@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 71;
+const corpus_len = 72;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -205,6 +205,18 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .scope_value = "/work/telar",
             .failed_only = true,
             .limit = 12,
+        }),
+    ));
+    const import_entries = [_]schema.ImportEntry{
+        .{ .started_at_ms = 1700000002000, .command = "git status" },
+        .{ .started_at_ms = 1700000003000, .command = "make -j4" },
+    };
+    helper.add("import_history", .client, false, golden.import_history, helper.commit(
+        try schema.encodeImportHistory(helper.space(), .{
+            .request_id = @enumFromInt(34),
+            .source = "zsh:/home/u/.zsh_history",
+            .base_sequence = 100,
+            .entries = &import_entries,
         }),
     ));
     helper.add("query_history_pane", .client, false, golden.query_history_pane, helper.commit(
@@ -758,6 +770,7 @@ const golden = struct {
     pub const create_pane = "09150000000000000000070000000000000003000000000000003c0014000000000005002f776f726b0600000000000000010007002f62696e2f7368000000";
     pub const close_pane = "0a16000000000000000800000000000000";
     pub const query_history_cwd = "0b1f0000000000000009007a6967206275696c64010b002f776f726b2f74656c617201000c00";
+    pub const import_history = "22220000000000000018007a73683a2f686f6d652f752f2e7a73685f686973746f727964000000000000000200d06fe5cf8b0100000a0067697420737461747573b873e5cf8b01000008006d616b65202d6a34";
     pub const query_history_pane = "0b2000000000000000000003090000000000000000001400";
     pub const request_workspace_snapshot = "0c2800000000000000000700000000000000";
     pub const create_tab = "0d290000000000000000070000000000000004006c6f6773500018000000000005002f776f726b0700000000000000010007002f62696e2f7368000000";
@@ -1496,9 +1509,10 @@ test "history results preserve nullable exits and command metadata" {
             .duration_ns = 9,
             .exit_code = null,
             .status = .interrupted,
+            .author = .agent,
             .command = "sleep 600",
-            .cwd = "/work/telar",
-            .workspace_path = "/work/telar",
+            .cwd = "",
+            .workspace_path = "",
         },
     };
     var buffer: [4096]u8 = undefined;

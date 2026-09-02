@@ -252,6 +252,18 @@ pub const Service = struct {
     /// ```zig
     /// _ = service.recordCommand(io, .{ .context = context, .command = command });
     /// ```
+    /// Copies one wire import batch into owned storage and queues it for
+    /// the history worker. Returns false when the copy or the bounded queue
+    /// refuses it; the caller reports that to the importing client.
+    ///
+    /// ```zig
+    /// if (!service.importBatch(io, view)) return error.ImportRefused;
+    /// ```
+    pub fn importBatch(service: *Service, io: std.Io, view: model_mod.schema.ImportHistoryView) bool {
+        const batch = model_mod.ImportBatch.init(service.gpa, view) catch return false;
+        return service.submit(io, .{ .import = batch });
+    }
+
     pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecord) bool {
         const context = record.context;
         const command = record.command;
@@ -403,6 +415,15 @@ pub fn runWorker(io: std.Io, service: *Service) anyerror!void {
                     error.HistoryUnavailable;
                 observeWrite(service, elapsedSince(io, started), result);
             },
+            .import => |batch| {
+                defer batch.deinit(service.gpa);
+                const started = std.Io.Timestamp.now(io, .awake);
+                const result = if (service.store) |*store|
+                    writeImportBatch(store, batch)
+                else
+                    error.HistoryUnavailable;
+                observeWrite(service, elapsedSince(io, started), result);
+            },
             .query => |query_value| {
                 const started = std.Io.Timestamp.now(io, .awake);
                 const response: model_mod.Response = if (service.store) |*store|
@@ -443,6 +464,41 @@ fn observeWrite(service: *Service, elapsed: u64, result: anyerror!void) void {
     result catch {
         _ = service.stats.sqlite_write_failures.fetchAdd(1, .monotonic);
     };
+}
+
+/// Writes one imported session and its commands idempotently: both inserts
+/// are `OR IGNORE`, keyed by the deterministic session id and sequence.
+fn writeImportBatch(store: *store_mod.Store, batch: *const model_mod.ImportBatch) anyerror!void {
+    const session: model_mod.SessionStarted = .{
+        .id = batch.session_id,
+        .pane_id = batch.pane_id,
+        .location = batch.location,
+        .started_at_ms = batch.started_at_ms,
+        .workspace_path = @constCast(""),
+        .shell = batch.source,
+    };
+    try store.importSession(&session);
+
+    for (batch.commands, batch.times, 0..) |command, time, index| {
+        var value: model_mod.CommandFinished = .{
+            .session_id = batch.session_id,
+            .pane_id = batch.pane_id,
+            .location = batch.location,
+            .sequence = batch.base_sequence + index,
+            .started_at_ms = time,
+            .duration_ns = 0,
+            .exit_code = null,
+            .status = .completed,
+            .author = .human,
+            .cols = 0,
+            .rows = 0,
+            .command = command,
+            .cwd = @constCast(""),
+            .workspace_path = @constCast(""),
+            .command_truncated = false,
+        };
+        try store.importCommand(&value);
+    }
 }
 
 fn elapsedSince(io: std.Io, started: std.Io.Timestamp) u64 {
@@ -576,4 +632,45 @@ test "filtered commands are refused before allocation or queueing" {
     recorded.bytes = "git status";
     try std.testing.expect(service.recordCommand(io, .{ .context = context, .command = recorded }));
     try std.testing.expectEqual(@as(u64, 1), service.stats.queued.load(.monotonic));
+}
+
+test "import batches write idempotently through the worker path" {
+    const gpa = std.testing.allocator;
+    var store = try store_mod.Store.open(":memory:");
+    defer store.close();
+
+    var buffer: [512]u8 = undefined;
+    const entries = [_]model_mod.schema.ImportEntry{
+        .{ .started_at_ms = 1_000, .command = "git status" },
+        .{ .started_at_ms = 2_000, .command = "make -j4" },
+    };
+    const encoded = try model_mod.schema.encodeImportHistory(&buffer, .{
+        .request_id = @enumFromInt(3),
+        .source = "zsh:/tmp/histfile",
+        .base_sequence = 0,
+        .entries = &entries,
+    });
+    const view = (try model_mod.schema.decodeClient(encoded)).import_history;
+
+    const first = try model_mod.ImportBatch.init(gpa, view);
+    defer first.deinit(gpa);
+    try writeImportBatch(&store, first);
+
+    const second = try model_mod.ImportBatch.init(gpa, view);
+    defer second.deinit(gpa);
+    try writeImportBatch(&store, second);
+
+    const origin: model_mod.QueryOrigin = .{
+        .client = .{ .id = 1, .generation = 1 },
+        .close_after_reply = false,
+    };
+    const result = try store.query(gpa, &(try model_mod.Query.init(.{
+        .request_id = @enumFromInt(9),
+        .origin = origin,
+    })));
+    defer result.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), result.entries.len);
+    try std.testing.expectEqualStrings("make -j4", result.entries[0].command);
+    try std.testing.expectEqual(model_mod.schema.HistoryAuthor.human, result.entries[0].author);
 }

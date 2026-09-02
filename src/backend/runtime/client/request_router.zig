@@ -52,6 +52,7 @@ pub fn Handlers(comptime Context: type) type {
         report_agent_session: *const fn (*Context, schema.ReportAgentSession) anyerror!void,
         report_agent: *const fn (*Context, schema.ReportAgent) anyerror!void,
         search_pane: *const fn (*Context, schema.SearchPane) anyerror!void,
+        import_history: *const fn (*Context, schema.ImportHistoryView) anyerror!void,
     };
 }
 
@@ -116,6 +117,7 @@ pub fn Router(comptime Context: type, comptime handlers: Handlers(Context)) type
                 .report_agent_session => |request| handlers.report_agent_session(router.context, request),
                 .report_agent => |request| handlers.report_agent(router.context, request),
                 .search_pane => |request| handlers.search_pane(router.context, request),
+                .import_history => |request| handlers.import_history(router.context, request),
             };
         }
     };
@@ -131,6 +133,7 @@ pub fn classify(tag: Tag) RequestClass {
     return switch (tag) {
         .runtime_stop,
         .query_history,
+        .import_history,
         .show_notification,
         .query_agents,
         .read_pane,
@@ -213,6 +216,7 @@ const testing_handlers: Handlers(Capture) = .{
     .report_agent_session = captureHandler(.report_agent_session, schema.ReportAgentSession),
     .report_agent = captureHandler(.report_agent, schema.ReportAgent),
     .search_pane = captureHandler(.search_pane, schema.SearchPane),
+    .import_history = captureHandler(.import_history, schema.ImportHistoryView),
 };
 
 const TestRouter = Router(Capture, testing_handlers);
@@ -276,6 +280,13 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
         .{ .report_agent_session = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .session = "abc" } },
         .{ .report_agent = .{ .request_id = request_id, .pane_id = pane_id, .pane_generation = 1, .state = .working } },
         .{ .search_pane = .{ .request_id = request_id, .pane_id = pane_id, .needle = "err" } },
+        .{ .import_history = .{
+            .request_id = request_id,
+            .source = "zsh:/tmp/hist",
+            .base_sequence = 0,
+            .entry_count = 1,
+            .encoded_entries = "\xe8\x03\x00\x00\x00\x00\x00\x00\x02\x00ls",
+        } },
     };
 }
 
@@ -298,6 +309,7 @@ test "Router delegates every client tag exactly once and preserves classificatio
         const expected_class: RequestClass = switch (tag) {
             .runtime_stop,
             .query_history,
+            .import_history,
             .show_notification,
             .query_agents,
             .read_pane,

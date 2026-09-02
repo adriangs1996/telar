@@ -518,12 +518,17 @@ fn parseWorkerBool(value: [*:0]const u8) !bool {
 }
 
 pub const HistoryAction = enum {
+    import,
     list,
     search,
 };
 
+pub const HistoryImportKind = enum { auto, zsh, bash, fish };
+
 pub const HistoryOptions = struct {
     action: HistoryAction,
+    import_kind: HistoryImportKind = .auto,
+    import_file: ?[*:0]const u8 = null,
     query: ?[*:0]const u8 = null,
     scope: core.schema.HistoryScope = .global,
     scope_value: ?[*:0]const u8 = null,
@@ -547,12 +552,43 @@ pub const HistoryOptions = struct {
             }
 
             break :search .{ .action = .search, .query = args[1] };
+        } else if (std.mem.eql(u8, action_text, "import")) import: {
+            var imported: HistoryOptions = .{ .action = .import };
+            if (args.len > 1 and args[1][0] != '-') {
+                const kind = std.mem.span(args[1]);
+                imported.import_kind = if (std.mem.eql(u8, kind, "auto"))
+                    .auto
+                else if (std.mem.eql(u8, kind, "zsh"))
+                    .zsh
+                else if (std.mem.eql(u8, kind, "bash"))
+                    .bash
+                else if (std.mem.eql(u8, kind, "fish"))
+                    .fish
+                else
+                    return error.UnknownHistoryImportKind;
+            }
+
+            break :import imported;
         } else return error.UnknownHistoryAction;
 
-        var index: usize = if (options.action == .search) 2 else 1;
+        var index: usize = switch (options.action) {
+            .search => 2,
+            .import => if (args.len > 1 and args[1][0] != '-') 2 else 1,
+            else => 1,
+        };
         while (index < args.len) {
             const arg = std.mem.span(args[index]);
-            if (std.mem.eql(u8, arg, "--cwd")) {
+            if (std.mem.eql(u8, arg, "--file")) {
+                if (options.action != .import) {
+                    return error.UnknownHistoryOption;
+                }
+                if (index + 1 >= args.len) {
+                    return error.MissingHistoryFile;
+                }
+
+                options.import_file = args[index + 1];
+                index += 2;
+            } else if (std.mem.eql(u8, arg, "--cwd")) {
                 try options.setScope(.cwd, null);
                 index += 1;
             } else if (std.mem.eql(u8, arg, "--workspace")) {
@@ -1645,4 +1681,20 @@ test "history author filter parses and rejects unknown values" {
 
     const invalid = [_][*:0]const u8{ "telar", "history", "list", "--author", "robot" };
     try std.testing.expectError(error.InvalidHistoryAuthor, Cli.parse(&invalid, .empty));
+}
+
+test "history import parses kinds and the file option" {
+    const explicit = [_][*:0]const u8{ "telar", "history", "import", "fish", "--file", "/tmp/h" };
+    const cli = try Cli.parse(&explicit, .empty);
+    try std.testing.expectEqual(HistoryImportKind.fish, cli.history.import_kind);
+    try std.testing.expectEqualStrings("/tmp/h", std.mem.span(cli.history.import_file.?));
+
+    const auto = [_][*:0]const u8{ "telar", "history", "import" };
+    try std.testing.expectEqual(HistoryImportKind.auto, (try Cli.parse(&auto, .empty)).history.import_kind);
+
+    const unknown = [_][*:0]const u8{ "telar", "history", "import", "powershell" };
+    try std.testing.expectError(error.UnknownHistoryImportKind, Cli.parse(&unknown, .empty));
+
+    const misplaced = [_][*:0]const u8{ "telar", "history", "list", "--file", "/tmp/h" };
+    try std.testing.expectError(error.UnknownHistoryOption, Cli.parse(&misplaced, .empty));
 }

@@ -18,6 +18,10 @@ const request_buffer_size = core.schema.max_history_query_bytes + core.schema.ma
 /// try history.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: HistoryOptions) !void {
+    if (options.action == .import) {
+        return runImport(init, options);
+    }
+
     const connector = try RuntimeConnector.init(init, options.socket);
     var connection = try connector.connectOrStart(.{});
     defer connection.deinit(init.io);
@@ -171,4 +175,343 @@ test "history fields preserve printable UTF-8" {
     try writeField(&writer, "git commit -m 'listo ✓'");
 
     try std.testing.expectEqualStrings("git commit -m 'listo ✓'", writer.buffered());
+}
+
+const max_histfile_bytes = 32 * 1024 * 1024;
+const max_batch_entries = core.schema.max_import_entries;
+const max_batch_payload = 48 * 1024;
+
+/// Streams one shell histfile to the runtime in bounded idempotent batches.
+/// The source label pins the deterministic import session, so re-running the
+/// import only adds entries the runtime has not seen.
+fn runImport(init: std.process.Init, options: HistoryOptions) !void {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const resolved = try resolveImport(init, options, &path_buffer);
+    const source_data = try Io.Dir.cwd().readFileAlloc(init.io, resolved.path, init.gpa, .limited(max_histfile_bytes));
+    defer init.gpa.free(source_data);
+
+    const connector = try RuntimeConnector.init(init, options.socket);
+    var connection = try connector.connectOrStart(.{});
+    defer connection.deinit(init.io);
+
+    var source_buffer: [core.schema.max_import_source_bytes]u8 = undefined;
+    const source = try std.fmt.bufPrint(&source_buffer, "{s}:{s}", .{ @tagName(resolved.kind), resolved.path });
+
+    var sender: BatchSender = .{
+        .io = init.io,
+        .gpa = init.gpa,
+        .connection = &connection,
+        .source = source,
+    };
+    var parser_state: ImportParser = .{ .kind = resolved.kind };
+    var lines = std.mem.splitScalar(u8, source_data, '\n');
+    while (lines.next()) |line| {
+        if (parser_state.feed(line)) |entry| {
+            try sender.push(entry);
+        }
+    }
+    if (parser_state.flush()) |entry| {
+        try sender.push(entry);
+    }
+
+    try sender.finish();
+    var stdout_buffer: [256]u8 = undefined;
+    var output = File.stdout().writerStreaming(init.io, &stdout_buffer);
+    try output.interface.print("imported {d} commands from {s}\n", .{ sender.total, resolved.path });
+    try output.interface.flush();
+}
+
+const ResolvedImport = struct {
+    kind: parser.HistoryImportKind,
+    path: []const u8,
+};
+
+fn resolveImport(init: std.process.Init, options: HistoryOptions, buffer: *[std.fs.max_path_bytes]u8) !ResolvedImport {
+    if (options.import_file) |file| {
+        const path = std.mem.span(file);
+        const kind = if (options.import_kind != .auto)
+            options.import_kind
+        else if (std.mem.endsWith(u8, path, "fish_history"))
+            parser.HistoryImportKind.fish
+        else if (std.mem.indexOf(u8, path, "bash") != null)
+            parser.HistoryImportKind.bash
+        else
+            parser.HistoryImportKind.zsh;
+        return .{ .kind = kind, .path = path };
+    }
+
+    const home = init.minimal.environ.getPosix("HOME") orelse return error.HistfileNotFound;
+    const candidates: []const ResolvedImport = &.{
+        .{ .kind = .zsh, .path = ".zsh_history" },
+        .{ .kind = .bash, .path = ".bash_history" },
+        .{ .kind = .fish, .path = ".local/share/fish/fish_history" },
+    };
+    for (candidates) |candidate| {
+        if (options.import_kind != .auto and options.import_kind != candidate.kind) {
+            continue;
+        }
+
+        const path = try std.fmt.bufPrint(buffer, "{s}/{s}", .{ home, candidate.path });
+        Io.Dir.cwd().access(init.io, path, .{}) catch continue;
+        return .{ .kind = candidate.kind, .path = path };
+    }
+
+    return error.HistfileNotFound;
+}
+
+/// Line-driven histfile parser producing (timestamp, command) entries.
+/// zsh extended history joins backslash continuations; plain lines fall back
+/// to a zero timestamp the runtime stores as-is.
+const ImportParser = struct {
+    kind: parser.HistoryImportKind,
+    pending_time_ms: i64 = 0,
+    /// Two alternating buffers: `flush` returns a slice into the active one
+    /// and `begin` switches to the other, so a finished entry stays valid
+    /// while the next command starts on the same fed line.
+    command_storage: [2][core.schema.max_import_command_bytes]u8 = undefined,
+    active: u1 = 0,
+    command_len: usize = 0,
+    command_active: bool = false,
+
+    fn feed(state: *ImportParser, raw_line: []const u8) ?ImportedEntry {
+        const line = std.mem.trimEnd(u8, raw_line, "\r");
+        return switch (state.kind) {
+            .auto => unreachable,
+            .zsh => state.feedZsh(line),
+            .bash => state.feedBash(line),
+            .fish => state.feedFish(line),
+        };
+    }
+
+    fn flush(state: *ImportParser) ?ImportedEntry {
+        if (!state.command_active or state.command_len == 0) {
+            return null;
+        }
+
+        state.command_active = false;
+        return .{ .started_at_ms = state.pending_time_ms, .command = state.command_storage[state.active][0..state.command_len] };
+    }
+
+    fn feedZsh(state: *ImportParser, line: []const u8) ?ImportedEntry {
+        if (state.command_active) {
+            if (state.command_len != 0 and state.command_storage[state.active][state.command_len - 1] == '\\') {
+                state.command_len -= 1;
+                state.append("\n");
+                state.append(line);
+                if (line.len != 0 and line[line.len - 1] == '\\') {
+                    return null;
+                }
+
+                return state.flush();
+            }
+        }
+
+        const finished = state.flush();
+        if (std.mem.startsWith(u8, line, ": ")) {
+            const semicolon = std.mem.indexOfScalar(u8, line, ';') orelse return finished;
+            const meta = line[2..semicolon];
+            const colon = std.mem.indexOfScalar(u8, meta, ':') orelse return finished;
+            const seconds = std.fmt.parseInt(i64, meta[0..colon], 10) catch 0;
+            state.begin(seconds * 1_000, line[semicolon + 1 ..]);
+            if (line.len != 0 and line[line.len - 1] == '\\') {
+                return finished;
+            }
+        } else if (line.len != 0) {
+            state.begin(0, line);
+        } else {
+            return finished;
+        }
+
+        if (state.command_len != 0 and state.command_storage[state.active][state.command_len - 1] == '\\') {
+            return finished;
+        }
+        if (finished) |value| {
+            // Two complete commands cannot finish on one line; the previous
+            // one is returned and the current one waits for the next feed.
+            return value;
+        }
+
+        return state.flush();
+    }
+
+    fn feedBash(state: *ImportParser, line: []const u8) ?ImportedEntry {
+        if (line.len > 1 and line[0] == '#') {
+            const seconds = std.fmt.parseInt(i64, line[1..], 10) catch return state.emitPlain(line);
+            const finished = state.flush();
+            state.pending_time_ms = seconds * 1_000;
+            return finished;
+        }
+
+        return state.emitPlain(line);
+    }
+
+    fn emitPlain(state: *ImportParser, line: []const u8) ?ImportedEntry {
+        if (line.len == 0) {
+            return null;
+        }
+
+        const finished = state.flush();
+        const time = state.pending_time_ms;
+        state.begin(time, line);
+        if (finished) |value| {
+            return value;
+        }
+
+        return state.flush();
+    }
+
+    fn feedFish(state: *ImportParser, line: []const u8) ?ImportedEntry {
+        if (std.mem.startsWith(u8, line, "- cmd: ")) {
+            const finished = state.flush();
+            state.begin(0, line["- cmd: ".len..]);
+            state.command_active = true;
+            if (finished) |value| {
+                return value;
+            }
+
+            return null;
+        }
+        if (std.mem.startsWith(u8, line, "  when: ")) {
+            const seconds = std.fmt.parseInt(i64, line["  when: ".len..], 10) catch 0;
+            state.pending_time_ms = seconds * 1_000;
+            return state.flush();
+        }
+
+        return null;
+    }
+
+    fn begin(state: *ImportParser, time_ms: i64, command: []const u8) void {
+        state.active ^= 1;
+        state.pending_time_ms = time_ms;
+        state.command_len = 0;
+        state.command_active = true;
+        state.append(command);
+    }
+
+    fn append(state: *ImportParser, bytes: []const u8) void {
+        const buffer = &state.command_storage[state.active];
+        const room = buffer.len - state.command_len;
+        const take = @min(room, bytes.len);
+        @memcpy(buffer[state.command_len .. state.command_len + take], bytes[0..take]);
+        state.command_len += take;
+    }
+};
+
+const ImportedEntry = struct {
+    started_at_ms: i64,
+    command: []const u8,
+};
+
+/// Accumulates entries and sends one bounded import_history request per
+/// batch, waiting for each acknowledgement before the next batch.
+const BatchSender = struct {
+    io: Io,
+    gpa: std.mem.Allocator,
+    connection: *core.transport.SocketChannel,
+    source: []const u8,
+    entries: [max_batch_entries]core.schema.ImportEntry = undefined,
+    storage: [max_batch_payload]u8 = undefined,
+    used: usize = 0,
+    count: usize = 0,
+    sequence: u64 = 0,
+    total: u64 = 0,
+    next_request: u64 = 1,
+
+    fn push(sender: *BatchSender, entry: ImportedEntry) !void {
+        if (entry.command.len == 0 or entry.command.len > core.schema.max_import_command_bytes) {
+            return;
+        }
+        if (sender.count == max_batch_entries or entry.command.len > sender.storage.len - sender.used) {
+            try sender.finish();
+        }
+
+        const copy = sender.storage[sender.used .. sender.used + entry.command.len];
+        @memcpy(copy, entry.command);
+        sender.used += entry.command.len;
+        sender.entries[sender.count] = .{ .started_at_ms = entry.started_at_ms, .command = copy };
+        sender.count += 1;
+    }
+
+    fn finish(sender: *BatchSender) !void {
+        if (sender.count == 0) {
+            return;
+        }
+
+        var send_buffer: [max_batch_payload + 1024]u8 = undefined;
+        const request_id: core.schema.RequestId = @enumFromInt(sender.next_request);
+        sender.next_request += 1;
+        try sender.connection.send(sender.io, try core.schema.encodeImportHistory(&send_buffer, .{
+            .request_id = request_id,
+            .source = sender.source,
+            .base_sequence = sender.sequence,
+            .entries = sender.entries[0..sender.count],
+        }));
+
+        var receive_buffer: [1024]u8 = undefined;
+        const response = try core.schema.decodeServer(try sender.connection.receive(sender.io, &receive_buffer));
+        switch (response) {
+            .request_completed => {},
+            .request_failed => |failure| {
+                std.debug.print("telar history import: {s}\n", .{failure.message});
+                return error.HistoryImportFailed;
+            },
+            else => return error.UnexpectedRuntimeResponse,
+        }
+
+        sender.sequence += sender.count;
+        sender.total += sender.count;
+        sender.count = 0;
+        sender.used = 0;
+    }
+};
+
+test "zsh extended history parses timestamps and continuations" {
+    var state: ImportParser = .{ .kind = .zsh };
+    var collected: [4]ImportedEntry = undefined;
+    var commands: [4][64]u8 = undefined;
+    var count: usize = 0;
+    const file = ": 1700000000:0;git status\n: 1700000001:2;echo one \\\ntwo\nplain command\n";
+    var lines = std.mem.splitScalar(u8, file, '\n');
+    while (lines.next()) |line| {
+        if (state.feed(line)) |entry| {
+            @memcpy(commands[count][0..entry.command.len], entry.command);
+            collected[count] = .{ .started_at_ms = entry.started_at_ms, .command = commands[count][0..entry.command.len] };
+            count += 1;
+        }
+    }
+    if (state.flush()) |entry| {
+        @memcpy(commands[count][0..entry.command.len], entry.command);
+        collected[count] = .{ .started_at_ms = entry.started_at_ms, .command = commands[count][0..entry.command.len] };
+        count += 1;
+    }
+
+    try std.testing.expectEqual(@as(usize, 3), count);
+    try std.testing.expectEqualStrings("git status", collected[0].command);
+    try std.testing.expectEqual(@as(i64, 1_700_000_000_000), collected[0].started_at_ms);
+    try std.testing.expectEqualStrings("echo one \ntwo", collected[1].command);
+    try std.testing.expectEqualStrings("plain command", collected[2].command);
+}
+
+test "bash timestamp comments attach to the following command" {
+    var state: ImportParser = .{ .kind = .bash };
+    try std.testing.expect(state.feed("#1700000000") == null);
+
+    const first = state.feed("make test").?;
+    try std.testing.expectEqualStrings("make test", first.command);
+    try std.testing.expectEqual(@as(i64, 1_700_000_000_000), first.started_at_ms);
+
+    const second = state.feed("ls").?;
+    try std.testing.expectEqualStrings("ls", second.command);
+    try std.testing.expect(state.flush() == null);
+}
+
+test "fish history pairs cmd and when lines" {
+    var state: ImportParser = .{ .kind = .fish };
+    try std.testing.expect(state.feed("- cmd: git log") == null);
+    const first = state.feed("  when: 1700000000").?;
+    try std.testing.expectEqualStrings("git log", first.command);
+    try std.testing.expectEqual(@as(i64, 1_700_000_000_000), first.started_at_ms);
+    try std.testing.expect(state.feed("- cmd: htop") == null);
+    const tail = state.flush().?;
+    try std.testing.expectEqualStrings("htop", tail.command);
 }

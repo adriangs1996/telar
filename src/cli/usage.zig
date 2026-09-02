@@ -13,6 +13,7 @@ pub const text =
     \\       telar plugin trust PATH [--capability NAME]...
     \\       telar history list [options]
     \\       telar history search <query> [options]
+    \\       telar history import [auto|zsh|bash|fish] [--file PATH]
     \\       telar notification show <title> [options]
     \\       telar agent list|get|wait|prompt|read [target] [options]
     \\       telar pane read|send-keys <pane|--current> [options]
@@ -31,6 +32,7 @@ pub const text =
     \\  server stop      Stop the local runtime
     \\  history list     Show recent command history
     \\  history search   Search command history
+    \\  history import   Import an existing shell histfile
     \\  notification show  Show a toast in every connected UI client
     \\  agent list       List the agents the runtime knows about
     \\  agent get        Show one agent by pane id, title or --current

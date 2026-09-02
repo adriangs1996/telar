@@ -160,6 +160,7 @@ pub const ClientTag = enum(u8) {
     report_agent_session = 0x1f,
     report_agent = 0x20,
     search_pane = 0x21,
+    import_history = 0x22,
 };
 
 pub const ServerTag = enum(u8) {
@@ -546,6 +547,56 @@ pub const CopySelection = struct {
     linewise: bool = false,
 };
 
+/// One bounded batch of foreign shell history. `source` is the stable
+/// identity of the imported file (e.g. `zsh:/home/u/.zsh_history`); the
+/// runtime derives one deterministic session from it so re-imports are
+/// idempotent, and `base_sequence` orders batches within that session.
+pub const ImportHistory = struct {
+    request_id: RequestId,
+    source: []const u8,
+    base_sequence: u64,
+    entries: []const ImportEntry,
+};
+
+pub const ImportEntry = struct {
+    started_at_ms: i64,
+    command: []const u8,
+};
+
+pub const ImportHistoryView = struct {
+    request_id: RequestId,
+    source: []const u8,
+    base_sequence: u64,
+    entry_count: u16,
+    encoded_entries: []const u8,
+
+    pub fn entries(view: ImportHistoryView) ImportEntryIterator {
+        return .{
+            .decoder = .init(view.encoded_entries),
+            .remaining = view.entry_count,
+        };
+    }
+};
+
+pub const ImportEntryIterator = struct {
+    decoder: wire.Decoder,
+    remaining: u16,
+
+    pub fn next(iterator: *ImportEntryIterator) !?ImportEntry {
+        if (iterator.remaining == 0) return null;
+        iterator.remaining -= 1;
+        const started_at_ms = try iterator.decoder.readInt(i64);
+        const command = try iterator.decoder.readSized16();
+        if (command.len == 0 or command.len > max_import_command_bytes)
+            return error.InvalidByteString;
+        return .{ .started_at_ms = started_at_ms, .command = command };
+    }
+};
+
+pub const max_import_entries = 64;
+pub const max_import_source_bytes = 256;
+pub const max_import_command_bytes = 4096;
+
 pub const QueryHistory = struct {
     request_id: RequestId,
     query: []const u8 = "",
@@ -714,6 +765,7 @@ pub const ClientMessage = union(enum) {
     report_agent_session: ReportAgentSession,
     report_agent: ReportAgent,
     search_pane: SearchPane,
+    import_history: ImportHistoryView,
     update_client_layout: ClientLayoutUpdateView,
 };
 
@@ -1265,6 +1317,48 @@ pub fn encodeMoveTab(buffer: []u8, message: MoveTab) ![]const u8 {
     return encodeDerived(@intFromEnum(ClientTag.move_tab), MoveTab, buffer, message);
 }
 
+pub fn encodeImportHistory(buffer: []u8, message: ImportHistory) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validateBytes(message.source, max_import_source_bytes, false);
+    if (message.entries.len == 0 or message.entries.len > max_import_entries)
+        return error.InvalidImportBatch;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.import_history));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeSized16(message.source);
+    try encoder.writeInt(u64, message.base_sequence);
+    try encoder.writeInt(u16, @intCast(message.entries.len));
+    for (message.entries) |entry| {
+        try validateBytes(entry.command, max_import_command_bytes, false);
+        try encoder.writeInt(i64, entry.started_at_ms);
+        try encoder.writeSized16(entry.command);
+    }
+    return encoder.finish();
+}
+
+fn decodeImportHistory(decoder: *wire.Decoder) !ImportHistoryView {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const source = try decoder.readSized16();
+    try validateBytes(source, max_import_source_bytes, false);
+    const base_sequence = try decoder.readInt(u64);
+    const entry_count = try decoder.readInt(u16);
+    if (entry_count == 0 or entry_count > max_import_entries)
+        return error.InvalidImportBatch;
+    const entries_start = decoder.index;
+    for (0..entry_count) |_| {
+        _ = try decoder.readInt(i64);
+        if ((try decoder.readSized16()).len > max_import_command_bytes)
+            return error.InvalidByteString;
+    }
+    return .{
+        .request_id = request_id,
+        .source = source,
+        .base_sequence = base_sequence,
+        .entry_count = entry_count,
+        .encoded_entries = decoder.consumed(entries_start),
+    };
+}
+
 pub fn encodeQueryHistory(buffer: []u8, message: QueryHistory) ![]const u8 {
     try validateRequestId(message.request_id);
     try validateBytes(message.query, max_history_query_bytes, true);
@@ -1636,6 +1730,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .report_agent_session => .{ .report_agent_session = try decodeReportAgentSession(&decoder) },
         .report_agent => .{ .report_agent = try decodeReportAgent(&decoder) },
         .search_pane => .{ .search_pane = try decodeSearchPane(&decoder) },
+        .import_history => .{ .import_history = try decodeImportHistory(&decoder) },
     };
     try decoder.ensureEnd();
     return message;
@@ -2718,8 +2813,9 @@ fn encodeHistoryEntry(encoder: *wire.Encoder, entry: HistoryEntry) !void {
     if (entry.id == 0) return error.InvalidHistoryId;
     try validatePaneId(entry.pane_id);
     try validateBytes(entry.command, max_history_command_bytes, false);
-    try validateBytes(entry.cwd, max_cwd_bytes, false);
-    try validateBytes(entry.workspace_path, max_cwd_bytes, false);
+    // Imported foreign history legitimately lacks a cwd and workspace path.
+    try validateBytes(entry.cwd, max_cwd_bytes, true);
+    try validateBytes(entry.workspace_path, max_cwd_bytes, true);
     try encoder.writeInt(u64, entry.id);
     try encoder.writeInt(u64, id.raw(entry.pane_id));
     try encoder.writeInt(i64, entry.started_at_ms);
@@ -2754,8 +2850,8 @@ fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
     const cwd = try decoder.readSized16();
     const workspace_path = try decoder.readSized16();
     try validateBytes(command, max_history_command_bytes, false);
-    try validateBytes(cwd, max_cwd_bytes, false);
-    try validateBytes(workspace_path, max_cwd_bytes, false);
+    try validateBytes(cwd, max_cwd_bytes, true);
+    try validateBytes(workspace_path, max_cwd_bytes, true);
     return .{
         .id = history_id,
         .pane_id = pane_id,

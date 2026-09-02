@@ -86,6 +86,20 @@ const insert_session_sql =
     \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);
 ;
 
+const import_session_sql =
+    \\INSERT OR IGNORE INTO session
+    \\  (id, pane_id, location_kind, location_id, tab_id, workspace_path, shell, started_at_ms)
+    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);
+;
+
+const import_command_sql =
+    \\INSERT OR IGNORE INTO command
+    \\  (session_id, pane_id, location_kind, location_id, tab_id, sequence, command,
+    \\   command_truncated, cwd, workspace_path, started_at_ms, duration_ns,
+    \\   exit_code, status, author)
+    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15);
+;
+
 const insert_launch_attempt_sql =
     \\INSERT INTO launch_attempt
     \\  (pane_id, pane_generation, location_kind, location_id, tab_id,
@@ -118,6 +132,8 @@ pub const Store = struct {
     finish_session: *c.sqlite3_stmt,
     set_session_title: *c.sqlite3_stmt,
     insert_command: *c.sqlite3_stmt,
+    import_session: *c.sqlite3_stmt,
+    import_command: *c.sqlite3_stmt,
     fts_available: bool,
 
     pub fn open(path: [:0]const u8) !Store {
@@ -153,6 +169,10 @@ pub const Store = struct {
         errdefer _ = c.sqlite3_finalize(set_session_title);
         const insert_command = try prepare(opened, insert_command_sql);
         errdefer _ = c.sqlite3_finalize(insert_command);
+        const import_session = try prepare(opened, import_session_sql);
+        errdefer _ = c.sqlite3_finalize(import_session);
+        const import_command = try prepare(opened, import_command_sql);
+        errdefer _ = c.sqlite3_finalize(import_command);
         return .{
             .db = opened,
             .insert_launch_attempt = insert_launch_attempt,
@@ -160,11 +180,15 @@ pub const Store = struct {
             .finish_session = finish_session,
             .set_session_title = set_session_title,
             .insert_command = insert_command,
+            .import_session = import_session,
+            .import_command = import_command,
             .fts_available = fts_available,
         };
     }
 
     pub fn close(store: *Store) void {
+        _ = c.sqlite3_finalize(store.import_command);
+        _ = c.sqlite3_finalize(store.import_session);
         _ = c.sqlite3_finalize(store.insert_command);
         _ = c.sqlite3_finalize(store.set_session_title);
         _ = c.sqlite3_finalize(store.finish_session);
@@ -203,6 +227,59 @@ pub const Store = struct {
         bindText(stmt, 6, value.workspace_path);
         bindText(stmt, 7, value.shell);
         _ = c.sqlite3_bind_int64(stmt, 8, value.started_at_ms);
+        try stepDone(stmt);
+    }
+
+    /// Idempotent session insert for imports: the deterministic id makes a
+    /// re-import reuse the existing session row.
+    ///
+    /// ```zig
+    /// try store.importSession(&session);
+    /// ```
+    pub fn importSession(store: *Store, value: *const model.SessionStarted) !void {
+        const stmt = store.import_session;
+        defer reset(stmt);
+        bindBlob(stmt, 1, &value.id);
+        _ = c.sqlite3_bind_int64(stmt, 2, @intCast(model.schema.id.raw(value.pane_id)));
+        const location = locationColumns(value.location);
+        _ = c.sqlite3_bind_int(stmt, 3, location.kind);
+        _ = c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
+        _ = c.sqlite3_bind_int64(stmt, 5, @intCast(model.schema.id.raw(value.location.tab_id)));
+        bindText(stmt, 6, value.workspace_path);
+        bindText(stmt, 7, value.shell);
+        _ = c.sqlite3_bind_int64(stmt, 8, value.started_at_ms);
+        try stepDone(stmt);
+    }
+
+    /// Idempotent command insert for imports, keyed by the unique
+    /// (session id, sequence) pair.
+    ///
+    /// ```zig
+    /// try store.importCommand(&value);
+    /// ```
+    pub fn importCommand(store: *Store, value: *const model.CommandFinished) !void {
+        const stmt = store.import_command;
+        defer reset(stmt);
+        bindBlob(stmt, 1, &value.session_id);
+        _ = c.sqlite3_bind_int64(stmt, 2, @intCast(model.schema.id.raw(value.pane_id)));
+        const location = locationColumns(value.location);
+        _ = c.sqlite3_bind_int(stmt, 3, location.kind);
+        _ = c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
+        _ = c.sqlite3_bind_int64(stmt, 5, @intCast(model.schema.id.raw(value.location.tab_id)));
+        _ = c.sqlite3_bind_int64(stmt, 6, @intCast(value.sequence));
+        bindText(stmt, 7, value.command);
+        _ = c.sqlite3_bind_int(stmt, 8, @intFromBool(value.command_truncated));
+        bindText(stmt, 9, value.cwd);
+        bindText(stmt, 10, value.workspace_path);
+        _ = c.sqlite3_bind_int64(stmt, 11, value.started_at_ms);
+        _ = c.sqlite3_bind_int64(stmt, 12, value.duration_ns);
+        if (value.exit_code) |exit_code| {
+            _ = c.sqlite3_bind_int(stmt, 13, exit_code);
+        } else {
+            _ = c.sqlite3_bind_null(stmt, 13);
+        }
+        _ = c.sqlite3_bind_int(stmt, 14, @intFromEnum(value.status));
+        _ = c.sqlite3_bind_int(stmt, 15, @intFromEnum(value.author));
         try stepDone(stmt);
     }
 

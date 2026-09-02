@@ -92,7 +92,7 @@ scope only" deviation recorded in the herdr plan (P7).
 - Tests: scope cycle requery (model + controller), enter-mode config parse,
   footer render. No wire change.
 
-## P4. Import: `telar history import`
+## P4. Import: `telar history import` — done
 
 First impressions: a fresh telar should search ten years of existing
 history one minute after install.
@@ -108,9 +108,15 @@ history one minute after install.
   `request_completed`; the runtime writes them on the observation path into
   one synthetic session per import (`shell = "import:zsh"`), `author = 0`.
   The CLI streams batches sequentially. Corpus + fingerprint bump.
-- Idempotence: skip exact `(command, started_at_ms)` duplicates per import
-  session via `INSERT OR IGNORE` + a unique partial index scoped to import
-  sessions, so re-running `import` is safe.
+- Deviation: idempotence keys on the existing `UNIQUE(session_id,
+  sequence)` instead of a new partial index — the import session id is a
+  deterministic hash of the source label and the CLI assigns stable
+  sequences, so `INSERT OR IGNORE` makes re-imports no-ops. Deviation: the
+  batch acknowledgement means "accepted by the bounded history queue", the
+  same fire-and-forget contract live captures have, not durability. The
+  wire now allows empty `cwd`/`workspace_path` on history entries because
+  imported rows legitimately lack them, and synthetic import identities
+  are masked to 62 bits so they survive SQLite's i64 columns.
 - P1 filters apply to imported rows too.
 - Tests: each parser against fixture files, batch encode/decode corpus,
   duplicate-safe reimport, filtered secrets never land.

@@ -13,6 +13,7 @@ const acknowledge_agent_commands = @import("commands/acknowledge_agent.zig");
 const acknowledge_agent_controller = @import("../entrypoints/requests/acknowledge_agent.zig");
 const query_agents_controller = @import("../entrypoints/requests/query_agents.zig");
 const read_pane_controller = @import("../entrypoints/requests/read_pane.zig");
+const import_history_controller = @import("../entrypoints/requests/import_history.zig");
 const send_pane_text_commands = @import("commands/send_pane_text.zig");
 const send_pane_text_controller = @import("../entrypoints/requests/send_pane_text.zig");
 const report_agent_session_commands = @import("commands/report_agent_session.zig");
@@ -180,6 +181,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .report_agent_session = routeReportAgentSession,
             .report_agent = routeReportAgent,
             .search_pane = routeSearchPane,
+            .import_history = routeImportHistory,
         };
 
         const ClientRequestRouter = client_request_router.Router(ClientRequestContext, client_request_handlers);
@@ -387,6 +389,15 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
                 .client = session.key,
                 .close_after_reply = session.role == .control,
             }, query);
+        }
+
+        fn routeImportHistory(request: *ClientRequestContext, batch: schema.ImportHistoryView) !void {
+            var controller = import_history_controller.Controller.init(
+                &request.session.delivery.responses,
+                request.application.history_service,
+            );
+
+            try controller.importHistory(request.application.io, batch);
         }
 
         fn routeRequestWorkspaceSnapshot(request: *ClientRequestContext, snapshot: schema.RequestWorkspaceSnapshot) !void {
