@@ -15,7 +15,7 @@ not compete with them.
 
 ---
 
-## P1. Record-time filtering: secrets, patterns, and opt-outs
+## P1. Record-time filtering: secrets, patterns, and opt-outs — done
 
 Nothing else matters if users must distrust the recorder. Refuse to record —
 never redact after the fact.

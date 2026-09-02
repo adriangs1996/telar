@@ -29,6 +29,9 @@ pub const Options = struct {
     environment: std.process.Environ,
     /// SQLite database for durable history; the default keeps it in memory.
     history_path: [:0]const u8 = ":memory:",
+    /// Record-time history filtering: secrets refusal plus configured
+    /// command and cwd patterns.
+    history_filters: core.history_filter.Filters = .{},
     proxy: ?ProxyOptions = null,
     agent_descriptions: ?AgentDescriptionOptions = null,
     /// Agent identification rules; the built-in table unless configured.

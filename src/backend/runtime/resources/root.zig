@@ -77,7 +77,10 @@ pub const Resources = struct {
         errdefer resources.gpa.destroy(resources.clients);
         try checkpoint(fail_after, .clients);
 
-        resources.history = try history_runtime.Runtime.init(resources.io(), resources.gpa, initialization.options.history_path);
+        resources.history = try history_runtime.Runtime.init(resources.io(), resources.gpa, .{
+            .database_path = initialization.options.history_path,
+            .filters = initialization.options.history_filters,
+        });
         errdefer resources.history.deinit();
         try checkpoint(fail_after, .history);
     }

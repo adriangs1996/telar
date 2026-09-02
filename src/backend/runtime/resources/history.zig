@@ -1,6 +1,7 @@
 //! Runtime ownership for the asynchronous history service.
 
 const std = @import("std");
+const core = @import("telar-core");
 const history = @import("../../history/root.zig");
 
 const Io = std.Io;
@@ -75,19 +76,25 @@ const HistoryLifecycle = Lifecycle(RuntimeState, Worker, lifecycle_port);
 pub const Runtime = struct {
     lifecycle: HistoryLifecycle,
 
+    pub const Config = struct {
+        database_path: [:0]const u8,
+        filters: core.history_filter.Filters = .{},
+    };
+
     /// Creates the history service at a stable address and starts its worker.
     /// A database-open failure keeps the service alive in degraded mode.
     ///
     /// ```zig
-    /// var history_runtime = try Runtime.init(io, gpa, ":memory:");
+    /// var history_runtime = try Runtime.init(io, gpa, .{ .database_path = ":memory:" });
     /// defer history_runtime.deinit();
     /// ```
-    pub fn init(io: Io, gpa: std.mem.Allocator, database_path: [:0]const u8) !Runtime {
+    pub fn init(io: Io, gpa: std.mem.Allocator, config: Config) !Runtime {
         const state = try gpa.create(RuntimeState);
-        const history_service = history.Service.init(gpa, database_path) catch |err| {
+        var history_service = history.Service.init(gpa, config.database_path) catch |err| {
             gpa.destroy(state);
             return err;
         };
+        history_service.filters = config.filters;
         state.* = .{
             .io = io,
             .gpa = gpa,
@@ -188,7 +195,7 @@ fn expectSteps(capture: *const Capture, expected: []const Step) !void {
 }
 
 fn createAndDestroy(gpa: std.mem.Allocator) !void {
-    var runtime = try Runtime.init(std.testing.io, gpa, ":memory:");
+    var runtime = try Runtime.init(std.testing.io, gpa, .{ .database_path = ":memory:" });
     runtime.deinit();
 }
 
@@ -222,7 +229,7 @@ test "database open failure starts a queryable degraded worker" {
     const directory_len = try temp.dir.realPath(io, &directory_buffer);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrintZ(&path_buffer, "{s}/missing/history.db", .{directory_buffer[0..directory_len]});
-    var runtime = try Runtime.init(io, std.testing.allocator, path);
+    var runtime = try Runtime.init(io, std.testing.allocator, .{ .database_path = path });
     defer runtime.deinit();
     const service_value = runtime.service();
 

@@ -1,6 +1,7 @@
 //! Command history capture and persistence.
 
 const std = @import("std");
+const core = @import("telar-core");
 const diagnostics = @import("telar-core").diagnostics;
 const model_mod = @import("model.zig");
 const osc_mod = @import("osc.zig");
@@ -37,6 +38,9 @@ pub const Service = struct {
     response_storage: []model_mod.Response,
     store: ?store_mod.Store,
     open_error: ?anyerror = null,
+    /// Record-time policy applied before a command is copied or queued, so
+    /// filtered secrets never exist outside the observation emulator.
+    filters: core.history_filter.Filters = .{},
     stats: Stats = .{},
 
     pub const Stats = struct {
@@ -250,6 +254,9 @@ pub const Service = struct {
     pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecord) bool {
         const context = record.context;
         const command = record.command;
+        if (!service.filters.shouldRecord(command.bytes, command.cwd)) {
+            return true;
+        }
 
         const allocation_len = @sizeOf(model_mod.CommandFinished) + command.bytes.len +
             command.cwd.len + context.workspace_path.len;
@@ -523,4 +530,48 @@ test "launch attempt recording releases every partial allocation" {
         });
         service.deinit(io);
     }
+}
+
+test "filtered commands are refused before allocation or queueing" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var service = try Service.init(gpa, ":memory:");
+    defer {
+        service.closeQueues(io);
+        service.deinit(io);
+    }
+    try service.filters.commands.add("vault kv");
+
+    const context: Service.CommandContext = .{
+        .session_id = @splat(7),
+        .pane_id = @enumFromInt(1),
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
+        .sequence = 1,
+        .workspace_path = "/work",
+        .cols = 80,
+        .rows = 24,
+    };
+    const secret: Command = .{
+        .bytes = "export AWS_KEY=AKIAIOSFODNN7EXAMPLE",
+        .cwd = "/work",
+        .started_at_ms = 1,
+        .duration_ns = 1,
+        .exit_code = 0,
+        .status = .completed,
+        .truncated = false,
+    };
+
+    try std.testing.expect(service.recordCommand(io, .{ .context = context, .command = secret }));
+    var filtered = secret;
+    filtered.bytes = "vault kv get secret/x";
+    try std.testing.expect(service.recordCommand(io, .{ .context = context, .command = filtered }));
+    var spaced = secret;
+    spaced.bytes = " git status";
+    try std.testing.expect(service.recordCommand(io, .{ .context = context, .command = spaced }));
+    try std.testing.expectEqual(@as(u64, 0), service.stats.queued.load(.monotonic));
+
+    var recorded = secret;
+    recorded.bytes = "git status";
+    try std.testing.expect(service.recordCommand(io, .{ .context = context, .command = recorded }));
+    try std.testing.expectEqual(@as(u64, 1), service.stats.queued.load(.monotonic));
 }

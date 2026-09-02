@@ -1118,14 +1118,81 @@ pub const Generation = struct {
             diagnostic.set("config.runtime.history must be a table", .{});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(state, absolute, &.{"path"}, "config.runtime.history", diagnostic);
-        const path = try requiredStringField(state, absolute, "path", diagnostic);
-        if (path.len == 0 or path.len > max_history_path_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
-            diagnostic.set("config.runtime.history.path is invalid", .{});
+        try ensureOnlyFields(
+            state,
+            absolute,
+            &.{ "path", "secrets_filter", "command_filters", "cwd_filters" },
+            "config.runtime.history",
+            diagnostic,
+        );
+
+        _ = lua.lua_getfield(state, absolute, "path");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            const path = string(state, -1) orelse {
+                pop(state, 1);
+                diagnostic.set("config.runtime.history.path must be a string", .{});
+                return error.InvalidConfig;
+            };
+            if (path.len == 0 or path.len > max_history_path_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
+                pop(state, 1);
+                diagnostic.set("config.runtime.history.path is invalid", .{});
+                return error.InvalidConfig;
+            }
+
+            @memcpy(generation.snapshot.runtime.history_path_bytes[0..path.len], path);
+            generation.snapshot.runtime.history_path_len = @intCast(path.len);
+        }
+        pop(state, 1);
+
+        _ = lua.lua_getfield(state, absolute, "secrets_filter");
+        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+            if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+                pop(state, 1);
+                diagnostic.set("config.runtime.history.secrets_filter must be a boolean", .{});
+                return error.InvalidConfig;
+            }
+
+            generation.snapshot.runtime.history_filters.secrets = lua.lua_toboolean(state, -1) != 0;
+        }
+        pop(state, 1);
+
+        try generation.parseHistoryPatterns(absolute, "command_filters", diagnostic);
+        try generation.parseHistoryPatterns(absolute, "cwd_filters", diagnostic);
+    }
+
+    /// Parses one `config.runtime.history` pattern array into the bounded
+    /// record-time filter list with the same name.
+    fn parseHistoryPatterns(generation: *Generation, absolute: c_int, comptime name: [:0]const u8, diagnostic: *Diagnostic) !void {
+        const state = generation.vm.state;
+        _ = lua.lua_getfield(state, absolute, name.ptr);
+        defer pop(state, 1);
+        if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+            return;
+        }
+        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+            diagnostic.set("config.runtime.history.{s} must be an array of strings", .{name});
             return error.InvalidConfig;
         }
-        @memcpy(generation.snapshot.runtime.history_path_bytes[0..path.len], path);
-        generation.snapshot.runtime.history_path_len = @intCast(path.len);
+
+        const table = lua.lua_absindex(state, -1);
+        const count = lua.lua_rawlen(state, table);
+        try ensureArrayOnly(state, table, count, "config.runtime.history." ++ name, diagnostic);
+        const list = if (comptime std.mem.eql(u8, name, "command_filters"))
+            &generation.snapshot.runtime.history_filters.commands
+        else
+            &generation.snapshot.runtime.history_filters.cwds;
+        for (1..count + 1) |item| {
+            _ = lua.lua_rawgeti(state, table, @intCast(item));
+            defer pop(state, 1);
+            const pattern = string(state, -1) orelse {
+                diagnostic.set("config.runtime.history.{s}[{d}] must be a string", .{ name, item });
+                return error.InvalidConfig;
+            };
+            list.add(pattern) catch {
+                diagnostic.set("config.runtime.history.{s}[{d}] is empty, too long or exceeds the pattern limit", .{ name, item });
+                return error.InvalidConfig;
+            };
+        }
     }
 
     fn parseClient(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -4245,5 +4312,44 @@ test "command-tab actions parse a bounded argv and reject empty commands" {
         "@config.lua",
         1,
         &invalid,
+    ));
+}
+
+test "runtime history filters parse and reject invalid patterns" {
+    var diagnostic: Diagnostic = .{};
+    var generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, runtime = { history = { secrets_filter = false, command_filters = { \"vault kv\" }, cwd_filters = { \"/private\" } } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+
+    const filters = generation.snapshot.runtime.history_filters;
+    try std.testing.expect(!filters.secrets);
+    try std.testing.expectEqualStrings("vault kv", filters.commands.at(0));
+    try std.testing.expectEqualStrings("/private", filters.cwds.at(0));
+    try std.testing.expectEqual(@as(?[]const u8, null), generation.snapshot.runtime.historyPath());
+
+    var invalid: Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, runtime = { history = { command_filters = { \"\" } } } }",
+        "@config.lua",
+        1,
+        &invalid,
+    ));
+
+    var bad_flag: Diagnostic = .{};
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, runtime = { history = { secrets_filter = \"yes\" } } }",
+        "@config.lua",
+        1,
+        &bad_flag,
     ));
 }

@@ -84,6 +84,7 @@ const Launch = struct {
     description_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined,
     agent_description_options: ?backend.runtime.AgentDescriptionOptions = null,
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
+    history_filters: core.history_filter.Filters = .{},
     session_persist: bool = true,
     session_resume_agents: bool = true,
     configured_session_buffer: [std.fs.max_path_bytes]u8 = undefined,
@@ -125,6 +126,7 @@ const Launch = struct {
     fn applyConfig(launch: *Launch, generation: *frontend.config.Generation) !void {
         const runtime_config = &generation.snapshot.runtime;
         launch.agent_manifests = runtime_config.agent_manifests;
+        launch.history_filters = runtime_config.history_filters;
         launch.session_persist = runtime_config.session_persist;
         launch.session_resume_agents = runtime_config.session_resume_agents;
         if (runtime_config.sessionPath()) |session_path| {
@@ -211,6 +213,7 @@ const Launch = struct {
                 .graphics = launch.options.graphics,
                 .environment = launch.process.minimal.environ,
                 .history_path = launch.history_path.path,
+                .history_filters = launch.history_filters,
                 .proxy = launch.proxy_options,
                 .agent_descriptions = launch.agent_description_options,
                 .agent_manifests = launch.agent_manifests,

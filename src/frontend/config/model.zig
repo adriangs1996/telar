@@ -209,6 +209,7 @@ pub const RuntimeSnapshot = struct {
     proxy_passthrough_hosts: ProxyPassthroughHosts = .{},
     agent_descriptions: AgentDescriptionCommand = .{},
     agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
+    history_filters: core.history_filter.Filters = .{},
     session_persist: bool = true,
     session_resume_agents: bool = true,
     session_path_bytes: [max_history_path_bytes]u8 = undefined,

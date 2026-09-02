@@ -10,6 +10,7 @@ pub const transport = @import("transport/root.zig");
 pub const schema = @import("schema/root.zig");
 pub const handshake = @import("schema/handshake.zig");
 pub const agent_manifest = @import("agent_manifest.zig");
+pub const history_filter = @import("history_filter.zig");
 pub const endpoint = transport.endpoint;
 pub const diagnostics = @import("diagnostics.zig");
 pub const graphics = @import("graphics.zig");
