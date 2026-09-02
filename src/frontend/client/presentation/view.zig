@@ -13,6 +13,7 @@ const client_model = @import("../model/root.zig");
 const name_prompt = @import("../model/name_prompt.zig");
 const goto_picker_model = @import("../model/goto_picker.zig");
 const history_palette_state = @import("../model/history_palette.zig");
+const suggestion_state = @import("../model/suggestion.zig");
 const diff = presentation.diff;
 const pointer = presentation.pointer;
 const icon_graphics = @import("../../graphics/root.zig").icons;
@@ -30,6 +31,7 @@ const widgets = @import("../../widgets/root.zig");
 const schema = core.schema;
 const empty_agent_snapshot: agents.Snapshot = .{};
 const empty_history_palette: history_palette_state.State = .{};
+const empty_suggestion: suggestion_state.State = .{};
 const empty_notifications: notifications.Center = .{};
 const empty_workspace_list: workspace_list.Snapshot = .{};
 const default_bars_state: bars.State = .{};
@@ -61,6 +63,7 @@ pub const RenderInput = struct {
     workspaces: *const workspace_list.Snapshot = &empty_workspace_list,
     prompt: ?*name_prompt.Prompt = null,
     history: *const history_palette_state.State = &empty_history_palette,
+    suggestion: *const suggestion_state.State = &empty_suggestion,
     proxy_tls_active: bool = false,
     system_metrics: ?client_model.SystemMetrics = null,
     status_mode: widgets.status_bar.Mode = .normal,
@@ -681,6 +684,7 @@ pub const State = struct {
                     .workspaces = input.workspaces,
                     .tabs = input.tabs,
                     .history = input.history,
+                    .suggestion = input.suggestion,
                     .graphical_frame = graphical_modal,
                 });
                 drawn_modal_area = picker_output.area;
@@ -782,7 +786,7 @@ fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
     const current = prompt orelse return .rename_tab;
 
     return switch (current.target) {
-        .rename_tab, .goto, .history => .rename_tab,
+        .rename_tab, .goto, .history, .suggest => .rename_tab,
         .create_workspace => .create_workspace,
         .rename_workspace => .rename_workspace,
         .copy_search => |direction| switch (direction) {
@@ -795,7 +799,7 @@ fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
 fn pickerPrompt(prompt: ?*name_prompt.Prompt) ?*name_prompt.Prompt {
     const current = prompt orelse return null;
     return switch (current.target) {
-        .goto, .history => current,
+        .goto, .history, .suggest => current,
         else => null,
     };
 }
@@ -803,7 +807,7 @@ fn pickerPrompt(prompt: ?*name_prompt.Prompt) ?*name_prompt.Prompt {
 fn promptField(prompt: ?*name_prompt.Prompt) ?*widgets.tab_rename.Field {
     const current = prompt orelse return null;
     return switch (current.target) {
-        .goto, .history => null,
+        .goto, .history, .suggest => null,
         else => &current.field,
     };
 }
@@ -814,6 +818,7 @@ const PickerSources = struct {
     workspaces: *const workspace_list.Snapshot,
     tabs: ?*const tabs_mod.Model,
     history: *const history_palette_state.State,
+    suggestion: *const suggestion_state.State,
     graphical_frame: bool,
 };
 
@@ -826,6 +831,9 @@ fn renderGotoPicker(context: *widgets.Context, application: ui.Rect, sources: Pi
         .workspaces = sources.workspaces,
         .tabs = sources.tabs,
     };
+    if (sources.prompt.target == .suggest) {
+        return renderSuggestPalette(context, application, sources);
+    }
     if (sources.prompt.target != .goto) {
         return renderHistoryPalette(context, application, sources);
     }
@@ -889,6 +897,50 @@ fn renderHistoryPalette(context: *widgets.Context, application: ui.Rect, sources
         .title = "history",
         .field = &sources.prompt.field,
         .rows = rows[0..window],
+        .total = total,
+        .hint = hint,
+        .graphical_frame = sources.graphical_frame,
+    });
+}
+
+/// Renders the suggestion palette through the same list modal: one row
+/// holding the suggested command, the waiting state or the failure, and a
+/// footer that says what Enter does next.
+fn renderSuggestPalette(context: *widgets.Context, application: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
+    const state = sources.suggestion;
+    const text: []const u8 = switch (state.phase) {
+        .idle => "",
+        .waiting => "asking the engine...",
+        .ready => state.textSlice(),
+        .failed => switch (state.status) {
+            .ready => "the engine returned no command",
+            .unavailable => "no engine configured (runtime.engine)",
+            .timeout => "the engine timed out",
+            .failed => "the engine could not answer",
+        },
+    };
+    const hint: []const u8 = switch (state.phase) {
+        .idle => "enter: ask",
+        .waiting => "esc: cancel",
+        .ready => "enter: paste",
+        .failed => "enter: ask again",
+    };
+
+    var rows: [1]widgets.goto_picker.Row = undefined;
+    var total: u16 = 0;
+    if (text.len != 0) {
+        var row: widgets.goto_picker.Row = .{ .selected = state.phase == .ready };
+        const len = @min(text.len, widgets.goto_picker.max_row_bytes);
+        @memcpy(row.text[0..len], text[0..len]);
+        row.len = @intCast(len);
+        rows[0] = row;
+        total = 1;
+    }
+
+    return widgets.goto_picker.render(context, application, .{
+        .title = "suggest",
+        .field = &sources.prompt.field,
+        .rows = rows[0..total],
         .total = total,
         .hint = hint,
         .graphical_frame = sources.graphical_frame,

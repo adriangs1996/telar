@@ -259,6 +259,17 @@ test "runtime stopping and stray history results" {
         try server_messages.handleServerMessage(harness.client, try schema.decodeServer(history)),
     );
     try std.testing.expectEqual(@as(u8, 0), harness.client.model.history_palette.len);
+
+    const suggestion = try schema.encodeCommandSuggestion(&payload, .{
+        .request_id = @enumFromInt(3),
+        .status = .ready,
+        .text = "ls -la",
+    });
+    try std.testing.expectEqual(
+        @as(?u8, null),
+        try server_messages.handleServerMessage(harness.client, try schema.decodeServer(suggestion)),
+    );
+    try std.testing.expectEqual(@as(u16, 0), harness.client.model.suggestion.text_len);
 }
 
 test "a pane clipboard write reaches the host terminal" {

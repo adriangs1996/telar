@@ -31,6 +31,8 @@ pub const max_tabs_per_workspace = types.max_tabs_per_workspace;
 pub const max_panes_per_tab = types.max_panes_per_tab;
 pub const max_history_query_bytes = types.max_history_query_bytes;
 pub const max_history_results = types.max_history_results;
+pub const max_suggestion_request_bytes = types.max_suggestion_request_bytes;
+pub const max_suggestion_bytes = types.max_suggestion_bytes;
 pub const max_pane_title_bytes = types.max_pane_title_bytes;
 pub const max_agent_manifests = types.max_agent_manifests;
 pub const first_custom_agent_provider = types.first_custom_agent_provider;
@@ -83,6 +85,7 @@ pub const TabDescriptor = types.TabDescriptor;
 pub const HistoryScope = types.HistoryScope;
 pub const PaneTextSource = types.PaneTextSource;
 pub const PaneTextMode = types.PaneTextMode;
+pub const SuggestionStatus = types.SuggestionStatus;
 pub const HistoryStatus = types.HistoryStatus;
 pub const HistoryEntry = types.HistoryEntry;
 pub const HistoryAuthor = types.HistoryAuthor;
@@ -169,6 +172,7 @@ pub const ClientTag = enum(u8) {
     history_stats = 0x26,
     request_pane_focus = 0x27,
     complete_pane_focus = 0x28,
+    suggest_command = 0x29,
 };
 
 pub const ServerTag = enum(u8) {
@@ -212,6 +216,7 @@ pub const ServerTag = enum(u8) {
     history_stats_result = 0xa6,
     pane_focus_command = 0xa7,
     pane_focus_result = 0xa8,
+    command_suggestion = 0xa9,
 };
 
 pub const LaunchView = struct {
@@ -809,6 +814,22 @@ pub const HistoryPruned = struct {
     removed: u64,
 };
 
+/// Asks the runtime's engine for one shell command that fulfils `text` in
+/// the context of `pane_id` (its cwd and visible screen).
+pub const SuggestCommand = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    text: []const u8,
+};
+
+/// The engine's answer to `suggest_command`. `text` is empty unless
+/// `status == .ready`.
+pub const CommandSuggestion = struct {
+    request_id: RequestId,
+    status: SuggestionStatus,
+    text: []const u8 = "",
+};
+
 pub const QueryHistory = struct {
     request_id: RequestId,
     query: []const u8 = "",
@@ -981,6 +1002,7 @@ pub const ClientMessage = union(enum) {
     search_pane: SearchPane,
     import_history: ImportHistoryView,
     delete_history: DeleteHistory,
+    suggest_command: SuggestCommand,
     prune_history: PruneHistory,
     read_history_output: ReadHistoryOutput,
     history_stats: HistoryStatsQuery,
@@ -1336,6 +1358,7 @@ pub const ServerMessage = union(enum) {
     pane_title: PaneTitle,
     pane_matches: PaneMatchesView,
     history_pruned: HistoryPruned,
+    command_suggestion: CommandSuggestion,
     history_output: HistoryOutput,
     history_stats_result: HistoryStatsView,
     pane_focus_command: PaneFocusCommand,
@@ -1542,6 +1565,31 @@ pub fn encodeMoveTab(buffer: []u8, message: MoveTab) ![]const u8 {
     return encodeDerived(@intFromEnum(ClientTag.move_tab), MoveTab, buffer, message);
 }
 
+/// Encodes one command-suggestion request.
+///
+/// ```zig
+/// const payload = try encodeSuggestCommand(&buffer, .{ .request_id = id, .pane_id = pane, .text = "list files" });
+/// ```
+pub fn encodeSuggestCommand(buffer: []u8, message: SuggestCommand) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validatePaneId(message.pane_id);
+    try validateBytes(message.text, max_suggestion_request_bytes, false);
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.suggest_command));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeSized16(message.text);
+    return encoder.finish();
+}
+
+fn decodeSuggestCommand(decoder: *wire.Decoder) !SuggestCommand {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const text = try decoder.readSized16();
+    try validateBytes(text, max_suggestion_request_bytes, false);
+    return .{ .request_id = request_id, .pane_id = pane_id, .text = text };
+}
+
 pub fn encodeDeleteHistory(buffer: []u8, message: DeleteHistory) ![]const u8 {
     try validateRequestId(message.request_id);
     if (message.id == 0) return error.InvalidHistoryId;
@@ -1725,6 +1773,32 @@ fn decodeHistoryStats(decoder: *wire.Decoder) !HistoryStatsView {
         .top_count = top_count,
         .encoded_top = decoder.consumed(top_start),
     };
+}
+
+/// Encodes one engine reply for a command suggestion.
+///
+/// ```zig
+/// const payload = try encodeCommandSuggestion(&buffer, .{ .request_id = id, .status = .ready, .text = "ls -la" });
+/// ```
+pub fn encodeCommandSuggestion(buffer: []u8, message: CommandSuggestion) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validateBytes(message.text, max_suggestion_bytes, true);
+    if (message.status != .ready and message.text.len != 0) return error.InvalidSuggestion;
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.command_suggestion));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeByte(@intFromEnum(message.status));
+    try encoder.writeSized16(message.text);
+    return encoder.finish();
+}
+
+fn decodeCommandSuggestion(decoder: *wire.Decoder) !CommandSuggestion {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const status = std.enums.fromInt(SuggestionStatus, try decoder.readByte()) orelse return error.InvalidSuggestion;
+    const text = try decoder.readSized16();
+    try validateBytes(text, max_suggestion_bytes, true);
+    if (status != .ready and text.len != 0) return error.InvalidSuggestion;
+    return .{ .request_id = request_id, .status = status, .text = text };
 }
 
 pub fn encodeHistoryPruned(buffer: []u8, message: HistoryPruned) ![]const u8 {
@@ -2175,6 +2249,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .search_pane => .{ .search_pane = try decodeSearchPane(&decoder) },
         .import_history => .{ .import_history = try decodeImportHistory(&decoder) },
         .delete_history => .{ .delete_history = try Derived(DeleteHistory).decode(&decoder) },
+        .suggest_command => .{ .suggest_command = try decodeSuggestCommand(&decoder) },
         .prune_history => .{ .prune_history = try decodePruneHistory(&decoder) },
         .read_history_output => .{ .read_history_output = try Derived(ReadHistoryOutput).decode(&decoder) },
         .history_stats => .{ .history_stats = try decodeHistoryStatsQuery(&decoder) },
@@ -2569,6 +2644,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .pane_title => .{ .pane_title = try decodePaneTitle(&decoder) },
         .pane_matches => .{ .pane_matches = try decodePaneMatches(&decoder) },
         .history_pruned => .{ .history_pruned = try Derived(HistoryPruned).decode(&decoder) },
+        .command_suggestion => .{ .command_suggestion = try decodeCommandSuggestion(&decoder) },
         .history_output => .{ .history_output = try decodeHistoryOutput(&decoder) },
         .history_stats_result => .{ .history_stats_result = try decodeHistoryStats(&decoder) },
         .pane_focus_command => .{ .pane_focus_command = try decodePaneFocusCommand(&decoder) },

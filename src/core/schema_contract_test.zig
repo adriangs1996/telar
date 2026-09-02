@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 83;
+const corpus_len = 85;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -557,6 +557,20 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .entries = &history_entries,
         }),
     ));
+    helper.add("suggest_command", .client, false, golden.suggest_command, helper.commit(
+        try schema.encodeSuggestCommand(helper.space(), .{
+            .request_id = @enumFromInt(41),
+            .pane_id = @enumFromInt(9),
+            .text = "list files by size",
+        }),
+    ));
+    helper.add("command_suggestion", .server, false, golden.command_suggestion, helper.commit(
+        try schema.encodeCommandSuggestion(helper.space(), .{
+            .request_id = @enumFromInt(41),
+            .status = .ready,
+            .text = "ls -lS",
+        }),
+    ));
     const descriptors = [_]schema.TabDescriptor{
         .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "main" },
         .{ .tab_id = @enumFromInt(4), .position = 1, .pane_count = 1, .label = "logs" },
@@ -931,6 +945,8 @@ const golden = struct {
     pub const client_layout_snapshot = "9f01014900010100070000000000000003000000000000000100000700000000000000030000000000000005000000000000000001030001007017000500000000000000000600000000000000";
     pub const pane_focus_command = "a709000000000000000a0000000000000005000000000000000500000000000000030000000000000000";
     pub const pane_focus_result = "a80500000000000000000600000000000000";
+    pub const suggest_command = "292900000000000000090000000000000012006c6973742066696c65732062792073697a65";
+    pub const command_suggestion = "a929000000000000000006006c73202d6c53";
 };
 
 fn fingerprint(entries: []const Entry) [6]u8 {

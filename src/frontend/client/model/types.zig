@@ -45,6 +45,7 @@ pub const Version = struct {
     chrome: u64 = 0,
     prompt: u64 = 0,
     history: u64 = 0,
+    suggestion: u64 = 0,
     copy: u64 = 0,
     viewport: u64 = 0,
 };

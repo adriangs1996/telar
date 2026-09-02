@@ -11,6 +11,7 @@ const client_detachments = @import("../session/client_detachments.zig");
 const client_layouts = @import("../../resources/client_layouts.zig");
 const copy_modes = @import("copy_modes.zig");
 const history_palettes = @import("history_palettes.zig");
+const suggestions = @import("suggestions.zig");
 const name_prompts = @import("name_prompts.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const pane_closures = @import("../panes/pane_closures.zig");
@@ -118,6 +119,7 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
         .command_tab => |*command| try createCommandTab(client, command),
         .goto_picker => _ = name_prompts.beginGotoPicker(client),
         .history_palette => _ = try history_palettes.begin(client),
+        .suggest_command => _ = try suggestions.begin(client),
         .notification => |*notification| _ = try notification_flow.requestDelivery(client, notification),
         .lua_callback, .lua_expr, .plugin => unreachable,
     }

@@ -5,6 +5,8 @@ const agent_mod = @import("../../../agent/root.zig");
 const engine = @import("../../../engine/root.zig");
 const pane_mod = @import("../../../pane/root.zig");
 const proxy_mod = @import("../../../proxy/root.zig");
+const delivery_mod = @import("../../delivery/root.zig");
+const suggestion = @import("../suggestion.zig");
 const runtime_event_entrypoints = @import("../../entrypoints/events/root.zig");
 const event_sources = @import("../../event_sources.zig");
 const coordinators = @import("../coordinators/root.zig");
@@ -89,7 +91,34 @@ pub fn Dispatcher(comptime Application: type) type {
 
             switch (response.purpose) {
                 .title => |title| handleDescription(application, describeFromEngine(title, &response)),
+                .suggestion => |target| deliverSuggestion(application, target, &response),
             }
+        }
+
+        /// Answers the client that asked for a suggestion, if it is still
+        /// connected; a departed client simply drops the reply.
+        fn deliverSuggestion(application: *Application, target: engine.Purpose.Suggestion, response: *const engine.Response) void {
+            const session = application.clients.resolve(.{ .id = target.client_id, .generation = target.client_generation }) orelse return;
+            var pending: delivery_mod.PendingSuggestion = .{
+                .request_id = @enumFromInt(target.request_id),
+                .status = switch (response.status) {
+                    .success => .ready,
+                    .unavailable => .unavailable,
+                    .timeout => .timeout,
+                    .invalid_output, .failed => .failed,
+                },
+            };
+            if (pending.status == .ready) {
+                if (suggestion.extractCommand(response.textSlice())) |command| {
+                    @memcpy(pending.text[0..command.len], command);
+                    pending.text_len = @intCast(command.len);
+                } else {
+                    pending.status = .failed;
+                }
+            }
+
+            session.delivery.responses.push(.{ .command_suggestion = pending }) catch return;
+            application.pumpAll();
         }
 
         /// Asks the engine to kill its child when it has been idle. Called

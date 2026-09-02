@@ -152,6 +152,25 @@ pub const OwnedHistoryQuery = struct {
     }
 };
 
+pub const OwnedSuggestion = struct {
+    /// The request comes from the prompt field, bounded by the tab-label
+    /// capacity; the cap keeps queue messages small.
+    pub const max_text_bytes = 128;
+
+    request_id: schema.RequestId,
+    pane_id: schema.PaneId,
+    text: [max_text_bytes]u8 = undefined,
+    text_len: u8 = 0,
+
+    fn view(value: *const OwnedSuggestion) schema.SuggestCommand {
+        return .{
+            .request_id = value.request_id,
+            .pane_id = value.pane_id,
+            .text = value.text[0..value.text_len],
+        };
+    }
+};
+
 pub const OwnedSearch = struct {
     request_id: schema.RequestId,
     pane_id: schema.PaneId,
@@ -241,6 +260,7 @@ pub const Message = union(enum) {
     search_pane: OwnedSearch,
     query_history: OwnedHistoryQuery,
     delete_history: schema.DeleteHistory,
+    suggest_command: OwnedSuggestion,
     complete_pane_focus: schema.CompletePaneFocus,
 };
 
@@ -566,6 +586,7 @@ pub const Outbox = struct {
             .search_pane => |*value| schema.encodeSearchPane(buffer, value.view()),
             .query_history => |*value| schema.encodeQueryHistory(buffer, value.view()),
             .delete_history => |value| schema.encodeDeleteHistory(buffer, value),
+            .suggest_command => |*value| schema.encodeSuggestCommand(buffer, value.view()),
             .complete_pane_focus => |value| schema.encodeCompletePaneFocus(buffer, value),
         };
     }

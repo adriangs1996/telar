@@ -19,6 +19,7 @@ const client_model = @import("../model/root.zig");
 const client_view = @import("view.zig");
 const name_prompt = @import("../model/name_prompt.zig");
 const history_palette_state = @import("../model/history_palette.zig");
+const suggestion_state = @import("../model/suggestion.zig");
 const kitty = graphics.kitty;
 const modal_graphics = graphics.modal;
 const toast_graphics = graphics.toast;
@@ -61,6 +62,7 @@ pub const Projection = struct {
     workspaces: *const workspace_list.Snapshot,
     prompt: ?name_prompt.Prompt,
     history: *const history_palette_state.State,
+    suggestion: *const suggestion_state.State,
     proxy_tls_active: bool,
     system_metrics: ?client_model.SystemMetrics,
     bar_state: *const bars.State,
@@ -319,6 +321,8 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         projection.version.prompt;
     const history_changed = presenter.presented_model_version.history !=
         projection.version.history;
+    const suggestion_changed = presenter.presented_model_version.suggestion !=
+        projection.version.suggestion;
     const viewport_changed = presenter.presented_model_version.viewport !=
         projection.version.viewport;
     const copy_status_changed = (presenter.compositor.copy == null) != (projection.copy == null);
@@ -340,8 +344,8 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         workspace_list_changed or agents_changed or sidebar_animation_changed or
         proxy_status_changed or system_metrics_changed or bars_changed or notifications_changed or tabs_changed or
         active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or
-        prompt_changed or history_changed or copy_status_changed or view_interaction_changed or
-        input_routing_changed)
+        prompt_changed or history_changed or suggestion_changed or copy_status_changed or
+        view_interaction_changed or input_routing_changed)
     {
         resources.view.invalidate();
     }
@@ -562,6 +566,7 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
         .workspaces = input.projection.workspaces,
         .prompt = if (prompt) |*value| value else null,
         .history = input.projection.history,
+        .suggestion = input.projection.suggestion,
         .proxy_tls_active = input.projection.proxy_tls_active,
         .system_metrics = input.projection.system_metrics,
         .copy_mode_active = input.projection.copy != null,

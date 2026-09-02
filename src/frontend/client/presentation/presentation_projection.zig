@@ -45,6 +45,7 @@ pub fn projection(client: *const Client) presenter.Projection {
         .workspaces = client.model.workspaceListSnapshot(),
         .prompt = prompt,
         .history = &client.model.history_palette,
+        .suggestion = &client.model.suggestion,
         .proxy_tls_active = client.model.proxyTlsActive(),
         .system_metrics = client.model.systemMetrics(),
         .bar_state = client.model.barState(),

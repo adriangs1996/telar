@@ -30,11 +30,20 @@ pub const Options = struct {
 /// per-request state.
 pub const Purpose = union(enum) {
     title: Title,
+    suggestion: Suggestion,
 
     pub const Title = struct {
         pane_id: u64,
         pane_generation: u64,
         session_id: [16]u8,
+    };
+
+    /// A client's command-suggestion request, answered to that exact
+    /// client session.
+    pub const Suggestion = struct {
+        client_id: u64,
+        client_generation: u64,
+        request_id: u64,
     };
 };
 

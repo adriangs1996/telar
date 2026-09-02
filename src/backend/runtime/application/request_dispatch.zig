@@ -47,6 +47,8 @@ const graphics_credit_commands = @import("commands/graphics_credit.zig");
 const graphics_credit_controller = @import("../entrypoints/requests/graphics_credit.zig");
 const history_query = @import("queries/history.zig");
 const history_query_controller = @import("../entrypoints/requests/history_query.zig");
+const suggestion = @import("suggestion.zig");
+const engine = @import("../../engine/root.zig");
 const move_tab_commands = @import("commands/move_tab.zig");
 const move_tab_controller = @import("../entrypoints/requests/move_tab.zig");
 const open_pane_commands = @import("commands/open_pane.zig");
@@ -89,6 +91,7 @@ const PaneStore = pane_mod.PaneStore;
 const WorkspaceRepository = workspace_mod.Repository;
 const AttachmentStore = attachment_mod.AttachmentStore;
 const Delivery = delivery_mod.Delivery;
+const ResponseQueue = delivery_mod.ResponseQueue;
 const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
 const AcknowledgeAgentController = acknowledge_agent_controller.Controller(*acknowledge_agent_commands.AcknowledgeAgentHandler);
 const QueryAgentsController = query_agents_controller.Controller(*Delivery);
@@ -161,6 +164,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .create_pane = routeCreatePane,
             .close_pane = routeClosePane,
             .query_history = routeQueryHistory,
+            .suggest_command = routeSuggestCommand,
             .request_workspace_snapshot = routeRequestWorkspaceSnapshot,
             .create_tab = routeCreateTab,
             .rename_tab = routeRenameTab,
@@ -531,6 +535,44 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
                 .client = session.key,
                 .close_after_reply = session.role == .control,
             }, query);
+        }
+
+        /// Builds the engine prompt from the pane's cwd and visible screen
+        /// and queues it; the reply reaches this client through
+        /// `AgentEvents.handleEngineResponse`. Every failure answers with a
+        /// `command_suggestion` status instead of a request failure, so the
+        /// palette never consumes a continuation.
+        fn routeSuggestCommand(request: *ClientRequestContext, command: schema.SuggestCommand) !void {
+            const application = request.application;
+            const session = request.session;
+            const service = application.engine_service orelse {
+                return queueSuggestionStatus(&session.delivery.responses, command.request_id, .unavailable);
+            };
+            const pane = application.model.panes.resolveControl(.{ .id = command.pane_id, .generation = 0 }) orelse {
+                return queueSuggestionStatus(&session.delivery.responses, command.request_id, .failed);
+            };
+
+            var screen_storage: [schema.max_pane_text_bytes]u8 = undefined;
+            const dump = pane.dumpText(.{ .rows = suggestion.context_rows, .source = .screen }, &screen_storage);
+            var prompt_buffer: [engine.max_prompt_bytes]u8 = undefined;
+            const prompt = suggestion.buildPrompt(.{
+                .cwd = pane.cwd.slice(),
+                .screen = screen_storage[0..dump.len],
+                .request = command.text,
+            }, &prompt_buffer);
+            const purpose: engine.Purpose = .{ .suggestion = .{
+                .client_id = session.key.id,
+                .client_generation = session.key.generation,
+                .request_id = schema.id.raw(command.request_id),
+            } };
+            const queued = engine.Prompt.init(purpose, prompt) catch null;
+            if (queued == null or !service.submit(application.io, .{ .prompt = queued.? })) {
+                return queueSuggestionStatus(&session.delivery.responses, command.request_id, .failed);
+            }
+        }
+
+        fn queueSuggestionStatus(responses: *ResponseQueue, request_id: schema.RequestId, status: schema.SuggestionStatus) !void {
+            try responses.push(.{ .command_suggestion = .{ .request_id = request_id, .status = status } });
         }
 
         fn routeDeleteHistory(request: *ClientRequestContext, delete: schema.DeleteHistory) !void {

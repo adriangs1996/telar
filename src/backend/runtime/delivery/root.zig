@@ -19,6 +19,7 @@ const diagnostics = core.diagnostics;
 const AttachmentStore = attachment_mod.AttachmentStore;
 const PaneStore = pane_mod.PaneStore;
 pub const PendingFailure = response_queue.PendingFailure;
+pub const PendingSuggestion = response_queue.PendingSuggestion;
 pub const PendingTabSnapshot = response_queue.PendingTabSnapshot;
 pub const PendingWorkspaceSnapshot = response_queue.PendingWorkspaceSnapshot;
 pub const PendingTabCreated = response_queue.PendingTabCreated;

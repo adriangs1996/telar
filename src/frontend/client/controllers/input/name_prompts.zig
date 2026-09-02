@@ -12,6 +12,7 @@ const runtime_transport = @import("../../connection/runtime_transport.zig");
 const input_capability = @import("../../../input/root.zig");
 const agent_navigation = @import("../agents/agent_navigation.zig");
 const history_palettes = @import("history_palettes.zig");
+const suggestions = @import("suggestions.zig");
 const goto_picker = @import("../../model/goto_picker.zig");
 const tab_renames = @import("../tabs/tab_renames.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
@@ -111,6 +112,18 @@ pub fn beginHistoryPalette(client: *Client) bool {
     return use_case.execute(.history_palette);
 }
 
+/// Opens the command-suggestion palette prompt; `suggestions.begin` also
+/// clears the suggestion model.
+///
+/// ```zig
+/// _ = beginSuggestPalette(client);
+/// ```
+pub fn beginSuggestPalette(client: *Client) bool {
+    var use_case = openingHandler(client);
+
+    return use_case.execute(.suggest_palette);
+}
+
 pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
     var use_case = handler(client);
 
@@ -118,6 +131,7 @@ pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
     const outcome = try dispatchInput(&use_case, bytes);
     clampPickerSelection(client);
     try refreshHistoryQuery(client, before);
+    discardEditedSuggestion(client, before);
     if (outcome == .finished) {
         var submission = before;
         submission.alternate = client.list_submission_alternate;
@@ -131,7 +145,7 @@ pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
 }
 
 const ListSnapshot = struct {
-    kind: enum { none, goto, history } = .none,
+    kind: enum { none, goto, history, suggest } = .none,
     selection: u16 = 0,
     scope: prompt_state.HistoryScope = .global,
     alternate: bool = false,
@@ -148,6 +162,7 @@ fn listSnapshot(client: *Client) ListSnapshot {
     var snapshot: ListSnapshot = switch (prompt.target) {
         .goto => .{ .kind = .goto },
         .history => .{ .kind = .history },
+        .suggest => .{ .kind = .suggest },
         else => return .{},
     };
 
@@ -169,6 +184,7 @@ fn finishListSubmission(client: *Client, before: ListSnapshot) !void {
             .selection = before.selection,
             .run = client.history_enter_runs != before.alternate,
         }),
+        .suggest => try suggestions.pasteSuggestion(client),
         .goto => {
             var results: goto_picker.Results = .{};
             goto_picker.collect(pickerSources(client), before.textSlice(), &results);
@@ -200,6 +216,21 @@ fn refreshHistoryQuery(client: *Client, before: ListSnapshot) !void {
     try history_palettes.sendQuery(client, text);
 }
 
+/// Drops a landed or pending suggestion once its request text changed, so
+/// the next Enter asks again instead of pasting a stale answer.
+fn discardEditedSuggestion(client: *Client, before: ListSnapshot) void {
+    const prompt = client.model.name_prompt.currentConst() orelse return;
+    if (prompt.target != .suggest or before.kind != .suggest) {
+        return;
+    }
+
+    if (std.mem.eql(u8, before.textSlice(), prompt.field.text())) {
+        return;
+    }
+
+    client.model.suggestion.invalidate();
+}
+
 /// Keeps the picker selection inside the deterministic result set the
 /// renderer and the submit path both derive from the current query.
 fn clampPickerSelection(client: *Client) void {
@@ -215,6 +246,7 @@ fn clampPickerSelection(client: *Client) void {
             break :blk results.len;
         },
         .history => client.model.history_palette.len,
+        .suggest => 1,
         else => return,
     };
     const limit: u16 = if (count == 0) 0 else count - 1;
@@ -295,6 +327,20 @@ fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
         .goto, .history => blk: {
             client.list_submission_alternate = submission.alternate;
             break :blk true;
+        },
+        // Enter asks while no suggestion is ready and the prompt stays
+        // open; once a suggestion landed, Enter closes and pastes it.
+        .suggest => blk: {
+            if (client.model.suggestion.phase == .ready) {
+                break :blk true;
+            }
+
+            if (submission.name.len == 0 or client.model.suggestion.phase == .waiting) {
+                break :blk false;
+            }
+
+            try suggestions.request(client, submission.name);
+            break :blk false;
         },
         .copy_search => blk: {
             const pane_id = client.model.copyModeTarget() orelse break :blk true;

@@ -2367,6 +2367,7 @@ const bootstrap =
     \\for _, name in ipairs({
     \\  "toggle-pane-fullscreen", "toggle-sidebar", "toggle-workspace-list",
     \\  "new-workspace", "rename-workspace", "close-pane", "new-tab", "rename-tab", "close-tab", "detach", "copy-mode",
+    \\  "suggest-command",
     \\}) do
     \\  local stable_name = name
     \\  telar.action[name:gsub("-", "_")] = function()

@@ -117,7 +117,11 @@ engine = {
 }
 ```
 
-See [Agent engine](flows/engine.md) for the runtime path.
+See [Agent engine](flows/engine.md) for the runtime path. With an engine
+configured, `prefix+?` (`telar.action.suggest_command()`) opens the
+[command suggestion](flows/suggest-command.md) palette: it sends the focused
+pane's working directory, its last visible rows and your request to the
+engine, and Enter pastes the answer without running it.
 
 `client.icons` accepts `"unicode"`, the default, or `"nerd-font"`. The Nerd
 Font theme uses a glyph subset embedded in Telar and does not require a Nerd

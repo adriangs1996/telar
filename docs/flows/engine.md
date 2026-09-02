@@ -3,7 +3,9 @@
 `runtime.engine` gives the runtime one headless agent it can ask questions
 without opening a pane: Pi in RPC mode, or any command that speaks the same
 JSON-lines contract. The first feature on it is session titles, which used to
-start one `agent_descriptions` subprocess per request.
+start one `agent_descriptions` subprocess per request; the second is the
+[command suggestion](suggest-command.md) palette. Every request carries a
+`Purpose` that says who asked, so replies route without runtime state.
 
 ## End-to-end path
 
