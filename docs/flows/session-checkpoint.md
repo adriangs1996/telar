@@ -41,8 +41,10 @@ live aggregates and from wire projections (ADR 0005). A checkpoint is a
 header (`TELARCKP`, version, id counters) followed by a stream of tagged
 records: workspace (id, path, explicit name, first tab), tab (extra tabs in
 display order), pane (id, location, cwd, size, NUL-separated launch
-arguments) and layout (client identity, LRU stamp and the exact bytes of one
-`update_client_layout` request). Layouts reuse the wire encoding on purpose:
+arguments, then the agent's provider, session reference and session title)
+and layout (client identity, LRU stamp and the exact bytes of one
+`update_client_layout` request). The file version is 2; version 1 files,
+which predate the pane title, still read with an empty title. Layouts reuse the wire encoding on purpose:
 restore replays them through the same validation that live updates get.
 
 Only panes whose launch inherited the runtime environment and whose arguments
@@ -84,6 +86,21 @@ allowlist can produce a command; custom providers and malformed references
 restore as plain shells. Claude Code hooks receive `session_id` in their
 input and are the intended reporter.
 
+The session title rides along with the reference. The checkpoint records a
+pane's title only when it is ready and generated or manual (`Tracker.durableTitle`);
+placeholders and a child's own window title are never written, and a ready
+title marks the checkpoint dirty like any other semantic change. On restore
+the title is handed over only together with a resume command, so a pane that
+comes back as a plain shell never wears the old agent's name. The restored
+pane has no agent aggregate yet, so `Tracker.restoreTitle` parks the title in
+a bounded store keyed by the exact pane generation; the first aggregate
+created for that generation starts with the title ready and final, which
+also stops the description job for the resumed session's first prompt. The
+pane's new history session receives the same title through
+`HistoryService.setSessionTitle`, so the history palette lists the resumed
+session under its old name. Closing the pane before the agent appears drops
+the parked title.
+
 ## Configuration
 
 `config.runtime.session = { persist = true, path = "...", resume_agents = true }`. The default
@@ -92,12 +109,17 @@ the session volatile.
 
 ## Proof
 
-- `src/backend/persistence/checkpoint.zig` proves the record round trip and
-  rejection of corrupt, truncated and foreign files.
+- `src/backend/persistence/checkpoint.zig` proves the record round trip,
+  version 1 compatibility, title validation and rejection of corrupt,
+  truncated and foreign files.
+- `src/backend/agent/tracker.zig` and `src/backend/agent/restored_titles.zig`
+  prove that a restored title reaches only the resumed agent's generation,
+  skips title generation and is dropped with its pane.
 - `src/backend/runtime/application/session_checkpoint.zig` proves the
   debounce, coalescing and retry state machine and the atomic private write.
 - `src/backend/workspace/repository.zig` and `src/backend/pane/root.zig` prove
   identity-preserving restore and counter advancement.
 - `src/backend/runtime/instance.zig` proves a restart round trip through a
-  real runtime: workspaces, tabs, panes and their identities survive
-  `deinit` followed by `init` on the same checkpoint.
+  real runtime: workspaces, tabs, panes, their identities and the resumed
+  agent's session title survive `deinit` followed by `init` on the same
+  checkpoint.
