@@ -85,8 +85,8 @@ fn schedule(raw_context: *anyopaque, capture: client_model.ClipboardCapture) !vo
     const request: attachments.CaptureRequest = .{
         .target = capture.target,
         .sequence = @intFromEnum(capture.id),
-        .marker_policy = if (client.model.attachmentProvider(capture.target) == .claude)
-            .stable_number
+        .marker_policy = if (client.model.attachmentProvider(capture.target)) |provider|
+            input_application.attachment_prompt.markerPolicy(provider)
         else
             .ordered,
     };
@@ -111,7 +111,7 @@ fn adopt(raw_context: *anyopaque) !bool {
     const request = capture.request;
     var layout_changed = try context.client.view.adoptAttachment(capture);
     context.capture = null;
-    if (request.marker_policy == .stable_number) {
+    if (request.marker_policy.learnsIdentity()) {
         const tab = context.client.model.workspace.tabForPaneConst(request.target.pane_id);
         const pane = if (tab) |value| value.model.findConst(request.target.pane_id) else null;
         if (pane) |value| {

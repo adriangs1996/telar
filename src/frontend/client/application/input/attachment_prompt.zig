@@ -3,15 +3,71 @@
 const std = @import("std");
 const core = @import("telar-core");
 const attachments = @import("../../../attachments/root.zig");
+const input_capability = @import("../../../input/root.zig");
 const client_model = @import("../../model/root.zig");
 const key_routing = @import("key_routing.zig");
 
+const Key = input_capability.keybind.Key;
 const schema = core.schema;
 
 pub const RemovalCommand = struct {
     pane_id: schema.PaneId,
     marker: attachments.MarkerRemoval,
 };
+
+/// Maps an attachment-capable provider to how its prompt identifies images.
+///
+/// ```zig
+/// const policy = markerPolicy(.pi);
+/// ```
+pub fn markerPolicy(provider: schema.AgentProvider) attachments.MarkerPolicy {
+    return switch (provider) {
+        .claude => .stable_number,
+        .pi => .pasted_path,
+        else => .ordered,
+    };
+}
+
+/// Reports whether one accepted key may remove a learned marker from the
+/// child's editor. Atomic placeholders only vanish on Backspace or Delete;
+/// Pi's plain-text path also yields to its word and line deletion bindings.
+///
+/// ```zig
+/// if (editsMarkers(policy, key)) store.expectMarkerDeletion(target);
+/// ```
+pub fn editsMarkers(policy: attachments.MarkerPolicy, key: Key) bool {
+    if (key.phase == .release or !policy.learnsIdentity()) {
+        return false;
+    }
+
+    const plain = !key.mods.ctrl and !key.mods.alt and !key.mods.shift;
+    const char_deletion = key.code == .backspace or key.code == .delete;
+    if (plain) {
+        return char_deletion;
+    }
+    if (policy != .pasted_path or key.mods.shift) {
+        return false;
+    }
+    if (key.mods.alt and !key.mods.ctrl) {
+        return char_deletion or isLetter(key, 'd');
+    }
+    if (key.mods.ctrl and !key.mods.alt) {
+        for ("dhwuk") |letter| {
+            if (isLetter(key, letter)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+fn isLetter(key: Key, letter: u8) bool {
+    return switch (key.code) {
+        .char => |char| char.len == 1 and std.ascii.toLower(char.bytes[0]) == letter,
+        else => false,
+    };
+}
 
 pub const DismissEffects = struct {
     context: *anyopaque,
@@ -140,6 +196,29 @@ const DismissCapture = struct {
         return capture.layout_changed;
     }
 };
+
+test "marker policies follow each provider's prompt conventions" {
+    try std.testing.expect(markerPolicy(.codex) == .ordered);
+    try std.testing.expect(markerPolicy(.claude) == .stable_number);
+    try std.testing.expect(markerPolicy(.pi) == .pasted_path);
+    try std.testing.expect(markerPolicy(.unknown) == .ordered);
+}
+
+test "Pi path markers yield to word and line deletion keys" {
+    const backspace: Key = .{ .code = .backspace };
+    try std.testing.expect(editsMarkers(.pasted_path, backspace));
+    try std.testing.expect(editsMarkers(.stable_number, backspace));
+    try std.testing.expect(!editsMarkers(.ordered, backspace));
+    try std.testing.expect(!editsMarkers(.pasted_path, .{ .code = .backspace, .phase = .release }));
+
+    const word_backward: Key = .{ .code = .{ .char = .init("w") }, .mods = .{ .ctrl = true } };
+    try std.testing.expect(editsMarkers(.pasted_path, word_backward));
+    try std.testing.expect(!editsMarkers(.stable_number, word_backward));
+    try std.testing.expect(editsMarkers(.pasted_path, .{ .code = .backspace, .mods = .{ .alt = true } }));
+    try std.testing.expect(editsMarkers(.pasted_path, .{ .code = .{ .char = .init("k") }, .mods = .{ .ctrl = true } }));
+    try std.testing.expect(!editsMarkers(.pasted_path, .{ .code = .{ .char = .init("v") }, .mods = .{ .ctrl = true } }));
+    try std.testing.expect(!editsMarkers(.pasted_path, .{ .code = .{ .char = .init("a") } }));
+}
 
 test "preview dismissal deletes the child marker before retiring local media" {
     var capture: DismissCapture = .{ .layout_changed = true };

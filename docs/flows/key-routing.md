@@ -110,9 +110,10 @@ changes advance their own `ClientModel.Version` fields. `Presenter` observes
 both through the paced loop. Pane input normally produces no presentation
 revision unless its viewport policy commits a scroll change. Removing a paired
 image marker also advances `View.interactionVersion`; removing the last marker
-re-offers pane geometry. Claude marker identity is additionally reconciled
-after committed pane frames because its attachment context can remove a chip
-without editing it as Codex text. Clipboard media follows its independent
+re-offers pane geometry. Claude and Pi marker identities are additionally
+reconciled after committed pane frames: Claude's attachment context can remove
+a chip without editing it as Codex text, and Pi's plain-text path yields to
+word and line deletion bindings. Clipboard media follows its independent
 ingress version.
 
 Prompt, copy and pane failures preserve the transaction rules of their

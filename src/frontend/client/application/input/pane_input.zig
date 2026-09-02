@@ -11,6 +11,8 @@ const keybind = input_capability.keybind;
 const schema = core.schema;
 
 pub const max_bytes: usize = 8 * 1024;
+/// Keys one synthetic sequence may carry; each key encodes to at most 32 bytes.
+pub const max_keys: usize = max_bytes / 32;
 
 pub const Source = enum {
     host,
@@ -95,7 +97,7 @@ pub const PaneInputHandler = struct {
     /// _ = try handler.executeKeys(.{ .pane = pane_id }, keys);
     /// ```
     pub fn executeKeys(handler: *PaneInputHandler, target: client_model.PaneInputTarget, keys: []const keybind.Key) !?Delivery {
-        if (keys.len == 0 or keys.len > max_bytes / 32) {
+        if (keys.len == 0 or keys.len > max_keys) {
             return error.InvalidInputLength;
         }
 

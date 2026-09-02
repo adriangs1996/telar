@@ -398,15 +398,15 @@ pub const State = struct {
         return had_items != has_items;
     }
 
-    /// Reconciles Claude's stable image markers after a pane frame commits.
-    /// A null result means no previously paired marker disappeared.
+    /// Reconciles learned image markers (Claude numbers, Pi paths) after a
+    /// pane frame commits. A null result means no paired marker disappeared.
     ///
     /// ```zig
     /// const layout_changed = view.reconcileAttachmentMarkers(target, screen) orelse return;
     /// ```
     pub fn reconcileAttachmentMarkers(state: *State, target: attachments.Target, screen: attachments.MarkerScreen) ?bool {
         const had_items = state.attachment_store.hasVisibleItems();
-        if (state.attachment_store.reconcileStableMarkers(target, screen) == 0) {
+        if (state.attachment_store.reconcileMarkers(target, screen) == 0) {
             return null;
         }
 

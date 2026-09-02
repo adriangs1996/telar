@@ -53,25 +53,44 @@ already accepted pane input transaction. See [Key routing](key-routing.md).
 ## Prompt coupling
 
 The attachment store scopes previews to one exact pane generation and applies
-the provider's marker identity. Codex treats each marker as one atomic editor
-element and renumbers the remaining markers after deletion, so its previews
-follow prompt order. Claude keeps increasing marker numbers after deletion, so
-Telar learns and retains the actual number rendered for each Claude preview.
+the provider's marker identity, chosen by `attachment_prompt.markerPolicy`:
+
+- Codex (`ordered`) treats each `[Image #N]` marker as one atomic editor
+  element and renumbers the remaining markers after deletion, so its previews
+  follow prompt order.
+- Claude (`stable_number`) keeps increasing marker numbers after deletion, so
+  Telar learns and retains the actual number rendered for each preview.
+- Pi (`pasted_path`) has no placeholder. Its `Ctrl+V` writes the image to
+  `<tmpdir>/pi-clipboard-<uuid>.<ext>` and inserts that path as plain text.
+  Telar learns the UUID from committed frames and treats the whole path as
+  the marker. `attachments/path_marker.zig` reads Pi's editor conventions: a
+  word longer than the row is broken at grapheme granularity into rows of
+  `width - 1` cells, the path starts at the first `/` of its word so a word
+  soft-wrapped before it is never included, and the hidden hardware cursor is
+  replaced by Pi's isolated inverse-video cell.
 
 Closing a preview produces a bounded synthetic key sequence for its pane. The
-sequence moves to the corresponding marker, deletes that atomic element and
-restores the prior cursor position. `PaneInputHandler.executeKeys` encodes the
-whole sequence against the pane's current keyboard modes and enqueues it as one
-input transaction. Telar retires the local image only after that transaction is
-accepted.
+sequence moves to the corresponding marker, deletes it and restores the prior
+cursor position. An atomic placeholder costs one deletion key; a Pi path costs
+one per grapheme, and the cursor must share a row with the path's end or
+start. The whole sequence is bounded by `attachments.max_removal_keys`, which
+the pane-input boundary can encode as one transaction.
+`PaneInputHandler.executeKeys` encodes the sequence against the pane's current
+keyboard modes and enqueues it as one input transaction. Telar retires the
+local image only after that transaction is accepted.
 
 For input in the other direction, a plain `Backspace` or `Delete` next to a
-known marker retires its preview. Committed Claude frames also reconcile stable
-marker numbers, covering deletion paths that happen inside Claude's attachment
-navigation context. A plain `Enter` delivered to the owning pane retires every
-preview for that prompt. It also cancels an exact clipboard capture still in
-flight, so a late worker completion cannot recreate previews for a prompt that
-was already sent. Retiring image buffers remains deferred to the media path.
+known marker retires its preview. Providers that learn marker identities also
+arm a bounded deletion watch: after a key that may remove a marker (Backspace
+and Delete for every learning policy; Pi's word and line deletion bindings as
+well), the next `deletion_watch_frames` committed frames retire previews whose
+learned marker is no longer on screen. This covers deletion paths that happen
+inside Claude's attachment navigation context and Pi's `Ctrl+W`, `Ctrl+U`,
+`Ctrl+K`, `Alt+D` and `Alt+Backspace`. A plain `Enter` delivered to the owning
+pane retires every preview for that prompt. It also cancels an exact clipboard
+capture still in flight, so a late worker completion cannot recreate previews
+for a prompt that was already sent. Retiring image buffers remains deferred to
+the media path.
 
 ## State and worker ownership
 
@@ -152,11 +171,13 @@ event does not wipe megabytes synchronously.
 - `src/frontend/client/application/clipboard_image_delivery.zig` proves quiet
   outcomes, notification mapping and publication failure propagation.
 - `src/frontend/client/application/input/attachment_prompt.zig` proves child
-  marker deletion precedes local retirement, and prompt submission cancels an
-  in-flight capture.
+  marker deletion precedes local retirement, prompt submission cancels an
+  in-flight capture, and which keys arm a deletion watch per policy.
 - `src/frontend/attachments/root.zig` proves cancellation ownership, image
-  bounds, retained-byte limits, target scoping, marker planning and ingress
-  revision.
+  bounds, retained-byte limits, target scoping, marker planning, the bounded
+  deletion watch and ingress revision.
+- `src/frontend/attachments/path_marker.zig` proves Pi path parsing across
+  forced wraps, extent limits, screen-order collection and cursor resolution.
 - `src/frontend/client/client_test.zig` proves pane delivery without a target,
   successful resource observation, stale target cleanup, quiet clipboard-empty
   behavior and notification failures without direct presentation.

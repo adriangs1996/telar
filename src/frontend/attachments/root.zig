@@ -9,6 +9,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("telar-core");
 const kitty = @import("../graphics/kitty.zig");
+pub const path_marker = @import("path_marker.zig");
 
 const Io = std.Io;
 const schema = core.schema;
@@ -20,6 +21,12 @@ pub const max_png_bytes: usize = 16 * 1024 * 1024;
 pub const max_pixels: u64 = 16 * 1024 * 1024;
 pub const max_retained_bytes: usize = 32 * 1024 * 1024;
 pub const max_marker_navigation_steps: u8 = 120;
+/// Keys one marker removal may enqueue as a single pane-input transaction.
+/// The pane-input boundary encodes at most this many keys per transaction.
+pub const max_removal_keys: usize = 256;
+/// Committed frames inspected for a marker's disappearance after a deletion
+/// key. The child may publish an unrelated frame before it redraws its editor.
+pub const deletion_watch_frames: u8 = 3;
 
 const marker_prefix = "[Image #";
 const marker_prefix_width: u16 = marker_prefix.len;
@@ -45,9 +52,27 @@ pub const CaptureRequest = struct {
     marker_policy: MarkerPolicy = .ordered,
 };
 
+/// How the child's prompt identifies one pasted image.
+///
+/// - `ordered`: Codex renumbers `[Image #N]` after deletion, so the preview's
+///   shelf position is its marker.
+/// - `stable_number`: Claude keeps increasing `[Image #N]`, so the number
+///   rendered for each preview is learned and retained.
+/// - `pasted_path`: Pi inserts `<tmpdir>/pi-clipboard-<uuid>.<ext>` as plain
+///   text, so the file UUID is learned and the whole path is the marker.
 pub const MarkerPolicy = enum {
     ordered,
     stable_number,
+    pasted_path,
+
+    pub fn learnsIdentity(policy: MarkerPolicy) bool {
+        return policy != .ordered;
+    }
+};
+
+const MarkerIdentity = union(enum) {
+    number: u16,
+    path: path_marker.Uuid,
 };
 
 pub const Capture = struct {
@@ -133,6 +158,24 @@ pub const MarkerRemoval = struct {
     },
     steps: u8,
     deletion: MarkerDeletion,
+    /// Deletion keys needed: one for an atomic placeholder, one per grapheme
+    /// for a pasted path.
+    deletions: u8 = 1,
+
+    pub fn keyCount(removal: MarkerRemoval) usize {
+        return @as(usize, removal.steps) * 2 + removal.deletions;
+    }
+};
+
+/// Names the deletion being probed for a preview that has no slot yet.
+pub const DeletionProbe = struct {
+    deletion: MarkerDeletion,
+    policy: MarkerPolicy = .ordered,
+};
+
+const PendingDeletion = struct {
+    target: Target,
+    frames: u8,
 };
 
 pub const PlanItem = struct {
@@ -167,8 +210,30 @@ const Slot = struct {
     desired_modal: ?kitty.OutputPlacement = null,
     emitted_modal: ?kitty.OutputPlacement = null,
     marker_policy: MarkerPolicy,
-    marker_number: ?u16 = null,
+    marker: ?MarkerIdentity = null,
     retire_pending: bool = false,
+
+    fn markerNumber(slot: *const Slot) ?u16 {
+        const marker = slot.marker orelse return null;
+
+        return switch (marker) {
+            .number => |number| number,
+            .path => null,
+        };
+    }
+
+    fn markerPath(slot: *const Slot) ?path_marker.Uuid {
+        const marker = slot.marker orelse return null;
+
+        return switch (marker) {
+            .number => null,
+            .path => |uuid| uuid,
+        };
+    }
+
+    fn owns(slot: *const Slot, target: Target) bool {
+        return !slot.retire_pending and std.meta.eql(slot.target, target);
+    }
 };
 
 /// Bounded, disposable presentation state for images the focused local agent
@@ -189,7 +254,7 @@ pub const Store = struct {
     gpa: std.mem.Allocator,
     slots: [max_items]?Slot = @splat(null),
     active_target: ?Target = null,
-    stable_deletion_pending: ?Target = null,
+    marker_deletion_pending: ?PendingDeletion = null,
     modal: ?Id = null,
     supported: bool = false,
     cell_width: u16 = 0,
@@ -267,7 +332,7 @@ pub const Store = struct {
             null;
         if (optionalTargetEql(store.active_target, target)) return .{};
         store.active_target = target;
-        store.stable_deletion_pending = null;
+        store.marker_deletion_pending = null;
         store.modal = null;
         if (store.partial) |index| {
             const slot = &store.slots[index].?;
@@ -401,16 +466,16 @@ pub const Store = struct {
         if (removed != 0) {
             store.modal = null;
         }
-        if (optionalTargetEql(store.stable_deletion_pending, target)) {
-            store.stable_deletion_pending = null;
+        if (store.pendingDeletionFor(target)) {
+            store.marker_deletion_pending = null;
         }
 
         return removed;
     }
 
-    /// Plans an atomic marker deletion while restoring the child's cursor.
-    /// Image placeholders count as one editor step even though they occupy ten
-    /// terminal cells.
+    /// Plans a marker deletion while restoring the child's cursor. An atomic
+    /// placeholder counts as one editor step even though it occupies ten
+    /// terminal cells; a pasted path costs one deletion per grapheme.
     ///
     /// ```zig
     /// const plan = store.planMarkerRemoval(id, screen) orelse return;
@@ -419,25 +484,15 @@ pub const Store = struct {
         const visible = store.snapshot();
         const ordinal = snapshotOrdinal(&visible, id) orelse return null;
         const slot = store.findConst(id) orelse return null;
-        const marker_number = slot.marker_number orelse @as(u16, ordinal) + 1;
-        if (!screen.cursor.visible) {
+        const removal = switch (slot.marker_policy) {
+            .ordered, .stable_number => planPlaceholderRemoval(slot, ordinal, screen),
+            .pasted_path => planPathRemoval(slot, screen),
+        } orelse return null;
+        if (removal.keyCount() > max_removal_keys) {
             return null;
         }
 
-        const marker = findMarker(screen.buffer, marker_number, screen.cursor) orelse return null;
-        if (marker.y != screen.cursor.y) {
-            return null;
-        }
-
-        if (screen.cursor.x >= marker.end) {
-            const steps = atomicSteps(screen.buffer, marker.end, screen.cursor.x, marker.y) orelse return null;
-
-            return .{ .direction = .left, .steps = steps, .deletion = .backward };
-        }
-
-        const steps = atomicSteps(screen.buffer, screen.cursor.x, marker.start, marker.y) orelse return null;
-
-        return .{ .direction = .right, .steps = steps, .deletion = .forward };
+        return removal;
     }
 
     /// Resolves a Backspace or Delete positioned directly beside an image
@@ -447,19 +502,18 @@ pub const Store = struct {
     /// const id = store.idAtMarkerDeletion(screen, .backward) orelse return;
     /// ```
     pub fn idAtMarkerDeletion(store: *const Store, screen: MarkerScreen, deletion: MarkerDeletion) ?Id {
-        if (!screen.cursor.visible) {
-            return null;
-        }
-
         const visible = store.snapshot();
         for (visible.slice(), 0..) |item, index| {
             const slot = store.findConst(item.id) orelse continue;
-            const ordinal = slot.marker_number orelse @as(u16, @intCast(index + 1));
-            if (markerTouchesCursor(screen.buffer, .{
-                .ordinal = ordinal,
-                .cursor = screen.cursor,
-                .deletion = deletion,
-            })) {
+            const touches = switch (slot.marker_policy) {
+                .ordered, .stable_number => screen.cursor.visible and markerTouchesCursor(screen.buffer, .{
+                    .ordinal = slot.markerNumber() orelse @as(u16, @intCast(index + 1)),
+                    .cursor = screen.cursor,
+                    .deletion = deletion,
+                }),
+                .pasted_path => pathTouchesCursor(slot.markerPath() orelse continue, screen, deletion),
+            };
+            if (touches) {
                 return item.id;
             }
         }
@@ -467,72 +521,110 @@ pub const Store = struct {
         return null;
     }
 
-    /// Reports whether a deletion targets the next marker whose clipboard
-    /// capture has not reached the preview store yet.
+    /// Reports whether a deletion targets the marker of a clipboard capture
+    /// that has not reached the preview store yet.
     ///
     /// ```zig
-    /// if (store.pendingMarkerAtDeletion(screen, .backward)) cancelCapture();
+    /// if (store.pendingMarkerAtDeletion(screen, .{ .deletion = .backward })) cancelCapture();
     /// ```
-    pub fn pendingMarkerAtDeletion(store: *const Store, screen: MarkerScreen, deletion: MarkerDeletion) bool {
-        if (!screen.cursor.visible) {
-            return false;
-        }
-
+    pub fn pendingMarkerAtDeletion(store: *const Store, screen: MarkerScreen, probe: DeletionProbe) bool {
         const visible = store.snapshot();
         if (visible.len >= max_items) {
             return false;
         }
 
-        return markerTouchesCursor(screen.buffer, .{
-            .ordinal = @as(u16, visible.len) + 1,
-            .cursor = screen.cursor,
-            .deletion = deletion,
-        });
+        switch (probe.policy) {
+            .ordered, .stable_number => {
+                if (!screen.cursor.visible) {
+                    return false;
+                }
+
+                return markerTouchesCursor(screen.buffer, .{
+                    .ordinal = @as(u16, visible.len) + 1,
+                    .cursor = screen.cursor,
+                    .deletion = probe.deletion,
+                });
+            },
+            .pasted_path => {
+                const target = store.active_target orelse return false;
+                var found: [max_items * 2]path_marker.Marker = undefined;
+                const count = path_marker.collect(screen.buffer, &found);
+                for (found[0..count]) |marker| {
+                    if (store.pathClaimed(target, marker.uuid)) {
+                        continue;
+                    }
+                    if (markerCursorTouches(marker, screen, probe.deletion)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            },
+        }
     }
 
-    pub fn expectStableMarkerDeletion(store: *Store, target: Target) void {
+    /// Arms one bounded watch for a marker disappearing from the target's
+    /// next committed frames. Only policies that learn marker identities can
+    /// recognise a disappearance.
+    ///
+    /// ```zig
+    /// store.expectMarkerDeletion(target);
+    /// ```
+    pub fn expectMarkerDeletion(store: *Store, target: Target) void {
         for (store.slots) |maybe_slot| {
             const slot = maybe_slot orelse continue;
-            if (!slot.retire_pending and slot.marker_policy == .stable_number and
-                std.meta.eql(slot.target, target))
-            {
-                store.stable_deletion_pending = target;
+            if (slot.owns(target) and slot.marker_policy.learnsIdentity()) {
+                store.marker_deletion_pending = .{ .target = target, .frames = deletion_watch_frames };
                 return;
             }
         }
     }
 
-    /// Learns Claude's stable marker numbers and retires previews whose
-    /// previously observed marker disappeared from a committed pane frame.
+    /// Learns Claude's stable marker numbers and Pi's pasted file paths, then
+    /// retires previews whose learned marker disappeared from a committed
+    /// pane frame while a deletion watch is armed.
     ///
     /// ```zig
-    /// const removed = store.reconcileStableMarkers(target, screen);
+    /// const removed = store.reconcileMarkers(target, screen);
     /// ```
-    pub fn reconcileStableMarkers(store: *Store, target: Target, screen: MarkerScreen) u8 {
+    pub fn reconcileMarkers(store: *Store, target: Target, screen: MarkerScreen) u8 {
         const visible = store.snapshot();
         for (visible.slice()) |item| {
             const slot = store.find(item.id) orelse continue;
-            if (slot.marker_policy != .stable_number or slot.marker_number != null or
-                !std.meta.eql(slot.target, target))
-            {
+            if (slot.marker != null or !slot.owns(target)) {
                 continue;
             }
 
-            slot.marker_number = markerForNextUnpaired(store, target, screen.buffer);
+            slot.marker = switch (slot.marker_policy) {
+                .ordered => null,
+                .stable_number => if (markerForNextUnpaired(store, target, screen.buffer)) |number|
+                    .{ .number = number }
+                else
+                    null,
+                .pasted_path => if (pathForNextUnpaired(store, target, screen.buffer)) |uuid|
+                    .{ .path = uuid }
+                else
+                    null,
+            };
         }
 
-        if (!optionalTargetEql(store.stable_deletion_pending, target)) {
+        if (!store.pendingDeletionFor(target)) {
             return 0;
         }
-        store.stable_deletion_pending = null;
 
         var removed: u8 = 0;
         for (&store.slots, 0..) |*maybe_slot, index| {
             const slot = if (maybe_slot.*) |*value| value else continue;
-            const number = slot.marker_number orelse continue;
-            if (slot.retire_pending or slot.marker_policy != .stable_number or
-                !std.meta.eql(slot.target, target) or markerPresent(screen.buffer, number))
-            {
+            const marker = slot.marker orelse continue;
+            if (!slot.owns(target)) {
+                continue;
+            }
+
+            const present = switch (marker) {
+                .number => |number| markerPresent(screen.buffer, number),
+                .path => |uuid| path_marker.find(screen.buffer, uuid) != null,
+            };
+            if (present) {
                 continue;
             }
 
@@ -544,7 +636,31 @@ pub const Store = struct {
             removed += 1;
         }
 
+        const pending = &store.marker_deletion_pending.?;
+        pending.frames -= 1;
+        if (removed != 0 or pending.frames == 0) {
+            store.marker_deletion_pending = null;
+        }
+
         return removed;
+    }
+
+    fn pendingDeletionFor(store: *const Store, target: Target) bool {
+        const pending = store.marker_deletion_pending orelse return false;
+
+        return std.meta.eql(pending.target, target);
+    }
+
+    fn pathClaimed(store: *const Store, target: Target, uuid: path_marker.Uuid) bool {
+        for (store.slots) |maybe_slot| {
+            const slot = maybe_slot orelse continue;
+            const claimed = slot.markerPath() orelse continue;
+            if (slot.owns(target) and std.mem.eql(u8, &claimed, &uuid)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     pub fn openModal(store: *Store, id: Id) bool {
@@ -862,6 +978,112 @@ fn snapshotOrdinal(snapshot: *const Snapshot, id: Id) ?u8 {
     return null;
 }
 
+fn planPlaceholderRemoval(slot: *const Slot, ordinal: u8, screen: MarkerScreen) ?MarkerRemoval {
+    const marker_number = slot.markerNumber() orelse @as(u16, ordinal) + 1;
+    if (!screen.cursor.visible) {
+        return null;
+    }
+
+    const marker = findMarker(screen.buffer, marker_number, screen.cursor) orelse return null;
+    if (marker.y != screen.cursor.y) {
+        return null;
+    }
+
+    if (screen.cursor.x >= marker.end) {
+        const steps = atomicSteps(screen.buffer, marker.end, screen.cursor.x, marker.y) orelse return null;
+
+        return .{ .direction = .left, .steps = steps, .deletion = .backward };
+    }
+
+    const steps = atomicSteps(screen.buffer, screen.cursor.x, marker.start, marker.y) orelse return null;
+
+    return .{ .direction = .right, .steps = steps, .deletion = .forward };
+}
+
+/// Pi's cursor must share a row with the path's end or start; steps across a
+/// wrapped row cannot be counted from cells alone.
+fn planPathRemoval(slot: *const Slot, screen: MarkerScreen) ?MarkerRemoval {
+    const uuid = slot.markerPath() orelse return null;
+    const marker = path_marker.find(screen.buffer, uuid) orelse return null;
+    const cells = marker.cells orelse return null;
+    const path_screen = pathScreen(screen);
+    if (path_marker.cursorOnRow(path_screen, marker.end.y)) |cursor_x| {
+        if (cursor_x >= marker.end.x) {
+            const steps = path_marker.stepsOnRow(screen.buffer, marker.end.y, .{
+                .from = marker.end.x,
+                .to = cursor_x,
+            }) orelse return null;
+
+            return .{ .direction = .left, .steps = steps, .deletion = .backward, .deletions = cells };
+        }
+    }
+    if (path_marker.cursorOnRow(path_screen, marker.start.y)) |cursor_x| {
+        if (cursor_x <= marker.start.x) {
+            const steps = path_marker.stepsOnRow(screen.buffer, marker.start.y, .{
+                .from = cursor_x,
+                .to = marker.start.x,
+            }) orelse return null;
+
+            return .{ .direction = .right, .steps = steps, .deletion = .forward, .deletions = cells };
+        }
+    }
+
+    return null;
+}
+
+fn pathTouchesCursor(uuid: path_marker.Uuid, screen: MarkerScreen, deletion: MarkerDeletion) bool {
+    const marker = path_marker.find(screen.buffer, uuid) orelse return false;
+
+    return markerCursorTouches(marker, screen, deletion);
+}
+
+fn markerCursorTouches(marker: path_marker.Marker, screen: MarkerScreen, deletion: MarkerDeletion) bool {
+    return switch (deletion) {
+        .backward => path_marker.cursorAt(pathScreen(screen), marker.end),
+        .forward => path_marker.cursorAt(pathScreen(screen), marker.start),
+    };
+}
+
+fn pathScreen(screen: MarkerScreen) path_marker.Screen {
+    return .{ .buffer = screen.buffer, .cursor = screen.cursor };
+}
+
+/// Pairs the oldest unpaired Pi preview with the oldest unclaimed path among
+/// the newest ones on screen, mirroring how Claude's numbers are paired.
+fn pathForNextUnpaired(store: *const Store, target: Target, buffer: *const ui.Buffer) ?path_marker.Uuid {
+    var found: [max_items * 2]path_marker.Marker = undefined;
+    const count = path_marker.collect(buffer, &found);
+    var candidates: [max_items * 2]path_marker.Uuid = undefined;
+    var candidate_count: usize = 0;
+    for (found[0..count]) |marker| {
+        if (store.pathClaimed(target, marker.uuid)) {
+            continue;
+        }
+
+        candidates[candidate_count] = marker.uuid;
+        candidate_count += 1;
+    }
+
+    const unpaired = unpairedPathCount(store, target);
+    if (unpaired == 0 or candidate_count < unpaired) {
+        return null;
+    }
+
+    return candidates[candidate_count - unpaired];
+}
+
+fn unpairedPathCount(store: *const Store, target: Target) u8 {
+    var count: u8 = 0;
+    for (store.slots) |maybe_slot| {
+        const slot = maybe_slot orelse continue;
+        if (slot.owns(target) and slot.marker_policy == .pasted_path and slot.marker == null) {
+            count += 1;
+        }
+    }
+
+    return count;
+}
+
 fn findMarker(buffer: *const ui.Buffer, number: u16, cursor: schema.frame.Cursor) ?MarkerPosition {
     if (number == 0 or buffer.w < minimum_marker_width) {
         return null;
@@ -946,9 +1168,7 @@ fn unpairedStableCount(store: *const Store, target: Target) u8 {
     var count: u8 = 0;
     for (store.slots) |maybe_slot| {
         const slot = maybe_slot orelse continue;
-        if (!slot.retire_pending and slot.marker_policy == .stable_number and
-            slot.marker_number == null and std.meta.eql(slot.target, target))
-        {
+        if (slot.owns(target) and slot.marker_policy == .stable_number and slot.marker == null) {
             count += 1;
         }
     }
@@ -959,9 +1179,7 @@ fn unpairedStableCount(store: *const Store, target: Target) u8 {
 fn markerNumberClaimed(store: *const Store, target: Target, number: u16) bool {
     for (store.slots) |maybe_slot| {
         const slot = maybe_slot orelse continue;
-        if (!slot.retire_pending and slot.marker_policy == .stable_number and
-            std.meta.eql(slot.target, target) and slot.marker_number == number)
-        {
+        if (slot.owns(target) and slot.markerNumber() == number) {
             return true;
         }
     }
@@ -1175,6 +1393,10 @@ extern fn telar_macos_clipboard_copy_png(
     max_pixels_value: u64,
 ) c_int;
 
+test {
+    _ = path_marker;
+}
+
 test "capture resources release one completed worker result" {
     var resources: CaptureResources = .{};
     const request: CaptureRequest = .{
@@ -1325,7 +1547,7 @@ test "marker removal keeps preview order aligned with atomic child placeholders"
     try std.testing.expect(store.pendingMarkerAtDeletion(.{
         .buffer = &buffer,
         .cursor = .{ .visible = true, .x = pending_cursor, .y = 0 },
-    }, .backward));
+    }, .{ .deletion = .backward }));
 }
 
 test "Claude previews retain stable marker numbers across attachment deletion" {
@@ -1343,7 +1565,7 @@ test "Claude previews retain stable marker numbers across attachment deletion" {
     defer buffer.deinit();
     var cursor_x = buffer.writeText(buffer.area(), 0, 0, "> [Image #7][Image #12]", .{});
 
-    try std.testing.expectEqual(@as(u8, 0), store.reconcileStableMarkers(target, .{
+    try std.testing.expectEqual(@as(u8, 0), store.reconcileMarkers(target, .{
         .buffer = &buffer,
         .cursor = .{ .visible = true, .x = cursor_x, .y = 0 },
     }));
@@ -1355,8 +1577,8 @@ test "Claude previews retain stable marker numbers across attachment deletion" {
 
     buffer.clear(.{});
     cursor_x = buffer.writeText(buffer.area(), 0, 0, "> [Image #12]", .{});
-    store.expectStableMarkerDeletion(target);
-    try std.testing.expectEqual(@as(u8, 1), store.reconcileStableMarkers(target, .{
+    store.expectMarkerDeletion(target);
+    try std.testing.expectEqual(@as(u8, 1), store.reconcileMarkers(target, .{
         .buffer = &buffer,
         .cursor = .{ .visible = true, .x = cursor_x, .y = 0 },
     }));
@@ -1364,6 +1586,129 @@ test "Claude previews retain stable marker numbers across attachment deletion" {
     const remaining = store.snapshot();
     try std.testing.expectEqual(@as(u8, 1), remaining.len);
     try std.testing.expectEqual(@as(u64, 2), @intFromEnum(remaining.items[0].id));
+}
+
+const pi_uuid = "3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b";
+const pi_second_uuid = "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d";
+const pi_path = "/var/folders/8x/abc/T/pi-clipboard-" ++ pi_uuid ++ ".png";
+const pi_second_path = "/var/folders/8x/abc/T/pi-clipboard-" ++ pi_second_uuid ++ ".png";
+
+fn adoptPiCapture(store: *Store, sequence: u64, target: Target) !void {
+    const capture = try testCapture(std.testing.allocator, testRequest(sequence, target), "pi");
+    capture.request.marker_policy = .pasted_path;
+    try store.adopt(capture);
+}
+
+fn writePiCursor(buffer: *ui.Buffer, x: u16, y: u16) void {
+    buffer.setCell(x, y, " ", 1, .{ .flags = .{ .inverse = true } });
+}
+
+test "Pi previews pair with pasted paths and are closed by deleting the whole path" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const target: Target = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
+    _ = store.setTarget(target);
+    try adoptPiCapture(&store, 1, target);
+    try adoptPiCapture(&store, 2, target);
+    var buffer = try ui.Buffer.init(std.testing.allocator, 200, 2);
+    defer buffer.deinit();
+    const prompt = "see " ++ pi_path ++ " and " ++ pi_second_path;
+    const cursor_x = buffer.writeText(buffer.area(), 0, 0, prompt, .{});
+    writePiCursor(&buffer, cursor_x, 0);
+    const hidden: schema.frame.Cursor = .{ .visible = false, .x = 0, .y = 0 };
+
+    try std.testing.expectEqual(@as(u8, 0), store.reconcileMarkers(target, .{ .buffer = &buffer, .cursor = hidden }));
+
+    const removal = store.planMarkerRemoval(@enumFromInt(1), .{ .buffer = &buffer, .cursor = hidden }).?;
+    try std.testing.expect(removal.direction == .left);
+    try std.testing.expectEqual(@as(u8, " and ".len + pi_second_path.len), removal.steps);
+    try std.testing.expect(removal.deletion == .backward);
+    try std.testing.expectEqual(@as(u8, pi_path.len), removal.deletions);
+
+    const second = store.planMarkerRemoval(@enumFromInt(2), .{ .buffer = &buffer, .cursor = hidden }).?;
+    try std.testing.expectEqual(@as(u8, 0), second.steps);
+    try std.testing.expectEqual(@as(u8, pi_second_path.len), second.deletions);
+
+    try std.testing.expectEqual(
+        @as(Id, @enumFromInt(2)),
+        store.idAtMarkerDeletion(.{ .buffer = &buffer, .cursor = hidden }, .backward).?,
+    );
+    try std.testing.expect(store.idAtMarkerDeletion(.{ .buffer = &buffer, .cursor = hidden }, .forward) == null);
+    try std.testing.expectEqual(
+        @as(Id, @enumFromInt(1)),
+        store.idAtMarkerDeletion(.{ .buffer = &buffer, .cursor = .{ .visible = true, .x = 4, .y = 0 } }, .forward).?,
+    );
+}
+
+test "a Pi path removed by any editor command retires its preview within the watched frames" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const target: Target = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
+    _ = store.setTarget(target);
+    try adoptPiCapture(&store, 1, target);
+    var buffer = try ui.Buffer.init(std.testing.allocator, 40, 4);
+    defer buffer.deinit();
+    var x: u16 = 0;
+    var y: u16 = 0;
+    for (pi_path) |byte| {
+        if (x == buffer.w - 1) {
+            x = 0;
+            y += 1;
+        }
+        buffer.setCell(x, y, &.{byte}, 1, .{});
+        x += 1;
+    }
+    const hidden: schema.frame.Cursor = .{ .visible = false, .x = 0, .y = 0 };
+    const screen: MarkerScreen = .{ .buffer = &buffer, .cursor = hidden };
+
+    try std.testing.expectEqual(@as(u8, 0), store.reconcileMarkers(target, screen));
+    store.expectMarkerDeletion(target);
+    try std.testing.expectEqual(@as(u8, 0), store.reconcileMarkers(target, screen));
+    try std.testing.expect(store.marker_deletion_pending != null);
+
+    buffer.clear(.{});
+    try std.testing.expectEqual(@as(u8, 1), store.reconcileMarkers(target, screen));
+    try std.testing.expectEqual(@as(u8, 0), store.snapshot().len);
+    try std.testing.expect(store.marker_deletion_pending == null);
+}
+
+test "a deletion watch expires after the bounded frame count" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const target: Target = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
+    _ = store.setTarget(target);
+    try adoptPiCapture(&store, 1, target);
+    var buffer = try ui.Buffer.init(std.testing.allocator, 120, 1);
+    defer buffer.deinit();
+    _ = buffer.writeText(buffer.area(), 0, 0, pi_path, .{});
+    const screen: MarkerScreen = .{ .buffer = &buffer, .cursor = .{ .visible = false, .x = 0, .y = 0 } };
+    _ = store.reconcileMarkers(target, screen);
+
+    store.expectMarkerDeletion(target);
+    for (0..deletion_watch_frames) |_| {
+        try std.testing.expectEqual(@as(u8, 0), store.reconcileMarkers(target, screen));
+    }
+
+    try std.testing.expect(store.marker_deletion_pending == null);
+    buffer.clear(.{});
+    try std.testing.expectEqual(@as(u8, 0), store.reconcileMarkers(target, screen));
+    try std.testing.expectEqual(@as(u8, 1), store.snapshot().len);
+}
+
+test "deleting a Pi path whose capture is still in flight is reported" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const target: Target = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
+    _ = store.setTarget(target);
+    var buffer = try ui.Buffer.init(std.testing.allocator, 120, 1);
+    defer buffer.deinit();
+    const cursor_x = buffer.writeText(buffer.area(), 0, 0, pi_path, .{});
+    writePiCursor(&buffer, cursor_x, 0);
+    const screen: MarkerScreen = .{ .buffer = &buffer, .cursor = .{ .visible = false, .x = 0, .y = 0 } };
+
+    try std.testing.expect(store.pendingMarkerAtDeletion(screen, .{ .deletion = .backward, .policy = .pasted_path }));
+    try std.testing.expect(!store.pendingMarkerAtDeletion(screen, .{ .deletion = .forward, .policy = .pasted_path }));
+    try std.testing.expect(!store.pendingMarkerAtDeletion(screen, .{ .deletion = .backward }));
 }
 
 test "submitted prompt retires only previews owned by its target" {

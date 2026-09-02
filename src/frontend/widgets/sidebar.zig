@@ -19,7 +19,9 @@ const AgentInput = agents.AgentInput;
 const AgentKey = agents.AgentKey;
 
 pub const max_provider_marks = agents.max_agents;
-const rows_per_agent = 3;
+const agent_card_rows = 3;
+const agent_row_spacing = 1;
+const agent_row_stride = agent_card_rows + agent_row_spacing;
 const minions_icon = "\u{2687}";
 
 pub const State = struct {
@@ -123,7 +125,10 @@ fn drawAgents(context: *widget.Context, input: Input, semantic: *Semantic) void 
     const background = cellBackground(context, input.transparent);
     context.buffer.fill(area, " ", .{ .bg = background });
 
-    const total: u16 = @intCast(@as(usize, input.snapshot.count) * rows_per_agent);
+    const total: u16 = if (input.snapshot.count == 0)
+        0
+    else
+        @intCast(@as(usize, input.snapshot.count) * agent_row_stride - agent_row_spacing);
     input.state.total_rows = total;
     input.state.scroll = @min(input.state.scroll, total -| area.h);
     if (input.snapshot.count == 0) {
@@ -135,8 +140,12 @@ fn drawAgents(context: *widget.Context, input: Input, semantic: *Semantic) void 
     while (line < area.h) : (line += 1) {
         const row_index = input.state.scroll + line;
         if (row_index >= total) break;
-        const agent_index: usize = row_index / rows_per_agent;
-        const card_line: u2 = @intCast(row_index % rows_per_agent);
+        const agent_index: usize = row_index / agent_row_stride;
+        const card_line: u2 = @intCast(row_index % agent_row_stride);
+        if (card_line >= agent_card_rows) {
+            continue;
+        }
+
         drawAgentLine(
             context,
             input,
@@ -179,7 +188,7 @@ fn drawAgentLine(
             .x = row.x,
             .y = y,
             .w = row.w,
-            .h = @min(rows_per_agent, semantic.list_area.y + semantic.list_area.h - y),
+            .h = @min(agent_card_rows, semantic.list_area.y + semantic.list_area.h - y),
         };
     context.buffer.fill(row, " ", .{ .bg = row_bg });
     if (focused) {
@@ -743,7 +752,7 @@ test "hover covers the complete three-row agent card" {
     try std.testing.expectEqualDeep(action, hits.at(10, 4).?);
 }
 
-test "partial card scroll preserves visible rows and hit targets" {
+test "partial card scroll preserves visible rows, spacing, and hit targets" {
     const agent_entries = [_]AgentInput{
         .{
             .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
@@ -792,15 +801,18 @@ test "partial card scroll preserves visible rows and hit targets" {
     });
 
     try std.testing.expect(output.focused_card == null);
+    try std.testing.expectEqual(@as(u16, 7), state.total_rows);
     try std.testing.expectEqualStrings("t", buffer.at(6, 2).?.text());
     try std.testing.expectEqualStrings("C", buffer.at(6, 3).?.text());
     try std.testing.expectEqualDeep(
         widget.Action{ .sidebar_focus_agent = agent_entries[0].key },
         hits.at(10, 2).?,
     );
+    try std.testing.expectEqualDeep(palette.panel_bg, buffer.at(10, 4).?.style.bg);
+    try std.testing.expect(hits.at(10, 4) == null);
     try std.testing.expectEqualDeep(
         widget.Action{ .sidebar_focus_agent = agent_entries[1].key },
-        hits.at(10, 4).?,
+        hits.at(10, 5).?,
     );
 }
 

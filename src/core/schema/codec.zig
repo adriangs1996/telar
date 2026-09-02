@@ -1,5 +1,5 @@
 //! Shared validators, composite-value codecs, and the derived fixed-layout
-//! serializer used by `messages.zig`.
+//! serializer used by the files under `messages/`.
 
 const std = @import("std");
 const wire = @import("wire.zig");

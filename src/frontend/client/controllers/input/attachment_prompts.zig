@@ -1,5 +1,6 @@
-//! Binds Telar's local image previews to Codex and Claude prompt markers.
+//! Binds Telar's local image previews to Codex, Claude and Pi prompt markers.
 
+const std = @import("std");
 const core = @import("telar-core");
 const attachments = @import("../../../attachments/root.zig");
 const input_capability = @import("../../../input/root.zig");
@@ -9,9 +10,14 @@ const pane_inputs = @import("pane_inputs.zig");
 const Client = @import("../../client.zig");
 const attachment_prompt = input_application.attachment_prompt;
 const key_routing = input_application.key_routing;
+const pane_input = input_application.pane_input;
 const schema = core.schema;
 
-const max_removal_keys = attachments.max_marker_navigation_steps * 2 + 1;
+const max_removal_keys = attachments.max_removal_keys;
+
+comptime {
+    std.debug.assert(max_removal_keys <= pane_input.max_keys);
+}
 
 /// Deletes the paired child marker and then retires one local preview.
 ///
@@ -36,7 +42,7 @@ pub fn dismiss(client: *Client, id: attachments.Id) !bool {
 /// const layout_changed = observe(client, pane_id, command);
 /// ```
 pub fn observe(client: *Client, pane_id: schema.PaneId, command: key_routing.Command) bool {
-    expectClaudeDeletion(client, pane_id, command);
+    expectMarkerDeletion(client, pane_id, command);
     var use_case: attachment_prompt.ObservePaneInputHandler = .{
         .model = &client.model,
         .effects = .{
@@ -52,33 +58,42 @@ pub fn observe(client: *Client, pane_id: schema.PaneId, command: key_routing.Com
     return use_case.execute(pane_id, command);
 }
 
-fn expectClaudeDeletion(client: *Client, pane_id: schema.PaneId, command: key_routing.Command) void {
+fn expectMarkerDeletion(client: *Client, pane_id: schema.PaneId, command: key_routing.Command) void {
     const key = switch (command) {
         .bytes => return,
         .key => |value| value,
     };
-    if (key.phase == .release or key.mods.ctrl or key.mods.alt or key.mods.shift or
-        (key.code != .backspace and key.code != .delete))
-    {
-        return;
-    }
-
     const target = client.view.kittyAttachments().visibleTarget() orelse return;
-    if (target.pane_id != pane_id or client.model.attachmentProvider(target) != .claude) {
+    if (target.pane_id != pane_id) {
         return;
     }
 
-    client.view.kittyAttachments().expectStableMarkerDeletion(target);
+    const policy = learnedPolicy(client, target) orelse return;
+    if (!attachment_prompt.editsMarkers(policy, key)) {
+        return;
+    }
+
+    client.view.kittyAttachments().expectMarkerDeletion(target);
 }
 
-/// Reconciles Claude's stable attachment identities after one pane frame.
+/// Resolves the marker policy of a target whose provider learns marker
+/// identities from committed frames.
+fn learnedPolicy(client: *Client, target: attachments.Target) ?attachments.MarkerPolicy {
+    const provider = client.model.attachmentProvider(target) orelse return null;
+    const policy = attachment_prompt.markerPolicy(provider);
+
+    return if (policy.learnsIdentity()) policy else null;
+}
+
+/// Reconciles learned attachment identities (Claude numbers, Pi paths)
+/// after one pane frame.
 ///
 /// ```zig
 /// const layout_changed = reconcileFrame(client, pane_id);
 /// ```
 pub fn reconcileFrame(client: *Client, pane_id: schema.PaneId) bool {
     const target = client.view.kittyAttachments().visibleTarget() orelse return false;
-    if (target.pane_id != pane_id or client.model.attachmentProvider(target) != .claude) {
+    if (target.pane_id != pane_id or learnedPolicy(client, target) == null) {
         return false;
     }
 
@@ -121,11 +136,13 @@ fn deliverRemoval(raw_context: *anyopaque, command: attachment_prompt.RemovalCom
         len += 1;
     }
 
-    keys[len] = .{ .code = switch (command.marker.deletion) {
-        .backward => .backspace,
-        .forward => .delete,
-    } };
-    len += 1;
+    for (0..command.marker.deletions) |_| {
+        keys[len] = .{ .code = switch (command.marker.deletion) {
+            .backward => .backspace,
+            .forward => .delete,
+        } };
+        len += 1;
+    }
 
     for (0..command.marker.steps) |_| {
         keys[len] = .{ .code = restoration };
@@ -160,10 +177,12 @@ fn pendingMarkerAtCursor(raw_context: *anyopaque, deletion: attachments.MarkerDe
     const model = client.model.activeTabModelConst() orelse return false;
     const pane = model.findConst(target.pane_id) orelse return false;
 
+    const provider = client.model.attachmentProvider(target) orelse return false;
+
     return client.view.kittyAttachments().pendingMarkerAtDeletion(.{
         .buffer = &pane.buffer,
         .cursor = pane.cursor,
-    }, deletion);
+    }, .{ .deletion = deletion, .policy = attachment_prompt.markerPolicy(provider) });
 }
 
 fn removeAttachment(raw_context: *anyopaque, id: attachments.Id) ?bool {

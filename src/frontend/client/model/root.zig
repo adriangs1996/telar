@@ -1268,7 +1268,7 @@ pub const Model = struct {
         const key = model.agent_snapshot.keyForPane(active.location, pane_id) orelse return null;
         const agent = model.agent_snapshot.find(key).?;
         switch (agent.provider) {
-            .claude, .codex => return key,
+            .claude, .codex, .pi => return key,
             else => return null,
         }
     }
@@ -1300,7 +1300,7 @@ pub const Model = struct {
         }) orelse return null;
 
         return switch (agent.provider) {
-            .claude, .codex => agent.provider,
+            .claude, .codex, .pi => agent.provider,
             else => null,
         };
     }
