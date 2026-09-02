@@ -79,7 +79,7 @@ pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output
         context.buffer.fillWithoutCorners(area, style);
     } else {
         context.buffer.fill(area, " ", style);
-        context.buffer.edgeBox(area, .{
+        context.buffer.box(area, .{
             .fg = context.palette.accent,
             .bg = background,
         }, null);
@@ -89,7 +89,7 @@ pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output
     _ = context.buffer.writeTruncated(title, title.x, title.y, input.title, title.w, .{
         .fg = context.palette.accent,
         .bg = background,
-        .flags = .{ .bold = true, .overline = !input.graphical_frame },
+        .flags = .{ .bold = true },
     });
 
     const inner = area.inner(1);
@@ -135,8 +135,6 @@ pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output
         _ = context.buffer.writeTruncated(footer, footer.x, footer.y, footer_text, footer.w, .{
             .fg = context.palette.subtext0,
             .bg = background,
-            .underline_color = context.palette.accent,
-            .flags = .{ .underline = if (input.graphical_frame) .none else .single },
         });
     }
 
@@ -149,7 +147,7 @@ pub fn render(context: *widget.Context, workbench: ui.Rect, input: Input) Output
     };
 }
 
-test "a graphical frame replaces the cell border and keeps the corners untouched" {
+test "cell fallback connects every border edge and graphical frame keeps corners untouched" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 40, 12);
     defer buffer.deinit();
     const outside: ui.Style = .{ .bg = .{ .rgb = .{ 1, 2, 3 } } };
@@ -173,17 +171,19 @@ test "a graphical frame replaces the cell border and keeps the corners untouched
     var cell_frame = input;
     cell_frame.graphical_frame = false;
     const cell_area = render(&context, buffer.area(), cell_frame).area;
-    try std.testing.expect(buffer.at(cell_area.x + 1, cell_area.y).?.style.flags.overline);
+    try std.testing.expectEqualStrings("╭", buffer.at(cell_area.x, cell_area.y).?.text());
+    try std.testing.expectEqualStrings("╮", buffer.at(cell_area.x + cell_area.w - 1, cell_area.y).?.text());
+    try std.testing.expectEqualStrings("╰", buffer.at(cell_area.x, cell_area.y + cell_area.h - 1).?.text());
+    try std.testing.expectEqualStrings("╯", buffer.at(cell_area.x + cell_area.w - 1, cell_area.y + cell_area.h - 1).?.text());
+    try std.testing.expectEqualStrings("─", buffer.at(cell_area.x + 1, cell_area.y).?.text());
+    try std.testing.expectEqualStrings("│", buffer.at(cell_area.x, cell_area.y + 1).?.text());
+    try std.testing.expectEqualStrings("─", buffer.at(cell_area.x + 1, cell_area.y + cell_area.h - 1).?.text());
     try std.testing.expectEqualDeep(context.palette.panel_bg, buffer.at(cell_area.x + 1, cell_area.y).?.style.bg);
-    try std.testing.expectEqual(ui.Style.Underline.single, buffer.at(cell_area.x + 2, cell_area.y + cell_area.h - 1).?.style.flags.underline);
 
     buffer.fill(buffer.area(), "#", outside);
     var graphical = input;
     graphical.graphical_frame = true;
     const area = render(&context, buffer.area(), graphical).area;
-    try std.testing.expect(!buffer.at(area.x + 1, area.y).?.style.flags.overline);
-    try std.testing.expect(!buffer.at(area.x + 2, area.y).?.style.flags.overline);
-    try std.testing.expectEqual(ui.Style.Underline.none, buffer.at(area.x + 2, area.y + area.h - 1).?.style.flags.underline);
     try std.testing.expectEqualStrings("#", buffer.at(area.x, area.y).?.text());
     try std.testing.expectEqualStrings("#", buffer.at(area.x + area.w - 1, area.y + area.h - 1).?.text());
     try std.testing.expectEqualStrings(" ", buffer.at(area.x, area.y + 1).?.text());

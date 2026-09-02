@@ -107,9 +107,8 @@ pub fn renderModal(
         context.buffer.fillWithoutCorners(area, style);
     } else {
         context.buffer.fill(area, " ", style);
-        context.buffer.edgeBox(area, border_style, null);
+        context.buffer.box(area, border_style, null);
     }
-    const top_flags: ui.Style.Flags = .{ .overline = !graphical_frame };
     const title: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 6, .h = 1 };
     _ = context.buffer.writeTruncated(
         title,
@@ -120,7 +119,6 @@ pub fn renderModal(
         .{
             .fg = context.palette.accent,
             .bg = background,
-            .flags = top_flags,
         },
     );
     const close: ui.Rect = .{ .x = area.x + area.w - 3, .y = area.y, .w = 2, .h = 1 };
@@ -128,7 +126,6 @@ pub fn renderModal(
     _ = context.buffer.writeText(close, close.x, close.y, "× ", .{
         .fg = context.palette.subtext0,
         .bg = background,
-        .flags = top_flags,
     });
     const image_area = area.inner(2);
     if (!image_area.isEmpty()) {
@@ -162,7 +159,7 @@ test "shelf publishes one bounded image placement and two hit targets" {
     try std.testing.expect(hits.len >= 2);
 }
 
-test "modal surface ends at its edge-aligned border" {
+test "cell modal draws a connected border" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 40, 10);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
@@ -180,9 +177,14 @@ test "modal surface ends at its edge-aligned border" {
     const area = renderModal(&context, buffer.area(), &snapshot, &plan, false);
 
     try std.testing.expect(!area.isEmpty());
-    try std.testing.expect(buffer.at(area.x, area.y).?.style.flags.overline);
-    try std.testing.expectEqualStrings("▏", buffer.at(area.x, area.y + 1).?.text());
-    try std.testing.expectEqualStrings("▕", buffer.at(area.x + area.w - 1, area.y + 1).?.text());
+    try std.testing.expectEqualStrings("╭", buffer.at(area.x, area.y).?.text());
+    try std.testing.expectEqualStrings("╮", buffer.at(area.x + area.w - 1, area.y).?.text());
+    try std.testing.expectEqualStrings("╰", buffer.at(area.x, area.y + area.h - 1).?.text());
+    try std.testing.expectEqualStrings("╯", buffer.at(area.x + area.w - 1, area.y + area.h - 1).?.text());
+    try std.testing.expectEqualStrings("│", buffer.at(area.x, area.y + 1).?.text());
+    try std.testing.expectEqualStrings("│", buffer.at(area.x + area.w - 1, area.y + 1).?.text());
+    try std.testing.expectEqualStrings("─", buffer.at(area.x + 1, area.y).?.text());
+    try std.testing.expectEqualStrings("─", buffer.at(area.x + 1, area.y + area.h - 1).?.text());
     try std.testing.expectEqualDeep(palette.panel_bg, buffer.at(area.x, area.y + 1).?.style.bg);
     try std.testing.expect(std.meta.eql(buffer.at(area.x - 1, area.y + 1).?.style.bg, ui.Color.default));
 }
@@ -207,5 +209,4 @@ test "graphical modal leaves corner cells to its rounded frame" {
     try std.testing.expectEqualStrings(".", buffer.at(area.x, area.y).?.text());
     try std.testing.expectEqualStrings(".", buffer.at(area.x + area.w - 1, area.y).?.text());
     try std.testing.expectEqualDeep(palette.panel_bg, buffer.at(area.x + 1, area.y).?.style.bg);
-    try std.testing.expect(!buffer.at(area.x + 2, area.y).?.style.flags.overline);
 }
