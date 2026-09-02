@@ -39,6 +39,9 @@ agent-state contract, and its bounded semantic transformation boundary are
 documented in [docs/proxy-tls.md](docs/proxy-tls.md). A complete configuration
 and plugin package live under [`examples/`](examples/).
 
+The [Neovim adapter](integrations/nvim/README.md) integrates Telar's
+navigation-aware `ctrl+h/j/k/l` action with `smart-splits.nvim`.
+
 ## Themes
 
 Vesper is the default client theme. Catppuccin Mocha, Tokyo Night, and a
