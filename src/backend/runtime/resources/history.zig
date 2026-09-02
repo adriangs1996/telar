@@ -1,7 +1,6 @@
 //! Runtime ownership for the asynchronous history service.
 
 const std = @import("std");
-const core = @import("telar-core");
 const history = @import("../../history/root.zig");
 
 const Io = std.Io;
@@ -47,11 +46,11 @@ const RuntimeState = struct {
 };
 
 fn startWorker(state: *RuntimeState) !Worker {
-    return state.io.concurrent(history.runWorker, .{ state.io, &state.service });
+    return state.io.concurrent(history.Service.run, .{ &state.service, state.io });
 }
 
-fn closeQueues(state: *RuntimeState) void {
-    state.service.closeQueues(state.io);
+fn stopService(state: *RuntimeState) void {
+    state.service.stop(state.io);
 }
 
 fn joinWorker(state: *RuntimeState, worker: *Worker) void {
@@ -66,7 +65,7 @@ fn destroyState(state: *RuntimeState) void {
 
 const lifecycle_port: Port(RuntimeState, Worker) = .{
     .start = startWorker,
-    .close = closeQueues,
+    .close = stopService,
     .join = joinWorker,
     .destroy = destroyState,
 };
@@ -76,11 +75,7 @@ const HistoryLifecycle = Lifecycle(RuntimeState, Worker, lifecycle_port);
 pub const Runtime = struct {
     lifecycle: HistoryLifecycle,
 
-    pub const Config = struct {
-        database_path: [:0]const u8,
-        filters: core.history_filter.Filters = .{},
-        capture_output: bool = false,
-    };
+    pub const Config = history.Service.Config;
 
     /// Creates the history service at a stable address and starts its worker.
     /// A database-open failure keeps the service alive in degraded mode.
@@ -91,12 +86,10 @@ pub const Runtime = struct {
     /// ```
     pub fn init(io: Io, gpa: std.mem.Allocator, config: Config) !Runtime {
         const state = try gpa.create(RuntimeState);
-        var history_service = history.Service.init(gpa, config.database_path) catch |err| {
+        const history_service = history.Service.init(gpa, config) catch |err| {
             gpa.destroy(state);
             return err;
         };
-        history_service.filters = config.filters;
-        history_service.capture_output = config.capture_output;
         state.* = .{
             .io = io,
             .gpa = gpa,
@@ -115,8 +108,8 @@ pub const Runtime = struct {
         return &runtime.lifecycle.state.service;
     }
 
-    /// Closes both queues, joins the worker, and releases every queued value
-    /// still owned by the service.
+    /// Stops the service, joins its worker, and releases every value still
+    /// owned by the history runtime.
     ///
     /// ```zig
     /// history_runtime.deinit();
@@ -245,7 +238,7 @@ test "database open failure starts a queryable degraded worker" {
         },
     });
     try std.testing.expect(service_value.query(io, query));
-    const response = try history.receiveResponse(io, service_value);
+    const response = try service_value.receiveResponse(io);
     defer history.model.deinitResponse(response, std.testing.allocator);
 
     try std.testing.expect(response == .failed);

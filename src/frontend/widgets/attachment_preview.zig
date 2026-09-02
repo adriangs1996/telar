@@ -103,7 +103,7 @@ pub fn renderModal(
         .bg = context.palette.surface0,
     };
     if (graphical_frame) {
-        fillWithoutCorners(context.buffer, area, style);
+        context.buffer.fillWithoutCorners(area, style);
     } else {
         context.buffer.fill(area, " ", style);
         context.buffer.edgeBox(area, border_style, null);
@@ -142,17 +142,6 @@ pub fn renderModal(
         plan.modal = .{ .id = id, .area = image_area };
     }
     return area;
-}
-
-fn fillWithoutCorners(buffer: *ui.Buffer, area: ui.Rect, style: ui.Style) void {
-    buffer.fill(.{ .x = area.x + 1, .y = area.y, .w = area.w -| 2, .h = 1 }, " ", style);
-    buffer.fill(.{ .x = area.x, .y = area.y + 1, .w = area.w, .h = area.h -| 2 }, " ", style);
-    buffer.fill(.{
-        .x = area.x + 1,
-        .y = area.y + area.h - 1,
-        .w = area.w -| 2,
-        .h = 1,
-    }, " ", style);
 }
 
 test "shelf publishes one bounded image placement and two hit targets" {

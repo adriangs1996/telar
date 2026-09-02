@@ -41,9 +41,9 @@ pub const PaneFixture = struct {
         fixture.* = .{};
         fixture.pane_allocator = .init(std.testing.allocator, .{});
         fixture.attachment_allocator = .init(std.testing.allocator, .{});
-        fixture.history_service = try history.Service.init(std.testing.allocator, ":memory:");
+        fixture.history_service = try history.Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
         errdefer {
-            fixture.history_service.closeQueues(io);
+            fixture.history_service.stop(io);
             fixture.history_service.deinit(io);
         }
 
@@ -68,7 +68,7 @@ pub const PaneFixture = struct {
         fixture.attachments.deinit();
         fixture.pane.session.shutdown();
         fixture.pane.destroy();
-        fixture.history_service.closeQueues(io);
+        fixture.history_service.stop(io);
         fixture.history_service.deinit(io);
     }
 

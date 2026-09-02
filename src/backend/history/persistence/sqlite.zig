@@ -1,7 +1,7 @@
 //! SQLite storage owned by the history worker.
 
 const std = @import("std");
-const model = @import("model.zig");
+const model = @import("../model.zig");
 const core_fuzzy = @import("telar-core").fuzzy;
 
 const c = @cImport({

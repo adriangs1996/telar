@@ -617,7 +617,7 @@ test "a failed telemetry write releases the buffer before retiring its sink" {
 
 test "runtime telemetry reports retained memory domains" {
     const io = std.testing.io;
-    var service = try history.Service.init(std.testing.allocator, ":memory:");
+    var service = try history.Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
     defer service.deinit(io);
     var heap = diagnostics.Heap.init(std.testing.allocator);
     {

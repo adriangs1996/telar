@@ -210,19 +210,11 @@ fn drawWorkspace(
     row_end: u16,
     y: u16,
 ) u16 {
-    var label_buffer: [workspace_list.max_name_bytes + core.schema.max_git_branch_bytes + 8]u8 = undefined;
-    const branch = snapshot.branchAt(index);
-    const dirty_mark: []const u8 = if (snapshot.dirtyAt(index)) "*" else "";
-    const label = if (branch.len != 0)
-        std.fmt.bufPrint(&label_buffer, " {s} \u{2387}{s}{s} ", .{
-            workspaceNameAt(snapshot, index, active_index, active_name),
-            branch,
-            dirty_mark,
-        }) catch " workspace "
-    else
-        std.fmt.bufPrint(&label_buffer, " {s} ", .{
-            workspaceNameAt(snapshot, index, active_index, active_name),
-        }) catch " workspace ";
+    var label_buffer: [workspace_list.max_name_bytes + 4]u8 = undefined;
+    const label = std.fmt.bufPrint(&label_buffer, " {s}{s} ", .{
+        workspaceNameAt(snapshot, index, active_index, active_name),
+        dirtyMark(snapshot, index),
+    }) catch " workspace ";
     const width = @min(ui.measure(label), row_end -| x);
     if (width == 0) return x;
     const rect: ui.Rect = .{ .x = x, .y = y, .w = width, .h = 1 };
@@ -291,9 +283,14 @@ fn listWidth(
 ) u16 {
     var total: u16 = 0;
     for (0..snapshot.count) |index| {
-        total +|= ui.measure(workspaceNameAt(snapshot, index, active_index, active_name)) + 2;
+        total +|= ui.measure(workspaceNameAt(snapshot, index, active_index, active_name)) +
+            ui.measure(dirtyMark(snapshot, index)) + 2;
     }
     return total;
+}
+
+fn dirtyMark(snapshot: *const workspace_list.Snapshot, index: usize) []const u8 {
+    return if (snapshot.dirtyAt(index)) "*" else "";
 }
 
 fn workspaceNameAt(
@@ -373,6 +370,37 @@ test "the list collapses when the row cannot fit every workspace" {
     // " telar " + " api " = 12 columns.
     try std.testing.expect(listFits(&snapshot, null, "", 12));
     try std.testing.expect(!listFits(&snapshot, null, "", 11));
+}
+
+test "the workspace label shows the name and dirty mark but never the branch" {
+    var snapshot: workspace_list.Snapshot = .{};
+    const entries = [_]workspace_list.EntryInput{
+        .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1, .branch = "main", .dirty = true },
+        .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1, .branch = "main" },
+    };
+    _ = try snapshot.replace(.{ .revision = 1, .entries = &entries });
+    var buffer = try ui.Buffer.init(std.testing.allocator, 40, 1);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &ui.theme.default_theme.palette,
+        .hovered = null,
+    };
+
+    const end = drawWorkspace(&context, &snapshot, 0, null, "", 0, 40, 0);
+    var text: [16]u8 = undefined;
+    var len: usize = 0;
+    for (0..end) |x| {
+        const cell_text = buffer.at(@intCast(x), 0).?.text();
+        @memcpy(text[len .. len + cell_text.len], cell_text);
+        len += cell_text.len;
+    }
+    try std.testing.expectEqualStrings(" telar* ", text[0..len]);
+    // " telar* " + " api " = 13 columns, and the dirty mark counts toward the fit.
+    try std.testing.expect(listFits(&snapshot, null, "", 13));
+    try std.testing.expect(!listFits(&snapshot, null, "", 12));
 }
 
 test "the active name replaces only the active workspace snapshot name" {

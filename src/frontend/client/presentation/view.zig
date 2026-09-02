@@ -659,6 +659,7 @@ pub const State = struct {
                     .workspaces = input.workspaces,
                     .tabs = input.tabs,
                     .history = input.history,
+                    .graphical_frame = graphical_modal,
                 });
                 drawn_modal_area = picker_output.area;
                 picker_cursor = picker_output.cursor;
@@ -791,6 +792,7 @@ const PickerSources = struct {
     workspaces: *const workspace_list.Snapshot,
     tabs: ?*const tabs_mod.Model,
     history: *const history_palette_state.State,
+    graphical_frame: bool,
 };
 
 /// Computes the deterministic result set and renders the visible window with
@@ -830,6 +832,7 @@ fn renderGotoPicker(context: *widgets.Context, workbench: ui.Rect, sources: Pick
         .field = &sources.prompt.field,
         .rows = rows[0..window],
         .total = total,
+        .graphical_frame = sources.graphical_frame,
     });
 }
 
@@ -866,6 +869,7 @@ fn renderHistoryPalette(context: *widgets.Context, workbench: ui.Rect, sources: 
         .rows = rows[0..window],
         .total = total,
         .hint = hint,
+        .graphical_frame = sources.graphical_frame,
     });
 }
 

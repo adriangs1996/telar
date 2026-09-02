@@ -976,9 +976,9 @@ fn placementValue(pane: *Pane, source: media_mod.PlacementSource) ?core.graphics
 test "attachment store reports and commits workspace departure on the last pane" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try history.Service.init(gpa, ":memory:");
+    var service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
-        service.closeQueues(io);
+        service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
@@ -1055,9 +1055,9 @@ test "attachment store reports and commits workspace departure on the last pane"
 test "attachments keep independent scrollback viewports" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try history.Service.init(gpa, ":memory:");
+    var service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
-        service.closeQueues(io);
+        service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
@@ -1109,9 +1109,9 @@ test "attachments keep independent scrollback viewports" {
 test "an unsupported stored image degrades graphics sync instead of killing it" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try history.Service.init(gpa, ":memory:");
+    var service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
-        service.closeQueues(io);
+        service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
@@ -1183,9 +1183,9 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
 test "graphics transfers wait for pane and client memory credit" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try history.Service.init(gpa, ":memory:");
+    var service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
-        service.closeQueues(io);
+        service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
@@ -1250,9 +1250,9 @@ test "graphics transfers wait for pane and client memory credit" {
 test "a staged transfer drains while the media actor stays busy" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try history.Service.init(gpa, ":memory:");
+    var service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
-        service.closeQueues(io);
+        service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
@@ -1359,9 +1359,9 @@ test "completed replacements do not exhaust attachment image slots" {
 test "graphics quota enforcement evicts oldest images on the ingested pane" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try history.Service.init(gpa, ":memory:");
+    var service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
-        service.closeQueues(io);
+        service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
@@ -1416,9 +1416,9 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
     if (comptime !graphics.shared_memory_supported) return error.SkipZigTest;
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try history.Service.init(gpa, ":memory:");
+    var service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
-        service.closeQueues(io);
+        service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
@@ -1514,9 +1514,9 @@ test "an abandoned unsent shared transfer unlinks its object" {
     if (comptime !graphics.shared_memory_supported) return error.SkipZigTest;
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try history.Service.init(gpa, ":memory:");
+    var service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
-        service.closeQueues(io);
+        service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);

@@ -733,7 +733,7 @@ pub const Pane = struct {
             .cwd = launch_cwd,
             .size = size,
             .manifests = resources.manifests,
-            .capture_output = resources.history_service.capture_output,
+            .capture_output = resources.history_service.capturesOutput(),
         });
         errdefer pane.history_observer.deinit();
         pane.screen = try .init(gpa, size.cols, size.rows);
@@ -2116,7 +2116,7 @@ test "PaneStore discovers only committed launches" {
 test "pane creation releases every partial allocation" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var history_service = try history.Service.init(gpa, ":memory:");
+    var history_service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{"/usr/bin/true"};
     const command = try pty.Command.fromArgv(&argv);
@@ -2158,7 +2158,7 @@ test "pane creation releases every partial allocation" {
 test "pane keeps launch cwd separate from workspace path" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var history_service = try history.Service.init(gpa, ":memory:");
+    var history_service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try pty.Command.fromArgv(&argv);
@@ -2191,7 +2191,7 @@ test "pane keeps launch cwd separate from workspace path" {
 test "pane close requests shut down the PTY exactly once" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var history_service = try history.Service.init(gpa, ":memory:");
+    var history_service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try pty.Command.fromArgv(&argv);

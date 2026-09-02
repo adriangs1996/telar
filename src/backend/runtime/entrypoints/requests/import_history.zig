@@ -48,9 +48,9 @@ pub const Controller = struct {
 test "Controller acknowledges an accepted batch" {
     const gpa = std.testing.allocator;
     var responses: ResponseQueue = .{};
-    var service = try history_mod.Service.init(gpa, ":memory:");
+    var service = try history_mod.Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
-        service.closeQueues(std.testing.io);
+        service.stop(std.testing.io);
         service.deinit(std.testing.io);
     }
     var controller = Controller.init(&responses, &service);

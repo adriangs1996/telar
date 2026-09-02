@@ -35,9 +35,9 @@ never redact after the fact.
   — plain substring matches, parsed in `src/frontend/config/root.zig`
   (runtime table, next to `runtime.agents`) and plumbed through
   `src/cli/server.zig` into runtime Options like the agent manifests were.
-- Hook point: the history worker right before `store.recordCommand`
-  (`src/backend/history/store.zig:107` INSERT) — the observer stays
-  filter-free; policy lives in one place.
+- Hook point: `Service.recordCommand` before the command is copied or queued;
+  the observer and SQLite adapter stay filter-free, and policy lives in one
+  place.
 - Tests: pattern unit tests per builtin, config parse/reject, worker-level
   "filtered command leaves no row". No wire change.
 
@@ -46,7 +46,7 @@ never redact after the fact.
 telar knows which pane runs an agent without hooks — atuin has to install
 itself inside each agent to learn this. Cheapest thesis-level win.
 
-- Schema v4 migration in `store.zig`: `command.author INTEGER NOT NULL
+- Schema v4 migration in `persistence/sqlite.zig`: `command.author INTEGER NOT NULL
   DEFAULT 0` (0 human, 1 agent) + `command.provider TEXT` (manifest name,
   empty for humans). `history_schema.version` 3 → 4 with `ALTER TABLE`.
 - Deviation: authorship comes from what the runtime actually owns, not the
@@ -133,7 +133,7 @@ Complements P1 for what was already recorded. Never destroy silently.
   no time filter — with `--before` it reports the text/scope matches and
   says the time bound is not previewable.
 - `command_output` already cascades (`ON DELETE CASCADE`); FTS triggers
-  must cover DELETE (extend the trigger set at `store.zig:375`).
+  must cover DELETE (extend the trigger set in `persistence/sqlite.zig`).
 - CLI: `telar history delete <id>`, `telar history prune --cwd ... --before
   <date> [--dry-run]` — dry-run prints the count using the same filters
   through `query_history`.

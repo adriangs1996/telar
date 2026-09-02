@@ -292,6 +292,23 @@ pub const Buffer = struct {
         }
     }
 
+    /// Fills a rectangle except its four corner cells.
+    ///
+    /// A pixel-aligned frame with rounded corners leaves the outside of each
+    /// corner cell transparent, so those cells keep whatever sits beneath the
+    /// modal instead of a square of modal background poking out of the curve.
+    ///
+    /// ```zig
+    /// buffer.fillWithoutCorners(area, .{ .bg = palette.surface0 });
+    /// ```
+    pub fn fillWithoutCorners(b: *Buffer, r: Rect, style: Style) void {
+        if (r.w < 2 or r.h < 2) return;
+
+        b.fill(.{ .x = r.x + 1, .y = r.y, .w = r.w - 2, .h = 1 }, " ", style);
+        b.fill(.{ .x = r.x, .y = r.y + 1, .w = r.w, .h = r.h - 2 }, " ", style);
+        b.fill(.{ .x = r.x + 1, .y = r.y + r.h - 1, .w = r.w - 2, .h = 1 }, " ", style);
+    }
+
     /// Draws a box on the outside edge of its cells.
     ///
     /// Box-drawing glyphs sit around the centre of a cell. When the cell also

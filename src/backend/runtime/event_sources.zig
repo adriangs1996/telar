@@ -58,7 +58,7 @@ pub const Sources = struct {
     /// try sources.receiveHistory(history_service);
     /// ```
     pub fn receiveHistory(sources: *Sources, history_service: *history.Service) !void {
-        try sources.select.concurrent(.history_response, history.receiveResponse, .{ sources.io, history_service });
+        try sources.select.concurrent(.history_response, history.Service.receiveResponse, .{ history_service, sources.io });
     }
 
     /// Arms the next proxy observation when the proxy is active.
