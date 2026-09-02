@@ -130,9 +130,12 @@ Only when Ghostty unlinks a consumed name, or the deadline reclaims it, does
 the client retire the image and return the exact byte credit to the runtime.
 Hosts without Kitty graphics shared-memory support and remote sessions retain
 the bounded direct-data fallback, which base64-encodes at most 256 KiB per
-media pass. Cell composition and its terminal flush complete first; a pending
-cell frame defers the separately paced media pass, and terminal writes remain
-serialized so KGP chunks cannot interleave with cell escape sequences.
+media pass. Shared names, placements and deletes ride inside the cell frame's
+synchronized update, after the cells and before the cursor, so a local frame
+costs no media tick. Cell composition and its terminal flush complete first;
+a pending cell frame defers the separately paced bulk media pass to its own
+completion, and terminal writes remain serialized so KGP chunks cannot
+interleave with cell escape sequences.
 
 Debug telemetry exposes `input_write_*` and `ingest_*` timings. The benchmark
 `backend.kitty.ingest_zlib_rgba_1920x1080` covers the actual APC → base64 →

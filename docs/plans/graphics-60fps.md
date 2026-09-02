@@ -92,16 +92,23 @@ the timer hops.
 - `presentMedia` no longer re-arms a timer when a draw is pending. It marks
   `media_after_draw` and `completeDraw` runs the bulk pass in the same event.
   The pacer still bounds bulk passes to one per interval.
-- `observe` distinguishes graphics-only ingress from semantic changes. With a
-  supported host and no fallback change, graphics ingress schedules a control
-  flush paced by the same 60 Hz pacer, not a full cell composition.
+- Graphics-only ingress keeps scheduling a paced cell frame; composition of an
+  unchanged model is damage-bounded and the frame now carries the control
+  escapes, so a dedicated control flush was not needed.
   `docs/flows/pane-graphics.md` "Budget and bounds" is rewritten accordingly.
-- Tests: presenter test feeding shared images at 120 Hz proves control flushes
-  at pacer cadence with zero deferrals; ordering test proves bulk still yields
-  to pending cells; screen test proves control escapes never interleave with
-  cell escapes inside one update. No wire change.
+- Tests: writer tests prove a control pass emits shared names and placements
+  but no pixel streams and emits nothing while a chunked transfer is open; a
+  client test proves a deferred media tick re-arms at the draw's completion;
+  a client test proves the shared name and placement land inside the cell
+  frame's synchronized update. No wire change.
 
 Exit: `present_interval` p99 ≤ 17 ms at 1080p on the `--measure` run.
+
+Result (2026-09-02, same setup as the baseline): presented 48.1 frames/s
+against 48.6 published, present interval 21.4 ms avg. The client no longer
+loses frames; the ceiling moved to the runtime (media ingest 11.5 ms avg,
+freeze 7.9 ms avg on the main loop, 1823 deferred send-loop lanes), which is
+P3.
 
 ## P3. Runtime: freeze on the media actor
 

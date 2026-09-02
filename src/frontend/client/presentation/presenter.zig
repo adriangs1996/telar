@@ -112,6 +112,10 @@ window_title: presentation.window_title.State = .{},
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
 media_tick_pending: bool = false,
+/// A media tick found a cell frame pending and stepped aside. The frame's
+/// completion arms the bulk pass immediately instead of a pacer interval
+/// later, so graphics never lose a whole tick to a keystroke echo.
+media_after_draw: bool = false,
 pending_updates: usize = 0,
 last_presented_ns: ?u64 = null,
 /// When the last pane image reached the host, for the present interval.
@@ -209,14 +213,18 @@ pub fn requestDraw(presenter: *Presenter) !void {
     };
 }
 
-/// Arms one independently paced media pass. Cell work always wins before a
-/// pass starts, and each pass emits at most the baseline KGP byte budget.
+/// Arms one independently paced bulk media pass. Cell work always wins before
+/// a pass starts, and each pass emits at most the baseline KGP byte budget. A
+/// pass that yielded to the frame just presented runs right away.
 ///
 /// ```zig
 /// try presenter.requestMedia();
 /// ```
 pub fn requestMedia(presenter: *Presenter) !void {
-    try presenter.requestMediaAt(monotonic(presenter.io) +| pace.default_interval);
+    const now_ns = monotonic(presenter.io);
+    const deadline_ns = if (presenter.media_after_draw) now_ns else now_ns +| pace.default_interval;
+    presenter.media_after_draw = false;
+    try presenter.requestMediaAt(deadline_ns);
 }
 
 fn requestMediaAt(presenter: *Presenter, deadline_ns: u64) !void {
@@ -366,9 +374,10 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     };
 }
 
-/// The media event never composes cells. A pending or scheduled cell frame
-/// defers it, which gives interactive output priority without concurrent
-/// writes corrupting the terminal protocol stream.
+/// The bulk media event never composes cells. A pending or scheduled cell
+/// frame defers it to that frame's completion, which gives interactive output
+/// priority without concurrent writes corrupting the terminal protocol stream.
+/// Shared names and placements do not wait here: the cell frame carries them.
 ///
 /// ```zig
 /// try presenter.presentMedia(projection, resources);
@@ -378,7 +387,7 @@ pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Re
         if (comptime diagnostics.enabled) {
             presenter.metrics.media_deferrals += 1;
         }
-        try presenter.requestMedia();
+        presenter.media_after_draw = true;
         return;
     }
 
@@ -423,21 +432,7 @@ pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Re
         .write = CombinedGraphicsWriter.writeOpaque,
     };
     try presenter.flushMedia(resources.writer);
-    if (comptime diagnostics.enabled) {
-        const graphics_stats = graphics_writer.panes.stats;
-        presenter.metrics.pane_shared_images += graphics_stats.shared_images;
-        presenter.metrics.pane_inline_images += graphics_stats.inline_images;
-        presenter.metrics.pane_compressed_images += graphics_stats.compressed_images;
-        presenter.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
-        presenter.metrics.pane_compress_passes += graphics_stats.compress_passes;
-        if (graphics_stats.shared_images + graphics_stats.inline_images != 0) {
-            const presented_ns = monotonic(presenter.io);
-            if (presenter.last_pane_present_ns) |previous| {
-                presenter.metrics.pane_present_interval.observe(presented_ns -| previous);
-            }
-            presenter.last_pane_present_ns = presented_ns;
-        }
-    }
+    presenter.notePaneGraphics(graphics_writer.panes.stats);
 
     if (covered_before != resources.view.graphicalToastsCover(projection.notifications) or
         modal_covered_before != resources.view.graphicalModalCoversPlan())
@@ -452,6 +447,35 @@ pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Re
             try presenter.requestMedia();
         }
     }
+}
+
+fn notePaneGraphics(presenter: *Presenter, graphics_stats: kitty.KittyGraphicsWriter.Stats) void {
+    if (comptime !diagnostics.enabled) return;
+    presenter.metrics.pane_shared_images += graphics_stats.shared_images;
+    presenter.metrics.pane_inline_images += graphics_stats.inline_images;
+    presenter.metrics.pane_compressed_images += graphics_stats.compressed_images;
+    presenter.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
+    presenter.metrics.pane_compress_passes += graphics_stats.compress_passes;
+    if (graphics_stats.shared_images + graphics_stats.inline_images != 0) {
+        const presented_ns = monotonic(presenter.io);
+        if (presenter.last_pane_present_ns) |previous| {
+            presenter.metrics.pane_present_interval.observe(presented_ns -| previous);
+        }
+        presenter.last_pane_present_ns = presented_ns;
+    }
+}
+
+/// Whether the cell frame may carry pane graphics control escapes. Any open
+/// chunked transfer owns the graphics stream, so the frame stays clean until
+/// the bulk pass closes it.
+fn controlGraphicsReady(projection: Projection, resources: Resources) bool {
+    if (projection.host_capabilities.kitty_graphics != .supported) return false;
+    if (!resources.graphics_store.damage or resources.graphics_store.partial != null) return false;
+    const view = resources.view;
+    return !view.kittyAttachments().transferInProgress() and
+        !view.kittyModal().transferInProgress() and
+        !view.kittyToasts().transferInProgress() and
+        !view.kittyIcons().transferInProgress();
 }
 
 fn mediaWorkPending(projection: Projection, resources: Resources) bool {
@@ -556,10 +580,23 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
             diagnostics.elapsed(compose_started, diagnostics.now(presenter.io)),
         );
     }
-    // Graphics never enter this flush. The media event applies the fixed plan
-    // produced above only after these cells have reached the host terminal.
-    presenter.screen.graphics = null;
+    // Pane graphics that are only names, placements and deletes ride inside
+    // this synchronized update, after the cells and before the cursor. Pixel
+    // streams and UI rasters wait for the byte-bounded bulk media pass.
+    var control_writer: kitty.KittyGraphicsWriter = .{
+        .store = input.resources.graphics_store,
+        .layout_snapshot = presenter.compositor.layoutSnapshot(),
+        .cell_width = input.projection.host_size.cell_width_px,
+        .cell_height = input.projection.host_size.cell_height_px,
+        .mode = .control,
+        .now_ns = if (comptime diagnostics.enabled) monotonic(presenter.io) else 0,
+    };
+    presenter.screen.graphics = if (controlGraphicsReady(input.projection, input.resources)) .{
+        .context = &control_writer,
+        .write = kitty.KittyGraphicsWriter.writeOpaque,
+    } else null;
     try presenter.flushScreen(input.resources.writer);
+    presenter.notePaneGraphics(control_writer.stats);
     var acks: FrameAcks = .{};
     for (composed.commit.slice()) |pane| {
         if (!pane.attached or pane.frame_id == 0) {
@@ -680,6 +717,8 @@ fn flushScreen(presenter: *Presenter, writer: *Io.Writer) !void {
         presenter.metrics.flushed_cells += stats.cells;
         presenter.metrics.flushed_bytes += stats.bytes;
         presenter.metrics.graphics_flushed_bytes += stats.graphics_bytes;
+        // Only pane control escapes ride the cell frame.
+        presenter.metrics.pane_graphics_flushed_bytes += stats.graphics_bytes;
         presenter.metrics.flush.observe(diagnostics.elapsed(started, diagnostics.now(presenter.io)));
     }
 }

@@ -43,9 +43,9 @@ presentation_lifecycle.observe
        |
 Presenter observes model version + graphics ingress version
        |
-paced cell pass
+paced cell pass (+ pane control escapes in the same update)
        |
-bounded media pass
+bounded bulk media pass
 ```
 
 `server_messages` only translates the decoded union variant into a typed
@@ -87,10 +87,17 @@ already requested downgrade.
 
 Resource ingestion belongs to the media path. Images, chunks and placements
 are bounded by the graphics schema and `kitty.Store` quotas. The presenter
-always completes the cell pass first. Its separate media tick emits at most the
-configured KGP byte budget and yields while interactive cell work is pending.
-Repeated frames replace obsolete generations in the store rather than forming
-an unbounded replay queue.
+composes and writes cells first. Pane graphics control escapes (shared names,
+placements, deletes) are a few hundred bytes per image, so the cell frame
+carries them inside its own synchronized update, after the cells and before
+the cursor; a graphics-only ingress therefore reaches the host at the pacer
+cadence with no extra tick. Pixel streams and UI rasters belong to the
+separate bulk media tick, which emits at most the configured KGP byte budget
+and yields while interactive cell work is pending; a tick that yields runs at
+that frame's completion rather than a pacer interval later. An open chunked
+transfer owns the graphics stream, so the cell frame carries no control
+escapes until the bulk pass closes it. Repeated frames replace obsolete
+generations in the store rather than forming an unbounded replay queue.
 
 Fallback synchronization allocates nothing and visits at most 64 tabs with 64
 panes each. A supported host performs no store queries. Every other capability

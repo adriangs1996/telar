@@ -222,6 +222,127 @@ test "presentation flushes an explicit empty model before bootstrap" {
     }
 }
 
+test "a media tick that yields to a pending draw runs at that draw's completion" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+
+    client.presenter.draw_pending = true;
+    client.presenter.media_tick_pending = true;
+    try presentation_lifecycle.handleMediaTick(client, {});
+
+    try std.testing.expect(!client.presenter.media_tick_pending);
+    try std.testing.expect(client.presenter.media_after_draw);
+
+    client.presenter.draw_pending = false;
+    try client.presenter.requestMedia();
+
+    try std.testing.expect(client.presenter.media_tick_pending);
+    try std.testing.expect(!client.presenter.media_after_draw);
+    // The deferred pass was armed for now, not a pacer interval later.
+    while (true) {
+        switch (try client.select.await()) {
+            .media_tick => |result| {
+                try presentation_lifecycle.handleMediaTick(client, result);
+                break;
+            },
+            .sent => |result| try runtime_transport.handleSent(client, result),
+            else => return error.UnexpectedEvent,
+        }
+    }
+    try std.testing.expect(!client.presenter.media_tick_pending);
+}
+
+fn createSharedObject(name: [:0]const u8, pixels: []const u8) !void {
+    const fd = std.c.shm_open(
+        name,
+        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
+        @as(u16, 0o600),
+    );
+    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(fd));
+    defer _ = std.c.close(fd);
+    try std.testing.expectEqual(@as(c_int, 0), std.c.ftruncate(fd, @intCast(pixels.len)));
+    const map = try std.posix.mmap(
+        null,
+        pixels.len,
+        .{ .READ = true, .WRITE = true },
+        std.c.MAP{ .TYPE = .SHARED },
+        fd,
+        0,
+    );
+    defer std.posix.munmap(map);
+    @memcpy(map[0..pixels.len], pixels);
+}
+
+test "shared pane graphics reach the host inside the cell frame" {
+    if (comptime !kitty.supportsSharedMemory()) return error.SkipZigTest;
+
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    _ = try host_resizes.apply(client, .{ .cols = 80, .rows = 24, .width_px = 800, .height_px = 480 });
+    _ = try client.model.observeHostCapability(.{ .kitty_graphics = .supported });
+    client.graphics_store.shared_memory = true;
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+
+    var capture: Io.Writer.Allocating = .init(std.testing.allocator);
+    defer capture.deinit();
+    client.writer = &capture.writer;
+
+    var name_buffer: [64]u8 = undefined;
+    const name = try core.graphics.ShmName.init(try std.fmt.bufPrint(
+        &name_buffer,
+        "/tlrtest-frame-{d}",
+        .{std.c.getpid()},
+    ));
+    _ = std.c.shm_unlink(name.sliceZ());
+    try createSharedObject(name.sliceZ(), &.{ 1, 2, 3, 255 });
+    defer _ = std.c.shm_unlink(name.sliceZ());
+
+    var payload: [256]u8 = undefined;
+    const image: core.graphics.Image = .{
+        .key = .{ .image_id = 1, .generation = 1 },
+        .format = .rgba,
+        .width = 1,
+        .height = 1,
+        .byte_len = 4,
+    };
+    const shared = try schema.encodeGraphicsSharedImage(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .revision = 1,
+        .image = image,
+        .name = name,
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(shared));
+    const placement = try schema.encodeGraphicsPlacement(&payload, .{
+        .pane_id = TestHarness.bootstrap_pane,
+        .revision = 1,
+        .placement = .{ .key = image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(placement));
+    try presentation_lifecycle.observe(client);
+    try std.testing.expect(client.presenter.draw_pending);
+    try harness.settleModelPresentation();
+
+    const host_bytes = capture.written();
+    const transmit = std.mem.indexOf(u8, host_bytes, "t=s") orelse return error.SharedNameNotSent;
+    const place = std.mem.indexOf(u8, host_bytes, "a=p,") orelse return error.PlacementNotSent;
+    try std.testing.expect(transmit < place);
+    // Both escapes sit inside the synchronized update the cells opened.
+    const begin = std.mem.lastIndexOf(u8, host_bytes[0..transmit], "\x1b[?2026h") orelse
+        return error.FrameNotSynchronized;
+    try std.testing.expect(std.mem.indexOf(u8, host_bytes[begin..place], "\x1b[?2026l") == null);
+    try std.testing.expect(std.mem.indexOf(u8, host_bytes[place..], "\x1b[?2026l") != null);
+    if (comptime core.diagnostics.enabled) {
+        try std.testing.expectEqual(@as(u64, 1), client.telemetry.metrics.pane_shared_images);
+    }
+}
+
 test "presentation worker failures release their scheduling tokens" {
     var harness: TestHarness = undefined;
     try harness.init();

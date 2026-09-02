@@ -13,7 +13,7 @@ const diagnostics = core.diagnostics;
 const schema = core.schema;
 const graphics = core.graphics;
 
-fn supportsSharedMemory() bool {
+pub fn supportsSharedMemory() bool {
     return builtin.os.tag != .windows and !builtin.abi.isAndroid() and builtin.link_libc;
 }
 
@@ -1109,6 +1109,18 @@ pub const KittyGraphicsWriter = struct {
     stats: Stats = .{},
     /// Monotonic time of this pass, for retire latency. Zero disables it.
     now_ns: u64 = 0,
+    /// Which escapes this pass may emit. `control` rides inside a cell frame
+    /// and therefore never streams pixels; `bulk` is the paced media pass.
+    mode: Mode = .bulk,
+
+    pub const Mode = enum {
+        /// Shared names, placements and deletes: a few hundred bytes per
+        /// image, so they fit the synchronized cell update without delaying
+        /// it. Images that need inline pixels stay damaged for `bulk`.
+        control,
+        /// Everything the byte budget allows, chunked transfers included.
+        bulk,
+    };
 
     pub const Stats = struct {
         /// Images handed to the host as a shared-memory name.
@@ -1135,10 +1147,14 @@ pub const KittyGraphicsWriter = struct {
         self.store.expireSharedTransmissions();
         if (!self.store.damage or self.cell_width == 0 or self.cell_height == 0) return 0;
         self.store.collectRetired(null, null);
+        // An open chunked transfer owns the stream until the bulk pass closes
+        // it; a control pass may not even emit a delete in between.
+        if (self.mode == .control and self.store.partial != null) return 0;
         var written: usize = 0;
         var budget: usize = self.budget;
         var compress_budget: usize = compression_slice_per_frame;
         var compressing = false;
+        var bulk_pending = false;
 
         // An open chunked transfer owns the graphics stream: the protocol
         // forbids other graphics escapes between its chunks, so it either
@@ -1239,6 +1255,10 @@ pub const KittyGraphicsWriter = struct {
                 budget -= @min(budget, emitted);
                 continue;
             };
+            if (self.mode == .control) {
+                bulk_pending = true;
+                continue;
+            }
             // A still-deflating image keeps its wire budget for the others;
             // its own transmission starts once the stream is finished.
             const compress_budget_before = compress_budget;
@@ -1328,7 +1348,7 @@ pub const KittyGraphicsWriter = struct {
                 placement.placement.key.image_id,
             );
         }
-        self.store.damage = compressing or self.store.delete_len != 0 or
+        self.store.damage = bulk_pending or compressing or self.store.delete_len != 0 or
             self.store.delete_overflow or self.store.hasPendingSharedRelease();
         return written;
     }
@@ -3464,6 +3484,152 @@ test "a runtime-named image maps without copying and hands the host its name" {
     const credit = store.peekCredit().?;
     try std.testing.expectEqual(@as(usize, 4), credit.bytes);
     store.consumeCredit(credit);
+}
+
+test "a control pass hands the host shared names and placements without pixel streams" {
+    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+
+    var store = Store.initSharedMemory(std.testing.allocator);
+    defer store.deinit();
+    var name_buffer: [64]u8 = undefined;
+    const name = try graphics.ShmName.init(try std.fmt.bufPrint(
+        &name_buffer,
+        "/tlrtest-control-{d}",
+        .{std.c.getpid()},
+    ));
+    _ = std.c.shm_unlink(name.sliceZ());
+    const source = [_]u8{ 1, 2, 3, 255 };
+    try testCreateSharedObject(name.sliceZ(), &source);
+    defer _ = std.c.shm_unlink(name.sliceZ());
+
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const shared_image: graphics.Image = .{
+        .key = .{ .image_id = 7, .generation = 1 },
+        .format = .rgba,
+        .width = 1,
+        .height = 1,
+        .byte_len = 4,
+    };
+    try store.applySharedImage(.{ .pane_id = pane_id, .revision = 1, .image = shared_image, .name = name });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .placement = .{ .key = shared_image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
+    });
+    const inline_image: graphics.Image = .{
+        .key = .{ .image_id = 8, .generation = 1 },
+        .format = .rgba,
+        .width = 1,
+        .height = 1,
+        .byte_len = 4,
+    };
+    try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = inline_image });
+    try store.applyChunk(.{ .pane_id = pane_id, .revision = 1, .key = inline_image.key, .offset = 0, .bytes = &source });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .placement = .{ .key = inline_image.key, .virtual_id = 2, .placement_id = 2, .x = 1, .y = 0 },
+    });
+    // A shared-memory client also names its own images; a host that lost
+    // one is served inline, which is the bulk pass's job.
+    store.images.getPtr(identity(pane_id, inline_image.key)).?.force_direct = true;
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    try model.addRoot(pane_id, .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 10, .rows = 5 });
+    const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
+
+    var control: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = layout_snapshot,
+        .cell_width = 10,
+        .cell_height = 20,
+        .mode = .control,
+    };
+    var control_output: [1024]u8 = undefined;
+    var control_writer = Io.Writer.fixed(&control_output);
+    _ = try control.write(&control_writer);
+    const control_bytes = control_writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, control_bytes, "t=s") != null);
+    try std.testing.expect(std.mem.indexOf(u8, control_bytes, "a=p,") != null);
+    try std.testing.expect(std.mem.indexOf(u8, control_bytes, "t=d") == null);
+    try std.testing.expectEqual(@as(u64, 1), control.stats.shared_images);
+    try std.testing.expectEqual(@as(u64, 0), control.stats.inline_images);
+    // The inline image keeps its damage for the bulk pass.
+    try std.testing.expect(store.damage);
+
+    var bulk: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = layout_snapshot,
+        .cell_width = 10,
+        .cell_height = 20,
+    };
+    var bulk_output: [1024]u8 = undefined;
+    var bulk_writer = Io.Writer.fixed(&bulk_output);
+    _ = try bulk.write(&bulk_writer);
+    const bulk_bytes = bulk_writer.buffered();
+    try std.testing.expect(std.mem.indexOf(u8, bulk_bytes, "t=d") != null);
+    try std.testing.expect(std.mem.indexOf(u8, bulk_bytes, "t=s") == null);
+    try std.testing.expectEqual(@as(u64, 1), bulk.stats.inline_images);
+    try std.testing.expect(!store.damage);
+}
+
+test "a control pass emits nothing while a chunked transfer is open" {
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    try model.addRoot(pane_id, .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    }, .{ .cols = 10, .rows = 5 });
+    const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
+
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const pixels = try std.testing.allocator.alloc(u8, 64 * 64 * 4);
+    defer std.testing.allocator.free(pixels);
+    @memset(pixels, 0x5a);
+    const image: graphics.Image = .{
+        .key = .{ .image_id = 7, .generation = 1 },
+        .format = .rgba,
+        .width = 64,
+        .height = 64,
+        .byte_len = pixels.len,
+    };
+    try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = image });
+    try store.applyChunk(.{ .pane_id = pane_id, .revision = 1, .key = image.key, .offset = 0, .bytes = pixels });
+    try store.applyPlacement(.{
+        .pane_id = pane_id,
+        .revision = 1,
+        .placement = .{ .key = image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
+    });
+
+    var bulk: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = layout_snapshot,
+        .cell_width = 10,
+        .cell_height = 20,
+        .budget = 4096,
+    };
+    var bulk_output: [8192]u8 = undefined;
+    var bulk_writer = Io.Writer.fixed(&bulk_output);
+    _ = try bulk.write(&bulk_writer);
+    try std.testing.expect(store.partial != null);
+
+    var control: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = layout_snapshot,
+        .cell_width = 10,
+        .cell_height = 20,
+        .mode = .control,
+    };
+    var control_output: [1024]u8 = undefined;
+    var control_writer = Io.Writer.fixed(&control_output);
+    try std.testing.expectEqual(@as(usize, 0), try control.write(&control_writer));
+    try std.testing.expect(store.partial != null);
+    try std.testing.expect(store.damage);
 }
 
 test "a host that never consumes shared names loses them and gets pixels inline" {
