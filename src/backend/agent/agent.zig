@@ -179,9 +179,13 @@ pub fn applyProxy(agent: *Agent, observation: ProxyObservation) bool {
         return false;
     }
 
+    // The proxy names the API family it saw on the wire, which is only an
+    // agent identity while no process has claimed the pane. A process-backed
+    // agent may talk to any provider, so its exchanges count regardless of
+    // host; only proxy- or screen-derived identity rejects a foreign family.
     const established_provider = agent.provider();
 
-    if (established_provider != .unknown and observation.provider != established_provider) {
+    if (agent.process == null and established_provider != .unknown and observation.provider != established_provider) {
         return false;
     }
 
@@ -695,6 +699,7 @@ fn ensurePlaceholder(agent: *Agent, provider_value: schema.AgentProvider) void {
     const placeholder = switch (provider_value) {
         .codex => "New Codex session",
         .claude => "New Claude Code session",
+        .pi => "New Pi session",
         else => "New agent session",
     };
 
@@ -857,6 +862,39 @@ test "agent rejects completion from a contradictory provider" {
     try std.testing.expectEqual(schema.AgentProvider.claude, evidence.provider);
     try std.testing.expectEqual(schema.AgentStatus.ready, evidence.status);
     try std.testing.expectEqual(@as(i64, 300), evidence.observed_at_ms);
+}
+
+test "a process-backed agent accepts exchanges with any provider family" {
+    const identity = try testIdentity();
+    var agent = Agent.init(identity);
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+
+    try std.testing.expect(agent.applyProcess(.{
+        .identity = identity,
+        .provider = .pi,
+        .process_id = 42,
+        .observed_at_ms = 50,
+    }));
+
+    // Pi talks to Anthropic here; the wire family must not reject the exchange.
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .request_started,
+        .exchange = exchange,
+        .observed_at_ms = 100,
+    }));
+    try std.testing.expect(agent.applyProxy(.{
+        .identity = identity,
+        .provider = .claude,
+        .phase = .provider_turn_completed,
+        .exchange = exchange,
+        .observed_at_ms = 200,
+    }));
+
+    const evidence = agent.proxy.currentEvidence().?;
+    try std.testing.expectEqual(schema.AgentStatus.ready, evidence.status);
+    try std.testing.expectEqual(schema.AgentProvider.pi, agent.provider());
 }
 
 test "semantic completion does not clear stronger blocked screen evidence" {
