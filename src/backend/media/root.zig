@@ -43,6 +43,9 @@ pub const Stats = struct {
     /// Wall time the media actor spent on this batch, including every shared
     /// frame it mapped, copied into pane storage and unlinked.
     elapsed_ns: u64 = 0,
+    /// Generations the actor froze into runtime-owned shared objects for
+    /// local clients to adopt without another copy.
+    prepared_frames: u64 = 0,
     reset: bool = false,
     failed: bool = false,
 };

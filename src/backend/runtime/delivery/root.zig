@@ -485,6 +485,7 @@ pub const Delivery = struct {
                         metrics.graphics_images_sent +|= effect.graphics.images;
                         metrics.graphics_placements_sent +|= effect.graphics.placements;
                         metrics.graphics_stage_blocked +|= effect.graphics.stage_blocked;
+                        metrics.graphics_transfers_adopted +|= effect.graphics.adopted;
                         metrics.graphics_freeze.merge(effect.graphics.freeze);
                     }
                 }

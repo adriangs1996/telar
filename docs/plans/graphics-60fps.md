@@ -135,6 +135,17 @@ idle" coupling.
 Exit: main-loop event dispatch shows no per-frame stall in `--measure`;
 `graphics_stage_blocked.worker` is zero.
 
+Result (2026-09-02): the runtime-thread freeze is gone (`graphics_freeze`
+0 samples, every transfer adopted), so input dispatch no longer stalls ~8 ms
+per frame. Throughput did not move: presented 47.6 frames/s against 48.2
+forwarded, because the actor is serial and now spends 19.8 ms per batch
+(11.5 ms decode + the same ~8 ms freeze it inherited). Both halves are page
+faults on fresh memory, not copying: the 50 MiB loading buffer and the fresh
+shared object each fault in ~2300 pages per frame. `graphics_stage_deferred`
+stays non-zero and harmless: the send loop polls the lane while the actor
+runs, and adoption happens at the actor's completion anyway. P4 and P6 are
+where the actor's time goes down.
+
 ## P4. Client to host: persistent file ring with an explicit ack
 
 Fresh shm objects cost page faults on both sides and give only an indirect

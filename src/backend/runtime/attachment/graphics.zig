@@ -1,65 +1,16 @@
 //! Per-client synchronization state for one pane's Kitty graphics projection.
 
 const std = @import("std");
-const builtin = @import("builtin");
 const core = @import("telar-core");
 const pane_mod = @import("../../pane/root.zig");
 
-const Io = std.Io;
 const Pane = pane_mod.Pane;
 
-const shm_supported =
-    builtin.os.tag != .windows and !builtin.abi.isAndroid() and builtin.link_libc;
+const shared_transfer = pane_mod.shared_transfer;
 
-pub const shared_memory_supported = shm_supported;
-
-var shared_freeze_sequence = std.atomic.Value(u64).init(0);
-var shared_freeze_nonce = std.atomic.Value(u32).init(0);
-
-pub fn initSharedFreezeNonce(io: Io) void {
-    var bytes: [4]u8 = undefined;
-    io.random(&bytes);
-    shared_freeze_nonce.store(@as(u32, @bitCast(bytes)) | 1, .monotonic);
-}
-
-pub fn freezeSharedPixels(pixels: []const u8) ?core.graphics.ShmName {
-    if (comptime !shm_supported) return null;
-    var nonce = shared_freeze_nonce.load(.monotonic);
-    if (nonce == 0) {
-        nonce = @as(u32, @bitCast(std.c.getpid())) | 1;
-        shared_freeze_nonce.store(nonce, .monotonic);
-    }
-    const sequence = shared_freeze_sequence.fetchAdd(1, .monotonic);
-    var text: [core.graphics.max_shm_name_bytes]u8 = undefined;
-    const printed = std.fmt.bufPrint(&text, "/tlr{x:0>8}{x}", .{ nonce, sequence }) catch
-        return null;
-    const name = core.graphics.ShmName.init(printed) catch return null;
-    const fd = std.c.shm_open(
-        name.sliceZ(),
-        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
-        @as(u16, 0o600),
-    );
-    if (std.posix.errno(fd) != .SUCCESS) return null;
-    defer _ = std.c.close(fd);
-    if (std.c.ftruncate(fd, @intCast(pixels.len)) != 0) {
-        _ = std.c.shm_unlink(name.sliceZ());
-        return null;
-    }
-    const map = std.posix.mmap(
-        null,
-        pixels.len,
-        .{ .READ = true, .WRITE = true },
-        std.c.MAP{ .TYPE = .SHARED },
-        fd,
-        0,
-    ) catch {
-        _ = std.c.shm_unlink(name.sliceZ());
-        return null;
-    };
-    defer std.posix.munmap(map);
-    @memcpy(map[0..pixels.len], pixels);
-    return name;
-}
+pub const shared_memory_supported = shared_transfer.shared_memory_supported;
+pub const initSharedFreezeNonce = shared_transfer.initSharedFreezeNonce;
+pub const freezeSharedPixels = shared_transfer.freezeSharedPixels;
 
 pub const SnapshotState = enum { begin_pending, open, idle };
 
@@ -89,6 +40,9 @@ pub const Sync = struct {
     sent_images: u32 = 0,
     sent_placements: u32 = 0,
     stage_blocked: u32 = 0,
+    /// Transfers adopted from the media actor's parked objects: no copy on
+    /// the runtime thread.
+    adopted: u32 = 0,
     freeze: core.diagnostics.Timing = .{},
     transfer: ?Transfer = null,
     known_images: [core.graphics.max_images_per_pane]?KnownImage =

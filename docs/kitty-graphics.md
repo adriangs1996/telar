@@ -74,7 +74,15 @@ deletes, and snapshot boundaries are separate ordered messages. IPC pixel
 chunks are capped at 1 MiB. The runtime freezes at most one generation per
 attachment while it crosses the socket, folds newer generations, and keeps the
 previous exterior placement visible until the replacement image and placement
-are complete. Moving a placement never retransmits pixels. Each client grants
+are complete. For local clients the pane's media actor freezes each decoded
+generation into the runtime-owned shared object right after the emulator
+stored it, while the pixels are still hot, and parks it on the pane (at most
+four per pane, every byte reserved against the pane quota). The runtime thread
+adopts the parked object when it stages the transfer, so no pixel copy runs on
+the thread that dispatches input; a generation nobody can adopt is released at
+the next synchronization, and a newer generation of the same image replaces
+an unadopted one. The runtime-thread copy remains only as the fallback for a
+generation the actor did not freeze. Moving a placement never retransmits pixels. Each client grants
 an explicit byte credit. The runtime cannot freeze another image until the
 client has retired enough image storage and returned that credit.
 

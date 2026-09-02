@@ -13,6 +13,7 @@ pub const blit = @import("blit.zig");
 pub const damage = @import("damage.zig");
 const escape = history.escape;
 const media_mod = @import("../media/root.zig");
+pub const shared_transfer = @import("shared_transfer.zig");
 const pty = @import("../pty/root.zig");
 
 const Io = std.Io;
@@ -601,6 +602,13 @@ pub const Pane = struct {
     semantic_colors_dirty: bool = false,
     graphics_revision: u64 = 0,
     graphics_present: bool = false,
+    /// Generations the media actor froze for local clients, awaiting
+    /// adoption on the runtime thread.
+    prepared_transfers: shared_transfer.PreparedTransfers = .{},
+    /// Attachments whose client takes shared-memory names. Written by the
+    /// runtime thread, read by the media actor to decide whether freezing a
+    /// generation right after decode can pay off.
+    shared_transport_clients: std.atomic.Value(u8) = .init(0),
     dirty: bool = true,
     render_pending: bool = true,
     cell_revision: u64 = 1,
@@ -1014,6 +1022,7 @@ pub const Pane = struct {
         pane.screen.deinit();
         pane.render_state.deinit(gpa);
         pane.history_observer.deinit();
+        pane.prepared_transfers.discardAll(&pane.media_allocator);
         pane.media.deinit();
         pane.stream.deinit();
         pane.media_allocator.detach();
@@ -1099,6 +1108,7 @@ pub const Pane = struct {
         if (pane.media.batches[pane.media.worker.?].reset_before) {
             pane.kitty_framing = .{};
             pane.kitty_loading_chunks = 0;
+            pane.prepared_transfers.discardAll(&pane.media_allocator);
         }
 
         const Sink = struct {
@@ -1110,6 +1120,85 @@ pub const Pane = struct {
         };
         var sink: Sink = .{ .pane = pane };
         pane.media.processSealed(.{ .current_size = current_size, .stats = stats }, &sink);
+        if (!stats.failed and pane.shared_transport_clients.load(.acquire) != 0) {
+            pane.prepareSharedTransfers(stats);
+        }
+    }
+
+    /// Records one attachment gaining or losing shared-memory transport, so
+    /// the media actor freezes generations only while somebody can adopt them.
+    ///
+    /// ```zig
+    /// pane.noteSharedTransport(true);
+    /// ```
+    pub fn noteSharedTransport(pane: *Pane, shared: bool) void {
+        if (shared) {
+            _ = pane.shared_transport_clients.fetchAdd(1, .release);
+        } else {
+            _ = pane.shared_transport_clients.fetchSub(1, .release);
+        }
+    }
+
+    const LiveImages = struct {
+        storage: *const vt.kitty.graphics.ImageStorage,
+
+        pub fn holds(alive: LiveImages, image_key: core.graphics.ImageKey) bool {
+            const image = alive.storage.imageById(image_key.image_id) orelse return false;
+            return image.generation == image_key.generation;
+        }
+
+        pub fn holdsImage(alive: LiveImages, image_id: u32) bool {
+            return alive.storage.imageById(image_id) != null;
+        }
+    };
+
+    /// Freezes every generation the emulator holds that no local client has
+    /// been offered yet, on the media actor with the pixels still hot. A
+    /// frame that cannot be frozen here is left to the runtime thread's
+    /// fallback copy, so nothing is lost, only deferred.
+    ///
+    /// ```zig
+    /// pane.prepareSharedTransfers(&stats);
+    /// ```
+    pub fn prepareSharedTransfers(pane: *Pane, stats: *media_mod.Stats) void {
+        const storage = &pane.media.terminal.screens.active.kitty_images;
+        pane.prepared_transfers.retain(LiveImages{ .storage = storage }, &pane.media_allocator);
+        var images = storage.images.iterator();
+        while (images.next()) |entry| {
+            const image = entry.value_ptr;
+            const pixels = image.data.bytes() orelse continue;
+            const image_key: core.graphics.ImageKey = .{ .image_id = image.id, .generation = image.generation };
+            if (pane.prepared_transfers.covers(image_key)) continue;
+            const format: core.graphics.Format = switch (image.format) {
+                .rgb => .rgb,
+                .rgba => .rgba,
+                else => continue,
+            };
+            const metadata: core.graphics.Image = .{
+                .key = image_key,
+                .format = format,
+                .width = image.width,
+                .height = image.height,
+                .byte_len = pixels.len,
+            };
+            _ = metadata.validate(pane.graphics_storage_limit) catch continue;
+            if (!pane.media_allocator.reserveManual(pixels.len)) continue;
+            const name = shared_transfer.freezeSharedPixels(pixels) orelse {
+                pane.media_allocator.releaseManual(pixels.len);
+                continue;
+            };
+            const transfer: shared_transfer.PreparedTransfer = .{
+                .metadata = metadata,
+                .name = name,
+                .reserved_len = pixels.len,
+            };
+            if (!pane.prepared_transfers.put(transfer, &pane.media_allocator)) {
+                _ = std.c.shm_unlink(name.sliceZ());
+                pane.media_allocator.releaseManual(pixels.len);
+                continue;
+            }
+            stats.prepared_frames +|= 1;
+        }
     }
 
     fn ingestMediaOutput(pane: *Pane, bytes: []const u8) void {

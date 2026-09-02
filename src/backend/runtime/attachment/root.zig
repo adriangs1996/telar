@@ -35,7 +35,10 @@ pub const Attachment = struct {
         /// Freezes refused because the next image exceeded the client's or
         /// the runtime's memory credit.
         stage_blocked: u32,
-        /// Time spent copying frozen generations out of live media storage.
+        /// Transfers adopted from objects the media actor froze.
+        adopted: u32,
+        /// Time spent copying frozen generations out of live media storage
+        /// on the runtime thread, the fallback when nothing was adopted.
         freeze: core.diagnostics.Timing,
     };
     pub const CellPreparation = struct {
@@ -65,7 +68,7 @@ pub const Attachment = struct {
     pub const CommitEffect = struct {
         detach_after_send: ?schema.PaneId = null,
         graphics_message: bool = false,
-        graphics: GraphicsCounts = .{ .images = 0, .placements = 0, .stage_blocked = 0, .freeze = .{} },
+        graphics: GraphicsCounts = .{ .images = 0, .placements = 0, .stage_blocked = 0, .adopted = 0, .freeze = .{} },
     };
     pane: *Pane,
     cells: cell.Sync,
@@ -87,6 +90,7 @@ pub const Attachment = struct {
 
     pub fn deinit(attachment: *Attachment) void {
         attachment.cells.deinit(attachment.pane);
+        if (attachment.graphics.shared_transport) attachment.pane.noteSharedTransport(false);
         attachment.graphics.deinit();
     }
 
@@ -223,7 +227,9 @@ pub const Attachment = struct {
     }
 
     fn configureGraphics(attachment: *Attachment, shared: bool) void {
+        if (attachment.graphics.shared_transport == shared) return;
         attachment.graphics.shared_transport = shared;
+        attachment.pane.noteSharedTransport(shared);
     }
 
     fn returnGraphicsCredit(attachment: *Attachment, bytes: usize) bool {
@@ -274,11 +280,13 @@ pub const Attachment = struct {
             .images = attachment.graphics.sent_images,
             .placements = attachment.graphics.sent_placements,
             .stage_blocked = attachment.graphics.stage_blocked,
+            .adopted = attachment.graphics.adopted,
             .freeze = attachment.graphics.freeze,
         };
         attachment.graphics.sent_images = 0;
         attachment.graphics.sent_placements = 0;
         attachment.graphics.stage_blocked = 0;
+        attachment.graphics.adopted = 0;
         attachment.graphics.freeze = .{};
         return result;
     }
@@ -886,24 +894,35 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
             attachment.graphics.stage_blocked +|= 1;
             return .blocked;
         }
-        if (!pane.media_allocator.reserveManual(pixels.len))
-            return error.GraphicsQuotaExceeded;
-        errdefer pane.media_allocator.releaseManual(pixels.len);
-        const freeze_started = core.diagnostics.now(pane.io);
-        defer if (comptime core.diagnostics.enabled) {
-            attachment.graphics.freeze.observe(
-                core.diagnostics.elapsed(freeze_started, core.diagnostics.now(pane.io)),
-            );
-        };
         var transfer: graphics.Sync.Transfer = .{
             .metadata = metadata,
             .pixels = &.{},
             .reserved_len = pixels.len,
         };
-        if (attachment.graphics.shared_transport)
-            transfer.shared_name = graphics.freezeSharedPixels(pixels);
-        if (transfer.shared_name == null)
-            transfer.pixels = try attachment.graphics.gpa.dupe(u8, pixels);
+        // The media actor may already have frozen this generation with the
+        // pixels hot; adopting it costs the runtime thread nothing.
+        if (attachment.graphics.shared_transport) {
+            if (pane.prepared_transfers.take(key)) |prepared| {
+                transfer.shared_name = prepared.name;
+                transfer.reserved_len = prepared.reserved_len;
+                attachment.graphics.adopted +|= 1;
+            }
+        }
+        if (transfer.shared_name == null) {
+            if (!pane.media_allocator.reserveManual(pixels.len))
+                return error.GraphicsQuotaExceeded;
+            errdefer pane.media_allocator.releaseManual(pixels.len);
+            const freeze_started = core.diagnostics.now(pane.io);
+            defer if (comptime core.diagnostics.enabled) {
+                attachment.graphics.freeze.observe(
+                    core.diagnostics.elapsed(freeze_started, core.diagnostics.now(pane.io)),
+                );
+            };
+            if (attachment.graphics.shared_transport)
+                transfer.shared_name = graphics.freezeSharedPixels(pixels);
+            if (transfer.shared_name == null)
+                transfer.pixels = try attachment.graphics.gpa.dupe(u8, pixels);
+        }
         attachment.graphics.credit -= pixels.len;
         attachment.graphics.transfer = transfer;
         var placement_iterator = storage.placements.iterator();

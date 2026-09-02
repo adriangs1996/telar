@@ -86,6 +86,8 @@ def frame_report(
         "graphics_freeze_max_us": latest(runtime_samples, "graphics_freeze_max_us"),
         "graphics_stage_blocked": latest(runtime_samples, "graphics_stage_blocked"),
         "graphics_stage_deferred": latest(runtime_samples, "graphics_stage_deferred"),
+        "graphics_transfers_prepared": latest(runtime_samples, "graphics_transfers_prepared"),
+        "graphics_transfers_adopted": latest(runtime_samples, "graphics_transfers_adopted"),
         "media_deferrals": latest(client_samples, "media_deferrals"),
         "pane_present_interval_avg_us": latest(client_samples, "pane_present_interval_avg_us"),
         "pane_present_interval_max_us": latest(client_samples, "pane_present_interval_max_us"),
