@@ -156,6 +156,13 @@ pub fn Dispatcher(comptime Application: type) type {
                     .claude_turn_completions = proxy_metrics.claude_turn_completions,
                     .claude_successful_responses = proxy_metrics.claude_successful_responses,
                     .claude_failure_observations = proxy_metrics.claude_failure_observations,
+                    .capture_started = proxy_metrics.capture_started,
+                    .capture_truncated = proxy_metrics.capture_truncated,
+                    .capture_skipped_quota = proxy_metrics.capture_skipped_quota,
+                    .capture_dropped_queue = proxy_metrics.capture_dropped_queue,
+                    .capture_decode_failed = proxy_metrics.capture_decode_failed,
+                    .capture_queue_depth = proxy_metrics.queued_captures,
+                    .capture_queue_high_water = proxy_metrics.capture_queue_high_water,
                 },
                 .heap = application.heap,
             });

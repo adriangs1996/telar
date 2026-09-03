@@ -81,6 +81,11 @@ pub const Sources = struct {
         try proxy_runtime.schedule(context.scheduler());
     }
 
+    pub fn receiveProxyCapture(sources: *Sources, proxy_runtime: *proxy_resource.Runtime) !void {
+        var context: ProxyCaptureScheduleContext = .{ .sources = sources };
+        try proxy_runtime.scheduleCapture(context.scheduler());
+    }
+
     /// Arms the next agent-maintenance tick.
     ///
     /// ```zig
@@ -132,6 +137,7 @@ pub const InitialSources = struct {
             try initial_sources.sources.receiveEngine(engine_service);
         }
         try initial_sources.sources.receiveProxyObservation(initial_sources.proxy_runtime);
+        try initial_sources.sources.receiveProxyCapture(initial_sources.proxy_runtime);
         try initial_sources.sources.waitForAgentMaintenance();
         try initial_sources.sources.waitForSystemMetrics();
 
@@ -166,6 +172,19 @@ const ProxyScheduleContext = struct {
     fn schedule(context_value: *anyopaque, proxy: *proxy_mod.Proxy) !void {
         const context: *ProxyScheduleContext = @ptrCast(@alignCast(context_value));
         try context.sources.select.concurrent(.proxy_event, proxy_mod.Proxy.receive, .{ proxy, context.sources.io });
+    }
+};
+
+const ProxyCaptureScheduleContext = struct {
+    sources: *Sources,
+
+    fn scheduler(context: *ProxyCaptureScheduleContext) proxy_resource.CaptureScheduler {
+        return .{ .context = context, .schedule_fn = schedule };
+    }
+
+    fn schedule(context_value: *anyopaque, proxy: *proxy_mod.Proxy) !void {
+        const context: *ProxyCaptureScheduleContext = @ptrCast(@alignCast(context_value));
+        try context.sources.select.concurrent(.proxy_capture, proxy_mod.Proxy.receiveCapture, .{ proxy, context.sources.io });
     }
 };
 

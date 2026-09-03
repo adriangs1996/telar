@@ -9,6 +9,7 @@ const provider = @import("../provider/root.zig");
 
 const Io = std.Io;
 const schema = core.schema;
+const net = Io.net;
 
 pub const Status = struct {
     phase: middleware.Phase,
@@ -30,6 +31,7 @@ pub const Exchange = struct {
     dialect: provider.ApiDialect,
     connection_id: u64,
     protocol: middleware.Protocol,
+    host: net.HostName = undefined,
     status_code: u16 = 0,
 
     /// Publishes one lifecycle phase for the current status and stream.

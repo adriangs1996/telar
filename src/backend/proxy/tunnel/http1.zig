@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const capture = @import("../capture/root.zig");
 const http = @import("../http/root.zig");
 const identity = @import("../identity.zig");
 const metrics = @import("../metrics.zig");
@@ -18,6 +19,7 @@ pub const Options = struct {
     transforms: *const middleware.TransformPipeline,
     session: *tls.Session,
     exchange: *exchange_mod.Exchange,
+    captures: ?*capture.Producer = null,
 };
 
 pub const Connection = struct {
@@ -25,7 +27,10 @@ pub const Connection = struct {
     transforms: *const middleware.TransformPipeline,
     session: *tls.Session,
     exchange: *exchange_mod.Exchange,
+    captures: ?*capture.Producer,
     request: provider.RequestObserver = .{},
+    request_capture: ?*capture.Half = null,
+    response_capture: ?*capture.Half = null,
 
     /// Binds an intercepted TLS session to its exchange and immutable header
     /// transformation pipeline.
@@ -39,6 +44,7 @@ pub const Connection = struct {
             .transforms = options.transforms,
             .session = options.session,
             .exchange = options.exchange,
+            .captures = options.captures,
         };
     }
 
@@ -50,7 +56,39 @@ pub const Connection = struct {
     /// ```
     pub fn run(connection: *Connection) void {
         defer connection.request.deinit();
+        defer connection.discardCaptures();
         RelayConnection.run(connection);
+    }
+
+    fn discardCaptures(connection: *Connection) void {
+        if (connection.request_capture) |half| {
+            half.deinit();
+            connection.request_capture = null;
+        }
+
+        if (connection.response_capture) |half| {
+            half.deinit();
+            connection.response_capture = null;
+        }
+    }
+
+    fn beginCapture(connection: *Connection) void {
+        connection.discardCaptures();
+        const producer = connection.captures orelse return;
+        const started_at_ms = Io.Timestamp.now(connection.io, .real).toMilliseconds();
+        const base: capture.StartOptions = .{
+            .credential = connection.exchange.credential,
+            .dialect = connection.exchange.dialect,
+            .protocol = connection.exchange.protocol,
+            .key = .{ .connection_id = connection.exchange.connection_id, .stream_id = 0 },
+            .side = .request,
+            .host = connection.exchange.host.bytes,
+            .started_at_ms = started_at_ms,
+        };
+        connection.request_capture = producer.start(base);
+        var response = base;
+        response.side = .response;
+        connection.response_capture = producer.start(response);
     }
 };
 
@@ -75,6 +113,7 @@ const RelayConnection = http.Connection(Connection, connection_port);
 
 const RequestBodyObserver = struct {
     request: *provider.RequestObserver,
+    capture_half: ?*capture.Half = null,
 
     /// Feeds one already-forwarded payload fragment to request classification.
     ///
@@ -83,6 +122,9 @@ const RequestBodyObserver = struct {
     /// ```
     pub fn observe(observer: RequestBodyObserver, fragment: http.BodyFragment) void {
         observer.request.feed(fragment.payload);
+        if (observer.capture_half) |half| {
+            _ = half.append(.request_body, fragment.payload);
+        }
     }
 };
 
@@ -90,12 +132,14 @@ const ResponseBodyObserver = struct {
     exchange: *exchange_mod.Exchange,
     response: provider.ResponseObserver,
     inspect_payload: bool,
+    capture_half: ?*capture.Half,
 
-    fn init(exchange: *exchange_mod.Exchange, inspect_payload: bool) ResponseBodyObserver {
+    fn init(exchange: *exchange_mod.Exchange, options: ResponseObserverOptions) ResponseBodyObserver {
         return .{
             .exchange = exchange,
             .response = .init(exchange.dialect),
-            .inspect_payload = inspect_payload,
+            .inspect_payload = options.inspect_payload,
+            .capture_half = options.capture_half,
         };
     }
 
@@ -106,6 +150,10 @@ const ResponseBodyObserver = struct {
     /// observer.observe(.{ .payload = bytes, .forwarded_bytes = bytes.len });
     /// ```
     pub fn observe(observer: *ResponseBodyObserver, fragment: http.BodyFragment) void {
+        if (observer.capture_half) |half| {
+            _ = half.append(.response_body, fragment.payload);
+        }
+
         if (fragment.forwarded_bytes != 0) {
             observer.exchange.publish(.response_activity, 0);
         }
@@ -124,7 +172,13 @@ const ResponseBodyObserver = struct {
     fn deinit(observer: *ResponseBodyObserver) void {
         observer.response.deinit();
         observer.inspect_payload = false;
+        observer.capture_half = null;
     }
+};
+
+const ResponseObserverOptions = struct {
+    inspect_payload: bool,
+    capture_half: ?*capture.Half,
 };
 
 const UpgradeRoute = struct {
@@ -138,6 +192,7 @@ fn connectionIo(connection: *Connection) Io {
 
 fn relayRequestHead(connection: *Connection) ?http.RequestHead {
     connection.request.deinit();
+    connection.beginCapture();
 
     const parsed = http.relayHeadTransformed(connection.session, .{
         .route = .{
@@ -154,6 +209,7 @@ fn relayRequestHead(connection: *Connection) ?http.RequestHead {
             .kind = .request,
             .stream_id = 0,
         }),
+        .capture = headSink(connection.request_capture),
     }) orelse return null;
 
     return .{
@@ -178,11 +234,15 @@ fn relayRequestBody(connection: *Connection, framing: http.BodyPlan) bool {
     const forwarded = http.relayBody(
         connection.session,
         .{ .from = .child, .to = .origin, .framing = framing },
-        RequestBodyObserver{ .request = &connection.request },
+        RequestBodyObserver{ .request = &connection.request, .capture_half = connection.request_capture },
     );
 
     if (forwarded and inspect) {
         finishRequest(connection);
+    }
+
+    if (forwarded) {
+        finishCapture(connection, .request, .finished);
     }
 
     return forwarded;
@@ -190,6 +250,62 @@ fn relayRequestBody(connection: *Connection, framing: http.BodyPlan) bool {
 
 fn finishRequest(connection: *Connection) void {
     connection.exchange.publish(exchange_mod.requestPhase(connection.request.finish()), 0);
+}
+
+fn headSink(half: ?*capture.Half) ?http.HeadSink {
+    const owned = half orelse return null;
+
+    return .{ .context = owned, .append_fn = captureHead };
+}
+
+fn captureHead(context: *anyopaque, bytes: []const u8) void {
+    const half: *capture.Half = @ptrCast(@alignCast(context));
+    const part: capture.Part = if (half.side == .request) .request_head else .response_head;
+    _ = half.append(part, bytes);
+
+    if (half.side == .request) {
+        const line_end = std.mem.indexOf(u8, bytes, "\r\n") orelse return;
+        var fields = std.mem.splitScalar(u8, bytes[0..line_end], ' ');
+        const method = fields.next() orelse return;
+        const target = fields.next() orelse return;
+        half.setRoute(method, target);
+    }
+
+    if (headerValue(bytes, "content-encoding")) |encoding| {
+        half.setEncoding(encoding);
+    }
+}
+
+fn headerValue(bytes: []const u8, wanted: []const u8) ?[]const u8 {
+    var lines = std.mem.splitSequence(u8, bytes, "\r\n");
+    _ = lines.next();
+
+    while (lines.next()) |line| {
+        const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
+        const name = std.mem.trim(u8, line[0..colon], " \t");
+        if (!std.ascii.eqlIgnoreCase(name, wanted)) {
+            continue;
+        }
+
+        return std.mem.trim(u8, line[colon + 1 ..], " \t");
+    }
+
+    return null;
+}
+
+fn finishCapture(connection: *Connection, side: capture.Side, outcome: capture.Outcome) void {
+    const producer = connection.captures orelse return;
+    const slot = switch (side) {
+        .request => &connection.request_capture,
+        .response => &connection.response_capture,
+    };
+    const half = slot.* orelse return;
+    slot.* = null;
+    half.finish(outcome, Io.Timestamp.now(connection.io, .real).toMilliseconds());
+    producer.publish(connection.io, .{
+        .credential = connection.exchange.credential,
+        .half = half,
+    });
 }
 
 fn relayResponse(connection: *Connection, request: http.RequestHead) ?http.ResponseHead {
@@ -208,9 +324,20 @@ fn relayResponse(connection: *Connection, request: http.RequestHead) ?http.Respo
                 .kind = .response,
                 .stream_id = 0,
             }),
+            .capture = headSink(connection.response_capture),
         }) orelse return null;
 
-        var observer: ResponseBodyObserver = .init(connection.exchange, shouldInspectResponse(request, head));
+        if (head.message.informational) {
+            if (connection.response_capture) |half| {
+                half.head.reset();
+                half.captured_bytes = half.body.len;
+            }
+        }
+
+        var observer: ResponseBodyObserver = .init(connection.exchange, .{
+            .inspect_payload = shouldInspectResponse(request, head),
+            .capture_half = connection.response_capture,
+        });
         const forwarded = http.relayBody(
             connection.session,
             .{ .from = .origin, .to = .child, .framing = head.framing },
@@ -223,6 +350,10 @@ fn relayResponse(connection: *Connection, request: http.RequestHead) ?http.Respo
         }
 
         if (!head.message.informational) {
+            if (connection.response_capture) |half| {
+                half.status_code = head.message.status_code;
+            }
+
             return semanticResponse(head);
         }
     }
@@ -253,6 +384,9 @@ fn publishRequest(connection: *Connection, request: http.RequestHead) void {
     else
         request.classification;
     connection.exchange.publish(exchange_mod.requestPhase(classification), 0);
+    if (!request.body.hasBody()) {
+        finishCapture(connection, .request, .finished);
+    }
 }
 
 fn shouldClassifyRequest(connection: *const Connection, request: http.RequestHead) bool {
@@ -262,6 +396,7 @@ fn shouldClassifyRequest(connection: *const Connection, request: http.RequestHea
 fn publishResponse(connection: *Connection, response: http.ResponseHead) void {
     connection.exchange.status_code = response.status_code;
     connection.exchange.publish(responsePhase(response.status_code), 0);
+    finishCapture(connection, .response, if (response.status_code >= 400) .failed else .finished);
 }
 
 fn responsePhase(status_code: u16) middleware.Phase {
@@ -270,6 +405,8 @@ fn responsePhase(status_code: u16) middleware.Phase {
 
 fn publishFailure(connection: *Connection) void {
     connection.exchange.publish(.request_failed, 0);
+    finishCapture(connection, .request, .failed);
+    finishCapture(connection, .response, .failed);
 }
 
 fn upgrade(connection: *Connection) void {
@@ -314,9 +451,9 @@ const Capture = struct {
     len: usize = 0,
 
     fn observe(context: *anyopaque, _: Io, event: middleware.Event) void {
-        const capture: *Capture = @ptrCast(@alignCast(context));
-        capture.events[capture.len] = event;
-        capture.len += 1;
+        const observed: *Capture = @ptrCast(@alignCast(context));
+        observed.events[observed.len] = event;
+        observed.len += 1;
     }
 };
 
@@ -487,7 +624,10 @@ test "Claude SSE completion is published after forwarded response activity" {
         .is_response = true,
         .response_to_head = false,
     }).?;
-    var observer: ResponseBodyObserver = .init(&harness.exchange, shouldInspectResponse(request, parsed_response));
+    var observer: ResponseBodyObserver = .init(&harness.exchange, .{
+        .inspect_payload = shouldInspectResponse(request, parsed_response),
+        .capture_half = null,
+    });
     defer observer.deinit();
 
     try std.testing.expect(http.relayBody(
@@ -550,4 +690,152 @@ test "final status maps to response completion or failure" {
     inline for (.{ @as(u16, 400), 429, 599 }) |status_code| {
         try std.testing.expectEqual(middleware.Phase.request_failed, responsePhase(status_code));
     }
+}
+
+const CaptureGate = struct {
+    fn accepts(_: *anyopaque, _: *const identity.Credential) bool {
+        return true;
+    }
+};
+
+fn testCaptureProducer(producer: *capture.Producer, context: *u8, config: capture.Config) !void {
+    try producer.init(std.testing.allocator, .{
+        .config = config,
+        .gate = .{ .context = context, .is_live = CaptureGate.accepts },
+    });
+}
+
+test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
+    const FakeSession = @import("../http/test_support.zig").FakeSession;
+    const request_head = "POST /upload?q=1 HTTP/1.1\r\nHost: example.test\r\nTransfer-Encoding: chunked\r\n\r\n";
+    const request = request_head ++ "4\r\nWiki\r\n5\r\npedia\r\n0\r\n\r\n";
+    const response_head = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n";
+    const response = response_head ++ "hello";
+
+    for (1..request.len + 1) |split_size| {
+        var gate_context: u8 = 0;
+        var producer: capture.Producer = undefined;
+        try testCaptureProducer(&producer, &gate_context, .{
+            .enabled = true,
+            .max_part_bytes = 512,
+            .max_exchange_bytes = 1024,
+            .max_total_bytes = 1024,
+        });
+        defer producer.close(std.testing.io);
+        var session: FakeSession = .{
+            .child_input = request,
+            .origin_input = response,
+            .max_read_bytes = split_size,
+        };
+        var harness: TestHarness = .{};
+        try harness.init();
+        harness.exchange.dialect = .unknown;
+        harness.exchange.host = try Io.net.HostName.init("example.test");
+
+        const request_half = producer.start(.{
+            .credential = harness.exchange.credential,
+            .dialect = harness.exchange.dialect,
+            .protocol = .http11,
+            .key = .{ .connection_id = harness.exchange.connection_id, .stream_id = 0 },
+            .side = .request,
+            .host = harness.exchange.host.bytes,
+            .started_at_ms = 1,
+        }).?;
+        const parsed_request = http.relayHead(&session, .{
+            .from = .child,
+            .to = .origin,
+            .is_response = false,
+            .response_to_head = false,
+            .capture = headSink(request_half),
+        }).?;
+        var request_observer: provider.RequestObserver = .{};
+        try std.testing.expect(http.relayBody(&session, .{
+            .from = .child,
+            .to = .origin,
+            .framing = parsed_request.framing,
+        }, RequestBodyObserver{ .request = &request_observer, .capture_half = request_half }));
+        request_half.finish(.finished, 2);
+        producer.publish(std.testing.io, .{ .credential = harness.exchange.credential, .half = request_half });
+
+        const response_half = producer.start(.{
+            .credential = harness.exchange.credential,
+            .dialect = harness.exchange.dialect,
+            .protocol = .http11,
+            .key = .{ .connection_id = harness.exchange.connection_id, .stream_id = 0 },
+            .side = .response,
+            .host = harness.exchange.host.bytes,
+            .started_at_ms = 1,
+        }).?;
+        const parsed_response = http.relayHead(&session, .{
+            .from = .origin,
+            .to = .child,
+            .is_response = true,
+            .response_to_head = false,
+            .capture = headSink(response_half),
+        }).?;
+        var response_observer = ResponseBodyObserver.init(&harness.exchange, .{
+            .inspect_payload = false,
+            .capture_half = response_half,
+        });
+        try std.testing.expect(http.relayBody(&session, .{
+            .from = .origin,
+            .to = .child,
+            .framing = parsed_response.framing,
+        }, &response_observer));
+        response_observer.deinit();
+        response_half.status_code = parsed_response.message.status_code;
+        response_half.finish(.finished, 3);
+        producer.publish(std.testing.io, .{ .credential = harness.exchange.credential, .half = response_half });
+
+        const captured_request = try producer.receive(std.testing.io);
+        defer captured_request.deinit();
+        const captured_response = try producer.receive(std.testing.io);
+        defer captured_response.deinit();
+        try std.testing.expectEqualStrings(request_head, captured_request.head.bytes());
+        try std.testing.expectEqualStrings("Wikipedia", captured_request.body.bytes());
+        try std.testing.expectEqualStrings("POST", captured_request.method());
+        try std.testing.expectEqualStrings("/upload?q=1", captured_request.target());
+        try std.testing.expectEqualStrings(response_head, captured_response.head.bytes());
+        try std.testing.expectEqualStrings("hello", captured_response.body.bytes());
+        try std.testing.expectEqual(@as(u16, 200), captured_response.status_code);
+        try std.testing.expectEqualStrings(request, session.originOutput());
+        try std.testing.expectEqualStrings(response, session.childOutput());
+    }
+}
+
+test "capture truncation never truncates HTTP1 forwarding" {
+    const FakeSession = @import("../http/test_support.zig").FakeSession;
+    const wire = "9\r\nWikipedia\r\n0\r\n\r\n";
+    var gate_context: u8 = 0;
+    var producer: capture.Producer = undefined;
+    try testCaptureProducer(&producer, &gate_context, .{
+        .enabled = true,
+        .max_part_bytes = 5,
+        .max_exchange_bytes = 10,
+        .max_total_bytes = 10,
+    });
+    defer producer.close(std.testing.io);
+    var harness: TestHarness = .{};
+    try harness.init();
+    var half = producer.start(.{
+        .credential = harness.exchange.credential,
+        .dialect = .unknown,
+        .protocol = .http11,
+        .key = .{ .connection_id = 1, .stream_id = 0 },
+        .side = .request,
+        .host = "example.test",
+        .started_at_ms = 1,
+    }).?;
+    var request_observer: provider.RequestObserver = .{};
+    var session: FakeSession = .{ .child_input = wire, .max_read_bytes = 1 };
+
+    try std.testing.expect(http.relayBody(&session, .{
+        .from = .child,
+        .to = .origin,
+        .framing = .chunked,
+    }, RequestBodyObserver{ .request = &request_observer, .capture_half = half }));
+    try std.testing.expectEqualStrings(wire, session.originOutput());
+    try std.testing.expectEqualStrings("Wikip", half.body.bytes());
+    try std.testing.expect(half.body.truncated);
+    half.deinit();
 }

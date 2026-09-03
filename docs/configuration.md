@@ -46,6 +46,13 @@ return telar.config({
     proxy = {
       enabled = false,
       ca_dir = "state/proxy",
+      capture = {
+        enabled = false,
+        max_part_bytes = 4 * 1024 * 1024,
+        max_exchange_bytes = 8 * 1024 * 1024,
+        max_total_bytes = 64 * 1024 * 1024,
+        join_timeout_ms = 30000,
+      },
       intercept_hosts = {
         "api.anthropic.com",
         "api.openai.com",
@@ -524,7 +531,8 @@ The runtime evaluates the same file in a disposable VM and retains only typed,
 validated values. No Lua state or closure enters the runtime process.
 `runtime.history.path` is resolved relative to the directory containing
 `config.lua`; its parent directory must already exist. `runtime.proxy` accepts
-`enabled`, `ca_dir`, and `intercept_hosts`. ProxyTLS is disabled by default. A
+`enabled`, `ca_dir`, `capture`, and `intercept_hosts`. ProxyTLS and exchange
+capture are disabled by default. A
 relative `ca_dir` is also resolved beside `config.lua`; Telar creates it
 owner-only and stores its private CA and derived trust bundle there with
 owner-only file permissions. `intercept_hosts` accepts at most 256 exact DNS
@@ -535,6 +543,16 @@ the set, and removes duplicates when the runtime starts. Wildcards are
 rejected. Every other connection still passes through Telar's authenticated
 CONNECT listener, but its TCP payload is forwarded opaquely and is not
 observed.
+
+`runtime.proxy.capture` accepts `enabled`, `max_part_bytes`,
+`max_exchange_bytes`, `max_total_bytes`, and `join_timeout_ms`. The byte limits
+must satisfy `max_part_bytes <= max_exchange_bytes <= max_total_bytes`; all
+limits and the timeout must be positive. Captured heads and de-framed bodies
+are bounded independently, and a full queue or exhausted quota drops capture
+data without delaying or changing proxied traffic. Response decompression is
+performed on the runtime observation path and is capped by `max_part_bytes`.
+Until a trusted tap plugin is configured, completed captures are consumed only
+for metrics and are not persisted.
 Explicit server CLI
 graphics limits still override the Lua values. Runtime-owned settings take
 effect when the long-lived runtime starts; restart that runtime to apply a

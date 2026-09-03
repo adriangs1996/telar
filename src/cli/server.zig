@@ -102,6 +102,7 @@ const Launch = struct {
     proxy_cert_buffer: [std.fs.max_path_bytes]u8 = undefined,
     proxy_bundle_buffer: [std.fs.max_path_bytes]u8 = undefined,
     proxy_options: ?backend.runtime.ProxyOptions = null,
+    proxy_capture: backend.proxy.CaptureConfig = .{},
 
     fn prepare(launch: *Launch, preparation: Preparation) !void {
         launch.* = .{
@@ -151,6 +152,13 @@ const Launch = struct {
         }
 
         launch.proxy_intercept_hosts = runtime_config.proxyInterceptHosts(&launch.proxy_intercept_host_storage);
+        launch.proxy_capture = .{
+            .enabled = runtime_config.proxy_capture_enabled,
+            .max_part_bytes = runtime_config.proxy_capture_max_part_bytes,
+            .max_exchange_bytes = runtime_config.proxy_capture_max_exchange_bytes,
+            .max_total_bytes = runtime_config.proxy_capture_max_total_bytes,
+            .join_timeout_ms = runtime_config.proxy_capture_join_timeout_ms,
+        };
         if (runtime_config.proxy_enabled) {
             if (runtime_config.proxyCaDir()) |ca_directory| {
                 launch.configured_proxy_directory = try resolveConfigPath(
@@ -209,6 +217,7 @@ const Launch = struct {
                 .certificate_path = try std.fmt.bufPrint(&launch.proxy_cert_buffer, "{s}/ca-cert.pem", .{directory}),
                 .bundle_path = try std.fmt.bufPrint(&launch.proxy_bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
                 .intercept_hosts = launch.proxy_intercept_hosts,
+                .capture = launch.proxy_capture,
             };
         }
     }

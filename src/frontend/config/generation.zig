@@ -2959,6 +2959,13 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
         \\    proxy = {
         \\      enabled = true,
         \\      ca_dir = "state/proxy",
+        \\      capture = {
+        \\        enabled = true,
+        \\        max_part_bytes = 1024,
+        \\        max_exchange_bytes = 2048,
+        \\        max_total_bytes = 8192,
+        \\        join_timeout_ms = 1500,
+        \\      },
         \\      intercept_hosts = { "updates.example.com", "API.EXAMPLE.COM" },
         \\    },
         \\    agent_descriptions = {
@@ -2994,6 +3001,11 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
         "state/proxy",
         generation.snapshot.runtime.proxyCaDir().?,
     );
+    try std.testing.expect(generation.snapshot.runtime.proxy_capture_enabled);
+    try std.testing.expectEqual(@as(usize, 1024), generation.snapshot.runtime.proxy_capture_max_part_bytes);
+    try std.testing.expectEqual(@as(usize, 2048), generation.snapshot.runtime.proxy_capture_max_exchange_bytes);
+    try std.testing.expectEqual(@as(usize, 8192), generation.snapshot.runtime.proxy_capture_max_total_bytes);
+    try std.testing.expectEqual(@as(u32, 1500), generation.snapshot.runtime.proxy_capture_join_timeout_ms);
     var intercept_host_storage: [max_proxy_intercept_hosts][]const u8 = undefined;
     const intercept_hosts = generation.snapshot.runtime.proxyInterceptHosts(&intercept_host_storage);
     try std.testing.expectEqual(@as(usize, 2), intercept_hosts.len);
@@ -3067,6 +3079,10 @@ test "runtime proxy rejects unsafe intercept host patterns" {
         .{
             .source = "local h = {}; for i = 1, 257 do h[i] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { intercept_hosts = h } } }",
             .message = "exceeds 256 entries",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { proxy = { capture = { max_part_bytes = 9, max_exchange_bytes = 8 } } } }",
+            .message = "byte limits must satisfy part <= exchange <= total",
         },
     };
     for (cases) |case| {

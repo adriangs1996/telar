@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const connection_admission = @import("connection_admission.zig");
+const capture = @import("capture/root.zig");
 const observation_queue = @import("observation_queue.zig");
 
 pub const Counter = enum {
@@ -25,6 +26,7 @@ pub const Counter = enum {
 pub const LiveState = struct {
     connections: connection_admission.SlotSnapshot,
     observations: observation_queue.Metrics,
+    captures: capture.Metrics = .{},
 };
 
 pub const Snapshot = struct {
@@ -48,6 +50,13 @@ pub const Snapshot = struct {
     claude_turn_completions: u64 = 0,
     claude_successful_responses: u64 = 0,
     claude_failure_observations: u64 = 0,
+    capture_started: u64 = 0,
+    capture_truncated: u64 = 0,
+    capture_skipped_quota: u64 = 0,
+    capture_dropped_queue: u64 = 0,
+    capture_decode_failed: u64 = 0,
+    queued_captures: u64 = 0,
+    capture_queue_high_water: u64 = 0,
 };
 
 pub const Counters = struct {
@@ -122,6 +131,13 @@ pub const Counters = struct {
             .claude_turn_completions = counters.claude_turn_completions.load(.monotonic),
             .claude_successful_responses = counters.claude_successful_responses.load(.monotonic),
             .claude_failure_observations = counters.claude_failure_observations.load(.monotonic),
+            .capture_started = live.captures.started,
+            .capture_truncated = live.captures.truncated,
+            .capture_skipped_quota = live.captures.skipped_quota,
+            .capture_dropped_queue = live.captures.dropped_queue,
+            .capture_decode_failed = live.captures.decode_failed,
+            .queued_captures = live.captures.queued,
+            .capture_queue_high_water = live.captures.queue_high_water,
         };
     }
 };
@@ -138,6 +154,15 @@ test "each proxy counter has one independent snapshot field" {
     const snapshot = counters.snapshot(.{
         .connections = .{ .active = 23, .limit_drops = 29 },
         .observations = .{ .queued = 31, .high_water = 37, .dropped = 41 },
+        .captures = .{
+            .started = 43,
+            .truncated = 47,
+            .skipped_quota = 53,
+            .dropped_queue = 59,
+            .decode_failed = 61,
+            .queued = 67,
+            .queue_high_water = 71,
+        },
     });
 
     try std.testing.expectEqual(@as(u32, 23), snapshot.active_connections);
@@ -160,4 +185,11 @@ test "each proxy counter has one independent snapshot field" {
     try std.testing.expectEqual(@as(u64, 13), snapshot.claude_turn_completions);
     try std.testing.expectEqual(@as(u64, 14), snapshot.claude_successful_responses);
     try std.testing.expectEqual(@as(u64, 15), snapshot.claude_failure_observations);
+    try std.testing.expectEqual(@as(u64, 43), snapshot.capture_started);
+    try std.testing.expectEqual(@as(u64, 47), snapshot.capture_truncated);
+    try std.testing.expectEqual(@as(u64, 53), snapshot.capture_skipped_quota);
+    try std.testing.expectEqual(@as(u64, 59), snapshot.capture_dropped_queue);
+    try std.testing.expectEqual(@as(u64, 61), snapshot.capture_decode_failed);
+    try std.testing.expectEqual(@as(u64, 67), snapshot.queued_captures);
+    try std.testing.expectEqual(@as(u64, 71), snapshot.capture_queue_high_water);
 }

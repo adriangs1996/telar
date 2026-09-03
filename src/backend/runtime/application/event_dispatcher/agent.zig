@@ -15,6 +15,7 @@ const Io = std.Io;
 const agent_description_coordinator = coordinators.agent_description;
 const agent_maintenance_coordinator = coordinators.agent_maintenance;
 const proxy_observation_adapter = runtime_event_entrypoints.proxy_observation;
+const proxy_capture_adapter = runtime_event_entrypoints.proxy_capture;
 
 /// Binds agent-related event completions to one concrete Application type.
 ///
@@ -33,6 +34,11 @@ pub fn Dispatcher(comptime Application: type) type {
             try adapter.handle(result);
         }
 
+        pub fn handleProxyCapture(application: *Application, result: anyerror!*proxy_mod.CaptureHalf) !void {
+            var adapter = proxyCaptureAdapter(application);
+            try adapter.handle(result);
+        }
+
         /// Applies one maintenance tick, expires stale agent activity and
         /// rearms the periodic source.
         ///
@@ -45,6 +51,7 @@ pub fn Dispatcher(comptime Application: type) type {
             try application.flushSessionCheckpoint();
             application.tickGitStatus();
             checkEngineIdle(application);
+            application.proxy_runtime.expireCaptures(runtimeWallClockMs(application));
         }
 
         /// Applies one generated description and persists the resulting title.
@@ -207,6 +214,25 @@ pub fn Dispatcher(comptime Application: type) type {
         fn rearmProxyObservation(application: *Application) !void {
             var sources = event_sources.Sources.init(application.io, application.select);
             try sources.receiveProxyObservation(application.proxy_runtime);
+        }
+
+        const proxy_capture_runtime_port: proxy_capture_adapter.RuntimePort(Application) = .{
+            .rearm_receive = rearmProxyCapture,
+            .now_ms = runtimeWallClockMs,
+        };
+
+        const RuntimeProxyCaptureAdapter = proxy_capture_adapter.Adapter(Application, proxy_capture_runtime_port);
+
+        fn proxyCaptureAdapter(application: *Application) RuntimeProxyCaptureAdapter {
+            return RuntimeProxyCaptureAdapter.init(application, .{
+                .panes = &application.model.panes,
+                .proxy_runtime = application.proxy_runtime,
+            });
+        }
+
+        fn rearmProxyCapture(application: *Application) !void {
+            var sources = event_sources.Sources.init(application.io, application.select);
+            try sources.receiveProxyCapture(application.proxy_runtime);
         }
 
         fn pumpRuntimeClients(application: *Application) void {

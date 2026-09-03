@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const connect_authentication = @import("../connect_authentication.zig");
+const capture = @import("../capture/root.zig");
 const credential_registry = @import("../credential_registry.zig");
 const http = @import("../http/root.zig");
 const identity = @import("../identity.zig");
@@ -25,6 +26,7 @@ pub const Dependencies = struct {
     transforms: *const middleware.TransformPipeline,
     has_custom_transformers: bool,
     connection_ids: *std.atomic.Value(u64),
+    captures: *capture.Producer,
 };
 
 pub const Options = struct {
@@ -88,6 +90,7 @@ pub const Tunnel = struct {
             .dialect = provider.identify(target.host.bytes),
             .connection_id = dependencies.connection_ids.fetchAdd(1, .monotonic),
             .protocol = .http11,
+            .host = target.host,
         };
         defer std.crypto.secureZero(u8, &exchange.credential.token);
 
@@ -133,6 +136,7 @@ pub const Tunnel = struct {
                 .has_custom_transformers = dependencies.has_custom_transformers,
                 .session = session,
                 .exchange = &exchange,
+                .captures = dependencies.captures,
             });
 
             connection.run();
@@ -144,6 +148,7 @@ pub const Tunnel = struct {
             .transforms = dependencies.transforms,
             .session = session,
             .exchange = &exchange,
+            .captures = dependencies.captures,
         });
         connection.run();
     }

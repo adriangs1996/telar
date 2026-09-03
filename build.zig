@@ -1,5 +1,10 @@
 const std = @import("std");
 
+const ProxyPrefixes = struct {
+    nghttp2: []const u8,
+    brotli: []const u8,
+};
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -37,6 +42,17 @@ pub fn build(b: *std.Build) void {
             "/usr/local/opt/libnghttp2"
     else
         "/usr";
+    const brotli_prefix = b.option(
+        []const u8,
+        "brotli",
+        "Prefix of a libbrotli installation",
+    ) orelse if (target.result.os.tag == .macos)
+        if (target.result.cpu.arch == .aarch64)
+            "/opt/homebrew/opt/brotli"
+        else
+            "/usr/local/opt/brotli"
+    else
+        "/usr";
 
     // The width tables, behind a module name so the drawing layer never names
     // its provider. Everything that draws imports `unicode`; only this line
@@ -72,6 +88,9 @@ pub fn build(b: *std.Build) void {
     backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
     backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
     backend.linkSystemLibrary("nghttp2", .{});
+    backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ brotli_prefix, "include" }) });
+    backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ brotli_prefix, "lib" }) });
+    backend.linkSystemLibrary("brotlidec", .{});
     backend.linkSystemLibrary("sqlite3", .{});
     coverage.instrumentModule(backend);
 
@@ -161,6 +180,9 @@ pub fn build(b: *std.Build) void {
     bench_backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
     bench_backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
     bench_backend.linkSystemLibrary("nghttp2", .{});
+    bench_backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ brotli_prefix, "include" }) });
+    bench_backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ brotli_prefix, "lib" }) });
+    bench_backend.linkSystemLibrary("brotlidec", .{});
     bench_backend.linkSystemLibrary("sqlite3", .{});
     const bench_frontend = b.createModule(.{
         .root_source_file = b.path("src/frontend/root.zig"),
@@ -335,6 +357,7 @@ pub fn build(b: *std.Build) void {
         .freetype = freetype,
         .ghostty_vt = ghostty_vt,
         .nghttp2_prefix = nghttp2_prefix,
+        .brotli_prefix = brotli_prefix,
         .target = target,
         .optimize = optimize,
     };
@@ -407,7 +430,7 @@ pub fn build(b: *std.Build) void {
             o: std.builtin.OptimizeMode,
             tls_mod: *std.Build.Module,
             vt_mod: *std.Build.Module,
-            prefix: []const u8,
+            prefixes: ProxyPrefixes,
         ) *std.Build.Module {
             const mod = bb.createModule(.{
                 .root_source_file = bb.path(path),
@@ -420,16 +443,22 @@ pub fn build(b: *std.Build) void {
             mod.linkSystemLibrary("sqlite3", .{});
             // HPACK only. Decoding a header block is the one part of HTTP/2
             // that cannot be skipped by relaying frames untouched.
-            mod.addIncludePath(.{ .cwd_relative = bb.pathJoin(&.{ prefix, "include" }) });
-            mod.addLibraryPath(.{ .cwd_relative = bb.pathJoin(&.{ prefix, "lib" }) });
+            mod.addIncludePath(.{ .cwd_relative = bb.pathJoin(&.{ prefixes.nghttp2, "include" }) });
+            mod.addLibraryPath(.{ .cwd_relative = bb.pathJoin(&.{ prefixes.nghttp2, "lib" }) });
             mod.linkSystemLibrary("nghttp2", .{});
+            mod.addIncludePath(.{ .cwd_relative = bb.pathJoin(&.{ prefixes.brotli, "include" }) });
+            mod.addLibraryPath(.{ .cwd_relative = bb.pathJoin(&.{ prefixes.brotli, "lib" }) });
+            mod.linkSystemLibrary("brotlidec", .{});
             return mod;
         }
     }.make;
 
     const proxy = b.addExecutable(.{
         .name = "proxy",
-        .root_module = proxyModule(b, "examples/proxy/main.zig", target, optimize, tls, ghostty_vt, nghttp2_prefix),
+        .root_module = proxyModule(b, "examples/proxy/main.zig", target, optimize, tls, ghostty_vt, .{
+            .nghttp2 = nghttp2_prefix,
+            .brotli = brotli_prefix,
+        }),
     });
     const proxy_step = b.step("proxy", "Build the pty and TLS proxy example");
     proxy_step.dependOn(&b.addInstallArtifact(proxy, .{}).step);
@@ -445,7 +474,10 @@ pub fn build(b: *std.Build) void {
         "examples/proxy/osc.zig",
     }) |path| {
         const tests = b.addTest(.{
-            .root_module = proxyModule(b, path, target, optimize, tls, ghostty_vt, nghttp2_prefix),
+            .root_module = proxyModule(b, path, target, optimize, tls, ghostty_vt, .{
+                .nghttp2 = nghttp2_prefix,
+                .brotli = brotli_prefix,
+            }),
         });
         coverage.instrumentTest(tests);
         proxy_test_step.dependOn(&b.addRunArtifact(tests).step);
@@ -552,6 +584,7 @@ const SuiteModules = struct {
     freetype: *std.Build.Module,
     ghostty_vt: *std.Build.Module,
     nghttp2_prefix: []const u8,
+    brotli_prefix: []const u8,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
 
@@ -575,6 +608,9 @@ const SuiteModules = struct {
         tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "include" }) });
         tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "lib" }) });
         tests.root_module.linkSystemLibrary("nghttp2", .{});
+        tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.brotli_prefix, "include" }) });
+        tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.brotli_prefix, "lib" }) });
+        tests.root_module.linkSystemLibrary("brotlidec", .{});
 
         if (suite.vt) {
             tests.root_module.addImport("ghostty-vt", modules.ghostty_vt);

@@ -15,7 +15,7 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
 
     try value.ensureOnlyFields(state, .{
         .index = absolute,
-        .allowed = &.{ "enabled", "ca_dir", "intercept_hosts" },
+        .allowed = &.{ "enabled", "ca_dir", "intercept_hosts", "capture" },
         .path = "config.runtime.proxy",
     }, diagnostic);
 
@@ -28,6 +28,12 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
         }
 
         runtime.proxy_enabled = lua.lua_toboolean(state, -1) != 0;
+    }
+    value.pop(state, 1);
+
+    _ = lua.lua_getfield(state, absolute, "capture");
+    if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+        try parseCapture(state, runtime, diagnostic);
     }
     value.pop(state, 1);
 
@@ -103,6 +109,91 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
         };
     }
     runtime.proxy_intercept_hosts.sortAndDeduplicate();
+}
+
+fn parseCapture(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diagnostic: *config_model.Diagnostic) !void {
+    const absolute = lua.lua_absindex(state, -1);
+    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+        diagnostic.set("config.runtime.proxy.capture must be a table", .{});
+        return error.InvalidConfig;
+    }
+
+    try value.ensureOnlyFields(state, .{
+        .index = absolute,
+        .allowed = &.{ "enabled", "max_part_bytes", "max_exchange_bytes", "max_total_bytes", "join_timeout_ms" },
+        .path = "config.runtime.proxy.capture",
+    }, diagnostic);
+
+    _ = lua.lua_getfield(state, absolute, "enabled");
+    if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+        if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+            value.pop(state, 1);
+            diagnostic.set("config.runtime.proxy.capture.enabled must be a boolean", .{});
+            return error.InvalidConfig;
+        }
+
+        runtime.proxy_capture_enabled = lua.lua_toboolean(state, -1) != 0;
+    }
+    value.pop(state, 1);
+
+    runtime.proxy_capture_max_part_bytes = try positiveBytesField(state, .{
+        .table = absolute,
+        .name = "max_part_bytes",
+        .default = runtime.proxy_capture_max_part_bytes,
+    }, diagnostic);
+    runtime.proxy_capture_max_exchange_bytes = try positiveBytesField(state, .{
+        .table = absolute,
+        .name = "max_exchange_bytes",
+        .default = runtime.proxy_capture_max_exchange_bytes,
+    }, diagnostic);
+    runtime.proxy_capture_max_total_bytes = try positiveBytesField(state, .{
+        .table = absolute,
+        .name = "max_total_bytes",
+        .default = runtime.proxy_capture_max_total_bytes,
+    }, diagnostic);
+    const timeout = try positiveBytesField(state, .{
+        .table = absolute,
+        .name = "join_timeout_ms",
+        .default = runtime.proxy_capture_join_timeout_ms,
+    }, diagnostic);
+    if (timeout > std.math.maxInt(u32)) {
+        diagnostic.set("config.runtime.proxy.capture.join_timeout_ms is out of range", .{});
+        return error.InvalidConfig;
+    }
+    runtime.proxy_capture_join_timeout_ms = @intCast(timeout);
+
+    if (runtime.proxy_capture_max_exchange_bytes < 2 or
+        runtime.proxy_capture_max_part_bytes > runtime.proxy_capture_max_exchange_bytes or
+        runtime.proxy_capture_max_exchange_bytes > runtime.proxy_capture_max_total_bytes)
+    {
+        diagnostic.set("config.runtime.proxy.capture byte limits must satisfy part <= exchange <= total", .{});
+        return error.InvalidConfig;
+    }
+}
+
+const PositiveField = struct {
+    table: c_int,
+    name: [*:0]const u8,
+    default: usize,
+};
+
+fn positiveBytesField(state: *lua.lua_State, field: PositiveField, diagnostic: *config_model.Diagnostic) !usize {
+    _ = lua.lua_getfield(state, field.table, field.name);
+    defer value.pop(state, 1);
+    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+        return field.default;
+    }
+
+    const parsed = value.integer(state, -1) orelse {
+        diagnostic.set("config.runtime.proxy.capture.{s} must be an integer", .{std.mem.span(field.name)});
+        return error.InvalidConfig;
+    };
+    if (parsed <= 0 or parsed > std.math.maxInt(usize)) {
+        diagnostic.set("config.runtime.proxy.capture.{s} is out of range", .{std.mem.span(field.name)});
+        return error.InvalidConfig;
+    }
+
+    return @intCast(parsed);
 }
 
 fn validHostname(host: []const u8) bool {

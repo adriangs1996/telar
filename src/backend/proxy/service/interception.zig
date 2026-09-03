@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const ca = @import("../ca.zig");
+const capture = @import("../capture/root.zig");
 const metrics = @import("../metrics.zig");
 const interception_policy = @import("../interception_policy.zig");
 const tls = @import("../tls.zig");
@@ -14,6 +15,7 @@ pub const Paths = struct {
     certificate: []const u8,
     bundle: []const u8,
     intercept_hosts: []const []const u8 = &.{},
+    capture: capture.Config = .{},
 };
 
 pub const Trust = struct {

@@ -15,6 +15,7 @@ return {
     proxy = {
       enabled = true,
       ca_dir = "state/proxy",
+      capture = { enabled = false },
       intercept_hosts = {
         "api.anthropic.com",
         "api.openai.com",
@@ -117,8 +118,10 @@ valid. `content-length` values remain unchanged because bodies are not part of
 this contract. Response status changes must retain their informational,
 bodyless, or regular response semantics.
 
-Header values are not persisted or copied to the observation queue. Bodies
-stream unchanged and are not exposed to transformers. Arbitrary body mutation,
+Header values are not persisted or copied to the lifecycle observation queue.
+When exchange capture is explicitly enabled, original heads and de-framed
+bodies are copied into a separate bounded capture queue. Bodies still stream
+unchanged and are not exposed to transformers. Arbitrary body mutation,
 especially a change in length, is a different capability: HTTP/2 would have to
 terminate flow control, and Lua exposure would first need explicit secret
 redaction, retention, timeout, and memory policies.
@@ -126,9 +129,38 @@ redaction, retention, timeout, and memory policies.
 Known secret names such as `authorization`, `cookie`, and `x-api-key` remain
 marked sensitive even if a native transformer says otherwise, so HPACK never
 indexes a replacement accidentally. Native transformers are trusted runtime
-code and can see the live snapshot. A future Lua adapter must redact sensitive
-values before constructing Lua data unless the user grants a separate secret
-capability.
+code and can see the live snapshot. The future `proxy.tap` capability is also
+full trust: it will receive unredacted headers and bodies, including
+authorization and cookie values. Grant it only to plugin code that may read all
+intercepted traffic.
+
+## Exchange capture
+
+`runtime.proxy.capture.enabled` copies each intercepted HTTP exchange for a
+runtime-side consumer. It is off by default. HTTP/1.1 capture retains the
+original head bytes and de-frames chunked bodies. HTTP/2 capture reconstructs
+header fields and joins DATA payloads per stream, including unknown API
+dialects. Capture does not alter the bytes forwarded to either endpoint.
+
+Request and response directions publish independent heap-owned halves. The
+runtime pairs them by connection and stream ID, or releases a partial exchange
+after `join_timeout_ms` when one direction never arrives. Pane identity and
+generation survive the handoff; the proxy credential token does not.
+
+Each head and body stops growing at `max_part_bytes`, each exchange is bounded
+by `max_exchange_bytes`, and all active captures share `max_total_bytes`.
+Truncation is recorded on the affected part. Queue publication is nonblocking;
+quota exhaustion, queue saturation, credential revocation, and shutdown free
+the abandoned buffers while traffic continues. Captured buffers are erased
+before release.
+
+The runtime decodes `gzip`, `deflate`, `zstd`, and Brotli bodies after queue
+delivery, never on a relay task. At most two chained content codings are
+applied in reverse order. Decoded output remains bounded by
+`max_part_bytes`; an unknown or malformed coding preserves the captured wire
+body and marks it as undecoded. The current sink only records metrics and
+releases exchanges; the trusted Lua consumer is implemented in the next
+capability phase.
 
 ## Agent state
 
@@ -227,9 +259,8 @@ already succeeded.
 
 ## Lua middleware boundary
 
-The runtime currently installs one native observer whose only operation is a
-nonblocking enqueue into the 256-event observation queue. Lua callbacks are not
-accepted in `runtime.proxy` yet.
+The runtime installs separate nonblocking lifecycle and exchange-capture
+queues. Lua callbacks are not accepted in `runtime.proxy` yet.
 
 The future adapter must run an isolated Lua worker behind a bounded queue. The
 tunnel copies a value snapshot to that worker; the worker returns typed
@@ -247,7 +278,9 @@ passthrough hosts do not require that installation.
 
 ## Build dependency
 
-The runtime links the system `libnghttp2` for HPACK decoding and encoding. The
+The runtime links the system `libnghttp2` for HPACK decoding and encoding and
+`libbrotlidec` for captured Brotli bodies. The
 default prefix is `/opt/homebrew/opt/libnghttp2` on Apple Silicon,
 `/usr/local/opt/libnghttp2` on Intel macOS, and `/usr` elsewhere. Override it
-with `zig build -Dnghttp2=/path/to/prefix`.
+with `zig build -Dnghttp2=/path/to/prefix`. The Brotli defaults use the same
+platform prefixes; override them with `zig build -Dbrotli=/path/to/prefix`.

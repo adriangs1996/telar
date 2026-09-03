@@ -16,6 +16,20 @@ pub const ObservationScheduler = struct {
     }
 };
 
+pub const CaptureScheduler = struct {
+    context: *anyopaque,
+    schedule_fn: *const fn (*anyopaque, *proxy_mod.Proxy) anyerror!void,
+
+    fn schedule(scheduler: CaptureScheduler, proxy: *proxy_mod.Proxy) !void {
+        return scheduler.schedule_fn(scheduler.context, proxy);
+    }
+};
+
+pub const CaptureInput = struct {
+    now_ms: i64,
+    half: *proxy_mod.CaptureHalf,
+};
+
 fn Owner(comptime Capability: type, comptime destroyCapability: *const fn (*Capability) void) type {
     return struct {
         const Self = @This();
@@ -47,6 +61,7 @@ const ProxyOwner = Owner(proxy_mod.Proxy, destroyProxy);
 
 pub const Runtime = struct {
     owner: ProxyOwner,
+    captures: proxy_mod.CaptureJoiner,
 
     /// Creates the configured proxy, or an inactive owner when disabled.
     ///
@@ -60,7 +75,12 @@ pub const Runtime = struct {
         else
             null;
 
-        return .{ .owner = .init(owned_proxy) };
+        const timeout_ms = if (config) |value| value.capture.join_timeout_ms else (proxy_mod.CaptureConfig{}).join_timeout_ms;
+
+        return .{
+            .owner = .init(owned_proxy),
+            .captures = .init(timeout_ms),
+        };
     }
 
     /// Borrows the proxy capability while this owner remains active.
@@ -91,6 +111,58 @@ pub const Runtime = struct {
         return runtime.owner.schedule(scheduler);
     }
 
+    /// Arms one runtime receive operation when the proxy is active.
+    ///
+    /// ```zig
+    /// try runtime.scheduleCapture(scheduler);
+    /// ```
+    pub fn scheduleCapture(runtime: *Runtime, scheduler: CaptureScheduler) !void {
+        return runtime.owner.schedule(scheduler);
+    }
+
+    /// Adds a half to the join table and releases completed exchange data.
+    ///
+    /// ```zig
+    /// runtime.acceptCapture(.{ .now_ms = now_ms, .half = half });
+    /// ```
+    pub fn acceptCapture(runtime: *Runtime, input: CaptureInput) void {
+        runtime.expireCaptures(input.now_ms);
+
+        switch (runtime.captures.push(input.now_ms, input.half)) {
+            .pending => {},
+            .complete => |value| {
+                var exchange = value;
+                exchange.deinit();
+            },
+            .partial => |value| {
+                var exchange = value;
+                exchange.deinit();
+            },
+        }
+    }
+
+    /// Delegates bounded content decoding to the active proxy service.
+    ///
+    /// ```zig
+    /// runtime.decodeCapture(half);
+    /// ```
+    pub fn decodeCapture(runtime: *Runtime, half: *proxy_mod.CaptureHalf) void {
+        const proxy = runtime.owner.capability orelse return;
+        proxy.decodeCapture(half);
+    }
+
+    /// Releases every partial capture whose join deadline has elapsed.
+    ///
+    /// ```zig
+    /// runtime.expireCaptures(now_ms);
+    /// ```
+    pub fn expireCaptures(runtime: *Runtime, now_ms: i64) void {
+        while (runtime.captures.expire(now_ms)) |value| {
+            var exchange = value;
+            exchange.deinit();
+        }
+    }
+
     /// Returns active proxy metrics or an all-zero inactive snapshot.
     ///
     /// ```zig
@@ -109,6 +181,7 @@ pub const Runtime = struct {
     /// proxy_runtime.deinit();
     /// ```
     pub fn deinit(runtime: *Runtime) void {
+        runtime.captures.deinit();
         runtime.owner.deinit();
     }
 };

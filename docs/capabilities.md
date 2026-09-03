@@ -43,6 +43,7 @@ disposable frontend process.
 | Agent | `src/backend/agent/root.zig` | Agent evidence precedence and projected agent state |
 | History | `src/backend/history/root.zig` | Command observation, queries and durable storage |
 | Proxy | `src/backend/proxy/root.zig` | Network observation and TLS proxy actors |
+| Proxy capture | `src/backend/proxy/capture/root.zig` | Bounded exchange buffers, delivery, decoding and runtime-side pairing |
 | Transport | `src/backend/transport/root.zig` | Runtime side of local connection and handshake |
 
 `src/cli/server.zig` selects the production dependencies and initializes the
@@ -190,6 +191,7 @@ non-stop event crosses `application.handle` into
 | Completed client write | `runtime/client/send_coordinator.zig` |
 | History worker result | `runtime/entrypoints/events/history_response.zig` |
 | Proxy observation | `runtime/entrypoints/events/proxy_observation.zig` |
+| Proxy exchange half | `runtime/entrypoints/events/proxy_capture.zig` |
 | Agent expiry / description completion | `runtime/application/coordinators/agent_*.zig` |
 | System metrics tick | `runtime/observability/system_metrics_coordinator.zig` |
 | Completed PTY input write | `runtime/entrypoints/events/pane/input.zig` |
