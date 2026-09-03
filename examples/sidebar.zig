@@ -439,7 +439,7 @@ fn drawSidebar(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
     const inside: ui.Rect = .{ .x = area.x + 1, .y = area.y + 1, .w = area.w - 2, .h = area.h - 2 };
 
     var y = inside.y;
-    y = drawSearch(state, buf, inside, y);
+    y = drawSearch(.{ .state = state, .buffer = buf, .area = inside }, y);
     y = rule(buf, area, y);
     y = drawTabs(state, buf, inside, y);
     y = rule(buf, area, y);
@@ -465,7 +465,10 @@ fn rule(buf: *ui.Buffer, area: ui.Rect, y: u16) u16 {
     return y + 1;
 }
 
-fn drawSearch(state: *State, buf: *ui.Buffer, area: ui.Rect, y: u16) u16 {
+fn drawSearch(context: DrawContext, y: u16) u16 {
+    const state = context.state;
+    const buf = context.buffer;
+    const area = context.area;
     const row: ui.Rect = .{ .x = area.x, .y = y, .w = area.w, .h = 1 };
     // Registered before it is drawn, so the drawing can ask. `has` reads the
     // focus decided by the previous frame's `endFrame`, which is exactly the
