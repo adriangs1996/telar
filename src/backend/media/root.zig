@@ -272,7 +272,9 @@ pub const Pipeline = struct {
             pipeline.batches[index].reset();
         }
         pipeline.worker = null;
-        if (pipeline.enabled) pipeline.stream.deinit();
+        if (pipeline.enabled) {
+            pipeline.stream.deinit();
+        }
         pipeline.terminal.deinit(pipeline.allocator);
     }
 
