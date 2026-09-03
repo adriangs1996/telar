@@ -268,7 +268,9 @@ pub const Pipeline = struct {
     }
 
     pub fn deinit(pipeline: *Pipeline) void {
-        if (pipeline.worker) |index| pipeline.batches[index].reset();
+        if (pipeline.worker) |index| {
+            pipeline.batches[index].reset();
+        }
         pipeline.worker = null;
         if (pipeline.enabled) pipeline.stream.deinit();
         pipeline.terminal.deinit(pipeline.allocator);
