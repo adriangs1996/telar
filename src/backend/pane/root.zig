@@ -1848,12 +1848,32 @@ pub const Pane = struct {
             .indeterminate => .indeterminate,
             .pause => .pause,
         };
-        if (pane.progress_state == state and pane.progress_percent == report.progress) {
+        pane.applyProgress(state, report.progress);
+    }
+
+    /// Drops the progress a foreground job reported once the shell owns the
+    /// terminal again. OSC 9;4 describes the running job, and a job that was
+    /// interrupted or killed never sends the removal itself, so the report
+    /// would otherwise outlive it until the next job replaced it.
+    ///
+    /// ```zig
+    /// pane.expireProgress(pane.session.shellForeground() orelse false);
+    /// ```
+    pub fn expireProgress(pane: *Pane, shell_foreground: bool) void {
+        if (!shell_foreground) {
+            return;
+        }
+
+        pane.applyProgress(.remove, null);
+    }
+
+    fn applyProgress(pane: *Pane, state: schema.PaneProgressState, percent: ?u8) void {
+        if (pane.progress_state == state and pane.progress_percent == percent) {
             return;
         }
 
         pane.progress_state = state;
-        pane.progress_percent = report.progress;
+        pane.progress_percent = percent;
         pane.progress_revision +%= 1;
         if (pane.progress_revision == 0) {
             pane.progress_revision = 1;
@@ -2663,6 +2683,52 @@ test "pane retains OSC 9 progress without painting it into terminal cells" {
     _ = try pane.ingest(io, "\x1b]9;4;0\x1b\\");
     try std.testing.expectEqual(schema.PaneProgressState.remove, pane.progress_state);
     try std.testing.expectEqual(@as(?u8, null), pane.progress_percent);
+}
+
+test "shell regaining the terminal expires the job's progress report" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var history_service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
+    defer history_service.deinit(io);
+    const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try pty.Command.fromArgv(&argv);
+    var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &history_service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = @enumFromInt(1), .generation = 1 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/work/telar",
+        .size = .{ .cols = 20, .rows = 5 },
+        .graphics_limits = .{},
+    });
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+
+    _ = try pane.ingest(io, "\x1b]9;4;3\x1b\\");
+    const reported_revision = pane.progress_revision;
+
+    pane.expireProgress(false);
+    try std.testing.expectEqual(schema.PaneProgressState.indeterminate, pane.progress_state);
+    try std.testing.expectEqual(reported_revision, pane.progress_revision);
+
+    pane.expireProgress(true);
+    try std.testing.expectEqual(schema.PaneProgressState.remove, pane.progress_state);
+    try std.testing.expectEqual(@as(?u8, null), pane.progress_percent);
+    try std.testing.expectEqual(reported_revision + 1, pane.progress_revision);
+
+    pane.expireProgress(true);
+    try std.testing.expectEqual(reported_revision + 1, pane.progress_revision);
 }
 
 test "pane close requests shut down the PTY exactly once" {

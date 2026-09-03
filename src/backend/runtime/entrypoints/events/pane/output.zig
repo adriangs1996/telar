@@ -104,9 +104,11 @@ pub fn Pipeline(comptime Context: type, comptime port: RuntimePort(Context)) typ
             }
 
             const bytes = pane.output_buffer[0..output_len];
+            const shell_foreground = pane.session.shellForeground();
+            pane.expireProgress(shell_foreground orelse false);
             pane.queueHistoryOutput(.{
                 .bytes = bytes,
-                .shell_foreground = pane.session.shellForeground(),
+                .shell_foreground = shell_foreground,
                 .clock = pane_mod.historyClock(pipeline.resources.io),
             });
             try port.schedule_observation(pipeline.context, pane);
@@ -306,6 +308,28 @@ test "data fans out before the VT ingest actor borrows the output buffer" {
     try std.testing.expect(fixture.pane.ingest_pending);
     try std.testing.expectEqual(@as(u8, 1), fixture.pane.actor_count);
     try std.testing.expect(!fixture.pane.beginPtyOutputRead());
+    fixture.pane.cancelOutputIngest();
+}
+
+test "data read while the shell owns the terminal expires stale progress" {
+    var fixture: test_support.PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var panes: PaneStore = .{};
+    try insertFixturePane(&fixture, &panes);
+    _ = try fixture.pane.ingest(std.testing.io, "\x1b]9;4;1;42\x1b\\");
+    try std.testing.expectEqual(schema.PaneProgressState.set, fixture.pane.progress_state);
+    fixture.pane.output_buffer[0] = 'x';
+    var capture: Capture = .{};
+    var pipeline = testPipeline(&capture, &panes, &fixture.metrics);
+
+    try pipeline.handle(.{
+        .pane = fixture.pane.key(),
+        .result = 1,
+    });
+
+    try std.testing.expectEqual(schema.PaneProgressState.remove, fixture.pane.progress_state);
+    try std.testing.expectEqual(@as(?u8, null), fixture.pane.progress_percent);
     fixture.pane.cancelOutputIngest();
 }
 
