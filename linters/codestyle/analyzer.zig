@@ -20,6 +20,12 @@ const Analyzer = struct {
         const function = self.tree.fullFnProto(&buffer, node).?;
         const function_token = function.name_token orelse function.ast.fn_token;
 
+        if (function.extern_export_inline_token) |token| {
+            if (self.tree.tokenTag(token) == .keyword_extern) {
+                return;
+            }
+        }
+
         var parameters = function.iterate(self.tree);
         var parameter_count: usize = 0;
         while (parameters.next() != null) {
@@ -166,6 +172,12 @@ test "counts anytype parameters" {
         \\fn combine(first: anytype, second: anytype, third: anytype, fourth: anytype) void {
         \\    _ = .{ first, second, third, fourth };
         \\}
+    );
+}
+
+test "accepts extern functions with more than three parameters" {
+    try expectRules(&.{},
+        \\extern "c" fn open(first: u8, second: u8, third: u8, fourth: u8) void;
     );
 }
 
