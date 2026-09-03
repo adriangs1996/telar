@@ -81,7 +81,7 @@ pub const Session = struct {
     /// response.status = session.ask(io, .{ .prompt = prompt.slice(), .response = &response });
     /// ```
     pub fn ask(session: *Session, io: Io, request: Request) Status {
-        session.exchange(io, request.prompt, request.response) catch |err| return switch (err) {
+        session.exchange(io, request) catch |err| return switch (err) {
             error.Timeout => .timeout,
             error.InvalidOutput => .invalid_output,
             error.WriteFailed, error.ReadFailed, error.Closed, error.Rejected => .failed,
@@ -108,19 +108,19 @@ pub const Session = struct {
         return nowMs(io) - session.last_used_ms;
     }
 
-    fn exchange(session: *Session, io: Io, prompt: []const u8, response: *Response) AskError!void {
+    fn exchange(session: *Session, io: Io, request: Request) AskError!void {
         const timeout: Io.Timeout = .{ .deadline = .fromNow(io, .{
             .clock = .awake,
             .raw = .fromMilliseconds(session.timeout_ms),
         }) };
 
-        const prompt_line = try rpc.encodePrompt(&session.line_buffer, prompt);
+        const prompt_line = try rpc.encodePrompt(&session.line_buffer, request.prompt);
         try session.writeLine(io, prompt_line);
         try session.awaitSettled(timeout);
 
         const query_line = try rpc.encodeCommand(&session.line_buffer, "get_last_assistant_text");
         try session.writeLine(io, query_line);
-        try session.readLastText(timeout, response);
+        try session.readLastText(timeout, request.response);
     }
 
     fn writeLine(session: *Session, io: Io, line: []const u8) AskError!void {
