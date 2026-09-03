@@ -650,7 +650,7 @@ fn drawList(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
         switch (rows[index]) {
             .blank => {},
             .section => |section| drawSectionHeader(.{ .state = state, .buffer = buf, .area = content }, y, section),
-            .task => |t| drawTaskLine(state, buf, content, y, t.index, t.line),
+            .task => |t| drawTaskLine(.{ .state = state, .buffer = buf, .area = content }, .{ .y = y, .index = t.index, .line = t.line }),
         }
     }
 
@@ -686,7 +686,19 @@ fn drawSectionHeader(context: DrawContext, y: u16, section: Section) void {
     });
 }
 
-fn drawTaskLine(state: *State, buf: *ui.Buffer, area: ui.Rect, y: u16, index: usize, line: u8) void {
+const TaskLine = struct {
+    y: u16,
+    index: usize,
+    line: u8,
+};
+
+fn drawTaskLine(context: DrawContext, position: TaskLine) void {
+    const state = context.state;
+    const buf = context.buffer;
+    const area = context.area;
+    const y = position.y;
+    const index = position.index;
+    const line = position.line;
     const task = state.tasks[index];
     const selected = index == state.selected_task;
     const hovered = isHovered(state, .{ .select_task = index }) or isHovered(state, .{ .run_task_action = index });
