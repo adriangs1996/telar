@@ -847,8 +847,12 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
 }
 
 fn parseUniqueU32(current: ?u32, value: []const u8) ?u32 {
-    if (current != null) return null;
+    if (current != null) {
+        return null;
+    }
+
     const parsed = std.fmt.parseUnsigned(u32, value, 10) catch return null;
+
     return if (parsed == 0) null else parsed;
 }
 
