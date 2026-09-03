@@ -722,7 +722,10 @@ fn findSharedFrame(bytes: []const u8, from: usize) ?SharedFrame {
 
 fn sharedFrameAt(bytes: []const u8, start: usize) ?SharedFrame {
     if (start > bytes.len or
-        !std.mem.startsWith(u8, bytes[start..], atomic_shared_prefix)) return null;
+        !std.mem.startsWith(u8, bytes[start..], atomic_shared_prefix))
+    {
+        return null;
+    }
     const command_start = start + atomic_shared_prefix.len;
     const terminator = std.mem.indexOfPos(u8, bytes, command_start, "\x1b\\") orelse return null;
     if (!std.mem.startsWith(u8, bytes[terminator..], atomic_shared_suffix)) return null;
