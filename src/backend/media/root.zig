@@ -307,7 +307,9 @@ pub const Pipeline = struct {
     }
 
     pub fn seal(pipeline: *Pipeline) bool {
-        if (!pipeline.hasPending()) return false;
+        if (!pipeline.hasPending()) {
+            return false;
+        }
         const sealed = pipeline.active;
         pipeline.active ^= 1;
         std.debug.assert(pipeline.batches[pipeline.active].event_count == 0);
