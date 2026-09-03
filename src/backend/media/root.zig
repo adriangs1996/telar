@@ -463,7 +463,9 @@ fn stripFileQueries(bytes: []const u8, scratch: []u8, sink: anytype) []const u8 
         const command = bytes[start + 3 .. terminator];
         const separator = std.mem.indexOfScalar(u8, command, ';') orelse continue;
         const query = parseFileQueryControl(command[0..separator]) orelse continue;
-        if (separator + 1 == command.len) continue;
+        if (separator + 1 == command.len) {
+            continue;
+        }
         const handled = sink.observeFileQuery(.{
             .bytes = bytes[start..end],
             .encoded_path = command[separator + 1 ..],
