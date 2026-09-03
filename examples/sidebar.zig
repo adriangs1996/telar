@@ -292,6 +292,12 @@ fn buildRows(state: *const State, out: []Row) u16 {
 // The view
 // ---------------------------------------------------------------------------
 
+const DrawContext = struct {
+    state: *State,
+    buffer: *ui.Buffer,
+    area: ui.Rect,
+};
+
 fn view(state: *State, buf: *ui.Buffer) void {
     state.hits.clear();
     state.focus.beginFrame();
@@ -311,7 +317,7 @@ fn view(state: *State, buf: *ui.Buffer) void {
         drawPane(state, buf, pane);
     }
     if (state.dialog) |index| {
-        drawDialog(state, buf, full, index);
+        drawDialog(.{ .state = state, .buffer = buf, .area = full }, index);
     }
 
     // Last of all, over whatever ended up on screen. A selection is about what
@@ -345,7 +351,10 @@ const dialog_choices = [_][]const u8{ "Approve", "Reject", "Open diff" };
 /// and a layer that swallows the whole screen, so the list behind it stops
 /// answering clicks. Neither is something the dialog implements - it asks for
 /// them.
-fn drawDialog(state: *State, buf: *ui.Buffer, full: ui.Rect, index: usize) void {
+fn drawDialog(context: DrawContext, index: usize) void {
+    const state = context.state;
+    const buf = context.buffer;
+    const full = context.area;
     const w: u16 = @min(52, full.w -| 4);
     const h: u16 = 9;
     if (w < 24 or full.h < h + 2) {
