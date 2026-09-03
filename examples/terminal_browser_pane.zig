@@ -599,7 +599,26 @@ fn drawCells(screen: *term.Screen, emulator: *Emulator, options: CellDrawOptions
     screen.cursor = try emulator.draw(buffer, .{ .area = frame.content, .force = rebuild_frame });
 }
 
-fn present(screen: *term.Screen, writer: *Io.Writer, emulator: *Emulator, mirror: *GraphicsMirror, graphics_store: *kitty.Store, model: *multiplexer.Model, frame: FrameGeometry, capabilities: *const HostCapabilities) !void {
+const PresentContext = struct {
+    screen: *term.Screen,
+    writer: *Io.Writer,
+    emulator: *Emulator,
+    mirror: *GraphicsMirror,
+    graphics_store: *kitty.Store,
+    model: *multiplexer.Model,
+    frame: FrameGeometry,
+    capabilities: *const HostCapabilities,
+};
+
+fn present(context: PresentContext) !void {
+    const screen = context.screen;
+    const writer = context.writer;
+    const emulator = context.emulator;
+    const mirror = context.mirror;
+    const graphics_store = context.graphics_store;
+    const model = context.model;
+    const frame = context.frame;
+    const capabilities = context.capabilities;
     _ = try mirror.sync(emulator, graphics_store);
     const cell = capabilities.cellSize(0, 0);
     var exterior: ExteriorGraphics = .{ .writer = .{
@@ -769,16 +788,16 @@ pub fn main(init: std.process.Init) !void {
     }
 
     try drawCells(&screen, &emulator, .{ .frame = frame, .rebuild_frame = true });
-    try present(
-        &screen,
-        writer,
-        &emulator,
-        &mirror,
-        &graphics_store,
-        &model,
-        frame,
-        &capabilities,
-    );
+    try present(.{
+        .screen = &screen,
+        .writer = writer,
+        .emulator = &emulator,
+        .mirror = &mirror,
+        .graphics_store = &graphics_store,
+        .model = &model,
+        .frame = frame,
+        .capabilities = &capabilities,
+    });
 
     var host_input: HostInput = .{};
     var batch: [32]Message = undefined;
@@ -870,16 +889,16 @@ pub fn main(init: std.process.Init) !void {
             should_present = true;
         }
         if (should_present or graphicsReady(&capabilities, &emulator, &mirror, &graphics_store)) {
-            try present(
-                &screen,
-                writer,
-                &emulator,
-                &mirror,
-                &graphics_store,
-                &model,
-                frame,
-                &capabilities,
-            );
+            try present(.{
+                .screen = &screen,
+                .writer = writer,
+                .emulator = &emulator,
+                .mirror = &mirror,
+                .graphics_store = &graphics_store,
+                .model = &model,
+                .frame = frame,
+                .capabilities = &capabilities,
+            });
             last_frame_ns = monotonic(io);
         }
     }
