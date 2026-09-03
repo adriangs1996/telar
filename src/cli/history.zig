@@ -88,6 +88,7 @@ fn print(io: Io, results: core.schema.HistoryResultsView) !void {
             timestamp.second,
         });
         switch (entry.status) {
+            .running => try writer.writeAll("RUN  "),
             .interrupted => try writer.writeAll("INT  "),
             .completed => if (entry.exit_code) |exit_code| {
                 if (exit_code < 0) {

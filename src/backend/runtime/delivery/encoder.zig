@@ -169,6 +169,7 @@ fn encodeHistoryResult(buffer: []u8, result: *const history.model.QueryResult, s
             .status = switch (entry.status) {
                 .completed => .completed,
                 .interrupted => .interrupted,
+                .running => .running,
             },
             .author = entry.author,
             .origin = entry.origin,

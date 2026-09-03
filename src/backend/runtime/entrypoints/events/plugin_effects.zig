@@ -102,6 +102,7 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
                     .truncated = false,
                 },
                 .provider = record.provider,
+                .tool_call_id = record.tool_call_id,
                 .origin = .plugin,
                 .redact = record.redact,
             });

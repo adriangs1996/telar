@@ -188,7 +188,14 @@ pub const Worker = struct {
         const started = std.Io.Timestamp.now(context.io, .awake);
         const result = if (worker.database) |*database| write: {
             if (value.origin != .pane) database.ensureCommandSession(value) catch |err| break :write err;
-            const inserted = database.insertCommand(value) catch |err| break :write err;
+            const updated = if (value.origin == .hook and value.status != .running)
+                database.finishAgentCommand(value) catch |err| break :write err
+            else
+                false;
+            const inserted = if (updated)
+                false
+            else
+                database.insertCommand(value) catch |err| break :write err;
             if (inserted and value.output_observed > 0) {
                 database.insertCommandOutput(value) catch |err| break :write err;
             }

@@ -226,6 +226,7 @@ fn parseEffects(state: *lua.lua_State, index: c_int) !effects.Batch {
                 .command = try stringField(state, effect_table, "command", true),
                 .cwd = try stringField(state, effect_table, "cwd", false),
                 .provider = try stringField(state, effect_table, "provider", false),
+                .tool_call_id = try stringField(state, effect_table, "tool_call_id", false),
                 .session = try optionalStringField(state, effect_table, "session"),
                 .exit_code = @intCast(try integerField(state, effect_table, "exit_code", 0)),
                 .started_at_ms = try integerField(state, effect_table, "started_at_ms", 0),

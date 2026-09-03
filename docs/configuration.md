@@ -198,6 +198,12 @@ runtime = {
                                                -- declares this is exempt from the generic
                                                -- prompt-glyph scan
 
+      -- Shell tools reported by this agent's native hooks (optional, max 8).
+      -- Both values are 1..64 and 1..32 bytes respectively.
+      command_tools = {
+        { tool = "Bash", field = "command" },
+      },
+
       -- Client capability (optional). How the agent's prompt identifies pasted
       -- images; "none" (default for new agents) hides the image shelf.
       attachments = "ordered",       -- "none" | "ordered" | "stable_number" | "pasted_path"
@@ -212,6 +218,13 @@ markers after a deletion (Codex), `stable_number` keeps numbers stable (Claude
 Code) and `pasted_path` inserts a temporary file path (Pi). The shipped
 defaults are `stable_number` for `claude`, `ordered` for `codex` and
 `pasted_path` for `pi`.
+
+`command_tools` maps a hook's exact tool name to the string field that contains
+the shell command in `tool_input`. It lets a custom harness participate in
+native command history without adding provider-specific code. Entries with a
+missing mapping, a non-string field or a subagent id are ignored. The shipped
+manifests map Claude Code `Bash.command`, Codex `Bash.command` plus the legacy
+`exec_command.cmd` and `shell.command` names, and Pi `bash.command`.
 
 Overriding a built-in keeps its provider index, artwork and code-level
 capabilities; only the listed fields change. For example, relabel Claude Code

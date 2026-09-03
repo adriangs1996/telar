@@ -17,6 +17,9 @@ pub const max_phrase_bytes = 48;
 pub const max_phrases = 8;
 pub const max_path_bytes = 64;
 pub const max_paths = 4;
+pub const max_command_tools = 8;
+pub const max_tool_name_bytes = 64;
+pub const max_command_field_bytes = 32;
 pub const first_custom_provider: u8 = schema.first_custom_agent_provider;
 
 /// Labels for an agent the table does not know. Clients and the runtime use
@@ -80,6 +83,55 @@ pub fn BoundedList(comptime capacity: usize, comptime entry_bytes: usize) type {
 pub const PhraseList = BoundedList(max_phrases, max_phrase_bytes);
 pub const PathList = BoundedList(max_paths, max_path_bytes);
 
+pub const CommandTool = struct {
+    tool: [max_tool_name_bytes]u8 = undefined,
+    tool_len: u8,
+    field: [max_command_field_bytes]u8 = undefined,
+    field_len: u8,
+
+    pub fn toolSlice(mapping: *const CommandTool) []const u8 {
+        return mapping.tool[0..mapping.tool_len];
+    }
+
+    pub fn fieldSlice(mapping: *const CommandTool) []const u8 {
+        return mapping.field[0..mapping.field_len];
+    }
+};
+
+pub const CommandTools = struct {
+    items: [max_command_tools]CommandTool = undefined,
+    count: u8 = 0,
+
+    pub fn append(mappings: *CommandTools, tool: []const u8, field: []const u8) ListError!void {
+        if (tool.len == 0 or field.len == 0) {
+            return error.EmptyEntry;
+        }
+        if (tool.len > max_tool_name_bytes or field.len > max_command_field_bytes) {
+            return error.EntryTooLong;
+        }
+        if (mappings.count == max_command_tools) {
+            return error.TooManyEntries;
+        }
+
+        const mapping = &mappings.items[mappings.count];
+        @memcpy(mapping.tool[0..tool.len], tool);
+        mapping.tool_len = @intCast(tool.len);
+        @memcpy(mapping.field[0..field.len], field);
+        mapping.field_len = @intCast(field.len);
+        mappings.count += 1;
+    }
+
+    pub fn commandField(mappings: *const CommandTools, tool: []const u8) ?[]const u8 {
+        for (mappings.items[0..mappings.count]) |*mapping| {
+            if (std.mem.eql(u8, mapping.toolSlice(), tool)) {
+                return mapping.fieldSlice();
+            }
+        }
+
+        return null;
+    }
+};
+
 pub const TextError = error{ EmptyText, TextTooLong };
 
 pub const Manifest = struct {
@@ -113,6 +165,8 @@ pub const Manifest = struct {
     blocked: PhraseList = .{},
     /// Prompt text that proves the agent is idle and waiting for input.
     ready_prompt: PhraseList = .{},
+    /// Tool names whose object input contains a shell command field.
+    command_tools: CommandTools = .{},
 
     pub fn nameSlice(manifest: *const Manifest) []const u8 {
         return manifest.name[0..manifest.name_len];
@@ -276,6 +330,16 @@ pub const Table = struct {
         return manifest.attachments;
     }
 
+    /// Returns the object field holding a command for one provider tool.
+    ///
+    /// ```zig
+    /// const field = table.commandField(.claude, "Bash") orelse return;
+    /// ```
+    pub fn commandField(table: *const Table, provider: AgentProvider, tool: []const u8) ?[]const u8 {
+        const manifest = table.find(provider) orelse return null;
+        return manifest.command_tools.commandField(tool);
+    }
+
     /// Reports whether the agent's manifest proves readiness by itself, so a
     /// generic screen scan must not override its stream signal.
     ///
@@ -427,6 +491,7 @@ fn buildBuiltin() Table {
     for ([_][]const u8{ "/@anthropic-ai/claude-code/", "\\@anthropic-ai\\claude-code\\" }) |path| claude.process_paths.append(path) catch unreachable;
     claude.brand.append("claude") catch unreachable;
     claude.identity.append("claude code") catch unreachable;
+    claude.command_tools.append("Bash", "command") catch unreachable;
     for (shared_blocked) |phrase| claude.blocked.append(phrase) catch unreachable;
     for (shared_working) |phrase| claude.working.append(phrase) catch unreachable;
 
@@ -437,6 +502,9 @@ fn buildBuiltin() Table {
     for ([_][]const u8{ "/@openai/codex/", "\\@openai\\codex\\" }) |path| codex.process_paths.append(path) catch unreachable;
     codex.brand.append("codex") catch unreachable;
     codex.ready_prompt.append("ask codex to do anything") catch unreachable;
+    codex.command_tools.append("Bash", "command") catch unreachable;
+    codex.command_tools.append("exec_command", "cmd") catch unreachable;
+    codex.command_tools.append("shell", "command") catch unreachable;
 
     // Pi launches as `node .../pi-coding-agent/dist/bundle/cli.js`, so its
     // entry-point path is the reliable identity; the package moved from the
@@ -448,6 +516,7 @@ fn buildBuiltin() Table {
     pi.setDisplayName("Pi") catch unreachable;
     pi.attachments = .pasted_path;
     pi.process_names.append("pi") catch unreachable;
+    pi.command_tools.append("bash", "command") catch unreachable;
     for ([_][]const u8{
         "/@earendil-works/pi-coding-agent/",
         "\\@earendil-works\\pi-coding-agent\\",

@@ -27,6 +27,7 @@ pub const ClientKey = struct {
 pub const CommandStatus = enum(u8) {
     completed = 0,
     interrupted = 1,
+    running = 2,
 };
 
 pub const SessionStarted = struct {

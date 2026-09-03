@@ -123,6 +123,7 @@ pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const effects.Batch) !
             try writeSized(&writer, record.command);
             try writeSized(&writer, record.cwd);
             try writeSized(&writer, record.provider);
+            try writeSized(&writer, record.tool_call_id);
             try writer.writeByte(@intFromBool(record.session != null));
             if (record.session) |session| try writeSized(&writer, session);
             try writeInt(&writer, i32, record.exit_code);
@@ -167,6 +168,7 @@ pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: effects.
                 .command = try cursor.sized(),
                 .cwd = try cursor.sized(),
                 .provider = try cursor.sized(),
+                .tool_call_id = try cursor.sized(),
                 .session = if (try cursor.boolean()) try cursor.sized() else null,
                 .exit_code = try cursor.int(i32),
                 .started_at_ms = try cursor.int(i64),
@@ -297,6 +299,7 @@ test "effect protocol round trips all effect variants and rejects trailing bytes
         .command = "git status",
         .cwd = "/work",
         .provider = "codex",
+        .tool_call_id = "call-1",
         .session = "session-1",
         .exit_code = 0,
         .started_at_ms = 10,
@@ -310,6 +313,7 @@ test "effect protocol round trips all effect variants and rejects trailing bytes
     const decoded = try decodeEffects(encoded);
     try std.testing.expectEqual(@as(u64, 9), decoded.event_id);
     try std.testing.expectEqualStrings("git status", decoded.batch.items[0].record_command.command);
+    try std.testing.expectEqualStrings("call-1", decoded.batch.items[0].record_command.tool_call_id);
     try std.testing.expectEqual(core.schema.AgentReportState.working, decoded.batch.items[1].agent_evidence.state);
     try std.testing.expectEqualStrings("Observed", decoded.batch.items[2].notification.message);
     storage[encoded.len] = 0;

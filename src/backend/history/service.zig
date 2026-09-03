@@ -35,6 +35,7 @@ pub const Service = struct {
         provider: []const u8 = "",
         tool_call_id: []const u8 = "",
         origin: core.schema.HistoryOrigin,
+        phase: core.schema.AgentCommandPhase = .finished,
         redact: bool = true,
     };
 
@@ -230,6 +231,9 @@ pub const Service = struct {
         if (record.origin == .pane) {
             return false;
         }
+        if (record.phase == .started and record.tool_call_id.len == 0) {
+            return true;
+        }
         if (record.command.bytes.len == 0 or
             record.command.bytes.len > core.schema.max_history_command_bytes or
             record.command.cwd.len > core.schema.max_cwd_bytes or
@@ -255,10 +259,14 @@ pub const Service = struct {
         context.origin = record.origin;
         context.provider = record.provider;
         context.tool_call_id = record.tool_call_id;
-        const request = request_factory.commandFinished(service.gpa, .{
+        var request = request_factory.commandFinished(service.gpa, .{
             .context = context,
             .command = record.command,
         }) catch return false;
+        request.command_finished.status = switch (record.phase) {
+            .started => .running,
+            .finished => request.command_finished.status,
+        };
         return service.submit(io, request);
     }
 

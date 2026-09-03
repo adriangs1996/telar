@@ -355,6 +355,7 @@ test "effect authorization checks exact identity, declaration and grant" {
         .command = "pwd",
         .cwd = "/tmp",
         .provider = "test",
+        .tool_call_id = "",
         .session = null,
         .exit_code = 0,
         .started_at_ms = 1,

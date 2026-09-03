@@ -13,6 +13,16 @@ const RuntimeConnector = runtime_connection.RuntimeConnector;
 
 pub const max_entries = schema.max_agent_snapshot_entries;
 
+pub const AgentCommandReport = struct {
+    phase: schema.AgentCommandPhase,
+    provider: []const u8,
+    tool_call_id: []const u8,
+    command: []const u8,
+    cwd: []const u8,
+    session: []const u8,
+    exit_code: ?i32,
+};
+
 /// One decoded agent entry with its variable-length labels copied into owned
 /// storage, so a snapshot can be inspected after the receive buffer is reused.
 pub const Agent = struct {
@@ -337,6 +347,34 @@ pub const Session = struct {
             .pane_generation = pane.pane_generation,
             .state = state,
             .session = reference,
+        }));
+
+        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+        switch (response) {
+            .request_completed => {},
+            .request_failed => |failure| return failureError(failure),
+            else => return error.UnexpectedRuntimeResponse,
+        }
+    }
+
+    /// Sends one shell-tool observation from an official agent hook.
+    ///
+    /// ```zig
+    /// try session.reportAgentCommand(pane, command);
+    /// ```
+    pub fn reportAgentCommand(session: *Session, pane: PaneRef, command: AgentCommandReport) !void {
+        var send_buffer: [schema.max_history_command_bytes + schema.max_cwd_bytes + 1024]u8 = undefined;
+        try session.connection.send(session.io, try schema.encodeReportAgentCommand(&send_buffer, .{
+            .request_id = session.requestId(),
+            .pane_id = try schema.id.pane(pane.pane_id),
+            .pane_generation = pane.pane_generation,
+            .phase = command.phase,
+            .provider = command.provider,
+            .tool_call_id = command.tool_call_id,
+            .command = command.command,
+            .cwd = command.cwd,
+            .session = command.session,
+            .exit_code = command.exit_code,
         }));
 
         const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));

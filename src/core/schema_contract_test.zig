@@ -28,7 +28,7 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 85;
+const corpus_len = 86;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -397,6 +397,20 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .pane_generation = 3,
             .state = .blocked,
             .session = "abc",
+        }),
+    ));
+    helper.add("report_agent_command", .client, false, golden.report_agent_command, helper.commit(
+        try schema.encodeReportAgentCommand(helper.space(), .{
+            .request_id = @enumFromInt(5),
+            .pane_id = @enumFromInt(5),
+            .pane_generation = 3,
+            .phase = .finished,
+            .provider = "codex",
+            .tool_call_id = "call-7",
+            .command = "zig build test",
+            .cwd = "/work",
+            .session = "abc",
+            .exit_code = 7,
         }),
     ));
     helper.add("search_pane", .client, false, golden.search_pane, helper.commit(
@@ -909,6 +923,7 @@ const golden = struct {
     pub const send_pane_text = "1e0500000000000000050000000000000003000000000000000102006c73";
     pub const report_agent_session = "1f0500000000000000050000000000000003000000000000000300616263";
     pub const report_agent = "20050000000000000005000000000000000300000000000000010300616263";
+    pub const report_agent_command = "2a050000000000000005000000000000000300000000000000010500636f646578060063616c6c2d370e0000007a6967206275696c64207465737405002f776f726b03006162630107000000";
     pub const search_pane = "21050000000000000005000000000000000300657272";
     pub const request_pane_focus = "2705000000000000000500000000000000030000000000000000";
     pub const complete_pane_focus = "2809000000000000000a00000000000000050000000000000005000000000000000300000000000000000600000000000000";

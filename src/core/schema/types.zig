@@ -250,6 +250,7 @@ pub const HistoryScope = enum(u8) {
 pub const HistoryStatus = enum(u8) {
     completed = 0,
     interrupted = 1,
+    running = 2,
 };
 
 /// Who submitted a recorded command: a person typing, or automation writing

@@ -64,6 +64,27 @@ pub const ReportAgent = struct {
     session: []const u8 = "",
 };
 
+pub const AgentCommandPhase = enum(u8) {
+    started = 0,
+    finished = 1,
+};
+
+/// One shell command observed by an official agent hook. Start and finish
+/// reports share a tool-call identifier so persistence can close the row
+/// idempotently.
+pub const ReportAgentCommand = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    pane_generation: u64,
+    phase: AgentCommandPhase,
+    provider: []const u8,
+    tool_call_id: []const u8 = "",
+    command: []const u8,
+    cwd: []const u8 = "",
+    session: []const u8 = "",
+    exit_code: ?i32 = null,
+};
+
 pub const AgentSnapshot = struct {
     revision: u64,
     entries: []const AgentSnapshotEntry,
@@ -194,6 +215,74 @@ pub fn decodeReportAgent(decoder: *wire.Decoder) !ReportAgent {
         .pane_generation = pane_generation,
         .state = state,
         .session = session,
+    };
+}
+
+pub fn encodeReportAgentCommand(buffer: []u8, message: ReportAgentCommand) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validatePaneId(message.pane_id);
+    try validateBytes(message.provider, types.max_history_provider_bytes, false);
+    try validateBytes(message.tool_call_id, types.max_history_tool_call_id_bytes, true);
+    try validateBytes(message.command, types.max_history_command_bytes, false);
+    try validateBytes(message.cwd, types.max_cwd_bytes, true);
+    if (message.session.len != 0) {
+        try validateSessionReference(message.session);
+    }
+    if (message.phase == .started and message.exit_code != null) {
+        return error.InvalidAgentCommandExitCode;
+    }
+
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.report_agent_command));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeByte(@intFromEnum(message.phase));
+    try encoder.writeSized16(message.provider);
+    try encoder.writeSized16(message.tool_call_id);
+    try encoder.writeSized32(message.command);
+    try encoder.writeSized16(message.cwd);
+    try encoder.writeSized16(message.session);
+    try encoder.writeByte(@intFromBool(message.exit_code != null));
+    if (message.exit_code) |exit_code| {
+        try encoder.writeInt(i32, exit_code);
+    }
+    return encoder.finish();
+}
+
+pub fn decodeReportAgentCommand(decoder: *wire.Decoder) !ReportAgentCommand {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const pane_generation = try decoder.readInt(u64);
+    const phase = std.enums.fromInt(AgentCommandPhase, try decoder.readByte()) orelse return error.InvalidAgentCommandPhase;
+    const provider = try decoder.readSized16();
+    const tool_call_id = try decoder.readSized16();
+    const command = try decoder.readSized32();
+    const cwd = try decoder.readSized16();
+    const session = try decoder.readSized16();
+    const has_exit_code = try decoder.readBool();
+    const exit_code = if (has_exit_code) try decoder.readInt(i32) else null;
+    try validateBytes(provider, types.max_history_provider_bytes, false);
+    try validateBytes(tool_call_id, types.max_history_tool_call_id_bytes, true);
+    try validateBytes(command, types.max_history_command_bytes, false);
+    try validateBytes(cwd, types.max_cwd_bytes, true);
+    if (session.len != 0) {
+        try validateSessionReference(session);
+    }
+    if (phase == .started and exit_code != null) {
+        return error.InvalidAgentCommandExitCode;
+    }
+    return .{
+        .request_id = request_id,
+        .pane_id = pane_id,
+        .pane_generation = pane_generation,
+        .phase = phase,
+        .provider = provider,
+        .tool_call_id = tool_call_id,
+        .command = command,
+        .cwd = cwd,
+        .session = session,
+        .exit_code = exit_code,
     };
 }
 

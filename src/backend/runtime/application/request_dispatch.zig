@@ -24,6 +24,8 @@ const search_pane_commands = @import("commands/search_pane.zig");
 const search_pane_controller = @import("../entrypoints/requests/search_pane.zig");
 const report_agent_commands = @import("commands/report_agent.zig");
 const report_agent_controller = @import("../entrypoints/requests/report_agent.zig");
+const report_agent_command_commands = @import("commands/report_agent_command.zig");
+const report_agent_command_controller = @import("../entrypoints/requests/report_agent_command.zig");
 const pane_observation_events = @import("../entrypoints/events/pane/observation.zig");
 const close_tab_commands = @import("commands/close_tab.zig");
 const close_tab_controller = @import("../entrypoints/requests/close_tab.zig");
@@ -98,6 +100,7 @@ const QueryAgentsController = query_agents_controller.Controller(*Delivery);
 const SendPaneTextController = send_pane_text_controller.Controller(*send_pane_text_commands.SendPaneTextHandler);
 const ReportAgentSessionController = report_agent_session_controller.Controller(*report_agent_session_commands.ReportAgentSessionHandler);
 const ReportAgentController = report_agent_controller.Controller(*report_agent_commands.ReportAgentHandler);
+const ReportAgentCommandController = report_agent_command_controller.Controller(*report_agent_command_commands.ReportAgentCommandHandler);
 const SearchPaneController = search_pane_controller.Controller(*search_pane_commands.SearchPaneHandler);
 const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
@@ -186,6 +189,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .send_pane_text = routeSendPaneText,
             .report_agent_session = routeReportAgentSession,
             .report_agent = routeReportAgent,
+            .report_agent_command = routeReportAgentCommand,
             .search_pane = routeSearchPane,
             .import_history = routeImportHistory,
             .delete_history = routeDeleteHistory,
@@ -927,6 +931,18 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
                 .pane_generation = report.pane_generation,
                 .sound = sound,
             });
+        }
+
+        fn routeReportAgentCommand(request: *ClientRequestContext, report: schema.ReportAgentCommand) !void {
+            const application = request.application;
+            var handler: report_agent_command_commands.ReportAgentCommandHandler = .{
+                .panes = &application.model.panes,
+                .history_service = application.history_service,
+            };
+            var controller = ReportAgentCommandController.init(&request.session.delivery.responses, &handler);
+            const now_ms = Io.Timestamp.now(application.io, .real).toMilliseconds();
+
+            try controller.reportAgentCommand(report, now_ms);
         }
 
         fn routeSearchPane(request: *ClientRequestContext, search: schema.SearchPane) !void {

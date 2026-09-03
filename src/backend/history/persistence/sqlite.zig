@@ -114,6 +114,18 @@ const insert_command_output_sql =
     \\VALUES (last_insert_rowid(), ?1, ?2, ?3);
 ;
 
+const finish_agent_command_sql =
+    \\UPDATE command SET
+    \\  command = ?1, command_truncated = ?2, cwd = ?3, workspace_path = ?4,
+    \\  duration_ns = CASE
+    \\    WHEN ?5 <= started_at_ms THEN 0
+    \\    WHEN ?5 - started_at_ms > 9223372036854 THEN 9223372036854775807
+    \\    ELSE (?5 - started_at_ms) * 1000000
+    \\  END,
+    \\  exit_code = ?6, status = ?7, author = ?8, origin = ?9, provider = ?10
+    \\WHERE session_id = ?11 AND tool_call_id = ?12;
+;
+
 const read_command_output_sql =
     \\SELECT content, truncated, observed_bytes FROM command_output WHERE command_id = ?1;
 ;
@@ -155,6 +167,7 @@ pub const Store = struct {
     import_command: *c.sqlite3_stmt,
     delete_command: *c.sqlite3_stmt,
     insert_command_output: *c.sqlite3_stmt,
+    finish_agent_command: *c.sqlite3_stmt,
     read_command_output: *c.sqlite3_stmt,
     fts_available: bool,
 
@@ -205,6 +218,8 @@ pub const Store = struct {
         errdefer _ = c.sqlite3_finalize(delete_command);
         const insert_command_output = try prepare(opened, insert_command_output_sql);
         errdefer _ = c.sqlite3_finalize(insert_command_output);
+        const finish_agent_command = try prepare(opened, finish_agent_command_sql);
+        errdefer _ = c.sqlite3_finalize(finish_agent_command);
         const read_command_output = try prepare(opened, read_command_output_sql);
         errdefer _ = c.sqlite3_finalize(read_command_output);
         return .{
@@ -218,6 +233,7 @@ pub const Store = struct {
             .import_command = import_command,
             .delete_command = delete_command,
             .insert_command_output = insert_command_output,
+            .finish_agent_command = finish_agent_command,
             .read_command_output = read_command_output,
             .fts_available = fts_available,
         };
@@ -226,6 +242,7 @@ pub const Store = struct {
     pub fn close(store: *Store) void {
         _ = c.sqlite3_finalize(store.read_command_output);
         _ = c.sqlite3_finalize(store.insert_command_output);
+        _ = c.sqlite3_finalize(store.finish_agent_command);
         _ = c.sqlite3_finalize(store.delete_command);
         _ = c.sqlite3_finalize(store.import_command);
         _ = c.sqlite3_finalize(store.import_session);
@@ -445,6 +462,43 @@ pub const Store = struct {
         _ = c.sqlite3_bind_int(stmt, 14, @intFromEnum(value.status));
         _ = c.sqlite3_bind_int(stmt, 15, @intFromEnum(value.author));
         bindCommandSource(stmt, value);
+        try stepDone(stmt);
+        return c.sqlite3_changes(store.db) == 1;
+    }
+
+    /// Closes a hook-started command without changing its stable row id.
+    /// Returns false when no matching start was persisted.
+    ///
+    /// ```zig
+    /// if (!try store.finishAgentCommand(command)) _ = try store.insertCommand(command);
+    /// ```
+    pub fn finishAgentCommand(store: *Store, value: *const model.CommandFinished) !bool {
+        if (value.tool_call_id.len == 0) {
+            return false;
+        }
+
+        const stmt = store.finish_agent_command;
+        defer reset(stmt);
+        bindText(stmt, 1, value.command);
+        _ = c.sqlite3_bind_int(stmt, 2, @intFromBool(value.command_truncated));
+        bindText(stmt, 3, value.cwd);
+        bindText(stmt, 4, value.workspace_path);
+        _ = c.sqlite3_bind_int64(stmt, 5, value.started_at_ms);
+        if (value.exit_code) |exit_code| {
+            _ = c.sqlite3_bind_int(stmt, 6, exit_code);
+        } else {
+            _ = c.sqlite3_bind_null(stmt, 6);
+        }
+        _ = c.sqlite3_bind_int(stmt, 7, @intFromEnum(value.status));
+        _ = c.sqlite3_bind_int(stmt, 8, @intFromEnum(value.author));
+        _ = c.sqlite3_bind_int(stmt, 9, @intFromEnum(value.origin));
+        if (value.provider.len == 0) {
+            _ = c.sqlite3_bind_null(stmt, 10);
+        } else {
+            bindText(stmt, 10, value.provider);
+        }
+        bindBlob(stmt, 11, &value.session_id);
+        bindText(stmt, 12, value.tool_call_id);
         try stepDone(stmt);
         return c.sqlite3_changes(store.db) == 1;
     }
@@ -878,6 +932,10 @@ fn enableCommandSearchIndex(db: *c.sqlite3) bool {
             "END; " ++
             "CREATE TRIGGER IF NOT EXISTS command_fts_delete AFTER DELETE ON command BEGIN " ++
             "INSERT INTO command_fts(command_fts, rowid, command) VALUES ('delete', old.id, old.command); " ++
+            "END; " ++
+            "CREATE TRIGGER IF NOT EXISTS command_fts_update AFTER UPDATE OF command ON command BEGIN " ++
+            "INSERT INTO command_fts(command_fts, rowid, command) VALUES ('delete', old.id, old.command); " ++
+            "INSERT INTO command_fts(rowid, command) VALUES (new.id, new.command); " ++
             "END;",
         null,
         null,
@@ -1028,6 +1086,7 @@ fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !model.Entry {
         .status = switch (c.sqlite3_column_int(stmt, 5)) {
             0 => .completed,
             1 => .interrupted,
+            2 => .running,
             else => return error.InvalidHistoryStatus,
         },
         .author = switch (c.sqlite3_column_int(stmt, 9)) {
@@ -1383,9 +1442,9 @@ test "agent command synthesis persists provenance and deduplicates tool calls" {
         .location = .{ .workspace = .{ .workspace = @enumFromInt(3) }, .tab_id = @enumFromInt(5) },
         .sequence = 1,
         .started_at_ms = 100,
-        .duration_ns = 2_000,
-        .exit_code = 0,
-        .status = .completed,
+        .duration_ns = 0,
+        .exit_code = null,
+        .status = .running,
         .author = .agent,
         .origin = .hook,
         .cols = 80,
@@ -1403,8 +1462,21 @@ test "agent command synthesis persists provenance and deduplicates tool calls" {
 
     try store.ensureCommandSession(&value);
     try std.testing.expect(try store.insertCommand(&value));
-    value.sequence = 2;
-    try std.testing.expect(!try store.insertCommand(&value));
+    var plugin = value;
+    plugin.sequence = 2;
+    plugin.status = .completed;
+    plugin.origin = .plugin;
+    plugin.provider = @constCast("tap");
+    try std.testing.expect(!try store.insertCommand(&plugin));
+
+    value.sequence = 3;
+    value.started_at_ms = 250;
+    value.exit_code = 7;
+    value.status = .completed;
+    value.command = @constCast("zig build test --summary all");
+    try std.testing.expect(try store.finishAgentCommand(&value));
+    plugin.sequence = 4;
+    try std.testing.expect(!try store.insertCommand(&plugin));
 
     const session_count = try prepare(store.db, "SELECT count(*) FROM session;");
     defer _ = c.sqlite3_finalize(session_count);
@@ -1421,6 +1493,10 @@ test "agent command synthesis persists provenance and deduplicates tool calls" {
     try std.testing.expectEqual(@as(usize, 1), result.entries.len);
     try std.testing.expectEqual(model.schema.HistoryOrigin.hook, result.entries[0].origin);
     try std.testing.expectEqualStrings("codex", result.entries[0].provider);
+    try std.testing.expectEqualStrings("zig build test --summary all", result.entries[0].command);
+    try std.testing.expectEqual(model.CommandStatus.completed, result.entries[0].status);
+    try std.testing.expectEqual(@as(i64, 150 * std.time.ns_per_ms), result.entries[0].duration_ns);
+    try std.testing.expectEqual(@as(?i32, 7), result.entries[0].exit_code);
 }
 
 test "opening a version four database migrates command provenance to version five" {

@@ -3357,7 +3357,8 @@ test "runtime agents extend built-ins and add custom manifests" {
         \\  runtime = {
         \\    agents = {
         \\      { name = "gemini", process_names = { "gemini" }, process_paths = { "/@google/gemini-cli/" },
-        \\        brand = { "gemini" }, identity = { "gemini cli" }, working = { "esc to cancel" } },
+        \\        brand = { "gemini" }, identity = { "gemini cli" }, working = { "esc to cancel" },
+        \\        command_tools = { { tool = "run_shell_command", field = "command" } } },
         \\      { name = "claude", working = { "brewing" } },
         \\    },
         \\  },
@@ -3373,6 +3374,7 @@ test "runtime agents extend built-ins and add custom manifests" {
     try std.testing.expectEqualStrings("gemini", gemini.nameSlice());
     try std.testing.expectEqual(gemini.provider, table.providerFromExecutable("gemini").?);
     try std.testing.expectEqual(gemini.provider, table.detect("Gemini CLI  esc to cancel").?.provider);
+    try std.testing.expectEqualStrings("command", table.commandField(gemini.provider, "run_shell_command").?);
     try std.testing.expectEqual(core.agent_manifest.Status.working, table.detect("brewing").?.status);
     try std.testing.expectEqual(core.schema.AgentProvider.claude, table.detect("Claude Code").?.provider);
 }
