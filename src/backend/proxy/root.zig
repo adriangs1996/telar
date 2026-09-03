@@ -23,6 +23,7 @@ pub const CaptureConfig = capture_mod.Config;
 pub const CaptureExchange = capture_mod.Exchange;
 pub const CaptureHalf = capture_mod.Half;
 pub const CaptureJoiner = capture_mod.Joiner;
+pub const CaptureOutcome = capture_mod.Outcome;
 
 pub const Config = struct {
     key_path: []const u8,

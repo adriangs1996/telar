@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const engine = @import("../engine/root.zig");
 const pane = @import("../pane/root.zig");
 const pane_launcher = @import("application/pane_launcher.zig");
+const plugins = @import("../plugins/root.zig");
 const proxy_resource = @import("resources/proxy.zig");
 
 const Io = std.Io;
@@ -28,6 +29,7 @@ pub const AgentDescriptionOptions = struct {
 pub const EngineOptions = engine.Options;
 
 pub const ProxyOptions = proxy_resource.Config;
+pub const PluginSpec = plugins.Spec;
 
 pub const Options = struct {
     endpoint: []const u8,
@@ -41,6 +43,7 @@ pub const Options = struct {
     /// Keep a bounded raw output tail per command (opt-in).
     history_output_capture: bool = false,
     proxy: ?ProxyOptions = null,
+    plugins: []const PluginSpec = &.{},
     agent_descriptions: ?AgentDescriptionOptions = null,
     /// The headless agent behind features like command suggestion.
     engine: ?EngineOptions = null,

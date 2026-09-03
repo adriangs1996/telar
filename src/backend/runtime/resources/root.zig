@@ -8,6 +8,7 @@ const client_store = @import("../client/root.zig").store;
 const config = @import("../config.zig");
 const history_runtime = @import("history.zig");
 const engine_runtime = @import("engine.zig");
+const plugins_runtime = @import("plugins.zig");
 const attachment = @import("../attachment/root.zig");
 const proxy_runtime = @import("proxy.zig");
 const telemetry = @import("../observability/root.zig").telemetry;
@@ -22,6 +23,7 @@ const AcquisitionPhase = enum {
     telemetry,
     clients,
     history,
+    plugins,
     engine,
 };
 
@@ -38,6 +40,7 @@ pub const Resources = struct {
     telemetry: telemetry.State,
     clients: *client_store.Store,
     history: history_runtime.Runtime,
+    plugins: plugins_runtime.Runtime,
     /// Present only when `runtime.engine` is configured.
     engine: ?engine_runtime.Runtime,
 
@@ -89,6 +92,18 @@ pub const Resources = struct {
         errdefer resources.history.deinit();
         try checkpoint(fail_after, .history);
 
+        try resources.plugins.init(.{
+            .io = resources.io(),
+            .gpa = resources.gpa,
+            .specs = initialization.options.plugins,
+        });
+        errdefer resources.plugins.deinit();
+        resources.proxy.setCaptureSink(.{
+            .context = resources.plugins.service(),
+            .submit_fn = submitCapture,
+        });
+        try checkpoint(fail_after, .plugins);
+
         resources.engine = if (initialization.options.engine) |options|
             try engine_runtime.Runtime.init(resources.io(), resources.gpa, options)
         else
@@ -110,6 +125,10 @@ pub const Resources = struct {
         return null;
     }
 
+    pub fn pluginService(resources: *Resources) *@import("../../plugins/root.zig").Service {
+        return resources.plugins.service();
+    }
+
     /// Returns the I/O implementation selected by the process root.
     ///
     /// ```zig
@@ -126,14 +145,20 @@ pub const Resources = struct {
     /// ```
     pub fn deinitUnstarted(resources: *Resources) void {
         if (resources.engine) |*engine| engine.deinit();
+        resources.proxy.deinit();
+        resources.plugins.deinit();
         resources.history.deinit();
         resources.gpa.destroy(resources.clients);
         resources.telemetry.deinit(resources.io());
         resources.listener.deinit(resources.io());
-        resources.proxy.deinit();
         resources.child_environment.deinit();
     }
 };
+
+fn submitCapture(context: *anyopaque, exchange: *@import("../../proxy/root.zig").CaptureExchange) void {
+    const service: *@import("../../plugins/root.zig").Service = @ptrCast(@alignCast(context));
+    service.submit(exchange);
+}
 
 fn checkpoint(comptime fail_after: ?AcquisitionPhase, comptime phase: AcquisitionPhase) !void {
     if (comptime fail_after == phase) {

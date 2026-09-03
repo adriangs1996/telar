@@ -30,6 +30,15 @@ pub const CaptureInput = struct {
     half: *proxy_mod.CaptureHalf,
 };
 
+pub const CaptureSink = struct {
+    context: *anyopaque,
+    submit_fn: *const fn (*anyopaque, *proxy_mod.CaptureExchange) void,
+
+    fn submit(sink: CaptureSink, exchange: *proxy_mod.CaptureExchange) void {
+        sink.submit_fn(sink.context, exchange);
+    }
+};
+
 fn Owner(comptime Capability: type, comptime destroyCapability: *const fn (*Capability) void) type {
     return struct {
         const Self = @This();
@@ -62,6 +71,7 @@ const ProxyOwner = Owner(proxy_mod.Proxy, destroyProxy);
 pub const Runtime = struct {
     owner: ProxyOwner,
     captures: proxy_mod.CaptureJoiner,
+    capture_sink: ?CaptureSink = null,
 
     /// Creates the configured proxy, or an inactive owner when disabled.
     ///
@@ -80,6 +90,7 @@ pub const Runtime = struct {
         return .{
             .owner = .init(owned_proxy),
             .captures = .init(timeout_ms),
+            .capture_sink = null,
         };
     }
 
@@ -132,7 +143,7 @@ pub const Runtime = struct {
             .pending => {},
             .complete => |value| {
                 var exchange = value;
-                exchange.deinit();
+                runtime.submitCapture(&exchange);
             },
             .partial => |value| {
                 var exchange = value;
@@ -159,8 +170,21 @@ pub const Runtime = struct {
     pub fn expireCaptures(runtime: *Runtime, now_ms: i64) void {
         while (runtime.captures.expire(now_ms)) |value| {
             var exchange = value;
-            exchange.deinit();
+            runtime.submitCapture(&exchange);
         }
+    }
+
+    pub fn setCaptureSink(runtime: *Runtime, sink: CaptureSink) void {
+        runtime.capture_sink = sink;
+    }
+
+    fn submitCapture(runtime: *Runtime, exchange: *proxy_mod.CaptureExchange) void {
+        if (runtime.capture_sink) |sink| {
+            sink.submit(exchange);
+            return;
+        }
+
+        exchange.deinit();
     }
 
     /// Returns active proxy metrics or an all-zero inactive snapshot.

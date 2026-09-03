@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const engine = @import("../engine/root.zig");
 const history = @import("../history/root.zig");
 const proxy_mod = @import("../proxy/root.zig");
+const plugins = @import("../plugins/root.zig");
 const transport = @import("../transport/root.zig");
 const runtime_event = @import("event.zig");
 const stop_signal_mod = @import("lifecycle/root.zig").stop_signal;
@@ -86,6 +87,15 @@ pub const Sources = struct {
         try proxy_runtime.scheduleCapture(context.scheduler());
     }
 
+    /// Arms the next bounded effect batch from a tap worker.
+    ///
+    /// ```zig
+    /// try sources.receivePluginEffects(plugin_service);
+    /// ```
+    pub fn receivePluginEffects(sources: *Sources, plugin_service: *plugins.Service) !void {
+        try sources.select.concurrent(.plugin_effects, plugins.Service.receive, .{ plugin_service, sources.io });
+    }
+
     /// Arms the next agent-maintenance tick.
     ///
     /// ```zig
@@ -122,6 +132,7 @@ pub const InitialSources = struct {
     history_service: *history.Service,
     engine_service: ?*engine.Service = null,
     proxy_runtime: *proxy_resource.Runtime,
+    plugin_service: *plugins.Service,
     telemetry_available: bool,
 
     /// Arms every source that may produce the runtime's first event.
@@ -138,6 +149,7 @@ pub const InitialSources = struct {
         }
         try initial_sources.sources.receiveProxyObservation(initial_sources.proxy_runtime);
         try initial_sources.sources.receiveProxyCapture(initial_sources.proxy_runtime);
+        try initial_sources.sources.receivePluginEffects(initial_sources.plugin_service);
         try initial_sources.sources.waitForAgentMaintenance();
         try initial_sources.sources.waitForSystemMetrics();
 

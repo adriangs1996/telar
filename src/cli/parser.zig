@@ -33,6 +33,10 @@ pub const PluginWorkerOptions = struct {
     context: frontend.config.CallbackContext,
 };
 
+pub const TapWorkerOptions = struct {
+    entry: [*:0]const u8,
+};
+
 pub const PluginCommand = enum { inspect, install, trust };
 
 pub const PluginOptions = struct {
@@ -189,6 +193,7 @@ pub const Cli = union(enum) {
     notification: NotificationOptions,
     config_check: ConfigCheckOptions,
     plugin_worker: PluginWorkerOptions,
+    tap_worker: TapWorkerOptions,
     plugin: PluginOptions,
     agent: AgentOptions,
     pane: PaneOptions,
@@ -296,6 +301,13 @@ pub const Cli = union(enum) {
                     .focused_pane_id = try std.fmt.parseUnsigned(u64, std.mem.span(args[8]), 10),
                 },
             } };
+        }
+        if (std.mem.eql(u8, first, "tap-worker")) {
+            if (args.len != 3) {
+                return error.InvalidTapWorkerArguments;
+            }
+
+            return .{ .tap_worker = .{ .entry = args[2] } };
         }
         if (std.mem.eql(u8, first, "plugin")) {
             if (args.len < 4) {
@@ -1904,4 +1916,16 @@ test "history stats parses periods and rejects unknown ones" {
 
     const misplaced = [_][*:0]const u8{ "telar", "history", "list", "--period", "week" };
     try std.testing.expectError(error.UnknownHistoryOption, Cli.parse(&misplaced, .empty));
+}
+
+test "CLI parses the internal tap worker and rejects extra arguments" {
+    const valid = [_][*:0]const u8{ "telar", "tap-worker", "/tmp/package/main.lua" };
+    const parsed = try Cli.parse(&valid, .empty);
+    try std.testing.expectEqualStrings("/tmp/package/main.lua", std.mem.span(parsed.tap_worker.entry));
+
+    const missing = [_][*:0]const u8{ "telar", "tap-worker" };
+    try std.testing.expectError(error.InvalidTapWorkerArguments, Cli.parse(&missing, .empty));
+
+    const extra = [_][*:0]const u8{ "telar", "tap-worker", "/tmp/main.lua", "extra" };
+    try std.testing.expectError(error.InvalidTapWorkerArguments, Cli.parse(&extra, .empty));
 }

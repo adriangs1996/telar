@@ -27,6 +27,14 @@ pub fn build(b: *std.Build) void {
 
     const lua_api = addLua(b, target, optimize, "lua");
     coverage.instrumentModule(lua_api);
+    const telar_lua = b.addModule("telar-lua", .{
+        .root_source_file = b.path("src/lua/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    telar_lua.addImport("lua-api", lua_api);
+    coverage.instrumentModule(telar_lua);
     const tls = b.dependency("tls", .{
         .target = target,
         .optimize = optimize,
@@ -83,6 +91,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     backend.addImport("telar-core", core);
+    backend.addImport("telar-lua", telar_lua);
     backend.addImport("ghostty-vt", ghostty_vt);
     backend.addImport("tls", tls);
     backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
@@ -102,6 +111,7 @@ pub fn build(b: *std.Build) void {
     });
     const freetype = addFreeType(b, target, optimize, coverage.enabled);
     frontend.addImport("telar-core", core);
+    frontend.addImport("telar-lua", telar_lua);
     frontend.addImport("lua-api", lua_api);
     frontend.addImport("freetype", freetype);
     if (target.result.os.tag == .macos) {
@@ -353,6 +363,7 @@ pub fn build(b: *std.Build) void {
         .backend = backend,
         .frontend = frontend,
         .lua_api = lua_api,
+        .telar_lua = telar_lua,
         .tls = tls,
         .freetype = freetype,
         .ghostty_vt = ghostty_vt,
@@ -580,6 +591,7 @@ const SuiteModules = struct {
     backend: *std.Build.Module,
     frontend: *std.Build.Module,
     lua_api: *std.Build.Module,
+    telar_lua: *std.Build.Module,
     tls: *std.Build.Module,
     freetype: *std.Build.Module,
     ghostty_vt: *std.Build.Module,
@@ -603,6 +615,7 @@ const SuiteModules = struct {
         tests.root_module.addImport("telar-backend", modules.backend);
         tests.root_module.addImport("telar-frontend", modules.frontend);
         tests.root_module.addImport("lua-api", modules.lua_api);
+        tests.root_module.addImport("telar-lua", modules.telar_lua);
         tests.root_module.addImport("tls", modules.tls);
         tests.root_module.addImport("freetype", modules.freetype);
         tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "include" }) });

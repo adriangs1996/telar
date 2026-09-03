@@ -21,6 +21,8 @@ pub const Capability = enum(u8) {
     clipboard_write,
     notifications,
     history_read,
+    history_write,
+    proxy_tap,
     runtime_control,
 
     pub fn parse(name: []const u8) !Capability {
@@ -41,6 +43,8 @@ pub const Capability = enum(u8) {
             .clipboard_write => "clipboard.write",
             .notifications => "notifications",
             .history_read => "history.read",
+            .history_write => "history.write",
+            .proxy_tap => "proxy.tap",
             .runtime_control => "runtime.control",
         };
     }

@@ -6,6 +6,10 @@ process. Each invocation starts an isolated one-shot Telar worker with an empty
 environment, safe Lua libraries, and hard memory, instruction, wall-time,
 stdout, stderr, and concurrency bounds.
 
+Plugins may also register a runtime-side exchange listener. Unlike action
+workers, each listener remains alive for the runtime lifetime so it can inspect
+completed ProxyTLS exchanges while every client is disconnected.
+
 ## Package identity
 
 `plugin.json` is declarative and is parsed before Lua executes:
@@ -103,3 +107,46 @@ A future API that exposes workspace files, process spawning, native code, or
 network access must state that a same-user plugin with such authority is
 full-trust code. A Lua VM is a containment boundary for failure and resource
 usage, not an operating-system sandbox.
+
+## Exchange listeners
+
+An enabled package that declares and is granted `proxy.tap` may return an
+`on_exchange` callback from its entrypoint:
+
+```lua
+local telar = require("telar")
+
+return {
+  on_exchange = function(exchange)
+    if exchange.status >= 500 then
+      return {
+        telar.effect.notification({
+          level = "warning",
+          title = "Upstream failure",
+          message = exchange.host,
+        }),
+      }
+    end
+  end,
+}
+```
+
+`proxy.tap` is full-trust authority. The callback receives unredacted request
+and response headers and decoded body bytes, including credentials such as
+`authorization` and cookies. Grant it only to code you have audited. Telar
+binds the grant to the exact package digest, copies the package into a private
+owner-only snapshot, and rehashes it before starting the worker.
+
+The callback receives one immutable table only after the whole exchange has
+finished. It may return at most 16 typed effects. `agent_evidence` requires
+`proxy.tap`; notifications additionally require `notifications`; command
+persistence additionally requires `history.write`. Each worker has bounded
+memory, execution time, frame size, stderr, queue depth, and restart rate.
+When a queue is full, the oldest observation is dropped. Proxy relay never
+waits for a listener.
+
+Tap packages are loaded when the runtime starts. Client configuration reload
+does not replace runtime tap workers because runtime reload does not yet exist.
+Restart the runtime after changing the enabled package set or trust grants.
+
+See [Proxy tap](flows/proxy-tap.md) for ownership and scheduling details.

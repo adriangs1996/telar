@@ -36,6 +36,7 @@ pub const NotificationOptions = parser.NotificationOptions;
 pub const PluginCommand = parser.PluginCommand;
 pub const PluginOptions = parser.PluginOptions;
 pub const PluginWorkerOptions = parser.PluginWorkerOptions;
+pub const TapWorkerOptions = parser.TapWorkerOptions;
 pub const RunOptions = parser.RunOptions;
 pub const RuntimeConfigSelection = runtime_connection.RuntimeConfigSelection;
 pub const RuntimeConnector = runtime_connection.RuntimeConnector;

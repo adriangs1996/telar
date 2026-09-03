@@ -1,18 +1,26 @@
-//! Quota-accounted Lua VM used by one client configuration generation.
+//! Quota-accounted Lua VM shared by isolated Telar workers.
 
 const std = @import("std");
 const lua = @import("lua-api").c;
-const config_model = @import("model.zig");
 
 const Io = std.Io;
 
+pub const default_memory_limit: usize = 16 * 1024 * 1024;
+pub const default_load_instruction_limit: u64 = 1_000_000;
+pub const default_load_deadline_ns: u64 = 100 * std.time.ns_per_ms;
 pub const default_callback_instruction_limit: u64 = 100_000;
 pub const default_callback_deadline_ns: u64 = 10 * std.time.ns_per_ms;
 pub const hook_instruction_interval: u32 = 1_000;
 
+pub const Limits = struct {
+    memory: usize = default_memory_limit,
+    instructions: u64 = default_load_instruction_limit,
+    deadline_after_ns: u64 = default_load_deadline_ns,
+};
+
 pub const Meter = struct {
     used: usize = 0,
-    limit: usize = config_model.default_memory_limit,
+    limit: usize = default_memory_limit,
 };
 
 pub const Execution = struct {
@@ -21,7 +29,7 @@ pub const Execution = struct {
     results: c_int,
 };
 
-/// Owns the Lua allocator and execution budgets for one configuration.
+/// Owns the Lua allocator and execution budgets for one isolated VM.
 ///
 /// ```zig
 /// const vm = try Vm.init(io, .{});
@@ -33,22 +41,22 @@ pub const Vm = struct {
     state: *lua.lua_State,
     meter: Meter,
     instruction_count: u64 = 0,
-    instruction_limit: u64 = config_model.default_load_instruction_limit,
-    deadline_ns: u64 = 0,
+    instruction_limit: u64,
+    deadline_ns: u64,
 
-    pub fn init(io: Io, limits: config_model.Limits) !*Vm {
-        const vm = std.heap.c_allocator.create(Vm) catch return error.OutOfMemory;
-        errdefer std.heap.c_allocator.destroy(vm);
-        vm.* = .{
+    pub fn init(io: Io, limits: Limits) !*Vm {
+        const owned = std.heap.c_allocator.create(Vm) catch return error.OutOfMemory;
+        errdefer std.heap.c_allocator.destroy(owned);
+        owned.* = .{
             .io = io,
             .state = undefined,
             .meter = .{ .limit = limits.memory },
             .instruction_limit = limits.instructions,
             .deadline_ns = monotonic(io) +| limits.deadline_after_ns,
         };
-        vm.state = lua.lua_newstate(allocate, vm, 0) orelse return error.OutOfMemory;
-        lua.lua_sethook(vm.state, instructionHook, lua.LUA_MASKCOUNT, hook_instruction_interval);
-        return vm;
+        owned.state = lua.lua_newstate(allocate, owned, 0) orelse return error.OutOfMemory;
+        lua.lua_sethook(owned.state, instructionHook, lua.LUA_MASKCOUNT, hook_instruction_interval);
+        return owned;
     }
 
     pub fn deinit(vm: *Vm) void {

@@ -11,6 +11,7 @@ pub const process = @import("process/root.zig");
 pub const history = @import("history/root.zig");
 pub const engine = @import("engine/root.zig");
 pub const proxy = @import("proxy/root.zig");
+pub const plugins = @import("plugins/root.zig");
 pub const media = @import("media/root.zig");
 pub const transport = @import("transport/root.zig");
 pub const runtime = @import("runtime/root.zig");

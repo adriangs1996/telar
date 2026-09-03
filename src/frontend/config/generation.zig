@@ -18,7 +18,7 @@ const plugins_config = @import("plugins.zig");
 const proxy_config = @import("proxy.zig");
 const session_config = @import("session.zig");
 const theme_config = @import("theme.zig");
-const vm_mod = @import("vm.zig");
+const lua_runtime = @import("telar-lua");
 const keybind = input.keybind;
 const kitty = @import("../graphics/root.zig").kitty;
 const icons = @import("../ui/root.zig").icons;
@@ -26,7 +26,6 @@ const theme_mod = @import("../ui/root.zig").theme;
 
 const Io = std.Io;
 const integer = lua_value.integer;
-const openLibrary = lua_value.openLibrary;
 const pop = lua_value.pop;
 const raiseLua = lua_value.raise;
 const string = lua_value.string;
@@ -34,9 +33,9 @@ const string = lua_value.string;
 pub const api_version: u16 = 2;
 pub const default_memory_limit = config_model.default_memory_limit;
 pub const default_load_instruction_limit = config_model.default_load_instruction_limit;
-pub const default_callback_instruction_limit = vm_mod.default_callback_instruction_limit;
-pub const default_callback_deadline_ns = vm_mod.default_callback_deadline_ns;
-pub const hook_instruction_interval = vm_mod.hook_instruction_interval;
+pub const default_callback_instruction_limit = lua_runtime.default_callback_instruction_limit;
+pub const default_callback_deadline_ns = lua_runtime.default_callback_deadline_ns;
+pub const hook_instruction_interval = lua_runtime.hook_instruction_interval;
 pub const max_bindings = config_model.max_bindings;
 pub const max_binding_keys = config_model.max_binding_keys;
 pub const max_binding_suffix_keys = max_binding_keys - 1;
@@ -97,8 +96,8 @@ pub const InputPaste = config_model.InputPaste;
 pub const InputDecision = config_model.InputDecision;
 pub const Limits = config_model.Limits;
 
-pub const Meter = vm_mod.Meter;
-pub const Vm = vm_mod.Vm;
+pub const Meter = lua_runtime.Meter;
+pub const Vm = lua_runtime.Vm;
 
 pub const Generation = struct {
     gpa: std.mem.Allocator,
@@ -164,7 +163,11 @@ pub const Generation = struct {
         generation.* = .{
             .gpa = gpa,
             .number = number,
-            .vm = try Vm.init(io, .{}),
+            .vm = try Vm.init(io, .{
+                .memory = config_model.default_memory_limit,
+                .instructions = config_model.default_load_instruction_limit,
+                .deadline_after_ns = (config_model.Limits{}).deadline_after_ns,
+            }),
             .config_dir_len = @intCast(config_dir.len),
         };
         @memcpy(generation.config_dir[0..config_dir.len], config_dir);
@@ -437,26 +440,7 @@ pub const Generation = struct {
     }
 
     fn openEnvironment(generation: *Generation) !void {
-        const state = generation.vm.state;
-        openLibrary(state, "_G", lua.luaopen_base);
-        openLibrary(state, lua.LUA_COLIBNAME, lua.luaopen_coroutine);
-        openLibrary(state, lua.LUA_MATHLIBNAME, lua.luaopen_math);
-        openLibrary(state, lua.LUA_STRLIBNAME, lua.luaopen_string);
-        openLibrary(state, lua.LUA_TABLIBNAME, lua.luaopen_table);
-        openLibrary(state, lua.LUA_UTF8LIBNAME, lua.luaopen_utf8);
-        for ([_][*:0]const u8{
-            "collectgarbage",
-            "dofile",
-            "getmetatable",
-            "load",
-            "loadfile",
-            "print",
-            "rawset",
-            "setmetatable",
-        }) |name| {
-            lua.lua_pushnil(state);
-            lua.lua_setglobal(state, name);
-        }
+        try lua_runtime.sandbox.open(generation.vm.state);
     }
 
     fn parseSnapshot(generation: *Generation, diagnostic: *Diagnostic) !void {

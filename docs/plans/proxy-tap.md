@@ -1,6 +1,6 @@
 # ProxyTLS tap and agent command persistence — handoff
 
-Status: P1 complete on 2026-09-03; P2-P7 not started. This document is the
+Status: P1-P2 complete on 2026-09-03; P3-P7 not started. This document is the
 handoff for the remaining implementation. Every file:line below was verified
 against commit `46db649` (`main`) on that date; symbols outlive line numbers,
 so search for the symbol when a line has moved.
@@ -358,6 +358,10 @@ traffic.
   `docs/flows/proxy-capture.md`.
 
 ### P2. Runtime-side Lua worker
+
+Status: complete on 2026-09-03. `zig fmt src`, `zig build check`, and
+`zig build test` pass. The worker flow is documented in
+`docs/flows/proxy-tap.md`.
 
 Goal: a trusted plugin with `proxy.tap` receives each captured exchange in
 a long-lived, isolated Lua process supervised by the runtime, and returns a

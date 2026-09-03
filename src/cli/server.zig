@@ -7,6 +7,7 @@ const frontend = @import("telar-frontend");
 const config = @import("config.zig");
 const parser = @import("parser.zig");
 const runtime_connection = @import("runtime_connection.zig");
+const plugin_cli = @import("plugin.zig");
 
 const Io = std.Io;
 const File = Io.File;
@@ -103,6 +104,11 @@ const Launch = struct {
     proxy_bundle_buffer: [std.fs.max_path_bytes]u8 = undefined,
     proxy_options: ?backend.runtime.ProxyOptions = null,
     proxy_capture: backend.proxy.CaptureConfig = .{},
+    tap_specs: [backend.plugins.max_workers]backend.plugins.Spec = undefined,
+    tap_spec_count: u8 = 0,
+    tap_snapshot_buffer: [std.fs.max_path_bytes]u8 = undefined,
+    tap_snapshot_directory: ?[]const u8 = null,
+    trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
 
     fn prepare(launch: *Launch, preparation: Preparation) !void {
         launch.* = .{
@@ -124,6 +130,9 @@ const Launch = struct {
 
         if (launch.options.mode != .background_launcher) {
             try launch.prepareRuntimeStorage();
+            if (launch.config_generation) |generation| {
+                try launch.prepareTapPlugins(generation);
+            }
         }
     }
 
@@ -222,6 +231,52 @@ const Launch = struct {
         }
     }
 
+    fn prepareTapPlugins(launch: *Launch, generation: *frontend.config.Generation) !void {
+        const trust_path = try plugin_cli.trustPath(launch.process.minimal.environ, &launch.trust_path_buffer);
+        const trust = try plugin_cli.loadTrustStore(launch.process, trust_path);
+        const registry = try frontend.plugins.Registry.loadWithTrust(
+            launch.process.gpa,
+            launch.process.io,
+            generation.configDir(),
+            generation.pluginSlice(),
+            &trust,
+        );
+
+        for (registry.packages[0..registry.count]) |*package| {
+            if (!package.manifest.capabilities.contains(.proxy_tap)) continue;
+            const granted = grantedCapabilities(&trust, package);
+            if (!granted.contains(.proxy_tap)) continue;
+            if (launch.tap_spec_count == backend.plugins.max_workers) return error.TooManyTapPlugins;
+            const snapshot_root = try launch.ensureTapSnapshot();
+            var package_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const package_path = try std.fmt.bufPrint(&package_buffer, "{s}/package-{d}", .{ snapshot_root, launch.tap_spec_count });
+            try frontend.plugins.installPackage(launch.process.gpa, launch.process.io, package, package_path);
+            const copied = try frontend.plugins.inspectPackage(launch.process.gpa, launch.process.io, package_path);
+            if (!std.mem.eql(u8, &copied.digest, &package.digest)) return error.PluginChangedDuringInstall;
+            var entry_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const entry = try std.fmt.bufPrint(&entry_buffer, "{s}/{s}", .{ package_path, copied.manifest.entry() });
+            launch.tap_specs[launch.tap_spec_count] = try backend.plugins.Spec.init(launch.tap_spec_count, generation.number, .{
+                .id = copied.manifest.id(),
+                .entry = entry,
+                .digest = copied.digest,
+                .declared = copied.manifest.capabilities,
+                .granted = granted,
+            });
+            launch.tap_spec_count += 1;
+        }
+    }
+
+    fn ensureTapSnapshot(launch: *Launch) ![]const u8 {
+        if (launch.tap_snapshot_directory) |path| return path;
+        var nonce: [16]u8 = undefined;
+        try launch.process.io.randomSecure(&nonce);
+        const nonce_hex = std.fmt.bytesToHex(nonce, .lower);
+        const path = try std.fmt.bufPrint(&launch.tap_snapshot_buffer, "/tmp/telar-tap-workers-{d}-{s}", .{ std.c.getuid(), &nonce_hex });
+        try Io.Dir.cwd().createDir(launch.process.io, path, File.Permissions.fromMode(0o700));
+        launch.tap_snapshot_directory = path;
+        return path;
+    }
+
     fn runtimeInitialization(launch: *const Launch) backend.runtime.Initialization {
         return .{
             .dependencies = .{
@@ -236,6 +291,7 @@ const Launch = struct {
                 .history_filters = launch.history_filters,
                 .history_output_capture = launch.history_output_capture,
                 .proxy = launch.proxy_options,
+                .plugins = launch.tap_specs[0..launch.tap_spec_count],
                 .agent_descriptions = launch.agent_description_options,
                 .engine = launch.engine_options,
                 .agent_manifests = launch.agent_manifests,
@@ -297,6 +353,10 @@ const Launch = struct {
     }
 
     fn deinit(launch: *Launch) void {
+        if (launch.tap_snapshot_directory) |directory| {
+            Io.Dir.cwd().deleteTree(launch.process.io, directory) catch {};
+            launch.tap_snapshot_directory = null;
+        }
         if (launch.default_proxy_directory) |directory| {
             launch.process.gpa.free(directory);
             launch.default_proxy_directory = null;
@@ -311,6 +371,16 @@ const Launch = struct {
         }
     }
 };
+
+fn grantedCapabilities(trust: *const core.plugin.TrustStore, package: *const frontend.plugins.Package) core.plugin.CapabilitySet {
+    var granted = core.plugin.CapabilitySet.initEmpty();
+    for (trust.entries[0..trust.count]) |entry| {
+        if (entry.grant.plugin_hash != core.plugin.stableId(package.manifest.id())) continue;
+        if (!std.mem.eql(u8, &entry.grant.digest, &package.digest)) continue;
+        granted.setUnion(entry.grant.capabilities);
+    }
+    return granted;
+}
 
 fn stop(init: std.process.Init, connector: *const RuntimeConnector) !void {
     var connection = connector.connect() catch |err| switch (err) {

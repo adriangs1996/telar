@@ -77,6 +77,9 @@ pub fn Dispatcher(comptime Application: type) type {
                 .proxy_capture => |result| {
                     try AgentEvents.handleProxyCapture(application, result);
                 },
+                .plugin_effects => |result| {
+                    try AgentEvents.handlePluginEffects(application, result);
+                },
                 .agent_tick => |result| {
                     try AgentEvents.handleMaintenance(application, result);
                 },

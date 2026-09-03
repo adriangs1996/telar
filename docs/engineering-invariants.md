@@ -222,6 +222,8 @@ A design is incomplete while any item is unknown.
   action.
 - Observation failure never changes the forwarded HTTP, HTTP/2, TLS, or PTY
   stream.
+- Exchange listeners receive only whole completed exchanges. Their bounded
+  queues drop obsolete work, and proxy relay never waits for a listener.
 
 ## Lua configuration
 

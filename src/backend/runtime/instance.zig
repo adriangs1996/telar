@@ -92,6 +92,7 @@ pub const Runtime = struct {
             .history_service = runtime.resources.history.service(),
             .engine_service = runtime.resources.engineService(),
             .proxy_runtime = &runtime.resources.proxy,
+            .plugin_service = runtime.resources.pluginService(),
             .telemetry_available = runtime.resources.telemetry.available(),
         };
 
@@ -112,6 +113,7 @@ pub const Runtime = struct {
             .session_path = options.session_path,
             .resume_agents = options.resume_agents,
             .proxy_runtime = &runtime.resources.proxy,
+            .plugin_service = runtime.resources.pluginService(),
             .agent_description_options = options.agent_descriptions,
             .engine_service = runtime.resources.engineService(),
             .launch_fault = options.launch_fault,
@@ -177,6 +179,7 @@ fn executeRuntimeShutdownStep(runtime: *Runtime, step: runtime_shutdown_mod.Step
         .stop_panes => runtime.application.shutdownStep(.stop_panes),
         .cancel_actors => runtime.loop.cancel(),
         .destroy_proxy => runtime.resources.proxy.deinit(),
+        .destroy_plugins => runtime.resources.plugins.deinit(),
         .destroy_listener => runtime.resources.listener.deinit(runtime.resources.io()),
         .destroy_pending_admission => runtime.application.shutdownStep(.destroy_pending_admission),
         .release_client_actor_claims => runtime.application.shutdownStep(.release_client_actor_claims),
