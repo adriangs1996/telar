@@ -95,7 +95,9 @@ pub const Authority = struct {
     /// not go through the proxy — and every tool that talks to something else —
     /// starts failing with "unable to get issuer cert". The child must trust the
     /// real world plus us.
-    pub fn writeBundle(self: *const Authority, io: Io, gpa: std.mem.Allocator, out_path: []const u8) Error!void {
+    pub fn writeBundle(self: *const Authority, resources: Resources, out_path: []const u8) Error!void {
+        const io = resources.io;
+        const gpa = resources.allocator;
         const cwd: Io.Dir = .cwd();
 
         const roots = readSystemRoots(io, gpa) catch &[_]u8{};

@@ -497,7 +497,7 @@ pub fn main(init: std.process.Init) !void {
     const proxy_port = if (authority != null) proxy.reservePort(8099, 20) else null;
     if (proxy_port) |port| {
         if (authority) |a| {
-            a.writeBundle(io, init.gpa, ca_bundle_path) catch {};
+            a.writeBundle(.{ .io = io, .allocator = init.gpa }, ca_bundle_path) catch {};
         }
         exportProxyEnv(port);
         exportTrustEnv();
