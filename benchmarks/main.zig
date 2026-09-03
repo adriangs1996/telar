@@ -191,10 +191,10 @@ fn timestamp(io: Io) u64 {
     return @intCast(Io.Clock.awake.now(io).nanoseconds);
 }
 
-fn timed(io: Io, context: anytype, iterations: usize, comptime run: fn (@TypeOf(context), usize) anyerror!u64) !u64 {
-    const started = timestamp(io);
-    const checksum = try run(context, iterations);
-    const elapsed = timestamp(io) - started;
+fn timed(input: anytype, iterations: usize, comptime run: fn (@TypeOf(input.context), usize) anyerror!u64) !u64 {
+    const started = timestamp(input.io);
+    const checksum = try run(input.context, iterations);
+    const elapsed = timestamp(input.io) - started;
     std.mem.doNotOptimizeAway(checksum);
     return elapsed;
 }
@@ -202,7 +202,7 @@ fn timed(io: Io, context: anytype, iterations: usize, comptime run: fn (@TypeOf(
 fn measure(io: Io, config: Config, context: anytype, comptime run: fn (@TypeOf(context), usize) anyerror!u64) !Measurement {
     var iterations: usize = 1;
     while (true) {
-        const elapsed = try timed(io, context, iterations, run);
+        const elapsed = try timed(.{ .io = io, .context = context }, iterations, run);
         if (elapsed >= config.sample_ns / 4 or iterations >= 1 << 30) {
             if (elapsed != 0 and elapsed < config.sample_ns) {
                 const scaled = @as(u128, iterations) * config.sample_ns / elapsed;
@@ -213,11 +213,11 @@ fn measure(io: Io, config: Config, context: anytype, comptime run: fn (@TypeOf(c
         iterations *= 4;
     }
 
-    _ = try timed(io, context, iterations, run);
+    _ = try timed(.{ .io = io, .context = context }, iterations, run);
 
     var samples: [max_samples]u64 = undefined;
     for (samples[0..config.samples]) |*sample| {
-        const elapsed = try timed(io, context, iterations, run);
+        const elapsed = try timed(.{ .io = io, .context = context }, iterations, run);
         sample.* = elapsed / iterations;
     }
     std.sort.heap(u64, samples[0..config.samples], {}, std.sort.asc(u64));
