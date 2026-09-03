@@ -113,9 +113,14 @@ const FrameFile = struct {
     path_len: usize = 0,
     map: []align(std.heap.page_size_min) u8 = &.{},
 
-    fn create(file: *FrameFile, directory: []const u8, slot: usize, byte_len: usize) !void {
+    const CreateOptions = struct {
+        slot: usize,
+        byte_len: usize,
+    };
+
+    fn create(file: *FrameFile, directory: []const u8, options: CreateOptions) !void {
         const pid: u32 = @bitCast(std.c.getpid());
-        const printed = try std.fmt.bufPrintZ(&file.path, "{s}/telar-frame-source-{x}-{d}.rgba", .{ directory, pid, slot });
+        const printed = try std.fmt.bufPrintZ(&file.path, "{s}/telar-frame-source-{x}-{d}.rgba", .{ directory, pid, options.slot });
         file.path_len = printed.len;
         _ = std.c.unlink(printed);
         const fd = std.c.open(printed, .{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true }, @as(std.c.mode_t, 0o600));
@@ -123,12 +128,12 @@ const FrameFile = struct {
             return error.FrameFileUnavailable;
         }
         defer _ = std.c.close(fd);
-        if (std.c.ftruncate(fd, @intCast(byte_len)) != 0) {
+        if (std.c.ftruncate(fd, @intCast(options.byte_len)) != 0) {
             return error.FrameFileUnavailable;
         }
         file.map = try std.posix.mmap(
             null,
-            byte_len,
+            options.byte_len,
             .{ .READ = true, .WRITE = true },
             std.c.MAP{ .TYPE = .SHARED },
             fd,
@@ -179,7 +184,7 @@ pub fn main(init: std.process.Init) !void {
     defer for (&files) |*file| file.destroy();
     if (options.transport == .file) {
         const directory = std.c.getenv("TMPDIR") orelse "/tmp";
-        for (&files, 0..) |*file, slot| try file.create(std.mem.span(directory), slot, byte_len);
+        for (&files, 0..) |*file, slot| try file.create(std.mem.span(directory), .{ .slot = slot, .byte_len = byte_len });
     }
 
     const stdout: std.Io.File = .stdout();
