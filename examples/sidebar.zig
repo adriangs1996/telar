@@ -735,7 +735,7 @@ fn drawTaskLine(context: DrawContext, position: TaskLine) void {
     switch (line) {
         0 => {
             // The chip is placed first so the title knows what room is left.
-            const chip_width = if (task.chip == .none) 0 else drawTaskChip(state, buf, body, index, task.chip);
+            const chip_width = if (task.chip == .none) 0 else drawTaskChip(.{ .state = state, .buffer = buf, .area = body }, index, task.chip);
             _ = buf.writeTruncated(body, body.x, y, task.title, body.w -| chip_width -| 1, .{
                 .fg = white,
                 .bg = row_bg,
@@ -795,7 +795,10 @@ fn chipWidth(chip: Chip) u16 {
     return ui.measure(chip.glyph()) + 1 + ui.measure(chip.label()) + 2;
 }
 
-fn drawTaskChip(state: *State, buf: *ui.Buffer, area: ui.Rect, index: usize, chip: Chip) u16 {
+fn drawTaskChip(context: DrawContext, index: usize, chip: Chip) u16 {
+    const state = context.state;
+    const buf = context.buffer;
+    const area = context.area;
     const width = chipWidth(chip);
     if (width > area.w) {
         return 0;
