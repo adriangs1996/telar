@@ -44,7 +44,20 @@ pub fn reservePort(first: u16, count: u16) ?u16 {
 }
 
 /// Accepts tunnels until cancelled. One task per connection.
-pub fn serve(io: Io, port: u16, authority: ca.Authority, gpa: std.mem.Allocator, queue: *event.Queue) Io.Cancelable!void {
+pub const ServeContext = struct {
+    io: Io,
+    port: u16,
+    authority: ca.Authority,
+    allocator: std.mem.Allocator,
+    queue: *event.Queue,
+};
+
+pub fn serve(context: ServeContext) Io.Cancelable!void {
+    const io = context.io;
+    const port = context.port;
+    const authority = context.authority;
+    const gpa = context.allocator;
+    const queue = context.queue;
     const address = net.IpAddress.parse("127.0.0.1", port) catch return;
     var server = address.listen(io, .{ .reuse_address = true }) catch return;
     defer server.deinit(io);

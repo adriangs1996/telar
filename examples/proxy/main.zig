@@ -575,7 +575,13 @@ pub fn main(init: std.process.Init) !void {
     }});
     try actors.concurrent(io, signalActor, .{ io, wake, &queue });
     if (proxy_port) |port| {
-        try actors.concurrent(io, proxy.serve, .{ io, port, authority.?, init.gpa, &queue });
+        try actors.concurrent(io, proxy.serve, .{.{
+            .io = io,
+            .port = port,
+            .authority = authority.?,
+            .allocator = init.gpa,
+            .queue = &queue,
+        }});
     }
 
     // The main loop owns every mutable decision and is the single ordering
