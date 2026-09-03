@@ -638,12 +638,19 @@ fn present(context: PresentContext) !void {
     _ = try screen.flush(writer);
 }
 
-fn graphicsReady(capabilities: *const HostCapabilities, emulator: *const Emulator, mirror: *const GraphicsMirror, store: *const kitty.Store) bool {
-    const cell = capabilities.cellSize(0, 0);
-    if (capabilities.kitty_graphics != .supported or cell.width == 0 or cell.height == 0) {
+const GraphicsReadiness = struct {
+    capabilities: *const HostCapabilities,
+    emulator: *const Emulator,
+    mirror: *const GraphicsMirror,
+    store: *const kitty.Store,
+};
+
+fn graphicsReady(state: GraphicsReadiness) bool {
+    const cell = state.capabilities.cellSize(0, 0);
+    if (state.capabilities.kitty_graphics != .supported or cell.width == 0 or cell.height == 0) {
         return false;
     }
-    return store.damage or mirror.ready(emulator);
+    return state.store.damage or state.mirror.ready(state.emulator);
 }
 
 fn applyPaneGeometry(io: Io, session: *pty.Session, emulator: *Emulator, model: *multiplexer.Model, graphics_store: *kitty.Store, frame: FrameGeometry, capabilities: *const HostCapabilities) !bool {
@@ -808,8 +815,12 @@ pub fn main(init: std.process.Init) !void {
     var child_closed = false;
 
     while (!stop and !child_closed) {
-        const scheduled = redraw_cells or rebuild_frame or
-            graphicsReady(&capabilities, &emulator, &mirror, &graphics_store);
+        const scheduled = redraw_cells or rebuild_frame or graphicsReady(.{
+            .capabilities = &capabilities,
+            .emulator = &emulator,
+            .mirror = &mirror,
+            .store = &graphics_store,
+        });
         if (scheduled) {
             const deadline_ns = last_frame_ns + frame_interval_ns;
             if (monotonic(io) < deadline_ns) {
@@ -888,7 +899,12 @@ pub fn main(init: std.process.Init) !void {
             rebuild_frame = false;
             should_present = true;
         }
-        if (should_present or graphicsReady(&capabilities, &emulator, &mirror, &graphics_store)) {
+        if (should_present or graphicsReady(.{
+            .capabilities = &capabilities,
+            .emulator = &emulator,
+            .mirror = &mirror,
+            .store = &graphics_store,
+        })) {
             try present(.{
                 .screen = &screen,
                 .writer = writer,
