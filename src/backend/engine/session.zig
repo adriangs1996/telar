@@ -17,6 +17,11 @@ const Status = types.Status;
 
 const AskError = error{ Timeout, ReadFailed, Closed, Rejected, InvalidOutput, WriteFailed };
 
+pub const Request = struct {
+    prompt: []const u8,
+    response: *Response,
+};
+
 pub const Session = struct {
     gpa: std.mem.Allocator,
     timeout_ms: u32,
@@ -73,10 +78,10 @@ pub const Session = struct {
     /// session deadline. The text is copied into `response` on success.
     ///
     /// ```zig
-    /// response.status = session.ask(io, prompt.slice(), &response);
+    /// response.status = session.ask(io, .{ .prompt = prompt.slice(), .response = &response });
     /// ```
-    pub fn ask(session: *Session, io: Io, prompt: []const u8, response: *Response) Status {
-        session.exchange(io, prompt, response) catch |err| return switch (err) {
+    pub fn ask(session: *Session, io: Io, request: Request) Status {
+        session.exchange(io, request.prompt, request.response) catch |err| return switch (err) {
             error.Timeout => .timeout,
             error.InvalidOutput => .invalid_output,
             error.WriteFailed, error.ReadFailed, error.Closed, error.Rejected => .failed,
@@ -183,7 +188,7 @@ fn askOnce(io: Io, arguments: []const []const u8, timeout_ms: u32) !Status {
     defer session.close(io);
 
     var response: Response = .{ .purpose = fakes.purpose, .status = .failed };
-    return session.ask(io, "Create a title", &response);
+    return session.ask(io, .{ .prompt = "Create a title", .response = &response });
 }
 
 test "a session answers a prompt with the settled assistant text" {
@@ -192,11 +197,11 @@ test "a session answers a prompt with the settled assistant text" {
     defer session.close(io);
 
     var response: Response = .{ .purpose = fakes.purpose, .status = .failed };
-    try std.testing.expectEqual(Status.success, session.ask(io, "Create a title", &response));
+    try std.testing.expectEqual(Status.success, session.ask(io, .{ .prompt = "Create a title", .response = &response }));
     try std.testing.expectEqualStrings("Improve agent sidebar", response.textSlice());
 
     // The same child answers again.
-    try std.testing.expectEqual(Status.success, session.ask(io, "Create a title", &response));
+    try std.testing.expectEqual(Status.success, session.ask(io, .{ .prompt = "Create a title", .response = &response }));
     try std.testing.expectEqualStrings("Improve agent sidebar", response.textSlice());
 }
 

@@ -157,7 +157,7 @@ pub const Service = struct {
             return response;
         };
 
-        response.status = session.ask(io, prompt.slice(), &response);
+        response.status = session.ask(io, .{ .prompt = prompt.slice(), .response = &response });
         session.touch(io);
 
         switch (response.status) {
