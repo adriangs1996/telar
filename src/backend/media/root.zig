@@ -175,15 +175,17 @@ const Batch = struct {
         // Output slices are one byte stream. Merge adjacent PTY reads so the
         // event bound measures output/resize ordering rather than scheduler
         // granularity; TerminalStream is required to be slice-independent.
-        if (batch.event_count != 0) switch (batch.events[batch.event_count - 1]) {
-            .output => |output| {
-                if (@as(usize, output.offset) + output.len == offset) {
-                    batch.events[batch.event_count - 1].output.len += @intCast(bytes.len);
-                    return true;
-                }
-            },
-            .resize => {},
-        };
+        if (batch.event_count != 0) {
+            switch (batch.events[batch.event_count - 1]) {
+                .output => |output| {
+                    if (@as(usize, output.offset) + output.len == offset) {
+                        batch.events[batch.event_count - 1].output.len += @intCast(bytes.len);
+                        return true;
+                    }
+                },
+                .resize => {},
+            }
+        }
         if (batch.event_count == batch.events.len) {
             batch.len = offset;
             return false;
