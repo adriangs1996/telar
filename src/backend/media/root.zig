@@ -692,7 +692,9 @@ fn sharedFrameAvailable(resource: FrameResource) bool {
     }
     var name_buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
     Decoder.decode(name_buffer[0..name_len], resource.encoded_name) catch return false;
-    if (std.mem.indexOfScalar(u8, name_buffer[0..name_len], 0) != null) return false;
+    if (std.mem.indexOfScalar(u8, name_buffer[0..name_len], 0) != null) {
+        return false;
+    }
     name_buffer[name_len] = 0;
     const name: [:0]const u8 = name_buffer[0..name_len :0];
     const fd = std.c.shm_open(
