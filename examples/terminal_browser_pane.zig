@@ -584,7 +584,14 @@ fn drainResponses(io: Io, session: *pty.Session, emulator: *Emulator) !void {
     }
 }
 
-fn drawCells(screen: *term.Screen, emulator: *Emulator, frame: FrameGeometry, rebuild_frame: bool) !void {
+const CellDrawOptions = struct {
+    frame: FrameGeometry,
+    rebuild_frame: bool,
+};
+
+fn drawCells(screen: *term.Screen, emulator: *Emulator, options: CellDrawOptions) !void {
+    const frame = options.frame;
+    const rebuild_frame = options.rebuild_frame;
     const buffer = screen.buffer();
     if (rebuild_frame) {
         drawFrame(buffer, frame);
@@ -761,7 +768,7 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    try drawCells(&screen, &emulator, frame, true);
+    try drawCells(&screen, &emulator, .{ .frame = frame, .rebuild_frame = true });
     try present(
         &screen,
         writer,
@@ -857,7 +864,7 @@ pub fn main(init: std.process.Init) !void {
         }
 
         if (redraw_cells or rebuild_frame) {
-            try drawCells(&screen, &emulator, frame, rebuild_frame);
+            try drawCells(&screen, &emulator, .{ .frame = frame, .rebuild_frame = rebuild_frame });
             redraw_cells = false;
             rebuild_frame = false;
             should_present = true;
