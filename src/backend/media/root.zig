@@ -387,7 +387,9 @@ pub const Pipeline = struct {
     }
 
     fn resetState(pipeline: *Pipeline, size: schema.TerminalSize) !void {
-        if (pipeline.enabled) pipeline.stream.deinit();
+        if (pipeline.enabled) {
+            pipeline.stream.deinit();
+        }
         pipeline.enabled = false;
         pipeline.terminal.fullReset();
         pipeline.stream = pipeline.newStream();
