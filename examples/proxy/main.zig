@@ -220,7 +220,7 @@ fn outputActor(io: Io, gpa: std.mem.Allocator, master: File, host_tty: File, row
     var last_title: event.CommandLine = .{};
 
     var capture: capture_mod.Capture = undefined;
-    const capturing = if (capture.init(io, gpa, rows, cols)) true else |_| false;
+    const capturing = if (capture.init(.{ .io = io, .allocator = gpa, .rows = rows, .cols = cols })) true else |_| false;
     defer if (capturing) capture.deinit();
 
     while (true) {

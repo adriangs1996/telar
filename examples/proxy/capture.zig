@@ -29,18 +29,26 @@ pub const Capture = struct {
     /// far from enough for a full build log, which is the intent.
     const max_scrollback_bytes: usize = 256 * 1024;
 
+    pub const InitOptions = struct {
+        io: std.Io,
+        allocator: std.mem.Allocator,
+        rows: u16,
+        cols: u16,
+    };
+
     /// Initialises in place. The stream holds a pointer to `terminal`, so a
     /// Capture must not be copied or moved after this returns.
-    pub fn init(self: *Capture, io: std.Io, gpa: std.mem.Allocator, rows: u16, cols: u16) !void {
+    pub fn init(self: *Capture, options: InitOptions) !void {
+        const gpa = options.allocator;
         // A pty with no window size reports 0x0, and a terminal of zero rows
         // trips an assertion deep inside PageList. Fall back to a classic
         // 24x80 rather than crashing the proxy over a cosmetic detail.
-        const safe_rows = if (rows == 0) 24 else rows;
-        const safe_cols = if (cols == 0) 80 else cols;
+        const safe_rows = if (options.rows == 0) 24 else options.rows;
+        const safe_cols = if (options.cols == 0) 80 else options.cols;
 
         self.* = .{
             .gpa = gpa,
-            .terminal = try .init(io, gpa, .{
+            .terminal = try .init(options.io, gpa, .{
                 .cols = safe_cols,
                 .rows = safe_rows,
                 .max_scrollback_bytes = max_scrollback_bytes,
