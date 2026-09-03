@@ -514,7 +514,9 @@ fn parseFileQueryControl(control: []const u8) ?FileQueryControl {
                 query = true;
             },
             't' => {
-                if (file or !std.mem.eql(u8, value, "f")) return null;
+                if (file or !std.mem.eql(u8, value, "f")) {
+                    return null;
+                }
                 file = true;
             },
             'i' => image_id = parseUniqueU32(image_id, value) orelse return null,
