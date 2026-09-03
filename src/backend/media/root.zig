@@ -807,7 +807,9 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
             's' => width = parseUniqueU32(width, value) orelse return null,
             'v' => height = parseUniqueU32(height, value) orelse return null,
             'C' => {
-                if (cursor_static or !std.mem.eql(u8, value, "1")) return null;
+                if (cursor_static or !std.mem.eql(u8, value, "1")) {
+                    return null;
+                }
                 cursor_static = true;
             },
             'q' => {
