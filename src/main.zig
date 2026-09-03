@@ -53,6 +53,7 @@ pub fn main(init: std.process.Init) !void {
         .api => |options| try cli_mod.api.run(init, options),
         .hook => |options| try cli_mod.hook.run(init, options),
         .integration => |options| std.process.exit(try cli_mod.integration.run(init, options)),
+        .proxy => |options| std.process.exit(try cli_mod.proxy.run(init, options)),
         .skill => try cli_mod.skill.run(init),
         .run => |options| {
             std.process.exit(try cli_mod.client.run(init, options));

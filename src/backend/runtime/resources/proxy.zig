@@ -73,16 +73,17 @@ const ProxyOwner = Owner(proxy_mod.Proxy, destroyProxy);
 pub const Runtime = struct {
     owner: ProxyOwner,
     scope: schema.ProxyScope,
+    system_trusted: bool,
     captures: proxy_mod.CaptureJoiner,
     capture_sink: ?CaptureSink = null,
 
     /// Creates the configured proxy, or an inactive owner when disabled.
     ///
     /// ```zig
-    /// var proxy_runtime = try Runtime.init(io, gpa, config);
+    /// var proxy_runtime = try Runtime.init(io, gpa, config, false);
     /// defer proxy_runtime.deinit();
     /// ```
-    pub fn init(io: Io, gpa: std.mem.Allocator, config: ?Config) !Runtime {
+    pub fn init(io: Io, gpa: std.mem.Allocator, config: ?Config, system_trusted: bool) !Runtime {
         const owned_proxy = if (config) |value|
             try proxy_mod.Proxy.create(io, gpa, value)
         else
@@ -93,6 +94,7 @@ pub const Runtime = struct {
         return .{
             .owner = .init(owned_proxy),
             .scope = if (config) |value| configuredScope(value.intercept_hosts) else .exact,
+            .system_trusted = system_trusted,
             .captures = .init(timeout_ms),
             .capture_sink = null,
         };
@@ -123,6 +125,16 @@ pub const Runtime = struct {
     /// ```
     pub fn interceptionScope(runtime: *const Runtime) schema.ProxyScope {
         return runtime.scope;
+    }
+
+    /// Reports whether Telar's short-lived authority is installed in the
+    /// platform trust store, independently of whether the proxy is active.
+    ///
+    /// ```zig
+    /// if (proxy_runtime.systemTrusted()) warnPersistentTrust();
+    /// ```
+    pub fn systemTrusted(runtime: *const Runtime) bool {
+        return runtime.system_trusted;
     }
 
     /// Schedules one observation receive when the proxy is active.
@@ -345,11 +357,12 @@ test "schedule failure preserves ownership and deinit destroys exactly once" {
 }
 
 test "disabled runtime exposes zero state and skips receive scheduling" {
-    var runtime = try Runtime.init(std.testing.io, std.testing.allocator, null);
+    var runtime = try Runtime.init(std.testing.io, std.testing.allocator, null, true);
     var capture: ScheduleCapture = .{};
 
     try runtime.schedule(capture.scheduler());
     try std.testing.expect(!runtime.active());
+    try std.testing.expect(runtime.systemTrusted());
     try std.testing.expect(runtime.capability() == null);
     try std.testing.expectEqualDeep(proxy_mod.MetricsSnapshot{}, runtime.metrics());
     try std.testing.expectEqual(@as(usize, 0), capture.count);
@@ -362,7 +375,7 @@ test "configured runtime schedules its owned proxy and tears it down" {
     const io = std.testing.io;
     var files = try ProxyTestFiles.init(io);
     defer files.deinit();
-    var runtime = try Runtime.init(io, std.testing.allocator, files.config());
+    var runtime = try Runtime.init(io, std.testing.allocator, files.config(), false);
     var capture: ScheduleCapture = .{ .failure = error.SchedulerUnavailable };
 
     try std.testing.expectError(error.SchedulerUnavailable, runtime.schedule(capture.scheduler()));

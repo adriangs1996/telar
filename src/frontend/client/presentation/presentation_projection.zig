@@ -48,6 +48,7 @@ pub fn projection(client: *const Client) presenter.Projection {
         .suggestion = &client.model.suggestion,
         .proxy_tls_active = client.model.proxyTlsActive(),
         .proxy_tls_scope = client.model.proxyTlsScope(),
+        .proxy_system_trusted = client.model.proxySystemTrusted(),
         .system_metrics = client.model.systemMetrics(),
         .bar_state = client.model.barState(),
         .status_mode = client.host_input.statusMode(client.model.copyModeActive()),

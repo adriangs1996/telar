@@ -16,6 +16,7 @@ pub const Error = error{
 };
 
 const ca_seconds: i64 = 3650 * 24 * 60 * 60;
+pub const system_ca_seconds: i64 = 30 * 24 * 60 * 60;
 const leaf_seconds: i64 = 30 * 24 * 60 * 60;
 const backdate_seconds: i64 = 3600;
 const max_cert_len = 1024;
@@ -69,6 +70,82 @@ pub const Authority = struct {
     /// var authority = try Authority.loadOrCreate(resources, files);
     /// ```
     pub fn loadOrCreate(resources: Resources, files: AuthorityFiles) Error!Authority {
+        return loadOrCreateWithValidity(resources, files, ca_seconds);
+    }
+
+    /// Loads a complete system-trust authority or creates a new 30-day one.
+    /// The caller owns installation in the platform trust store.
+    ///
+    /// ```zig
+    /// var authority = try Authority.loadOrCreateSystem(resources, files);
+    /// ```
+    pub fn loadOrCreateSystem(resources: Resources, files: AuthorityFiles) Error!Authority {
+        return loadOrCreateWithValidity(resources, files, system_ca_seconds);
+    }
+
+    /// Loads an existing authority without creating missing files.
+    ///
+    /// ```zig
+    /// const authority = try Authority.loadExisting(resources, files);
+    /// ```
+    pub fn loadExisting(resources: Resources, files: AuthorityFiles) Error!Authority {
+        try validateStoredFile(resources.io, files.key);
+        try validateStoredFile(resources.io, files.certificate);
+
+        return .{ .pair = try load(resources, files) };
+    }
+
+    /// Creates a new 30-day authority at unused paths. This is the rotation
+    /// primitive; it never overwrites the currently installed authority.
+    ///
+    /// ```zig
+    /// var authority = try Authority.createSystem(resources, temporary_files);
+    /// ```
+    pub fn createSystem(resources: Resources, files: AuthorityFiles) Error!Authority {
+        var pair = try generate(resources.io, system_ca_seconds);
+        defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
+        try persist(resources.io, &pair, files);
+        return .{ .pair = pair };
+    }
+
+    /// Returns the uppercase SHA-1 certificate fingerprint accepted by the
+    /// macOS `security -Z` option.
+    ///
+    /// ```zig
+    /// const fingerprint = authority.fingerprint();
+    /// ```
+    pub fn fingerprint(authority: *const Authority) [40]u8 {
+        var digest: [std.crypto.hash.Sha1.digest_length]u8 = undefined;
+        std.crypto.hash.Sha1.hash(authority.pair.certDer(), &digest, .{});
+        return std.fmt.bytesToHex(digest, .upper);
+    }
+
+    /// Reports whether the certificate expires within `seconds` from now.
+    ///
+    /// ```zig
+    /// if (authority.expiresWithin(io, 86400)) rotate();
+    /// ```
+    pub fn expiresWithin(authority: *const Authority, io: Io, seconds: u64) Error!bool {
+        const parsed = (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse() catch
+            return error.ReadFailed;
+        const now: u64 = @intCast(@max(Io.Clock.real.now(io).toSeconds(), 0));
+        return parsed.validity.not_after <= now +| seconds;
+    }
+
+    /// Reports whether the certificate has Telar's bounded system-trust
+    /// lifetime rather than the ten-year private-CA lifetime.
+    ///
+    /// ```zig
+    /// if (!try authority.hasSystemLifetime()) rejectAuthority();
+    /// ```
+    pub fn hasSystemLifetime(authority: *const Authority) Error!bool {
+        const parsed = (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse() catch
+            return error.ReadFailed;
+        const lifetime = parsed.validity.not_after -| parsed.validity.not_before;
+        return lifetime <= system_ca_seconds + backdate_seconds;
+    }
+
+    fn loadOrCreateWithValidity(resources: Resources, files: AuthorityFiles, validity_seconds: i64) Error!Authority {
         const io = resources.io;
         const key_path = files.key;
         const cert_path = files.certificate;
@@ -79,10 +156,15 @@ pub const Authority = struct {
         if (key_exists) {
             try validateStoredFile(io, key_path);
             try validateStoredFile(io, cert_path);
-            return .{ .pair = try load(resources, files) };
+            const authority: Authority = .{ .pair = try load(resources, files) };
+            if (validity_seconds == system_ca_seconds and !(try authority.hasSystemLifetime())) {
+                return error.ReadFailed;
+            }
+
+            return authority;
         }
 
-        var pair = try generate(io);
+        var pair = try generate(io, validity_seconds);
         defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
         try persist(io, &pair, files);
         return .{ .pair = pair };
@@ -128,7 +210,7 @@ pub const Authority = struct {
     }
 };
 
-fn generate(io: Io) Error!Pair {
+fn generate(io: Io, validity_seconds: i64) Error!Pair {
     const now = Io.Clock.real.now(io).toSeconds();
     var pair: Pair = .{ .key_pair = x509.KeyPair.generate(io) };
     defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
@@ -138,7 +220,7 @@ fn generate(io: Io) Error!Pair {
             .common_name = ca_common_name,
             .serial = randomSerial(io),
             .not_before = now - backdate_seconds,
-            .not_after = now + ca_seconds,
+            .not_after = now + validity_seconds,
             .is_ca = true,
         },
         pair.key_pair.public_key,
@@ -284,7 +366,7 @@ fn randomSerial(io: Io) u64 {
 
 test "minted leaves verify against the local authority" {
     const io = std.testing.io;
-    const authority: Authority = .{ .pair = try generate(io) };
+    const authority: Authority = .{ .pair = try generate(io, ca_seconds) };
     const leaf = try authority.mint(io, "api.anthropic.com");
     const parsed_leaf = try (std.crypto.Certificate{ .buffer = leaf.certDer(), .index = 0 }).parse();
     const parsed_ca = try (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse();
@@ -317,4 +399,12 @@ test "authority files and derived bundle are owner-only" {
         try std.testing.expectEqual(File.Kind.file, stat.kind);
         try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
     }
+}
+
+test "system authorities have a bounded 30-day lifetime" {
+    const io = std.testing.io;
+    const authority: Authority = .{ .pair = try generate(io, system_ca_seconds) };
+    try std.testing.expect(try authority.hasSystemLifetime());
+    try std.testing.expect(!(try (Authority{ .pair = try generate(io, ca_seconds) }).hasSystemLifetime()));
+    try std.testing.expectEqual(@as(usize, 40), authority.fingerprint().len);
 }

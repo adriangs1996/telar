@@ -99,6 +99,7 @@ test "runtime-state subscription emits current projections once and future revis
         .proxy_status => |status| {
             try std.testing.expect(status.active);
             try std.testing.expectEqual(schema.ProxyScope.exact, status.scope);
+            try std.testing.expect(!status.system_trusted);
         },
         else => return error.ExpectedProxyStatus,
     }

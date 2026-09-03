@@ -560,6 +560,13 @@ Every connection still requires a live pane credential. A connection outside
 the configured scope passes through the authenticated CONNECT listener, but
 its TCP payload is forwarded opaquely and is not observed.
 
+System trust is not a configuration side effect. Run `telar proxy trust
+install|uninstall|status` explicitly. If `ca_dir` is custom, pass the same
+absolute path with `--ca-dir`. Linux installation also requires either
+`--linux update-ca-certificates` or `--linux trust`. The installed authority is
+separate from the private CA, expires after 30 days, and rotates when the
+server starts with less than one day remaining.
+
 `runtime.proxy.capture` accepts `enabled`, `max_part_bytes`,
 `max_exchange_bytes`, `max_total_bytes`, and `join_timeout_ms`. The byte limits
 must satisfy `max_part_bytes <= max_exchange_bytes <= max_total_bytes`; all

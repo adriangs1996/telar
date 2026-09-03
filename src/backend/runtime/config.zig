@@ -43,6 +43,8 @@ pub const Options = struct {
     /// Keep a bounded raw output tail per command (opt-in).
     history_output_capture: bool = false,
     proxy: ?ProxyOptions = null,
+    /// Whether the short-lived proxy authority is installed in system trust.
+    proxy_system_trusted: bool = false,
     plugins: []const PluginSpec = &.{},
     agent_descriptions: ?AgentDescriptionOptions = null,
     /// The headless agent behind features like command suggestion.

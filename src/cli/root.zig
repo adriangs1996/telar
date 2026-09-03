@@ -17,6 +17,7 @@ pub const hook = @import("hook.zig");
 pub const integration = @import("integration.zig");
 pub const notification = @import("notification.zig");
 pub const plugin = @import("plugin.zig");
+pub const proxy = @import("proxy.zig");
 pub const server = @import("server.zig");
 
 pub const AgentAction = parser.AgentAction;
@@ -25,6 +26,7 @@ pub const ApiOptions = parser.ApiOptions;
 pub const Cli = parser.Cli;
 pub const HookOptions = parser.HookOptions;
 pub const IntegrationOptions = parser.IntegrationOptions;
+pub const ProxyOptions = parser.ProxyOptions;
 pub const PaneAction = parser.PaneAction;
 pub const PaneOptions = parser.PaneOptions;
 pub const Target = parser.Target;
@@ -60,6 +62,7 @@ test {
     _ = parser;
     _ = remote;
     _ = plugin;
+    _ = proxy;
     _ = runtime_connection;
     _ = server;
     _ = skill;

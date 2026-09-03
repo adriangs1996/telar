@@ -68,7 +68,12 @@ pub const Resources = struct {
         errdefer resources.child_environment.deinit();
         try checkpoint(fail_after, .child_environment);
 
-        resources.proxy = try proxy_runtime.Runtime.init(resources.io(), resources.gpa, initialization.options.proxy);
+        resources.proxy = try proxy_runtime.Runtime.init(
+            resources.io(),
+            resources.gpa,
+            initialization.options.proxy,
+            initialization.options.proxy_system_trusted,
+        );
         errdefer resources.proxy.deinit();
         try checkpoint(fail_after, .proxy);
 

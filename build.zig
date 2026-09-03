@@ -92,6 +92,7 @@ pub fn build(b: *std.Build) void {
     });
     backend.addImport("telar-core", core);
     backend.addImport("telar-lua", telar_lua);
+    backend.addImport("lua-api", lua_api);
     backend.addImport("ghostty-vt", ghostty_vt);
     backend.addImport("tls", tls);
     backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });

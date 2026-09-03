@@ -252,7 +252,7 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
     defer init.gpa.free(input);
     var stdin_reader = File.stdin().readerStreaming(init.io, &.{});
     const len = stdin_reader.interface.readSliceShort(input) catch return;
-    const pane: control.PaneRef = .{ .pane_id = pane_id, .pane_generation = pane_generation };
+    const pane: control.Session.PaneRef = .{ .pane_id = pane_id, .pane_generation = pane_generation };
     switch (options.agent) {
         .claude => {
             const parsed = std.json.parseFromSlice(ClaudeHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
@@ -301,7 +301,7 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
     }
 }
 
-fn sendReports(init: std.process.Init, socket: ?[*:0]const u8, pane: control.PaneRef, report: ?Report, command: ?CommandReport) void {
+fn sendReports(init: std.process.Init, socket: ?[*:0]const u8, pane: control.Session.PaneRef, report: ?Report, command: ?CommandReport) void {
     if (report == null and command == null) {
         return;
     }

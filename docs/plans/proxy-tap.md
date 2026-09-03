@@ -1,6 +1,6 @@
 # ProxyTLS tap and agent command persistence — handoff
 
-Status: P1-P5 complete on 2026-09-03; P6-P7 not started. This document is the
+Status: P1-P6 complete on 2026-09-03; P7 not started. This document is the
 handoff for the remaining implementation. Every file:line below was verified
 against commit `46db649` (`main`) on that date; symbols outlive line numbers,
 so search for the symbol when a line has moved.

@@ -8,6 +8,7 @@ const config = @import("config.zig");
 const parser = @import("parser.zig");
 const runtime_connection = @import("runtime_connection.zig");
 const plugin_cli = @import("plugin.zig");
+const proxy_cli = @import("proxy.zig");
 
 const Io = std.Io;
 const File = Io.File;
@@ -103,6 +104,7 @@ const Launch = struct {
     proxy_cert_buffer: [std.fs.max_path_bytes]u8 = undefined,
     proxy_bundle_buffer: [std.fs.max_path_bytes]u8 = undefined,
     proxy_options: ?backend.runtime.ProxyOptions = null,
+    proxy_system_trusted: bool = false,
     proxy_capture: backend.proxy.CaptureConfig = .{},
     tap_specs: [backend.plugins.max_workers]backend.plugins.Spec = undefined,
     tap_spec_count: u8 = 0,
@@ -168,14 +170,12 @@ const Launch = struct {
             .max_total_bytes = runtime_config.proxy_capture_max_total_bytes,
             .join_timeout_ms = runtime_config.proxy_capture_join_timeout_ms,
         };
-        if (runtime_config.proxy_enabled) {
-            if (runtime_config.proxyCaDir()) |ca_directory| {
-                launch.configured_proxy_directory = try resolveConfigPath(
-                    launch.process.gpa,
-                    generation.configDir(),
-                    ca_directory,
-                );
-            }
+        if (runtime_config.proxyCaDir()) |ca_directory| {
+            launch.configured_proxy_directory = try resolveConfigPath(
+                launch.process.gpa,
+                generation.configDir(),
+                ca_directory,
+            );
         }
         if (runtime_config.agent_descriptions.enabled()) {
             launch.agent_description_options = .{
@@ -211,20 +211,21 @@ const Launch = struct {
             generation.snapshot.runtime.proxy_enabled
         else
             false;
-        const proxy_directory: ?[]const u8 = if (proxy_enabled)
-            launch.configured_proxy_directory orelse block: {
-                const resolved = try resolveProxyDirectory(launch.process.minimal.environ, &launch.default_proxy_buffer);
-                launch.default_proxy_directory = try launch.process.gpa.dupe(u8, resolved);
-                break :block launch.default_proxy_directory.?;
-            }
-        else
-            null;
-        if (proxy_directory) |directory| {
-            try prepareProxyDirectory(launch.process.io, directory);
+        const proxy_directory = launch.configured_proxy_directory orelse block: {
+            const resolved = try resolveProxyDirectory(launch.process.minimal.environ, &launch.default_proxy_buffer);
+            launch.default_proxy_directory = try launch.process.gpa.dupe(u8, resolved);
+            break :block launch.default_proxy_directory.?;
+        };
+        _ = try proxy_cli.rotateIfNeeded(launch.process, proxy_directory);
+        launch.proxy_system_trusted = proxy_cli.trusted(launch.process, proxy_directory);
+        if (proxy_enabled) {
+            const authority_names = proxyAuthorityNames(launch.proxy_system_trusted);
+            try prepareProxyDirectory(launch.process.io, proxy_directory);
             launch.proxy_options = .{
-                .key_path = try std.fmt.bufPrint(&launch.proxy_key_buffer, "{s}/ca-key.pem", .{directory}),
-                .certificate_path = try std.fmt.bufPrint(&launch.proxy_cert_buffer, "{s}/ca-cert.pem", .{directory}),
-                .bundle_path = try std.fmt.bufPrint(&launch.proxy_bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
+                .key_path = try std.fmt.bufPrint(&launch.proxy_key_buffer, "{s}/{s}", .{ proxy_directory, authority_names.key }),
+                .certificate_path = try std.fmt.bufPrint(&launch.proxy_cert_buffer, "{s}/{s}", .{ proxy_directory, authority_names.certificate }),
+                .bundle_path = try std.fmt.bufPrint(&launch.proxy_bundle_buffer, "{s}/ca-bundle.pem", .{proxy_directory}),
+                .system_authority = launch.proxy_system_trusted,
                 .intercept_hosts = launch.proxy_intercept_hosts,
                 .capture = launch.proxy_capture,
             };
@@ -291,6 +292,7 @@ const Launch = struct {
                 .history_filters = launch.history_filters,
                 .history_output_capture = launch.history_output_capture,
                 .proxy = launch.proxy_options,
+                .proxy_system_trusted = launch.proxy_system_trusted,
                 .plugins = launch.tap_specs[0..launch.tap_spec_count],
                 .agent_descriptions = launch.agent_description_options,
                 .engine = launch.engine_options,
@@ -429,6 +431,19 @@ fn resolveProxyDirectory(environ: std.process.Environ, buffer: []u8) ![]const u8
     return std.fmt.bufPrint(buffer, "{s}/.local/share/telar/proxy", .{home});
 }
 
+const ProxyAuthorityNames = struct {
+    key: []const u8,
+    certificate: []const u8,
+};
+
+fn proxyAuthorityNames(system_trusted: bool) ProxyAuthorityNames {
+    if (system_trusted) {
+        return .{ .key = "ca-system-key.pem", .certificate = "ca-system-cert.pem" };
+    }
+
+    return .{ .key = "ca-key.pem", .certificate = "ca-cert.pem" };
+}
+
 fn prepareProxyDirectory(io: Io, directory: []const u8) !void {
     const permissions = File.Permissions.fromMode(0o700);
     _ = try Io.Dir.cwd().createDirPathStatus(io, directory, permissions);
@@ -556,6 +571,16 @@ test "history and proxy storage prefer XDG data home" {
     try std.testing.expectEqualStrings("/data/telar", history.managed_directory.?);
     try std.testing.expectEqualStrings("/data/telar/history.db", history.path);
     try std.testing.expectEqualStrings("/data/telar/proxy", try resolveProxyDirectory(environ, &proxy_buffer));
+}
+
+test "runtime selects the installed system authority without reusing the private CA" {
+    const private = proxyAuthorityNames(false);
+    const system = proxyAuthorityNames(true);
+
+    try std.testing.expectEqualStrings("ca-key.pem", private.key);
+    try std.testing.expectEqualStrings("ca-cert.pem", private.certificate);
+    try std.testing.expectEqualStrings("ca-system-key.pem", system.key);
+    try std.testing.expectEqualStrings("ca-system-cert.pem", system.certificate);
 }
 
 test "relative configured paths resolve from the config directory" {

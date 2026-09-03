@@ -758,6 +758,7 @@ pub const Application = struct {
                 .system_metrics = &application.system_metrics,
                 .proxy_active = application.proxy_runtime.active(),
                 .proxy_scope = application.proxy_runtime.interceptionScope(),
+                .proxy_system_trusted = application.proxy_runtime.systemTrusted(),
                 .home = application.inherited_environment.getPosix("HOME"),
                 .client_layouts = &application.model.client_layouts,
             },

@@ -39,6 +39,7 @@ pub const Input = struct {
     sidebar_animation_frame: u8,
     proxy_tls_active: bool,
     proxy_tls_scope: schema.ProxyScope = .exact,
+    proxy_system_trusted: bool = false,
     system_metrics: ?status_bar.Metrics,
     status_mode: status_bar.Mode,
     workspaces: *const workspace_list.Snapshot,
@@ -61,6 +62,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         .collapsed = input.workspace_list_collapsed,
         .proxy_tls_active = input.proxy_tls_active,
         .proxy_tls_scope = input.proxy_tls_scope,
+        .proxy_system_trusted = input.proxy_system_trusted,
         .right = input.bar_state.layout.slot(.top_right),
         .system_metrics = input.system_metrics,
     });

@@ -46,7 +46,8 @@ otherwise select their own certifi bundle. Telar deliberately does not change
 plaintext `HTTP_PROXY`. The local authority directory is mode 0700; its key,
 certificate, and combined system root bundle are written atomically with mode
 0600. Existing corrupt or partial authority files are not overwritten. Telar
-never installs this CA in the system trust store.
+uses a separate explicit command and a different authority for system trust;
+enabling the proxy alone never changes an OS trust store.
 
 Telar passes TLS through by default and intercepts only its host allowlist.
 The defaults cover the model APIs used by Claude Code and Codex:
@@ -60,7 +61,8 @@ then binary-searches exact rules and a suffix list ordered by reversed DNS
 labels for every CONNECT hostname.
 
 The top-bar shield is peach for exact-only interception and red when any
-suffix or global wildcard expands the active scope.
+suffix or global wildcard expands the active scope. A yellow shield means the
+system-trust authority remains installed while interception is off.
 
 Every CONNECT request still requires a live pane capability. For a host outside
 the allowlist, Telar responds with `200` and forwards the TCP stream byte for
@@ -275,11 +277,41 @@ runtime loop, a TLS session, or a tunnel actor, and it never receives a Zig
 pointer. Registering a new immutable pipeline generation happens before it can
 accept connections.
 
-## System trust remains unchanged
+## System trust
 
-Installing Telar's CA into Keychain or another system trust store remains a
-separate user decision and is outside the current implementation. The built-in
-passthrough hosts do not require that installation.
+ProxyTLS works without changing system trust because Telar injects CA paths
+into panes. Applications that ignore those variables require an explicit trust
+installation:
+
+```sh
+telar proxy trust status
+telar proxy trust install
+telar proxy trust uninstall
+```
+
+On macOS, Telar installs into the current user's login keychain without
+`sudo`. On Linux the backend is mandatory: use `--linux
+update-ca-certificates` on Debian-family systems or `--linux trust` on systems
+that provide p11-kit. Telar prints each argv before it starts the process. It
+does not invoke a shell.
+
+The command creates `ca-system-key.pem` and `ca-system-cert.pem`, separate from
+the private CA used by default. The system authority is valid for 30 days. A
+server start replaces it when less than one day remains, removes the prior
+recorded certificate from the selected trust store, and records the new backend,
+fingerprint, and store path in `trust-install.json`. The directory is mode
+0700; CA files and the record are mode 0600. A malformed record stops install
+and uninstall because Telar can no longer prove which certificate it owns.
+
+`--ca-dir PATH` selects the same absolute directory as `runtime.proxy.ca_dir`.
+Without it, the command uses `$XDG_DATA_HOME/telar/proxy` or
+`$HOME/.local/share/telar/proxy`. Keep both settings aligned when config uses a
+custom path.
+
+Firefox may use its own certificate store. The command prints the certificate
+path for manual import and does not modify Firefox profiles. Uninstall uses the
+recorded identity and destination, so it does not remove an unrelated
+certificate.
 
 ## Build dependency
 

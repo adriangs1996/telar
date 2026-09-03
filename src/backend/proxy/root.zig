@@ -13,6 +13,8 @@ const middleware = @import("middleware.zig");
 const capture_mod = @import("capture/root.zig");
 const service_mod = @import("service/root.zig");
 
+pub const ca = @import("ca.zig");
+
 const Io = std.Io;
 
 pub const PaneKey = pane_mod.PaneKey;
@@ -29,6 +31,7 @@ pub const Config = struct {
     key_path: []const u8,
     certificate_path: []const u8,
     bundle_path: []const u8,
+    system_authority: bool = false,
     intercept_hosts: []const []const u8 = &.{},
     capture: capture_mod.Config = .{},
 };
@@ -97,6 +100,7 @@ pub const Proxy = struct {
             .key = config.key_path,
             .certificate = config.certificate_path,
             .bundle = config.bundle_path,
+            .system_authority = config.system_authority,
             .intercept_hosts = config.intercept_hosts,
             .capture = config.capture,
         });

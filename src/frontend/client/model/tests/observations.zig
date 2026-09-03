@@ -23,11 +23,11 @@ test "proxy status reconciliation commits only changed runtime state" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expect(model.reconcileProxyStatus(false, .exact) == null);
+    try std.testing.expect(model.reconcileProxyStatus(false, .exact, false) == null);
     try std.testing.expect(!model.proxyTlsActive());
     try std.testing.expectEqualDeep(client_model.Version{}, model.version());
 
-    const enabled = model.reconcileProxyStatus(true, .wildcard).?;
+    const enabled = model.reconcileProxyStatus(true, .wildcard, false).?;
 
     try std.testing.expect(!enabled.previous);
     try std.testing.expect(enabled.active);
@@ -36,10 +36,10 @@ test "proxy status reconciliation commits only changed runtime state" {
     try std.testing.expectEqual(@as(u64, 1), enabled.proxy_status_revision);
     try std.testing.expect(model.proxyTlsActive());
     try std.testing.expectEqual(client_model.Version{ .proxy_status = 1 }, model.version());
-    try std.testing.expect(model.reconcileProxyStatus(true, .wildcard) == null);
+    try std.testing.expect(model.reconcileProxyStatus(true, .wildcard, false) == null);
     try std.testing.expectEqual(client_model.Version{ .proxy_status = 1 }, model.version());
 
-    const disabled = model.reconcileProxyStatus(false, .exact).?;
+    const disabled = model.reconcileProxyStatus(false, .exact, false).?;
 
     try std.testing.expect(disabled.previous);
     try std.testing.expect(!disabled.active);
@@ -47,6 +47,13 @@ test "proxy status reconciliation commits only changed runtime state" {
     try std.testing.expectEqual(@as(u64, 2), disabled.proxy_status_revision);
     try std.testing.expect(!model.proxyTlsActive());
     try std.testing.expectEqual(client_model.Version{ .proxy_status = 2 }, model.version());
+
+    const trusted = model.reconcileProxyStatus(false, .exact, true).?;
+
+    try std.testing.expect(!trusted.previous_system_trusted);
+    try std.testing.expect(trusted.system_trusted);
+    try std.testing.expect(model.proxySystemTrusted());
+    try std.testing.expectEqual(client_model.Version{ .proxy_status = 3 }, model.version());
 }
 
 test "system metrics reconciliation owns the latest replica and one isolated revision" {

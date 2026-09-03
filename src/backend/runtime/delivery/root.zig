@@ -39,6 +39,7 @@ pub const Sources = struct {
     system_metrics: *const system_metrics_mod.Sampler,
     proxy_active: bool,
     proxy_scope: schema.ProxyScope = .exact,
+    proxy_system_trusted: bool = false,
     home: ?[]const u8,
     client_layouts: ?*client_layout_store.Store = null,
 };
@@ -303,7 +304,11 @@ pub const Delivery = struct {
 
         if (delivery.runtime_state_requested and !delivery.proxy_status_sent)
             return delivery.stage(
-                try schema.encodeProxyStatus(buffer, .{ .active = sources.proxy_active, .scope = sources.proxy_scope }),
+                try schema.encodeProxyStatus(buffer, .{
+                    .active = sources.proxy_active,
+                    .scope = sources.proxy_scope,
+                    .system_trusted = sources.proxy_system_trusted,
+                }),
                 .proxy_status,
             );
 

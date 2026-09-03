@@ -505,7 +505,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
     const pending_updates_before = client.presenter.pending_updates;
 
     var payload: [64]u8 = undefined;
-    const enabled = try schema.encodeProxyStatus(&payload, .{ .active = true, .scope = .wildcard });
+    const enabled = try schema.encodeProxyStatus(&payload, .{ .active = true, .scope = .wildcard, .system_trusted = false });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(enabled));
 
     try std.testing.expect(client.model.proxyTlsActive());
@@ -545,7 +545,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
 
     const pending_updates_after_enabled = client.presenter.pending_updates;
     const version_before_disabled = client.model.version();
-    const disabled = try schema.encodeProxyStatus(&payload, .{ .active = false, .scope = .exact });
+    const disabled = try schema.encodeProxyStatus(&payload, .{ .active = false, .scope = .exact, .system_trusted = false });
     _ = try server_messages.handleServerMessage(client, try schema.decodeServer(disabled));
 
     try std.testing.expect(!client.model.proxyTlsActive());

@@ -163,6 +163,7 @@ pub const Model = struct {
     sidebar_animation_revision: u64 = 0,
     proxy_tls_active: bool = false,
     proxy_tls_scope: schema.ProxyScope = .exact,
+    proxy_system_trusted: bool = false,
     proxy_status_revision: u64 = 0,
     system_metrics: ?SystemMetrics = null,
     system_metrics_revision: u64 = 0,
@@ -921,25 +922,29 @@ pub const Model = struct {
     /// effect or presentation work.
     ///
     /// ```zig
-    /// const commit = model.reconcileProxyStatus(true, .exact) orelse return;
+    /// const commit = model.reconcileProxyStatus(true, .exact, false) orelse return;
     /// ```
-    pub fn reconcileProxyStatus(model: *Model, active: bool, scope: schema.ProxyScope) ?ProxyStatusCommit {
-        if (model.proxy_tls_active == active and model.proxy_tls_scope == scope) {
+    pub fn reconcileProxyStatus(model: *Model, active: bool, scope: schema.ProxyScope, system_trusted: bool) ?ProxyStatusCommit {
+        if (model.proxy_tls_active == active and model.proxy_tls_scope == scope and model.proxy_system_trusted == system_trusted) {
             return null;
         }
 
         const previous = model.proxy_tls_active;
         const previous_scope = model.proxy_tls_scope;
+        const previous_system_trusted = model.proxy_system_trusted;
         const proxy_status_revision_before = model.proxy_status_revision;
         model.proxy_tls_active = active;
         model.proxy_tls_scope = scope;
+        model.proxy_system_trusted = system_trusted;
         model.proxy_status_revision +%= 1;
 
         return .{
             .previous = previous,
             .previous_scope = previous_scope,
+            .previous_system_trusted = previous_system_trusted,
             .active = active,
             .scope = scope,
+            .system_trusted = system_trusted,
             .proxy_status_revision_before = proxy_status_revision_before,
             .proxy_status_revision = model.proxy_status_revision,
         };
@@ -961,6 +966,15 @@ pub const Model = struct {
     /// ```
     pub fn proxyTlsScope(model: *const Model) schema.ProxyScope {
         return model.proxy_tls_scope;
+    }
+
+    /// Returns whether Telar's authority remains in the platform trust store.
+    ///
+    /// ```zig
+    /// if (model.proxySystemTrusted()) renderTrustBadge();
+    /// ```
+    pub fn proxySystemTrusted(model: *const Model) bool {
+        return model.proxy_system_trusted;
     }
 
     /// Commits one newer host-health replica. Invalid newer values preserve
