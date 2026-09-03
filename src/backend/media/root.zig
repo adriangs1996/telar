@@ -581,7 +581,9 @@ fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability: any
                         .byte_len = frame.byte_len,
                         .limit = storage_limit,
                         .medium = frame.medium,
-                    })) continue;
+                    })) {
+                        continue;
+                    }
                     entry.start = frame.start;
                     break;
                 }
