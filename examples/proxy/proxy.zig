@@ -248,7 +248,15 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
     // directions run at once and there is no request/response turn to hang the
     // half-duplex loop on.
     if (session.negotiated() == .h2) {
-        relayH2(io, session, gpa, id, opened, port, queue) catch |err| switch (err) {
+        relayH2(.{
+            .io = io,
+            .session = session,
+            .allocator = gpa,
+            .id = id,
+            .opened = opened,
+            .port = port,
+            .queue = queue,
+        }) catch |err| switch (err) {
             error.Canceled => |e| return e,
         };
         return;
@@ -369,7 +377,24 @@ const H2Side = struct {
 
 /// Runs both directions of an h2 connection and records one exchange for the
 /// whole thing. Per-stream splitting is the next step; this is the connection.
-fn relayH2(io: Io, session: *tls.Session, gpa: std.mem.Allocator, id: u64, opened: event.Upstream, port: u16, queue: *event.Queue) Io.Cancelable!void {
+const H2RelayContext = struct {
+    io: Io,
+    session: *tls.Session,
+    allocator: std.mem.Allocator,
+    id: u64,
+    opened: event.Upstream,
+    port: u16,
+    queue: *event.Queue,
+};
+
+fn relayH2(context: H2RelayContext) Io.Cancelable!void {
+    const io = context.io;
+    const session = context.session;
+    const gpa = context.allocator;
+    const id = context.id;
+    const opened = context.opened;
+    const port = context.port;
+    const queue = context.queue;
     const started = Io.Timestamp.now(io, .awake);
 
     const req_body = gpa.alloc(u8, 64 * event.KB) catch return;
