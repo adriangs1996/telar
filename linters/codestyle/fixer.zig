@@ -36,18 +36,6 @@ const Fixer = struct {
         }
     }
 
-    fn inspectBlock(self: Fixer, node: Ast.Node.Index) !void {
-        var buffer: [2]Ast.Node.Index = undefined;
-        const statements = self.tree.blockStatements(&buffer, node).?;
-
-        for (statements) |statement| {
-            switch (self.tree.nodeTag(statement)) {
-                .if_simple, .@"if" => try self.fixStatementIf(statement),
-                else => {},
-            }
-        }
-    }
-
     fn fixStatementIf(self: Fixer, node: Ast.Node.Index) !void {
         const conditional = self.tree.fullIf(node).?;
         const then_tag = self.tree.nodeTag(conditional.ast.then_expr);
@@ -58,9 +46,7 @@ const Fixer = struct {
 
         if (conditional.ast.else_expr.unwrap()) |else_expr| {
             const else_tag = self.tree.nodeTag(else_expr);
-            if (else_tag == .if_simple or else_tag == .@"if") {
-                try self.fixStatementIf(else_expr);
-            } else if (!syntax.isBlock(else_tag)) {
+            if (!syntax.isBlock(else_tag) and else_tag != .if_simple and else_tag != .@"if") {
                 try self.wrapBranch(else_expr, false);
             }
         }
@@ -135,9 +121,15 @@ pub fn fixSource(allocator: Allocator, source: [:0]const u8) !?[:0]u8 {
 
         switch (tree.nodeTag(node)) {
             .fn_proto, .fn_proto_multi, .fn_proto_one, .fn_proto_simple => try fixer.inspectFunction(node),
-            .block, .block_semicolon, .block_two, .block_two_semicolon => try fixer.inspectBlock(node),
             else => {},
         }
+    }
+
+    const statement_ifs = try syntax.statementIfNodes(allocator, &tree);
+    defer allocator.free(statement_ifs);
+
+    for (statement_ifs) |statement_if| {
+        try fixer.fixStatementIf(statement_if);
     }
 
     if (!needs_render) {

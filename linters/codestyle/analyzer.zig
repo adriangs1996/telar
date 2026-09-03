@@ -49,10 +49,6 @@ const Analyzer = struct {
     fn lintIf(self: Analyzer, node: Ast.Node.Index) !void {
         const conditional = self.tree.fullIf(node).?;
 
-        if (!self.isStatementIf(conditional.ast.if_token)) {
-            return;
-        }
-
         if (!syntax.isBlock(self.tree.nodeTag(conditional.ast.then_expr))) {
             try self.append(conditional.ast.if_token, .{ .rule = .braced_if_branch });
         }
@@ -63,17 +59,6 @@ const Analyzer = struct {
                 try self.append(conditional.else_token, .{ .rule = .braced_if_branch });
             }
         }
-    }
-
-    fn isStatementIf(self: Analyzer, if_token: Ast.TokenIndex) bool {
-        if (if_token == 0) {
-            return false;
-        }
-
-        return switch (self.tree.tokenTag(if_token - 1)) {
-            .l_brace, .semicolon => true,
-            else => false,
-        };
     }
 
     fn append(self: Analyzer, token: Ast.TokenIndex, finding: Finding) !void {
@@ -127,9 +112,15 @@ pub fn lintSource(allocator: Allocator, source: [:0]const u8) ![]diagnostic.Viol
 
         switch (tree.nodeTag(node)) {
             .fn_proto, .fn_proto_multi, .fn_proto_one, .fn_proto_simple => try analyzer.lintFunction(node),
-            .if_simple, .@"if" => try analyzer.lintIf(node),
             else => {},
         }
+    }
+
+    const statement_ifs = try syntax.statementIfNodes(allocator, &tree);
+    defer allocator.free(statement_ifs);
+
+    for (statement_ifs) |statement_if| {
+        try analyzer.lintIf(statement_if);
     }
 
     return violations.toOwnedSlice(allocator);
@@ -215,6 +206,24 @@ test "rejects unbraced else branches" {
         \\    if (value) {
         \\        return true;
         \\    } else return false;
+        \\}
+    );
+}
+
+test "rejects an unbraced if statement after a block" {
+    try expectRules(&.{.braced_if_branch},
+        \\fn choose(first: bool, second: bool) bool {
+        \\    if (first) {}
+        \\    if (second) return true;
+        \\    return false;
+        \\}
+    );
+}
+
+test "rejects unbraced branches in an else if continuation" {
+    try expectRules(&.{ .braced_if_branch, .braced_if_branch },
+        \\fn choose(first: bool, second: bool) bool {
+        \\    if (first) {} else if (second) return true else return false;
         \\}
     );
 }
