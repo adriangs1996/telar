@@ -1,0 +1,12 @@
+{
+  "api_version": 1,
+  "id": "dev.telar.agent-commands",
+  "version": "0.1.0",
+  "entry": "plugin.lua",
+  "source": {
+    "url": "local:examples/plugins/agent-commands",
+    "revision": "development"
+  },
+  "actions": [],
+  "capabilities": ["proxy.tap", "history.write", "notifications"]
+}

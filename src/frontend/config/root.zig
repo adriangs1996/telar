@@ -4,7 +4,7 @@ const config_model = @import("model.zig");
 const default_bindings = @import("default_bindings.zig");
 const generation = @import("generation.zig");
 const loader = @import("loader.zig");
-const vm = @import("vm.zig");
+const vm = @import("telar-lua");
 
 pub const api_version = generation.api_version;
 pub const default_memory_limit = config_model.default_memory_limit;

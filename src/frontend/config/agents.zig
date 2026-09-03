@@ -38,7 +38,7 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
         const entry = lua.lua_absindex(state, -1);
         try value.ensureOnlyFields(state, .{
             .index = entry,
-            .allowed = &(.{"name"} ++ phrase_fields ++ text_fields ++ .{"attachments"}),
+            .allowed = &(.{"name"} ++ phrase_fields ++ text_fields ++ .{ "attachments", "command_tools" }),
             .path = "config.runtime.agents[]",
         }, diagnostic);
         _ = lua.lua_getfield(state, entry, "name");
@@ -63,7 +63,49 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
             }, diagnostic);
         }
 
+        try parseCommandTools(state, entry, manifest, position, diagnostic);
         try parsePresentation(state, .{ .entry = entry, .manifest = manifest, .position = position }, diagnostic);
+    }
+}
+
+fn parseCommandTools(state: *lua.lua_State, entry: c_int, manifest: *Manifest, position: usize, diagnostic: *config_model.Diagnostic) !void {
+    _ = lua.lua_getfield(state, entry, "command_tools");
+    defer value.pop(state, 1);
+    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+        return;
+    }
+    if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+        diagnostic.set("config.runtime.agents[{d}].command_tools must be an array", .{position});
+        return error.InvalidConfig;
+    }
+
+    const tools = lua.lua_absindex(state, -1);
+    const count = lua.lua_rawlen(state, tools);
+    try value.ensureArrayOnly(state, .{ .index = tools, .count = count, .path = "config.runtime.agents[].command_tools" }, diagnostic);
+    for (1..count + 1) |tool_position| {
+        _ = lua.lua_rawgeti(state, tools, @intCast(tool_position));
+        defer value.pop(state, 1);
+        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+            diagnostic.set("config.runtime.agents[{d}].command_tools[{d}] must be a table", .{ position, tool_position });
+            return error.InvalidConfig;
+        }
+
+        const mapping = lua.lua_absindex(state, -1);
+        try value.ensureOnlyFields(state, .{ .index = mapping, .allowed = &.{ "tool", "field" }, .path = "config.runtime.agents[].command_tools[]" }, diagnostic);
+        _ = lua.lua_getfield(state, mapping, "tool");
+        const tool = value.string(state, -1) orelse "";
+        _ = lua.lua_getfield(state, mapping, "field");
+        const field = value.string(state, -1) orelse "";
+        manifest.command_tools.append(tool, field) catch |err| {
+            value.pop(state, 2);
+            diagnostic.set("config.runtime.agents[{d}].command_tools[{d}] {s}", .{ position, tool_position, switch (err) {
+                error.EmptyEntry => "requires non-empty tool and field strings",
+                error.EntryTooLong => "contains an oversized tool or field",
+                error.TooManyEntries => "exceeds the command tool limit",
+            } });
+            return error.InvalidConfig;
+        };
+        value.pop(state, 2);
     }
 }
 

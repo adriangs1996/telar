@@ -6,6 +6,7 @@ const agent = @import("../agent/root.zig");
 const history = @import("../history/root.zig");
 const engine = @import("../engine/root.zig");
 const proxy = @import("../proxy/root.zig");
+const plugins = @import("../plugins/root.zig");
 const client_session = @import("client/root.zig").session;
 const pane_events = @import("entrypoints/events/pane/root.zig");
 const pane_launcher = @import("application/pane_launcher.zig");
@@ -39,6 +40,8 @@ pub const Event = union(enum) {
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     proxy_event: anyerror!proxy.Observation,
+    proxy_capture: anyerror!*proxy.CaptureHalf,
+    plugin_effects: anyerror!*plugins.EffectResult,
     agent_tick: anyerror!void,
     agent_description: agent.description.Result,
     engine_response: anyerror!engine.Response,
@@ -71,6 +74,8 @@ fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) diagnostics.Path {
         .pane_observed,
         .history_response,
         .proxy_event,
+        .proxy_capture,
+        .plugin_effects,
         .agent_tick,
         .agent_description,
         .engine_response,
@@ -112,6 +117,8 @@ test "observation events use the observation budget" {
         .pane_observed,
         .history_response,
         .proxy_event,
+        .proxy_capture,
+        .plugin_effects,
         .agent_tick,
         .agent_description,
         .engine_response,

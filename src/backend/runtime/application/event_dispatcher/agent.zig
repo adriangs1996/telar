@@ -4,6 +4,7 @@ const std = @import("std");
 const agent_mod = @import("../../../agent/root.zig");
 const engine = @import("../../../engine/root.zig");
 const proxy_mod = @import("../../../proxy/root.zig");
+const plugins = @import("../../../plugins/root.zig");
 const delivery_mod = @import("../../delivery/root.zig");
 const suggestion = @import("../suggestion.zig");
 const runtime_event_entrypoints = @import("../../entrypoints/events/root.zig");
@@ -15,6 +16,8 @@ const Io = std.Io;
 const agent_description_coordinator = coordinators.agent_description;
 const agent_maintenance_coordinator = coordinators.agent_maintenance;
 const proxy_observation_adapter = runtime_event_entrypoints.proxy_observation;
+const proxy_capture_adapter = runtime_event_entrypoints.proxy_capture;
+const plugin_effects_adapter = runtime_event_entrypoints.plugin_effects;
 
 /// Binds agent-related event completions to one concrete Application type.
 ///
@@ -33,6 +36,21 @@ pub fn Dispatcher(comptime Application: type) type {
             try adapter.handle(result);
         }
 
+        pub fn handleProxyCapture(application: *Application, result: anyerror!*proxy_mod.CaptureHalf) !void {
+            var adapter = proxyCaptureAdapter(application);
+            try adapter.handle(result);
+        }
+
+        /// Authorizes and applies one bounded effect batch, then rearms receive.
+        ///
+        /// ```zig
+        /// try AgentEvents.handlePluginEffects(&application, result);
+        /// ```
+        pub fn handlePluginEffects(application: *Application, result: anyerror!*plugins.EffectResult) !void {
+            var adapter = pluginEffectsAdapter(application);
+            try adapter.handle(result);
+        }
+
         /// Applies one maintenance tick, expires stale agent activity and
         /// rearms the periodic source.
         ///
@@ -45,6 +63,7 @@ pub fn Dispatcher(comptime Application: type) type {
             try application.flushSessionCheckpoint();
             application.tickGitStatus();
             checkEngineIdle(application);
+            application.proxy_runtime.expireCaptures(runtimeWallClockMs(application));
         }
 
         /// Applies one generated description and persists the resulting title.
@@ -207,6 +226,52 @@ pub fn Dispatcher(comptime Application: type) type {
         fn rearmProxyObservation(application: *Application) !void {
             var sources = event_sources.Sources.init(application.io, application.select);
             try sources.receiveProxyObservation(application.proxy_runtime);
+        }
+
+        const proxy_capture_runtime_port: proxy_capture_adapter.RuntimePort(Application) = .{
+            .rearm_receive = rearmProxyCapture,
+            .now_ms = runtimeWallClockMs,
+        };
+
+        const RuntimeProxyCaptureAdapter = proxy_capture_adapter.Adapter(Application, proxy_capture_runtime_port);
+
+        fn proxyCaptureAdapter(application: *Application) RuntimeProxyCaptureAdapter {
+            return RuntimeProxyCaptureAdapter.init(application, .{
+                .panes = &application.model.panes,
+                .proxy_runtime = application.proxy_runtime,
+            });
+        }
+
+        fn rearmProxyCapture(application: *Application) !void {
+            var sources = event_sources.Sources.init(application.io, application.select);
+            try sources.receiveProxyCapture(application.proxy_runtime);
+        }
+
+        const plugin_effects_runtime_port: plugin_effects_adapter.RuntimePort(Application) = .{
+            .rearm_receive = rearmPluginEffects,
+            .now_ms = runtimeWallClockMs,
+            .publish_notification = publishPluginNotification,
+            .pump_clients = pumpRuntimeClients,
+        };
+
+        const RuntimePluginEffectsAdapter = plugin_effects_adapter.Adapter(Application, plugin_effects_runtime_port);
+
+        fn pluginEffectsAdapter(application: *Application) RuntimePluginEffectsAdapter {
+            return RuntimePluginEffectsAdapter.init(application, .{
+                .panes = &application.model.panes,
+                .agents = &application.model.agents,
+                .service = application.plugin_service,
+                .history_service = application.history_service,
+            });
+        }
+
+        fn rearmPluginEffects(application: *Application) !void {
+            var sources = event_sources.Sources.init(application.io, application.select);
+            try sources.receivePluginEffects(application.plugin_service);
+        }
+
+        fn publishPluginNotification(application: *Application, notification: @import("telar-core").schema.Notification) u8 {
+            return application.publishNotification(notification);
         }
 
         fn pumpRuntimeClients(application: *Application) void {

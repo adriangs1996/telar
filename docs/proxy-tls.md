@@ -15,6 +15,7 @@ return {
     proxy = {
       enabled = true,
       ca_dir = "state/proxy",
+      capture = { enabled = false },
       intercept_hosts = {
         "api.anthropic.com",
         "api.openai.com",
@@ -45,16 +46,23 @@ otherwise select their own certifi bundle. Telar deliberately does not change
 plaintext `HTTP_PROXY`. The local authority directory is mode 0700; its key,
 certificate, and combined system root bundle are written atomically with mode
 0600. Existing corrupt or partial authority files are not overwritten. Telar
-never installs this CA in the system trust store.
+uses a separate explicit command and a different authority for system trust;
+enabling the proxy alone never changes an OS trust store.
 
-Telar passes TLS through by default and intercepts only an exact-host allowlist.
+Telar passes TLS through by default and intercepts only its host allowlist.
 The defaults cover the model APIs used by Claude Code and Codex:
 `api.anthropic.com`, `api.openai.com`, and `chatgpt.com`. Setting
 `intercept_hosts` replaces those defaults, so an empty array disables all TLS
-interception while retaining the authenticated proxy tunnel. Wildcards and
-suffix matches are rejected. The runtime accepts 256 entries, canonicalizes
-and deduplicates them at startup, then uses binary search for every CONNECT
-hostname.
+interception while retaining the authenticated proxy tunnel. `*.example.com`
+matches proper subdomains of `example.com`, but not the bare suffix; `*`
+matches every hostname. Partial-label and embedded wildcards are rejected. The
+runtime accepts 256 entries, canonicalizes and deduplicates them at startup,
+then binary-searches exact rules and a suffix list ordered by reversed DNS
+labels for every CONNECT hostname.
+
+The top-bar shield is peach for exact-only interception and red when any
+suffix or global wildcard expands the active scope. A yellow shield means the
+system-trust authority remains installed while interception is off.
 
 Every CONNECT request still requires a live pane capability. For a host outside
 the allowlist, Telar responds with `200` and forwards the TCP stream byte for
@@ -117,8 +125,10 @@ valid. `content-length` values remain unchanged because bodies are not part of
 this contract. Response status changes must retain their informational,
 bodyless, or regular response semantics.
 
-Header values are not persisted or copied to the observation queue. Bodies
-stream unchanged and are not exposed to transformers. Arbitrary body mutation,
+Header values are not persisted or copied to the lifecycle observation queue.
+When exchange capture is explicitly enabled, original heads and de-framed
+bodies are copied into a separate bounded capture queue. Bodies still stream
+unchanged and are not exposed to transformers. Arbitrary body mutation,
 especially a change in length, is a different capability: HTTP/2 would have to
 terminate flow control, and Lua exposure would first need explicit secret
 redaction, retention, timeout, and memory policies.
@@ -126,9 +136,46 @@ redaction, retention, timeout, and memory policies.
 Known secret names such as `authorization`, `cookie`, and `x-api-key` remain
 marked sensitive even if a native transformer says otherwise, so HPACK never
 indexes a replacement accidentally. Native transformers are trusted runtime
-code and can see the live snapshot. A future Lua adapter must redact sensitive
-values before constructing Lua data unless the user grants a separate secret
-capability.
+code and can see the live snapshot. The `proxy.tap` capability is also full
+trust: it receives unredacted headers and bodies, including
+authorization and cookie values. Grant it only to plugin code that may read all
+intercepted traffic.
+
+## Exchange capture
+
+`runtime.proxy.capture.enabled` copies each intercepted HTTP exchange for a
+runtime-side consumer. It is off by default. HTTP/1.1 capture retains the
+original head bytes and de-frames chunked bodies. HTTP/2 capture reconstructs
+header fields and joins DATA payloads per stream, including unknown API
+dialects. Capture does not alter the bytes forwarded to either endpoint.
+
+Request and response directions publish independent heap-owned halves. The
+runtime pairs them by connection and stream ID, or releases a partial exchange
+after `join_timeout_ms` when one direction never arrives. Pane identity and
+generation survive the handoff; the proxy credential token does not.
+
+Each head and body stops growing at `max_part_bytes`, each exchange is bounded
+by `max_exchange_bytes`, and all active captures share `max_total_bytes`.
+Truncation is recorded on the affected part. Queue publication is nonblocking;
+quota exhaustion, queue saturation, credential revocation, and shutdown free
+the abandoned buffers while traffic continues. Captured buffers are erased
+before release.
+
+The runtime decodes `gzip`, `deflate`, `zstd`, and Brotli bodies after queue
+delivery, never on a relay task. At most two chained content codings are
+applied in reverse order. Decoded output remains bounded by
+`max_part_bytes`; an unknown or malformed coding preserves the captured wire
+body and marks it as undecoded. Completed exchanges are offered to supervised
+runtime-side Lua workers for enabled packages with an exact `proxy.tap` grant.
+Each worker has its own bounded queue and cannot delay proxy traffic. With no
+authorized tap worker, the runtime records capture metrics and releases the
+exchange.
+
+The shipped
+[`examples/plugins/agent-commands`](../examples/plugins/agent-commands)
+listener demonstrates classification in Lua. It reconstructs command
+arguments from Anthropic and OpenAI streaming events and returns typed history
+effects; Telar does not embed those provider event formats in the proxy.
 
 ## Agent state
 
@@ -225,29 +272,58 @@ completions increase while the agent remains `working`, compare observation
 queue loss and active concurrent model exchanges; provider interpretation has
 already succeeded.
 
-## Lua middleware boundary
+## Lua tap boundary
 
-The runtime currently installs one native observer whose only operation is a
-nonblocking enqueue into the 256-event observation queue. Lua callbacks are not
-accepted in `runtime.proxy` yet.
+The runtime keeps lifecycle and exchange capture on separate nonblocking
+queues. An authorized tap package runs in an isolated long-lived Lua child
+behind its own bounded queue. The tunnel publishes an owned exchange snapshot;
+the worker receives an immutable value and returns typed semantic effects. Zig
+validates the complete batch and its capabilities before applying anything.
+Timeouts, VM errors, stale identities, and full queues discard extension work.
+A Lua closure never enters the runtime loop, a TLS session, or a tunnel actor,
+and it never receives a Zig pointer. See [Proxy tap](flows/proxy-tap.md).
 
-The future adapter must run an isolated Lua worker behind a bounded queue. The
-tunnel copies a value snapshot to that worker; the worker returns typed
-semantic effects; Zig validates the complete batch. Timeouts, VM errors, and
-full queues discard the extension result. A Lua closure never enters the
-runtime loop, a TLS session, or a tunnel actor, and it never receives a Zig
-pointer. Registering a new immutable pipeline generation happens before it can
-accept connections.
+## System trust
 
-## System trust remains unchanged
+ProxyTLS works without changing system trust because Telar injects CA paths
+into panes. Applications that ignore those variables require an explicit trust
+installation:
 
-Installing Telar's CA into Keychain or another system trust store remains a
-separate user decision and is outside the current implementation. The built-in
-passthrough hosts do not require that installation.
+```sh
+telar proxy trust status
+telar proxy trust install
+telar proxy trust uninstall
+```
+
+On macOS, Telar installs into the current user's login keychain without
+`sudo`. On Linux the backend is mandatory: use `--linux
+update-ca-certificates` on Debian-family systems or `--linux trust` on systems
+that provide p11-kit. Telar prints each argv before it starts the process. It
+does not invoke a shell.
+
+The command creates `ca-system-key.pem` and `ca-system-cert.pem`, separate from
+the private CA used by default. The system authority is valid for 30 days. A
+server start replaces it when less than one day remains, removes the prior
+recorded certificate from the selected trust store, and records the new backend,
+fingerprint, and store path in `trust-install.json`. The directory is mode
+0700; CA files and the record are mode 0600. A malformed record stops install
+and uninstall because Telar can no longer prove which certificate it owns.
+
+`--ca-dir PATH` selects the same absolute directory as `runtime.proxy.ca_dir`.
+Without it, the command uses `$XDG_DATA_HOME/telar/proxy` or
+`$HOME/.local/share/telar/proxy`. Keep both settings aligned when config uses a
+custom path.
+
+Firefox may use its own certificate store. The command prints the certificate
+path for manual import and does not modify Firefox profiles. Uninstall uses the
+recorded identity and destination, so it does not remove an unrelated
+certificate.
 
 ## Build dependency
 
-The runtime links the system `libnghttp2` for HPACK decoding and encoding. The
+The runtime links the system `libnghttp2` for HPACK decoding and encoding and
+`libbrotlidec` for captured Brotli bodies. The
 default prefix is `/opt/homebrew/opt/libnghttp2` on Apple Silicon,
 `/usr/local/opt/libnghttp2` on Intel macOS, and `/usr` elsewhere. Override it
-with `zig build -Dnghttp2=/path/to/prefix`.
+with `zig build -Dnghttp2=/path/to/prefix`. The Brotli defaults use the same
+platform prefixes; override them with `zig build -Dbrotli=/path/to/prefix`.

@@ -232,6 +232,13 @@ pub const ProxySample = struct {
     claude_turn_completions: u64 = 0,
     claude_successful_responses: u64 = 0,
     claude_failure_observations: u64 = 0,
+    capture_started: u64 = 0,
+    capture_truncated: u64 = 0,
+    capture_skipped_quota: u64 = 0,
+    capture_dropped_queue: u64 = 0,
+    capture_decode_failed: u64 = 0,
+    capture_queue_depth: u64 = 0,
+    capture_queue_high_water: u64 = 0,
 };
 
 pub const Sample = struct {
@@ -513,7 +520,14 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
             "\"proxy_claude_sse_payload_fragments\":{d}," ++
             "\"proxy_claude_turn_completions\":{d}," ++
             "\"proxy_claude_successful_responses\":{d}," ++
-            "\"proxy_claude_failure_observations\":{d},",
+            "\"proxy_claude_failure_observations\":{d}," ++
+            "\"proxy_capture_started\":{d}," ++
+            "\"proxy_capture_truncated\":{d}," ++
+            "\"proxy_capture_skipped_quota\":{d}," ++
+            "\"proxy_capture_dropped_queue\":{d}," ++
+            "\"proxy_capture_decode_failed\":{d}," ++
+            "\"proxy_capture_queue_depth\":{d}," ++
+            "\"proxy_capture_queue_high_water\":{d},",
         .{
             metrics.agent_process_inspections,
             metrics.agent_process_misses,
@@ -539,6 +553,13 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
             proxy.claude_turn_completions,
             proxy.claude_successful_responses,
             proxy.claude_failure_observations,
+            proxy.capture_started,
+            proxy.capture_truncated,
+            proxy.capture_skipped_quota,
+            proxy.capture_dropped_queue,
+            proxy.capture_decode_failed,
+            proxy.capture_queue_depth,
+            proxy.capture_queue_high_water,
         },
     );
     try output.print("\"history_available\":{d},\"sqlite_open_failures\":{d}," ++
@@ -708,6 +729,13 @@ test "runtime telemetry reports retained memory domains" {
                 .claude_turn_completions = 89,
                 .claude_successful_responses = 97,
                 .claude_failure_observations = 101,
+                .capture_started = 103,
+                .capture_truncated = 107,
+                .capture_skipped_quota = 109,
+                .capture_dropped_queue = 113,
+                .capture_decode_failed = 127,
+                .capture_queue_depth = 131,
+                .capture_queue_high_water = 137,
             },
             .heap = &heap,
         });
@@ -763,6 +791,13 @@ test "runtime telemetry reports retained memory domains" {
             "\"proxy_claude_turn_completions\":89",
             "\"proxy_claude_successful_responses\":97",
             "\"proxy_claude_failure_observations\":101",
+            "\"proxy_capture_started\":103",
+            "\"proxy_capture_truncated\":107",
+            "\"proxy_capture_skipped_quota\":109",
+            "\"proxy_capture_dropped_queue\":113",
+            "\"proxy_capture_decode_failed\":127",
+            "\"proxy_capture_queue_depth\":131",
+            "\"proxy_capture_queue_high_water\":137",
         };
 
         for (expected_fields) |field| {

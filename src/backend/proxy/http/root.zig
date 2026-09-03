@@ -40,6 +40,16 @@ pub const MessageRoute = struct {
     is_response: bool,
     response_to_head: bool,
     dialect: provider.ApiDialect = .unknown,
+    capture: ?HeadSink = null,
+};
+
+pub const HeadSink = struct {
+    context: *anyopaque,
+    append_fn: *const fn (*anyopaque, []const u8) void,
+
+    pub fn append(sink: HeadSink, bytes: []const u8) void {
+        sink.append_fn(sink.context, bytes);
+    }
 };
 
 pub const HeadTransform = struct {
@@ -47,6 +57,7 @@ pub const HeadTransform = struct {
     pipeline: *const middleware.TransformPipeline,
     io: std.Io,
     context: middleware.TransformContext,
+    capture: ?HeadSink = null,
 };
 
 /// Relays one complete HTTP/1.1 message and returns its metadata.
@@ -79,6 +90,9 @@ pub fn relay(session: anytype, route: MessageRoute, observer: anytype) ?Message 
 pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
     var buffer: [max_head_bytes]u8 = undefined;
     const len = head.read(session, route.from, &buffer) orelse return null;
+    if (route.capture) |capture| {
+        capture.append(buffer[0..len]);
+    }
 
     if (!session.writeAll(route.to, buffer[0..len])) {
         return null;
@@ -102,11 +116,16 @@ pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
 /// ```
 pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?Head {
     if (transformation.pipeline.len == 0) {
-        return relayHead(session, transformation.route);
+        var route = transformation.route;
+        route.capture = transformation.capture;
+        return relayHead(session, route);
     }
 
     var original: [max_head_bytes]u8 = undefined;
     const original_len = head.read(session, transformation.route.from, &original) orelse return null;
+    if (transformation.capture) |capture| {
+        capture.append(original[0..original_len]);
+    }
     const original_head = head.analyze(original[0..original_len], .{
         .is_response = transformation.route.is_response,
         .response_to_head = transformation.route.response_to_head,

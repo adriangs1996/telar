@@ -46,6 +46,13 @@ return telar.config({
     proxy = {
       enabled = false,
       ca_dir = "state/proxy",
+      capture = {
+        enabled = false,
+        max_part_bytes = 4 * 1024 * 1024,
+        max_exchange_bytes = 8 * 1024 * 1024,
+        max_total_bytes = 64 * 1024 * 1024,
+        join_timeout_ms = 30000,
+      },
       intercept_hosts = {
         "api.anthropic.com",
         "api.openai.com",
@@ -191,6 +198,12 @@ runtime = {
                                                -- declares this is exempt from the generic
                                                -- prompt-glyph scan
 
+      -- Shell tools reported by this agent's native hooks (optional, max 8).
+      -- Both values are 1..64 and 1..32 bytes respectively.
+      command_tools = {
+        { tool = "Bash", field = "command" },
+      },
+
       -- Client capability (optional). How the agent's prompt identifies pasted
       -- images; "none" (default for new agents) hides the image shelf.
       attachments = "ordered",       -- "none" | "ordered" | "stable_number" | "pasted_path"
@@ -205,6 +218,13 @@ markers after a deletion (Codex), `stable_number` keeps numbers stable (Claude
 Code) and `pasted_path` inserts a temporary file path (Pi). The shipped
 defaults are `stable_number` for `claude`, `ordered` for `codex` and
 `pasted_path` for `pi`.
+
+`command_tools` maps a hook's exact tool name to the string field that contains
+the shell command in `tool_input`. It lets a custom harness participate in
+native command history without adding provider-specific code. Entries with a
+missing mapping, a non-string field or a subagent id are ignored. The shipped
+manifests map Claude Code `Bash.command`, Codex `Bash.command` plus the legacy
+`exec_command.cmd` and `shell.command` names, and Pi `bash.command`.
 
 Overriding a built-in keeps its provider index, artwork and code-level
 capabilities; only the listed fields change. For example, relabel Claude Code
@@ -524,28 +544,52 @@ The runtime evaluates the same file in a disposable VM and retains only typed,
 validated values. No Lua state or closure enters the runtime process.
 `runtime.history.path` is resolved relative to the directory containing
 `config.lua`; its parent directory must already exist. `runtime.proxy` accepts
-`enabled`, `ca_dir`, and `intercept_hosts`. ProxyTLS is disabled by default. A
+`enabled`, `ca_dir`, `capture`, and `intercept_hosts`. ProxyTLS and exchange
+capture are disabled by default. A
 relative `ca_dir` is also resolved beside `config.lua`; Telar creates it
 owner-only and stores its private CA and derived trust bundle there with
 owner-only file permissions. `intercept_hosts` accepts at most 256 exact DNS
-hostnames within a 64,768-byte budget. It defaults to `api.anthropic.com`,
+hostnames, leading wildcard rules such as `*.example.com`, or the global `*`
+rule within a 64,768-byte budget. It defaults to `api.anthropic.com`,
 `api.openai.com`, and `chatgpt.com`; an explicitly configured array replaces
 the defaults, including with an empty array. Telar canonicalizes case, sorts
-the set, and removes duplicates when the runtime starts. Wildcards are
-rejected. Every other connection still passes through Telar's authenticated
-CONNECT listener, but its TCP payload is forwarded opaquely and is not
-observed.
-Explicit server CLI
-graphics limits still override the Lua values. Runtime-owned settings take
-effect when the long-lived runtime starts; restart that runtime to apply a
-changed runtime profile.
+the set, and removes duplicates when the runtime starts. A leading wildcard
+matches proper subdomains but not the bare suffix; `*` matches every hostname.
+Partial labels such as `*example.com` and embedded wildcards are rejected.
+Every connection still requires a live pane credential. A connection outside
+the configured scope passes through the authenticated CONNECT listener, but
+its TCP payload is forwarded opaquely and is not observed.
 
-No proxy callback is accepted by the runtime configuration today. The native
-proxy exposes bounded observation and semantic head-transformation contracts
-for a later isolated Lua worker. Method, target, status, and header effects are
-already validated consistently for HTTP/1.1 and HTTP/2, while bodies remain
-streaming and unavailable to callbacks. Placing a live closure in
-`runtime.proxy` is rejected so Lua cannot enter the runtime or a
-traffic-forwarding actor accidentally. See
-[`proxy-tls.md`](proxy-tls.md) for the trust, observation, and future middleware
-contracts.
+System trust is not a configuration side effect. Run `telar proxy trust
+install|uninstall|status` explicitly. If `ca_dir` is custom, pass the same
+absolute path with `--ca-dir`. Linux installation also requires either
+`--linux update-ca-certificates` or `--linux trust`. The installed authority is
+separate from the private CA, expires after 30 days, and rotates when the
+server starts with less than one day remaining.
+
+`runtime.proxy.capture` accepts `enabled`, `max_part_bytes`,
+`max_exchange_bytes`, `max_total_bytes`, and `join_timeout_ms`. The byte limits
+must satisfy `max_part_bytes <= max_exchange_bytes <= max_total_bytes`; all
+limits and the timeout must be positive. Captured heads and de-framed bodies
+are bounded independently, and a full queue or exhausted quota drops capture
+data without delaying or changing proxied traffic. Response decompression is
+performed on the runtime observation path and is capped by `max_part_bytes`.
+Until a trusted tap plugin is configured, completed captures are consumed only
+for metrics and are not persisted. The shipped
+[`examples/plugins/agent-commands`](../examples/plugins/agent-commands)
+package is an opt-in classifier: install it, grant its exact digest
+`proxy.tap`, `history.write`, and `notifications`, then add the immutable path
+printed by `telar plugin install` to `config.plugins`. Runtime tap workers are
+created only at server startup, so restart the runtime after changing that
+package or its grants.
+
+Explicit server CLI graphics limits still override the Lua values.
+Runtime-owned settings take effect when the long-lived runtime starts; restart
+that runtime to apply a changed runtime profile.
+
+No proxy callback is accepted directly in `runtime.proxy`. Enabled plugin
+packages declare `on_exchange`; the runtime converts them to isolated worker
+specifications and retains no Lua state or closure. Bodies remain streaming on
+the relay path and become available to the worker only as bounded captured
+snapshots. See [`proxy-tls.md`](proxy-tls.md) and
+[`plugins.md`](plugins.md) for the capture and authority contracts.

@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const ca = @import("../ca.zig");
+const capture = @import("../capture/root.zig");
 const metrics = @import("../metrics.zig");
 const interception_policy = @import("../interception_policy.zig");
 const tls = @import("../tls.zig");
@@ -13,7 +14,9 @@ pub const Paths = struct {
     key: []const u8,
     certificate: []const u8,
     bundle: []const u8,
+    system_authority: bool = false,
     intercept_hosts: []const []const u8 = &.{},
+    capture: capture.Config = .{},
 };
 
 pub const Trust = struct {
@@ -39,10 +42,11 @@ pub const Interception = struct {
     /// ```
     pub fn init(io: Io, gpa: std.mem.Allocator, paths: Paths) !Interception {
         const resources: ca.Resources = .{ .io = io, .allocator = gpa };
-        var authority = try ca.Authority.loadOrCreate(resources, .{
-            .key = paths.key,
-            .certificate = paths.certificate,
-        });
+        const files: ca.AuthorityFiles = .{ .key = paths.key, .certificate = paths.certificate };
+        var authority = if (paths.system_authority)
+            try ca.Authority.loadOrCreateSystem(resources, files)
+        else
+            try ca.Authority.loadOrCreate(resources, files);
         defer std.crypto.secureZero(u8, std.mem.asBytes(&authority));
         try authority.writeBundle(resources, paths.bundle);
 

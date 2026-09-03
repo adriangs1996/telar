@@ -60,11 +60,23 @@ pub const ResponseBody = struct {
     bytes: []const u8,
 };
 
+pub const HeaderField = struct {
+    name: []const u8,
+    value: []const u8,
+};
+
+pub const HeaderBlock = struct {
+    stream_id: u32,
+    fields: []const HeaderField,
+};
+
 /// One borrowed observation produced while relaying HTTP/2 frames.
 pub const Event = union(enum) {
     lifecycle: Lifecycle,
+    request_headers: HeaderBlock,
     request_body: RequestBody,
     request_finished: RequestFinished,
+    response_headers: HeaderBlock,
     response_body: ResponseBody,
 };
 
@@ -288,7 +300,7 @@ const Observer = struct {
         if (isHeaderFrame(completed_type)) {
             if (completed_flags & flag_end_headers != 0) {
                 observer.continuation_stream = 0;
-                const decoded = if (observer.failed) Decoded{} else observer.decodeBlock();
+                const decoded = if (observer.failed) Decoded{} else observer.decodeBlock(sink);
                 if (observer.block_kind == .headers) {
                     switch (observer.direction) {
                         .request => {
@@ -421,7 +433,7 @@ const Observer = struct {
         return prefix;
     }
 
-    fn decodeBlock(observer: *Observer) Decoded {
+    fn decodeBlock(observer: *Observer, sink: anytype) Decoded {
         const inflater = observer.inflater orelse {
             observer.fail();
             return .{};
@@ -447,6 +459,20 @@ const Observer = struct {
             if (flags & c.NGHTTP2_HD_INFLATE_EMIT != 0) {
                 const name = field.name[0..field.namelen];
                 const value = field.value[0..field.valuelen];
+                if (observer.block_kind == .headers) {
+                    const fields = [_]HeaderField{.{ .name = name, .value = value }};
+                    switch (observer.direction) {
+                        .request => sink.emit(.{ .request_headers = .{
+                            .stream_id = observer.block_stream,
+                            .fields = &fields,
+                        } }),
+                        .response => sink.emit(.{ .response_headers = .{
+                            .stream_id = observer.block_stream,
+                            .fields = &fields,
+                        } }),
+                    }
+                }
+
                 if (std.mem.eql(u8, name, ":status"))
                     decoded.status_code = std.fmt.parseInt(u16, value, 10) catch 0;
                 if (std.mem.eql(u8, name, ":method")) {
@@ -835,6 +861,13 @@ const Transcoder = struct {
         if (transcoder.block_type == frame_push_promise and
             (direction != .response or promisedStreamId(transcoder) == 0 or
                 promisedStreamId(transcoder) & 1 != 0)) return false;
+        if (kind == .request or kind == .response) {
+            emitHeaders(port, .{
+                .direction = direction,
+                .stream_id = transcoder.block_stream,
+                .headers = &original,
+            });
+        }
         var transformed: middleware.Headers = undefined;
         transformed.copyFrom(&original);
         var context = configuration.transform_context;
@@ -1402,11 +1435,32 @@ fn writeFrameHeader(buffer: *[frame_header_len]u8, header: FrameHeader) void {
     };
 }
 
+const HeaderEmission = struct {
+    direction: Direction,
+    stream_id: u32,
+    headers: *const middleware.Headers,
+};
+
+fn emitHeaders(port: anytype, emission: HeaderEmission) void {
+    for (emission.headers.fields[0..emission.headers.len]) |field| {
+        const fields = [_]HeaderField{.{
+            .name = emission.headers.name(field),
+            .value = emission.headers.value(field),
+        }};
+        switch (emission.direction) {
+            .request => port.emit(.{ .request_headers = .{ .stream_id = emission.stream_id, .fields = &fields } }),
+            .response => port.emit(.{ .response_headers = .{ .stream_id = emission.stream_id, .fields = &fields } }),
+        }
+    }
+}
+
 fn lifecycle(event: Event) ?Lifecycle {
     return switch (event) {
         .lifecycle => |value| value,
+        .request_headers => null,
         .request_body => null,
         .request_finished => null,
+        .response_headers => null,
         .response_body => null,
     };
 }
@@ -1433,6 +1487,7 @@ const BodyCollector = struct {
                 },
                 else => {},
             },
+            .request_headers, .response_headers => {},
             .request_body => |body| {
                 std.debug.assert(body.bytes.len <= collector.bytes.len - collector.len);
                 @memcpy(collector.bytes[collector.len..][0..body.bytes.len], body.bytes);

@@ -58,7 +58,9 @@ one slot belongs to built-in tabs. It may choose only the top-right content.
 Workspace navigation, the sidebar toggle and the permanent ProxyTLS signal
 remain authoritative Telar UI. Narrow rows reserve a usable tabs region,
 truncate custom content and never let the configurable top-right block cover
-the interception badge. A visible sidebar owns the complete left column, so
+the proxy badge. Its peach shield denotes an exact-host policy, red denotes a
+suffix or global wildcard, and yellow denotes installed system trust while the
+proxy is off. A visible sidebar owns the complete left column, so
 both bars start at the workbench edge. Hiding it expands them to the full
 client width.
 

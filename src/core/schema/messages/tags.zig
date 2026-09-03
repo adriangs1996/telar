@@ -44,6 +44,7 @@ pub const ClientTag = enum(u8) {
     request_pane_focus = 0x27,
     complete_pane_focus = 0x28,
     suggest_command = 0x29,
+    report_agent_command = 0x2a,
 };
 
 pub const ServerTag = enum(u8) {

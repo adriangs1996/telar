@@ -6,6 +6,7 @@ const coordinators = @import("coordinators/root.zig");
 const agent_description_coordinator = coordinators.agent_description;
 const history = @import("../../history/root.zig");
 const engine = @import("../../engine/root.zig");
+const plugins = @import("../../plugins/root.zig");
 const attachment_mod = @import("../attachment/root.zig");
 const client_mod = @import("../client/root.zig");
 const runtime_config = @import("../config.zig");
@@ -68,6 +69,7 @@ pub const Initialization = struct {
     socket_path: []const u8,
     agent_manifests: *const core.agent_manifest.Table,
     proxy_runtime: *proxy_resource.Runtime,
+    plugin_service: *plugins.Service,
     agent_description_options: ?AgentDescriptionOptions,
     engine_service: ?*engine.Service = null,
     launch_fault: ?*LaunchTestFault,
@@ -102,6 +104,7 @@ pub const Application = struct {
     executable_path_len: usize,
     agent_manifests: *const core.agent_manifest.Table,
     proxy_runtime: *proxy_resource.Runtime,
+    plugin_service: *plugins.Service,
     agent_description_options: ?AgentDescriptionOptions,
     agent_description_state: agent_description_coordinator.State = .{},
     /// The headless engine, when `runtime.engine` is configured.
@@ -142,6 +145,7 @@ pub const Application = struct {
             .agent_manifests = initialization.agent_manifests,
             .session = .{ .path = initialization.session_path, .resume_agents = initialization.resume_agents },
             .proxy_runtime = initialization.proxy_runtime,
+            .plugin_service = initialization.plugin_service,
             .agent_description_options = initialization.agent_description_options,
             .engine_service = initialization.engine_service,
             .launch_fault = initialization.launch_fault,
@@ -753,6 +757,8 @@ pub const Application = struct {
                 .manifests = application.agent_manifests,
                 .system_metrics = &application.system_metrics,
                 .proxy_active = application.proxy_runtime.active(),
+                .proxy_scope = application.proxy_runtime.interceptionScope(),
+                .proxy_system_trusted = application.proxy_runtime.systemTrusted(),
                 .home = application.inherited_environment.getPosix("HOME"),
                 .client_layouts = &application.model.client_layouts,
             },

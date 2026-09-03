@@ -15,6 +15,7 @@ answer "what happens after this external event?".
 | Schema | `src/core/schema/root.zig` | Bounded runtime-client messages and their encoding |
 | UI values | `src/core/ui/root.zig` | Cells, buffers, geometry and text values shared across the process boundary |
 | Transport | `src/core/transport/root.zig` | Framed byte-stream channels and local endpoint values |
+| Lua runtime | `src/lua/root.zig` | Shared metered VM and restricted standard-library sandbox |
 
 The remaining files in `src/core/` are small pure support modules. Core owns no
 live runtime or client state and imports neither process package.
@@ -43,7 +44,14 @@ disposable frontend process.
 | Agent | `src/backend/agent/root.zig` | Agent evidence precedence and projected agent state |
 | History | `src/backend/history/root.zig` | Command observation, queries and durable storage |
 | Proxy | `src/backend/proxy/root.zig` | Network observation and TLS proxy actors |
+| Proxy capture | `src/backend/proxy/capture/root.zig` | Bounded exchange buffers, delivery, decoding and runtime-side pairing |
+| Tap plugins | `src/backend/plugins/root.zig` | Supervised runtime-side Lua workers and authorized effect protocol |
 | Transport | `src/backend/transport/root.zig` | Runtime side of local connection and handshake |
+
+The shipped `examples/plugins/agent-commands` package is an integration fixture
+across Proxy capture, Tap plugins, and History. Provider-specific JSON and SSE
+classification stays in Lua; the runtime owns only bounded exchange delivery,
+capability authorization, and durable effects.
 
 `src/cli/server.zig` selects the production dependencies and initializes the
 public runtime instance. Behind `src/backend/runtime/root.zig`, the lifetime is
@@ -139,7 +147,7 @@ frontend/config       -> sound, input, graphics, ui
 frontend/plugins      -> input, config
 
 backend/runtime       -> pane, pty, media, process, agent, history, proxy,
-                         transport
+                         plugins, transport
 backend/pane          -> pty, media, process, history
 backend/agent         -> pane, history
 ```
@@ -190,6 +198,8 @@ non-stop event crosses `application.handle` into
 | Completed client write | `runtime/client/send_coordinator.zig` |
 | History worker result | `runtime/entrypoints/events/history_response.zig` |
 | Proxy observation | `runtime/entrypoints/events/proxy_observation.zig` |
+| Proxy exchange half | `runtime/entrypoints/events/proxy_capture.zig` |
+| Tap plugin effects | `runtime/entrypoints/events/plugin_effects.zig` |
 | Agent expiry / description completion | `runtime/application/coordinators/agent_*.zig` |
 | System metrics tick | `runtime/observability/system_metrics_coordinator.zig` |
 | Completed PTY input write | `runtime/entrypoints/events/pane/input.zig` |

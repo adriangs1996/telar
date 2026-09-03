@@ -7,6 +7,8 @@ const frontend = @import("telar-frontend");
 const config = @import("config.zig");
 const parser = @import("parser.zig");
 const runtime_connection = @import("runtime_connection.zig");
+const plugin_cli = @import("plugin.zig");
+const proxy_cli = @import("proxy.zig");
 
 const Io = std.Io;
 const File = Io.File;
@@ -102,6 +104,13 @@ const Launch = struct {
     proxy_cert_buffer: [std.fs.max_path_bytes]u8 = undefined,
     proxy_bundle_buffer: [std.fs.max_path_bytes]u8 = undefined,
     proxy_options: ?backend.runtime.ProxyOptions = null,
+    proxy_system_trusted: bool = false,
+    proxy_capture: backend.proxy.CaptureConfig = .{},
+    tap_specs: [backend.plugins.max_workers]backend.plugins.Spec = undefined,
+    tap_spec_count: u8 = 0,
+    tap_snapshot_buffer: [std.fs.max_path_bytes]u8 = undefined,
+    tap_snapshot_directory: ?[]const u8 = null,
+    trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
 
     fn prepare(launch: *Launch, preparation: Preparation) !void {
         launch.* = .{
@@ -123,6 +132,9 @@ const Launch = struct {
 
         if (launch.options.mode != .background_launcher) {
             try launch.prepareRuntimeStorage();
+            if (launch.config_generation) |generation| {
+                try launch.prepareTapPlugins(generation);
+            }
         }
     }
 
@@ -151,14 +163,19 @@ const Launch = struct {
         }
 
         launch.proxy_intercept_hosts = runtime_config.proxyInterceptHosts(&launch.proxy_intercept_host_storage);
-        if (runtime_config.proxy_enabled) {
-            if (runtime_config.proxyCaDir()) |ca_directory| {
-                launch.configured_proxy_directory = try resolveConfigPath(
-                    launch.process.gpa,
-                    generation.configDir(),
-                    ca_directory,
-                );
-            }
+        launch.proxy_capture = .{
+            .enabled = runtime_config.proxy_capture_enabled,
+            .max_part_bytes = runtime_config.proxy_capture_max_part_bytes,
+            .max_exchange_bytes = runtime_config.proxy_capture_max_exchange_bytes,
+            .max_total_bytes = runtime_config.proxy_capture_max_total_bytes,
+            .join_timeout_ms = runtime_config.proxy_capture_join_timeout_ms,
+        };
+        if (runtime_config.proxyCaDir()) |ca_directory| {
+            launch.configured_proxy_directory = try resolveConfigPath(
+                launch.process.gpa,
+                generation.configDir(),
+                ca_directory,
+            );
         }
         if (runtime_config.agent_descriptions.enabled()) {
             launch.agent_description_options = .{
@@ -194,23 +211,71 @@ const Launch = struct {
             generation.snapshot.runtime.proxy_enabled
         else
             false;
-        const proxy_directory: ?[]const u8 = if (proxy_enabled)
-            launch.configured_proxy_directory orelse block: {
-                const resolved = try resolveProxyDirectory(launch.process.minimal.environ, &launch.default_proxy_buffer);
-                launch.default_proxy_directory = try launch.process.gpa.dupe(u8, resolved);
-                break :block launch.default_proxy_directory.?;
-            }
-        else
-            null;
-        if (proxy_directory) |directory| {
-            try prepareProxyDirectory(launch.process.io, directory);
+        const proxy_directory = launch.configured_proxy_directory orelse block: {
+            const resolved = try resolveProxyDirectory(launch.process.minimal.environ, &launch.default_proxy_buffer);
+            launch.default_proxy_directory = try launch.process.gpa.dupe(u8, resolved);
+            break :block launch.default_proxy_directory.?;
+        };
+        _ = try proxy_cli.rotateIfNeeded(launch.process, proxy_directory);
+        launch.proxy_system_trusted = proxy_cli.trusted(launch.process, proxy_directory);
+        if (proxy_enabled) {
+            const authority_names = proxyAuthorityNames(launch.proxy_system_trusted);
+            try prepareProxyDirectory(launch.process.io, proxy_directory);
             launch.proxy_options = .{
-                .key_path = try std.fmt.bufPrint(&launch.proxy_key_buffer, "{s}/ca-key.pem", .{directory}),
-                .certificate_path = try std.fmt.bufPrint(&launch.proxy_cert_buffer, "{s}/ca-cert.pem", .{directory}),
-                .bundle_path = try std.fmt.bufPrint(&launch.proxy_bundle_buffer, "{s}/ca-bundle.pem", .{directory}),
+                .key_path = try std.fmt.bufPrint(&launch.proxy_key_buffer, "{s}/{s}", .{ proxy_directory, authority_names.key }),
+                .certificate_path = try std.fmt.bufPrint(&launch.proxy_cert_buffer, "{s}/{s}", .{ proxy_directory, authority_names.certificate }),
+                .bundle_path = try std.fmt.bufPrint(&launch.proxy_bundle_buffer, "{s}/ca-bundle.pem", .{proxy_directory}),
+                .system_authority = launch.proxy_system_trusted,
                 .intercept_hosts = launch.proxy_intercept_hosts,
+                .capture = launch.proxy_capture,
             };
         }
+    }
+
+    fn prepareTapPlugins(launch: *Launch, generation: *frontend.config.Generation) !void {
+        const trust_path = try plugin_cli.trustPath(launch.process.minimal.environ, &launch.trust_path_buffer);
+        const trust = try plugin_cli.loadTrustStore(launch.process, trust_path);
+        const registry = try frontend.plugins.Registry.loadWithTrust(
+            launch.process.gpa,
+            launch.process.io,
+            generation.configDir(),
+            generation.pluginSlice(),
+            &trust,
+        );
+
+        for (registry.packages[0..registry.count]) |*package| {
+            if (!package.manifest.capabilities.contains(.proxy_tap)) continue;
+            const granted = grantedCapabilities(&trust, package);
+            if (!granted.contains(.proxy_tap)) continue;
+            if (launch.tap_spec_count == backend.plugins.max_workers) return error.TooManyTapPlugins;
+            const snapshot_root = try launch.ensureTapSnapshot();
+            var package_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const package_path = try std.fmt.bufPrint(&package_buffer, "{s}/package-{d}", .{ snapshot_root, launch.tap_spec_count });
+            try frontend.plugins.installPackage(launch.process.gpa, launch.process.io, package, package_path);
+            const copied = try frontend.plugins.inspectPackage(launch.process.gpa, launch.process.io, package_path);
+            if (!std.mem.eql(u8, &copied.digest, &package.digest)) return error.PluginChangedDuringInstall;
+            var entry_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            const entry = try std.fmt.bufPrint(&entry_buffer, "{s}/{s}", .{ package_path, copied.manifest.entry() });
+            launch.tap_specs[launch.tap_spec_count] = try backend.plugins.Spec.init(launch.tap_spec_count, generation.number, .{
+                .id = copied.manifest.id(),
+                .entry = entry,
+                .digest = copied.digest,
+                .declared = copied.manifest.capabilities,
+                .granted = granted,
+            });
+            launch.tap_spec_count += 1;
+        }
+    }
+
+    fn ensureTapSnapshot(launch: *Launch) ![]const u8 {
+        if (launch.tap_snapshot_directory) |path| return path;
+        var nonce: [16]u8 = undefined;
+        try launch.process.io.randomSecure(&nonce);
+        const nonce_hex = std.fmt.bytesToHex(nonce, .lower);
+        const path = try std.fmt.bufPrint(&launch.tap_snapshot_buffer, "/tmp/telar-tap-workers-{d}-{s}", .{ std.c.getuid(), &nonce_hex });
+        try Io.Dir.cwd().createDir(launch.process.io, path, File.Permissions.fromMode(0o700));
+        launch.tap_snapshot_directory = path;
+        return path;
     }
 
     fn runtimeInitialization(launch: *const Launch) backend.runtime.Initialization {
@@ -227,6 +292,8 @@ const Launch = struct {
                 .history_filters = launch.history_filters,
                 .history_output_capture = launch.history_output_capture,
                 .proxy = launch.proxy_options,
+                .proxy_system_trusted = launch.proxy_system_trusted,
+                .plugins = launch.tap_specs[0..launch.tap_spec_count],
                 .agent_descriptions = launch.agent_description_options,
                 .engine = launch.engine_options,
                 .agent_manifests = launch.agent_manifests,
@@ -288,6 +355,10 @@ const Launch = struct {
     }
 
     fn deinit(launch: *Launch) void {
+        if (launch.tap_snapshot_directory) |directory| {
+            Io.Dir.cwd().deleteTree(launch.process.io, directory) catch {};
+            launch.tap_snapshot_directory = null;
+        }
         if (launch.default_proxy_directory) |directory| {
             launch.process.gpa.free(directory);
             launch.default_proxy_directory = null;
@@ -302,6 +373,16 @@ const Launch = struct {
         }
     }
 };
+
+fn grantedCapabilities(trust: *const core.plugin.TrustStore, package: *const frontend.plugins.Package) core.plugin.CapabilitySet {
+    var granted = core.plugin.CapabilitySet.initEmpty();
+    for (trust.entries[0..trust.count]) |entry| {
+        if (entry.grant.plugin_hash != core.plugin.stableId(package.manifest.id())) continue;
+        if (!std.mem.eql(u8, &entry.grant.digest, &package.digest)) continue;
+        granted.setUnion(entry.grant.capabilities);
+    }
+    return granted;
+}
 
 fn stop(init: std.process.Init, connector: *const RuntimeConnector) !void {
     var connection = connector.connect() catch |err| switch (err) {
@@ -348,6 +429,19 @@ fn resolveProxyDirectory(environ: std.process.Environ, buffer: []u8) ![]const u8
     }
 
     return std.fmt.bufPrint(buffer, "{s}/.local/share/telar/proxy", .{home});
+}
+
+const ProxyAuthorityNames = struct {
+    key: []const u8,
+    certificate: []const u8,
+};
+
+fn proxyAuthorityNames(system_trusted: bool) ProxyAuthorityNames {
+    if (system_trusted) {
+        return .{ .key = "ca-system-key.pem", .certificate = "ca-system-cert.pem" };
+    }
+
+    return .{ .key = "ca-key.pem", .certificate = "ca-cert.pem" };
 }
 
 fn prepareProxyDirectory(io: Io, directory: []const u8) !void {
@@ -477,6 +571,16 @@ test "history and proxy storage prefer XDG data home" {
     try std.testing.expectEqualStrings("/data/telar", history.managed_directory.?);
     try std.testing.expectEqualStrings("/data/telar/history.db", history.path);
     try std.testing.expectEqualStrings("/data/telar/proxy", try resolveProxyDirectory(environ, &proxy_buffer));
+}
+
+test "runtime selects the installed system authority without reusing the private CA" {
+    const private = proxyAuthorityNames(false);
+    const system = proxyAuthorityNames(true);
+
+    try std.testing.expectEqualStrings("ca-key.pem", private.key);
+    try std.testing.expectEqualStrings("ca-cert.pem", private.certificate);
+    try std.testing.expectEqualStrings("ca-system-key.pem", system.key);
+    try std.testing.expectEqualStrings("ca-system-cert.pem", system.certificate);
 }
 
 test "relative configured paths resolve from the config directory" {

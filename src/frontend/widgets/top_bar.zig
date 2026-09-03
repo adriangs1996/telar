@@ -3,7 +3,7 @@
 //! The bar lists every open workspace from the runtime's workspace-list
 //! snapshot, highlights the one this client sits in, and switches on click.
 //! The list collapses to `active +N` on user request or when the row cannot
-//! fit it; the TLS badge never disappears while interception is on.
+//! fit it; the TLS badge remains while interception or system trust is on.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -25,6 +25,8 @@ pub const Input = struct {
     workspaces: *const workspace_list.Snapshot,
     collapsed: bool,
     proxy_tls_active: bool,
+    proxy_tls_scope: schema.ProxyScope = .exact,
+    proxy_system_trusted: bool = false,
     right: *const bars.Slot = &empty_right,
     system_metrics: ?status_bar.Metrics = null,
 };
@@ -80,9 +82,10 @@ pub fn render(context: *widget.Context, input: Input) void {
     }
 
     // The badge is reserved first so a long workspace list cannot push the
-    // interception signal off screen.
+    // interception or installed-trust signal off screen.
     const safe_start = toggle.x + toggle.w + 1;
-    const badge_width: u16 = if (input.proxy_tls_active) @min(area.w, 3) else 0;
+    const badge_visible = input.proxy_tls_active or input.proxy_system_trusted;
+    const badge_width: u16 = if (badge_visible) @min(area.w, 3) else 0;
     const right_capacity = area.x + area.w -| badge_width -| safe_start -| 4;
     const right_width = @min(rightDesiredWidth(input), right_capacity);
     const row_end = area.x + area.w - badge_width - right_width;
@@ -122,7 +125,7 @@ pub fn render(context: *widget.Context, input: Input) void {
         .h = 1,
     }, input);
 
-    if (input.proxy_tls_active) {
+    if (badge_visible) {
         const badge: ui.Rect = .{
             .x = area.x + area.w - badge_width,
             .y = area.y,
@@ -130,7 +133,12 @@ pub fn render(context: *widget.Context, input: Input) void {
             .h = 1,
         };
         const badge_style: ui.Style = .{
-            .fg = context.palette.peach,
+            .fg = if (!input.proxy_tls_active)
+                context.palette.yellow
+            else if (input.proxy_tls_scope == .wildcard)
+                context.palette.red
+            else
+                context.palette.peach,
             .bg = context.palette.panel_bg,
             .flags = .{ .bold = true },
         };
@@ -485,6 +493,62 @@ test "proxy badge reserves the right edge before workspace navigation" {
         buffer.cells[badge_x].text(),
     );
     try std.testing.expect(hits.at(@intCast(badge_x), 0) == null);
+}
+
+test "wildcard proxy scope renders a distinct warning badge" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 20, 1);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &ui.theme.default_theme.palette,
+        .hovered = null,
+    };
+    const workspaces: workspace_list.Snapshot = .{};
+
+    render(&context, .{
+        .area = buffer.area(),
+        .sidebar_visible = true,
+        .location = null,
+        .workspace_name = "telar",
+        .workspaces = &workspaces,
+        .collapsed = false,
+        .proxy_tls_active = true,
+        .proxy_tls_scope = .wildcard,
+    });
+
+    const badge = buffer.at(18, 0).?;
+    try std.testing.expectEqualStrings(ui.icons.Icon.proxy_active.unicodeGlyph(), badge.text());
+    try std.testing.expectEqualDeep(ui.theme.default_theme.palette.red, badge.style.fg);
+}
+
+test "installed system trust keeps a yellow badge while the proxy is off" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 20, 1);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &ui.theme.default_theme.palette,
+        .hovered = null,
+    };
+    const workspaces: workspace_list.Snapshot = .{};
+
+    render(&context, .{
+        .area = buffer.area(),
+        .sidebar_visible = true,
+        .location = null,
+        .workspace_name = "telar",
+        .workspaces = &workspaces,
+        .collapsed = false,
+        .proxy_tls_active = false,
+        .proxy_system_trusted = true,
+    });
+
+    const badge = buffer.at(18, 0).?;
+    try std.testing.expectEqualStrings(ui.icons.Icon.proxy_active.unicodeGlyph(), badge.text());
+    try std.testing.expectEqualDeep(ui.theme.default_theme.palette.yellow, badge.style.fg);
 }
 
 test "configured right content stops before the permanent proxy badge" {

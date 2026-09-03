@@ -103,6 +103,22 @@ test "service negotiates identity encoding for Claude message requests" {
     try std.testing.expectEqualStrings("identity", headers.find("accept-encoding").?);
 }
 
+test "running service leaves exchange capture inert when disabled" {
+    var fixture: TestServiceFixture = .{};
+    try fixture.init(std.testing.io, std.testing.allocator);
+    defer fixture.deinit();
+    const service = fixture.service.?;
+    var worker = try service.start();
+
+    service.cancel(&worker);
+    service.close();
+
+    const snapshot = service.metrics();
+    try std.testing.expectEqual(@as(u64, 0), snapshot.capture_started);
+    try std.testing.expectEqual(@as(u64, 0), snapshot.capture_skipped_quota);
+    try std.testing.expectEqual(@as(u64, 0), snapshot.queued_captures);
+}
+
 fn echoOpaquePayload(io: Io, listener: *net.Server, expected: []const u8) !void {
     const stream = try listener.accept(io);
     defer stream.close(io);

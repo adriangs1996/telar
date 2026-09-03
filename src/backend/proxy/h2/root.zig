@@ -11,6 +11,8 @@ pub const Direction = relay_mod.Direction;
 pub const client_preface = relay_mod.client_preface;
 pub const Stats = relay_mod.Stats;
 pub const Lifecycle = relay_mod.Lifecycle;
+pub const HeaderBlock = relay_mod.HeaderBlock;
+pub const HeaderField = relay_mod.HeaderField;
 pub const RequestBody = relay_mod.RequestBody;
 pub const RequestFinished = relay_mod.RequestFinished;
 pub const ResponseBody = relay_mod.ResponseBody;
@@ -258,7 +260,7 @@ const IntegrationContext = struct {
             .lifecycle => |observed| if (observed.stream_id == 1) {
                 context.request_phase = observed.phase;
             },
-            .request_body, .request_finished, .response_body => {},
+            .request_headers, .request_body, .request_finished, .response_headers, .response_body => {},
         }
     }
 };
@@ -294,7 +296,7 @@ test "HTTP2 connection composition relays both directions before settlement" {
     try std.testing.expectEqualStrings(settings_frame, context.session.childOutput());
     try std.testing.expect(context.session.origin_half_closed);
     try std.testing.expect(context.session.child_half_closed);
-    try std.testing.expectEqual(@as(u32, 1), context.event_count.load(.monotonic));
+    try std.testing.expectEqual(@as(u32, 3), context.event_count.load(.monotonic));
     try std.testing.expectEqual(middleware.Phase.request_started, context.request_phase.?);
     try std.testing.expectEqual(@as(u8, 0), context.decode_failures);
     try std.testing.expectEqual(@as(u8, 1), context.settlements);

@@ -33,6 +33,10 @@ pub const PluginWorkerOptions = struct {
     context: frontend.config.CallbackContext,
 };
 
+pub const TapWorkerOptions = struct {
+    entry: [*:0]const u8,
+};
+
 pub const PluginCommand = enum { inspect, install, trust };
 
 pub const PluginOptions = struct {
@@ -189,6 +193,7 @@ pub const Cli = union(enum) {
     notification: NotificationOptions,
     config_check: ConfigCheckOptions,
     plugin_worker: PluginWorkerOptions,
+    tap_worker: TapWorkerOptions,
     plugin: PluginOptions,
     agent: AgentOptions,
     pane: PaneOptions,
@@ -196,6 +201,7 @@ pub const Cli = union(enum) {
     api: ApiOptions,
     hook: HookOptions,
     integration: IntegrationOptions,
+    proxy: ProxyOptions,
     skill,
     run: RunOptions,
 
@@ -241,6 +247,9 @@ pub const Cli = union(enum) {
         }
         if (std.mem.eql(u8, first, "integration")) {
             return .{ .integration = try IntegrationOptions.parse(args[2..]) };
+        }
+        if (std.mem.eql(u8, first, "proxy")) {
+            return .{ .proxy = try ProxyOptions.parse(args[2..]) };
         }
         if (std.mem.eql(u8, first, "server")) {
             return .{ .server = try ServerOptions.parse(args[2..]) };
@@ -296,6 +305,13 @@ pub const Cli = union(enum) {
                     .focused_pane_id = try std.fmt.parseUnsigned(u64, std.mem.span(args[8]), 10),
                 },
             } };
+        }
+        if (std.mem.eql(u8, first, "tap-worker")) {
+            if (args.len != 3) {
+                return error.InvalidTapWorkerArguments;
+            }
+
+            return .{ .tap_worker = .{ .entry = args[2] } };
         }
         if (std.mem.eql(u8, first, "plugin")) {
             if (args.len < 4) {
@@ -1249,6 +1265,63 @@ pub const IntegrationOptions = struct {
     }
 };
 
+pub const ProxyTrustAction = enum { install, uninstall, status };
+pub const LinuxTrustBackend = enum { update_ca_certificates, trust };
+
+pub const ProxyOptions = struct {
+    action: ProxyTrustAction,
+    ca_dir: ?[*:0]const u8 = null,
+    linux_backend: ?LinuxTrustBackend = null,
+
+    fn parse(args: []const [*:0]const u8) !ProxyOptions {
+        if (args.len < 2 or !std.mem.eql(u8, std.mem.span(args[0]), "trust")) {
+            return error.MissingProxyTrustAction;
+        }
+
+        const action_text = std.mem.span(args[1]);
+        var options: ProxyOptions = .{ .action = if (std.mem.eql(u8, action_text, "install"))
+            .install
+        else if (std.mem.eql(u8, action_text, "uninstall"))
+            .uninstall
+        else if (std.mem.eql(u8, action_text, "status"))
+            .status
+        else
+            return error.UnknownProxyTrustAction };
+        var index: usize = 2;
+        while (index < args.len) {
+            const argument = std.mem.span(args[index]);
+            if (std.mem.eql(u8, argument, "--ca-dir")) {
+                if (options.ca_dir != null or index + 1 >= args.len) {
+                    return error.InvalidProxyTrustDirectory;
+                }
+
+                options.ca_dir = args[index + 1];
+                if (std.mem.span(options.ca_dir.?).len == 0) {
+                    return error.InvalidProxyTrustDirectory;
+                }
+                index += 2;
+            } else if (std.mem.eql(u8, argument, "--linux")) {
+                if (options.linux_backend != null or index + 1 >= args.len) {
+                    return error.InvalidLinuxTrustBackend;
+                }
+
+                const backend_name = std.mem.span(args[index + 1]);
+                options.linux_backend = if (std.mem.eql(u8, backend_name, "update-ca-certificates"))
+                    .update_ca_certificates
+                else if (std.mem.eql(u8, backend_name, "trust"))
+                    .trust
+                else
+                    return error.InvalidLinuxTrustBackend;
+                index += 2;
+            } else {
+                return error.UnknownProxyTrustOption;
+            }
+        }
+
+        return options;
+    }
+};
+
 fn parseHookAgent(text: []const u8) !HookAgent {
     if (std.mem.eql(u8, text, "claude")) {
         return .claude;
@@ -1840,6 +1913,22 @@ test "CLI parses hook and integration commands" {
     try std.testing.expectError(error.UnknownHookAgent, Cli.parse(&unknown, .empty));
 }
 
+test "CLI parses explicit proxy trust actions and Linux backends" {
+    const install = [_][*:0]const u8{ "telar", "proxy", "trust", "install", "--ca-dir", "/tmp/proxy", "--linux", "trust" };
+    const parsed = (try Cli.parse(&install, .empty)).proxy;
+    try std.testing.expectEqual(ProxyTrustAction.install, parsed.action);
+    try std.testing.expectEqualStrings("/tmp/proxy", std.mem.span(parsed.ca_dir.?));
+    try std.testing.expectEqual(LinuxTrustBackend.trust, parsed.linux_backend.?);
+
+    const status = [_][*:0]const u8{ "telar", "proxy", "trust", "status" };
+    try std.testing.expectEqual(ProxyTrustAction.status, (try Cli.parse(&status, .empty)).proxy.action);
+
+    const implicit = [_][*:0]const u8{ "telar", "proxy", "trust" };
+    try std.testing.expectError(error.MissingProxyTrustAction, Cli.parse(&implicit, .empty));
+    const invalid = [_][*:0]const u8{ "telar", "proxy", "trust", "install", "--linux", "automatic" };
+    try std.testing.expectError(error.InvalidLinuxTrustBackend, Cli.parse(&invalid, .empty));
+}
+
 test "CLI parses the remote destination and the server endpoint action" {
     const remote = [_][*:0]const u8{ "telar", "--remote", "dev@build-box", "/bin/zsh" };
     const cli = try Cli.parse(&remote, .empty);
@@ -1904,4 +1993,16 @@ test "history stats parses periods and rejects unknown ones" {
 
     const misplaced = [_][*:0]const u8{ "telar", "history", "list", "--period", "week" };
     try std.testing.expectError(error.UnknownHistoryOption, Cli.parse(&misplaced, .empty));
+}
+
+test "CLI parses the internal tap worker and rejects extra arguments" {
+    const valid = [_][*:0]const u8{ "telar", "tap-worker", "/tmp/package/main.lua" };
+    const parsed = try Cli.parse(&valid, .empty);
+    try std.testing.expectEqualStrings("/tmp/package/main.lua", std.mem.span(parsed.tap_worker.entry));
+
+    const missing = [_][*:0]const u8{ "telar", "tap-worker" };
+    try std.testing.expectError(error.InvalidTapWorkerArguments, Cli.parse(&missing, .empty));
+
+    const extra = [_][*:0]const u8{ "telar", "tap-worker", "/tmp/main.lua", "extra" };
+    try std.testing.expectError(error.InvalidTapWorkerArguments, Cli.parse(&extra, .empty));
 }

@@ -64,6 +64,10 @@ const database_schema =
     \\  duration_ns       INTEGER NOT NULL,
     \\  exit_code         INTEGER,
     \\  status            INTEGER NOT NULL,
+    \\  author            INTEGER NOT NULL DEFAULT 0,
+    \\  origin            INTEGER NOT NULL DEFAULT 0,
+    \\  provider          TEXT,
+    \\  tool_call_id      TEXT,
     \\  UNIQUE(session_id, sequence)
     \\);
     \\CREATE TABLE IF NOT EXISTS command_output (
@@ -97,8 +101,8 @@ const import_command_sql =
     \\INSERT OR IGNORE INTO command
     \\  (session_id, pane_id, location_kind, location_id, tab_id, sequence, command,
     \\   command_truncated, cwd, workspace_path, started_at_ms, duration_ns,
-    \\   exit_code, status, author)
-    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15);
+    \\   exit_code, status, author, origin, provider, tool_call_id)
+    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18);
 ;
 
 const delete_command_sql =
@@ -108,6 +112,18 @@ const delete_command_sql =
 const insert_command_output_sql =
     \\INSERT INTO command_output (command_id, content, truncated, observed_bytes)
     \\VALUES (last_insert_rowid(), ?1, ?2, ?3);
+;
+
+const finish_agent_command_sql =
+    \\UPDATE command SET
+    \\  command = ?1, command_truncated = ?2, cwd = ?3, workspace_path = ?4,
+    \\  duration_ns = CASE
+    \\    WHEN ?5 <= started_at_ms THEN 0
+    \\    WHEN ?5 - started_at_ms > 9223372036854 THEN 9223372036854775807
+    \\    ELSE (?5 - started_at_ms) * 1000000
+    \\  END,
+    \\  exit_code = ?6, status = ?7, author = ?8, origin = ?9, provider = ?10
+    \\WHERE session_id = ?11 AND tool_call_id = ?12;
 ;
 
 const read_command_output_sql =
@@ -135,8 +151,9 @@ const insert_command_sql =
     \\INSERT INTO command
     \\  (session_id, pane_id, location_kind, location_id, tab_id, sequence, command,
     \\   command_truncated, cwd, workspace_path, started_at_ms, duration_ns,
-    \\   exit_code, status, author)
-    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15);
+    \\   exit_code, status, author, origin, provider, tool_call_id)
+    \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+    \\ON CONFLICT(session_id, tool_call_id) WHERE tool_call_id IS NOT NULL DO NOTHING;
 ;
 
 pub const Store = struct {
@@ -150,6 +167,7 @@ pub const Store = struct {
     import_command: *c.sqlite3_stmt,
     delete_command: *c.sqlite3_stmt,
     insert_command_output: *c.sqlite3_stmt,
+    finish_agent_command: *c.sqlite3_stmt,
     read_command_output: *c.sqlite3_stmt,
     fts_available: bool,
 
@@ -174,6 +192,12 @@ pub const Store = struct {
         try ensureColumn(opened, .{ .table = "session", .column = "title_source", .alter_sql = "ALTER TABLE session ADD COLUMN title_source INTEGER;" });
         try ensureColumn(opened, .{ .table = "session", .column = "title_state", .alter_sql = "ALTER TABLE session ADD COLUMN title_state INTEGER;" });
         try ensureColumn(opened, .{ .table = "command", .column = "author", .alter_sql = "ALTER TABLE command ADD COLUMN author INTEGER NOT NULL DEFAULT 0;" });
+        try ensureColumn(opened, .{ .table = "command", .column = "origin", .alter_sql = "ALTER TABLE command ADD COLUMN origin INTEGER NOT NULL DEFAULT 0;" });
+        try ensureColumn(opened, .{ .table = "command", .column = "provider", .alter_sql = "ALTER TABLE command ADD COLUMN provider TEXT;" });
+        try ensureColumn(opened, .{ .table = "command", .column = "tool_call_id", .alter_sql = "ALTER TABLE command ADD COLUMN tool_call_id TEXT;" });
+        if (c.sqlite3_exec(opened, "CREATE UNIQUE INDEX IF NOT EXISTS command_tool_call ON command(session_id, tool_call_id) WHERE tool_call_id IS NOT NULL; UPDATE history_schema SET version = 5 WHERE version < 5;", null, null, null) != c.SQLITE_OK) {
+            return error.HistorySchemaFailed;
+        }
         const fts_available = enableCommandSearchIndex(opened);
 
         const insert_launch_attempt = try prepare(opened, insert_launch_attempt_sql);
@@ -194,6 +218,8 @@ pub const Store = struct {
         errdefer _ = c.sqlite3_finalize(delete_command);
         const insert_command_output = try prepare(opened, insert_command_output_sql);
         errdefer _ = c.sqlite3_finalize(insert_command_output);
+        const finish_agent_command = try prepare(opened, finish_agent_command_sql);
+        errdefer _ = c.sqlite3_finalize(finish_agent_command);
         const read_command_output = try prepare(opened, read_command_output_sql);
         errdefer _ = c.sqlite3_finalize(read_command_output);
         return .{
@@ -207,6 +233,7 @@ pub const Store = struct {
             .import_command = import_command,
             .delete_command = delete_command,
             .insert_command_output = insert_command_output,
+            .finish_agent_command = finish_agent_command,
             .read_command_output = read_command_output,
             .fts_available = fts_available,
         };
@@ -215,6 +242,7 @@ pub const Store = struct {
     pub fn close(store: *Store) void {
         _ = c.sqlite3_finalize(store.read_command_output);
         _ = c.sqlite3_finalize(store.insert_command_output);
+        _ = c.sqlite3_finalize(store.finish_agent_command);
         _ = c.sqlite3_finalize(store.delete_command);
         _ = c.sqlite3_finalize(store.import_command);
         _ = c.sqlite3_finalize(store.import_session);
@@ -337,6 +365,27 @@ pub const Store = struct {
         try stepDone(stmt);
     }
 
+    /// Ensures an agent-originated command has a parent session even when its
+    /// source reported before normal pane-session persistence completed.
+    ///
+    /// ```zig
+    /// try store.ensureCommandSession(command);
+    /// ```
+    pub fn ensureCommandSession(store: *Store, value: *const model.CommandFinished) !void {
+        const stmt = store.import_session;
+        defer reset(stmt);
+        bindBlob(stmt, 1, &value.session_id);
+        _ = c.sqlite3_bind_int64(stmt, 2, @intCast(model.schema.id.raw(value.pane_id)));
+        const location = locationColumns(value.location);
+        _ = c.sqlite3_bind_int(stmt, 3, location.kind);
+        _ = c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
+        _ = c.sqlite3_bind_int64(stmt, 5, @intCast(model.schema.id.raw(value.location.tab_id)));
+        bindText(stmt, 6, value.workspace_path);
+        bindText(stmt, 7, "");
+        _ = c.sqlite3_bind_int64(stmt, 8, value.started_at_ms);
+        try stepDone(stmt);
+    }
+
     /// Idempotent command insert for imports, keyed by the unique
     /// (session id, sequence) pair.
     ///
@@ -366,6 +415,7 @@ pub const Store = struct {
         }
         _ = c.sqlite3_bind_int(stmt, 14, @intFromEnum(value.status));
         _ = c.sqlite3_bind_int(stmt, 15, @intFromEnum(value.author));
+        bindCommandSource(stmt, value);
         try stepDone(stmt);
     }
 
@@ -388,7 +438,7 @@ pub const Store = struct {
         if (c.sqlite3_changes(store.db) != 1) return error.HistorySessionNotFound;
     }
 
-    pub fn insertCommand(store: *Store, value: *const model.CommandFinished) !void {
+    pub fn insertCommand(store: *Store, value: *const model.CommandFinished) !bool {
         const stmt = store.insert_command;
         defer reset(stmt);
         bindBlob(stmt, 1, &value.session_id);
@@ -411,7 +461,46 @@ pub const Store = struct {
         }
         _ = c.sqlite3_bind_int(stmt, 14, @intFromEnum(value.status));
         _ = c.sqlite3_bind_int(stmt, 15, @intFromEnum(value.author));
+        bindCommandSource(stmt, value);
         try stepDone(stmt);
+        return c.sqlite3_changes(store.db) == 1;
+    }
+
+    /// Closes a hook-started command without changing its stable row id.
+    /// Returns false when no matching start was persisted.
+    ///
+    /// ```zig
+    /// if (!try store.finishAgentCommand(command)) _ = try store.insertCommand(command);
+    /// ```
+    pub fn finishAgentCommand(store: *Store, value: *const model.CommandFinished) !bool {
+        if (value.tool_call_id.len == 0) {
+            return false;
+        }
+
+        const stmt = store.finish_agent_command;
+        defer reset(stmt);
+        bindText(stmt, 1, value.command);
+        _ = c.sqlite3_bind_int(stmt, 2, @intFromBool(value.command_truncated));
+        bindText(stmt, 3, value.cwd);
+        bindText(stmt, 4, value.workspace_path);
+        _ = c.sqlite3_bind_int64(stmt, 5, value.started_at_ms);
+        if (value.exit_code) |exit_code| {
+            _ = c.sqlite3_bind_int(stmt, 6, exit_code);
+        } else {
+            _ = c.sqlite3_bind_null(stmt, 6);
+        }
+        _ = c.sqlite3_bind_int(stmt, 7, @intFromEnum(value.status));
+        _ = c.sqlite3_bind_int(stmt, 8, @intFromEnum(value.author));
+        _ = c.sqlite3_bind_int(stmt, 9, @intFromEnum(value.origin));
+        if (value.provider.len == 0) {
+            _ = c.sqlite3_bind_null(stmt, 10);
+        } else {
+            bindText(stmt, 10, value.provider);
+        }
+        bindBlob(stmt, 11, &value.session_id);
+        bindText(stmt, 12, value.tool_call_id);
+        try stepDone(stmt);
+        return c.sqlite3_changes(store.db) == 1;
     }
 
     /// Fuzzy path: scans the newest candidates in scope and keeps the best
@@ -423,7 +512,7 @@ pub const Store = struct {
         var sql = std.Io.Writer.fixed(&sql_buffer);
         try sql.writeAll(
             "SELECT id, pane_id, started_at_ms, duration_ns, exit_code, status, " ++
-                "command, cwd, workspace_path, author FROM command WHERE 1=1",
+                "command, cwd, workspace_path, author, origin, provider FROM command WHERE 1=1",
         );
         if (request.failed_only)
             try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
@@ -501,7 +590,7 @@ pub const Store = struct {
         while (kept < count) : (kept += 1) {
             const entry = &best[kept].entry;
             const entry_bytes = model.encoded_entry_overhead_bytes +
-                entry.command.len + entry.cwd.len + entry.workspace_path.len;
+                entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
             if (entry_bytes > model.max_result_payload_bytes - encoded_bytes) break;
             encoded_bytes += entry_bytes;
         }
@@ -712,7 +801,7 @@ pub const Store = struct {
         var sql = std.Io.Writer.fixed(&sql_buffer);
         try sql.writeAll(
             "SELECT id, pane_id, started_at_ms, duration_ns, exit_code, status, " ++
-                "command, cwd, workspace_path, author FROM command WHERE 1=1",
+                "command, cwd, workspace_path, author, origin, provider FROM command WHERE 1=1",
         );
         // The trigram index probes instead of scanning the whole table, and
         // is case-insensitive like the fallback. Trigram matching needs at
@@ -788,7 +877,7 @@ pub const Store = struct {
 
                 var entry = try readEntry(gpa, stmt);
                 const entry_bytes = model.encoded_entry_overhead_bytes +
-                    entry.command.len + entry.cwd.len + entry.workspace_path.len;
+                    entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
                 if (entry_bytes > model.max_result_payload_bytes - encoded_bytes) {
                     entry.deinit(gpa);
                     break;
@@ -843,6 +932,10 @@ fn enableCommandSearchIndex(db: *c.sqlite3) bool {
             "END; " ++
             "CREATE TRIGGER IF NOT EXISTS command_fts_delete AFTER DELETE ON command BEGIN " ++
             "INSERT INTO command_fts(command_fts, rowid, command) VALUES ('delete', old.id, old.command); " ++
+            "END; " ++
+            "CREATE TRIGGER IF NOT EXISTS command_fts_update AFTER UPDATE OF command ON command BEGIN " ++
+            "INSERT INTO command_fts(command_fts, rowid, command) VALUES ('delete', old.id, old.command); " ++
+            "INSERT INTO command_fts(rowid, command) VALUES (new.id, new.command); " ++
             "END;",
         null,
         null,
@@ -938,6 +1031,20 @@ fn bindBlob(stmt: *c.sqlite3_stmt, index: c_int, value: *const model.SessionId) 
     _ = c.sqlite3_bind_blob(stmt, index, value, value.len, null);
 }
 
+fn bindCommandSource(stmt: *c.sqlite3_stmt, value: *const model.CommandFinished) void {
+    _ = c.sqlite3_bind_int(stmt, 16, @intFromEnum(value.origin));
+    if (value.provider.len == 0) {
+        _ = c.sqlite3_bind_null(stmt, 17);
+    } else {
+        bindText(stmt, 17, value.provider);
+    }
+    if (value.tool_call_id.len == 0) {
+        _ = c.sqlite3_bind_null(stmt, 18);
+    } else {
+        bindText(stmt, 18, value.tool_call_id);
+    }
+}
+
 const LocationColumns = struct { kind: c_int, id: u64 };
 
 fn locationColumns(location: model.schema.TabLocation) LocationColumns {
@@ -954,13 +1061,18 @@ fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !model.Entry {
     errdefer gpa.free(cwd);
     const workspace_path = try columnText(gpa, stmt, 8);
     errdefer gpa.free(workspace_path);
+    const provider = try columnText(gpa, stmt, 11);
+    errdefer gpa.free(provider);
     const raw_history_id = c.sqlite3_column_int64(stmt, 0);
     const raw_pane = c.sqlite3_column_int64(stmt, 1);
     if (raw_history_id <= 0 or raw_pane <= 0) return error.InvalidHistoryId;
     if (command.len > model.schema.max_history_command_bytes or
         cwd.len > model.schema.max_cwd_bytes or
-        workspace_path.len > model.schema.max_cwd_bytes)
+        workspace_path.len > model.schema.max_cwd_bytes or
+        provider.len > model.schema.max_history_provider_bytes)
+    {
         return error.InvalidHistoryText;
+    }
     const raw_pane_id: u64 = @intCast(raw_pane);
     return .{
         .id = @intCast(raw_history_id),
@@ -974,6 +1086,7 @@ fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !model.Entry {
         .status = switch (c.sqlite3_column_int(stmt, 5)) {
             0 => .completed,
             1 => .interrupted,
+            2 => .running,
             else => return error.InvalidHistoryStatus,
         },
         .author = switch (c.sqlite3_column_int(stmt, 9)) {
@@ -981,9 +1094,16 @@ fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !model.Entry {
             1 => .agent,
             else => return error.InvalidHistoryAuthor,
         },
+        .origin = switch (c.sqlite3_column_int(stmt, 10)) {
+            0 => .pane,
+            1 => .hook,
+            2 => .plugin,
+            else => return error.InvalidHistoryOrigin,
+        },
         .command = command,
         .cwd = cwd,
         .workspace_path = workspace_path,
+        .provider = provider,
     };
 }
 
@@ -1175,13 +1295,13 @@ test "persists sessions and filters command history" {
         .output_truncated = false,
         .output_observed = 0,
     };
-    try store.insertCommand(&successful);
+    _ = try store.insertCommand(&successful);
     var failed = successful;
     failed.sequence = 2;
     failed.started_at_ms = 3_000;
     failed.exit_code = 2;
     failed.command = @constCast("git commit");
-    try store.insertCommand(&failed);
+    _ = try store.insertCommand(&failed);
     try store.finishSession(.{ .id = session_id, .finished_at_ms = 4_000 });
 
     const tab_stmt = try prepare(store.db, "SELECT tab_id FROM command WHERE sequence = 1;");
@@ -1276,11 +1396,11 @@ test "author filters partition query results" {
         .output_truncated = false,
         .output_observed = 0,
     };
-    try store.insertCommand(&base);
+    _ = try store.insertCommand(&base);
     base.sequence = 2;
     base.author = .agent;
     base.command = @constCast("zig build test");
-    try store.insertCommand(&base);
+    _ = try store.insertCommand(&base);
 
     const origin: model.QueryOrigin = .{
         .client = .{ .id = 1, .generation = 1 },
@@ -1311,6 +1431,101 @@ test "author filters partition query results" {
     })));
     defer all.deinit();
     try std.testing.expectEqual(@as(usize, 2), all.entries.len);
+}
+
+test "agent command synthesis persists provenance and deduplicates tool calls" {
+    var store = try Store.open(":memory:");
+    defer store.close();
+    var value: model.CommandFinished = .{
+        .session_id = @splat(0x44),
+        .pane_id = @enumFromInt(9),
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(3) }, .tab_id = @enumFromInt(5) },
+        .sequence = 1,
+        .started_at_ms = 100,
+        .duration_ns = 0,
+        .exit_code = null,
+        .status = .running,
+        .author = .agent,
+        .origin = .hook,
+        .cols = 80,
+        .rows = 24,
+        .command = @constCast("zig build test"),
+        .cwd = @constCast("/work"),
+        .workspace_path = @constCast("/work"),
+        .provider = @constCast("codex"),
+        .tool_call_id = @constCast("call-7"),
+        .command_truncated = false,
+        .output = @constCast(""),
+        .output_truncated = false,
+        .output_observed = 0,
+    };
+
+    try store.ensureCommandSession(&value);
+    try std.testing.expect(try store.insertCommand(&value));
+    var plugin = value;
+    plugin.sequence = 2;
+    plugin.status = .completed;
+    plugin.origin = .plugin;
+    plugin.provider = @constCast("tap");
+    try std.testing.expect(!try store.insertCommand(&plugin));
+
+    value.sequence = 3;
+    value.started_at_ms = 250;
+    value.exit_code = 7;
+    value.status = .completed;
+    value.command = @constCast("zig build test --summary all");
+    try std.testing.expect(try store.finishAgentCommand(&value));
+    plugin.sequence = 4;
+    try std.testing.expect(!try store.insertCommand(&plugin));
+
+    const session_count = try prepare(store.db, "SELECT count(*) FROM session;");
+    defer _ = c.sqlite3_finalize(session_count);
+    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(session_count));
+    try std.testing.expectEqual(@as(c_longlong, 1), c.sqlite3_column_int64(session_count, 0));
+
+    const query = try model.Query.init(.{
+        .request_id = @enumFromInt(1),
+        .origin = .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
+        .author = .agent,
+    });
+    const result = try store.query(std.testing.allocator, &query);
+    defer result.deinit();
+    try std.testing.expectEqual(@as(usize, 1), result.entries.len);
+    try std.testing.expectEqual(model.schema.HistoryOrigin.hook, result.entries[0].origin);
+    try std.testing.expectEqualStrings("codex", result.entries[0].provider);
+    try std.testing.expectEqualStrings("zig build test --summary all", result.entries[0].command);
+    try std.testing.expectEqual(model.CommandStatus.completed, result.entries[0].status);
+    try std.testing.expectEqual(@as(i64, 150 * std.time.ns_per_ms), result.entries[0].duration_ns);
+    try std.testing.expectEqual(@as(?i32, 7), result.entries[0].exit_code);
+}
+
+test "opening a version four database migrates command provenance to version five" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrintZ(&path_buffer, "{s}/history.db", .{directory_buffer[0..directory_len]});
+    var db: ?*c.sqlite3 = null;
+    try std.testing.expectEqual(@as(c_int, c.SQLITE_OK), c.sqlite3_open_v2(path.ptr, &db, c.SQLITE_OPEN_READWRITE | c.SQLITE_OPEN_CREATE, null));
+    const opened = db.?;
+    const legacy =
+        "CREATE TABLE history_schema(version INTEGER NOT NULL); INSERT INTO history_schema VALUES(4);" ++
+        "CREATE TABLE session(id BLOB PRIMARY KEY, pane_id INTEGER NOT NULL, location_kind INTEGER NOT NULL, location_id INTEGER NOT NULL, tab_id INTEGER NOT NULL, workspace_path TEXT NOT NULL, shell TEXT NOT NULL, started_at_ms INTEGER NOT NULL, finished_at_ms INTEGER, title TEXT, title_source INTEGER, title_state INTEGER);" ++
+        "CREATE TABLE command(id INTEGER PRIMARY KEY, session_id BLOB NOT NULL REFERENCES session(id), pane_id INTEGER NOT NULL, location_kind INTEGER NOT NULL, location_id INTEGER NOT NULL, tab_id INTEGER NOT NULL, sequence INTEGER NOT NULL, command TEXT NOT NULL, command_truncated INTEGER NOT NULL DEFAULT 0, cwd TEXT NOT NULL, workspace_path TEXT NOT NULL, started_at_ms INTEGER NOT NULL, duration_ns INTEGER NOT NULL, exit_code INTEGER, status INTEGER NOT NULL, author INTEGER NOT NULL DEFAULT 0, UNIQUE(session_id, sequence));";
+    try std.testing.expectEqual(@as(c_int, c.SQLITE_OK), c.sqlite3_exec(opened, legacy, null, null, null));
+    _ = c.sqlite3_close(opened);
+
+    var store = try Store.open(path);
+    defer store.close();
+    const version = try prepare(store.db, "SELECT version FROM history_schema;");
+    defer _ = c.sqlite3_finalize(version);
+    try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(version));
+    try std.testing.expectEqual(@as(c_int, 5), c.sqlite3_column_int(version, 0));
+    const columns = try prepare(store.db, "SELECT origin, provider, tool_call_id FROM command LIMIT 0;");
+    defer _ = c.sqlite3_finalize(columns);
+    try std.testing.expectEqual(@as(c_int, c.SQLITE_DONE), c.sqlite3_step(columns));
 }
 
 test "delete and prune remove rows and keep the FTS index consistent" {
@@ -1350,12 +1565,12 @@ test "delete and prune remove rows and keep the FTS index consistent" {
         .output_truncated = false,
         .output_observed = 0,
     };
-    try store.insertCommand(&value);
+    _ = try store.insertCommand(&value);
     value.sequence = 2;
     value.started_at_ms = 9_000;
     value.exit_code = 0;
     value.command = @constCast("git status");
-    try store.insertCommand(&value);
+    _ = try store.insertCommand(&value);
 
     const origin: model.QueryOrigin = .{
         .client = .{ .id = 1, .generation = 1 },
@@ -1424,7 +1639,7 @@ test "command output rows round trip through the store" {
         .output_truncated = true,
         .output_observed = 9_000,
     };
-    try store.insertCommand(&value);
+    _ = try store.insertCommand(&value);
     try store.insertCommandOutput(&value);
 
     const origin: model.QueryOrigin = .{
@@ -1500,7 +1715,7 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
         value.sequence = index + 1;
         value.started_at_ms = @intCast((index + 1) * 1_000);
         value.command = @constCast(command);
-        try store.insertCommand(&value);
+        _ = try store.insertCommand(&value);
     }
 
     const origin: model.QueryOrigin = .{

@@ -545,6 +545,7 @@ fn encodeHistoryEntry(encoder: *wire.Encoder, entry: HistoryEntry) !void {
     // Imported foreign history legitimately lacks a cwd and workspace path.
     try validateBytes(entry.cwd, types.max_cwd_bytes, true);
     try validateBytes(entry.workspace_path, types.max_cwd_bytes, true);
+    try validateBytes(entry.provider, types.max_history_provider_bytes, true);
     try encoder.writeInt(u64, entry.id);
     try encoder.writeInt(u64, id.raw(entry.pane_id));
     try encoder.writeInt(i64, entry.started_at_ms);
@@ -557,6 +558,8 @@ fn encodeHistoryEntry(encoder: *wire.Encoder, entry: HistoryEntry) !void {
     }
     try encoder.writeByte(@intFromEnum(entry.status));
     try encoder.writeByte(@intFromEnum(entry.author));
+    try encoder.writeByte(@intFromEnum(entry.origin));
+    try encoder.writeSized16(entry.provider);
     try encoder.writeSized32(entry.command);
     try encoder.writeSized16(entry.cwd);
     try encoder.writeSized16(entry.workspace_path);
@@ -575,12 +578,16 @@ fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
     const status = try decodeHistoryStatus(try decoder.readByte());
     const author = std.enums.fromInt(HistoryAuthor, try decoder.readByte()) orelse
         return error.InvalidHistoryAuthor;
+    const origin = std.enums.fromInt(types.HistoryOrigin, try decoder.readByte()) orelse
+        return error.InvalidHistoryOrigin;
+    const provider = try decoder.readSized16();
     const command = try decoder.readSized32();
     const cwd = try decoder.readSized16();
     const workspace_path = try decoder.readSized16();
     try validateBytes(command, types.max_history_command_bytes, false);
     try validateBytes(cwd, types.max_cwd_bytes, true);
     try validateBytes(workspace_path, types.max_cwd_bytes, true);
+    try validateBytes(provider, types.max_history_provider_bytes, true);
     return .{
         .id = history_id,
         .pane_id = pane_id,
@@ -589,6 +596,8 @@ fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
         .exit_code = exit_code,
         .status = status,
         .author = author,
+        .origin = origin,
+        .provider = provider,
         .command = command,
         .cwd = cwd,
         .workspace_path = workspace_path,
@@ -605,6 +614,8 @@ fn skipHistoryEntry(decoder: *wire.Decoder) !void {
     if (try decoder.readBool()) _ = try decoder.readInt(i32);
     _ = try decoder.readByte(); // status
     _ = try decoder.readByte(); // author
+    _ = try decoder.readByte(); // origin
+    if ((try decoder.readSized16()).len > types.max_history_provider_bytes) return error.InvalidByteString;
     if ((try decoder.readSized32()).len > types.max_history_command_bytes)
         return error.InvalidByteString;
     if ((try decoder.readSized16()).len > types.max_cwd_bytes) return error.InvalidByteString;

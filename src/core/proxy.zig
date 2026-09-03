@@ -5,6 +5,10 @@ const std = @import("std");
 pub const max_intercept_hosts = 256;
 pub const max_hostname_bytes = 253;
 pub const max_intercept_bytes = max_intercept_hosts * max_hostname_bytes;
+pub const default_capture_part_bytes = 4 * 1024 * 1024;
+pub const default_capture_exchange_bytes = 8 * 1024 * 1024;
+pub const default_capture_total_bytes = 64 * 1024 * 1024;
+pub const default_capture_join_timeout_ms = 30_000;
 
 pub fn orderHostname(left: []const u8, right: []const u8) std.math.Order {
     const common_len = @min(left.len, right.len);

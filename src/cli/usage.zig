@@ -25,6 +25,7 @@ pub const text =
     \\       telar workspace create --worktree BRANCH [--name NAME] [--directory DIR]
     \\       telar api schema [--json]
     \\       telar integration install|uninstall|status claude|codex|pi [--settings PATH]
+    \\       telar proxy trust install|uninstall|status [--ca-dir PATH] [--linux BACKEND]
     \\       telar hook claude|codex|pi
     \\       telar --skill
     \\
@@ -56,6 +57,7 @@ pub const text =
     \\  api schema       Print the wire contract of this binary
     \\  integration      Register telar's lifecycle reports with an agent (claude hooks, pi extension)
     \\  hook             Entry point that agent hooks run (reads JSON on stdin)
+    \\  proxy trust      Install, remove, or inspect Telar's short-lived system CA
     \\  --skill          Print the bundled agent skill
     \\  config check     Compile and validate config.lua, then exit
     \\  plugin inspect   Validate a package and print its immutable identity
@@ -141,6 +143,7 @@ test "usage names every public subcommand" {
         "history search",
         "notification show",
         "workspace create",
+        "proxy trust",
     }) |command| {
         try std.testing.expect(std.mem.indexOf(u8, text, command) != null);
     }

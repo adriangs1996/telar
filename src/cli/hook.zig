@@ -26,6 +26,10 @@ pub const ClaudeHookInput = struct {
     session_id: []const u8 = "",
     agent_id: ?[]const u8 = null,
     notification_type: []const u8 = "",
+    tool_name: []const u8 = "",
+    tool_use_id: []const u8 = "",
+    tool_input: std.json.Value = .null,
+    cwd: []const u8 = "",
 };
 
 /// The subset of Codex hook input telar reads.
@@ -34,6 +38,10 @@ pub const CodexHookInput = struct {
     session_id: []const u8 = "",
     agent_id: ?[]const u8 = null,
     source: []const u8 = "",
+    tool_name: []const u8 = "",
+    tool_use_id: []const u8 = "",
+    tool_input: std.json.Value = .null,
+    cwd: []const u8 = "",
 };
 
 /// The payload the Telar extension for Pi sends. Pi has no hook files: the
@@ -44,7 +52,74 @@ pub const PiHookInput = struct {
     session_id: []const u8 = "",
     /// Whether Pi had no run in progress when the event fired.
     idle: ?bool = null,
+    tool_name: []const u8 = "",
+    tool_call_id: []const u8 = "",
+    tool_input: std.json.Value = .null,
+    cwd: []const u8 = "",
+    exit_code: ?i32 = null,
 };
+
+const CommandReport = struct {
+    phase: schema.AgentCommandPhase,
+    provider: []const u8,
+    tool_call_id: []const u8,
+    command: []const u8,
+    cwd: []const u8,
+    session: []const u8,
+    exit_code: ?i32,
+};
+
+const ToolHookInput = struct {
+    event: []const u8,
+    agent_id: ?[]const u8 = null,
+    tool_name: []const u8,
+    tool_call_id: []const u8,
+    tool_input: std.json.Value,
+    cwd: []const u8,
+    session: []const u8,
+    exit_code: ?i32,
+};
+
+/// Extracts a shell command using the provider's manifest mapping.
+///
+/// ```zig
+/// const command = mapToolCommand(.claude, input) orelse return;
+/// ```
+fn mapToolCommand(provider: schema.AgentProvider, input: ToolHookInput) ?CommandReport {
+    if (input.agent_id) |agent_id| {
+        if (agent_id.len != 0) {
+            return null;
+        }
+    }
+
+    const phase: schema.AgentCommandPhase = if (std.mem.eql(u8, input.event, "PreToolUse") or
+        std.mem.eql(u8, input.event, "tool_execution_start"))
+        .started
+    else if (std.mem.eql(u8, input.event, "PostToolUse") or
+        std.mem.eql(u8, input.event, "tool_execution_end"))
+        .finished
+    else
+        return null;
+    const field = core.agent_manifest.builtin_table.commandField(provider, input.tool_name) orelse return null;
+    if (input.tool_input != .object) {
+        return null;
+    }
+    const value = input.tool_input.object.get(field) orelse return null;
+    if (value != .string or value.string.len == 0) {
+        return null;
+    }
+
+    const session = if (schema.validateSessionReference(input.session)) |_| input.session else |_| "";
+    return .{
+        .phase = phase,
+        .provider = core.agent_manifest.builtin_table.providerName(provider),
+        .tool_call_id = input.tool_call_id,
+        .command = value.string,
+        .cwd = input.cwd,
+        .session = session,
+        .exit_code = if (phase == .finished) input.exit_code else null,
+    };
+}
 
 /// Maps one Pi extension event to a report. A closed UI prompt reports
 /// `working` while a run continues and `ready` when Pi was idle.
@@ -98,6 +173,9 @@ pub fn mapClaudeHook(input: ClaudeHookInput) ?Report {
     if (std.mem.eql(u8, event, "UserPromptSubmit")) {
         return .{ .state = .working, .session = session };
     }
+    if (std.mem.eql(u8, event, "PreToolUse") or std.mem.eql(u8, event, "PostToolUse")) {
+        return .{ .state = .working, .session = session };
+    }
     if (std.mem.eql(u8, event, "Stop")) {
         return .{ .state = .ready, .session = session };
     }
@@ -139,7 +217,7 @@ pub fn mapCodexHook(input: CodexHookInput) ?Report {
         const state: schema.AgentReportState = if (std.mem.eql(u8, input.source, "compact")) .working else .ready;
         return .{ .state = state, .session = session };
     }
-    if (std.mem.eql(u8, event, "UserPromptSubmit") or std.mem.eql(u8, event, "PostToolUse")) {
+    if (std.mem.eql(u8, event, "UserPromptSubmit") or std.mem.eql(u8, event, "PreToolUse") or std.mem.eql(u8, event, "PostToolUse")) {
         return .{ .state = .working, .session = session };
     }
     if (std.mem.eql(u8, event, "PermissionRequest")) {
@@ -174,36 +252,76 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
     defer init.gpa.free(input);
     var stdin_reader = File.stdin().readerStreaming(init.io, &.{});
     const len = stdin_reader.interface.readSliceShort(input) catch return;
-    const report = switch (options.agent) {
-        .claude => parseClaude(init.gpa, input[0..len]) orelse return,
-        .codex => parseCodex(init.gpa, input[0..len]) orelse return,
-        .pi => parsePi(init.gpa, input[0..len]) orelse return,
-    };
+    const pane: control.Session.PaneRef = .{ .pane_id = pane_id, .pane_generation = pane_generation };
+    switch (options.agent) {
+        .claude => {
+            const parsed = std.json.parseFromSlice(ClaudeHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            defer parsed.deinit();
+            const command = mapToolCommand(.claude, .{
+                .event = parsed.value.hook_event_name,
+                .agent_id = parsed.value.agent_id,
+                .tool_name = parsed.value.tool_name,
+                .tool_call_id = parsed.value.tool_use_id,
+                .tool_input = parsed.value.tool_input,
+                .cwd = parsed.value.cwd,
+                .session = parsed.value.session_id,
+                .exit_code = if (std.mem.eql(u8, parsed.value.hook_event_name, "PostToolUse")) 0 else null,
+            });
+            sendReports(init, options.socket, pane, mapClaudeHook(parsed.value), command);
+        },
+        .codex => {
+            const parsed = std.json.parseFromSlice(CodexHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            defer parsed.deinit();
+            const command = mapToolCommand(.codex, .{
+                .event = parsed.value.hook_event_name,
+                .agent_id = parsed.value.agent_id,
+                .tool_name = parsed.value.tool_name,
+                .tool_call_id = parsed.value.tool_use_id,
+                .tool_input = parsed.value.tool_input,
+                .cwd = parsed.value.cwd,
+                .session = parsed.value.session_id,
+                .exit_code = null,
+            });
+            sendReports(init, options.socket, pane, mapCodexHook(parsed.value), command);
+        },
+        .pi => {
+            const parsed = std.json.parseFromSlice(PiHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            defer parsed.deinit();
+            const command = mapToolCommand(.pi, .{
+                .event = parsed.value.event,
+                .tool_name = parsed.value.tool_name,
+                .tool_call_id = parsed.value.tool_call_id,
+                .tool_input = parsed.value.tool_input,
+                .cwd = parsed.value.cwd,
+                .session = parsed.value.session_id,
+                .exit_code = parsed.value.exit_code,
+            });
+            sendReports(init, options.socket, pane, mapPiHook(parsed.value), command);
+        },
+    }
+}
 
-    var session = control.Session.open(init, options.socket) catch return;
+fn sendReports(init: std.process.Init, socket: ?[*:0]const u8, pane: control.Session.PaneRef, report: ?Report, command: ?CommandReport) void {
+    if (report == null and command == null) {
+        return;
+    }
+
+    var session = control.Session.open(init, socket) catch return;
     defer session.close();
-    session.reportAgent(.{ .pane_id = pane_id, .pane_generation = pane_generation }, report.state, report.session) catch return;
-}
-
-fn parseClaude(gpa: std.mem.Allocator, bytes: []const u8) ?Report {
-    const parsed = std.json.parseFromSlice(ClaudeHookInput, gpa, bytes, .{ .ignore_unknown_fields = true }) catch return null;
-    defer parsed.deinit();
-    const mapped = mapClaudeHook(parsed.value) orelse return null;
-    return .{ .state = mapped.state, .session = mapped.session };
-}
-
-fn parseCodex(gpa: std.mem.Allocator, bytes: []const u8) ?Report {
-    const parsed = std.json.parseFromSlice(CodexHookInput, gpa, bytes, .{ .ignore_unknown_fields = true }) catch return null;
-    defer parsed.deinit();
-    const mapped = mapCodexHook(parsed.value) orelse return null;
-    return .{ .state = mapped.state, .session = mapped.session };
-}
-
-fn parsePi(gpa: std.mem.Allocator, bytes: []const u8) ?Report {
-    const parsed = std.json.parseFromSlice(PiHookInput, gpa, bytes, .{ .ignore_unknown_fields = true }) catch return null;
-    defer parsed.deinit();
-    const mapped = mapPiHook(parsed.value) orelse return null;
-    return .{ .state = mapped.state, .session = mapped.session };
+    if (report) |lifecycle| {
+        session.reportAgent(pane, lifecycle.state, lifecycle.session) catch return;
+    }
+    if (command) |tool| {
+        session.reportAgentCommand(pane, .{
+            .phase = tool.phase,
+            .provider = tool.provider,
+            .tool_call_id = tool.tool_call_id,
+            .command = tool.command,
+            .cwd = tool.cwd,
+            .session = tool.session,
+            .exit_code = tool.exit_code,
+        }) catch return;
+    }
 }
 
 test "Pi extension events map to reports and prompts close into the right state" {
@@ -223,10 +341,12 @@ test "Pi extension events map to reports and prompts close into the right state"
 }
 
 test "Pi hook JSON accepts the extension payload" {
-    const report = parsePi(std.testing.allocator, "{\"event\":\"session_start\",\"session_id\":\"01a061a3-a2e7-7574-9e07-997b8d59340d\",\"idle\":true}").?;
+    const parsed = try std.json.parseFromSlice(PiHookInput, std.testing.allocator, "{\"event\":\"session_start\",\"session_id\":\"01a061a3-a2e7-7574-9e07-997b8d59340d\",\"idle\":true}", .{ .ignore_unknown_fields = true });
+    defer parsed.deinit();
+    const report = mapPiHook(parsed.value).?;
     try std.testing.expectEqual(schema.AgentReportState.ready, report.state);
     try std.testing.expectEqualStrings("01a061a3-a2e7-7574-9e07-997b8d59340d", report.session);
-    try std.testing.expect(parsePi(std.testing.allocator, "not json") == null);
+    try std.testing.expectError(error.SyntaxError, std.json.parseFromSlice(PiHookInput, std.testing.allocator, "not json", .{ .ignore_unknown_fields = true }));
 }
 
 test "Claude hook events map to reports and subagents are ignored" {
@@ -240,7 +360,7 @@ test "Claude hook events map to reports and subagents are ignored" {
     try std.testing.expectEqual(schema.AgentReportState.blocked, mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "permission_prompt" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.ready, mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "idle_prompt" }).?.state);
     try std.testing.expect(mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "auth_success" }) == null);
-    try std.testing.expect(mapClaudeHook(.{ .hook_event_name = "PreToolUse" }) == null);
+    try std.testing.expectEqual(schema.AgentReportState.working, mapClaudeHook(.{ .hook_event_name = "PreToolUse" }).?.state);
     try std.testing.expect(mapClaudeHook(.{ .hook_event_name = "Stop", .agent_id = "sub-1" }) == null);
     try std.testing.expectEqualStrings("", mapClaudeHook(.{ .hook_event_name = "Stop", .session_id = "bad session" }).?.session);
 }
@@ -257,18 +377,78 @@ test "Codex hook events map to reports and subagents are ignored" {
     try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "Stop" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.ready, mapCodexHook(.{ .hook_event_name = "Interrupt" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.exited, mapCodexHook(.{ .hook_event_name = "SessionEnd" }).?.state);
-    try std.testing.expect(mapCodexHook(.{ .hook_event_name = "PreToolUse" }) == null);
+    try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "PreToolUse" }).?.state);
     try std.testing.expect(mapCodexHook(.{ .hook_event_name = "PostToolUse", .agent_id = "sub-1" }) == null);
     try std.testing.expectEqualStrings("", mapCodexHook(.{ .hook_event_name = "Stop", .session_id = "bad session" }).?.session);
 }
 
-test "Codex hook JSON accepts the official event payload" {
+test "installed harness payloads map shell tools through manifests" {
     const session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
-    const payload =
-        \\{"session_id":"0192aaaa-bbbb-cccc-dddd-eeeeffff0000","turn_id":"turn-1","transcript_path":null,"cwd":"/work","hook_event_name":"PermissionRequest","model":"gpt-5.6-sol","permission_mode":"default","tool_name":"exec_command","tool_input":{"cmd":"zig build test"}}
+    const codex_payload =
+        \\{"session_id":"0192aaaa-bbbb-cccc-dddd-eeeeffff0000","turn_id":"turn-1","cwd":"/work","hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"call-7","tool_input":{"command":"zig build test"}}
     ;
-    const report = parseCodex(std.testing.allocator, payload).?;
+    const codex = try std.json.parseFromSlice(CodexHookInput, std.testing.allocator, codex_payload, .{ .ignore_unknown_fields = true });
+    defer codex.deinit();
+    const codex_command = mapToolCommand(.codex, .{
+        .event = codex.value.hook_event_name,
+        .agent_id = codex.value.agent_id,
+        .tool_name = codex.value.tool_name,
+        .tool_call_id = codex.value.tool_use_id,
+        .tool_input = codex.value.tool_input,
+        .cwd = codex.value.cwd,
+        .session = codex.value.session_id,
+        .exit_code = null,
+    }).?;
+    try std.testing.expectEqual(schema.AgentCommandPhase.started, codex_command.phase);
+    try std.testing.expectEqualStrings("codex", codex_command.provider);
+    try std.testing.expectEqualStrings("call-7", codex_command.tool_call_id);
+    try std.testing.expectEqualStrings("zig build test", codex_command.command);
+    try std.testing.expectEqualStrings(session, codex_command.session);
 
-    try std.testing.expectEqual(schema.AgentReportState.blocked, report.state);
-    try std.testing.expectEqualStrings(session, report.session);
+    const claude_payload =
+        \\{"session_id":"0192aaaa-bbbb-cccc-dddd-eeeeffff0000","cwd":"/work","hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"toolu_1","tool_input":{"command":"npm test"}}
+    ;
+    const claude = try std.json.parseFromSlice(ClaudeHookInput, std.testing.allocator, claude_payload, .{ .ignore_unknown_fields = true });
+    defer claude.deinit();
+    const claude_command = mapToolCommand(.claude, .{
+        .event = claude.value.hook_event_name,
+        .agent_id = claude.value.agent_id,
+        .tool_name = claude.value.tool_name,
+        .tool_call_id = claude.value.tool_use_id,
+        .tool_input = claude.value.tool_input,
+        .cwd = claude.value.cwd,
+        .session = claude.value.session_id,
+        .exit_code = 0,
+    }).?;
+    try std.testing.expectEqual(schema.AgentCommandPhase.finished, claude_command.phase);
+    try std.testing.expectEqualStrings("npm test", claude_command.command);
+
+    const pi_payload =
+        \\{"event":"tool_execution_end","session_id":"01a061a3-a2e7-7574-9e07-997b8d59340d","tool_name":"bash","tool_call_id":"pi-3","tool_input":{"command":"git status"},"cwd":"/work","exit_code":1}
+    ;
+    const pi = try std.json.parseFromSlice(PiHookInput, std.testing.allocator, pi_payload, .{ .ignore_unknown_fields = true });
+    defer pi.deinit();
+    const pi_command = mapToolCommand(.pi, .{
+        .event = pi.value.event,
+        .tool_name = pi.value.tool_name,
+        .tool_call_id = pi.value.tool_call_id,
+        .tool_input = pi.value.tool_input,
+        .cwd = pi.value.cwd,
+        .session = pi.value.session_id,
+        .exit_code = pi.value.exit_code,
+    }).?;
+    try std.testing.expectEqual(@as(?i32, 1), pi_command.exit_code);
+
+    var subagent = codex.value;
+    subagent.agent_id = "sub-1";
+    try std.testing.expect(mapToolCommand(.codex, .{
+        .event = subagent.hook_event_name,
+        .agent_id = subagent.agent_id,
+        .tool_name = subagent.tool_name,
+        .tool_call_id = subagent.tool_use_id,
+        .tool_input = subagent.tool_input,
+        .cwd = subagent.cwd,
+        .session = subagent.session_id,
+        .exit_code = null,
+    }) == null);
 }

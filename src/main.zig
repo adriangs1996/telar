@@ -45,6 +45,7 @@ pub fn main(init: std.process.Init) !void {
         .notification => |options| try cli_mod.notification.run(init, options),
         .config_check => |options| try cli_mod.config.runCheck(init, options),
         .plugin_worker => |options| try cli_mod.plugin.runWorker(init, options),
+        .tap_worker => |options| try @import("telar-backend").plugins.runWorker(init, std.mem.span(options.entry)),
         .plugin => |options| try cli_mod.plugin.run(init, options),
         .agent => |options| std.process.exit(try cli_mod.agent.run(init, options)),
         .pane => |options| std.process.exit(try cli_mod.pane.run(init, options)),
@@ -52,6 +53,7 @@ pub fn main(init: std.process.Init) !void {
         .api => |options| try cli_mod.api.run(init, options),
         .hook => |options| try cli_mod.hook.run(init, options),
         .integration => |options| std.process.exit(try cli_mod.integration.run(init, options)),
+        .proxy => |options| std.process.exit(try cli_mod.proxy.run(init, options)),
         .skill => try cli_mod.skill.run(init),
         .run => |options| {
             std.process.exit(try cli_mod.client.run(init, options));

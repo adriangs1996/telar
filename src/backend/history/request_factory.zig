@@ -26,6 +26,7 @@ pub const SessionStartRequest = struct {
 
 pub const CommandContext = struct {
     author: model.schema.HistoryAuthor = .human,
+    origin: model.schema.HistoryOrigin = .pane,
     session_id: model.SessionId,
     pane_id: model.schema.PaneId,
     location: model.schema.TabLocation,
@@ -33,6 +34,8 @@ pub const CommandContext = struct {
     workspace_path: []const u8,
     cols: u16,
     rows: u16,
+    provider: []const u8 = "",
+    tool_call_id: []const u8 = "",
 };
 
 pub const CommandRecord = struct {
@@ -131,7 +134,8 @@ pub fn commandFinished(gpa: std.mem.Allocator, record: CommandRecord) !model.Req
     const context = record.context;
     const command = record.command;
     const allocation_len = @sizeOf(model.CommandFinished) + command.bytes.len +
-        command.cwd.len + context.workspace_path.len + command.output.len;
+        command.cwd.len + context.workspace_path.len + context.provider.len +
+        context.tool_call_id.len + command.output.len;
     const allocation = try gpa.alignedAlloc(u8, .of(model.CommandFinished), allocation_len);
     const value: *model.CommandFinished = @ptrCast(allocation);
     var cursor: usize = @sizeOf(model.CommandFinished);
@@ -142,11 +146,17 @@ pub fn commandFinished(gpa: std.mem.Allocator, record: CommandRecord) !model.Req
     cursor += cwd_copy.len;
     const workspace_copy = allocation[cursor..][0..context.workspace_path.len];
     cursor += workspace_copy.len;
+    const provider_copy = allocation[cursor..][0..context.provider.len];
+    cursor += provider_copy.len;
+    const tool_call_id_copy = allocation[cursor..][0..context.tool_call_id.len];
+    cursor += tool_call_id_copy.len;
     const output_copy = allocation[cursor..][0..command.output.len];
 
     @memcpy(command_copy, command.bytes);
     @memcpy(cwd_copy, command.cwd);
     @memcpy(workspace_copy, context.workspace_path);
+    @memcpy(provider_copy, context.provider);
+    @memcpy(tool_call_id_copy, context.tool_call_id);
     @memcpy(output_copy, command.output);
 
     value.* = .{
@@ -162,11 +172,14 @@ pub fn commandFinished(gpa: std.mem.Allocator, record: CommandRecord) !model.Req
             .interrupted => .interrupted,
         },
         .author = context.author,
+        .origin = context.origin,
         .cols = context.cols,
         .rows = context.rows,
         .command = command_copy,
         .cwd = cwd_copy,
         .workspace_path = workspace_copy,
+        .provider = provider_copy,
+        .tool_call_id = tool_call_id_copy,
         .command_truncated = command.truncated,
         .output = output_copy,
         .output_truncated = command.output_truncated,

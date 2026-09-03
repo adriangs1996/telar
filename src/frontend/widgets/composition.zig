@@ -4,6 +4,7 @@
 //! its region, its order, and the only conditional replacement in the frame.
 
 const workspace = @import("../workspace/root.zig");
+const core = @import("telar-core");
 const agents = @import("../agents/root.zig");
 const bars = @import("../bars/root.zig");
 const layout_mod = workspace.layout;
@@ -22,6 +23,8 @@ const top_bar = @import("top_bar.zig");
 const ui = @import("../ui/root.zig");
 const workbench = @import("workbench.zig");
 
+const schema = core.schema;
+
 pub const Input = struct {
     regions: layout.Regions,
     tabs: ?*const tabs_mod.Model,
@@ -35,6 +38,8 @@ pub const Input = struct {
     sidebar_rounded_focus: bool,
     sidebar_animation_frame: u8,
     proxy_tls_active: bool,
+    proxy_tls_scope: schema.ProxyScope = .exact,
+    proxy_system_trusted: bool = false,
     system_metrics: ?status_bar.Metrics,
     status_mode: status_bar.Mode,
     workspaces: *const workspace_list.Snapshot,
@@ -56,6 +61,8 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         .workspaces = input.workspaces,
         .collapsed = input.workspace_list_collapsed,
         .proxy_tls_active = input.proxy_tls_active,
+        .proxy_tls_scope = input.proxy_tls_scope,
+        .proxy_system_trusted = input.proxy_system_trusted,
         .right = input.bar_state.layout.slot(.top_right),
         .system_metrics = input.system_metrics,
     });

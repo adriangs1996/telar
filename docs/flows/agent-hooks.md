@@ -1,10 +1,10 @@
 # Agent hooks
 
-An agent's own lifecycle hooks are the most reliable evidence about its
-state, and the engineering invariants already rank "full official lifecycle
-reports" first. telar does not depend on them: the proxy and the screen keep
-working when no hook is installed, and a report expires like every other
-evidence so a silent hook hands control back.
+An agent's own hooks are the most reliable evidence about its state and tool
+calls. The engineering invariants already rank "full official lifecycle
+reports" first. telar does not depend on hooks: the proxy and the screen keep
+working when none are installed, and a lifecycle report expires like every
+other evidence so a silent hook hands control back.
 
 ## End-to-end path
 
@@ -18,16 +18,24 @@ Claude Code or Codex fires a hook inside the pane
         |
 telar hook <agent>   (stdin JSON; TELAR_PANE_ID + TELAR_PANE_GENERATION from the env)
         |
-hook.mapClaudeHook or hook.mapCodexHook -> { state, session }
+parse the harness payload once
         |
-schema.report_agent -> routeReportAgent -> ReportAgentHandler
+        +-> lifecycle mapping -> schema.report_agent
+        |                         -> routeReportAgent -> ReportAgentHandler
+        |                         -> Tracker.observeReport -> Agent.applyReport
         |
-Tracker.observeReport -> Agent.applyReport (Evidence source lifecycle_report)
-        |                  + Agent.applySessionReference when the hook carried one
+        +-> manifest command_tools mapping -> schema.report_agent_command
+                                          -> ReportAgentCommandHandler
+                                          -> history.Service.recordAgentCommand
         |
-reproject -> agent_snapshot; working -> done publishes the agent sound;
-a new session reference marks the session checkpoint dirty
+reproject lifecycle state; persist a running or completed agent command
 ```
+
+The hook keeps the parsed JSON arena alive until both requests have been sent.
+A lifecycle request updates the agent projection and session reference. A
+command request runs only for a configured shell-tool mapping. `PreToolUse`
+opens a `running` history row keyed by the tool call id; `PostToolUse` updates
+that row in place. A finish without an open row inserts a completed row.
 
 ## Mapping
 
@@ -35,6 +43,7 @@ a new session reference marks the session checkpoint dirty
 | --- | --- |
 | `SessionStart` | `ready` + session reference |
 | `UserPromptSubmit` | `working` |
+| `PreToolUse`, `PostToolUse` | `working`; a mapped `Bash` call is also recorded |
 | `Stop` | `ready` (projected as `done` until seen) |
 | `Notification` `permission_prompt`, `elicitation_*`, `agent_needs_input` | `blocked` |
 | `Notification` `idle_prompt` | `ready` |
@@ -47,7 +56,7 @@ a new session reference marks the session checkpoint dirty
 | `SessionStart` with source `compact` | `working` + session reference |
 | `UserPromptSubmit` | `working` |
 | `PermissionRequest` | `blocked` |
-| `PostToolUse` | `working`, recovering from a resolved permission request |
+| `PreToolUse`, `PostToolUse` | `working`; a mapped shell call is also recorded |
 | `Stop` | `working`; a confirmed input prompt closes the turn |
 | `Interrupt` | `ready` |
 | `SessionEnd` | `exited`: the report is withdrawn, weaker evidence decides |
@@ -64,11 +73,11 @@ The extension does nothing outside a Telar pane; inside one it runs
 ```text
 Pi extension event
         |
-{ event, session_id, idle }  --stdin-->  telar hook pi
+{ event, session_id, ...event data }  --stdin-->  telar hook pi
         |
-hook.mapPiHook -> { state, session }
+hook lifecycle and manifest command mappings
         |
-schema.report_agent (same path as Claude Code from here)
+schema.report_agent or schema.report_agent_command
 ```
 
 | Pi event | Report |
@@ -78,6 +87,8 @@ schema.report_agent (same path as Claude Code from here)
 | `agent_settled` | `ready` (projected as `done` until seen) |
 | `ui_prompt_start` | `blocked` |
 | `ui_prompt_end` | `ready` when Pi was idle, else `working` |
+| `tool_execution_start` | mapped shell tool opens a running command row |
+| `tool_execution_end` | matching command row is completed |
 | `session_shutdown` | `exited` |
 
 Pi renders no permission prompts of its own, so `blocked` only comes from
@@ -90,8 +101,8 @@ touched.
 ## Ownership
 
 `telar hook` never fails loudly: outside a pane, with a malformed payload or
-an unreachable runtime it exits 0, so the agent is unaffected. It sends one
-bounded request and exits.
+an unreachable runtime it exits 0, so the agent is unaffected. It sends at
+most one bounded lifecycle request and one bounded command request, then exits.
 
 The runtime keeps the report as `Agent.report`, the first evidence
 `chooseEvidence` consults while it is valid. A `working` report expires with
@@ -103,6 +114,19 @@ Codex runs every matching `Stop` hook before it decides whether another hook
 will continue the turn. A `Stop` report therefore keeps the agent `working`.
 A newer, explicit Codex input prompt withdraws that report and projects
 `done`; a continuation produces no prompt and no premature notification.
+
+The command field is data, not harness-specific branching. Built-in manifests
+map Claude Code `Bash.command`, current Codex `Bash.command`, compatibility
+names `exec_command.cmd` and `shell.command`, and Pi `bash.command`. A custom
+manifest can declare the same mapping with `command_tools`. Subagent tool calls
+are ignored. Native hook records use `origin = hook`; a later plugin record with
+the same session and tool call id cannot duplicate it.
+
+Claude Code reports a successful `PostToolUse`, so Telar closes it with exit
+code zero. Failures use Claude Code's separate `PostToolUseFailure` event,
+which Telar does not install. Codex's `PostToolUse` payload does not carry a
+reliable process exit code, so its completed row keeps that field empty. Pi
+reports `isError`; its extension maps that boolean to zero or one.
 
 `telar integration` edits only the event arrays owned by the selected agent,
 adds an entry once per event, removes only entries whose command ends in
@@ -121,9 +145,13 @@ for `SessionEnd` and `Interrupt`.
 - `src/backend/runtime/entrypoints/requests/report_agent.zig` proves the
   reply contract.
 - `src/cli/hook.zig` proves the event mapping and subagent filtering for
-  Claude Code, the Pi event mapping, and that parsed reports own their
-  session reference.
+  Claude Code, Codex and Pi; installed payload shapes; manifest-based shell
+  extraction; and the parsed arena lifetime that backs both requests.
 - `src/cli/integration.zig` proves idempotent install and selective removal
   for Claude Code, and rendering, marker detection and atomic owner-only
   installation for the Pi extension.
-- `src/core/schema_contract_test.zig` pins the `report_agent` bytes.
+- `src/backend/history/persistence/sqlite.zig` proves that native start/finish
+  updates one row and a later plugin observation with the same tool call id is
+  deduplicated.
+- `src/core/schema_contract_test.zig` pins the `report_agent` and
+  `report_agent_command` bytes.

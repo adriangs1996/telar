@@ -18,7 +18,7 @@ const plugins_config = @import("plugins.zig");
 const proxy_config = @import("proxy.zig");
 const session_config = @import("session.zig");
 const theme_config = @import("theme.zig");
-const vm_mod = @import("vm.zig");
+const lua_runtime = @import("telar-lua");
 const keybind = input.keybind;
 const kitty = @import("../graphics/root.zig").kitty;
 const icons = @import("../ui/root.zig").icons;
@@ -26,7 +26,6 @@ const theme_mod = @import("../ui/root.zig").theme;
 
 const Io = std.Io;
 const integer = lua_value.integer;
-const openLibrary = lua_value.openLibrary;
 const pop = lua_value.pop;
 const raiseLua = lua_value.raise;
 const string = lua_value.string;
@@ -34,9 +33,9 @@ const string = lua_value.string;
 pub const api_version: u16 = 2;
 pub const default_memory_limit = config_model.default_memory_limit;
 pub const default_load_instruction_limit = config_model.default_load_instruction_limit;
-pub const default_callback_instruction_limit = vm_mod.default_callback_instruction_limit;
-pub const default_callback_deadline_ns = vm_mod.default_callback_deadline_ns;
-pub const hook_instruction_interval = vm_mod.hook_instruction_interval;
+pub const default_callback_instruction_limit = lua_runtime.default_callback_instruction_limit;
+pub const default_callback_deadline_ns = lua_runtime.default_callback_deadline_ns;
+pub const hook_instruction_interval = lua_runtime.hook_instruction_interval;
 pub const max_bindings = config_model.max_bindings;
 pub const max_binding_keys = config_model.max_binding_keys;
 pub const max_binding_suffix_keys = max_binding_keys - 1;
@@ -97,8 +96,8 @@ pub const InputPaste = config_model.InputPaste;
 pub const InputDecision = config_model.InputDecision;
 pub const Limits = config_model.Limits;
 
-pub const Meter = vm_mod.Meter;
-pub const Vm = vm_mod.Vm;
+pub const Meter = lua_runtime.Meter;
+pub const Vm = lua_runtime.Vm;
 
 pub const Generation = struct {
     gpa: std.mem.Allocator,
@@ -164,7 +163,11 @@ pub const Generation = struct {
         generation.* = .{
             .gpa = gpa,
             .number = number,
-            .vm = try Vm.init(io, .{}),
+            .vm = try Vm.init(io, .{
+                .memory = config_model.default_memory_limit,
+                .instructions = config_model.default_load_instruction_limit,
+                .deadline_after_ns = (config_model.Limits{}).deadline_after_ns,
+            }),
             .config_dir_len = @intCast(config_dir.len),
         };
         @memcpy(generation.config_dir[0..config_dir.len], config_dir);
@@ -437,26 +440,7 @@ pub const Generation = struct {
     }
 
     fn openEnvironment(generation: *Generation) !void {
-        const state = generation.vm.state;
-        openLibrary(state, "_G", lua.luaopen_base);
-        openLibrary(state, lua.LUA_COLIBNAME, lua.luaopen_coroutine);
-        openLibrary(state, lua.LUA_MATHLIBNAME, lua.luaopen_math);
-        openLibrary(state, lua.LUA_STRLIBNAME, lua.luaopen_string);
-        openLibrary(state, lua.LUA_TABLIBNAME, lua.luaopen_table);
-        openLibrary(state, lua.LUA_UTF8LIBNAME, lua.luaopen_utf8);
-        for ([_][*:0]const u8{
-            "collectgarbage",
-            "dofile",
-            "getmetatable",
-            "load",
-            "loadfile",
-            "print",
-            "rawset",
-            "setmetatable",
-        }) |name| {
-            lua.lua_pushnil(state);
-            lua.lua_setglobal(state, name);
-        }
+        try lua_runtime.sandbox.open(generation.vm.state);
     }
 
     fn parseSnapshot(generation: *Generation, diagnostic: *Diagnostic) !void {
@@ -2959,6 +2943,13 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
         \\    proxy = {
         \\      enabled = true,
         \\      ca_dir = "state/proxy",
+        \\      capture = {
+        \\        enabled = true,
+        \\        max_part_bytes = 1024,
+        \\        max_exchange_bytes = 2048,
+        \\        max_total_bytes = 8192,
+        \\        join_timeout_ms = 1500,
+        \\      },
         \\      intercept_hosts = { "updates.example.com", "API.EXAMPLE.COM" },
         \\    },
         \\    agent_descriptions = {
@@ -2994,6 +2985,11 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
         "state/proxy",
         generation.snapshot.runtime.proxyCaDir().?,
     );
+    try std.testing.expect(generation.snapshot.runtime.proxy_capture_enabled);
+    try std.testing.expectEqual(@as(usize, 1024), generation.snapshot.runtime.proxy_capture_max_part_bytes);
+    try std.testing.expectEqual(@as(usize, 2048), generation.snapshot.runtime.proxy_capture_max_exchange_bytes);
+    try std.testing.expectEqual(@as(usize, 8192), generation.snapshot.runtime.proxy_capture_max_total_bytes);
+    try std.testing.expectEqual(@as(u32, 1500), generation.snapshot.runtime.proxy_capture_join_timeout_ms);
     var intercept_host_storage: [max_proxy_intercept_hosts][]const u8 = undefined;
     const intercept_hosts = generation.snapshot.runtime.proxyInterceptHosts(&intercept_host_storage);
     try std.testing.expectEqual(@as(usize, 2), intercept_hosts.len);
@@ -3058,15 +3054,42 @@ test "runtime engine parses its command, deadline and idle interval" {
     }
 }
 
+test "runtime proxy accepts wildcard intercept hosts" {
+    var diagnostic: Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, runtime = { proxy = { intercept_hosts = { '*.Example.com', '*' } } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+
+    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
+    try std.testing.expectEqual(@as(usize, 2), hosts.len);
+    try std.testing.expectEqualStrings("*", hosts[0]);
+    try std.testing.expectEqualStrings("*.example.com", hosts[1]);
+}
+
 test "runtime proxy rejects unsafe intercept host patterns" {
     const cases = [_]struct { source: []const u8, message: []const u8 }{
         .{
-            .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = { '*.example.com' } } } }",
+            .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = { '*example.com' } } } }",
+            .message = "is not a valid hostname",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = { 'api.*.example.com' } } } }",
             .message = "is not a valid hostname",
         },
         .{
             .source = "local h = {}; for i = 1, 257 do h[i] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { intercept_hosts = h } } }",
             .message = "exceeds 256 entries",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { proxy = { capture = { max_part_bytes = 9, max_exchange_bytes = 8 } } } }",
+            .message = "byte limits must satisfy part <= exchange <= total",
         },
     };
     for (cases) |case| {
@@ -3357,7 +3380,8 @@ test "runtime agents extend built-ins and add custom manifests" {
         \\  runtime = {
         \\    agents = {
         \\      { name = "gemini", process_names = { "gemini" }, process_paths = { "/@google/gemini-cli/" },
-        \\        brand = { "gemini" }, identity = { "gemini cli" }, working = { "esc to cancel" } },
+        \\        brand = { "gemini" }, identity = { "gemini cli" }, working = { "esc to cancel" },
+        \\        command_tools = { { tool = "run_shell_command", field = "command" } } },
         \\      { name = "claude", working = { "brewing" } },
         \\    },
         \\  },
@@ -3373,6 +3397,7 @@ test "runtime agents extend built-ins and add custom manifests" {
     try std.testing.expectEqualStrings("gemini", gemini.nameSlice());
     try std.testing.expectEqual(gemini.provider, table.providerFromExecutable("gemini").?);
     try std.testing.expectEqual(gemini.provider, table.detect("Gemini CLI  esc to cancel").?.provider);
+    try std.testing.expectEqualStrings("command", table.commandField(gemini.provider, "run_shell_command").?);
     try std.testing.expectEqual(core.agent_manifest.Status.working, table.detect("brewing").?.status);
     try std.testing.expectEqual(core.schema.AgentProvider.claude, table.detect("Claude Code").?.provider);
 }

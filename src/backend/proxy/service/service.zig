@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const diagnostics = core.diagnostics;
 const configuration_mod = @import("configuration.zig");
+const capture_mod = @import("../capture/root.zig");
 const connection_admission = @import("../connection_admission.zig");
 const credential_registry = @import("../credential_registry.zig");
 const identity = @import("../identity.zig");
@@ -43,6 +44,7 @@ pub const Service = struct {
     credentials: credential_registry.Registry = .{},
     configuration: configuration_mod.Configuration,
     observations: observations_mod.Observations = undefined,
+    captures: capture_mod.Producer = undefined,
     connection_slots: connection_admission.Slots = .init(max_connections),
     telemetry: metrics_mod.Counters = .{},
     next_connection_id: std.atomic.Value(u64) = .init(1),
@@ -77,6 +79,13 @@ pub const Service = struct {
         try service.observations.init(.{
             .context = service,
             .is_live = observationCredentialIsLive,
+        });
+        try service.captures.init(gpa, .{
+            .config = paths.capture,
+            .gate = .{
+                .context = service,
+                .is_live = observationCredentialIsLive,
+            },
         });
 
         return service;
@@ -125,6 +134,7 @@ pub const Service = struct {
     /// ```
     pub fn close(service: *Service) void {
         service.observations.close(service.io);
+        service.captures.close(service.io);
     }
 
     /// Returns the stable connection and trust configuration inherited by
@@ -162,6 +172,24 @@ pub const Service = struct {
         return service.observations.receive(io);
     }
 
+    /// Waits for one captured half whose pane credential remains live.
+    ///
+    /// ```zig
+    /// const half = try service.receiveCapture(io);
+    /// ```
+    pub fn receiveCapture(service: *Service, io: Io) anyerror!*capture_mod.Half {
+        return service.captures.receive(io);
+    }
+
+    /// Decodes a captured body outside the traffic relay task.
+    ///
+    /// ```zig
+    /// service.decodeCapture(half);
+    /// ```
+    pub fn decodeCapture(service: *Service, half: *capture_mod.Half) void {
+        service.captures.decodeBody(half);
+    }
+
     /// Returns one lock-free snapshot without exposing queue, admission, or
     /// counter storage to the caller.
     ///
@@ -172,6 +200,7 @@ pub const Service = struct {
         return service.telemetry.snapshot(.{
             .connections = service.connection_slots.snapshot(),
             .observations = service.observations.metrics(),
+            .captures = service.captures.metrics(),
         });
     }
 
@@ -274,6 +303,7 @@ fn serveConnection(service: *Service, stream: net.Stream) Io.Cancelable!void {
             .transforms = configuration.transforms,
             .has_custom_transformers = configuration.has_custom_transformers,
             .connection_ids = &service.next_connection_id,
+            .captures = &service.captures,
         },
         .child = stream,
     });

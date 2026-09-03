@@ -82,6 +82,29 @@ pub const Filters = struct {
 
         return true;
     }
+
+    /// Applies configured filters to an agent command without treating a
+    /// leading space as shell history control. Secret refusal is optional.
+    ///
+    /// ```zig
+    /// if (!filters.shouldRecordAgent(command, cwd, true)) return;
+    /// ```
+    pub fn shouldRecordAgent(filters: *const Filters, command: []const u8, cwd: []const u8, redact: bool) bool {
+        if (command.len == 0) {
+            return false;
+        }
+        if (redact and filters.secrets and looksLikeSecret(command)) {
+            return false;
+        }
+        if (filters.commands.matches(command)) {
+            return false;
+        }
+        if (filters.cwds.matches(cwd)) {
+            return false;
+        }
+
+        return true;
+    }
 };
 
 const SecretRule = union(enum) {

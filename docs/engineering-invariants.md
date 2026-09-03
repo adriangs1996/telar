@@ -218,10 +218,13 @@ A design is incomplete while any item is unknown.
 - State directories are owner-only. Durable writes are atomic and preserve a
   corrupt prior file for diagnosis.
 - TLS interception is opt-in, scoped, and permanently visible while active.
-- Installing a CA into a system trust store is a separate user-authorized
-  action.
+- System trust requires an explicit reversible CLI action. It uses a separate
+  30-day CA, records the exact installed fingerprint, rotates on server start,
+  and remains visible while installed even if interception is off.
 - Observation failure never changes the forwarded HTTP, HTTP/2, TLS, or PTY
   stream.
+- Exchange listeners receive only whole completed exchanges. Their bounded
+  queues drop obsolete work, and proxy relay never waits for a listener.
 
 ## Lua configuration
 

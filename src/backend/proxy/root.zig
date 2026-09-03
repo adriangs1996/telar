@@ -10,7 +10,10 @@ const pty = @import("../pty/root.zig");
 const lifecycle_mod = @import("lifecycle.zig");
 const metrics_mod = @import("metrics.zig");
 const middleware = @import("middleware.zig");
+const capture_mod = @import("capture/root.zig");
 const service_mod = @import("service/root.zig");
+
+pub const ca = @import("ca.zig");
 
 const Io = std.Io;
 
@@ -18,12 +21,19 @@ pub const PaneKey = pane_mod.PaneKey;
 pub const ObservationPhase = middleware.Phase;
 pub const ObservationProtocol = middleware.Protocol;
 pub const ApiDialect = middleware.ApiDialect;
+pub const CaptureConfig = capture_mod.Config;
+pub const CaptureExchange = capture_mod.Exchange;
+pub const CaptureHalf = capture_mod.Half;
+pub const CaptureJoiner = capture_mod.Joiner;
+pub const CaptureOutcome = capture_mod.Outcome;
 
 pub const Config = struct {
     key_path: []const u8,
     certificate_path: []const u8,
     bundle_path: []const u8,
+    system_authority: bool = false,
     intercept_hosts: []const []const u8 = &.{},
+    capture: capture_mod.Config = .{},
 };
 
 pub const Observation = struct {
@@ -90,7 +100,9 @@ pub const Proxy = struct {
             .key = config.key_path,
             .certificate = config.certificate_path,
             .bundle = config.bundle_path,
+            .system_authority = config.system_authority,
             .intercept_hosts = config.intercept_hosts,
+            .capture = config.capture,
         });
 
         proxy.* = .{
@@ -112,6 +124,24 @@ pub const Proxy = struct {
         const gpa = proxy.gpa;
         proxy.lifecycle.deinit();
         gpa.destroy(proxy);
+    }
+
+    /// Waits for one live, heap-owned captured exchange half.
+    ///
+    /// ```zig
+    /// const half = try proxy.receiveCapture(io);
+    /// ```
+    pub fn receiveCapture(proxy: *Proxy, io: Io) anyerror!*capture_mod.Half {
+        return proxy.lifecycle.service.receiveCapture(io);
+    }
+
+    /// Decodes one captured body on the runtime observation path.
+    ///
+    /// ```zig
+    /// proxy.decodeCapture(half);
+    /// ```
+    pub fn decodeCapture(proxy: *Proxy, half: *capture_mod.Half) void {
+        proxy.lifecycle.service.decodeCapture(half);
     }
 
     /// Registers one pane generation and returns its owned child environment.

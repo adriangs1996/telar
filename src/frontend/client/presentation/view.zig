@@ -65,6 +65,8 @@ pub const RenderInput = struct {
     history: *const history_palette_state.State = &empty_history_palette,
     suggestion: *const suggestion_state.State = &empty_suggestion,
     proxy_tls_active: bool = false,
+    proxy_tls_scope: schema.ProxyScope = .exact,
+    proxy_system_trusted: bool = false,
     system_metrics: ?client_model.SystemMetrics = null,
     status_mode: widgets.status_bar.Mode = .normal,
     copy_mode_active: bool = false,
@@ -670,6 +672,8 @@ pub const State = struct {
             .sidebar_rounded_focus = focused_card_color != null,
             .sidebar_animation_frame = input.sidebar_animation_frame,
             .proxy_tls_active = input.proxy_tls_active,
+            .proxy_tls_scope = input.proxy_tls_scope,
+            .proxy_system_trusted = input.proxy_system_trusted,
             .system_metrics = if (input.system_metrics) |metrics| .{
                 .cpu_percent = metrics.cpu_percent,
                 .memory_used_decigib = metrics.memory_used_decigib,

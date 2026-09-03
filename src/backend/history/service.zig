@@ -29,6 +29,15 @@ pub const Service = struct {
     pub const SessionStartRequest = request_factory.SessionStartRequest;
     pub const CommandContext = request_factory.CommandContext;
     pub const CommandRecord = request_factory.CommandRecord;
+    pub const AgentCommandRecord = struct {
+        context: CommandContext,
+        command: terminal.Command,
+        provider: []const u8 = "",
+        tool_call_id: []const u8 = "",
+        origin: core.schema.HistoryOrigin,
+        phase: core.schema.AgentCommandPhase = .finished,
+        redact: bool = true,
+    };
 
     /// Creates the bounded history channel and opens its SQLite adapter. A
     /// database-open failure produces an observable degraded service instead
@@ -212,6 +221,55 @@ pub const Service = struct {
         return service.submit(io, request);
     }
 
+    /// Queues an agent command with explicit provenance and optional secret
+    /// filtering. Leading spaces are data, not shell history control.
+    ///
+    /// ```zig
+    /// _ = service.recordAgentCommand(io, record);
+    /// ```
+    pub fn recordAgentCommand(service: *Service, io: std.Io, record: AgentCommandRecord) bool {
+        if (record.origin == .pane) {
+            return false;
+        }
+        if (record.phase == .started and record.tool_call_id.len == 0) {
+            return true;
+        }
+        if (record.command.bytes.len == 0 or
+            record.command.bytes.len > core.schema.max_history_command_bytes or
+            record.command.cwd.len > core.schema.max_cwd_bytes or
+            record.context.workspace_path.len > core.schema.max_cwd_bytes or
+            record.provider.len > core.schema.max_history_provider_bytes or
+            record.tool_call_id.len > core.schema.max_history_tool_call_id_bytes)
+        {
+            return false;
+        }
+        if (!std.unicode.utf8ValidateSlice(record.provider) or
+            !std.unicode.utf8ValidateSlice(record.tool_call_id) or
+            std.mem.indexOfScalar(u8, record.provider, 0) != null or
+            std.mem.indexOfScalar(u8, record.tool_call_id, 0) != null)
+        {
+            return false;
+        }
+        if (!service.filters.shouldRecordAgent(record.command.bytes, record.command.cwd, record.redact)) {
+            return true;
+        }
+
+        var context = record.context;
+        context.author = .agent;
+        context.origin = record.origin;
+        context.provider = record.provider;
+        context.tool_call_id = record.tool_call_id;
+        var request = request_factory.commandFinished(service.gpa, .{
+            .context = context,
+            .command = record.command,
+        }) catch return false;
+        request.command_finished.status = switch (record.phase) {
+            .started => .running,
+            .finished => request.command_finished.status,
+        };
+        return service.submit(io, request);
+    }
+
     /// Queues one history search and produces an asynchronous response.
     ///
     /// ```zig
@@ -311,4 +369,43 @@ test "database open degradation remains visible through the service facade" {
     try std.testing.expect(!stats.available);
     try std.testing.expectEqual(@as(u64, 1), stats.sqlite_open_failures);
     try std.testing.expect(service.openError() != null);
+}
+
+test "agent recording applies secret filtering by default but keeps leading spaces" {
+    const io = std.testing.io;
+    var service = try Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
+    defer {
+        service.stop(io);
+        service.deinit(io);
+    }
+    const context: Service.CommandContext = .{
+        .session_id = @splat(4),
+        .pane_id = @enumFromInt(2),
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
+        .sequence = 1,
+        .workspace_path = "/work",
+        .cols = 80,
+        .rows = 24,
+    };
+    const secret: terminal.Command = .{
+        .bytes = "deploy token=cleartext",
+        .cwd = "/work",
+        .started_at_ms = 1,
+        .duration_ns = 1,
+        .exit_code = 0,
+        .status = .completed,
+        .truncated = false,
+    };
+
+    try std.testing.expect(service.recordAgentCommand(io, .{ .context = context, .command = secret, .provider = "tap", .origin = .plugin }));
+    try std.testing.expectEqual(@as(u64, 0), service.statsSnapshot().queued);
+    try std.testing.expect(service.recordAgentCommand(io, .{ .context = context, .command = secret, .provider = "tap", .origin = .plugin, .redact = false }));
+    try std.testing.expectEqual(@as(u64, 1), service.statsSnapshot().queued);
+
+    var spaced = secret;
+    spaced.bytes = " git status";
+    var next = context;
+    next.sequence = 2;
+    try std.testing.expect(service.recordAgentCommand(io, .{ .context = next, .command = spaced, .provider = "hook", .origin = .hook }));
+    try std.testing.expectEqual(@as(u64, 2), service.statsSnapshot().queued);
 }
