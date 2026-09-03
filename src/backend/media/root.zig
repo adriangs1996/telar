@@ -508,7 +508,9 @@ fn parseFileQueryControl(control: []const u8) ?FileQueryControl {
         const value = field[equals + 1 ..];
         switch (field[0]) {
             'a' => {
-                if (query or !std.mem.eql(u8, value, "q")) return null;
+                if (query or !std.mem.eql(u8, value, "q")) {
+                    return null;
+                }
                 query = true;
             },
             't' => {
