@@ -52,3 +52,11 @@ five failures inside ten minutes disable that worker until the runtime restarts.
 Shutdown first stops proxy production, then closes worker queues and kills each
 child and its descendants. Captured buffers and protocol frames are scrubbed by
 their single owner before release.
+
+The shipped `examples/plugins/agent-commands` package is the end-to-end
+classifier fixture. Host tests load its real Lua entrypoint, deliver Anthropic
+and OpenAI streaming exchanges split across argument deltas, verify
+`Bash.command` and `exec_command.cmd`, verify the non-stream
+`shell.command` path, and reject truncated or undecoded bodies. This keeps
+provider event interpretation outside the runtime while proving the typed
+effect boundary.

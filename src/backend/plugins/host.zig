@@ -21,16 +21,20 @@ const Host = struct {
     module_cache_ref: c_int = lua.LUA_NOREF,
 
     fn init(init_process: std.process.Init, entry_path: []const u8) !Host {
+        return initWithResources(init_process.io, init_process.gpa, entry_path);
+    }
+
+    fn initWithResources(io: Io, gpa: std.mem.Allocator, entry_path: []const u8) !Host {
         const root = std.fs.path.dirname(entry_path) orelse return error.InvalidEntrypoint;
         var host: Host = .{
-            .io = init_process.io,
-            .gpa = init_process.gpa,
-            .vm = try lua_runtime.Vm.init(init_process.io, .{
+            .io = io,
+            .gpa = gpa,
+            .vm = try lua_runtime.Vm.init(io, .{
                 .memory = 64 * 1024 * 1024,
                 .instructions = 5_000_000,
                 .deadline_after_ns = 200 * std.time.ns_per_ms,
             }),
-            .package_root = try init_process.gpa.dupe(u8, root),
+            .package_root = try gpa.dupe(u8, root),
         };
         errdefer host.deinit();
         try lua_runtime.sandbox.open(host.vm.state);
@@ -476,4 +480,90 @@ fn validModuleName(name: []const u8) bool {
 fn pathInside(root: []const u8, candidate: []const u8) bool {
     return std.mem.startsWith(u8, candidate, root) and
         (candidate.len == root.len or (candidate.len > root.len and candidate[root.len] == std.fs.path.sep));
+}
+
+test "shipped agent command tap accumulates Anthropic and OpenAI arguments" {
+    var host = try Host.initWithResources(std.testing.io, std.testing.allocator, "examples/plugins/agent-commands/plugin.lua");
+    defer host.deinit();
+
+    const anthropic_body =
+        "event: content_block_start\n" ++
+        "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"Bash\",\"input\":{}}}\n\n" ++
+        "event: content_block_delta\n" ++
+        "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\":\\\"zig \"}}\n\n" ++
+        "event: content_block_delta\n" ++
+        "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"build test\\\"}\"}}\n\n" ++
+        "event: content_block_stop\n" ++
+        "data: {\"type\":\"content_block_stop\",\"index\":1}\n\n";
+    const anthropic = try host.invoke(testExchange(.anthropic_messages, anthropic_body));
+    try std.testing.expectEqual(@as(u8, 2), anthropic.len);
+    try std.testing.expectEqualStrings("zig build test", anthropic.items[0].record_command.command);
+    try std.testing.expectEqualStrings("toolu_1", anthropic.items[0].record_command.tool_call_id);
+    try std.testing.expectEqualStrings("claude", anthropic.items[0].record_command.provider);
+
+    const openai_body =
+        "event: response.output_item.added\n" ++
+        "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"fc_1\",\"call_id\":\"call_1\",\"type\":\"function_call\",\"name\":\"exec_command\",\"arguments\":\"\"}}\n\n" ++
+        "event: response.function_call_arguments.delta\n" ++
+        "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_1\",\"delta\":\"{\\\"cmd\\\":\\\"rg \"}\n\n" ++
+        "event: response.function_call_arguments.delta\n" ++
+        "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_1\",\"delta\":\"TODO\\\"}\"}\n\n" ++
+        "event: response.function_call_arguments.done\n" ++
+        "data: {\"type\":\"response.function_call_arguments.done\",\"item_id\":\"fc_1\",\"name\":\"exec_command\"}\n\n";
+    const openai = try host.invoke(testExchange(.openai_responses, openai_body));
+    try std.testing.expectEqual(@as(u8, 2), openai.len);
+    try std.testing.expectEqualStrings("rg TODO", openai.items[0].record_command.command);
+    try std.testing.expectEqualStrings("call_1", openai.items[0].record_command.tool_call_id);
+    try std.testing.expectEqualStrings("codex", openai.items[0].record_command.provider);
+}
+
+test "shipped agent command tap maps non-stream shell commands and rejects unusable bodies" {
+    var host = try Host.initWithResources(std.testing.io, std.testing.allocator, "examples/plugins/agent-commands/plugin.lua");
+    defer host.deinit();
+
+    const body =
+        "{\"output\":[{\"id\":\"fc_2\",\"call_id\":\"call_2\",\"type\":\"function_call\"," ++
+        "\"name\":\"shell\",\"arguments\":\"{\\\"command\\\":\\\"git status\\\"}\"}]}";
+    const complete = try host.invoke(testExchange(.openai_responses, body));
+    try std.testing.expectEqual(@as(u8, 2), complete.len);
+    try std.testing.expectEqualStrings("git status", complete.items[0].record_command.command);
+
+    var truncated_exchange = testExchange(.openai_responses, body);
+    truncated_exchange.response.?.body_truncated = true;
+    const truncated = try host.invoke(truncated_exchange);
+    try std.testing.expectEqual(@as(u8, 0), truncated.len);
+
+    var undecoded_exchange = testExchange(.openai_responses, body);
+    undecoded_exchange.response.?.decoded = false;
+    const undecoded = try host.invoke(undecoded_exchange);
+    try std.testing.expectEqual(@as(u8, 0), undecoded.len);
+}
+
+fn testExchange(dialect: @import("../proxy/root.zig").ApiDialect, body: []const u8) protocol.Exchange {
+    return .{
+        .id = 1,
+        .generation = 1,
+        .pane = @enumFromInt(1),
+        .pane_generation = 1,
+        .host = "api.example.com",
+        .protocol = .h2,
+        .dialect = dialect,
+        .connection_id = 1,
+        .stream_id = 1,
+        .method = "POST",
+        .target = "/v1/responses",
+        .started_at_ms = 100,
+        .request = null,
+        .response = .{
+            .head = ":status: 200\r\n",
+            .body = body,
+            .encoding = "identity",
+            .decoded = true,
+            .head_truncated = false,
+            .body_truncated = false,
+            .status_code = 200,
+            .outcome = .finished,
+            .finished_at_ms = 120,
+        },
+    };
 }

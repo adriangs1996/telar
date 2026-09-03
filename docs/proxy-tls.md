@@ -136,8 +136,8 @@ redaction, retention, timeout, and memory policies.
 Known secret names such as `authorization`, `cookie`, and `x-api-key` remain
 marked sensitive even if a native transformer says otherwise, so HPACK never
 indexes a replacement accidentally. Native transformers are trusted runtime
-code and can see the live snapshot. The future `proxy.tap` capability is also
-full trust: it will receive unredacted headers and bodies, including
+code and can see the live snapshot. The `proxy.tap` capability is also full
+trust: it receives unredacted headers and bodies, including
 authorization and cookie values. Grant it only to plugin code that may read all
 intercepted traffic.
 
@@ -165,9 +165,17 @@ The runtime decodes `gzip`, `deflate`, `zstd`, and Brotli bodies after queue
 delivery, never on a relay task. At most two chained content codings are
 applied in reverse order. Decoded output remains bounded by
 `max_part_bytes`; an unknown or malformed coding preserves the captured wire
-body and marks it as undecoded. The current sink only records metrics and
-releases exchanges; the trusted Lua consumer is implemented in the next
-capability phase.
+body and marks it as undecoded. Completed exchanges are offered to supervised
+runtime-side Lua workers for enabled packages with an exact `proxy.tap` grant.
+Each worker has its own bounded queue and cannot delay proxy traffic. With no
+authorized tap worker, the runtime records capture metrics and releases the
+exchange.
+
+The shipped
+[`examples/plugins/agent-commands`](../examples/plugins/agent-commands)
+listener demonstrates classification in Lua. It reconstructs command
+arguments from Anthropic and OpenAI streaming events and returns typed history
+effects; Telar does not embed those provider event formats in the proxy.
 
 ## Agent state
 
@@ -264,18 +272,16 @@ completions increase while the agent remains `working`, compare observation
 queue loss and active concurrent model exchanges; provider interpretation has
 already succeeded.
 
-## Lua middleware boundary
+## Lua tap boundary
 
-The runtime installs separate nonblocking lifecycle and exchange-capture
-queues. Lua callbacks are not accepted in `runtime.proxy` yet.
-
-The future adapter must run an isolated Lua worker behind a bounded queue. The
-tunnel copies a value snapshot to that worker; the worker returns typed
-semantic effects; Zig validates the complete batch. Timeouts, VM errors, and
-full queues discard the extension result. A Lua closure never enters the
-runtime loop, a TLS session, or a tunnel actor, and it never receives a Zig
-pointer. Registering a new immutable pipeline generation happens before it can
-accept connections.
+The runtime keeps lifecycle and exchange capture on separate nonblocking
+queues. An authorized tap package runs in an isolated long-lived Lua child
+behind its own bounded queue. The tunnel publishes an owned exchange snapshot;
+the worker receives an immutable value and returns typed semantic effects. Zig
+validates the complete batch and its capabilities before applying anything.
+Timeouts, VM errors, stale identities, and full queues discard extension work.
+A Lua closure never enters the runtime loop, a TLS session, or a tunnel actor,
+and it never receives a Zig pointer. See [Proxy tap](flows/proxy-tap.md).
 
 ## System trust
 

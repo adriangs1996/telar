@@ -48,6 +48,11 @@ disposable frontend process.
 | Tap plugins | `src/backend/plugins/root.zig` | Supervised runtime-side Lua workers and authorized effect protocol |
 | Transport | `src/backend/transport/root.zig` | Runtime side of local connection and handshake |
 
+The shipped `examples/plugins/agent-commands` package is an integration fixture
+across Proxy capture, Tap plugins, and History. Provider-specific JSON and SSE
+classification stays in Lua; the runtime owns only bounded exchange delivery,
+capability authorization, and durable effects.
+
 `src/cli/server.zig` selects the production dependencies and initializes the
 public runtime instance. Behind `src/backend/runtime/root.zig`, the lifetime is
 split without changing that public contract:

@@ -575,18 +575,21 @@ are bounded independently, and a full queue or exhausted quota drops capture
 data without delaying or changing proxied traffic. Response decompression is
 performed on the runtime observation path and is capped by `max_part_bytes`.
 Until a trusted tap plugin is configured, completed captures are consumed only
-for metrics and are not persisted.
-Explicit server CLI
-graphics limits still override the Lua values. Runtime-owned settings take
-effect when the long-lived runtime starts; restart that runtime to apply a
-changed runtime profile.
+for metrics and are not persisted. The shipped
+[`examples/plugins/agent-commands`](../examples/plugins/agent-commands)
+package is an opt-in classifier: install it, grant its exact digest
+`proxy.tap`, `history.write`, and `notifications`, then add the immutable path
+printed by `telar plugin install` to `config.plugins`. Runtime tap workers are
+created only at server startup, so restart the runtime after changing that
+package or its grants.
 
-No proxy callback is accepted by the runtime configuration today. The native
-proxy exposes bounded observation and semantic head-transformation contracts
-for a later isolated Lua worker. Method, target, status, and header effects are
-already validated consistently for HTTP/1.1 and HTTP/2, while bodies remain
-streaming and unavailable to callbacks. Placing a live closure in
-`runtime.proxy` is rejected so Lua cannot enter the runtime or a
-traffic-forwarding actor accidentally. See
-[`proxy-tls.md`](proxy-tls.md) for the trust, observation, and future middleware
-contracts.
+Explicit server CLI graphics limits still override the Lua values.
+Runtime-owned settings take effect when the long-lived runtime starts; restart
+that runtime to apply a changed runtime profile.
+
+No proxy callback is accepted directly in `runtime.proxy`. Enabled plugin
+packages declare `on_exchange`; the runtime converts them to isolated worker
+specifications and retains no Lua state or closure. Bodies remain streaming on
+the relay path and become available to the worker only as bounded captured
+snapshots. See [`proxy-tls.md`](proxy-tls.md) and
+[`plugins.md`](plugins.md) for the capture and authority contracts.
