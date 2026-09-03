@@ -8,6 +8,7 @@ const core = @import("telar-core");
 const description = @import("description.zig");
 const evidence_mod = @import("evidence.zig");
 const pane_mod = @import("../pane/root.zig");
+const providers = @import("providers/root.zig");
 const proxy_state_mod = @import("proxy_state.zig");
 const types = @import("types.zig");
 
@@ -175,17 +176,18 @@ pub fn applyProcess(agent: *Agent, observation: ProcessObservation) bool {
 /// }
 /// ```
 pub fn applyProxy(agent: *Agent, observation: ProxyObservation) bool {
-    if (observation.provider == .unknown) {
+    if (observation.dialect == .unknown) {
         return false;
     }
 
-    // The proxy names the API family it saw on the wire, which is only an
-    // agent identity while no process has claimed the pane. A process-backed
-    // agent may talk to any provider, so its exchanges count regardless of
-    // host; only proxy- or screen-derived identity rejects a foreign family.
+    // The proxy names the API dialect it saw on the wire, which implies an
+    // agent identity only while no process has claimed the pane. A
+    // process-backed agent may talk to any host, so its exchanges count
+    // regardless of dialect; only proxy- or screen-derived identity rejects a
+    // foreign one.
     const established_provider = agent.provider();
 
-    if (agent.process == null and established_provider != .unknown and observation.provider != established_provider) {
+    if (agent.process == null and established_provider != .unknown and observation.impliedProvider() != established_provider) {
         return false;
     }
 
@@ -275,9 +277,7 @@ pub fn applyScreen(agent: *Agent, observation: ScreenObservation) bool {
         return false;
     }
 
-    // Codex runs `Stop` hooks before other hooks may continue the turn. Only
-    // the newer input prompt proves that its conservative working report ended.
-    if (signal.provider == .codex and signal.status == .ready and signal.ready_confirmed) {
+    if (providers.of(signal.provider).ready_prompt_settles_report and signal.status == .ready and signal.ready_confirmed) {
         if (agent.report) |report| {
             if (report.status == .working and observation.observed_at_ms > report.observed_at_ms) {
                 agent.report = null;
@@ -362,7 +362,7 @@ pub fn reproject(agent: *Agent, context: ProjectionContext) ProjectionResult {
     const provider_value = agent.projectionProvider(evidence);
     const previous = agent.projected;
 
-    agent.ensurePlaceholder(provider_value);
+    agent.ensurePlaceholder();
     agent.projected = .{
         .pane_id = agent.key.id,
         .pane_generation = agent.key.generation,
@@ -729,17 +729,14 @@ fn projectionProvider(agent: *const Agent, evidence: Evidence) schema.AgentProvi
     return .unknown;
 }
 
-fn ensurePlaceholder(agent: *Agent, provider_value: schema.AgentProvider) void {
+// The aggregate carries the generic placeholder only; delivery replaces it
+// with the manifest's own wording, next to the provider name it also adds.
+fn ensurePlaceholder(agent: *Agent) void {
     if (agent.title.source != .telar) {
         return;
     }
 
-    const placeholder = switch (provider_value) {
-        .codex => "New Codex session",
-        .claude => "New Claude Code session",
-        .pi => "New Pi session",
-        else => "New agent session",
-    };
+    const placeholder = core.agent_manifest.generic_placeholder;
 
     if (std.mem.eql(u8, agent.title.slice(), placeholder)) {
         return;
@@ -793,7 +790,7 @@ test "agent rejects an untracked proxy response" {
 
     try std.testing.expect(!agent.applyProxy(.{
         .identity = try testIdentity(),
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .response_activity,
         .exchange = exchange,
         .observed_at_ms = 100,
@@ -809,7 +806,7 @@ test "agent applies a tracked proxy lifecycle" {
 
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
@@ -818,7 +815,7 @@ test "agent applies a tracked proxy lifecycle" {
 
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .response_finished,
         .exchange = exchange,
         .observed_at_ms = 200,
@@ -838,14 +835,14 @@ test "agent applies semantic completion without changing its authority" {
 
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 200,
@@ -863,14 +860,14 @@ test "agent rejects completion from a contradictory provider" {
 
     _ = agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
     });
     try std.testing.expect(!agent.applyProxy(.{
         .identity = identity,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 200,
@@ -882,7 +879,7 @@ test "agent rejects completion from a contradictory provider" {
 
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 300,
@@ -908,14 +905,14 @@ test "a process-backed agent accepts exchanges with any provider family" {
     // Pi talks to Anthropic here; the wire family must not reject the exchange.
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 200,
@@ -933,7 +930,7 @@ test "semantic completion does not clear stronger blocked screen evidence" {
 
     _ = agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
@@ -950,7 +947,7 @@ test "semantic completion does not clear stronger blocked screen evidence" {
 
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 200,
@@ -967,14 +964,14 @@ test "agent coalesces frequent proxy activity" {
 
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
     try std.testing.expect(!agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .response_activity,
         .exchange = exchange,
         .observed_at_ms = 100 + types.activity_refresh_ms - 1,
@@ -984,7 +981,7 @@ test "agent coalesces frequent proxy activity" {
     const refreshed_at = 100 + types.activity_refresh_ms;
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .response_activity,
         .exchange = exchange,
         .observed_at_ms = refreshed_at,
@@ -1010,7 +1007,7 @@ test "new proxy work resumes an obscured agent" {
 
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,

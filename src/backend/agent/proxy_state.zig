@@ -42,7 +42,7 @@ pub const ProxyState = struct {
 
         if (observation.isResponseActivity()) {
             if (state.evidence) |*evidence| {
-                if (observation.hasProvider(evidence.provider) and evidence.isWorking()) {
+                if (observation.impliedProvider() == evidence.provider and evidence.isWorking()) {
                     if (observation.observed_at_ms - evidence.observed_at_ms < types.activity_refresh_ms) {
                         return .ignored;
                     }
@@ -209,7 +209,7 @@ fn testObservation(phase: ProxyPhase, exchange: ProxyExchange, observed_at_ms: i
             .process_id = 1,
             .session_id = .{0xa5} ** 16,
         },
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = phase,
         .exchange = exchange,
         .observed_at_ms = observed_at_ms,

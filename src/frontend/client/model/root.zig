@@ -1257,7 +1257,7 @@ pub const Model = struct {
     }
 
     /// Resolves the focused pane to an attachment-capable agent identity.
-    /// Unknown providers do not support the local image shelf.
+    /// Agents whose manifest declares no attachment markers have no image shelf.
     ///
     /// ```zig
     /// const key = model.focusedAttachmentAgent() orelse return;
@@ -1267,10 +1267,11 @@ pub const Model = struct {
         const pane_id = active.model.layout.focused() orelse return null;
         const key = model.agent_snapshot.keyForPane(active.location, pane_id) orelse return null;
         const agent = model.agent_snapshot.find(key).?;
-        switch (agent.provider) {
-            .claude, .codex, .pi => return key,
-            else => return null,
+        if (agent.attachments == .none) {
+            return null;
         }
+
+        return key;
     }
 
     /// Resolves the focused attachment-capable agent to its capture target.
@@ -1287,22 +1288,19 @@ pub const Model = struct {
         };
     }
 
-    /// Resolves the provider only while the exact pane generation still owns
-    /// an attachment-capable agent.
+    /// Resolves the marker scheme only while the exact pane generation still
+    /// owns an attachment-capable agent.
     ///
     /// ```zig
-    /// const provider = model.attachmentProvider(target) orelse return;
+    /// const markers = model.attachmentMarkers(target) orelse return;
     /// ```
-    pub fn attachmentProvider(model: *const Model, target: attachments.Target) ?schema.AgentProvider {
+    pub fn attachmentMarkers(model: *const Model, target: attachments.Target) ?schema.AgentAttachmentMarkers {
         const agent = model.agent_snapshot.find(.{
             .pane_id = target.pane_id,
             .pane_generation = target.pane_generation,
         }) orelse return null;
 
-        return switch (agent.provider) {
-            .claude, .codex, .pi => agent.provider,
-            else => null,
-        };
+        return if (agent.attachments == .none) null else agent.attachments;
     }
 
     /// Returns the pane identity and reporting mode last synchronized with the

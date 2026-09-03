@@ -236,7 +236,7 @@ fn seedDescription(agents: *agent_mod.Tracker, raw: u64, submitted_input: []cons
     try std.testing.expect(agents.observeInput(identity.key, submitted_input));
     try std.testing.expect(agents.observeProxy(.{
         .identity = identity,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .request_started,
         .exchange = .{
             .protocol = .h2,

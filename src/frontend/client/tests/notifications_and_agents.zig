@@ -753,6 +753,7 @@ test "an agent snapshot replaces the sidebar replica" {
             .title_state = .ready,
             .cwd_label = "~/sandbox/telar",
             .provider = .claude,
+            .display_name = "Claude",
             .status = .working,
             .source = .screen,
             .authority = .active,

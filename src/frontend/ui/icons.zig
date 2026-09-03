@@ -55,6 +55,21 @@ pub const Icon = enum {
     agent_failed,
     close,
 
+    /// The shipped artwork for a built-in agent. Configured agents have no
+    /// artwork here; their manifest glyph or the generic mark is drawn instead.
+    ///
+    /// ```zig
+    /// const icon = Icon.forProvider(agent.provider) orelse .provider_unknown;
+    /// ```
+    pub fn forProvider(provider: @import("telar-core").schema.AgentProvider) ?Icon {
+        return switch (provider) {
+            .claude => .provider_claude,
+            .codex => .provider_codex,
+            .pi => .provider_pi,
+            else => null,
+        };
+    }
+
     pub fn unicodeGlyph(icon: Icon) []const u8 {
         return switch (icon) {
             .sidebar_collapse => "\u{25c0}",

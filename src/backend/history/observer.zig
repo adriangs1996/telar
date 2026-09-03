@@ -11,6 +11,7 @@ const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const agent_detection = @import("agent_detection.zig");
+const prompt_scan = @import("prompt_scan.zig");
 const terminal_history = @import("terminal.zig");
 
 const Io = std.Io;
@@ -304,13 +305,15 @@ pub const Observer = struct {
             .interrupt => |clock| observer.tracker.interrupt(clock, sink),
         };
         const stream_signal = observer.detector.signal(observer.manifests);
-        const screen_signal = claudeReadyPrompt(&observer.terminal);
+        const screen_signal = prompt_scan.scanReadyPrompt(&observer.terminal);
+        // An agent whose manifest declares its own ready prompt phrases is not
+        // subject to the generic glyph scan; its stream signal stands.
         stats.agent_signal = if (stream_signal) |signal|
             if (signal.status == .blocked)
                 signal
-            else if (signal.provider != .codex and screen_signal != null) merged: {
+            else if (!observer.manifests.declaresReadyPrompt(signal.provider) and screen_signal != null) merged: {
                 var result = screen_signal.?;
-                result.identity_confirmed = signal.provider == .claude and
+                result.identity_confirmed = signal.provider == result.provider and
                     signal.identity_confirmed;
                 break :merged result;
             } else signal
@@ -331,6 +334,7 @@ pub const Observer = struct {
                     observer.failures +|= 1;
                 };
             observer.tracker.observeOutput(.{
+                .terminal = &observer.terminal,
                 .bytes = slice,
                 .clock = observation.clock,
                 .shell_foreground = observation.shell_foreground,
@@ -393,79 +397,6 @@ fn vtResize(size: schema.TerminalSize) vt.Terminal.Resize {
             .width = size.cell_width_px,
             .height = size.cell_height_px,
         } else null,
-    };
-}
-
-/// Claude's prompt glyph is meaningful only in the terminal's current screen.
-/// A copy found in raw PTY bytes may have been erased or moved before the batch
-/// finished. Claude may use either the terminal cursor or an inverse-video cell
-/// as its editor cursor. In both cases the cursor must belong to the prompt row,
-/// which excludes the stale input row Claude leaves behind while it is working.
-fn claudeReadyPrompt(terminal: *const vt.Terminal) ?agent_detection.Signal {
-    const screen = terminal.screens.active;
-    const ready = if (terminal.modes.get(.cursor_visible))
-        promptBeforeTerminalCursor(screen.cursor.page_pin.*)
-    else
-        promptWithSoftwareCursor(screen, terminal.rows);
-    if (!ready) return null;
-    return .{
-        .provider = .claude,
-        .status = .ready,
-        .confidence = 96,
-        .ready_confirmed = true,
-    };
-}
-
-fn promptBeforeTerminalCursor(cursor: vt.Pin) bool {
-    const cells = cursor.cells(.left);
-    const max_prompt_distance = 8;
-    var index = cells.len;
-    var distance: usize = 0;
-    while (index != 0 and distance < max_prompt_distance) : (distance += 1) {
-        index -= 1;
-        const cell = cells[index];
-        if (!cell.hasText()) continue;
-        const codepoint = cell.codepoint();
-        if (codepoint == ' ') continue;
-        return codepoint == 0x276f;
-    }
-    return false;
-}
-
-fn promptWithSoftwareCursor(screen: *const vt.Screen, rows: u16) bool {
-    const max_prompt_rows = 12;
-    const first_row = rows - @min(rows, max_prompt_rows);
-    for (first_row..rows) |y| {
-        const pin = screen.pages.pin(.{ .viewport = .{ .y = @intCast(y) } }) orelse
-            continue;
-        const cells = pin.cells(.all);
-        var prompt: ?usize = null;
-        for (cells, 0..) |*cell, x| {
-            if (cell.codepoint() == 0x276f and rowPrefixIsBlank(cells[0..x])) {
-                prompt = x;
-                continue;
-            }
-            if (prompt == null or x <= prompt.?) continue;
-            if (cell.content_tag == .bg_color_palette or cell.content_tag == .bg_color_rgb)
-                return true;
-            const cell_style = pin.style(cell);
-            if (cell_style.flags.inverse or hasBackground(cell_style.bg_color)) return true;
-        }
-    }
-    return false;
-}
-
-fn rowPrefixIsBlank(cells: []const vt.Cell) bool {
-    for (cells) |cell| {
-        if (cell.hasText() and cell.codepoint() != ' ') return false;
-    }
-    return true;
-}
-
-fn hasBackground(color: vt.Style.Color) bool {
-    return switch (color) {
-        .none => false,
-        .palette, .rgb => true,
     };
 }
 

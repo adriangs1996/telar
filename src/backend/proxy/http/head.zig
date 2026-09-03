@@ -32,7 +32,7 @@ pub const Head = struct {
 pub const AnalyzeOptions = struct {
     is_response: bool,
     response_to_head: bool,
-    provider: provider.AgentProvider = .unknown,
+    dialect: provider.ApiDialect = .unknown,
 };
 
 /// Reads one complete head into `buffer` and returns its byte length.
@@ -67,7 +67,7 @@ pub fn read(session: anytype, side: tls.Session.Side, buffer: []u8) ?usize {
 /// const parsed = analyze(bytes, .{
 ///     .is_response = false,
 ///     .response_to_head = false,
-///     .provider = .claude,
+///     .dialect = .anthropic_messages,
 /// });
 /// ```
 pub fn analyze(bytes: []const u8, options: AnalyzeOptions) ?Head {
@@ -95,7 +95,7 @@ pub fn analyze(bytes: []const u8, options: AnalyzeOptions) ?Head {
         .classification = if (options.is_response)
             .auxiliary
         else
-            classifyRequest(start_line, options.provider),
+            classifyRequest(start_line, options.dialect),
         .sse_body = options.is_response and hasObservableSseBody(bytes),
     };
 }
@@ -140,14 +140,14 @@ fn onlyChunkedCoding(value: []const u8) bool {
     return coding.len != 0 and std.ascii.eqlIgnoreCase(coding, "chunked") and tokens.next() == null;
 }
 
-fn classifyRequest(start_line: []const u8, agent_provider: provider.AgentProvider) provider.RequestClass {
+fn classifyRequest(start_line: []const u8, dialect: provider.ApiDialect) provider.RequestClass {
     const method_end = std.mem.indexOfScalar(u8, start_line, ' ') orelse return .auxiliary;
     const version_start = std.mem.lastIndexOfScalar(u8, start_line, ' ') orelse return .auxiliary;
     if (method_end == version_start) {
         return .auxiliary;
     }
 
-    return provider.classify(agent_provider, .{
+    return provider.classify(dialect, .{
         .method = start_line[0..method_end],
         .target = start_line[method_end + 1 .. version_start],
     });
@@ -245,11 +245,11 @@ fn parseStatus(line: []const u8) ?u16 {
     return if (status >= 100 and status <= 599) status else null;
 }
 
-fn analyzeRequest(bytes: []const u8, agent_provider: provider.AgentProvider) ?Head {
+fn analyzeRequest(bytes: []const u8, dialect: provider.ApiDialect) ?Head {
     return analyze(bytes, .{
         .is_response = false,
         .response_to_head = false,
-        .provider = agent_provider,
+        .dialect = dialect,
     });
 }
 
@@ -363,7 +363,7 @@ test "SSE response metadata rejects ambiguous non-SSE and encoded payloads" {
 test "request content type never assigns response SSE metadata" {
     const parsed = analyzeRequest(
         "POST /v1/messages HTTP/1.1\r\nContent-Type: text/event-stream\r\nContent-Length: 0\r\n\r\n",
-        .claude,
+        .anthropic_messages,
     ).?;
 
     try std.testing.expect(!parsed.sse_body);
@@ -408,29 +408,29 @@ test "response status must be exactly three digits in the HTTP range" {
     }
 }
 
-test "request classification uses the provider that owns the connection" {
+test "request classification uses the dialect that owns the connection" {
     try std.testing.expectEqual(provider.RequestClass.inference, analyzeRequest(
         "POST /v1/messages?beta=true HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        .claude,
+        .anthropic_messages,
     ).?.classification);
     try std.testing.expectEqual(provider.RequestClass.auxiliary, analyzeRequest(
         "POST /v1/messages HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        .codex,
+        .openai_responses,
     ).?.classification);
     try std.testing.expectEqual(provider.RequestClass.auxiliary, analyzeRequest(
         "POST /v1/messages/count_tokens?beta=true HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        .claude,
+        .anthropic_messages,
     ).?.classification);
     try std.testing.expectEqual(provider.RequestClass.auxiliary, analyzeRequest(
         "POST /api/event_logging/v2/batch HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
-        .claude,
+        .anthropic_messages,
     ).?.classification);
 }
 
 test "a HEAD request is identified without assigning response metadata" {
     const parsed = analyzeRequest(
         "HEAD /v1/messages HTTP/1.1\r\nHost: example.test\r\n\r\n",
-        .claude,
+        .anthropic_messages,
     ).?;
     try std.testing.expect(parsed.message.head_request);
     try std.testing.expectEqual(@as(u16, 0), parsed.message.status_code);

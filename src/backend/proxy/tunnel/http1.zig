@@ -94,7 +94,7 @@ const ResponseBodyObserver = struct {
     fn init(exchange: *exchange_mod.Exchange, inspect_payload: bool) ResponseBodyObserver {
         return .{
             .exchange = exchange,
-            .response = .init(exchange.provider),
+            .response = .init(exchange.dialect),
             .inspect_payload = inspect_payload,
         };
     }
@@ -111,7 +111,7 @@ const ResponseBodyObserver = struct {
         }
 
         if (observer.inspect_payload and fragment.payload.len != 0) {
-            if (observer.response.provider == .claude) {
+            if (observer.response.dialect == .anthropic_messages) {
                 observer.exchange.record(.claude_sse_payload_fragment);
             }
 
@@ -145,7 +145,7 @@ fn relayRequestHead(connection: *Connection) ?http.RequestHead {
             .to = .origin,
             .is_response = false,
             .response_to_head = false,
-            .provider = connection.exchange.provider,
+            .dialect = connection.exchange.dialect,
         },
         .pipeline = connection.transforms,
         .io = connection.io,
@@ -244,11 +244,11 @@ fn semanticResponse(head: http.Head) http.ResponseHead {
 
 fn publishRequest(connection: *Connection, request: http.RequestHead) void {
     if (shouldClassifyRequest(connection, request)) {
-        connection.request.init(connection.exchange.provider);
+        connection.request.init(connection.exchange.dialect);
         return;
     }
 
-    const classification: http.RequestClass = if (connection.exchange.provider == .claude and request.classification == .inference)
+    const classification: http.RequestClass = if (connection.exchange.dialect == .anthropic_messages and request.classification == .inference)
         .auxiliary
     else
         request.classification;
@@ -256,7 +256,7 @@ fn publishRequest(connection: *Connection, request: http.RequestHead) void {
 }
 
 fn shouldClassifyRequest(connection: *const Connection, request: http.RequestHead) bool {
-    return connection.exchange.provider == .claude and request.classification == .inference and request.body.hasBody();
+    return connection.exchange.dialect == .anthropic_messages and request.classification == .inference and request.body.hasBody();
 }
 
 fn publishResponse(connection: *Connection, response: http.ResponseHead) void {
@@ -337,7 +337,7 @@ const TestHarness = struct {
                 .pane_generation = 11,
                 .token = .{0x42} ** identity.token_bytes,
             },
-            .provider = .claude,
+            .dialect = .anthropic_messages,
             .connection_id = 19,
             .protocol = .http11,
         };
@@ -472,7 +472,7 @@ test "Claude SSE completion is published after forwarded response activity" {
         .to = .origin,
         .is_response = false,
         .response_to_head = false,
-        .provider = harness.exchange.provider,
+        .dialect = harness.exchange.dialect,
     }).?;
     const request: http.RequestHead = .{
         .classification = parsed_request.classification,

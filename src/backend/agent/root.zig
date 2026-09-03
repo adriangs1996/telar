@@ -8,6 +8,7 @@ const tracker = @import("tracker.zig");
 const types = @import("types.zig");
 
 pub const description = @import("description.zig");
+pub const providers = @import("providers/root.zig");
 pub const Tracker = tracker.Tracker;
 pub const AcknowledgeResult = tracker.AcknowledgeResult;
 
@@ -21,6 +22,7 @@ pub const ProxyPhase = types.ProxyPhase;
 pub const ProxyProtocol = types.ProxyProtocol;
 pub const ProxyExchange = types.ProxyExchange;
 pub const ProxyObservation = types.ProxyObservation;
+pub const ApiDialect = types.ApiDialect;
 pub const DescriptionFinished = types.DescriptionFinished;
 pub const SessionReference = types.SessionReference;
 pub const SessionTitle = types.SessionTitle;
@@ -29,6 +31,7 @@ pub const ReportObservation = types.ReportObservation;
 test {
     _ = @import("agent.zig");
     _ = @import("evidence.zig");
+    _ = @import("providers/root.zig");
     _ = @import("proxy_state.zig");
     _ = @import("repository.zig");
     _ = @import("restored_titles.zig");

@@ -20,7 +20,7 @@ pub fn requestTransformer() middleware.Transformer {
 fn transform(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
     const snapshot = transformation.snapshot;
 
-    if (snapshot.context.provider != .claude or
+    if (snapshot.context.dialect != .anthropic_messages or
         snapshot.context.direction != .request or
         snapshot.context.kind != .request)
     {
@@ -29,7 +29,7 @@ fn transform(_: *anyopaque, transformation: middleware.Transformation) middlewar
 
     const method = uniqueHeader(snapshot.fields, ":method") orelse return .preserve;
     const target = uniqueHeader(snapshot.fields, ":path") orelse return .preserve;
-    if (request.classify(.claude, .{ .method = method, .target = target }) != .inference) {
+    if (request.classify(.anthropic_messages, .{ .method = method, .target = target }) != .inference) {
         return .preserve;
     }
 
@@ -59,7 +59,7 @@ fn uniqueHeader(fields: []const middleware.HeaderView, wanted: []const u8) ?[]co
 }
 
 const TransformCase = struct {
-    provider: request.AgentProvider = .claude,
+    dialect: request.ApiDialect = .anthropic_messages,
     direction: middleware.Direction = .request,
     kind: middleware.HeaderKind = .request,
     method: []const u8 = "POST",
@@ -84,7 +84,7 @@ fn apply(case: TransformCase, effects: *middleware.EffectBatch) middleware.Trans
             .context = .{
                 .pane_id = @enumFromInt(1),
                 .pane_generation = 1,
-                .provider = case.provider,
+                .dialect = case.dialect,
                 .protocol = .http11,
                 .direction = case.direction,
                 .kind = case.kind,
@@ -125,7 +125,7 @@ test "Claude inference requests negotiate identity encoding" {
 
 test "Claude identity negotiation preserves unrelated traffic" {
     inline for (.{
-        TransformCase{ .provider = .codex },
+        TransformCase{ .dialect = .openai_responses },
         TransformCase{ .direction = .response },
         TransformCase{ .kind = .trailers },
         TransformCase{ .method = "GET" },
@@ -152,7 +152,7 @@ test "Claude identity negotiation rejects ambiguous pseudo headers" {
             .context = .{
                 .pane_id = @enumFromInt(1),
                 .pane_generation = 1,
-                .provider = .claude,
+                .dialect = .anthropic_messages,
                 .protocol = .h2,
                 .direction = .request,
                 .kind = .request,

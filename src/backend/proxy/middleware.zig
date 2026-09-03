@@ -8,6 +8,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
+const dialect_mod = @import("provider/dialect.zig");
 const identity = @import("identity.zig");
 
 const schema = core.schema;
@@ -22,6 +23,7 @@ pub const Phase = enum {
 };
 
 pub const Protocol = enum { http11, h2, upgraded };
+pub const ApiDialect = dialect_mod.ApiDialect;
 
 /// Recognizes the SSE media type while allowing parameters and ASCII case.
 ///
@@ -60,7 +62,7 @@ pub fn isIdentityContentEncoding(value: []const u8) bool {
 
 pub const Event = struct {
     credential: identity.Credential,
-    provider: schema.AgentProvider,
+    dialect: dialect_mod.ApiDialect,
     phase: Phase,
     protocol: Protocol,
     connection_id: u64,
@@ -128,7 +130,7 @@ pub const Direction = enum { request, response };
 pub const TransformContext = struct {
     pane_id: schema.PaneId,
     pane_generation: u64,
-    provider: schema.AgentProvider,
+    dialect: dialect_mod.ApiDialect,
     protocol: Protocol,
     direction: Direction,
     kind: HeaderKind,

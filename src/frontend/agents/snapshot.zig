@@ -27,6 +27,9 @@ pub const AgentInput = struct {
     cwd_label: []const u8 = "",
     provider: schema.AgentProvider,
     provider_name: []const u8 = "",
+    display_name: []const u8 = "",
+    icon: []const u8 = "",
+    attachments: schema.AgentAttachmentMarkers = .none,
     status: schema.AgentStatus,
 };
 
@@ -46,11 +49,16 @@ pub const Agent = struct {
     cwd_label_len: u8 = 0,
     provider_name: [schema.max_agent_provider_name_bytes]u8 = undefined,
     provider_name_len: u8 = 0,
+    display_name: [schema.max_agent_display_name_bytes]u8 = undefined,
+    display_name_len: u8 = 0,
+    icon: [schema.max_agent_icon_bytes]u8 = undefined,
+    icon_len: u8 = 0,
+    attachments: schema.AgentAttachmentMarkers,
     provider: schema.AgentProvider,
     status: schema.AgentStatus,
 
-    /// Display name of the provider: the runtime's manifest name, or the
-    /// built-in label when the runtime sent none.
+    /// Manifest name of the provider ("claude"), or "agent" when the runtime
+    /// sent none because the provider is unknown.
     ///
     /// ```zig
     /// const name = agent.providerName();
@@ -60,12 +68,31 @@ pub const Agent = struct {
             return agent.provider_name[0..agent.provider_name_len];
         }
 
-        return switch (agent.provider) {
-            .claude => "claude",
-            .codex => "codex",
-            .pi => "pi",
-            else => "agent",
-        };
+        return "agent";
+    }
+
+    /// Human label of the provider ("Claude Code"), or the generic label when
+    /// the runtime sent none.
+    ///
+    /// ```zig
+    /// const label = agent.displayName();
+    /// ```
+    pub fn displayName(agent: *const Agent) []const u8 {
+        if (agent.display_name_len != 0) {
+            return agent.display_name[0..agent.display_name_len];
+        }
+
+        return core.agent_manifest.generic_display_name;
+    }
+
+    /// Configured sidebar glyph; empty when the client should use its own
+    /// artwork for the provider.
+    ///
+    /// ```zig
+    /// const glyph = agent.iconGlyph();
+    /// ```
+    pub fn iconGlyph(agent: *const Agent) []const u8 {
+        return agent.icon[0..agent.icon_len];
     }
 
     fn init(input: AgentInput) !Agent {
@@ -76,6 +103,7 @@ pub const Agent = struct {
             .title_source = input.title_source,
             .title_state = input.title_state,
             .provider = input.provider,
+            .attachments = input.attachments,
             .status = input.status,
         };
         agent.workspace_label_len = try copyLabel(&agent.workspace_label, input.workspace_label);
@@ -83,6 +111,8 @@ pub const Agent = struct {
         agent.session_title_len = try copyLabel(&agent.session_title, input.session_title);
         agent.cwd_label_len = try copyLabel(&agent.cwd_label, input.cwd_label);
         agent.provider_name_len = try copyLabel(&agent.provider_name, input.provider_name);
+        agent.display_name_len = try copyLabel(&agent.display_name, input.display_name);
+        agent.icon_len = try copyLabel(&agent.icon, input.icon);
 
         return agent;
     }

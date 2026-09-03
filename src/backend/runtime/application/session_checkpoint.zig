@@ -442,21 +442,17 @@ pub fn Checkpointer(comptime Application: type) type {
 pub const max_resume_command_bytes = 32 + schema.max_agent_session_reference_bytes;
 
 /// Builds the shell line that resumes a built-in agent's session, typed into
-/// the restored pane's shell. Only the official allowlist can produce a
-/// command, and only for a reference shaped like a UUID, so a stored
-/// reference can never smuggle options or shell syntax.
+/// the restored pane's shell. Only the built-in capability table
+/// (`agent.providers`) can produce a command, and only for a reference shaped
+/// like a UUID, so a stored reference can never smuggle options or shell
+/// syntax.
 ///
 /// ```zig
 /// const line = resumeCommand(&buffer, .claude, session) orelse return;
 /// ```
 pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: schema.AgentProvider, session: []const u8) ?[]const u8 {
     if (!isUuid(session)) return null;
-    const template: []const u8 = switch (provider) {
-        .claude => "claude --resume ",
-        .codex => "codex resume ",
-        .pi => "pi --session ",
-        else => return null,
-    };
+    const template = agent_mod.providers.of(provider).resume_prefix orelse return null;
     const len = template.len + session.len + 1;
     if (len > buffer.len) return null;
     @memcpy(buffer[0..template.len], template);

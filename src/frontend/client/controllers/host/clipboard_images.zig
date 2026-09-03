@@ -85,8 +85,8 @@ fn schedule(raw_context: *anyopaque, capture: client_model.ClipboardCapture) !vo
     const request: attachments.CaptureRequest = .{
         .target = capture.target,
         .sequence = @intFromEnum(capture.id),
-        .marker_policy = if (client.model.attachmentProvider(capture.target)) |provider|
-            input_application.attachment_prompt.markerPolicy(provider)
+        .marker_policy = if (client.model.attachmentMarkers(capture.target)) |markers|
+            input_application.attachment_prompt.markerPolicy(markers)
         else
             .ordered,
     };

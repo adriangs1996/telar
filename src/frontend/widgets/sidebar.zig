@@ -237,13 +237,15 @@ fn drawAgentTitle(
 ) void {
     if (area.w == 0) return;
     const mark_area: ui.Rect = .{ .x = area.x, .y = area.y, .w = 2, .h = 2 };
-    if (input.transparent and (agent.provider == .claude or agent.provider == .codex or agent.provider == .pi)) {
+    const icon_style: ui.Style = .{ .fg = context.palette.accent, .bg = background };
+    const glyph = agent.iconGlyph();
+    const artwork = ui.icons.Icon.forProvider(agent.provider);
+    if (glyph.len != 0) {
+        _ = context.buffer.writeTruncated(area, area.x, area.y, glyph, 1, icon_style);
+    } else if (input.transparent and artwork != null) {
         semantic.addProviderMark(.{ .area = mark_area, .provider = agent.provider });
     } else {
-        _ = context.drawIcon(area, area.x, area.y, providerIcon(agent.provider), .{
-            .fg = context.palette.accent,
-            .bg = background,
-        });
+        _ = context.drawIcon(area, area.x, area.y, artwork orelse .provider_unknown, icon_style);
     }
     const status_width = statusWidth(agent.status);
     _ = context.buffer.writeTruncated(
@@ -253,7 +255,7 @@ fn drawAgentTitle(
         if (agent.sessionTitle().len != 0)
             agent.sessionTitle()
         else
-            fallbackTitle(agent.provider),
+            core.agent_manifest.generic_placeholder,
         area.w -| status_width -| 3,
         .{ .fg = context.palette.text, .bg = background, .flags = .{ .bold = true } },
     );
@@ -315,7 +317,7 @@ fn drawAgentMeta(
 ) void {
     if (area.w <= 3) return;
     const style: ui.Style = .{ .fg = context.palette.overlay0, .bg = background };
-    const provider = providerLabel(agent);
+    const provider = agent.displayName();
     var x = area.x + 3;
     var remaining = area.w - 3;
     const provider_width = ui.measure(provider);
@@ -374,34 +376,6 @@ fn statusIcon(status: schema.AgentStatus, animation_frame: u8) ui.icons.Icon {
         .ready => .agent_ready,
         .done => .agent_done,
         .failed => .agent_failed,
-    };
-}
-
-fn providerLabel(agent: *const agents.Agent) []const u8 {
-    return switch (agent.provider) {
-        .unknown => "Agent",
-        .claude => "Claude Code",
-        .codex => "Codex",
-        .pi => "Pi",
-        else => agent.providerName(),
-    };
-}
-
-fn fallbackTitle(provider: schema.AgentProvider) []const u8 {
-    return switch (provider) {
-        .claude => "New Claude Code session",
-        .codex => "New Codex session",
-        .pi => "New Pi session",
-        else => "New agent session",
-    };
-}
-
-fn providerIcon(provider: schema.AgentProvider) ui.icons.Icon {
-    return switch (provider) {
-        .claude => .provider_claude,
-        .codex => .provider_codex,
-        .pi => .provider_pi,
-        else => .provider_unknown,
     };
 }
 
@@ -535,6 +509,7 @@ test "agent snapshot renders compact selectable rows and status" {
         .title_state = .ready,
         .cwd_label = "~/sandbox/telar",
         .provider = .codex,
+        .display_name = "Codex",
         .status = .blocked,
     }};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
@@ -583,6 +558,7 @@ test "active layout projects pane indices without mutating runtime agent state" 
         .location = location,
         .pane_index = 9,
         .provider = .codex,
+        .display_name = "Codex",
         .status = .ready,
     };
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
@@ -610,6 +586,7 @@ test "agent without pane focus remains unhighlighted" {
         },
         .pane_index = 2,
         .provider = .codex,
+        .display_name = "Codex",
         .status = .ready,
     };
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
@@ -646,6 +623,7 @@ test "transparent Codex row publishes an official provider mark" {
         },
         .pane_index = 2,
         .provider = .codex,
+        .display_name = "Codex",
         .status = .ready,
     }};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
@@ -681,6 +659,7 @@ test "graphical focus exposes only the four rounded card corners" {
         },
         .pane_index = 2,
         .provider = .codex,
+        .display_name = "Codex",
         .status = .ready,
     }};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
@@ -725,6 +704,7 @@ test "hover covers the complete three-row agent card" {
         },
         .pane_index = 2,
         .provider = .codex,
+        .display_name = "Codex",
         .status = .working,
     };
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
@@ -765,6 +745,7 @@ test "partial card scroll preserves visible rows, spacing, and hit targets" {
             .tab_label = "main",
             .cwd_label = "~/sandbox/telar",
             .provider = .codex,
+            .display_name = "Codex",
             .status = .ready,
         },
         .{
@@ -775,6 +756,7 @@ test "partial card scroll preserves visible rows, spacing, and hit targets" {
             },
             .pane_index = 3,
             .provider = .claude,
+            .display_name = "Claude Code",
             .status = .working,
         },
     };
@@ -843,6 +825,7 @@ test "42 and 62 column cards reserve status before truncating context" {
         .title_state = .ready,
         .cwd_label = "…/abcdefghijklmnopqrstuvwx/agents/telar",
         .provider = .claude,
+        .display_name = "Claude Code",
         .status = .blocked,
     };
     var snapshot: Snapshot = .{};

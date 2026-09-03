@@ -99,8 +99,9 @@ failure mode exists only when a transformer has been registered.
 ## Transformation contract
 
 The native boundary accepts at most eight immutable transformers. A callback
-receives an owned, immutable snapshot with pane identity and generation, provider,
-protocol, direction, header kind, connection ID, stream ID, and header fields.
+receives an owned, immutable snapshot with pane identity and generation, API
+dialect, protocol, direction, header kind, connection ID, stream ID, and header
+fields.
 It returns no more than 32 typed `set` or `remove` effects using at most 8 KiB.
 The shared representation is bounded to 256 fields and 128 KiB. HTTP/1.1 heads
 have a stricter 32 KiB wire limit; encoded HTTP/2 output is bounded to 256 KiB.
@@ -131,15 +132,20 @@ capability.
 
 ## Agent state
 
-Hosts below `anthropic.com` identify Claude Code and hosts below `openai.com`
-or `chatgpt.com` identify Codex. `POST /v1/messages` is a Claude inference
-candidate. Telar publishes it as an inference request only when its complete
-JSON body has top-level `stream: true` and a non-empty top-level `tools` array.
-Claude Code also sends startup probes and helper requests to that route, so the
-route cannot establish `working` by itself. Only `POST /v1/responses` and
-`POST /backend-api/codex/responses` belong to Codex. Queries do not change
-route ownership. Cross-provider routes, unknown hosts, and other requests are
-auxiliary and do not drive agent lifecycle.
+The proxy classifies by API dialect (`provider.ApiDialect`), never by agent.
+Hosts below `anthropic.com` speak `anthropic_messages`; hosts below
+`openai.com` or `chatgpt.com` speak `openai_responses`. Which agent process
+drives an exchange is the runtime's decision: a dialect implies its native
+built-in agent (Claude Code, Codex) only while no process has claimed the
+pane, so Pi talking to Anthropic is still Pi. `POST /v1/messages` is an
+Anthropic inference candidate. Telar publishes it as an inference request only
+when its complete JSON body has top-level `stream: true` and a non-empty
+top-level `tools` array. Claude Code also sends startup probes and helper
+requests to that route, so the route cannot establish `working` by itself.
+Only `POST /v1/responses` and `POST /backend-api/codex/responses` belong to
+the OpenAI dialect. Queries do not change route ownership. Cross-dialect
+routes, unknown hosts, and other requests are auxiliary and do not drive agent
+lifecycle.
 
 An inference request start, response data, or successful response completion
 means `working`: one completed model exchange may be followed by local tool
@@ -186,7 +192,7 @@ identity prevent a late event from attaching to a reused pane.
 
 These are sidebar hints, not agent authority. A heuristic never approves a
 command, resumes a session, kills a process, or generates terminal input.
-Observation values contain only connection, stream, protocol, provider, phase,
+Observation values contain only connection, stream, protocol, dialect, phase,
 status code, pane identity, and timestamps. One fixed 256-event channel checks
 the pane credential both before publication and before delivery. Revocation
 therefore removes queued authority as well as rejecting later observations.

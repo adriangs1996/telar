@@ -17,6 +17,7 @@ const Io = std.Io;
 pub const PaneKey = pane_mod.PaneKey;
 pub const ObservationPhase = middleware.Phase;
 pub const ObservationProtocol = middleware.Protocol;
+pub const ApiDialect = middleware.ApiDialect;
 
 pub const Config = struct {
     key_path: []const u8,
@@ -27,7 +28,7 @@ pub const Config = struct {
 
 pub const Observation = struct {
     pane: PaneKey,
-    provider: core.schema.AgentProvider,
+    dialect: middleware.ApiDialect,
     phase: ObservationPhase,
     protocol: ObservationProtocol,
     connection_id: u64,
@@ -169,7 +170,7 @@ pub const Proxy = struct {
                 .id = event.credential.pane_id,
                 .generation = event.credential.pane_generation,
             },
-            .provider = event.provider,
+            .dialect = event.dialect,
             .phase = event.phase,
             .protocol = event.protocol,
             .connection_id = event.connection_id,

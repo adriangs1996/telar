@@ -3,6 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const detection = @import("../history/root.zig").detection;
+const dialect_mod = @import("../proxy/provider/dialect.zig");
 const pane_mod = @import("../pane/root.zig");
 
 const schema = core.schema;
@@ -17,6 +18,7 @@ pub const max_active_proxy_requests = 128;
 
 pub const ScreenStatus = detection.Status;
 pub const ScreenSignal = detection.Signal;
+pub const ApiDialect = dialect_mod.ApiDialect;
 
 pub const Identity = struct {
     key: PaneKey,
@@ -139,24 +141,26 @@ pub const ProxyExchange = struct {
 /// that was active when the observation arrived.
 ///
 /// The exchange identifies the network work being observed, while
-/// `observed_at_ms` orders evidence and determines its expiry. Callers exclude
-/// auxiliary provider traffic before constructing this value.
+/// `observed_at_ms` orders evidence and determines its expiry. `dialect` names
+/// the API family seen on the wire, never the agent process. Callers exclude
+/// auxiliary traffic before constructing this value.
 pub const ProxyObservation = struct {
     identity: Identity,
-    provider: schema.AgentProvider,
+    dialect: ApiDialect,
     phase: ProxyPhase,
     exchange: ProxyExchange,
     observed_at_ms: i64,
 
-    /// Compares the observed provider with an established provider identity.
+    /// The built-in agent implied by the wire dialect. It is an identity only
+    /// while no process has claimed the pane; see `ApiDialect.impliedAgent`.
     ///
     /// ```zig
-    /// if (observation.hasProvider(.claude)) {
-    ///     refreshClaudeActivity();
+    /// if (observation.impliedProvider() == evidence.provider) {
+    ///     refreshActivity();
     /// }
     /// ```
-    pub fn hasProvider(observation: *const ProxyObservation, provider: schema.AgentProvider) bool {
-        return observation.provider == provider;
+    pub fn impliedProvider(observation: *const ProxyObservation) schema.AgentProvider {
+        return observation.dialect.impliedAgent();
     }
 
     /// Reports whether this observation carries response bytes without closing

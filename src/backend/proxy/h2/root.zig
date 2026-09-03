@@ -42,19 +42,19 @@ pub const Transform = struct {
 
 pub const RelayOptions = struct {
     route: Route,
-    provider: provider.AgentProvider,
+    dialect: provider.ApiDialect,
     transformation: ?Transformation = null,
 };
 
 pub const RelayConfiguration = struct {
-    provider: provider.AgentProvider,
+    dialect: provider.ApiDialect,
     transformation: ?Transform = null,
 };
 
 /// Builds the route and crossed peer settings for one relay direction.
 ///
 /// ```zig
-/// const request = relayOptions(.request, &settings, .{ .provider = .claude });
+/// const request = relayOptions(.request, &settings, .{ .dialect = .anthropic_messages });
 /// ```
 pub fn relayOptions(direction: Direction, settings: *Settings, configuration: RelayConfiguration) RelayOptions {
     const route: Route = switch (direction) {
@@ -68,7 +68,7 @@ pub fn relayOptions(direction: Direction, settings: *Settings, configuration: Re
 
     return .{
         .route = route,
-        .provider = configuration.provider,
+        .dialect = configuration.dialect,
         .transformation = if (configuration.transformation) |selected| .{
             .source_settings = source_settings,
             .target_settings = target_settings,
@@ -86,7 +86,7 @@ pub fn relayOptions(direction: Direction, settings: *Settings, configuration: Re
 /// ```zig
 /// const stats = relay(session, .{
 ///     .route = .{ .from = .child, .to = .origin, .direction = .request },
-///     .provider = .claude,
+///     .dialect = .anthropic_messages,
 /// }, &sink);
 /// ```
 pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
@@ -97,7 +97,7 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
             .from = route.from,
             .to = route.to,
             .direction = route.direction,
-            .agent_provider = options.provider,
+            .dialect = options.dialect,
         },
         sink,
     );
@@ -109,7 +109,7 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
                 .from = route.from,
                 .to = route.to,
                 .direction = route.direction,
-                .agent_provider = options.provider,
+                .dialect = options.dialect,
             },
             .source_settings = transformation.source_settings,
             .target_settings = transformation.target_settings,
@@ -126,14 +126,14 @@ test "relay options map direction and peer settings" {
     var pipeline: middleware.TransformPipeline = .{};
     const context: middleware.TransformContext = undefined;
 
-    const observed_request = relayOptions(.request, &settings, .{ .provider = .unknown });
+    const observed_request = relayOptions(.request, &settings, .{ .dialect = .unknown });
     try std.testing.expectEqual(tls.Session.Side.child, observed_request.route.from);
     try std.testing.expectEqual(tls.Session.Side.origin, observed_request.route.to);
-    try std.testing.expectEqual(provider.AgentProvider.unknown, observed_request.provider);
+    try std.testing.expectEqual(provider.ApiDialect.unknown, observed_request.dialect);
     try std.testing.expect(observed_request.transformation == null);
 
     const request = relayOptions(.request, &settings, .{
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .transformation = .{
             .pipeline = &pipeline,
             .io = std.testing.io,
@@ -142,12 +142,12 @@ test "relay options map direction and peer settings" {
     });
     try std.testing.expectEqual(tls.Session.Side.child, request.route.from);
     try std.testing.expectEqual(tls.Session.Side.origin, request.route.to);
-    try std.testing.expectEqual(provider.AgentProvider.claude, request.provider);
+    try std.testing.expectEqual(provider.ApiDialect.anthropic_messages, request.dialect);
     try std.testing.expect(request.transformation.?.source_settings == &settings.child);
     try std.testing.expect(request.transformation.?.target_settings == &settings.origin);
 
     const response = relayOptions(.response, &settings, .{
-        .provider = .codex,
+        .dialect = .openai_responses,
         .transformation = .{
             .pipeline = &pipeline,
             .io = std.testing.io,
@@ -156,7 +156,7 @@ test "relay options map direction and peer settings" {
     });
     try std.testing.expectEqual(tls.Session.Side.origin, response.route.from);
     try std.testing.expectEqual(tls.Session.Side.child, response.route.to);
-    try std.testing.expectEqual(provider.AgentProvider.codex, response.provider);
+    try std.testing.expectEqual(provider.ApiDialect.openai_responses, response.dialect);
     try std.testing.expect(response.transformation.?.source_settings == &settings.origin);
     try std.testing.expect(response.transformation.?.target_settings == &settings.child);
 }
@@ -233,14 +233,14 @@ const IntegrationContext = struct {
     }
 
     fn relayRequest(context: *IntegrationContext, settings: *Settings) Stats {
-        const stats = relay(&context.session, relayOptions(.request, settings, .{ .provider = .claude }), context);
+        const stats = relay(&context.session, relayOptions(.request, settings, .{ .dialect = .anthropic_messages }), context);
         context.request_done.putOneUncancelable(std.testing.io, 0) catch unreachable;
         return stats;
     }
 
     fn relayResponse(context: *IntegrationContext, settings: *Settings) Stats {
         _ = context.request_done.getOne(std.testing.io) catch return .{ .decode_failed = true };
-        return relay(&context.session, relayOptions(.response, settings, .{ .provider = .claude }), context);
+        return relay(&context.session, relayOptions(.response, settings, .{ .dialect = .anthropic_messages }), context);
     }
 
     fn recordDecodeFailure(context: *IntegrationContext, _: Direction) void {

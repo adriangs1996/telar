@@ -89,7 +89,7 @@ test "service negotiates identity encoding for Claude message requests" {
         .context = .{
             .pane_id = @enumFromInt(1),
             .pane_generation = 1,
-            .provider = .claude,
+            .dialect = .anthropic_messages,
             .protocol = .http11,
             .direction = .request,
             .kind = .request,
@@ -170,7 +170,7 @@ test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
     defer std.crypto.secureZero(u8, &credential.token);
     const observation: middleware.Event = .{
         .credential = credential,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .response_activity,
         .protocol = .http11,
         .connection_id = 1,
@@ -333,7 +333,7 @@ test "receive discards observations queued before pane revocation" {
     defer std.crypto.secureZero(u8, &current.token);
     service.observations.pipeline().publish(io, .{
         .credential = current,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .request_started,
         .protocol = .http11,
         .connection_id = 1,
@@ -344,7 +344,7 @@ test "receive discards observations queued before pane revocation" {
     defer std.crypto.secureZero(u8, &next.token);
     service.observations.pipeline().publish(io, .{
         .credential = next,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .request_started,
         .protocol = .http11,
         .connection_id = 2,

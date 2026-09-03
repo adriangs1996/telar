@@ -40,7 +40,7 @@ pub const Evidence = struct {
         std.debug.assert(status == .working or status == .ready or status == .failed);
 
         return .{
-            .provider = observation.provider,
+            .provider = observation.impliedProvider(),
             .status = status,
             .source = .proxy_tls,
             .confidence = switch (observation.phase) {
@@ -158,7 +158,7 @@ test "proxy evidence derives confidence and expiry from phase and aggregate stat
     for (expectations) |expectation| {
         const observation: types.ProxyObservation = .{
             .identity = identity,
-            .provider = .claude,
+            .dialect = .anthropic_messages,
             .phase = expectation.phase,
             .exchange = exchange,
             .observed_at_ms = observed_at_ms,

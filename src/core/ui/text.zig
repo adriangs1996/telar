@@ -75,6 +75,14 @@ pub const GraphemeIterator = struct {
         const start = it.index;
         it.index = offsets[measured.len];
 
+        // A control character never reaches a cell as itself. The screen diff
+        // writes cell text verbatim, so a raw newline or escape in a cell
+        // moves the host cursor and every cell after it lands on the wrong
+        // row. It still owns one column, drawn blank.
+        if (isControl(codepoints[0])) {
+            return .{ .bytes = " ", .width = 1 };
+        }
+
         return .{
             .bytes = it.bytes[start..it.index],
             // Control characters measure zero, and a zero width cell cannot be
@@ -84,11 +92,35 @@ pub const GraphemeIterator = struct {
     }
 };
 
+/// C0 controls, DEL and C1 controls: the codepoints a terminal interprets
+/// instead of drawing.
+fn isControl(codepoint: u21) bool {
+    return codepoint < 0x20 or (codepoint >= 0x7f and codepoint <= 0x9f);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 const testing = std.testing;
+
+test "a control character becomes a blank cell rather than its own byte" {
+    // The diff emits cell text unchanged. A newline stored in a cell would
+    // move the real cursor and smear every later cell of the frame.
+    const samples = [_][]const u8{ "\n", "\r", "\x1b", "\x7f", "\u{0085}" };
+    for (samples) |sample| {
+        var it: GraphemeIterator = .{ .bytes = sample };
+        const cluster = it.next().?;
+        try testing.expectEqualStrings(" ", cluster.bytes);
+        try testing.expectEqual(@as(u8, 1), cluster.width);
+        try testing.expectEqual(@as(?GraphemeIterator.Cluster, null), it.next());
+    }
+
+    var it: GraphemeIterator = .{ .bytes = "a\nb" };
+    try testing.expectEqualStrings("a", it.next().?.bytes);
+    try testing.expectEqualStrings(" ", it.next().?.bytes);
+    try testing.expectEqualStrings("b", it.next().?.bytes);
+}
 
 test "measuring and iterating cannot disagree" {
     // They share the iterator on purpose. Right alignment and truncation both

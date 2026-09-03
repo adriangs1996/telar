@@ -9,6 +9,7 @@ pub const model = model_mod;
 pub const osc = @import("osc.zig");
 pub const terminal = terminal_mod;
 pub const observer = @import("observer.zig");
+pub const prompt_scan = @import("prompt_scan.zig");
 pub const detection = @import("agent_detection.zig");
 pub const escape = @import("escape.zig");
 

@@ -5,13 +5,13 @@ const core = @import("telar-core");
 const claude = @import("claude_request.zig");
 const request = @import("request.zig");
 
-pub const AgentProvider = core.schema.AgentProvider;
+pub const ApiDialect = request.ApiDialect;
 pub const RequestClass = request.RequestClass;
 pub const max_concurrent_requests = 128;
 
 /// Owns the body classifier for one candidate provider request.
 pub const Observer = struct {
-    provider: AgentProvider = .unknown,
+    dialect: ApiDialect = .unknown,
     claude_decoder: claude.Decoder = .{},
     active: bool = false,
 
@@ -19,13 +19,13 @@ pub const Observer = struct {
     ///
     /// ```zig
     /// var observer: Observer = .{};
-    /// observer.init(.claude);
+    /// observer.init(.anthropic_messages);
     /// defer observer.deinit();
     /// ```
-    pub fn init(observer: *Observer, provider: AgentProvider) void {
-        observer.* = .{ .provider = provider, .active = true };
+    pub fn init(observer: *Observer, dialect: ApiDialect) void {
+        observer.* = .{ .dialect = dialect, .active = true };
 
-        if (provider == .claude) {
+        if (dialect == .anthropic_messages) {
             observer.claude_decoder.init();
         }
     }
@@ -40,8 +40,8 @@ pub const Observer = struct {
             return;
         }
 
-        switch (observer.provider) {
-            .claude => observer.claude_decoder.feed(input),
+        switch (observer.dialect) {
+            .anthropic_messages => observer.claude_decoder.feed(input),
             else => {},
         }
     }
@@ -57,8 +57,8 @@ pub const Observer = struct {
             return .auxiliary;
         }
 
-        return switch (observer.provider) {
-            .claude => if (observer.claude_decoder.finish()) .inference else .auxiliary,
+        return switch (observer.dialect) {
+            .anthropic_messages => if (observer.claude_decoder.finish()) .inference else .auxiliary,
             else => .auxiliary,
         };
     }
@@ -84,11 +84,11 @@ pub const Observer = struct {
             return;
         }
 
-        if (observer.provider == .claude) {
+        if (observer.dialect == .anthropic_messages) {
             observer.claude_decoder.deinit();
         }
 
-        observer.provider = .unknown;
+        observer.dialect = .unknown;
         observer.active = false;
     }
 };
@@ -106,17 +106,17 @@ pub const Streams = struct {
         observer: Observer = .{},
     };
 
-    provider: AgentProvider,
+    dialect: ApiDialect,
     slots: [max_concurrent_requests]Slot = @splat(.{}),
 
     /// Creates an empty per-connection observer set.
     ///
     /// ```zig
-    /// var streams = Streams.init(.claude);
+    /// var streams = Streams.init(.anthropic_messages);
     /// defer streams.deinit();
     /// ```
-    pub fn init(provider: AgentProvider) Streams {
-        return .{ .provider = provider };
+    pub fn init(dialect: ApiDialect) Streams {
+        return .{ .dialect = dialect };
     }
 
     /// Starts observing one candidate stream. Duplicate, zero, and
@@ -126,7 +126,7 @@ pub const Streams = struct {
     /// const observing = streams.start(stream_id);
     /// ```
     pub fn start(streams: *Streams, stream_id: u32) bool {
-        if (stream_id == 0 or streams.provider == .unknown) {
+        if (stream_id == 0 or streams.dialect == .unknown) {
             return false;
         }
 
@@ -144,7 +144,7 @@ pub const Streams = struct {
 
         const slot = free orelse return false;
         slot.stream_id = stream_id;
-        slot.observer.init(streams.provider);
+        slot.observer.init(streams.dialect);
         return true;
     }
 
@@ -200,7 +200,7 @@ pub const Streams = struct {
             slot.* = .{};
         }
 
-        streams.provider = .unknown;
+        streams.dialect = .unknown;
     }
 
     fn find(streams: *Streams, stream_id: u32) ?*Slot {
@@ -219,12 +219,12 @@ const auxiliary_body = "{\"messages\":[],\"tools\":[],\"stream\":true}";
 
 test "request observer distinguishes primary and auxiliary Claude bodies" {
     var primary: Observer = .{};
-    primary.init(.claude);
+    primary.init(.anthropic_messages);
     defer primary.deinit();
     primary.feed(primary_body);
 
     var auxiliary: Observer = .{};
-    auxiliary.init(.claude);
+    auxiliary.init(.anthropic_messages);
     defer auxiliary.deinit();
     auxiliary.feed(auxiliary_body);
 
@@ -233,7 +233,7 @@ test "request observer distinguishes primary and auxiliary Claude bodies" {
 }
 
 test "request streams classify arbitrarily interleaved bodies independently" {
-    var streams = Streams.init(.claude);
+    var streams = Streams.init(.anthropic_messages);
     defer streams.deinit();
     try std.testing.expect(streams.start(1));
     try std.testing.expect(streams.start(3));
@@ -250,7 +250,7 @@ test "request streams classify arbitrarily interleaved bodies independently" {
 }
 
 test "finishing a request stream releases its slot for reuse" {
-    var streams = Streams.init(.claude);
+    var streams = Streams.init(.anthropic_messages);
     defer streams.deinit();
     try std.testing.expect(streams.start(7));
     streams.feed(.{ .stream_id = 7, .bytes = primary_body });
@@ -262,7 +262,7 @@ test "finishing a request stream releases its slot for reuse" {
 }
 
 test "discarding a request stream erases partial input and releases its slot" {
-    var streams = Streams.init(.claude);
+    var streams = Streams.init(.anthropic_messages);
     defer streams.deinit();
     try std.testing.expect(streams.start(9));
     streams.feed(.{ .stream_id = 9, .bytes = primary_body[0 .. primary_body.len / 2] });
@@ -274,7 +274,7 @@ test "discarding a request stream erases partial input and releases its slot" {
 }
 
 test "request stream capacity fails closed without disturbing active slots" {
-    var streams = Streams.init(.claude);
+    var streams = Streams.init(.anthropic_messages);
     defer streams.deinit();
 
     for (0..max_concurrent_requests) |index| {

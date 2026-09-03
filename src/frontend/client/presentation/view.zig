@@ -745,12 +745,7 @@ pub const State = struct {
             var provider_marks: [widgets.sidebar.max_provider_marks]kitty.SidebarProviderPlacement = undefined;
             var provider_mark_count: usize = 0;
             for (composed.sidebar.provider_marks[0..composed.sidebar.provider_mark_count]) |mark| {
-                const provider: kitty.SidebarProvider = switch (mark.provider) {
-                    .claude => .claude,
-                    .codex => .codex,
-                    .pi => .pi,
-                    else => continue,
-                };
+                const provider = kitty.SidebarProvider.fromAgent(mark.provider) orelse continue;
                 provider_marks[provider_mark_count] = .{ .area = mark.area, .provider = provider };
                 provider_mark_count += 1;
             }

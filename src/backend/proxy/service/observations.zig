@@ -96,7 +96,7 @@ test "published observations traverse the owned channel exactly once" {
     defer observations.close(io);
     var expected: middleware.Event = .{
         .credential = capture.credential,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .protocol = .http11,
         .connection_id = 11,

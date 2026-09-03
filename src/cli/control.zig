@@ -34,14 +34,13 @@ pub const Agent = struct {
     provider_name: [schema.max_agent_provider_name_bytes]u8 = undefined,
     provider_name_len: u8 = 0,
 
-    /// Manifest name of the provider, or the built-in label when the runtime
-    /// sent none.
+    /// Manifest name of the provider; "unknown" when the runtime sent none.
     pub fn providerLabel(agent: *const Agent) []const u8 {
         if (agent.provider_name_len != 0) {
             return agent.provider_name[0..agent.provider_name_len];
         }
 
-        return providerName(agent.provider);
+        return "unknown";
     }
 
     pub fn workspaceLabel(agent: *const Agent) []const u8 {
@@ -434,15 +433,6 @@ pub fn statusName(status: schema.AgentStatus) []const u8 {
         .ready => "ready",
         .done => "done",
         .failed => "failed",
-    };
-}
-
-pub fn providerName(provider: schema.AgentProvider) []const u8 {
-    return switch (provider) {
-        .unknown => "unknown",
-        .claude => "claude",
-        .codex => "codex",
-        else => "custom",
     };
 }
 

@@ -15,16 +15,17 @@ pub const RemovalCommand = struct {
     marker: attachments.MarkerRemoval,
 };
 
-/// Maps an attachment-capable provider to how its prompt identifies images.
+/// Maps the marker scheme an agent's manifest declares to the client policy
+/// that binds previews to prompt markers.
 ///
 /// ```zig
-/// const policy = markerPolicy(.pi);
+/// const policy = markerPolicy(.pasted_path);
 /// ```
-pub fn markerPolicy(provider: schema.AgentProvider) attachments.MarkerPolicy {
-    return switch (provider) {
-        .claude => .stable_number,
-        .pi => .pasted_path,
-        else => .ordered,
+pub fn markerPolicy(markers: schema.AgentAttachmentMarkers) attachments.MarkerPolicy {
+    return switch (markers) {
+        .stable_number => .stable_number,
+        .pasted_path => .pasted_path,
+        .ordered, .none => .ordered,
     };
 }
 
@@ -198,10 +199,10 @@ const DismissCapture = struct {
 };
 
 test "marker policies follow each provider's prompt conventions" {
-    try std.testing.expect(markerPolicy(.codex) == .ordered);
-    try std.testing.expect(markerPolicy(.claude) == .stable_number);
-    try std.testing.expect(markerPolicy(.pi) == .pasted_path);
-    try std.testing.expect(markerPolicy(.unknown) == .ordered);
+    try std.testing.expect(markerPolicy(.ordered) == .ordered);
+    try std.testing.expect(markerPolicy(.none) == .ordered);
+    try std.testing.expect(markerPolicy(.stable_number) == .stable_number);
+    try std.testing.expect(markerPolicy(.pasted_path) == .pasted_path);
 }
 
 test "Pi path markers yield to word and line deletion keys" {

@@ -40,7 +40,7 @@ pub const Cache = struct {
 
     pub fn init(executable: []const u8) Cache {
         var cache: Cache = .{};
-        cache.setName(applicationName(.unknown, executable));
+        cache.setName(boundedCommandName(executable));
         return cache;
     }
 
@@ -61,9 +61,9 @@ const Identification = struct {
     name: [schema.max_foreground_name_bytes]u8 = @splat(0),
     name_len: u8 = 0,
 
-    fn init(provider: schema.AgentProvider, command: []const u8) Identification {
+    fn init(table: *const Table, provider: schema.AgentProvider, command: []const u8) Identification {
         var result: Identification = .{ .provider = provider };
-        const value = applicationName(provider, command);
+        const value = applicationName(table, provider, command);
         @memcpy(result.name[0..value.len], value);
         result.name_len = @intCast(value.len);
         return result;
@@ -210,7 +210,7 @@ fn identifyMacosProcess(table: *const Table, pid: u32) Identification {
     var args_buffer: [max_process_args_bytes]u8 = undefined;
     const argv = readMacosArgv(pid, &args_buffer) orelse &.{};
     const command = comm_bytes[0..comm_end];
-    return .init(identifyCommand(table, command, argv), command);
+    return .init(table, identifyCommand(table, command, argv), command);
 }
 
 fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
@@ -260,7 +260,7 @@ fn identifyLinuxProcess(table: *const Table, pid: u32) Identification {
     const args_path = std.fmt.bufPrint(&path_buffer, "/proc/{d}/cmdline", .{pid}) catch return .{};
     const argv = readSmallFile(args_path, &args_buffer) orelse &.{};
     const command = std.mem.trim(u8, comm, " \r\n\t");
-    return .init(identifyCommand(table, command, argv), command);
+    return .init(table, identifyCommand(table, command, argv), command);
 }
 
 fn linuxProcessGroup(pid: u32) ?u32 {
@@ -326,12 +326,14 @@ fn identifyCommand(table: *const Table, comm: []const u8, argv: []const u8) sche
     return .unknown;
 }
 
-fn applicationName(provider: schema.AgentProvider, command: []const u8) []const u8 {
-    return switch (provider) {
-        .claude => "Claude Code",
-        .codex => "Codex",
-        else => boundedCommandName(command),
-    };
+/// The foreground name a pane shows: the manifest display name for a known
+/// agent, otherwise the executable basename.
+fn applicationName(table: *const Table, provider: schema.AgentProvider, command: []const u8) []const u8 {
+    if (provider == .unknown) {
+        return boundedCommandName(command);
+    }
+
+    return table.displayName(provider);
 }
 
 fn boundedCommandName(command: []const u8) []const u8 {
@@ -408,12 +410,12 @@ test "does not infer an agent from arbitrary runtime arguments" {
 
 test "process acquisition is bounded and cached" {
     const Fake = struct {
-        fn claude(_: *const Table, _: u32) Identification {
-            return .init(.claude, "claude");
+        fn claude(table: *const Table, _: u32) Identification {
+            return .init(table, .claude, "claude");
         }
 
-        fn unknown(_: *const Table, _: u32) Identification {
-            return .init(.unknown, "node");
+        fn unknown(table: *const Table, _: u32) Identification {
+            return .init(table, .unknown, "node");
         }
     };
     const shell: std.c.pid_t = 10;
@@ -447,7 +449,8 @@ test "process acquisition is bounded and cached" {
 }
 
 test "foreground names are bounded application labels" {
-    try std.testing.expectEqualStrings("Claude Code", applicationName(.claude, "claude"));
-    try std.testing.expectEqualStrings("zsh", applicationName(.unknown, "/bin/zsh"));
-    try std.testing.expectEqualStrings("", applicationName(.unknown, "bad\x1bname"));
+    try std.testing.expectEqualStrings("Claude Code", applicationName(&core.agent_manifest.builtin_table, .claude, "claude"));
+    try std.testing.expectEqualStrings("Pi", applicationName(&core.agent_manifest.builtin_table, .pi, "node"));
+    try std.testing.expectEqualStrings("zsh", applicationName(&core.agent_manifest.builtin_table, .unknown, "/bin/zsh"));
+    try std.testing.expectEqualStrings("", applicationName(&core.agent_manifest.builtin_table, .unknown, "bad\x1bname"));
 }

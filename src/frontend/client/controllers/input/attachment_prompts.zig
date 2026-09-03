@@ -79,8 +79,8 @@ fn expectMarkerDeletion(client: *Client, pane_id: schema.PaneId, command: key_ro
 /// Resolves the marker policy of a target whose provider learns marker
 /// identities from committed frames.
 fn learnedPolicy(client: *Client, target: attachments.Target) ?attachments.MarkerPolicy {
-    const provider = client.model.attachmentProvider(target) orelse return null;
-    const policy = attachment_prompt.markerPolicy(provider);
+    const markers = client.model.attachmentMarkers(target) orelse return null;
+    const policy = attachment_prompt.markerPolicy(markers);
 
     return if (policy.learnsIdentity()) policy else null;
 }
@@ -177,12 +177,12 @@ fn pendingMarkerAtCursor(raw_context: *anyopaque, deletion: attachments.MarkerDe
     const model = client.model.activeTabModelConst() orelse return false;
     const pane = model.findConst(target.pane_id) orelse return false;
 
-    const provider = client.model.attachmentProvider(target) orelse return false;
+    const markers = client.model.attachmentMarkers(target) orelse return false;
 
     return client.view.kittyAttachments().pendingMarkerAtDeletion(.{
         .buffer = &pane.buffer,
         .cursor = pane.cursor,
-    }, .{ .deletion = deletion, .policy = attachment_prompt.markerPolicy(provider) });
+    }, .{ .deletion = deletion, .policy = attachment_prompt.markerPolicy(markers) });
 }
 
 fn removeAttachment(raw_context: *anyopaque, id: attachments.Id) ?bool {

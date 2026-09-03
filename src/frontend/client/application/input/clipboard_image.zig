@@ -309,6 +309,7 @@ fn installFocusedTarget(model: *client_model.Model) !attachments.Target {
             .location = location,
             .pane_index = 1,
             .provider = .codex,
+            .attachments = .ordered,
             .status = .working,
         }},
     });

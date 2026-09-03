@@ -27,6 +27,22 @@ return telar.config({
       },
       timeout_ms = 15000,
     },
+    -- Agent manifests: recognize, label and draw an agent without a rebuild.
+    -- Naming a built-in ("claude", "codex", "pi") extends or overrides it.
+    agents = {
+      {
+        name = "gemini",
+        display_name = "Gemini CLI",
+        placeholder = "New Gemini chat",
+        icon = "G",
+        process_names = { "gemini" },
+        process_paths = { "/@google/gemini-cli/" },
+        identity = { "gemini cli" },
+        working = { "esc to cancel" },
+        attachments = "ordered",
+      },
+      { name = "claude", working = { "brewing" } },
+    },
   },
 
   plugins = {

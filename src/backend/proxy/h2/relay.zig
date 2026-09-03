@@ -77,7 +77,7 @@ pub const Route = struct {
     from: tls.Session.Side,
     to: tls.Session.Side,
     direction: Direction,
-    agent_provider: provider.AgentProvider,
+    dialect: provider.ApiDialect,
 };
 
 pub const TransformedRoute = struct {
@@ -114,7 +114,7 @@ const Decoded = struct {
 const Observer = struct {
     inflater: ?*c.nghttp2_hd_inflater = null,
     failed: bool = false,
-    agent_provider: provider.AgentProvider,
+    dialect: provider.ApiDialect,
     direction: Direction,
 
     header: [frame_header_len]u8 = undefined,
@@ -135,8 +135,8 @@ const Observer = struct {
     block_len: usize = 0,
     streams: stream_state.Tracker = .{},
 
-    fn init(agent_provider: provider.AgentProvider, direction: Direction) Observer {
-        var observer: Observer = .{ .agent_provider = agent_provider, .direction = direction };
+    fn init(dialect: provider.ApiDialect, direction: Direction) Observer {
+        var observer: Observer = .{ .dialect = dialect, .direction = direction };
         if (c.nghttp2_hd_inflate_new(&observer.inflater) != 0 or
             c.nghttp2_hd_inflate_change_table_size(
                 observer.inflater,
@@ -454,7 +454,7 @@ const Observer = struct {
                     decoded.inference_method = std.ascii.eqlIgnoreCase(value, "POST");
                 }
                 if (std.mem.eql(u8, name, ":path"))
-                    decoded.inference_route = provider.classify(observer.agent_provider, .{
+                    decoded.inference_route = provider.classify(observer.dialect, .{
                         .method = "POST",
                         .target = value,
                     }) == .inference;
@@ -545,7 +545,7 @@ const Transcoder = struct {
     inflater: ?*c.nghttp2_hd_inflater = null,
     deflater: ?*c.nghttp2_hd_deflater = null,
     failed: bool = false,
-    agent_provider: provider.AgentProvider,
+    dialect: provider.ApiDialect,
     configuration: TranscodeConfiguration,
     applied_table_size: u32 = 4096,
     applied_inflate_table_size: u32 = max_header_block_bytes,
@@ -574,8 +574,8 @@ const Transcoder = struct {
     setting_len: u8 = 0,
     streams: stream_state.Tracker = .{},
 
-    fn init(agent_provider: provider.AgentProvider, configuration: TranscodeConfiguration) Transcoder {
-        var transcoder: Transcoder = .{ .agent_provider = agent_provider, .configuration = configuration };
+    fn init(dialect: provider.ApiDialect, configuration: TranscodeConfiguration) Transcoder {
+        var transcoder: Transcoder = .{ .dialect = dialect, .configuration = configuration };
         if (c.nghttp2_hd_inflate_new(&transcoder.inflater) != 0 or
             c.nghttp2_hd_inflate_change_table_size(
                 transcoder.inflater,
@@ -851,7 +851,7 @@ const Transcoder = struct {
             transcoder.streams.startRequest(transcoder.block_stream))
         {
             port.emit(.{ .lifecycle = .{
-                .phase = if (provider.classify(transcoder.agent_provider, .{
+                .phase = if (provider.classify(transcoder.dialect, .{
                     .method = original.find(":method") orelse "",
                     .target = original.find(":path") orelse "",
                 }) == .inference)
@@ -1115,7 +1115,7 @@ const Transcoder = struct {
 /// const stats = relay(session, route, &sink);
 /// ```
 pub fn relay(session: anytype, route: Route, sink: anytype) Stats {
-    var observer = Observer.init(route.agent_provider, route.direction);
+    var observer = Observer.init(route.dialect, route.direction);
     defer observer.deinit();
     var preface_offset: usize = 0;
     var buffer: [32 * 1024]u8 = undefined;
@@ -1172,7 +1172,7 @@ pub fn relayTransformed(session: anytype, transformed_route: TransformedRoute, s
         .io = transformed_route.io,
         .transform_context = transformed_route.transform_context,
     };
-    var transcoder = Transcoder.init(route.agent_provider, configuration);
+    var transcoder = Transcoder.init(route.dialect, configuration);
     defer transcoder.deinit();
     const port = transcodePort(session, sink);
     var preface_offset: usize = 0;
@@ -1465,7 +1465,7 @@ test "HTTP2 observer exposes request DATA across every two-chunk split" {
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
-        var observer = Observer.init(.claude, .request);
+        var observer = Observer.init(.anthropic_messages, .request);
         defer observer.deinit();
 
         observer.observe(wire[0..split], &collector);
@@ -1489,7 +1489,7 @@ test "HTTP2 observer finishes a bodyless request across every two-chunk split" {
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
-        var observer = Observer.init(.claude, .request);
+        var observer = Observer.init(.anthropic_messages, .request);
         defer observer.deinit();
 
         observer.observe(wire[0..split], &collector);
@@ -1510,7 +1510,7 @@ test "HTTP2 observer exposes DATA payload across every two-chunk split" {
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
-        var observer = Observer.init(.claude, .response);
+        var observer = Observer.init(.anthropic_messages, .response);
         defer observer.deinit();
 
         observer.observe(wire[0..split], &collector);
@@ -1559,7 +1559,7 @@ test "HTTP2 observer attaches the decoded final status to response DATA" {
     writeFrameHeader(data[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 17 });
     @memcpy(data[frame_header_len..], payload);
     var collector: BodyCollector = .{};
-    var observer = Observer.init(.claude, .response);
+    var observer = Observer.init(.anthropic_messages, .response);
     defer observer.deinit();
 
     observer.observe(&header, &collector);
@@ -1587,7 +1587,7 @@ test "HTTP2 observer excludes the pad length and padding from DATA payload" {
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
-        var observer = Observer.init(.claude, .response);
+        var observer = Observer.init(.anthropic_messages, .response);
         defer observer.deinit();
 
         observer.observe(wire[0..split], &collector);
@@ -1604,7 +1604,7 @@ test "HTTP2 observer drops invalid DATA padding from observation only" {
     writeFrameHeader(wire[0..frame_header_len], .{ .length = 2, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 11 });
     wire[frame_header_len] = 2;
     var collector: BodyCollector = .{};
-    var observer = Observer.init(.claude, .response);
+    var observer = Observer.init(.anthropic_messages, .response);
     defer observer.deinit();
 
     observer.observe(&wire, &collector);
@@ -1661,7 +1661,7 @@ test "HPACK status turns a completed HTTP2 error stream into failure" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(.claude, .response);
+    var observer = Observer.init(.anthropic_messages, .response);
     defer observer.deinit();
     for (frames[0 .. 2 * frame_header_len + encoded_len]) |byte|
         observer.observe(&.{byte}, &collector);
@@ -1685,7 +1685,7 @@ test "request trailers do not emit a second request start" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(.claude, .request);
+    var observer = Observer.init(.anthropic_messages, .request);
     defer observer.deinit();
     var request_fields = [_]c.nghttp2_nv{
         .{ .name = @constCast(":method"), .value = @constCast("POST"), .namelen = 7, .valuelen = 4, .flags = 0 },
@@ -1730,7 +1730,7 @@ test "request trailers do not emit a second request start" {
     try std.testing.expectEqual(@as(usize, 1), collector.starts);
 }
 
-test "cross-provider HTTP2 requests are classified as auxiliary" {
+test "cross-dialect HTTP2 requests are classified as auxiliary" {
     var deflater: ?*c.nghttp2_hd_deflater = null;
     try std.testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_deflate_new(&deflater, 4096));
     defer c.nghttp2_hd_deflate_del(deflater);
@@ -1756,7 +1756,7 @@ test "cross-provider HTTP2 requests are classified as auxiliary" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(.codex, .request);
+    var observer = Observer.init(.openai_responses, .request);
     defer observer.deinit();
     observer.observe(&header, &collector);
     observer.observe(block[0..@intCast(block_len)], &collector);
@@ -1780,7 +1780,7 @@ test "HPACK dynamic table survives padded response blocks" {
         }
     };
     var collector: Collector = .{};
-    var observer = Observer.init(.claude, .response);
+    var observer = Observer.init(.anthropic_messages, .response);
     defer observer.deinit();
     for (1..3) |stream_id| {
         var fields = [_]c.nghttp2_nv{
@@ -1849,7 +1849,7 @@ fn decodeTestHeaderBlock(inflater: *c.nghttp2_hd_inflater, block: []const u8) !m
 }
 
 const TestTranscodeSetup = struct {
-    provider: provider.AgentProvider,
+    dialect: provider.ApiDialect,
     direction: Direction,
     to: tls.Session.Side,
     source_settings: *PeerSettings,
@@ -1858,7 +1858,7 @@ const TestTranscodeSetup = struct {
 };
 
 fn initTestTranscoder(setup: TestTranscodeSetup) Transcoder {
-    return Transcoder.init(setup.provider, .{
+    return Transcoder.init(setup.dialect, .{
         .direction = setup.direction,
         .to = setup.to,
         .source_settings = setup.source_settings,
@@ -1933,7 +1933,7 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
     target_settings.header_table_size.store(8192, .seq_cst);
-    var transcoder = initTestTranscoder(.{ .provider = .codex, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .openai_responses, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     for (frame[0 .. frame_header_len + @as(usize, @intCast(compressed_len))]) |byte|
         try std.testing.expect(transcoder.process(
@@ -2027,7 +2027,7 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
     for (1..3) |stream_id| {
@@ -2153,7 +2153,7 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     var input_offset: usize = 0;
     while (input_offset < input_len) {
@@ -2221,7 +2221,7 @@ test "HTTP2 SETTINGS update the opposite encoder bounds without changing wire by
     var session: FakeWriteSession = .{};
     var child_settings: PeerSettings = .{};
     var origin_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .request, .to = .origin, .source_settings = &child_settings, .target_settings = &origin_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &child_settings, .target_settings = &origin_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
     var settings_frame: [frame_header_len + 12]u8 = undefined;
@@ -2276,7 +2276,7 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
     try std.testing.expect(transcoder.process(
@@ -2319,7 +2319,7 @@ test "HTTP2 transform mode exposes unpadded response DATA without changing wire 
         var session: FakeWriteSession = .{};
         var source_settings: PeerSettings = .{};
         var target_settings: PeerSettings = .{};
-        var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+        var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
         defer transcoder.deinit();
 
         try std.testing.expect(transcoder.process(
@@ -2358,7 +2358,7 @@ test "HTTP2 transform mode exposes request DATA without changing wire bytes" {
         var session: FakeWriteSession = .{};
         var source_settings: PeerSettings = .{};
         var target_settings: PeerSettings = .{};
-        var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+        var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
         defer transcoder.deinit();
 
         try std.testing.expect(transcoder.process(
@@ -2404,7 +2404,7 @@ test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
     for (wire) |byte| {
@@ -2435,7 +2435,7 @@ test "HTTP2 transform mode relays DATA and control frames byte for byte" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
     var wire: [3 * frame_header_len + 17]u8 = undefined;
@@ -2507,7 +2507,7 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     try std.testing.expect(transcoder.process(
         frame[0 .. frame_header_len + @as(usize, @intCast(compressed_len))],
@@ -2577,7 +2577,7 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
     var session: FakeWriteSession = .{};
     var source_settings: PeerSettings = .{};
     var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .provider = .claude, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
+    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     try std.testing.expect(transcoder.process(
         frame[0 .. frame_header_len + 4 + @as(usize, @intCast(compressed_len))],

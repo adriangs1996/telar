@@ -43,9 +43,9 @@ pub const Connection = struct {
     /// ```
     pub fn run(connection: *Connection) void {
         const options = connection.options;
-        var responses = provider.ResponseStreams.init(options.gpa, options.exchange.provider);
+        var responses = provider.ResponseStreams.init(options.gpa, options.exchange.dialect);
         defer responses.deinit();
-        var requests = provider.RequestStreams.init(options.exchange.provider);
+        var requests = provider.RequestStreams.init(options.exchange.dialect);
         defer requests.deinit();
         var relay: RelayContext = .{
             .io = options.io,
@@ -53,8 +53,8 @@ pub const Connection = struct {
             .has_custom_transformers = options.has_custom_transformers,
             .session = options.session,
             .exchange = options.exchange,
-            .responses = if (options.exchange.provider == .claude) &responses else null,
-            .requests = if (options.exchange.provider == .claude) &requests else null,
+            .responses = if (options.exchange.dialect == .anthropic_messages) &responses else null,
+            .requests = if (options.exchange.dialect == .anthropic_messages) &requests else null,
         };
 
         RelayConnection.run(&relay);
@@ -154,7 +154,7 @@ const EventObserver = struct {
     }
 
     fn shouldClassifyRequest(observer: *const EventObserver, lifecycle: h2.Lifecycle) bool {
-        return observer.exchange.provider == .claude and observer.requests != null and lifecycle.phase == .request_started;
+        return observer.exchange.dialect == .anthropic_messages and observer.requests != null and lifecycle.phase == .request_started;
     }
 
     fn finishRequest(observer: *EventObserver, stream_id: u32) void {
@@ -197,7 +197,7 @@ fn relayOptions(context: *RelayContext, settings: *h2.Settings, direction: h2.Di
     };
 
     return h2.relayOptions(direction, settings, .{
-        .provider = context.exchange.provider,
+        .dialect = context.exchange.dialect,
         .transformation = if (!shouldTransform(context, direction)) null else .{
             .pipeline = context.transforms,
             .io = context.io,
@@ -215,7 +215,7 @@ fn shouldTransform(context: *const RelayContext, direction: h2.Direction) bool {
         return true;
     }
 
-    return context.exchange.provider == .claude and direction == .request;
+    return context.exchange.dialect == .anthropic_messages and direction == .request;
 }
 
 fn recordDecodeFailure(context: *RelayContext, _: h2.Direction) void {
@@ -268,7 +268,7 @@ const TestHarness = struct {
                 .pane_generation = 17,
                 .token = .{0x24} ** identity.token_bytes,
             },
-            .provider = .claude,
+            .dialect = .anthropic_messages,
             .connection_id = 29,
             .protocol = .h2,
         };
@@ -312,7 +312,7 @@ const claude_startup_request =
 test "Claude request bodies refine interleaved route candidates per stream" {
     var harness: TestHarness = .{};
     try harness.init();
-    var requests = provider.RequestStreams.init(.claude);
+    var requests = provider.RequestStreams.init(.anthropic_messages);
     defer requests.deinit();
     var observer: EventObserver = .{
         .exchange = &harness.exchange,
@@ -383,7 +383,7 @@ test "built-in Claude negotiation transforms only request heads" {
     try std.testing.expect(shouldTransform(&context, .request));
     try std.testing.expect(!shouldTransform(&context, .response));
 
-    harness.exchange.provider = .codex;
+    harness.exchange.dialect = .openai_responses;
     try std.testing.expect(!shouldTransform(&context, .request));
     try std.testing.expect(!shouldTransform(&context, .response));
 
@@ -395,7 +395,7 @@ test "built-in Claude negotiation transforms only request heads" {
 test "final DATA publishes Claude completion before transport completion" {
     var harness: TestHarness = .{};
     try harness.init();
-    var responses = provider.ResponseStreams.init(std.testing.allocator, .claude);
+    var responses = provider.ResponseStreams.init(std.testing.allocator, .anthropic_messages);
     defer responses.deinit();
     var observer: EventObserver = .{
         .exchange = &harness.exchange,

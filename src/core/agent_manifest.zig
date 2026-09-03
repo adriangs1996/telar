@@ -10,11 +10,21 @@ pub const AgentProvider = schema.AgentProvider;
 
 pub const max_agents = schema.max_agent_manifests;
 pub const max_name_bytes = schema.max_agent_provider_name_bytes;
+pub const max_display_name_bytes = schema.max_agent_display_name_bytes;
+pub const max_placeholder_bytes = schema.max_agent_session_title_bytes;
+pub const max_icon_bytes = schema.max_agent_icon_bytes;
 pub const max_phrase_bytes = 48;
 pub const max_phrases = 8;
 pub const max_path_bytes = 64;
 pub const max_paths = 4;
 pub const first_custom_provider: u8 = schema.first_custom_agent_provider;
+
+/// Labels for an agent the table does not know. Clients and the runtime use
+/// the same words so an unknown agent reads identically everywhere.
+pub const generic_display_name = "Agent";
+pub const generic_placeholder = "New agent session";
+
+pub const AttachmentMarkers = schema.AgentAttachmentMarkers;
 
 pub const Status = enum { working, blocked, ready };
 
@@ -70,10 +80,26 @@ pub fn BoundedList(comptime capacity: usize, comptime entry_bytes: usize) type {
 pub const PhraseList = BoundedList(max_phrases, max_phrase_bytes);
 pub const PathList = BoundedList(max_paths, max_path_bytes);
 
+pub const TextError = error{ EmptyText, TextTooLong };
+
 pub const Manifest = struct {
     provider: AgentProvider,
     name: [max_name_bytes]u8 = undefined,
     name_len: u8 = 0,
+    /// Human label shown wherever the agent is named; defaults to `name`.
+    display_name: [max_display_name_bytes]u8 = undefined,
+    display_name_len: u8 = 0,
+    /// Session title shown until the agent has a real one; defaults to
+    /// "New <display name> session".
+    placeholder: [max_placeholder_bytes]u8 = undefined,
+    placeholder_len: u8 = 0,
+    /// One sidebar glyph. Empty leaves the choice to the client, which has
+    /// artwork for the built-in agents and a generic mark for the rest.
+    icon: [max_icon_bytes]u8 = undefined,
+    icon_len: u8 = 0,
+    /// How the agent's prompt identifies pasted images; `none` disables the
+    /// image shelf for this agent.
+    attachments: AttachmentMarkers = .none,
     /// Executable basenames, compared without `.exe`, `.cmd`, `.bat` or `.js`.
     process_names: PathList = .{},
     /// Path fragments of an interpreter-launched entry point.
@@ -91,7 +117,63 @@ pub const Manifest = struct {
     pub fn nameSlice(manifest: *const Manifest) []const u8 {
         return manifest.name[0..manifest.name_len];
     }
+
+    /// The label to show for this agent: the configured display name, or
+    /// the manifest name when none was configured.
+    ///
+    /// ```zig
+    /// const label = manifest.displayName();
+    /// ```
+    pub fn displayName(manifest: *const Manifest) []const u8 {
+        if (manifest.display_name_len != 0) {
+            return manifest.display_name[0..manifest.display_name_len];
+        }
+
+        return manifest.nameSlice();
+    }
+
+    pub fn iconSlice(manifest: *const Manifest) []const u8 {
+        return manifest.icon[0..manifest.icon_len];
+    }
+
+    /// Writes the session title shown before the agent has a real one.
+    ///
+    /// ```zig
+    /// var buffer: [max_placeholder_bytes]u8 = undefined;
+    /// const title = manifest.placeholderTitle(&buffer);
+    /// ```
+    pub fn placeholderTitle(manifest: *const Manifest, buffer: *[max_placeholder_bytes]u8) []const u8 {
+        if (manifest.placeholder_len != 0) {
+            return manifest.placeholder[0..manifest.placeholder_len];
+        }
+
+        return std.fmt.bufPrint(buffer, "New {s} session", .{manifest.displayName()}) catch unreachable;
+    }
+
+    pub fn setDisplayName(manifest: *Manifest, text: []const u8) TextError!void {
+        manifest.display_name_len = try copyText(&manifest.display_name, text);
+    }
+
+    pub fn setPlaceholder(manifest: *Manifest, text: []const u8) TextError!void {
+        manifest.placeholder_len = try copyText(&manifest.placeholder, text);
+    }
+
+    pub fn setIcon(manifest: *Manifest, text: []const u8) TextError!void {
+        manifest.icon_len = try copyText(&manifest.icon, text);
+    }
+
+    comptime {
+        // "New " + display name + " session" must always fit the placeholder.
+        std.debug.assert(4 + max_display_name_bytes + 8 <= max_placeholder_bytes);
+    }
 };
+
+fn copyText(storage: []u8, text: []const u8) TextError!u8 {
+    if (text.len == 0) return error.EmptyText;
+    if (text.len > storage.len) return error.TextTooLong;
+    @memcpy(storage[0..text.len], text);
+    return @intCast(text.len);
+}
 
 pub const AddError = error{ TooManyAgents, InvalidName, DuplicateName };
 
@@ -151,6 +233,58 @@ pub const Table = struct {
     pub fn providerName(table: *const Table, provider: AgentProvider) []const u8 {
         const manifest = table.find(provider) orelse return "unknown";
         return manifest.nameSlice();
+    }
+
+    /// Human label for a provider index; unknown indexes read as "Agent".
+    ///
+    /// ```zig
+    /// const label = table.displayName(entry.provider);
+    /// ```
+    pub fn displayName(table: *const Table, provider: AgentProvider) []const u8 {
+        const manifest = table.find(provider) orelse return generic_display_name;
+        return manifest.displayName();
+    }
+
+    /// Session title shown before an agent has a real one.
+    ///
+    /// ```zig
+    /// var buffer: [max_placeholder_bytes]u8 = undefined;
+    /// const title = table.placeholderTitle(entry.provider, &buffer);
+    /// ```
+    pub fn placeholderTitle(table: *const Table, provider: AgentProvider, buffer: *[max_placeholder_bytes]u8) []const u8 {
+        const manifest = table.find(provider) orelse return generic_placeholder;
+        return manifest.placeholderTitle(buffer);
+    }
+
+    /// Configured sidebar glyph; empty when the client should pick artwork.
+    ///
+    /// ```zig
+    /// const glyph = table.icon(entry.provider);
+    /// ```
+    pub fn icon(table: *const Table, provider: AgentProvider) []const u8 {
+        const manifest = table.find(provider) orelse return "";
+        return manifest.iconSlice();
+    }
+
+    /// How the agent's prompt identifies pasted images.
+    ///
+    /// ```zig
+    /// if (table.attachments(entry.provider) == .none) hideImageShelf();
+    /// ```
+    pub fn attachments(table: *const Table, provider: AgentProvider) AttachmentMarkers {
+        const manifest = table.find(provider) orelse return .none;
+        return manifest.attachments;
+    }
+
+    /// Reports whether the agent's manifest proves readiness by itself, so a
+    /// generic screen scan must not override its stream signal.
+    ///
+    /// ```zig
+    /// if (!table.declaresReadyPrompt(signal.provider)) mergeScreenScan();
+    /// ```
+    pub fn declaresReadyPrompt(table: *const Table, provider: AgentProvider) bool {
+        const manifest = table.find(provider) orelse return false;
+        return manifest.ready_prompt.count != 0;
     }
 
     /// Applies the screen heuristics to one plain-text sample. Blocked
@@ -287,6 +421,8 @@ fn buildBuiltin() Table {
     };
 
     const claude = table.add("claude") catch unreachable;
+    claude.setDisplayName("Claude Code") catch unreachable;
+    claude.attachments = .stable_number;
     for ([_][]const u8{ "claude", "claude-code" }) |name| claude.process_names.append(name) catch unreachable;
     for ([_][]const u8{ "/@anthropic-ai/claude-code/", "\\@anthropic-ai\\claude-code\\" }) |path| claude.process_paths.append(path) catch unreachable;
     claude.brand.append("claude") catch unreachable;
@@ -295,6 +431,8 @@ fn buildBuiltin() Table {
     for (shared_working) |phrase| claude.working.append(phrase) catch unreachable;
 
     const codex = table.add("codex") catch unreachable;
+    codex.setDisplayName("Codex") catch unreachable;
+    codex.attachments = .ordered;
     codex.process_names.append("codex") catch unreachable;
     for ([_][]const u8{ "/@openai/codex/", "\\@openai\\codex\\" }) |path| codex.process_paths.append(path) catch unreachable;
     codex.brand.append("codex") catch unreachable;
@@ -307,6 +445,8 @@ fn buildBuiltin() Table {
     // brand word: "pi" would match "api" or "pipe" in any pane. Its state
     // comes from process detection, the proxy and its own lifecycle reports.
     const pi = table.add("pi") catch unreachable;
+    pi.setDisplayName("Pi") catch unreachable;
+    pi.attachments = .pasted_path;
     pi.process_names.append("pi") catch unreachable;
     for ([_][]const u8{
         "/@earendil-works/pi-coding-agent/",
@@ -434,4 +574,43 @@ test "phrase lists reject empty, oversized and excess entries" {
     try std.testing.expectError(error.EntryTooLong, list.append("x" ** (max_phrase_bytes + 1)));
     for (0..max_phrases) |_| try list.append("ok");
     try std.testing.expectError(error.TooManyEntries, list.append("ok"));
+}
+
+test "presentation defaults derive from the manifest and configuration overrides them" {
+    var table = builtin_table;
+    var buffer: [max_placeholder_bytes]u8 = undefined;
+
+    try std.testing.expectEqualStrings("Claude Code", table.displayName(.claude));
+    try std.testing.expectEqualStrings("New Claude Code session", table.placeholderTitle(.claude, &buffer));
+    try std.testing.expectEqualStrings("", table.icon(.claude));
+    try std.testing.expectEqual(AttachmentMarkers.stable_number, table.attachments(.claude));
+    try std.testing.expectEqual(AttachmentMarkers.ordered, table.attachments(.codex));
+    try std.testing.expectEqual(AttachmentMarkers.pasted_path, table.attachments(.pi));
+
+    try std.testing.expectEqualStrings(generic_display_name, table.displayName(.unknown));
+    try std.testing.expectEqualStrings(generic_placeholder, table.placeholderTitle(.unknown, &buffer));
+    try std.testing.expectEqual(AttachmentMarkers.none, table.attachments(.unknown));
+    try std.testing.expect(table.declaresReadyPrompt(.codex));
+    try std.testing.expect(!table.declaresReadyPrompt(.claude));
+    try std.testing.expect(!table.declaresReadyPrompt(.unknown));
+
+    const gemini = try table.add("gemini");
+    try std.testing.expectEqualStrings("gemini", table.displayName(gemini.provider));
+    try std.testing.expectEqualStrings("New gemini session", table.placeholderTitle(gemini.provider, &buffer));
+    try gemini.setDisplayName("Gemini CLI");
+    try gemini.setPlaceholder("Fresh Gemini chat");
+    try gemini.setIcon("G");
+    gemini.attachments = .ordered;
+    try std.testing.expectEqualStrings("Gemini CLI", table.displayName(gemini.provider));
+    try std.testing.expectEqualStrings("Fresh Gemini chat", table.placeholderTitle(gemini.provider, &buffer));
+    try std.testing.expectEqualStrings("G", table.icon(gemini.provider));
+    try std.testing.expectEqual(AttachmentMarkers.ordered, table.attachments(gemini.provider));
+
+    const claude = try table.add("claude");
+    try claude.setDisplayName("Claude");
+    try std.testing.expectEqualStrings("New Claude session", table.placeholderTitle(.claude, &buffer));
+
+    try std.testing.expectError(error.EmptyText, gemini.setIcon(""));
+    try std.testing.expectError(error.TextTooLong, gemini.setIcon("x" ** (max_icon_bytes + 1)));
+    try std.testing.expectError(error.TextTooLong, gemini.setDisplayName("x" ** (max_display_name_bytes + 1)));
 }

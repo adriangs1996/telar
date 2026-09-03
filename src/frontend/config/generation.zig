@@ -3401,6 +3401,73 @@ test "runtime agents reject bad names and oversized phrases" {
     try std.testing.expectEqualStrings("config.runtime.agents[1].working[1] is too long", long_phrase.message());
 }
 
+test "runtime agents carry presentation and the attachment scheme" {
+    const source =
+        \\return {
+        \\  api_version = 2,
+        \\  runtime = {
+        \\    agents = {
+        \\      { name = "gemini", display_name = "Gemini CLI", placeholder = "Fresh Gemini chat",
+        \\        icon = "G", attachments = "ordered" },
+        \\      { name = "claude", display_name = "Claude" },
+        \\    },
+        \\  },
+        \\}
+    ;
+    var diagnostic: Diagnostic = .{};
+    var generation = try Generation.loadSource(std.testing.allocator, std.testing.io, source, "@config.lua", 1, &diagnostic);
+    defer generation.deinit();
+    const table = &generation.snapshot.runtime.agent_manifests;
+    const gemini: core.schema.AgentProvider = @enumFromInt(core.schema.first_custom_agent_provider);
+    var buffer: [core.agent_manifest.max_placeholder_bytes]u8 = undefined;
+
+    try std.testing.expectEqualStrings("Gemini CLI", table.displayName(gemini));
+    try std.testing.expectEqualStrings("Fresh Gemini chat", table.placeholderTitle(gemini, &buffer));
+    try std.testing.expectEqualStrings("G", table.icon(gemini));
+    try std.testing.expectEqual(core.agent_manifest.AttachmentMarkers.ordered, table.attachments(gemini));
+    try std.testing.expectEqualStrings("Claude", table.displayName(.claude));
+    try std.testing.expectEqualStrings("New Claude session", table.placeholderTitle(.claude, &buffer));
+    try std.testing.expectEqual(core.agent_manifest.AttachmentMarkers.stable_number, table.attachments(.claude));
+    try std.testing.expectEqual(core.agent_manifest.AttachmentMarkers.pasted_path, table.attachments(.pi));
+}
+
+test "runtime agents reject bad presentation fields" {
+    const cases = [_]struct { source: []const u8, message: []const u8 }{
+        .{
+            .source = "return { api_version = 2, runtime = { agents = { { name = \"x\", icon = \"GG\" } } } }",
+            .message = "config.runtime.agents[1].icon must be exactly one cell wide",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { agents = { { name = \"x\", attachments = \"paths\" } } } }",
+            .message = "config.runtime.agents[1].attachments must be \"none\", \"ordered\", \"stable_number\" or \"pasted_path\"",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { agents = { { name = \"x\", display_name = string.rep(\"a\", 33) } } } }",
+            .message = "config.runtime.agents[1].display_name is too long",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { agents = { { name = \"x\", placeholder = \"a\\tb\" } } } }",
+            .message = "config.runtime.agents[1].placeholder must be a printable string",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { agents = { { name = \"x\", icon = 7 } } } }",
+            .message = "config.runtime.agents[1].icon must be a printable string",
+        },
+    };
+    for (cases) |case| {
+        var diagnostic: Diagnostic = .{};
+        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
+            std.testing.allocator,
+            std.testing.io,
+            case.source,
+            "@config.lua",
+            1,
+            &diagnostic,
+        ));
+        try std.testing.expectEqualStrings(case.message, diagnostic.message());
+    }
+}
+
 test "notification delivery parses and rejects unknown channels" {
     var diagnostic: Diagnostic = .{};
     var generation = try Generation.loadSource(

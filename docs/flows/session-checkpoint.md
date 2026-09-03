@@ -78,12 +78,12 @@ An agent reports its own session identifier with `telar agent report-session`
 (`report_agent_session` on the wire). The tracker stores it on the exact pane
 generation as a typed, bounded token; the checkpoint records it next to the
 pane's provider. On restore, when `runtime.session.resume_agents` is true and
-the reference is shaped like a UUID, the runtime types the official resume
-line for a built-in provider (`claude --resume <id>`, `codex resume <id>`,
-`pi --session <id>`)
-into the relaunched shell through the normal pane input queue. Only the
-allowlist can produce a command; custom providers and malformed references
-restore as plain shells. Claude Code hooks receive `session_id` in their
+the reference is shaped like a UUID, the runtime types the resume line the
+provider's capability entry declares (`agent.providers`: `claude --resume <id>`,
+`codex resume <id>`, `pi --session <id>`) into the relaunched shell through the
+normal pane input queue. Only that table can produce a command; configured
+providers carry no resume prefix and restore as plain shells, as do malformed
+references. Claude Code hooks receive `session_id` in their
 input and are the intended reporter.
 
 The session title rides along with the reference. The checkpoint records a

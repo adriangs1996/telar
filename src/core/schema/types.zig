@@ -310,8 +310,27 @@ pub const max_agent_manifests = 16;
 pub const first_custom_agent_provider: u8 = 4;
 pub const max_agent_provider_index: u8 = first_custom_agent_provider + max_agent_manifests - 1;
 pub const max_agent_provider_name_bytes = 32;
+/// Bound for a manifest display name such as "Claude Code".
+pub const max_agent_display_name_bytes = 32;
+/// Bound for one configured sidebar glyph: a single UTF-8 grapheme.
+pub const max_agent_icon_bytes = 8;
 /// Bound for an agent's own session reference as reported by its hooks.
 pub const max_agent_session_reference_bytes = 64;
+
+/// How an agent's prompt identifies pasted images, so the client can bind
+/// local previews to the markers the agent inserts. `none` disables the
+/// image shelf for that agent.
+pub const AgentAttachmentMarkers = enum(u8) {
+    none = 0,
+    /// Markers are matched by insertion order (Codex).
+    ordered = 1,
+    /// The agent numbers each image and the number is learned from the
+    /// committed frame (Claude Code).
+    stable_number = 2,
+    /// The agent pastes a temporary file path whose UUID is learned from the
+    /// committed frame (Pi).
+    pasted_path = 3,
+};
 
 pub const AgentStatus = enum(u8) {
     unknown = 0,
@@ -397,8 +416,13 @@ pub const AgentSnapshotEntry = struct {
     title_state: AgentTitleState = .placeholder,
     cwd_label: []const u8 = "",
     provider: AgentProvider,
-    /// Display name for `provider`; empty only for `unknown`.
+    /// Manifest name for `provider` ("claude"); empty only for `unknown`.
     provider_name: []const u8 = "",
+    /// Human label for `provider` ("Claude Code"); empty only for `unknown`.
+    display_name: []const u8 = "",
+    /// Configured sidebar glyph; empty selects the client's own artwork.
+    icon: []const u8 = "",
+    attachments: AgentAttachmentMarkers = .none,
     status: AgentStatus,
     source: AgentSource,
     authority: AgentAuthority,

@@ -13,6 +13,7 @@ const ServerTag = tags.ServerTag;
 const RequestId = id.RequestId;
 const PaneId = id.PaneId;
 const AgentProvider = types.AgentProvider;
+const AgentAttachmentMarkers = types.AgentAttachmentMarkers;
 const AgentStatus = types.AgentStatus;
 const AgentReportState = types.AgentReportState;
 const AgentSound = types.AgentSound;
@@ -271,6 +272,8 @@ fn encodeAgentSnapshotEntry(encoder: *wire.Encoder, entry: AgentSnapshotEntry) !
     try validateAgentDisplayText(entry.session_title, types.max_agent_session_title_bytes, true);
     try validateAgentDisplayText(entry.cwd_label, types.max_agent_cwd_label_bytes, true);
     try validateAgentDisplayText(entry.provider_name, types.max_agent_provider_name_bytes, true);
+    try validateAgentDisplayText(entry.display_name, types.max_agent_display_name_bytes, true);
+    try validateAgentDisplayText(entry.icon, types.max_agent_icon_bytes, true);
     try validateAgentProvider(entry.provider);
     try validateAgentTitle(entry);
     try encoder.writeInt(u64, id.raw(entry.pane_id));
@@ -287,6 +290,9 @@ fn encodeAgentSnapshotEntry(encoder: *wire.Encoder, entry: AgentSnapshotEntry) !
     try encoder.writeSized16(entry.cwd_label);
     try encoder.writeByte(@intFromEnum(entry.provider));
     try encoder.writeSized16(entry.provider_name);
+    try encoder.writeSized16(entry.display_name);
+    try encoder.writeSized16(entry.icon);
+    try encoder.writeByte(@intFromEnum(entry.attachments));
     try encoder.writeByte(@intFromEnum(entry.status));
     try encoder.writeByte(@intFromEnum(entry.source));
     try encoder.writeByte(@intFromEnum(entry.authority));
@@ -314,6 +320,10 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
         .cwd_label = try decoder.readSized16(),
         .provider = try decodeAgentProvider(try decoder.readByte()),
         .provider_name = try decoder.readSized16(),
+        .display_name = try decoder.readSized16(),
+        .icon = try decoder.readSized16(),
+        .attachments = std.enums.fromInt(AgentAttachmentMarkers, try decoder.readByte()) orelse
+            return error.InvalidAgentAttachments,
         .status = std.enums.fromInt(AgentStatus, try decoder.readByte()) orelse
             return error.InvalidAgentStatus,
         .source = std.enums.fromInt(AgentSource, try decoder.readByte()) orelse
@@ -334,6 +344,8 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
     try validateAgentDisplayText(entry.session_title, types.max_agent_session_title_bytes, true);
     try validateAgentDisplayText(entry.cwd_label, types.max_agent_cwd_label_bytes, true);
     try validateAgentDisplayText(entry.provider_name, types.max_agent_provider_name_bytes, true);
+    try validateAgentDisplayText(entry.display_name, types.max_agent_display_name_bytes, true);
+    try validateAgentDisplayText(entry.icon, types.max_agent_icon_bytes, true);
     try validateAgentTitle(entry);
     return entry;
 }

@@ -40,6 +40,9 @@ pub fn apply(client: *Client, snapshot: schema.AgentSnapshotView) !?client_model
             .cwd_label = entry.cwd_label,
             .provider = entry.provider,
             .provider_name = entry.provider_name,
+            .display_name = entry.display_name,
+            .icon = entry.icon,
+            .attachments = entry.attachments,
             .status = entry.status,
         };
         count += 1;

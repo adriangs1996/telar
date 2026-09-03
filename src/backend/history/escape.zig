@@ -137,6 +137,15 @@ pub const InputScanner = struct {
     state: State = .ground,
     parameter: u16 = 0,
     has_parameter: bool = false,
+    /// Printable ASCII typed since the last reset, with backspaces applied.
+    /// This is what a line editor re-echoes when it takes over input that
+    /// arrived before it started. It is exact only while `typed_exact` holds:
+    /// multi-byte text, pastes and kill keys are not modeled.
+    typed: [max_typed_bytes]u8 = undefined,
+    typed_len: u8 = 0,
+    typed_exact: bool = true,
+
+    pub const max_typed_bytes = 255;
 
     const State = enum { ground, escape, csi, paste, paste_escape, paste_csi };
     pub const Event = struct { submitted: bool = false, cancelled: bool = false };
@@ -151,13 +160,32 @@ pub const InputScanner = struct {
         return event;
     }
 
+    /// The typed text, or null when it could not be tracked exactly.
+    ///
+    /// ```zig
+    /// const pending = scanner.typedText() orelse return;
+    /// ```
+    pub fn typedText(scanner: *const InputScanner) ?[]const u8 {
+        if (!scanner.typed_exact) return null;
+        return scanner.typed[0..scanner.typed_len];
+    }
+
     fn feedByte(scanner: *InputScanner, byte: u8, event: *Event) void {
         switch (scanner.state) {
             .ground => switch (byte) {
-                esc => scanner.state = .escape,
+                esc => {
+                    scanner.state = .escape;
+                    scanner.typed_exact = false;
+                },
                 '\r', '\n' => event.submitted = true,
                 0x03 => event.cancelled = true,
-                else => {},
+                0x08, 0x7f => scanner.typed_len -|= 1,
+                // Clear-screen repaints the line without changing it.
+                0x0c => {},
+                0x20...0x7e => scanner.recordTyped(byte),
+                // Editing keys and multi-byte text change the line in ways
+                // this scanner does not model.
+                else => scanner.typed_exact = false,
             },
             .escape => if (byte == '[') {
                 scanner.startCsi(.csi);
@@ -175,6 +203,16 @@ pub const InputScanner = struct {
             },
             .paste_csi => scanner.csiByte(byte, true),
         }
+    }
+
+    fn recordTyped(scanner: *InputScanner, byte: u8) void {
+        if (scanner.typed_len == max_typed_bytes) {
+            scanner.typed_exact = false;
+            return;
+        }
+
+        scanner.typed[scanner.typed_len] = byte;
+        scanner.typed_len += 1;
     }
 
     fn startCsi(scanner: *InputScanner, state: State) void {
@@ -219,6 +257,23 @@ fn collectOsc(scanner: *OscScanner, bytes: []const u8, capture: OscCapture) void
         .byte => |value| capture.payloads.appendAssumeCapacity(value),
         .end => capture.ends.* += 1,
     };
+}
+
+test "the input scanner tracks plain typed text with backspaces applied" {
+    var scanner: InputScanner = .{};
+    _ = scanner.feed("cd ~/.cox\x7fn");
+    try std.testing.expectEqualStrings("cd ~/.con", scanner.typedText().?);
+
+    _ = scanner.feed("\x1b[D");
+    try std.testing.expect(scanner.typedText() == null);
+
+    scanner.reset();
+    _ = scanner.feed("ok\x15");
+    try std.testing.expect(scanner.typedText() == null);
+
+    scanner.reset();
+    _ = scanner.feed("caf\xc3\xa9");
+    try std.testing.expect(scanner.typedText() == null);
 }
 
 test "the OSC scanner produces identical events for any byte split" {

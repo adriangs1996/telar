@@ -431,6 +431,7 @@ pub fn encodeTestingAgentSnapshot(buffer: []u8, revision: u64, status: schema.Ag
             .title_state = .ready,
             .cwd_label = "~/sandbox/telar",
             .provider = .claude,
+            .display_name = "Claude",
             .status = status,
             .source = .screen,
             .authority = .active,
@@ -565,6 +566,7 @@ pub fn installTestingAttachmentProvider(client: *Client, generation: u64, provid
             .location = TestHarness.bootstrap_location,
             .pane_index = 1,
             .provider = provider,
+            .attachments = core.agent_manifest.builtin_table.attachments(provider),
             .status = .working,
         }},
     });

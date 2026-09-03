@@ -53,7 +53,9 @@ already accepted pane input transaction. See [Key routing](key-routing.md).
 ## Prompt coupling
 
 The attachment store scopes previews to one exact pane generation and applies
-the provider's marker identity, chosen by `attachment_prompt.markerPolicy`:
+the marker scheme the agent's manifest declares (`attachments` in
+`config.runtime.agents`, carried on the snapshot entry and mapped by
+`attachment_prompt.markerPolicy`; `none` hides the shelf):
 
 - Codex (`ordered`) treats each `[Image #N]` marker as one atomic editor
   element and renumbers the remaining markers after deletion, so its previews

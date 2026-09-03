@@ -7,16 +7,17 @@
 const std = @import("std");
 const core = @import("telar-core");
 const claude = @import("claude.zig");
+const dialect_mod = @import("dialect.zig");
 const claude_transport = @import("claude_transport.zig");
 const request = @import("request.zig");
 const request_body = @import("request_body.zig");
 const sse = @import("../sse.zig");
 
-pub const AgentProvider = core.schema.AgentProvider;
+pub const ApiDialect = dialect_mod.ApiDialect;
 
 pub const Request = request.Request;
 pub const RequestClass = request.RequestClass;
-pub const identify = request.identify;
+pub const identify = dialect_mod.identify;
 pub const classify = request.classify;
 pub const RequestObserver = request_body.Observer;
 pub const RequestFragment = request_body.Fragment;
@@ -27,18 +28,18 @@ pub const max_concurrent_responses = 128;
 
 /// Bounded interpreter for one streamed provider response.
 pub const ResponseObserver = struct {
-    provider: AgentProvider = .unknown,
+    dialect: ApiDialect = .unknown,
     decoder: sse.Decoder = .{},
     completed: bool = false,
 
     /// Starts observing one response from `provider`.
     ///
     /// ```zig
-    /// var observer = ResponseObserver.init(.claude);
+    /// var observer = ResponseObserver.init(.anthropic_messages);
     /// defer observer.deinit();
     /// ```
-    pub fn init(provider: AgentProvider) ResponseObserver {
-        return .{ .provider = provider };
+    pub fn init(dialect: ApiDialect) ResponseObserver {
+        return .{ .dialect = dialect };
     }
 
     /// Consumes the next response payload fragment and returns `true` exactly
@@ -53,7 +54,7 @@ pub const ResponseObserver = struct {
     /// );
     /// ```
     pub fn feed(observer: *ResponseObserver, input: []const u8) bool {
-        if (observer.completed or observer.provider != .claude) {
+        if (observer.completed or observer.dialect != .anthropic_messages) {
             return false;
         }
 
@@ -93,17 +94,17 @@ pub const ResponseStreams = struct {
     };
 
     allocator: std.mem.Allocator,
-    provider: AgentProvider,
+    dialect: ApiDialect,
     slots: [max_concurrent_responses]Slot = @splat(.{}),
 
     /// Starts an empty set for one provider connection.
     ///
     /// ```zig
-    /// var streams = ResponseStreams.init(allocator, .claude);
+    /// var streams = ResponseStreams.init(allocator, .anthropic_messages);
     /// defer streams.deinit();
     /// ```
-    pub fn init(allocator: std.mem.Allocator, provider: AgentProvider) ResponseStreams {
-        return .{ .allocator = allocator, .provider = provider };
+    pub fn init(allocator: std.mem.Allocator, dialect: ApiDialect) ResponseStreams {
+        return .{ .allocator = allocator, .dialect = dialect };
     }
 
     /// Feeds one response payload fragment to its stream and reports a newly
@@ -118,7 +119,7 @@ pub const ResponseStreams = struct {
     /// }
     /// ```
     pub fn feed(streams: *ResponseStreams, stream_id: u32, input: []const u8) bool {
-        if (stream_id == 0 or streams.provider != .claude) {
+        if (stream_id == 0 or streams.dialect != .anthropic_messages) {
             return false;
         }
 
@@ -152,7 +153,7 @@ pub const ResponseStreams = struct {
             slot.* = .{};
         }
 
-        streams.provider = .unknown;
+        streams.dialect = .unknown;
     }
 
     fn find(streams: *ResponseStreams, stream_id: u32) ?*Slot {
@@ -172,7 +173,7 @@ pub const ResponseStreams = struct {
             }
 
             const response = streams.allocator.create(ResponseObserver) catch return null;
-            response.* = .init(streams.provider);
+            response.* = .init(streams.dialect);
             slot.* = .{
                 .stream_id = stream_id,
                 .response = response,
@@ -190,7 +191,7 @@ const end_turn_event =
     "\n";
 
 test "response observer reports Claude completion exactly once" {
-    var observer = ResponseObserver.init(.claude);
+    var observer = ResponseObserver.init(.anthropic_messages);
     defer observer.deinit();
 
     try std.testing.expect(observer.feed(end_turn_event));
@@ -200,7 +201,7 @@ test "response observer reports Claude completion exactly once" {
 
 test "response observer preserves Claude SSE state across every split" {
     for (0..end_turn_event.len + 1) |split| {
-        var observer = ResponseObserver.init(.claude);
+        var observer = ResponseObserver.init(.anthropic_messages);
         defer observer.deinit();
 
         const completed_before_second_chunk = observer.feed(end_turn_event[0..split]);
@@ -212,7 +213,7 @@ test "response observer preserves Claude SSE state across every split" {
 }
 
 test "response observer ignores stream closure and tool continuation" {
-    var observer = ResponseObserver.init(.claude);
+    var observer = ResponseObserver.init(.anthropic_messages);
     defer observer.deinit();
 
     try std.testing.expect(!observer.feed(
@@ -223,7 +224,7 @@ test "response observer ignores stream closure and tool continuation" {
 }
 
 test "response observer ignores malformed and truncated SSE input" {
-    var observer = ResponseObserver.init(.claude);
+    var observer = ResponseObserver.init(.anthropic_messages);
     defer observer.deinit();
 
     try std.testing.expect(!observer.feed("event: message_delta\ndata: not-json\n\n"));
@@ -234,8 +235,8 @@ test "response observer ignores malformed and truncated SSE input" {
 }
 
 test "response observer ignores unsupported providers" {
-    inline for (.{ AgentProvider.unknown, AgentProvider.codex }) |provider| {
-        var observer = ResponseObserver.init(provider);
+    inline for (.{ ApiDialect.unknown, ApiDialect.openai_responses }) |dialect| {
+        var observer = ResponseObserver.init(dialect);
         defer observer.deinit();
 
         try std.testing.expect(!observer.feed(end_turn_event));
@@ -245,7 +246,7 @@ test "response observer ignores unsupported providers" {
 test "response streams decode arbitrarily interleaved HTTP2 payloads independently" {
     const first_split = end_turn_event.len / 3;
     const second_split = 2 * end_turn_event.len / 3;
-    var streams = ResponseStreams.init(std.testing.allocator, .claude);
+    var streams = ResponseStreams.init(std.testing.allocator, .anthropic_messages);
     defer streams.deinit();
 
     try std.testing.expect(!streams.feed(1, end_turn_event[0..first_split]));
@@ -258,7 +259,7 @@ test "response streams decode arbitrarily interleaved HTTP2 payloads independent
 }
 
 test "response streams discard finished state and allow stream-slot reuse" {
-    var streams = ResponseStreams.init(std.testing.allocator, .claude);
+    var streams = ResponseStreams.init(std.testing.allocator, .anthropic_messages);
     defer streams.deinit();
 
     try std.testing.expect(!streams.feed(7, end_turn_event[0 .. end_turn_event.len / 2]));
@@ -269,11 +270,11 @@ test "response streams discard finished state and allow stream-slot reuse" {
 }
 
 test "response streams reject the connection sentinel and unsupported providers" {
-    var claude_streams = ResponseStreams.init(std.testing.allocator, .claude);
+    var claude_streams = ResponseStreams.init(std.testing.allocator, .anthropic_messages);
     defer claude_streams.deinit();
     try std.testing.expect(!claude_streams.feed(0, end_turn_event));
 
-    var codex_streams = ResponseStreams.init(std.testing.allocator, .codex);
+    var codex_streams = ResponseStreams.init(std.testing.allocator, .openai_responses);
     defer codex_streams.deinit();
     try std.testing.expect(!codex_streams.feed(1, end_turn_event));
 }
@@ -281,7 +282,7 @@ test "response streams reject the connection sentinel and unsupported providers"
 test "response stream allocation failure drops observation without retaining a slot" {
     var storage: [0]u8 = .{};
     var allocator = std.heap.FixedBufferAllocator.init(&storage);
-    var streams = ResponseStreams.init(allocator.allocator(), .claude);
+    var streams = ResponseStreams.init(allocator.allocator(), .anthropic_messages);
     defer streams.deinit();
 
     try std.testing.expect(!streams.feed(1, end_turn_event));
@@ -289,7 +290,7 @@ test "response stream allocation failure drops observation without retaining a s
 }
 
 test "response streams degrade locally at their fixed concurrency bound" {
-    var streams = ResponseStreams.init(std.testing.allocator, .claude);
+    var streams = ResponseStreams.init(std.testing.allocator, .anthropic_messages);
     defer streams.deinit();
 
     for (0..max_concurrent_responses) |index| {
@@ -305,5 +306,6 @@ test "response streams degrade locally at their fixed concurrency bound" {
 
 test {
     std.testing.refAllDecls(claude);
+    std.testing.refAllDecls(dialect_mod);
     std.testing.refAllDecls(request);
 }

@@ -317,6 +317,7 @@ test "agent navigation and focused attachments derive from committed client stat
             .location = first,
             .pane_index = 1,
             .provider = .claude,
+            .attachments = .stable_number,
             .status = .ready,
         },
         .{
@@ -327,6 +328,7 @@ test "agent navigation and focused attachments derive from committed client stat
             },
             .pane_index = 2,
             .provider = .codex,
+            .attachments = .ordered,
             .status = .working,
         },
     };

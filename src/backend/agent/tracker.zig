@@ -226,7 +226,7 @@ pub const Tracker = struct {
     /// }
     /// ```
     pub fn observeProxy(tracker: *Tracker, observation: ProxyObservation) bool {
-        if (observation.provider == .unknown) {
+        if (observation.dialect == .unknown) {
             return false;
         }
 
@@ -500,7 +500,7 @@ fn testIdentityAt(id: u32, generation: u64) !Identity {
 }
 
 const TestProxyObservation = struct {
-    provider: schema.AgentProvider,
+    dialect: types.ApiDialect,
     phase: ProxyPhase,
     observed_at_ms: i64,
 };
@@ -510,8 +510,8 @@ const TestReadyPrompt = struct {
     observed_at_ms: i64,
 };
 
-fn testProxy(provider: schema.AgentProvider, phase: ProxyPhase, observed_at_ms: i64) TestProxyObservation {
-    return .{ .provider = provider, .phase = phase, .observed_at_ms = observed_at_ms };
+fn testProxy(dialect: types.ApiDialect, phase: ProxyPhase, observed_at_ms: i64) TestProxyObservation {
+    return .{ .dialect = dialect, .phase = phase, .observed_at_ms = observed_at_ms };
 }
 
 fn testReadyPrompt(provider: schema.AgentProvider, observed_at_ms: i64) TestReadyPrompt {
@@ -521,7 +521,7 @@ fn testReadyPrompt(provider: schema.AgentProvider, observed_at_ms: i64) TestRead
 fn observeTestProxy(tracker: *Tracker, identity: Identity, observation: TestProxyObservation) bool {
     return tracker.observeProxy(.{
         .identity = identity,
-        .provider = observation.provider,
+        .dialect = observation.dialect,
         .phase = observation.phase,
         .observed_at_ms = observation.observed_at_ms,
         .exchange = .{
@@ -593,7 +593,7 @@ test "tracker rejects every observation that would exceed repository capacity" {
         },
         .observed_at_ms = 200,
     }));
-    try std.testing.expect(!observeTestProxy(&tracker, overflow, testProxy(.claude, .request_started, 200)));
+    try std.testing.expect(!observeTestProxy(&tracker, overflow, testProxy(.anthropic_messages, .request_started, 200)));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     try std.testing.expectEqual(max_records, tracker.snapshot(&entries).len);
@@ -602,8 +602,8 @@ test "tracker rejects every observation that would exceed repository capacity" {
 test "only a confirmed prompt settles model work" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 100)));
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .response_finished, 200)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.anthropic_messages, .request_started, 100)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.anthropic_messages, .response_finished, 200)));
     try std.testing.expect(!tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
@@ -629,7 +629,7 @@ test "only a confirmed prompt settles model work" {
 test "explicit Codex prompt settles working without repetition" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.codex, .request_started, 100)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.openai_responses, .request_started, 100)));
     try std.testing.expect(tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
@@ -720,7 +720,7 @@ test "an older Codex prompt cannot overrule current lifecycle work" {
 test "agent branding alone does not settle working" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 100)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.anthropic_messages, .request_started, 100)));
     try std.testing.expect(!tracker.observeScreen(.{
         .identity = identity,
         .signal = .{
@@ -797,7 +797,7 @@ test "first working turn starts one generated session title" {
     }));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     var snapshot = tracker.snapshot(&entries);
-    try std.testing.expectEqualStrings("New Codex session", snapshot[0].session_title);
+    try std.testing.expectEqualStrings(core.agent_manifest.generic_placeholder, snapshot[0].session_title);
     try std.testing.expectEqual(schema.AgentTitleState.placeholder, snapshot[0].title_state);
 
     try std.testing.expect(tracker.observeInput(identity.key, "improve the sidebar\r"));
@@ -805,7 +805,7 @@ test "first working turn starts one generated session title" {
     snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentTitleState.placeholder, snapshot[0].title_state);
 
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.codex, .request_started, 200)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.openai_responses, .request_started, 200)));
     snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentTitleState.pending, snapshot[0].title_state);
 
@@ -843,7 +843,7 @@ test "manual title wins over a late generated result" {
         .observed_at_ms = 100,
     }));
     try std.testing.expect(tracker.observeInput(identity.key, "fix tests\r"));
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 200)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.anthropic_messages, .request_started, 200)));
     var job = tracker.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &job.query);
     try std.testing.expect(try tracker.setManualTitle(identity.key, "Release audit"));
@@ -878,7 +878,7 @@ test "description backpressure fails the ninth queued request without retry" {
             .observed_at_ms = 100,
         }));
         try std.testing.expect(tracker.observeInput(identity.key, "do work\r"));
-        try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.codex, .request_started, 200)));
+        try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.openai_responses, .request_started, 200)));
     }
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     const snapshot = tracker.snapshot(&entries);
@@ -1011,7 +1011,7 @@ test "network work resumes a visibly blocked agent" {
         .signal = .{ .provider = .claude, .status = .blocked, .confidence = 88 },
         .observed_at_ms = 100,
     }));
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 200)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.anthropic_messages, .request_started, 200)));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
@@ -1021,10 +1021,10 @@ test "network work resumes a visibly blocked agent" {
 test "new network work supersedes an older ready prompt" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 50)));
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .response_finished, 100)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.anthropic_messages, .request_started, 50)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.anthropic_messages, .response_finished, 100)));
     try std.testing.expect(observeTestReadyPrompt(&tracker, identity, testReadyPrompt(.claude, 200)));
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.claude, .request_started, 300)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.anthropic_messages, .request_started, 300)));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
@@ -1037,21 +1037,21 @@ test "unmatched proxy responses cannot create agent state" {
     const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
     try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .response_activity,
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
     try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 200,
     }));
     try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_failed,
         .exchange = exchange,
         .observed_at_ms = 300,
@@ -1068,14 +1068,14 @@ test "a contradictory provider cannot complete another agent's exchange" {
 
     _ = tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
     });
     try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 200,
@@ -1088,7 +1088,7 @@ test "a contradictory provider cannot complete another agent's exchange" {
 
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 300,
@@ -1105,14 +1105,14 @@ test "transport completion without provider turn completion remains working" {
 
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .response_finished,
         .exchange = exchange,
         .observed_at_ms = 200,
@@ -1133,14 +1133,14 @@ test "provider turn completion projects ready and ignores later transport comple
 
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = 200,
@@ -1155,7 +1155,7 @@ test "provider turn completion projects ready and ignores later transport comple
 
     try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .response_finished,
         .exchange = exchange,
         .observed_at_ms = 300,
@@ -1174,7 +1174,7 @@ test "all concurrent model exchanges must complete before ready" {
     for ([_]ProxyExchange{ first, second }, 0..) |exchange, index| {
         try std.testing.expect(tracker.observeProxy(.{
             .identity = identity,
-            .provider = .claude,
+            .dialect = .anthropic_messages,
             .phase = .request_started,
             .exchange = exchange,
             .observed_at_ms = @intCast(100 + index),
@@ -1183,7 +1183,7 @@ test "all concurrent model exchanges must complete before ready" {
 
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .provider_turn_completed,
         .exchange = first,
         .observed_at_ms = 200,
@@ -1194,7 +1194,7 @@ test "all concurrent model exchanges must complete before ready" {
 
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .provider_turn_completed,
         .exchange = second,
         .observed_at_ms = 300,
@@ -1211,21 +1211,21 @@ test "new model work supersedes a completed response" {
 
     _ = tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = completed,
         .observed_at_ms = 100,
     });
     _ = tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .provider_turn_completed,
         .exchange = completed,
         .observed_at_ms = 200,
     });
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = next,
         .observed_at_ms = 300,
@@ -1240,8 +1240,8 @@ test "new model work supersedes a completed response" {
 test "expired agent evidence is removed" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.codex, .request_started, 50)));
-    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.codex, .response_finished, 100)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.openai_responses, .request_started, 50)));
+    try std.testing.expect(observeTestProxy(&tracker, identity, testProxy(.openai_responses, .response_finished, 100)));
     try std.testing.expect(tracker.expire(100 + settled_expiry_ms));
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     try std.testing.expectEqual(@as(usize, 0), tracker.snapshot(&entries).len);
@@ -1252,10 +1252,10 @@ test "expiration removes every adjacent stale aggregate" {
     const first = try testIdentityAt(1, 1);
     const second = try testIdentityAt(2, 1);
 
-    try std.testing.expect(observeTestProxy(&tracker, first, testProxy(.codex, .request_started, 50)));
-    try std.testing.expect(observeTestProxy(&tracker, first, testProxy(.codex, .response_finished, 100)));
-    try std.testing.expect(observeTestProxy(&tracker, second, testProxy(.codex, .request_started, 50)));
-    try std.testing.expect(observeTestProxy(&tracker, second, testProxy(.codex, .response_finished, 100)));
+    try std.testing.expect(observeTestProxy(&tracker, first, testProxy(.openai_responses, .request_started, 50)));
+    try std.testing.expect(observeTestProxy(&tracker, first, testProxy(.openai_responses, .response_finished, 100)));
+    try std.testing.expect(observeTestProxy(&tracker, second, testProxy(.openai_responses, .request_started, 50)));
+    try std.testing.expect(observeTestProxy(&tracker, second, testProxy(.openai_responses, .response_finished, 100)));
     try std.testing.expect(tracker.expire(100 + settled_expiry_ms));
 
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
@@ -1281,21 +1281,21 @@ test "completed HTTP2 streams do not settle the agent turn" {
     const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .request_started,
         .exchange = first,
         .observed_at_ms = 100,
     }));
     _ = tracker.observeProxy(.{
         .identity = identity,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .request_started,
         .exchange = second,
         .observed_at_ms = 101,
     });
     _ = tracker.observeProxy(.{
         .identity = identity,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .response_finished,
         .exchange = first,
         .observed_at_ms = 200,
@@ -1306,7 +1306,7 @@ test "completed HTTP2 streams do not settle the agent turn" {
     try std.testing.expectEqual(schema.AgentStatus.working, snapshot[0].status);
     _ = tracker.observeProxy(.{
         .identity = identity,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .response_finished,
         .exchange = second,
         .observed_at_ms = 300,
@@ -1326,14 +1326,14 @@ test "sequential model requests stay working until a confirmed prompt" {
     const second: ProxyExchange = .{ .protocol = .h2, .connection_id = 9, .stream_id = 3 };
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = first,
         .observed_at_ms = 100,
     }));
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .response_finished,
         .exchange = first,
         .observed_at_ms = 200,
@@ -1345,14 +1345,14 @@ test "sequential model requests stay working until a confirmed prompt" {
 
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = second,
         .observed_at_ms = 300,
     }));
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .response_finished,
         .exchange = second,
         .observed_at_ms = 400,
@@ -1374,28 +1374,28 @@ test "HTTP2 connection failure settles all of its active streams" {
     const connection: ProxyExchange = .{ .protocol = .h2, .connection_id = 11, .stream_id = 0 };
     _ = tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = first,
         .observed_at_ms = 100,
     });
     _ = tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .exchange = second,
         .observed_at_ms = 101,
     });
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_failed,
         .exchange = connection,
         .observed_at_ms = 200,
     }));
     try std.testing.expect(!tracker.observeProxy(.{
         .identity = identity,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_failed,
         .exchange = connection,
         .observed_at_ms = 201,

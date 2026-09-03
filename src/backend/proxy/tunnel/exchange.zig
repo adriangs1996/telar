@@ -27,7 +27,7 @@ pub const Exchange = struct {
     pipeline: *const middleware.Pipeline,
     telemetry: *metrics.Counters,
     credential: identity.Credential,
-    provider: schema.AgentProvider,
+    dialect: provider.ApiDialect,
     connection_id: u64,
     protocol: middleware.Protocol,
     status_code: u16 = 0,
@@ -56,7 +56,7 @@ pub const Exchange = struct {
     /// });
     /// ```
     pub fn publishStatus(exchange: *Exchange, status: Status) void {
-        if (exchange.provider == .claude) {
+        if (exchange.dialect == .anthropic_messages) {
             const counter: ?metrics.Counter = switch (status.phase) {
                 .request_started => .claude_inference_request,
                 .provider_turn_completed => .claude_turn_completion,
@@ -72,7 +72,7 @@ pub const Exchange = struct {
 
         exchange.pipeline.publish(exchange.io, .{
             .credential = exchange.credential,
-            .provider = exchange.provider,
+            .dialect = exchange.dialect,
             .phase = status.phase,
             .protocol = exchange.protocol,
             .connection_id = exchange.connection_id,
@@ -96,7 +96,7 @@ pub const Exchange = struct {
         return .{
             .pane_id = exchange.credential.pane_id,
             .pane_generation = exchange.credential.pane_generation,
-            .provider = exchange.provider,
+            .dialect = exchange.dialect,
             .protocol = exchange.protocol,
             .direction = target.direction,
             .kind = target.kind,
@@ -151,7 +151,7 @@ fn testExchange(pipeline: *const middleware.Pipeline, counters: *metrics.Counter
         .pipeline = pipeline,
         .telemetry = counters,
         .credential = credential,
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .connection_id = 17,
         .protocol = .h2,
     };
@@ -173,7 +173,7 @@ test "published status carries authenticated exchange identity" {
     try std.testing.expectEqual(@as(usize, 1), capture.len);
     const event = capture.events[0];
     try std.testing.expect(std.meta.eql(exchange.credential, event.credential));
-    try std.testing.expectEqual(schema.AgentProvider.claude, event.provider);
+    try std.testing.expectEqual(provider.ApiDialect.anthropic_messages, event.dialect);
     try std.testing.expectEqual(middleware.Phase.response_finished, event.phase);
     try std.testing.expectEqual(middleware.Protocol.h2, event.protocol);
     try std.testing.expectEqual(@as(u64, 17), event.connection_id);
@@ -211,7 +211,7 @@ test "only lifecycle evidence for Claude increments Claude counters" {
     try std.testing.expectEqual(@as(u64, 1), snapshot.claude_successful_responses);
     try std.testing.expectEqual(@as(u64, 1), snapshot.claude_failure_observations);
 
-    exchange.provider = .codex;
+    exchange.dialect = .openai_responses;
     exchange.publish(.request_started, 0);
     try std.testing.expectEqual(@as(u64, 1), counters.snapshot(.{
         .connections = .{ .active = 0, .limit_drops = 0 },

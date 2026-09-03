@@ -31,13 +31,15 @@ pub const DeliverAgentSnapshotHandler = struct {
         try handler.effects.synchronize_attachments(handler.effects.context);
 
         var alert_count: usize = 0;
+        const snapshot = handler.model.agentSnapshot();
         for (commit.status_changes.slice()) |change| {
             if (alert_count == notification_capability.max_items) {
                 break;
             }
 
-            var message_buffer: [64]u8 = undefined;
-            const alert = alertInput(change, &message_buffer) orelse continue;
+            var message_buffer: [96]u8 = undefined;
+            const label = if (snapshot.find(change.key)) |agent| agent.displayName() else core.agent_manifest.generic_display_name;
+            const alert = alertInput(change, label, &message_buffer) orelse continue;
 
             try handler.effects.publish_alert(handler.effects.context, alert);
             alert_count += 1;
@@ -79,7 +81,7 @@ pub const DeliverAgentSnapshotHandler = struct {
     }
 };
 
-fn alertInput(change: client_model.AgentStatusChange, message_buffer: *[64]u8) ?notification_capability.Input {
+fn alertInput(change: client_model.AgentStatusChange, label: []const u8, message_buffer: *[96]u8) ?notification_capability.Input {
     const level: notification_capability.Level = switch (change.current) {
         .blocked => .warning,
         .done => .success,
@@ -89,7 +91,7 @@ fn alertInput(change: client_model.AgentStatusChange, message_buffer: *[64]u8) ?
     const message = std.fmt.bufPrint(
         message_buffer,
         "{s} in pane {d} is {s}",
-        .{ providerName(change.provider), change.pane_index, statusName(change.current) },
+        .{ label, change.pane_index, statusName(change.current) },
     ) catch "Agent status changed";
 
     return .{
@@ -106,15 +108,6 @@ fn alertInput(change: client_model.AgentStatusChange, message_buffer: *[64]u8) ?
             7 * std.time.ns_per_s
         else
             notification_capability.default_duration_ns,
-    };
-}
-
-fn providerName(provider: schema.AgentProvider) []const u8 {
-    return switch (provider) {
-        .claude => "Claude",
-        .codex => "Codex",
-        .pi => "Pi",
-        else => "Agent",
     };
 }
 
@@ -226,6 +219,12 @@ fn commitStatuses(model: *client_model.Model, revision: u64, statuses: []const s
                 1 => .claude,
                 2 => .unknown,
                 else => .codex,
+            },
+            .display_name = switch (index) {
+                0 => "Codex",
+                1 => "Claude",
+                2 => "",
+                else => "Codex",
             },
             .status = status,
         };

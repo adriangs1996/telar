@@ -85,7 +85,7 @@ pub const Tunnel = struct {
             .pipeline = dependencies.pipeline,
             .telemetry = dependencies.tls.telemetry,
             .credential = authenticated.credential,
-            .provider = provider.identify(target.host.bytes),
+            .dialect = provider.identify(target.host.bytes),
             .connection_id = dependencies.connection_ids.fetchAdd(1, .monotonic),
             .protocol = .http11,
         };

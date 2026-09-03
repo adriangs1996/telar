@@ -60,6 +60,19 @@ return telar.config({
       },
       timeout_ms = 15000,
     },
+    agents = {
+      {
+        name = "gemini",
+        display_name = "Gemini CLI",
+        icon = "G",
+        process_names = { "gemini" },
+        process_paths = { "/@google/gemini-cli/" },
+        identity = { "gemini cli" },
+        working = { "esc to cancel" },
+        attachments = "ordered",
+      },
+      { name = "claude", working = { "brewing" } },
+    },
   },
   plugins = {
     telar.plugin({ path = "plugins/sample", enabled = true }),
@@ -135,6 +148,89 @@ to `true`. `ready` applies only to `working -> ready`; `needs_input` applies
 only to `working -> blocked`. Initial snapshots, reconnects, repeated states,
 failures, and transitions from any other state remain silent. Set
 `enabled = false` to disable both sounds for that client or profile.
+
+## Agents
+
+`runtime.agents` is an array of agent manifests. A manifest is everything
+Telar knows about one coding agent without code: how to recognize it, how to
+show it, and which client capability it supports. Telar ships manifests for
+`claude`, `codex` and `pi`. Naming one of them extends or overrides the
+shipped manifest; any other name creates a new agent that the sidebar, the
+`telar agent` command, notifications and the image shelf treat exactly like a
+built-in one. At most 16 agents can be configured.
+
+```lua
+runtime = {
+  agents = {
+    {
+      -- Required. Lowercase letters, digits, "-", "_" or ".", 1..32 bytes.
+      -- It is the machine name shown by `telar agent` and the `provider_name`
+      -- clients receive.
+      name = "gemini",
+
+      -- Presentation (all optional).
+      display_name = "Gemini CLI",        -- sidebar label; defaults to name (max 32 bytes)
+      placeholder = "New Gemini chat",    -- title before the agent has one;
+                                          -- defaults to "New <display_name> session"
+      icon = "G",                         -- one glyph, exactly one cell wide;
+                                          -- built-ins use Telar's artwork when unset
+
+      -- Identity: how the foreground process is recognized (optional, max 4 each).
+      process_names = { "gemini" },                 -- executable basenames, launcher
+                                                    -- suffixes (.exe/.cmd/.bat/.js) ignored
+      process_paths = { "/@google/gemini-cli/" },   -- entry-point path fragments for
+                                                    -- interpreter launches (node, python)
+
+      -- Screen phrases: case-insensitive substrings of the pane's output
+      -- (optional, max 8 each, max 48 bytes each).
+      brand = { "gemini" },          -- attributes a generic working/blocked phrase to this agent
+      identity = { "gemini cli" },   -- confirms identity on screen without proving readiness
+      working = { "esc to cancel" },
+      blocked = { "allow this tool?" },
+      ready_prompt = { "type your message" },  -- proves the agent is idle; an agent that
+                                               -- declares this is exempt from the generic
+                                               -- prompt-glyph scan
+
+      -- Client capability (optional). How the agent's prompt identifies pasted
+      -- images; "none" (default for new agents) hides the image shelf.
+      attachments = "ordered",       -- "none" | "ordered" | "stable_number" | "pasted_path"
+    },
+  },
+}
+```
+
+`attachments` selects the marker scheme documented in
+[clipboard images](flows/clipboard-image.md): `ordered` renumbers `[Image #N]`
+markers after a deletion (Codex), `stable_number` keeps numbers stable (Claude
+Code) and `pasted_path` inserts a temporary file path (Pi). The shipped
+defaults are `stable_number` for `claude`, `ordered` for `codex` and
+`pasted_path` for `pi`.
+
+Overriding a built-in keeps its provider index, artwork and code-level
+capabilities; only the listed fields change. For example, relabel Claude Code
+and add a working phrase:
+
+```lua
+agents = {
+  { name = "claude", display_name = "Claude", working = { "brewing" } },
+}
+```
+
+Three things stay in code and are not configurable, because each needs an
+agent-specific program rather than data:
+
+- **Session resume.** Only `claude`, `codex` and `pi` are resumed from a
+  checkpoint (`src/backend/agent/providers/`). A configured agent restores as
+  a plain shell.
+- **Lifecycle hooks.** `telar integration <agent>` and `telar hook <agent>`
+  know the hook formats of the three built-ins (`src/cli/`).
+- **Network observation.** The proxy recognizes API dialects
+  (`anthropic_messages`, `openai_responses`), not agents. Any agent that talks
+  to one of those APIs through the proxy gets network-side lifecycle for free;
+  an agent talking to another API relies on process detection and phrases.
+
+Diagnostics name the entry and the field, for example
+`config.runtime.agents[2].icon must be exactly one cell wide`.
 
 ## Bars
 

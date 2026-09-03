@@ -161,7 +161,7 @@ fn testEvent(generation: u64, connection_id: u64) middleware.Event {
             .pane_generation = generation,
             .token = .{0x5a} ** identity.token_bytes,
         },
-        .provider = .claude,
+        .dialect = .anthropic_messages,
         .phase = .request_started,
         .protocol = .http11,
         .connection_id = connection_id,

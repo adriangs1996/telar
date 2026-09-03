@@ -1,9 +1,22 @@
 //! Compiler for runtime agent manifests.
+//!
+//! One `config.runtime.agents[]` entry names an agent and carries three kinds
+//! of data: how to recognize it (`process_names`, `process_paths` and the
+//! screen phrase lists), how to present it (`display_name`, `placeholder`,
+//! `icon`) and which client capability it supports (`attachments`). Every
+//! field except `name` is optional; a built-in name extends or overrides the
+//! shipped manifest instead of creating a new agent.
 
 const std = @import("std");
+const core = @import("telar-core");
 const lua = @import("lua-api").c;
 const config_model = @import("model.zig");
 const value = @import("lua_value.zig");
+
+const Manifest = core.agent_manifest.Manifest;
+
+const phrase_fields = .{ "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt" };
+const text_fields = .{ "display_name", "placeholder", "icon" };
 
 pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diagnostic: *config_model.Diagnostic) !void {
     const absolute = lua.lua_absindex(state, -1);
@@ -25,7 +38,7 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
         const entry = lua.lua_absindex(state, -1);
         try value.ensureOnlyFields(state, .{
             .index = entry,
-            .allowed = &.{ "name", "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt" },
+            .allowed = &(.{"name"} ++ phrase_fields ++ text_fields ++ .{"attachments"}),
             .path = "config.runtime.agents[]",
         }, diagnostic);
         _ = lua.lua_getfield(state, entry, "name");
@@ -41,7 +54,7 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
         };
         value.pop(state, 1);
 
-        inline for (.{ "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt" }) |field| {
+        inline for (phrase_fields) |field| {
             try parseList(state, .{
                 .entry = entry,
                 .field = field,
@@ -49,7 +62,97 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
                 .position = position,
             }, diagnostic);
         }
+
+        try parsePresentation(state, .{ .entry = entry, .manifest = manifest, .position = position }, diagnostic);
     }
+}
+
+const PresentationInput = struct {
+    entry: c_int,
+    manifest: *Manifest,
+    position: usize,
+};
+
+const FieldLookup = struct {
+    entry: c_int,
+    position: usize,
+    field: [:0]const u8,
+};
+
+const TextValue = struct {
+    field: []const u8,
+    text: []const u8,
+};
+
+/// Reads the optional display fields and the attachment policy of one entry.
+fn parsePresentation(state: *lua.lua_State, input: PresentationInput, diagnostic: *config_model.Diagnostic) !void {
+    inline for (text_fields) |field| {
+        const lookup: FieldLookup = .{ .entry = input.entry, .position = input.position, .field = field };
+        if (try optionalText(state, lookup, diagnostic)) |text| {
+            try applyText(input, .{ .field = field, .text = text }, diagnostic);
+        }
+    }
+
+    const lookup: FieldLookup = .{ .entry = input.entry, .position = input.position, .field = "attachments" };
+    if (try optionalText(state, lookup, diagnostic)) |text| {
+        input.manifest.attachments = attachmentMarkers(text) orelse {
+            diagnostic.set("config.runtime.agents[{d}].attachments must be \"none\", \"ordered\", \"stable_number\" or \"pasted_path\"", .{input.position});
+            return error.InvalidConfig;
+        };
+    }
+}
+
+fn attachmentMarkers(text: []const u8) ?core.agent_manifest.AttachmentMarkers {
+    inline for (std.meta.fields(core.agent_manifest.AttachmentMarkers)) |field| {
+        if (std.mem.eql(u8, text, field.name)) {
+            return @enumFromInt(field.value);
+        }
+    }
+
+    return null;
+}
+
+/// Returns a printable string field, `null` when absent, and a diagnostic
+/// when present with the wrong shape. The slice borrows the Lua stack value,
+/// which stays alive while the entry table is on the stack.
+fn optionalText(state: *lua.lua_State, lookup: FieldLookup, diagnostic: *config_model.Diagnostic) !?[]const u8 {
+    _ = lua.lua_getfield(state, lookup.entry, lookup.field.ptr);
+    defer value.pop(state, 1);
+    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+        return null;
+    }
+
+    const text = value.string(state, -1) orelse "";
+    if (text.len == 0 or !std.unicode.utf8ValidateSlice(text) or hasControlBytes(text)) {
+        diagnostic.set("config.runtime.agents[{d}].{s} must be a printable string", .{ lookup.position, lookup.field });
+        return error.InvalidConfig;
+    }
+
+    return text;
+}
+
+/// Stores one presentation string on the manifest. `icon` must also occupy
+/// exactly one cell so custom marks align with the built-in artwork.
+fn applyText(input: PresentationInput, item: TextValue, diagnostic: *config_model.Diagnostic) !void {
+    if (std.mem.eql(u8, item.field, "icon") and core.ui.measure(item.text) != 1) {
+        diagnostic.set("config.runtime.agents[{d}].icon must be exactly one cell wide", .{input.position});
+        return error.InvalidConfig;
+    }
+
+    const result = if (std.mem.eql(u8, item.field, "display_name"))
+        input.manifest.setDisplayName(item.text)
+    else if (std.mem.eql(u8, item.field, "placeholder"))
+        input.manifest.setPlaceholder(item.text)
+    else
+        input.manifest.setIcon(item.text);
+
+    result catch |err| {
+        diagnostic.set("config.runtime.agents[{d}].{s} {s}", .{ input.position, item.field, switch (err) {
+            error.TextTooLong => "is too long",
+            error.EmptyText => "is empty",
+        } });
+        return error.InvalidConfig;
+    };
 }
 
 fn parseList(state: *lua.lua_State, input: anytype, diagnostic: *config_model.Diagnostic) !void {

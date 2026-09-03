@@ -100,7 +100,7 @@ fn translate(event: proxy_mod.Observation, pane: *const Pane) ?agent_mod.ProxyOb
 
     return .{
         .identity = agent_mod.Identity.fromPane(pane),
-        .provider = event.provider,
+        .dialect = event.dialect,
         .phase = phase,
         .exchange = .{
             .protocol = protocol,
@@ -161,7 +161,7 @@ const TestAdapter = Adapter(Capture, test_port);
 fn eventFor(pane: *const Pane, phase: proxy_mod.ObservationPhase, protocol: proxy_mod.ObservationProtocol) proxy_mod.Observation {
     return .{
         .pane = pane.key(),
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = phase,
         .protocol = protocol,
         .connection_id = 17,
@@ -239,7 +239,7 @@ test "every proxy protocol and inference phase translates without losing identit
             };
 
             try std.testing.expectEqualDeep(agent_mod.Identity.fromPane(fixture.support.pane), translated.identity);
-            try std.testing.expectEqual(core.schema.AgentProvider.codex, translated.provider);
+            try std.testing.expectEqual(agent_mod.ApiDialect.openai_responses, translated.dialect);
             try std.testing.expectEqual(expected_phase, translated.phase);
             try std.testing.expectEqual(expected_protocol, translated.exchange.protocol);
             try std.testing.expectEqual(@as(u64, 17), translated.exchange.connection_id);
@@ -331,7 +331,7 @@ test "Claude provider completion projects ready for each HTTP protocol" {
         const stream_id: u32 = if (protocol == .http11) 0 else 23;
 
         var started = fixture.event(.request_started, protocol);
-        started.provider = .claude;
+        started.dialect = .anthropic_messages;
         started.stream_id = stream_id;
         started.status_code = 0;
         started.observed_at_ms = 100;
@@ -341,7 +341,7 @@ test "Claude provider completion projects ready for each HTTP protocol" {
         fixture.capture.len = 0;
 
         var completed = fixture.event(.provider_turn_completed, protocol);
-        completed.provider = .claude;
+        completed.dialect = .anthropic_messages;
         completed.stream_id = stream_id;
         completed.status_code = 0;
         completed.observed_at_ms = 200;
@@ -353,7 +353,7 @@ test "Claude provider completion projects ready for each HTTP protocol" {
         fixture.capture.len = 0;
 
         var finished = fixture.event(.response_finished, protocol);
-        finished.provider = .claude;
+        finished.dialect = .anthropic_messages;
         finished.stream_id = stream_id;
         finished.status_code = 200;
         finished.observed_at_ms = 300;

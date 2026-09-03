@@ -27,14 +27,14 @@ fn completeTurn(agents: *agent_mod.Tracker, identity: agent_mod.Identity, comple
     };
     try std.testing.expect(agents.observeProxy(.{
         .identity = identity,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .request_started,
         .exchange = exchange,
         .observed_at_ms = completed_at_ms - 1,
     }));
     try std.testing.expect(agents.observeProxy(.{
         .identity = identity,
-        .provider = .codex,
+        .dialect = .openai_responses,
         .phase = .provider_turn_completed,
         .exchange = exchange,
         .observed_at_ms = completed_at_ms,

@@ -186,7 +186,7 @@ fn testDecision(input: TestDecisionInput) Decision {
         .original_head = head.analyze(original, .{
             .is_response = is_response,
             .response_to_head = false,
-            .provider = if (is_response) .unknown else .claude,
+            .dialect = if (is_response) .unknown else .anthropic_messages,
         }).?,
         .is_response = is_response,
         .response_to_head = false,

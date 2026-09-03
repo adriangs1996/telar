@@ -1738,7 +1738,25 @@ test "PNG transmissions use encoded format without raw pixel dimensions" {
     try std.testing.expect(std.mem.indexOf(u8, bytes, ",v=") == null);
 }
 
-pub const SidebarProvider = enum { claude, codex, pi };
+/// Column of the shipped provider-mark atlas. Only built-in agents have
+/// artwork; a configured agent draws its manifest glyph as cells instead.
+pub const SidebarProvider = enum {
+    claude,
+    codex,
+    pi,
+
+    /// ```zig
+    /// const column = SidebarProvider.fromAgent(mark.provider) orelse continue;
+    /// ```
+    pub fn fromAgent(provider: core.schema.AgentProvider) ?SidebarProvider {
+        return switch (provider) {
+            .claude => .claude,
+            .codex => .codex,
+            .pi => .pi,
+            else => null,
+        };
+    }
+};
 
 pub const SidebarProviderPlacement = struct {
     area: core.ui.Rect,

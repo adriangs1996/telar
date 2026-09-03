@@ -321,10 +321,12 @@ pub const Delivery = struct {
                 const pane_index = sources.panes.positionAt(pane) orelse continue;
                 entry_storage[enriched_count] = entry;
                 entry_storage[enriched_count].location = pane.location;
-                entry_storage[enriched_count].provider_name = if (entry.provider == .unknown)
-                    ""
-                else
-                    sources.manifests.providerName(entry.provider);
+                if (entry.provider != .unknown) {
+                    entry_storage[enriched_count].provider_name = sources.manifests.providerName(entry.provider);
+                    entry_storage[enriched_count].display_name = sources.manifests.displayName(entry.provider);
+                    entry_storage[enriched_count].icon = sources.manifests.icon(entry.provider);
+                    entry_storage[enriched_count].attachments = sources.manifests.attachments(entry.provider);
+                }
                 entry_storage[enriched_count].pane_index = pane_index;
                 if (workspaces.workspaceName(pane.location.workspace)) |workspace_name|
                     entry_storage[enriched_count].workspace_label = copyDisplayPrefix(
@@ -339,6 +341,11 @@ pub const Delivery = struct {
                         schema.max_agent_session_title_bytes,
                     );
                     entry_storage[enriched_count].title_source = .terminal;
+                } else if (entry.title_source == .telar) {
+                    entry_storage[enriched_count].session_title = sources.manifests.placeholderTitle(
+                        entry.provider,
+                        &display_storage[enriched_count].placeholder,
+                    );
                 }
                 entry_storage[enriched_count].cwd_label = shortenCwd(
                     &display_storage[enriched_count].cwd,
@@ -585,6 +592,7 @@ fn truncateUtf8(text: []const u8, limit: usize) []const u8 {
 const AgentDisplayStorage = struct {
     workspace: [schema.max_agent_workspace_label_bytes]u8 = undefined,
     cwd: [schema.max_agent_cwd_label_bytes]u8 = undefined,
+    placeholder: [core.agent_manifest.max_placeholder_bytes]u8 = undefined,
 };
 
 fn copyDisplayPrefix(output: []u8, source: []const u8) []const u8 {

@@ -19,6 +19,8 @@ pub const InputObservation = struct {
 };
 
 pub const OutputObservation = struct {
+    /// The emulator that has already replayed `bytes`.
+    terminal: *vt.Terminal,
     bytes: []const u8,
     clock: Clock,
     shell_foreground: ?bool,
@@ -49,6 +51,9 @@ pub const Tracker = struct {
     right_prompt: *vt.Pin,
     right_prompt_active: bool = false,
     right_prompt_hash: u64 = 0,
+    /// The shell erased the anchor row while editing and has not painted a
+    /// prompt to re-anchor at yet.
+    anchor_erased: bool = false,
     phase: Phase = .idle,
     input: InputScanner = .{},
     command: ?[:0]const u8 = null,
@@ -184,7 +189,10 @@ pub const Tracker = struct {
         if (tracker.phase != .awaiting_commit) return false;
         const screen = terminal.screens.active;
         const finish_pin = screen.cursor.page_pin.*;
-        if (tracker.anchor.garbage or finish_pin.before(tracker.anchor.*)) {
+        // A blank anchor row means the shell erased the echo and painted
+        // elsewhere without the edit being re-anchored. Whatever follows the
+        // anchor is prompt, not command.
+        if (tracker.anchor.garbage or finish_pin.before(tracker.anchor.*) or tracker.anchor_erased or rowIsBlank(tracker.anchor.*)) {
             if (comptime builtin.mode == .Debug)
                 tracker.capture_failures += 1;
             tracker.reset(.idle);
@@ -238,7 +246,7 @@ pub const Tracker = struct {
     /// foreground-process transitions.
     ///
     /// ```zig
-    /// tracker.observeOutput(.{ .bytes = bytes, .clock = clock, .shell_foreground = foreground }, &sink);
+    /// tracker.observeOutput(.{ .terminal = terminal, .bytes = bytes, .clock = clock, .shell_foreground = foreground }, &sink);
     /// ```
     pub fn observeOutput(tracker: *Tracker, observation: OutputObservation, sink: anytype) void {
         const bytes = observation.bytes;
@@ -246,6 +254,7 @@ pub const Tracker = struct {
         const shell_foreground = observation.shell_foreground;
 
         if (bytes.len != 0) tracker.last_output_awake_ns = clock.awake_ns;
+        if (tracker.phase == .editing and bytes.len != 0) tracker.rebaseMovedEdit(observation.terminal);
         if (tracker.phase == .running) tracker.captureOutput(bytes);
 
         const Relay = struct {
@@ -315,6 +324,7 @@ pub const Tracker = struct {
     fn beginEdit(tracker: *Tracker, terminal: *vt.Terminal) void {
         tracker.anchor.* = terminal.screens.active.cursor.page_pin.*;
         tracker.anchor.garbage = false;
+        tracker.anchor_erased = false;
         tracker.findRightPrompt();
         tracker.input.reset();
         tracker.phase = .editing;
@@ -341,6 +351,56 @@ pub const Tracker = struct {
             tracker.right_prompt_active = true;
             return;
         }
+    }
+
+    /// Moves the anchor when the shell relocated the line being edited.
+    ///
+    /// Two shapes are recognized. Input typed before the shell paints its
+    /// prompt leaves the anchor row blank or holding a stale kernel echo; the
+    /// line editor then paints the prompt lower and re-echoes the pending text
+    /// after it. And a shell that redraws prompt and buffer below asynchronous
+    /// output, or after a clear-screen, moves them the same way. In both, the
+    /// edit is re-anchored where the re-echo starts, so the prompt and the
+    /// rows in between never enter the capture.
+    fn rebaseMovedEdit(tracker: *Tracker, terminal: *vt.Terminal) void {
+        if (tracker.anchor.garbage) return;
+        if (!tracker.anchor_erased and rowIsBlank(tracker.anchor.*)) tracker.anchor_erased = true;
+
+        // The new prompt has to be on screen first, or the anchor would land
+        // before it and the prompt would be captured as command text.
+        const cursor = terminal.screens.active.cursor.page_pin.*;
+        const echo_start = tracker.echoStart(cursor);
+        if (echo_start == 0 or cellsBlank(cursor.cells(.left)[0..echo_start])) return;
+
+        const same_row = cursor.node == tracker.anchor.node and cursor.y == tracker.anchor.y;
+        const re_echoed = !same_row and echo_start < cursor.x;
+        if (!tracker.anchor_erased and !re_echoed) return;
+
+        tracker.anchor.* = cursor;
+        tracker.anchor.garbage = false;
+        tracker.anchor.x = echo_start;
+        tracker.anchor_erased = false;
+        tracker.findRightPrompt();
+    }
+
+    /// The column where the re-echo of the typed text starts on the cursor
+    /// row, or the cursor column when the text has not been re-echoed yet or
+    /// cannot be matched.
+    fn echoStart(tracker: *const Tracker, cursor: vt.Pin) u16 {
+        const typed = tracker.input.typedText() orelse return cursor.x;
+        if (typed.len == 0 or typed.len > cursor.x) return cursor.x;
+
+        const cells = cursor.cells(.left);
+        const start = cursor.x - typed.len;
+        for (typed, cells[start..cursor.x]) |byte, cell| {
+            if (cellBlank(cell)) {
+                if (byte != ' ') return cursor.x;
+                continue;
+            }
+            if (cell.codepoint() != byte) return cursor.x;
+        }
+
+        return @intCast(start);
     }
 
     fn selectionFinish(tracker: *const Tracker, fallback: vt.Pin) vt.Pin {
@@ -383,6 +443,7 @@ pub const Tracker = struct {
         tracker.freeCommand();
         tracker.phase = phase;
         tracker.input.reset();
+        tracker.anchor_erased = false;
         tracker.command_truncated = false;
         tracker.saw_foreground_child = false;
         tracker.output_len = 0;
@@ -423,6 +484,21 @@ fn validPrefixLength(bytes: []const u8, limit: usize) usize {
     var len = limit;
     while (len > 0 and !std.unicode.utf8ValidateSlice(bytes[0..len])) : (len -= 1) {}
     return len;
+}
+
+fn rowIsBlank(pin: vt.Pin) bool {
+    return cellsBlank(pin.cells(.all));
+}
+
+fn cellsBlank(cells: []const vt.Cell) bool {
+    for (cells) |cell| {
+        if (!cellBlank(cell)) return false;
+    }
+    return true;
+}
+
+fn cellBlank(cell: vt.Cell) bool {
+    return !cell.hasText() or cell.codepoint() == ' ';
 }
 
 fn hashCells(cells: []const vt.Cell) u64 {
@@ -632,4 +708,179 @@ test "output capture stays disabled without the opt-in" {
     tracker.captureOutput("ignored");
     try std.testing.expect(tracker.output_tail == null);
     try std.testing.expectEqual(@as(u64, 0), tracker.output_observed);
+}
+
+/// The observer replays output into the emulator before the tracker sees it.
+const TypeAheadFixture = struct {
+    terminal: vt.Terminal,
+    stream: vt.TerminalStream,
+    tracker: Tracker,
+    collected: Collected = .{},
+    clock: Clock = .{ .real_ms = 1, .awake_ns = 1 },
+
+    // Recorded from zsh with powerlevel10k on an 80 column pty, reduced to the
+    // bytes that move the cursor or paint text. The shell finds the kernel
+    // echo mid row, prints its end-of-output marker, clears from the next row,
+    // paints a two line prompt with a right prompt and lets the line editor
+    // re-echo the pending input.
+    const startup =
+        "\x1b[1m\x1b[7m%\x1b[27m\x1b[1m\x1b[0m" ++ " " ** 79 ++ "\r \r" ++
+        "\x1b]2;title\x07\r\x1b[0m\x1b[27m\x1b[24m\x1b[J\r\n" ++
+        " ~/sandbox/telar  main !? \r\n" ++
+        "\u{276f} \x1b[K\x1b[61C[ +544 ][ -348 ]\x1b[77D\x1b[6 q\x1b[?2004h";
+    const re_echo = "c\x08cd ~/.con";
+
+    fn init(fixture: *TypeAheadFixture, gpa: std.mem.Allocator) !void {
+        fixture.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 80, .rows = 24 });
+        errdefer fixture.terminal.deinit(gpa);
+        fixture.stream = fixture.terminal.vtStream();
+        errdefer fixture.stream.deinit();
+        fixture.tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &fixture.terminal });
+        fixture.collected = .{};
+        fixture.clock = .{ .real_ms = 1, .awake_ns = 1 };
+    }
+
+    fn deinit(fixture: *TypeAheadFixture, gpa: std.mem.Allocator) void {
+        fixture.tracker.deinit(&fixture.terminal);
+        fixture.stream.deinit();
+        fixture.terminal.deinit(gpa);
+    }
+
+    fn typed(fixture: *TypeAheadFixture, bytes: []const u8) void {
+        fixture.clock.awake_ns += 1;
+        _ = fixture.tracker.observeInput(.{
+            .terminal = &fixture.terminal,
+            .bytes = bytes,
+            .shell_foreground = true,
+            .clock = fixture.clock,
+        }, &fixture.collected);
+    }
+
+    fn output(fixture: *TypeAheadFixture, bytes: []const u8) void {
+        fixture.clock.awake_ns += 1;
+        fixture.stream.nextSlice(bytes);
+        fixture.tracker.observeOutput(.{
+            .terminal = &fixture.terminal,
+            .bytes = bytes,
+            .clock = fixture.clock,
+            .shell_foreground = true,
+        }, &fixture.collected);
+    }
+
+    fn submit(fixture: *TypeAheadFixture) !void {
+        fixture.typed("\r");
+        const committed = "\r\r\n";
+        fixture.stream.nextSlice(committed);
+        try std.testing.expect(try fixture.tracker.captureSubmitted(&fixture.terminal));
+        fixture.tracker.shellExited(.{ .clock = fixture.clock, .exit_code = 0 }, &fixture.collected);
+    }
+
+    fn command(fixture: *const TypeAheadFixture) []const u8 {
+        return fixture.collected.bytes[0..fixture.collected.len];
+    }
+};
+
+test "type-ahead echoed by the kernel is re-anchored at the line editor's re-echo" {
+    const gpa = std.testing.allocator;
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(gpa);
+    defer fixture.deinit(gpa);
+
+    for ("cd ~/.con") |byte| {
+        fixture.typed(&.{byte});
+        fixture.output(&.{byte});
+    }
+    fixture.output(TypeAheadFixture.startup);
+    fixture.output(TypeAheadFixture.re_echo);
+    for ("fig") |byte| {
+        fixture.typed(&.{byte});
+        fixture.output(&.{byte});
+    }
+    try fixture.submit();
+
+    try std.testing.expectEqualStrings("cd ~/.config", fixture.command());
+}
+
+test "type-ahead is re-anchored when the prompt and the re-echo arrive together" {
+    const gpa = std.testing.allocator;
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(gpa);
+    defer fixture.deinit(gpa);
+
+    for ("cd ~/.con") |byte| {
+        fixture.typed(&.{byte});
+        fixture.output(&.{byte});
+    }
+    fixture.output(TypeAheadFixture.startup ++ TypeAheadFixture.re_echo);
+    for ("fig") |byte| {
+        fixture.typed(&.{byte});
+        fixture.output(&.{byte});
+    }
+    try fixture.submit();
+
+    try std.testing.expectEqualStrings("cd ~/.config", fixture.command());
+}
+
+test "type-ahead with no echo is re-anchored once a prompt is painted" {
+    // An instant prompt paints below the row where the first keystroke found
+    // the cursor, and the typed text only appears after it.
+    const gpa = std.testing.allocator;
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(gpa);
+    defer fixture.deinit(gpa);
+
+    fixture.typed("v");
+    fixture.output("\r\n ~/sandbox/telar \r\n\u{276f} ");
+    fixture.output("v");
+    try fixture.submit();
+
+    try std.testing.expectEqualStrings("v", fixture.command());
+}
+
+test "a clear-screen while editing is re-anchored at the repainted prompt" {
+    const gpa = std.testing.allocator;
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(gpa);
+    defer fixture.deinit(gpa);
+
+    fixture.output("\r\n\r\n$ ");
+    fixture.typed("ls");
+    fixture.output("ls");
+    fixture.typed("\x0c");
+    fixture.output("\x1b[2J\x1b[H");
+    fixture.output("$ ls");
+    fixture.typed(" -la");
+    fixture.output(" -la");
+    try fixture.submit();
+
+    try std.testing.expectEqualStrings("ls -la", fixture.command());
+}
+
+test "a prompt repainted below asynchronous output is re-anchored" {
+    const gpa = std.testing.allocator;
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(gpa);
+    defer fixture.deinit(gpa);
+
+    fixture.output("$ ");
+    fixture.typed("make");
+    fixture.output("make");
+    fixture.output("\r\n[1]  + done  sleep 5\r\n$ make");
+    try fixture.submit();
+
+    try std.testing.expectEqualStrings("make", fixture.command());
+}
+
+test "an erased anchor row without a repainted prompt captures nothing" {
+    const gpa = std.testing.allocator;
+    var fixture: TypeAheadFixture = undefined;
+    try fixture.init(gpa);
+    defer fixture.deinit(gpa);
+
+    fixture.typed("x");
+    fixture.output("\r\n\r\n");
+    fixture.typed("\r");
+    fixture.stream.nextSlice("\r\n");
+    try std.testing.expect(!try fixture.tracker.captureSubmitted(&fixture.terminal));
+    try std.testing.expectEqual(Tracker.Phase.idle, fixture.tracker.phase);
 }

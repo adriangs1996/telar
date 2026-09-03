@@ -39,7 +39,7 @@ pub const MessageRoute = struct {
     to: tls.Session.Side,
     is_response: bool,
     response_to_head: bool,
-    provider: provider.AgentProvider = .unknown,
+    dialect: provider.ApiDialect = .unknown,
 };
 
 pub const HeadTransform = struct {
@@ -87,7 +87,7 @@ pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
     return head.analyze(buffer[0..len], .{
         .is_response = route.is_response,
         .response_to_head = route.response_to_head,
-        .provider = route.provider,
+        .dialect = route.dialect,
     });
 }
 
@@ -110,7 +110,7 @@ pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?He
     const original_head = head.analyze(original[0..original_len], .{
         .is_response = transformation.route.is_response,
         .response_to_head = transformation.route.response_to_head,
-        .provider = transformation.route.provider,
+        .dialect = transformation.route.dialect,
     }) orelse return null;
 
     var encoded: [max_head_bytes]u8 = undefined;
@@ -281,7 +281,7 @@ const ConnectionIntegration = struct {
             .to = .origin,
             .is_response = false,
             .response_to_head = false,
-            .provider = .claude,
+            .dialect = .anthropic_messages,
         }) orelse return null;
 
         return .{

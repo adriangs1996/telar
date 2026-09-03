@@ -611,7 +611,7 @@ pub const Compositor = struct {
                 .pane_id = pane.id,
                 .cols = pane.buffer.w,
                 .rows = pane.buffer.h,
-                .scroll_offset = pane.scroll.offset,
+                .scroll_offset = highlightedScrollOffset(compositor.copy, pane),
                 .graphics_placeholder = pane.graphics_placeholder,
             };
             next_count += 1;
@@ -659,6 +659,22 @@ const CopyChangeComposition = struct {
 fn copyView(copy: ?CopyProjection, pane_id: schema.PaneId) ?copy_mode.View {
     const projection = copy orelse return null;
     return if (projection.pane_id == pane_id) projection.view else null;
+}
+
+/// The viewport offset reaches composed cells only through a copy-mode
+/// selection, which is anchored to absolute scrollback rows. Without one the
+/// content scrolling under a live pane arrives as frame damage, so the offset
+/// stays out of the projection and cannot force a full composition per frame.
+///
+/// ```zig
+/// const offset = highlightedScrollOffset(compositor.copy, pane);
+/// ```
+fn highlightedScrollOffset(copy: ?CopyProjection, pane: *const Pane) u32 {
+    if (copyView(copy, pane.id) == null) {
+        return 0;
+    }
+
+    return pane.scroll.offset;
 }
 
 const CopySelectionRange = struct {
@@ -1871,7 +1887,34 @@ test "compositor detects pane projection changes without model cache flags" {
     defer compositor.deinit();
     try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
 
+    // Content scrolling moves the offset every frame; its cells arrive as
+    // frame damage, so it must not invalidate the composition on its own.
     pane.scroll = .{ .total_rows = 4, .offset = 1 };
+    const scrolled = try testingRenderDefault(&compositor, &model, &screen);
+    try std.testing.expect(!scrolled.full);
+    try std.testing.expectEqual(@as(usize, 0), scrolled.cells);
+
+    // A copy-mode selection is anchored to absolute rows, so under it the
+    // offset shapes the composed cells and does invalidate.
+    const copy: CopyProjection = .{ .pane_id = pane_id, .view = .{
+        .anchor = .{ .x = 0, .y = 1 },
+        .cursor = .{ .x = 1, .y = 1 },
+        .linewise = false,
+    } };
+    try std.testing.expect((try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .copy = copy,
+    })).full);
+    pane.scroll = .{ .total_rows = 5, .offset = 2 };
+    try std.testing.expect((try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .copy = copy,
+    })).full);
+    // Leaving copy mode drops the offset from the projection again.
     try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
 
     pane.graphics_placeholder = true;
