@@ -649,7 +649,7 @@ fn drawList(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
         const y = area.y + line;
         switch (rows[index]) {
             .blank => {},
-            .section => |section| drawSectionHeader(state, buf, content, y, section),
+            .section => |section| drawSectionHeader(.{ .state = state, .buffer = buf, .area = content }, y, section),
             .task => |t| drawTaskLine(state, buf, content, y, t.index, t.line),
         }
     }
@@ -657,7 +657,10 @@ fn drawList(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
     drawScrollbar(state, buf, .{ .x = area.x + area.w - 1, .y = area.y, .w = 1, .h = area.h }, total);
 }
 
-fn drawSectionHeader(state: *State, buf: *ui.Buffer, area: ui.Rect, y: u16, section: Section) void {
+fn drawSectionHeader(context: DrawContext, y: u16, section: Section) void {
+    const state = context.state;
+    const buf = context.buffer;
+    const area = context.area;
     const row: ui.Rect = .{ .x = area.x, .y = y, .w = area.w, .h = 1 };
 
     var x = row.x + 1;
