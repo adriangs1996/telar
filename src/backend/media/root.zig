@@ -472,7 +472,9 @@ fn stripFileQueries(bytes: []const u8, scratch: []u8, sink: anytype) []const u8 
             .image_id = query.image_id,
             .byte_len = query.byte_len,
         });
-        if (!handled) continue;
+        if (!handled) {
+            continue;
+        }
         const run = bytes[copied_until..start];
         @memcpy(scratch[kept..][0..run.len], run);
         kept += run.len;
