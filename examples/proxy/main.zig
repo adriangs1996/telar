@@ -213,7 +213,24 @@ fn inputActor(io: Io, stdin: File, queue: *event.Queue) Io.Cancelable!void {
 /// Drains the pty master onto the host terminal. This is herdr's PtyIoActor read
 /// side: the tap runs here, in the actor, so only parsed events reach the main
 /// loop rather than every byte of output.
-fn outputActor(io: Io, gpa: std.mem.Allocator, master: File, host_tty: File, rows: u16, cols: u16, queue: *event.Queue) Io.Cancelable!void {
+const OutputActorContext = struct {
+    io: Io,
+    allocator: std.mem.Allocator,
+    master: File,
+    host_tty: File,
+    rows: u16,
+    cols: u16,
+    queue: *event.Queue,
+};
+
+fn outputActor(context: OutputActorContext) Io.Cancelable!void {
+    const io = context.io;
+    const gpa = context.allocator;
+    const master = context.master;
+    const host_tty = context.host_tty;
+    const rows = context.rows;
+    const cols = context.cols;
+    const queue = context.queue;
     var buffer: [64 * KB]u8 = undefined;
     var scanner: osc.Scanner = .init(gpa);
     defer scanner.deinit();
@@ -547,7 +564,15 @@ pub fn main(init: std.process.Init) !void {
     defer actors.cancel(io);
 
     try actors.concurrent(io, inputActor, .{ io, File.stdin(), &queue });
-    try actors.concurrent(io, outputActor, .{ io, init.gpa, master, host_tty, winsize.row, winsize.col, &queue });
+    try actors.concurrent(io, outputActor, .{.{
+        .io = io,
+        .allocator = init.gpa,
+        .master = master,
+        .host_tty = host_tty,
+        .rows = winsize.row,
+        .cols = winsize.col,
+        .queue = &queue,
+    }});
     try actors.concurrent(io, signalActor, .{ io, wake, &queue });
     if (proxy_port) |port| {
         try actors.concurrent(io, proxy.serve, .{ io, port, authority.?, init.gpa, &queue });
