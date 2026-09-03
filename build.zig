@@ -5,6 +5,14 @@ const ProxyPrefixes = struct {
     brotli: []const u8,
 };
 
+const ProxyModuleConfig = struct {
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    tls: *std.Build.Module,
+    vt: *std.Build.Module,
+    prefixes: ProxyPrefixes,
+};
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -483,23 +491,23 @@ pub fn build(b: *std.Build) void {
     // the core builds anywhere with nothing but a Zig compiler. Someone who
     // wants the proxy asks for it.
     const proxyModule = struct {
-        fn make(bb: *std.Build, path: []const u8, t: std.Build.ResolvedTarget, o: std.builtin.OptimizeMode, tls_mod: *std.Build.Module, vt_mod: *std.Build.Module, prefixes: ProxyPrefixes) *std.Build.Module {
+        fn make(bb: *std.Build, path: []const u8, config: ProxyModuleConfig) *std.Build.Module {
             const mod = bb.createModule(.{
                 .root_source_file = bb.path(path),
-                .target = t,
-                .optimize = o,
+                .target = config.target,
+                .optimize = config.optimize,
                 .link_libc = true,
             });
-            mod.addImport("tls", tls_mod);
-            mod.addImport("ghostty-vt", vt_mod);
+            mod.addImport("tls", config.tls);
+            mod.addImport("ghostty-vt", config.vt);
             mod.linkSystemLibrary("sqlite3", .{});
             // HPACK only. Decoding a header block is the one part of HTTP/2
             // that cannot be skipped by relaying frames untouched.
-            mod.addIncludePath(.{ .cwd_relative = bb.pathJoin(&.{ prefixes.nghttp2, "include" }) });
-            mod.addLibraryPath(.{ .cwd_relative = bb.pathJoin(&.{ prefixes.nghttp2, "lib" }) });
+            mod.addIncludePath(.{ .cwd_relative = bb.pathJoin(&.{ config.prefixes.nghttp2, "include" }) });
+            mod.addLibraryPath(.{ .cwd_relative = bb.pathJoin(&.{ config.prefixes.nghttp2, "lib" }) });
             mod.linkSystemLibrary("nghttp2", .{});
-            mod.addIncludePath(.{ .cwd_relative = bb.pathJoin(&.{ prefixes.brotli, "include" }) });
-            mod.addLibraryPath(.{ .cwd_relative = bb.pathJoin(&.{ prefixes.brotli, "lib" }) });
+            mod.addIncludePath(.{ .cwd_relative = bb.pathJoin(&.{ config.prefixes.brotli, "include" }) });
+            mod.addLibraryPath(.{ .cwd_relative = bb.pathJoin(&.{ config.prefixes.brotli, "lib" }) });
             mod.linkSystemLibrary("brotlidec", .{});
             return mod;
         }
@@ -507,9 +515,15 @@ pub fn build(b: *std.Build) void {
 
     const proxy = b.addExecutable(.{
         .name = "proxy",
-        .root_module = proxyModule(b, "examples/proxy/main.zig", target, optimize, tls, ghostty_vt, .{
-            .nghttp2 = nghttp2_prefix,
-            .brotli = brotli_prefix,
+        .root_module = proxyModule(b, "examples/proxy/main.zig", .{
+            .target = target,
+            .optimize = optimize,
+            .tls = tls,
+            .vt = ghostty_vt,
+            .prefixes = .{
+                .nghttp2 = nghttp2_prefix,
+                .brotli = brotli_prefix,
+            },
         }),
     });
     const proxy_step = b.step("proxy", "Build the pty and TLS proxy example");
@@ -526,9 +540,15 @@ pub fn build(b: *std.Build) void {
         "examples/proxy/osc.zig",
     }) |path| {
         const tests = b.addTest(.{
-            .root_module = proxyModule(b, path, target, optimize, tls, ghostty_vt, .{
-                .nghttp2 = nghttp2_prefix,
-                .brotli = brotli_prefix,
+            .root_module = proxyModule(b, path, .{
+                .target = target,
+                .optimize = optimize,
+                .tls = tls,
+                .vt = ghostty_vt,
+                .prefixes = .{
+                    .nghttp2 = nghttp2_prefix,
+                    .brotli = brotli_prefix,
+                },
             }),
         });
         coverage.instrumentTest(tests);
