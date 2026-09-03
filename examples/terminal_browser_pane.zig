@@ -653,21 +653,29 @@ fn graphicsReady(state: GraphicsReadiness) bool {
     return state.store.damage or state.mirror.ready(state.emulator);
 }
 
-fn applyPaneGeometry(io: Io, session: *pty.Session, emulator: *Emulator, model: *multiplexer.Model, graphics_store: *kitty.Store, frame: FrameGeometry, capabilities: *const HostCapabilities) !bool {
-    _ = io;
-    const next = paneTerminalSize(frame, capabilities);
-    if (std.meta.eql(next, emulator.size)) {
+const PaneGeometryContext = struct {
+    session: *pty.Session,
+    emulator: *Emulator,
+    model: *multiplexer.Model,
+    graphics_store: *kitty.Store,
+    frame: FrameGeometry,
+    capabilities: *const HostCapabilities,
+};
+
+fn applyPaneGeometry(context: PaneGeometryContext) !bool {
+    const next = paneTerminalSize(context.frame, context.capabilities);
+    if (std.meta.eql(next, context.emulator.size)) {
         return false;
     }
-    try session.resize(.{
+    try context.session.resize(.{
         .cols = next.cols,
         .rows = next.rows,
         .cell_width_px = next.cell_width_px,
         .cell_height_px = next.cell_height_px,
     });
-    try emulator.resize(next);
-    model.setCellSize(next.cell_width_px, next.cell_height_px);
-    graphics_store.invalidatePlacements();
+    try context.emulator.resize(next);
+    context.model.setCellSize(next.cell_width_px, next.cell_height_px);
+    context.graphics_store.invalidatePlacements();
     return true;
 }
 
@@ -840,15 +848,14 @@ pub fn main(init: std.process.Init) !void {
                 );
                 stop = stop or result.stop;
                 if (result.capabilities_changed) {
-                    if (try applyPaneGeometry(
-                        io,
-                        &session,
-                        &emulator,
-                        &model,
-                        &graphics_store,
-                        frame,
-                        &capabilities,
-                    )) {
+                    if (try applyPaneGeometry(.{
+                        .session = &session,
+                        .emulator = &emulator,
+                        .model = &model,
+                        .graphics_store = &graphics_store,
+                        .frame = frame,
+                        .capabilities = &capabilities,
+                    })) {
                         redraw_cells = true;
                     }
                 }
@@ -869,15 +876,14 @@ pub fn main(init: std.process.Init) !void {
                 observePlatformPixels(&capabilities, host_size);
                 frame = try centeredFrame(host_size.cols, host_size.rows);
                 try screen.resize(host_size.cols, host_size.rows);
-                _ = try applyPaneGeometry(
-                    io,
-                    &session,
-                    &emulator,
-                    &model,
-                    &graphics_store,
-                    frame,
-                    &capabilities,
-                );
+                _ = try applyPaneGeometry(.{
+                    .session = &session,
+                    .emulator = &emulator,
+                    .model = &model,
+                    .graphics_store = &graphics_store,
+                    .frame = frame,
+                    .capabilities = &capabilities,
+                });
                 graphics_store.invalidatePlacements();
                 rebuild_frame = true;
                 redraw_cells = true;
