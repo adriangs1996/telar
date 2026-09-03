@@ -750,7 +750,7 @@ fn drawTaskLine(context: DrawContext, position: TaskLine) void {
             x += buf.writeText(body, x, y, task.place, .{ .fg = muted, .bg = row_bg });
             x += buf.writeText(body, x, y, " \u{00b7} ", .{ .fg = faint, .bg = row_bg });
 
-            const status_width = drawStatus(buf, body, y, task, row_bg);
+            const status_width = drawStatus(buf, .{ .area = body, .y = y, .task = task, .background = row_bg });
             _ = buf.writeTruncated(body, x, y, task.place_detail, body.x + body.w -| x -| status_width -| 1, .{
                 .fg = muted,
                 .bg = row_bg,
@@ -825,7 +825,18 @@ fn drawTaskChip(context: DrawContext, index: usize, chip: Chip) u16 {
     return width;
 }
 
-fn drawStatus(buf: *ui.Buffer, area: ui.Rect, y: u16, task: Task, row_bg: ui.Color) u16 {
+const StatusDraw = struct {
+    area: ui.Rect,
+    y: u16,
+    task: Task,
+    background: ui.Color,
+};
+
+fn drawStatus(buf: *ui.Buffer, draw: StatusDraw) u16 {
+    const area = draw.area;
+    const y = draw.y;
+    const task = draw.task;
+    const row_bg = draw.background;
     const word: []const u8 = switch (task.status) {
         .waiting => "waiting",
         .failed => "failed",
