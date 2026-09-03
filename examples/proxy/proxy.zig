@@ -82,13 +82,38 @@ pub fn serve(context: ServeContext) Io.Cancelable!void {
             else => continue,
         };
 
-        connections.concurrent(io, tunnel, .{ io, stream, authority, roots, gpa, queue, &next_id }) catch {
+        connections.concurrent(io, tunnel, .{.{
+            .io = io,
+            .stream = stream,
+            .authority = authority,
+            .roots = roots,
+            .allocator = gpa,
+            .queue = queue,
+            .next_id = &next_id,
+        }}) catch {
             stream.close(io);
         };
     }
 }
 
-fn tunnel(io: Io, stream: net.Stream, authority: ca.Authority, roots: tls.Roots, gpa: std.mem.Allocator, queue: *event.Queue, next_id: *std.atomic.Value(u64)) Io.Cancelable!void {
+const TunnelContext = struct {
+    io: Io,
+    stream: net.Stream,
+    authority: ca.Authority,
+    roots: tls.Roots,
+    allocator: std.mem.Allocator,
+    queue: *event.Queue,
+    next_id: *std.atomic.Value(u64),
+};
+
+fn tunnel(context: TunnelContext) Io.Cancelable!void {
+    const io = context.io;
+    const stream = context.stream;
+    const authority = context.authority;
+    const roots = context.roots;
+    const gpa = context.allocator;
+    const queue = context.queue;
+    const next_id = context.next_id;
     defer stream.close(io);
 
     var head_buf: [8 * event.KB]u8 = undefined;
