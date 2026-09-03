@@ -441,7 +441,7 @@ fn drawSidebar(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
     var y = inside.y;
     y = drawSearch(.{ .state = state, .buffer = buf, .area = inside }, y);
     y = rule(buf, area, y);
-    y = drawTabs(state, buf, inside, y);
+    y = drawTabs(.{ .state = state, .buffer = buf, .area = inside }, y);
     y = rule(buf, area, y);
     y = drawScope(state, buf, inside, y);
     y = rule(buf, area, y);
@@ -563,7 +563,10 @@ fn drawChipAt(context: DrawContext, chip: ChipDraw) u16 {
     return width + 1;
 }
 
-fn drawTabs(state: *State, buf: *ui.Buffer, area: ui.Rect, y: u16) u16 {
+fn drawTabs(context: DrawContext, y: u16) u16 {
+    const state = context.state;
+    const buf = context.buffer;
+    const area = context.area;
     const row: ui.Rect = .{ .x = area.x, .y = y, .w = area.w, .h = 1 };
     const underline: ui.Rect = .{ .x = area.x, .y = y + 1, .w = area.w, .h = 1 };
     buf.fill(row, " ", .{ .bg = bg });
