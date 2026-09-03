@@ -13,6 +13,12 @@ const ProxyModuleConfig = struct {
     prefixes: ProxyPrefixes,
 };
 
+const FreeTypeConfig = struct {
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    disable_coverage: bool,
+};
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -118,7 +124,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
-    const freetype = addFreeType(b, target, optimize, coverage.enabled);
+    const freetype = addFreeType(b, .{ .target = target, .optimize = optimize, .disable_coverage = coverage.enabled });
     frontend.addImport("telar-core", core);
     frontend.addImport("telar-lua", telar_lua);
     frontend.addImport("lua-api", lua_api);
@@ -211,7 +217,7 @@ pub fn build(b: *std.Build) void {
         .optimize = bench_optimize,
         .link_libc = true,
     });
-    const bench_freetype = addFreeType(b, target, bench_optimize, false);
+    const bench_freetype = addFreeType(b, .{ .target = target, .optimize = bench_optimize, .disable_coverage = false });
     bench_frontend.addImport("telar-core", bench_core);
     bench_frontend.addImport("lua-api", bench_lua_api);
     bench_frontend.addImport("freetype", bench_freetype);
@@ -602,7 +608,7 @@ pub fn build(b: *std.Build) void {
         });
         raster_check.root_module.addImport(
             "freetype",
-            addFreeType(b, cross_target, .Debug, false),
+            addFreeType(b, .{ .target = cross_target, .optimize = .Debug, .disable_coverage = false }),
         );
         cross_step.dependOn(&raster_check.step);
         const sound_check = b.addTest(.{
@@ -770,13 +776,15 @@ fn cFlags(b: *std.Build, base: []const []const u8, disable_coverage: bool) []con
 /// faces and shaping. Telar leaves system zlib disabled, so FreeType's bundled
 /// gzip decoder remains self-contained and the frontend gains no runtime
 /// library dependency.
-fn addFreeType(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, disable_coverage: bool) *std.Build.Module {
+fn addFreeType(b: *std.Build, config: FreeTypeConfig) *std.Build.Module {
+    const target = config.target;
+    const disable_coverage = config.disable_coverage;
     const upstream = b.dependency("freetype", .{});
     const harfbuzz = b.dependency("harfbuzz", .{});
     const module = b.createModule(.{
         .root_source_file = b.path("src/frontend/graphics/freetype.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = config.optimize,
         .link_libc = true,
         .link_libcpp = target.result.abi != .msvc,
     });
