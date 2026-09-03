@@ -116,11 +116,31 @@ pub const Observed = struct {
     truncated: bool = false,
 };
 
+pub const Route = struct {
+    from: tls.Session.Side,
+    to: tls.Session.Side,
+};
+
+pub const Capture = struct {
+    decoder: *Decoder,
+    text: *std.Io.Writer,
+    body: []u8,
+    body_len: *usize,
+    seen: *Observed,
+};
+
 /// Relays one direction and reports what went by.
 ///
 /// `text` receives decoded headers, `body` the DATA payloads. Both are the
 /// caller's buffers and both may fill up; the relay itself never stops.
-pub fn relay(session: *tls.Session, from: tls.Session.Side, to: tls.Session.Side, decoder: *Decoder, text: *std.Io.Writer, body: []u8, body_len: *usize, seen: *Observed) void {
+pub fn relay(session: *tls.Session, route: Route, capture: Capture) void {
+    const from = route.from;
+    const to = route.to;
+    const decoder = capture.decoder;
+    const text = capture.text;
+    const body = capture.body;
+    const body_len = capture.body_len;
+    const seen = capture.seen;
     // Carries the bytes of a frame that a single read did not deliver whole.
     var pending: std.ArrayList(u8) = .empty;
     defer pending.deinit(decoder.gpa);

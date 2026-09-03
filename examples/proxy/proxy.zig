@@ -316,7 +316,13 @@ const H2Side = struct {
     seen: h2.Observed = .{},
 
     fn run(self: *H2Side, session: *tls.Session, from: tls.Session.Side, to: tls.Session.Side) void {
-        h2.relay(session, from, to, &self.decoder, &self.text.writer, self.body, &self.body_len, &self.seen);
+        h2.relay(session, .{ .from = from, .to = to }, .{
+            .decoder = &self.decoder,
+            .text = &self.text.writer,
+            .body = self.body,
+            .body_len = &self.body_len,
+            .seen = &self.seen,
+        });
         // One side stopping ends the conversation; release the other so the
         // exchange gets recorded instead of waiting on a keep-alive timeout.
         session.halfClose(to);
