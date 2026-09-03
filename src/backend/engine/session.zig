@@ -54,7 +54,7 @@ pub const Session = struct {
             .stdout = .pipe,
             .stderr = .ignore,
         });
-        session.stream.init(gpa, io, session.child.stdout.?);
+        session.stream.init(.{ .allocator = gpa, .io = io, .stdout = session.child.stdout.? });
         return session;
     }
 

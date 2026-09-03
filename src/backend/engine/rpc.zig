@@ -137,15 +137,21 @@ pub const Stream = struct {
 
     pub const Error = error{ Timeout, ReadFailed };
 
+    pub const InitOptions = struct {
+        allocator: std.mem.Allocator,
+        io: Io,
+        stdout: Io.File,
+    };
+
     /// Follows `stdout` until `deinit`.
     ///
     /// ```zig
-    /// session.stream.init(gpa, io, child.stdout.?);
+    /// session.stream.init(.{ .allocator = gpa, .io = io, .stdout = child.stdout.? });
     /// defer session.stream.deinit();
     /// ```
-    pub fn init(stream: *Stream, gpa: std.mem.Allocator, io: Io, stdout: Io.File) void {
+    pub fn init(stream: *Stream, options: InitOptions) void {
         stream.discarding = false;
-        stream.reader.init(gpa, io, stream.streams.toStreams(), &.{stdout});
+        stream.reader.init(options.allocator, options.io, stream.streams.toStreams(), &.{options.stdout});
     }
 
     pub fn deinit(stream: *Stream) void {
