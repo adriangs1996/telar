@@ -687,7 +687,9 @@ fn sharedFrameAvailable(resource: FrameResource) bool {
 
     const Decoder = std.base64.standard.Decoder;
     const name_len = Decoder.calcSizeForSlice(resource.encoded_name) catch return false;
-    if (name_len == 0 or name_len > std.fs.max_path_bytes) return false;
+    if (name_len == 0 or name_len > std.fs.max_path_bytes) {
+        return false;
+    }
     var name_buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
     Decoder.decode(name_buffer[0..name_len], resource.encoded_name) catch return false;
     if (std.mem.indexOfScalar(u8, name_buffer[0..name_len], 0) != null) return false;
