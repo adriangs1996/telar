@@ -813,7 +813,10 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
                 cursor_static = true;
             },
             'q' => {
-                if (quiet or !std.mem.eql(u8, value, "2")) return null;
+                if (quiet or !std.mem.eql(u8, value, "2")) {
+                    return null;
+                }
+
                 quiet = true;
             },
             // Chunked transmissions carry ordering state and are never folded.
