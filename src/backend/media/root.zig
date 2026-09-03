@@ -781,7 +781,9 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
         const value = field[equals + 1 ..];
         switch (field[0]) {
             'a' => {
-                if (transmit or !std.mem.eql(u8, value, "T")) return null;
+                if (transmit or !std.mem.eql(u8, value, "T")) {
+                    return null;
+                }
                 transmit = true;
             },
             't' => {
