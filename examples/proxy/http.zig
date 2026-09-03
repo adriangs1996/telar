@@ -133,6 +133,27 @@ pub const Buffers = struct {
     capture: []u8,
 };
 
+const CaptureState = struct {
+    buffer: []u8,
+    kept: usize = 0,
+    truncated: bool = false,
+
+    fn keep(state: *CaptureState, bytes: []const u8) void {
+        if (state.kept >= state.buffer.len) {
+            state.truncated = true;
+            return;
+        }
+
+        const room = state.buffer.len - state.kept;
+        const take = @min(room, bytes.len);
+        @memcpy(state.buffer[state.kept .. state.kept + take], bytes[0..take]);
+        state.kept += take;
+        if (take < bytes.len) {
+            state.truncated = true;
+        }
+    }
+};
+
 pub fn relay(session: *tls.Session, direction: Direction, buffers: Buffers) ?Summary {
     const from = direction.from;
     const to = direction.to;
@@ -190,8 +211,7 @@ pub fn relay(session: *tls.Session, direction: Direction, buffers: Buffers) ?Sum
     const framing, const length = framingOf(head, bodyless);
 
     var body_bytes: usize = 0;
-    var kept: usize = 0;
-    var truncated = false;
+    var capture_state: CaptureState = .{ .buffer = capture };
     var buf: [16 * 1024]u8 = undefined;
 
     switch (framing) {
@@ -205,7 +225,7 @@ pub fn relay(session: *tls.Session, direction: Direction, buffers: Buffers) ?Sum
                     break;
                 }
                 body_bytes += n;
-                keep(capture, &kept, &truncated, buf[0..n]);
+                capture_state.keep(buf[0..n]);
                 left -= n;
             }
         },
@@ -219,7 +239,7 @@ pub fn relay(session: *tls.Session, direction: Direction, buffers: Buffers) ?Sum
                     break;
                 }
                 body_bytes += n;
-                keep(capture, &kept, &truncated, buf[0..n]);
+                capture_state.keep(buf[0..n]);
                 if (framing == .chunked and std.mem.endsWith(u8, buf[0..n], "0\r\n\r\n")) {
                     break;
                 }
@@ -231,23 +251,9 @@ pub fn relay(session: *tls.Session, direction: Direction, buffers: Buffers) ?Sum
         .head = head,
         .start_line = start_line,
         .body_bytes = body_bytes,
-        .body = capture[0..kept],
-        .truncated = truncated,
+        .body = capture[0..capture_state.kept],
+        .truncated = capture_state.truncated,
     };
-}
-
-fn keep(capture: []u8, kept: *usize, truncated: *bool, bytes: []const u8) void {
-    if (kept.* >= capture.len) {
-        truncated.* = true;
-        return;
-    }
-    const room = capture.len - kept.*;
-    const take = @min(room, bytes.len);
-    @memcpy(capture[kept.* .. kept.* + take], bytes[0..take]);
-    kept.* += take;
-    if (take < bytes.len) {
-        truncated.* = true;
-    }
 }
 
 // ---------------------------------------------------------------------------
