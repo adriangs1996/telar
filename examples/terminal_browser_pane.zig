@@ -137,6 +137,11 @@ const Emulator = struct {
         size: schema.TerminalSize,
     };
 
+    const DrawOptions = struct {
+        area: ui.Rect,
+        force: bool,
+    };
+
     fn init(emulator: *Emulator, options: InitOptions) !void {
         const io = options.io;
         const gpa = options.allocator;
@@ -187,14 +192,15 @@ const Emulator = struct {
         emulator.size = size;
     }
 
-    fn draw(emulator: *Emulator, buffer: *ui.Buffer, area: ui.Rect, force: bool) !?term.Screen.Position {
+    fn draw(emulator: *Emulator, buffer: *ui.Buffer, options: DrawOptions) !?term.Screen.Position {
+        const area = options.area;
         try emulator.render_state.update(emulator.gpa, &emulator.terminal);
         _ = blit.blit(.{
             .buffer = buffer,
             .area = area,
             .terminal = &emulator.terminal,
             .state = &emulator.render_state,
-            .options = .{ .force = force },
+            .options = .{ .force = options.force },
         });
         const cursor = emulator.render_state.cursor;
         if (!cursor.visible or cursor.viewport == null or
@@ -577,7 +583,7 @@ fn drawCells(screen: *term.Screen, emulator: *Emulator, frame: FrameGeometry, re
     if (rebuild_frame) {
         drawFrame(buffer, frame);
     }
-    screen.cursor = try emulator.draw(buffer, frame.content, rebuild_frame);
+    screen.cursor = try emulator.draw(buffer, .{ .area = frame.content, .force = rebuild_frame });
 }
 
 fn present(screen: *term.Screen, writer: *Io.Writer, emulator: *Emulator, mirror: *GraphicsMirror, graphics_store: *kitty.Store, model: *multiplexer.Model, frame: FrameGeometry, capabilities: *const HostCapabilities) !void {
