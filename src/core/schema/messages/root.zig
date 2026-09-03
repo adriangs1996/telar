@@ -120,6 +120,7 @@ pub const ServerMessage = union(enum) {
     history_stats_result: history.HistoryStatsView,
     pane_focus_command: focus.PaneFocusCommand,
     pane_focus_result: focus.PaneFocusResult,
+    pane_progress: pane.PaneProgress,
 };
 
 pub fn decodeClient(payload: []const u8) !ClientMessage {
@@ -243,6 +244,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
         .history_stats_result => .{ .history_stats_result = try history.decodeHistoryStats(&decoder) },
         .pane_focus_command => .{ .pane_focus_command = try focus.decodePaneFocusCommand(&decoder) },
         .pane_focus_result => .{ .pane_focus_result = try focus.decodePaneFocusResult(&decoder) },
+        .pane_progress => .{ .pane_progress = try pane.decodePaneProgress(&decoder) },
     };
     try decoder.ensureEnd();
     return message;

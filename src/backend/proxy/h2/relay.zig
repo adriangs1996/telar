@@ -154,12 +154,16 @@ const Observer = struct {
                 observer.inflater,
                 max_header_block_bytes,
             ) != 0)
+        {
             observer.failed = true;
+        }
         return observer;
     }
 
     fn deinit(observer: *Observer) void {
-        if (observer.inflater) |inflater| c.nghttp2_hd_inflate_del(inflater);
+        if (observer.inflater) |inflater| {
+            c.nghttp2_hd_inflate_del(inflater);
+        }
         observer.inflater = null;
         std.crypto.secureZero(u8, &observer.block);
     }
@@ -172,7 +176,9 @@ const Observer = struct {
                 @memcpy(observer.header[observer.header_len..][0..take], input[offset..][0..take]);
                 observer.header_len += @intCast(take);
                 offset += take;
-                if (observer.header_len != frame_header_len) continue;
+                if (observer.header_len != frame_header_len) {
+                    continue;
+                }
                 observer.beginFrame();
                 if (observer.payload_left == 0) {
                     observer.finishFrame(sink);
@@ -229,7 +235,9 @@ const Observer = struct {
             frame_continuation => {
                 if (observer.continuation_stream == 0 or
                     observer.continuation_stream != observer.stream_id)
+                {
                     observer.fail();
+                }
             },
             else => if (observer.continuation_stream != 0) observer.fail(),
         }
@@ -263,10 +271,14 @@ const Observer = struct {
             }
         }
 
-        if (observer.failed or !isHeaderFrame(observer.frame_type)) return;
+        if (observer.failed or !isHeaderFrame(observer.frame_type)) {
+            return;
+        }
 
         if (observer.flags & flag_padded != 0 and observer.payload_offset == 0) {
-            if (payload.len == 0) return;
+            if (payload.len == 0) {
+                return;
+            }
             observer.padding = payload[0];
         }
         const prefix = observer.headerPrefixLength() orelse {
@@ -282,7 +294,9 @@ const Observer = struct {
         const input_end = input_start + payload.len;
         const copy_start = @max(input_start, prefix);
         const copy_end = @min(input_end, fragment_end);
-        if (copy_start >= copy_end) return;
+        if (copy_start >= copy_end) {
+            return;
+        }
         const source = payload[copy_start - input_start .. copy_end - input_start];
         if (source.len > observer.block.len - observer.block_len) {
             observer.fail();
@@ -429,7 +443,9 @@ const Observer = struct {
             frame_continuation => 0,
             else => return null,
         };
-        if (prefix > observer.payload_len) return null;
+        if (prefix > observer.payload_len) {
+            return null;
+        }
         return prefix;
     }
 
@@ -473,17 +489,19 @@ const Observer = struct {
                     }
                 }
 
-                if (std.mem.eql(u8, name, ":status"))
+                if (std.mem.eql(u8, name, ":status")) {
                     decoded.status_code = std.fmt.parseInt(u16, value, 10) catch 0;
+                }
                 if (std.mem.eql(u8, name, ":method")) {
                     decoded.request = true;
                     decoded.inference_method = std.ascii.eqlIgnoreCase(value, "POST");
                 }
-                if (std.mem.eql(u8, name, ":path"))
+                if (std.mem.eql(u8, name, ":path")) {
                     decoded.inference_route = provider.classify(observer.dialect, .{
                         .method = "POST",
                         .target = value,
                     }) == .inference;
+                }
                 if (std.ascii.eqlIgnoreCase(name, "content-type")) {
                     if (decoded.content_type_seen) {
                         decoded.metadata_valid = false;
@@ -499,7 +517,9 @@ const Observer = struct {
                 }
             }
             if (flags & c.NGHTTP2_HD_INFLATE_FINAL != 0) {
-                if (c.nghttp2_hd_inflate_end_headers(inflater) != 0) observer.fail();
+                if (c.nghttp2_hd_inflate_end_headers(inflater) != 0) {
+                    observer.fail();
+                }
                 return decoded;
             }
             if (consumed == 0 and flags & c.NGHTTP2_HD_INFLATE_EMIT == 0) {
@@ -607,15 +627,22 @@ const Transcoder = struct {
                 transcoder.inflater,
                 max_header_block_bytes,
             ) != 0)
+        {
             transcoder.failed = true;
-        if (c.nghttp2_hd_deflate_new(&transcoder.deflater, max_header_block_bytes) != 0)
+        }
+        if (c.nghttp2_hd_deflate_new(&transcoder.deflater, max_header_block_bytes) != 0) {
             transcoder.failed = true;
+        }
         return transcoder;
     }
 
     fn deinit(transcoder: *Transcoder) void {
-        if (transcoder.inflater) |inflater| c.nghttp2_hd_inflate_del(inflater);
-        if (transcoder.deflater) |deflater| c.nghttp2_hd_deflate_del(deflater);
+        if (transcoder.inflater) |inflater| {
+            c.nghttp2_hd_inflate_del(inflater);
+        }
+        if (transcoder.deflater) |deflater| {
+            c.nghttp2_hd_deflate_del(deflater);
+        }
         transcoder.inflater = null;
         transcoder.deflater = null;
         std.crypto.secureZero(u8, &transcoder.compressed);
@@ -763,7 +790,9 @@ const Transcoder = struct {
         if (transcoder.frame_type != frame_continuation and
             transcoder.flags & flag_padded != 0 and input_start == 0)
         {
-            if (slice.len == 0) return true;
+            if (slice.len == 0) {
+                return true;
+            }
             transcoder.frame_padding = slice[0];
             slice = slice[1..];
             input_start += 1;
@@ -792,7 +821,9 @@ const Transcoder = struct {
             transcoder.failed = true;
             return false;
         }
-        if (input_start >= padding_start) return true;
+        if (input_start >= padding_start) {
+            return true;
+        }
         const fragment_len = @min(slice.len, padding_start - input_start);
         if (fragment_len > transcoder.compressed.len - transcoder.compressed_len) {
             transcoder.failed = true;
@@ -849,18 +880,24 @@ const Transcoder = struct {
         );
         if (inflate_table_size != transcoder.applied_inflate_table_size) {
             const inflater = transcoder.inflater orelse return false;
-            if (c.nghttp2_hd_inflate_change_table_size(inflater, inflate_table_size) != 0)
+            if (c.nghttp2_hd_inflate_change_table_size(inflater, inflate_table_size) != 0) {
                 return false;
+            }
             transcoder.applied_inflate_table_size = inflate_table_size;
         }
         // The table-size limit must be installed before decoding a block that
         // can begin with an HPACK dynamic-table update.
         var original = transcoder.decodeHeaders() orelse return false;
         const kind = headerKind(transcoder.block_type, &original);
-        if (!validH2Headers(&original, kind)) return false;
+        if (!validH2Headers(&original, kind)) {
+            return false;
+        }
         if (transcoder.block_type == frame_push_promise and
             (direction != .response or promisedStreamId(transcoder) == 0 or
-                promisedStreamId(transcoder) & 1 != 0)) return false;
+                promisedStreamId(transcoder) & 1 != 0))
+        {
+            return false;
+        }
         if (kind == .request or kind == .response) {
             emitHeaders(port, .{
                 .direction = direction,
@@ -877,8 +914,9 @@ const Transcoder = struct {
             transcoder.block_stream;
         context.kind = kind;
         _ = configuration.pipeline.apply(.{ .io = configuration.io, .context = context, .headers = &transformed });
-        if (!compatibleH2Headers(&original, &transformed, context.kind))
+        if (!compatibleH2Headers(&original, &transformed, context.kind)) {
             transformed.copyFrom(&original);
+        }
 
         if (direction == .request and context.kind == .request and
             transcoder.streams.startRequest(transcoder.block_stream))
@@ -902,8 +940,9 @@ const Transcoder = struct {
         );
         if (table_size != transcoder.applied_table_size) {
             const deflater = transcoder.deflater orelse return false;
-            if (c.nghttp2_hd_deflate_change_table_size(deflater, table_size) != 0)
+            if (c.nghttp2_hd_deflate_change_table_size(deflater, table_size) != 0) {
                 return false;
+            }
             transcoder.applied_table_size = table_size;
         }
         var nv: [middleware.max_header_fields]c.nghttp2_nv = undefined;
@@ -916,7 +955,9 @@ const Transcoder = struct {
         };
         const deflater = transcoder.deflater orelse return false;
         const bound = c.nghttp2_hd_deflate_bound(deflater, &nv, transformed.len);
-        if (bound > transcoder.encoded.len) return false;
+        if (bound > transcoder.encoded.len) {
+            return false;
+        }
         const encoded_len = c.nghttp2_hd_deflate_hd2(
             deflater,
             &transcoder.encoded,
@@ -924,7 +965,9 @@ const Transcoder = struct {
             &nv,
             transformed.len,
         );
-        if (encoded_len < 0) return false;
+        if (encoded_len < 0) {
+            return false;
+        }
         if (!transcoder.writeHeaderBlock(port, @intCast(encoded_len))) {
             return false;
         }
@@ -938,21 +981,23 @@ const Transcoder = struct {
             });
         }
 
-        if (transcoder.block_flags & flag_end_stream != 0) switch (direction) {
-            .request => {
-                port.emit(.{ .request_finished = .{ .stream_id = transcoder.block_stream } });
-                transcoder.streams.finishRequest(transcoder.block_stream);
-            },
-            .response => {
-                const final_status = transcoder.streams.status(transcoder.block_stream);
-                port.emit(.{ .lifecycle = .{
-                    .phase = if (final_status >= 400) .request_failed else .response_finished,
-                    .stream_id = transcoder.block_stream,
-                    .status_code = final_status,
-                } });
-                transcoder.streams.finishResponse(transcoder.block_stream);
-            },
-        };
+        if (transcoder.block_flags & flag_end_stream != 0) {
+            switch (direction) {
+                .request => {
+                    port.emit(.{ .request_finished = .{ .stream_id = transcoder.block_stream } });
+                    transcoder.streams.finishRequest(transcoder.block_stream);
+                },
+                .response => {
+                    const final_status = transcoder.streams.status(transcoder.block_stream);
+                    port.emit(.{ .lifecycle = .{
+                        .phase = if (final_status >= 400) .request_failed else .response_finished,
+                        .stream_id = transcoder.block_stream,
+                        .status_code = final_status,
+                    } });
+                    transcoder.streams.finishResponse(transcoder.block_stream);
+                },
+            }
+        }
         return true;
     }
 
@@ -971,8 +1016,9 @@ const Transcoder = struct {
                 input.len,
                 1,
             );
-            if (consumed < 0 or @as(usize, @intCast(consumed)) > input.len)
+            if (consumed < 0 or @as(usize, @intCast(consumed)) > input.len) {
                 return null;
+            }
             input = input[@intCast(consumed)..];
             if (flags & c.NGHTTP2_HD_INFLATE_EMIT != 0) {
                 headers.append(.{
@@ -982,11 +1028,14 @@ const Transcoder = struct {
                 }) catch return null;
             }
             if (flags & c.NGHTTP2_HD_INFLATE_FINAL != 0) {
-                if (c.nghttp2_hd_inflate_end_headers(inflater) != 0) return null;
+                if (c.nghttp2_hd_inflate_end_headers(inflater) != 0) {
+                    return null;
+                }
                 return headers;
             }
-            if (consumed == 0 and flags & c.NGHTTP2_HD_INFLATE_EMIT == 0)
+            if (consumed == 0 and flags & c.NGHTTP2_HD_INFLATE_EMIT == 0) {
                 return null;
+            }
         }
     }
 
@@ -997,7 +1046,9 @@ const Transcoder = struct {
             advertised_frame_size
         else
             16 * 1024;
-        if (transcoder.block_prefix_len >= max_frame_size) return false;
+        if (transcoder.block_prefix_len >= max_frame_size) {
+            return false;
+        }
         var offset: usize = 0;
         var first = true;
         while (first or offset < encoded_len) {
@@ -1010,7 +1061,9 @@ const Transcoder = struct {
                 transcoder.block_flags & ~(flag_padded | flag_end_headers)
             else
                 0;
-            if (final) flags |= flag_end_headers;
+            if (final) {
+                flags |= flag_end_headers;
+            }
             writeFrameHeader(
                 &header,
                 .{
@@ -1048,7 +1101,9 @@ const Transcoder = struct {
         for (payload) |byte| {
             transcoder.setting[transcoder.setting_len] = byte;
             transcoder.setting_len += 1;
-            if (transcoder.setting_len != transcoder.setting.len) continue;
+            if (transcoder.setting_len != transcoder.setting.len) {
+                continue;
+            }
             const identifier = std.mem.readInt(u16, transcoder.setting[0..2], .big);
             const value = std.mem.readInt(u32, transcoder.setting[2..6], .big);
             switch (identifier) {
@@ -1075,7 +1130,9 @@ const Transcoder = struct {
                 .status_code = transcoder.streams.status(frame_stream),
             } });
             transcoder.streams.finishResponse(frame_stream);
-            if (direction == .request) transcoder.streams.finishRequest(frame_stream);
+            if (direction == .request) {
+                transcoder.streams.finishRequest(frame_stream);
+            }
         } else if (direction == .response and frame_type == frame_goaway and
             transcoder.streams.hasActiveResponses())
         {
@@ -1132,7 +1189,9 @@ const Transcoder = struct {
     }
 
     fn headerPayloadPrefixLength(transcoder: *const Transcoder) usize {
-        if (transcoder.frame_type == frame_continuation) return 0;
+        if (transcoder.frame_type == frame_continuation) {
+            return 0;
+        }
         return @as(usize, transcoder.block_prefix_len) +
             @intFromBool(transcoder.block_flags & flag_padded != 0);
     }
@@ -1161,7 +1220,9 @@ pub fn relay(session: anytype, route: Route, sink: anytype) Stats {
                 u8,
                 client_preface[preface_offset..][0..take],
                 input[0..take],
-            )) observer.fail();
+            )) {
+                observer.fail();
+            }
             preface_offset += take;
             input = input[take..];
         }
@@ -1242,9 +1303,15 @@ pub fn relayTransformed(session: anytype, transformed_route: TransformedRoute, s
 }
 
 fn headerKind(block_type: u8, headers: *const middleware.Headers) middleware.HeaderKind {
-    if (block_type == frame_push_promise) return .push_promise;
-    if (headers.find(":method") != null) return .request;
-    if (headers.find(":status") != null) return .response;
+    if (block_type == frame_push_promise) {
+        return .push_promise;
+    }
+    if (headers.find(":method") != null) {
+        return .request;
+    }
+    if (headers.find(":status") != null) {
+        return .response;
+    }
     return .trailers;
 }
 
@@ -1264,10 +1331,15 @@ fn validH2Headers(headers: *const middleware.Headers, kind: middleware.HeaderKin
         const name = headers.name(field);
         const value = headers.value(field);
         if (value.len != 0 and (value[0] == ' ' or value[0] == '\t' or
-            value[value.len - 1] == ' ' or value[value.len - 1] == '\t')) return false;
+            value[value.len - 1] == ' ' or value[value.len - 1] == '\t'))
+        {
+            return false;
+        }
         for (name) |byte| if (std.ascii.isUpper(byte)) return false;
         const pseudo = name.len != 0 and name[0] == ':';
-        if (pseudo and regular_seen) return false;
+        if (pseudo and regular_seen) {
+            return false;
+        }
         regular_seen = regular_seen or !pseudo;
         if (pseudo) {
             const seen = if (std.mem.eql(u8, name, ":method")) &method_seen else if (std.mem.eql(
@@ -1283,17 +1355,27 @@ fn validH2Headers(headers: *const middleware.Headers, kind: middleware.HeaderKin
                 name,
                 ":status",
             )) &status_seen else return false;
-            if (seen.* or !pseudoAllowed(kind, name)) return false;
+            if (seen.* or !pseudoAllowed(kind, name)) {
+                return false;
+            }
             seen.* = true;
         }
         if (std.mem.eql(u8, name, "connection") or
             std.mem.eql(u8, name, "keep-alive") or
             std.mem.eql(u8, name, "proxy-connection") or
             std.mem.eql(u8, name, "transfer-encoding") or
-            std.mem.eql(u8, name, "upgrade")) return false;
+            std.mem.eql(u8, name, "upgrade"))
+        {
+            return false;
+        }
         if (std.mem.eql(u8, name, "te") and
-            !std.ascii.eqlIgnoreCase(value, "trailers")) return false;
-        if (kind == .trailers and pseudo) return false;
+            !std.ascii.eqlIgnoreCase(value, "trailers"))
+        {
+            return false;
+        }
+        if (kind == .trailers and pseudo) {
+            return false;
+        }
     }
     return switch (kind) {
         .request, .push_promise => requestPseudosValid(headers, kind),
@@ -1316,19 +1398,43 @@ fn pseudoAllowed(kind: middleware.HeaderKind, name: []const u8) bool {
 
 fn requestPseudosValid(headers: *const middleware.Headers, kind: middleware.HeaderKind) bool {
     const method = headers.find(":method") orelse return false;
-    if (!validToken(method)) return false;
+    if (!validToken(method)) {
+        return false;
+    }
     const scheme = headers.find(":scheme");
     const authority = headers.find(":authority");
     const path = headers.find(":path");
     const protocol = headers.find(":protocol");
-    if (authority) |value| if (containsSpace(value)) return false;
-    if (scheme) |value| if (!validScheme(value)) return false;
-    if (path) |value| if (containsSpace(value)) return false;
-    if (protocol) |value| if (!validToken(value)) return false;
-    if (kind == .push_promise and std.mem.eql(u8, method, "CONNECT")) return false;
+    if (authority) |value| {
+        if (containsSpace(value)) {
+            return false;
+        }
+    }
+    if (scheme) |value| {
+        if (!validScheme(value)) {
+            return false;
+        }
+    }
+    if (path) |value| {
+        if (containsSpace(value)) {
+            return false;
+        }
+    }
+    if (protocol) |value| {
+        if (!validToken(value)) {
+            return false;
+        }
+    }
+    if (kind == .push_promise and std.mem.eql(u8, method, "CONNECT")) {
+        return false;
+    }
     if (std.mem.eql(u8, method, "CONNECT")) {
-        if (authority == null or authority.?.len == 0) return false;
-        if (protocol == null) return scheme == null and path == null;
+        if (authority == null or authority.?.len == 0) {
+            return false;
+        }
+        if (protocol == null) {
+            return scheme == null and path == null;
+        }
         return protocol.?.len != 0 and scheme != null and scheme.?.len != 0 and
             path != null and path.?.len != 0;
     }
@@ -1337,7 +1443,9 @@ fn requestPseudosValid(headers: *const middleware.Headers, kind: middleware.Head
 }
 
 fn validScheme(value: []const u8) bool {
-    if (value.len == 0 or !std.ascii.isAlphabetic(value[0])) return false;
+    if (value.len == 0 or !std.ascii.isAlphabetic(value[0])) {
+        return false;
+    }
     for (value[1..]) |byte| if (!std.ascii.isAlphanumeric(byte) and
         byte != '+' and byte != '-' and byte != '.') return false;
     return true;
@@ -1348,7 +1456,9 @@ fn containsSpace(value: []const u8) bool {
 }
 
 fn validToken(value: []const u8) bool {
-    if (value.len == 0) return false;
+    if (value.len == 0) {
+        return false;
+    }
     for (value) |byte| if (!std.ascii.isAlphanumeric(byte) and
         byte != '!' and byte != '#' and byte != '$' and byte != '%' and
         byte != '&' and byte != '\'' and byte != '*' and byte != '+' and
@@ -1358,15 +1468,22 @@ fn validToken(value: []const u8) bool {
 }
 
 fn validStatus(value: []const u8) bool {
-    if (value.len != 3) return false;
+    if (value.len != 3) {
+        return false;
+    }
     const status = std.fmt.parseInt(u16, value, 10) catch return false;
     return status >= 100 and status <= 599 and status != 101;
 }
 
 fn compatibleH2Headers(original: *const middleware.Headers, transformed: *const middleware.Headers, kind: middleware.HeaderKind) bool {
     if (!validH2Headers(transformed, kind) or
-        !sameHeaderValues(original, transformed, "content-length")) return false;
-    if (kind != .response) return true;
+        !sameHeaderValues(original, transformed, "content-length"))
+    {
+        return false;
+    }
+    if (kind != .response) {
+        return true;
+    }
     return statusSemantics(parseStatusHeader(original)) ==
         statusSemantics(parseStatusHeader(transformed));
 }
@@ -1374,9 +1491,15 @@ fn compatibleH2Headers(original: *const middleware.Headers, transformed: *const 
 const StatusSemantics = enum { informational, bodyless, regular, invalid };
 
 fn statusSemantics(status: u16) StatusSemantics {
-    if (status >= 100 and status < 200 and status != 101) return .informational;
-    if (status == 204 or status == 205 or status == 304) return .bodyless;
-    if (status >= 200) return .regular;
+    if (status >= 100 and status < 200 and status != 101) {
+        return .informational;
+    }
+    if (status == 204 or status == 205 or status == 304) {
+        return .bodyless;
+    }
+    if (status >= 200) {
+        return .regular;
+    }
     return .invalid;
 }
 
@@ -1386,9 +1509,12 @@ fn sameHeaderValues(left: *const middleware.Headers, right: *const middleware.He
     while (true) {
         const left_value = nextHeaderValue(left, wanted, &left_index);
         const right_value = nextHeaderValue(right, wanted, &right_index);
-        if (left_value == null or right_value == null)
+        if (left_value == null or right_value == null) {
             return left_value == null and right_value == null;
-        if (!std.mem.eql(u8, left_value.?, right_value.?)) return false;
+        }
+        if (!std.mem.eql(u8, left_value.?, right_value.?)) {
+            return false;
+        }
     }
 }
 
@@ -1396,7 +1522,9 @@ fn nextHeaderValue(headers: *const middleware.Headers, wanted: []const u8, index
     while (index.* < headers.len) {
         const field = headers.fields[index.*];
         index.* += 1;
-        if (std.mem.eql(u8, headers.name(field), wanted)) return headers.value(field);
+        if (std.mem.eql(u8, headers.name(field), wanted)) {
+            return headers.value(field);
+        }
     }
     return null;
 }
@@ -1736,7 +1864,9 @@ test "request trailers do not emit a second request start" {
         fn emit(self: *@This(), event: Event) void {
             const observed = lifecycle(event) orelse return;
 
-            if (observed.phase == .request_started) self.starts += 1;
+            if (observed.phase == .request_started) {
+                self.starts += 1;
+            }
         }
     };
     var collector: Collector = .{};
@@ -1806,8 +1936,12 @@ test "cross-dialect HTTP2 requests are classified as auxiliary" {
         fn emit(self: *@This(), event: Event) void {
             const observed = lifecycle(event) orelse return;
 
-            if (observed.phase == .request_started) self.starts += 1;
-            if (observed.phase == .auxiliary_request_started) self.auxiliary_starts += 1;
+            if (observed.phase == .request_started) {
+                self.starts += 1;
+            }
+            if (observed.phase == .auxiliary_request_started) {
+                self.auxiliary_starts += 1;
+            }
         }
     };
     var collector: Collector = .{};
@@ -1831,7 +1965,9 @@ test "HPACK dynamic table survives padded response blocks" {
         fn emit(self: *@This(), event: Event) void {
             const observed = lifecycle(event) orelse return;
 
-            if (observed.phase == .response_finished and observed.status_code == 200) self.completed += 1;
+            if (observed.phase == .response_finished and observed.status_code == 200) {
+                self.completed += 1;
+            }
         }
     };
     var collector: Collector = .{};
@@ -1865,7 +2001,9 @@ const FakeWriteSession = struct {
     len: usize = 0,
 
     fn writeAll(fake: *FakeWriteSession, _: tls.Session.Side, bytes: []const u8) bool {
-        if (bytes.len > fake.output.len - fake.len) return false;
+        if (bytes.len > fake.output.len - fake.len) {
+            return false;
+        }
         @memcpy(fake.output[fake.len..][0..bytes.len], bytes);
         fake.len += bytes.len;
         return true;
@@ -1981,7 +2119,9 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
                 self.output_bytes_at_start = self.session.len;
             }
 
-            if (observed.phase == .auxiliary_request_started) self.auxiliary_starts += 1;
+            if (observed.phase == .auxiliary_request_started) {
+                self.auxiliary_starts += 1;
+            }
         }
     };
     var collector: Collector = .{ .session = &session };
@@ -2075,7 +2215,9 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
         fn emit(self: *@This(), event: Event) void {
             const observed = lifecycle(event) orelse return;
 
-            if (observed.phase == .response_finished and observed.status_code == 200) self.completed += 1;
+            if (observed.phase == .response_finished and observed.status_code == 200) {
+                self.completed += 1;
+            }
         }
     };
     var collector: Collector = .{};
@@ -2242,8 +2384,9 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
         );
         output_block_len += payload_len;
         final_seen = header[4] & flag_end_headers != 0;
-        if (final_seen)
+        if (final_seen) {
             try std.testing.expectEqual(session.len, output_offset + frame_header_len + payload_len);
+        }
         output_offset += frame_header_len + payload_len;
         frame_count += 1;
     }

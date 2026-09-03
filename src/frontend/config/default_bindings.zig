@@ -67,7 +67,9 @@ pub fn load(prefix: keybind.Key) ![count]Binding {
 /// of the other. Dropping prefix conflicts too keeps the merged keymap free
 /// of the ambiguity the router rejects; every other default is appended.
 pub fn resolve(prefix: keybind.Key, configured: []const Binding) !Resolved {
-    if (configured.len > config_model.max_bindings) return error.TooManyBindings;
+    if (configured.len > config_model.max_bindings) {
+        return error.TooManyBindings;
+    }
 
     var resolved: Resolved = .{};
     @memcpy(resolved.bindings[0..configured.len], configured);
@@ -82,8 +84,12 @@ pub fn resolve(prefix: keybind.Key, configured: []const Binding) !Resolved {
                 break;
             }
         }
-        if (overridden) continue;
-        if (resolved.len == config_model.max_bindings) return error.TooManyBindings;
+        if (overridden) {
+            continue;
+        }
+        if (resolved.len == config_model.max_bindings) {
+            return error.TooManyBindings;
+        }
         resolved.bindings[resolved.len] = default.*;
         resolved.len += 1;
     }
@@ -119,7 +125,9 @@ test "configured bindings extend defaults and override matching sequences" {
 
     var matching_defaults: usize = 0;
     for (resolved.slice()) |*binding| {
-        if (binding.sameSequence(&override)) matching_defaults += 1;
+        if (binding.sameSequence(&override)) {
+            matching_defaults += 1;
+        }
     }
     try testing.expectEqual(@as(usize, 1), matching_defaults);
 }

@@ -302,9 +302,15 @@ pub fn deinit(client: *Client) void {
     client.telemetry.deinit(client.io);
     client.reload.deinit(gpa);
     client.clipboard_capture_resources.deinit(gpa);
-    if (client.lua_generation) |generation| generation.deinit();
-    if (client.plugin_registry) |registry| gpa.destroy(registry);
-    if (client.trust_store) |store| gpa.destroy(store);
+    if (client.lua_generation) |generation| {
+        generation.deinit();
+    }
+    if (client.plugin_registry) |registry| {
+        gpa.destroy(registry);
+    }
+    if (client.trust_store) |store| {
+        gpa.destroy(store);
+    }
     client.graphics_store.deinit();
     client.model.deinit();
     client.view.deinit();

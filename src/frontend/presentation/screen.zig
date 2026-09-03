@@ -129,7 +129,9 @@ pub const Screen = struct {
         const first: usize = start;
         const len: usize = count;
         const end = std.math.add(usize, first, len) catch return error.PatchOutOfBounds;
-        if (len == 0 or end > s.back.cells.len) return error.PatchOutOfBounds;
+        if (len == 0 or end > s.back.cells.len) {
+            return error.PatchOutOfBounds;
+        }
 
         diff.markRows(s.damage_rows, s.back.w, first, len);
         return s.back.cells[first..end];
@@ -189,7 +191,9 @@ pub const Screen = struct {
                     current.* = next.*;
                     continue;
                 }
-                if (next.eqlPublic(current)) continue;
+                if (next.eqlPublic(current)) {
+                    continue;
+                }
 
                 // One cursor move per run of changes, not per cell. On a mostly
                 // unchanged screen this is where the bytes are saved.
@@ -210,8 +214,9 @@ pub const Screen = struct {
             }
         }
 
-        if (s.graphics) |effect|
+        if (s.graphics) |effect| {
             stats.graphics_bytes = try effect.write(effect.context, w);
+        }
         s.graphics = null;
 
         // The cursor is placed after the diff, so it ends up where the caller
@@ -253,18 +258,36 @@ fn writeStyle(w: *Io.Writer, style: ui.Style) !void {
     // attribute and a memory of which were on. Resetting costs four bytes.
     try w.writeAll("\x1b[0");
     const f = style.flags;
-    if (f.bold) try w.writeAll(";1");
-    if (f.faint) try w.writeAll(";2");
-    if (f.italic) try w.writeAll(";3");
-    if (f.blink) try w.writeAll(";5");
-    if (f.inverse) try w.writeAll(";7");
-    if (f.invisible) try w.writeAll(";8");
-    if (f.strikethrough) try w.writeAll(";9");
-    if (f.overline) try w.writeAll(";53");
+    if (f.bold) {
+        try w.writeAll(";1");
+    }
+    if (f.faint) {
+        try w.writeAll(";2");
+    }
+    if (f.italic) {
+        try w.writeAll(";3");
+    }
+    if (f.blink) {
+        try w.writeAll(";5");
+    }
+    if (f.inverse) {
+        try w.writeAll(";7");
+    }
+    if (f.invisible) {
+        try w.writeAll(";8");
+    }
+    if (f.strikethrough) {
+        try w.writeAll(";9");
+    }
+    if (f.overline) {
+        try w.writeAll(";53");
+    }
     // SGR 4:n rather than plain 4, so a curly underline stays curly. Terminals
     // that do not know the sub-parameter form fall back to a plain underline,
     // which is the right degradation.
-    if (f.underline != .none) try w.print(";4:{d}", .{@intFromEnum(f.underline)});
+    if (f.underline != .none) {
+        try w.print(";4:{d}", .{@intFromEnum(f.underline)});
+    }
     switch (style.fg) {
         .default => {},
         .indexed => |i| try w.print(";38;5;{d}", .{i}),
@@ -277,11 +300,13 @@ fn writeStyle(w: *Io.Writer, style: ui.Style) !void {
     }
     // Only when there is an underline to colour. Emitting SGR 58 unconditionally
     // costs bytes on every run and confuses terminals that parse it loosely.
-    if (f.underline != .none) switch (style.underline_color) {
-        .default => {},
-        .indexed => |i| try w.print(";58;5;{d}", .{i}),
-        .rgb => |c| try w.print(";58;2;{d};{d};{d}", .{ c[0], c[1], c[2] }),
-    };
+    if (f.underline != .none) {
+        switch (style.underline_color) {
+            .default => {},
+            .indexed => |i| try w.print(";58;5;{d}", .{i}),
+            .rgb => |c| try w.print(";58;2;{d};{d};{d}", .{ c[0], c[1], c[2] }),
+        }
+    }
     try w.writeAll("m");
 }
 
@@ -328,7 +353,9 @@ pub fn writeHostNotification(w: *Io.Writer, title: []const u8, message: []const 
 }
 
 pub fn writeClipboard(w: *Io.Writer, payload: []const u8) (ClipboardError || Io.Writer.Error)!void {
-    if (payload.len > max_clipboard_bytes) return error.TooLarge;
+    if (payload.len > max_clipboard_bytes) {
+        return error.TooLarge;
+    }
 
     // `c` is the selection name: the clipboard proper rather than the X11
     // primary selection, which is the one that pastes on middle click and is
@@ -461,7 +488,9 @@ pub const Event = union(enum) {
 
         /// Whether this is `Ctrl` plus a specific letter, case insensitive.
         pub fn isCtrl(k: Key, letter: u8) bool {
-            if (!k.mods.ctrl) return false;
+            if (!k.mods.ctrl) {
+                return false;
+            }
             return switch (k.code) {
                 .char => |c| c.len == 1 and std.ascii.toLower(c.bytes[0]) == letter,
                 else => false,
@@ -532,7 +561,9 @@ fn parseOscReply(input: []const u8) Parsed {
             break;
         }
         if (input[end] == 0x1b) {
-            if (end + 1 >= input.len) return .{ .event = .incomplete, .len = 0 };
+            if (end + 1 >= input.len) {
+                return .{ .event = .incomplete, .len = 0 };
+            }
             if (input[end + 1] == '\\') {
                 terminator_len = 2;
                 break;
@@ -555,43 +586,67 @@ fn parseOscReply(input: []const u8) Parsed {
 /// Accepts `rgb:RRRR/GGGG/BBBB` with 1..4 hex digits per channel, scaling to
 /// eight bits from the leading digits.
 fn parseOscColor(text: []const u8) ?Event.Rgb8 {
-    if (!std.mem.startsWith(u8, text, "rgb:")) return null;
+    if (!std.mem.startsWith(u8, text, "rgb:")) {
+        return null;
+    }
     var channels: [3]u8 = undefined;
     var iterator = std.mem.splitScalar(u8, text[4..], '/');
     for (&channels) |*channel| {
         const digits = iterator.next() orelse return null;
-        if (digits.len == 0 or digits.len > 4) return null;
+        if (digits.len == 0 or digits.len > 4) {
+            return null;
+        }
         var value: u16 = 0;
         for (digits[0..@min(digits.len, 2)]) |digit| {
             value = value * 16 + (std.fmt.charToDigit(digit, 16) catch return null);
         }
         channel.* = if (digits.len == 1) @intCast(value * 17) else @intCast(value);
     }
-    if (iterator.next() != null) return null;
+    if (iterator.next() != null) {
+        return null;
+    }
     return .{ .r = channels[0], .g = channels[1], .b = channels[2] };
 }
 
 pub fn parse(input: []const u8) ?Parsed {
-    if (input.len == 0) return null;
+    if (input.len == 0) {
+        return null;
+    }
 
-    if (input[0] != 0x1b) return parseByte(input);
+    if (input[0] != 0x1b) {
+        return parseByte(input);
+    }
 
     // A lone escape. Stream routers disambiguate it with a timeout; direct UI
     // callers that already own event framing can treat it as the key itself.
-    if (input.len == 1) return key(.escape, .{}, 1);
-    if (input[1] == '_') return parseApc(input);
-    if (input[1] == ']') return parseOscReply(input);
+    if (input.len == 1) {
+        return key(.escape, .{}, 1);
+    }
+    if (input[1] == '_') {
+        return parseApc(input);
+    }
+    if (input[1] == ']') {
+        return parseOscReply(input);
+    }
     // SS3, which is what a terminal in application cursor mode sends for the
     // arrows and for Home and End. Ignoring it makes those keys dead in exactly
     // the terminals that use it.
-    if (input[1] == 'O') return parseSs3(input);
+    if (input[1] == 'O') {
+        return parseSs3(input);
+    }
     // Traditional terminals encode Alt+key as Escape followed by the key's
     // ordinary bytes. Once both bytes have arrived this is one modified key;
     // a stream reader still needs a timeout to distinguish a lone Escape.
-    if (input[1] != '[') return parseAlt(input);
-    if (input.len == 2) return .{ .event = .incomplete, .len = 0 };
+    if (input[1] != '[') {
+        return parseAlt(input);
+    }
+    if (input.len == 2) {
+        return .{ .event = .incomplete, .len = 0 };
+    }
 
-    if (input[2] == '<') return parseMouse(input);
+    if (input[2] == '<') {
+        return parseMouse(input);
+    }
 
     // Unmodified arrows, and the two forms of Home and End that need no
     // parameters.
@@ -613,10 +668,14 @@ pub fn parse(input: []const u8) ?Parsed {
         // ECMA-48: a new ESC aborts the sequence in progress. Consume only
         // the dead prefix, so the aborting sequence parses from its own
         // introducer instead of leaking its final bytes as typed characters.
-        if (input[final] == 0x1b) return .{ .event = .incomplete, .len = final };
+        if (input[final] == 0x1b) {
+            return .{ .event = .incomplete, .len = final };
+        }
         final += 1;
     }
-    if (final == input.len) return .{ .event = .incomplete, .len = 0 };
+    if (final == input.len) {
+        return .{ .event = .incomplete, .len = 0 };
+    }
 
     var params: [3]u32 = .{ 0, 0, 0 };
     var count: usize = 0;
@@ -624,10 +683,14 @@ pub fn parse(input: []const u8) ?Parsed {
     while (index < final) : (index += 1) {
         if (input[index] == ';') {
             count += 1;
-            if (count == params.len) break;
+            if (count == params.len) {
+                break;
+            }
             continue;
         }
-        if (input[index] < '0' or input[index] > '9') break;
+        if (input[index] < '0' or input[index] > '9') {
+            break;
+        }
         params[count] = params[count] *| 10 +| (input[index] - '0');
     }
     const length = final + 1;
@@ -851,10 +914,14 @@ fn parseKittyModifierEvent(field: ?[]const u8) ?KittyModifierEvent {
 
 fn parseModifyOtherKeys(body: []const u8, length: usize) ?Parsed {
     var fields = std.mem.splitScalar(u8, body, ';');
-    if (!std.mem.eql(u8, fields.next() orelse return null, "27")) return null;
+    if (!std.mem.eql(u8, fields.next() orelse return null, "27")) {
+        return null;
+    }
     const modifier = std.fmt.parseUnsigned(u32, fields.next() orelse return null, 10) catch return null;
     const codepoint = std.fmt.parseUnsigned(u32, fields.next() orelse return null, 10) catch return null;
-    if (fields.next() != null) return null;
+    if (fields.next() != null) {
+        return null;
+    }
     return codepointKey(codepoint, modifier, length);
 }
 
@@ -897,20 +964,27 @@ fn parseKeyModifiers(modifier: u32) ?Event.Key.Mods {
 fn parseApc(input: []const u8) Parsed {
     var end: usize = 2;
     while (end + 1 < input.len) : (end += 1) {
-        if (input[end] != 0x1b or input[end + 1] != '\\') continue;
+        if (input[end] != 0x1b or input[end + 1] != '\\') {
+            continue;
+        }
         const length = end + 2;
         const content = input[2..end];
-        if (content.len < 2 or content[0] != 'G')
+        if (content.len < 2 or content[0] != 'G') {
             return .{ .event = .incomplete, .len = length };
+        }
         const separator = std.mem.indexOfScalar(u8, content, ';') orelse
             return .{ .event = .incomplete, .len = length };
         var image_id: u32 = 0;
         var fields = std.mem.splitScalar(u8, content[1..separator], ',');
         while (fields.next()) |field| {
-            if (!std.mem.startsWith(u8, field, "i=")) continue;
+            if (!std.mem.startsWith(u8, field, "i=")) {
+                continue;
+            }
             image_id = std.fmt.parseInt(u32, field[2..], 10) catch 0;
         }
-        if (image_id == 0) return .{ .event = .incomplete, .len = length };
+        if (image_id == 0) {
+            return .{ .event = .incomplete, .len = length };
+        }
         const status = content[separator + 1 ..];
         return .{
             .event = .{ .terminal_response = .{ .kitty_graphics = .{
@@ -949,7 +1023,9 @@ fn parseByte(input: []const u8) ?Parsed {
     }
 
     const length = std.unicode.utf8ByteSequenceLength(input[0]) catch 1;
-    if (input.len < length) return .{ .event = .incomplete, .len = 0 };
+    if (input.len < length) {
+        return .{ .event = .incomplete, .len = 0 };
+    }
     return key(.{ .char = .init(input[0..length]) }, .{}, length);
 }
 
@@ -958,10 +1034,14 @@ fn parseAlt(input: []const u8) Parsed {
         // ESC ESC: legacy terminals prefix a whole CSI or SS3 sequence with
         // ESC for a modified key, so Alt+Up arrives as `ESC ESC [ A`. Only
         // the third byte disambiguates that from Alt+Escape.
-        if (input.len == 2) return .{ .event = .incomplete, .len = 0 };
+        if (input.len == 2) {
+            return .{ .event = .incomplete, .len = 0 };
+        }
         if (input[2] == '[' or input[2] == 'O') {
             const parsed = parse(input[1..]) orelse unreachable;
-            if (parsed.len == 0) return parsed;
+            if (parsed.len == 0) {
+                return parsed;
+            }
             return switch (parsed.event) {
                 .key => |pressed| altKey(pressed, parsed.len + 1),
                 else => .{ .event = .incomplete, .len = parsed.len + 1 },
@@ -970,7 +1050,9 @@ fn parseAlt(input: []const u8) Parsed {
         return key(.escape, .{ .alt = true }, 2);
     }
     const parsed = parseByte(input[1..]) orelse unreachable;
-    if (parsed.len == 0) return parsed;
+    if (parsed.len == 0) {
+        return parsed;
+    }
     return switch (parsed.event) {
         .key => |pressed| altKey(pressed, parsed.len + 1),
         else => .{ .event = .incomplete, .len = parsed.len + 1 },
@@ -979,7 +1061,9 @@ fn parseAlt(input: []const u8) Parsed {
 
 /// `ESC O X`, application cursor mode.
 fn parseSs3(input: []const u8) ?Parsed {
-    if (input.len < 3) return .{ .event = .incomplete, .len = 0 };
+    if (input.len < 3) {
+        return .{ .event = .incomplete, .len = 0 };
+    }
     return switch (input[2]) {
         'A' => physicalKey(.{ .code = .up }, 3),
         'B' => physicalKey(.{ .code = .down }, 3),
@@ -1025,7 +1109,9 @@ fn physicalIdentity(code: Event.Key.Code) Event.Key.Physical {
 /// Zero means the parameter was absent, which is not the same as "no
 /// modifiers" arithmetically - subtracting one from it would set every bit.
 fn modsOf(param: u32) Event.Key.Mods {
-    if (param == 0) return .{};
+    if (param == 0) {
+        return .{};
+    }
     const bits = param - 1;
     return .{
         .shift = bits & 1 != 0,
@@ -1082,13 +1168,17 @@ pub fn Input(comptime capacity: usize) type {
                     // in which case the buffer holds something that will never
                     // parse and waiting is a deadlock. Dropping the oldest byte
                     // is the only move that guarantees progress.
-                    if (in.len < capacity) return null;
+                    if (in.len < capacity) {
+                        return null;
+                    }
                     in.discard(1);
                     in.dropped += 1;
                     continue;
                 }
                 in.discard(parsed.len);
-                if (parsed.event == .incomplete) continue;
+                if (parsed.event == .incomplete) {
+                    continue;
+                }
                 return parsed.event;
             }
             return null;
@@ -1119,12 +1209,18 @@ fn parseMouse(input: []const u8) ?Parsed {
         }
         if (byte == ';') {
             field += 1;
-            if (field >= fields.len) return .{ .event = .incomplete, .len = index + 1 };
+            if (field >= fields.len) {
+                return .{ .event = .incomplete, .len = index + 1 };
+            }
             continue;
         }
         // A new ESC aborts the report; keep it for the next parse.
-        if (byte == 0x1b) return .{ .event = .incomplete, .len = index };
-        if (byte != 'M' and byte != 'm') return .{ .event = .incomplete, .len = index + 1 };
+        if (byte == 0x1b) {
+            return .{ .event = .incomplete, .len = index };
+        }
+        if (byte != 'M' and byte != 'm') {
+            return .{ .event = .incomplete, .len = index + 1 };
+        }
 
         const button = fields[0];
         // Terminals count from one; everything above this counts from zero.
@@ -1667,10 +1763,12 @@ test "a paste is bracketed, so a newline inside it is text" {
             .key => |k| {
                 if (k.isCtrl('j')) {
                     newlines += 1;
-                } else switch (k.code) {
-                    .enter => enters += 1,
-                    .char => characters += 1,
-                    else => {},
+                } else {
+                    switch (k.code) {
+                        .enter => enters += 1,
+                        .char => characters += 1,
+                        else => {},
+                    }
                 }
             },
             else => {},
@@ -1765,7 +1863,9 @@ test "no byte is lost when a read does not fit in what is left" {
             seen += 1;
         }
         // Progress is guaranteed: either bytes went in or events came out.
-        if (took == 0 and in.len == 0) return error.Stuck;
+        if (took == 0 and in.len == 0) {
+            return error.Stuck;
+        }
     }
     try testing.expectEqual(burst.len, seen);
     try testing.expectEqual(@as(usize, 0), in.dropped);

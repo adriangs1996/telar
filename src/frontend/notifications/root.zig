@@ -18,7 +18,9 @@ pub const Delivery = enum {
 
     pub fn parse(text: []const u8) ?Delivery {
         inline for (@typeInfo(Delivery).@"enum".fields) |field| {
-            if (std.mem.eql(u8, text, field.name)) return @field(Delivery, field.name);
+            if (std.mem.eql(u8, text, field.name)) {
+                return @field(Delivery, field.name);
+            }
         }
         return null;
     }
@@ -104,8 +106,12 @@ pub const Item = struct {
     /// Evaluates the same continuous curve at pixel precision for graphical
     /// placements. FPS only controls how often this value is sampled.
     pub fn animatedPixels(item: *const Item, full_width: u32) u32 {
-        if (full_width == 0 or item.transition_position_ns == 0) return 0;
-        if (item.transition_position_ns >= transition_duration_ns) return full_width;
+        if (full_width == 0 or item.transition_position_ns == 0) {
+            return 0;
+        }
+        if (item.transition_position_ns >= transition_duration_ns) {
+            return full_width;
+        }
 
         const position: u128 = item.transition_position_ns;
         const duration: u128 = transition_duration_ns;
@@ -123,28 +129,37 @@ pub const Item = struct {
     }
 
     fn beginExit(item: *Item, now_ns: u64) bool {
-        if (item.phase == .exiting) return false;
-        if (item.phase == .entering) _ = item.advanceEntering(now_ns);
+        if (item.phase == .exiting) {
+            return false;
+        }
+        if (item.phase == .entering) {
+            _ = item.advanceEntering(now_ns);
+        }
         item.phase = .exiting;
         item.transition_updated_ns = now_ns;
         return true;
     }
 
     fn advanceEntering(item: *Item, now_ns: u64) bool {
-        if (now_ns <= item.transition_updated_ns) return false;
+        if (now_ns <= item.transition_updated_ns) {
+            return false;
+        }
         const previous = item.transition_position_ns;
         item.transition_position_ns = @min(
             transition_duration_ns,
             previous +| (now_ns - item.transition_updated_ns),
         );
         item.transition_updated_ns = now_ns;
-        if (item.transition_position_ns == transition_duration_ns)
+        if (item.transition_position_ns == transition_duration_ns) {
             item.phase = .visible;
+        }
         return item.transition_position_ns != previous;
     }
 
     fn advanceExiting(item: *Item, now_ns: u64) bool {
-        if (now_ns <= item.transition_updated_ns) return false;
+        if (now_ns <= item.transition_updated_ns) {
+            return false;
+        }
         const previous = item.transition_position_ns;
         item.transition_position_ns -|= now_ns - item.transition_updated_ns;
         item.transition_updated_ns = now_ns;
@@ -192,7 +207,9 @@ pub const Center = struct {
 
         for (center.items[0..center.count]) |*slot| {
             const existing = if (slot.*) |*value| value else continue;
-            if (existing.phase == .exiting or !sameNotification(existing, &item)) continue;
+            if (existing.phase == .exiting or !sameNotification(existing, &item)) {
+                continue;
+            }
             existing.expires_at_ns = switch (existing.phase) {
                 .entering => now_ns +| transition_duration_ns +| input.duration_ns,
                 .visible => now_ns +| input.duration_ns,
@@ -203,7 +220,9 @@ pub const Center = struct {
 
         const id = center.takeId();
         item.id = id;
-        if (center.count == max_items) center.count -= 1;
+        if (center.count == max_items) {
+            center.count -= 1;
+        }
         var index: usize = center.count;
         while (index > 0) : (index -= 1) center.items[index] = center.items[index - 1];
         center.items[0] = item;
@@ -216,7 +235,9 @@ pub const Center = struct {
     }
 
     pub fn itemAt(center: *const Center, index: usize) ?*const Item {
-        if (index >= center.count) return null;
+        if (index >= center.count) {
+            return null;
+        }
         return &center.items[index].?;
     }
 
@@ -228,7 +249,9 @@ pub const Center = struct {
     /// ```
     pub fn nextDeadline(center: *const Center, now_ns: u64, frame_interval_ns: u64) ?u64 {
         std.debug.assert(frame_interval_ns != 0);
-        if (center.count == 0) return null;
+        if (center.count == 0) {
+            return null;
+        }
         var deadline: u64 = std.math.maxInt(u64);
         for (center.items[0..center.count]) |slot| {
             const item = slot orelse continue;
@@ -253,12 +276,15 @@ pub const Center = struct {
                 switch (item.phase) {
                     .entering => {
                         changed = item.advanceEntering(now_ns) or changed;
-                        if (item.phase == .visible and now_ns >= item.expires_at_ns)
+                        if (item.phase == .visible and now_ns >= item.expires_at_ns) {
                             continue :item_transition;
+                        }
                         break :item_transition;
                     },
                     .visible => {
-                        if (now_ns < item.expires_at_ns) break :item_transition;
+                        if (now_ns < item.expires_at_ns) {
+                            break :item_transition;
+                        }
                         item.phase = .exiting;
                         item.transition_updated_ns = item.expires_at_ns;
                         changed = true;
@@ -308,7 +334,9 @@ pub const Center = struct {
     fn find(center: *Center, id: Id) ?*Item {
         for (center.items[0..center.count]) |*slot| {
             const item = if (slot.*) |*value| value else continue;
-            if (item.id == id) return item;
+            if (item.id == id) {
+                return item;
+            }
         }
         return null;
     }
@@ -323,7 +351,9 @@ pub const Center = struct {
     }
 
     fn takeId(center: *Center) Id {
-        if (center.next_id == 0) center.next_id = 1;
+        if (center.next_id == 0) {
+            center.next_id = 1;
+        }
         const id: Id = @enumFromInt(center.next_id);
         center.next_id +%= 1;
         return id;

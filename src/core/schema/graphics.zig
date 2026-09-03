@@ -145,8 +145,9 @@ pub fn decodeSharedImage(d: *wire.Decoder) !SharedImage {
 }
 
 pub fn encodeImageChunk(e: *wire.Encoder, value: ImageChunk) !void {
-    if (value.bytes.len == 0 or value.bytes.len > shared.max_ipc_chunk_bytes)
+    if (value.bytes.len == 0 or value.bytes.len > shared.max_ipc_chunk_bytes) {
         return error.InvalidGraphicsChunkLength;
+    }
     try header(e, value.pane_id, value.revision);
     try imageKey(e, value.key);
     try e.writeInt(u64, value.offset);
@@ -162,15 +163,18 @@ pub fn decodeImageChunk(d: *wire.Decoder) !ImageChunk {
         .offset = try d.readInt(u64),
         .bytes = try d.readSized32(),
     };
-    if (value.bytes.len == 0 or value.bytes.len > shared.max_ipc_chunk_bytes)
+    if (value.bytes.len == 0 or value.bytes.len > shared.max_ipc_chunk_bytes) {
         return error.InvalidGraphicsChunkLength;
+    }
     return value;
 }
 
 pub fn encodePlacement(e: *wire.Encoder, value: Placement) !void {
     try header(e, value.pane_id, value.revision);
     const p = value.placement;
-    if (p.virtual_id == 0) return error.InvalidGraphicsIdentity;
+    if (p.virtual_id == 0) {
+        return error.InvalidGraphicsIdentity;
+    }
     try imageKey(e, p.key);
     try e.writeInt(u64, p.virtual_id);
     try e.writeInt(u32, p.placement_id);
@@ -222,7 +226,9 @@ pub fn decodeDeleteImage(d: *wire.Decoder) !DeleteImage {
 }
 
 pub fn encodeDeletePlacement(e: *wire.Encoder, value: DeletePlacement) !void {
-    if (value.virtual_id == 0) return error.InvalidGraphicsIdentity;
+    if (value.virtual_id == 0) {
+        return error.InvalidGraphicsIdentity;
+    }
     try header(e, value.pane_id, value.revision);
     try imageKey(e, value.key);
     try e.writeInt(u64, value.virtual_id);
@@ -242,12 +248,16 @@ pub fn decodeDeletePlacement(d: *wire.Decoder) !DeletePlacement {
 
 fn decodeVirtualId(d: *wire.Decoder) !u64 {
     const virtual_id = try d.readInt(u64);
-    if (virtual_id == 0) return error.InvalidGraphicsIdentity;
+    if (virtual_id == 0) {
+        return error.InvalidGraphicsIdentity;
+    }
     return virtual_id;
 }
 
 fn header(e: *wire.Encoder, pane_id: PaneId, revision: u64) !void {
-    if (pane_id == .invalid or revision == 0) return error.InvalidGraphicsIdentity;
+    if (pane_id == .invalid or revision == 0) {
+        return error.InvalidGraphicsIdentity;
+    }
     try e.writeInt(u64, id.raw(pane_id));
     try e.writeInt(u64, revision);
 }
@@ -255,12 +265,16 @@ fn header(e: *wire.Encoder, pane_id: PaneId, revision: u64) !void {
 fn decodeHeader(d: *wire.Decoder) !struct { pane_id: PaneId, revision: u64 } {
     const pane_id = try id.pane(try d.readInt(u64));
     const revision = try d.readInt(u64);
-    if (revision == 0) return error.InvalidGraphicsIdentity;
+    if (revision == 0) {
+        return error.InvalidGraphicsIdentity;
+    }
     return .{ .pane_id = pane_id, .revision = revision };
 }
 
 fn imageKey(e: *wire.Encoder, key: shared.ImageKey) !void {
-    if (key.image_id == 0 or key.generation == 0) return error.InvalidGraphicsIdentity;
+    if (key.image_id == 0 or key.generation == 0) {
+        return error.InvalidGraphicsIdentity;
+    }
     try e.writeInt(u32, key.image_id);
     try e.writeInt(u64, key.generation);
 }
@@ -270,7 +284,9 @@ fn decodeImageKey(d: *wire.Decoder) !shared.ImageKey {
         .image_id = try d.readInt(u32),
         .generation = try d.readInt(u64),
     };
-    if (key.image_id == 0 or key.generation == 0) return error.InvalidGraphicsIdentity;
+    if (key.image_id == 0 or key.generation == 0) {
+        return error.InvalidGraphicsIdentity;
+    }
     return key;
 }
 

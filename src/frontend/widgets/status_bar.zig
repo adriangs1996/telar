@@ -31,7 +31,9 @@ pub const Hints = struct {
     len: u8 = 0,
 
     pub fn append(hints: *Hints, hint: Hint) void {
-        if (hints.len == hints.items.len) return;
+        if (hints.len == hints.items.len) {
+            return;
+        }
         hints.items[hints.len] = hint;
         hints.len += 1;
     }
@@ -48,7 +50,9 @@ pub const Mode = union(enum) {
 };
 
 pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
-    if (area.isEmpty()) return;
+    if (area.isEmpty()) {
+        return;
+    }
     const values = metrics orelse return;
     var x = area.x + 1;
     const background = context.palette.panel_bg;
@@ -113,7 +117,9 @@ fn iconWidth(icon: ui.icons.Icon) u16 {
 }
 
 pub fn renderMode(context: *widget.Context, area: ui.Rect, mode: Mode) void {
-    if (area.isEmpty() or mode == .normal) return;
+    if (area.isEmpty() or mode == .normal) {
+        return;
+    }
     context.buffer.fill(area, " ", .{ .bg = context.palette.panel_bg });
     switch (mode) {
         .normal => {},
@@ -157,13 +163,7 @@ fn renderModeLabel(context: *widget.Context, area: ui.Rect, label: []const u8) u
     );
 }
 
-fn renderPair(
-    context: *widget.Context,
-    area: ui.Rect,
-    x: *u16,
-    key: []const u8,
-    label: []const u8,
-) void {
+fn renderPair(context: *widget.Context, area: ui.Rect, x: *u16, key: []const u8, label: []const u8) void {
     write(context, area, x, " ", .{ .bg = context.palette.panel_bg });
     write(context, area, x, key, .{
         .fg = context.palette.accent,
@@ -178,23 +178,25 @@ fn renderPair(
     write(context, area, x, " ", .{ .bg = context.palette.panel_bg });
 }
 
-fn write(
-    context: *widget.Context,
-    area: ui.Rect,
-    x: *u16,
-    text: []const u8,
-    style: ui.Style,
-) void {
+fn write(context: *widget.Context, area: ui.Rect, x: *u16, text: []const u8, style: ui.Style) void {
     const remaining = area.x + area.w -| x.*;
-    if (remaining == 0) return;
+    if (remaining == 0) {
+        return;
+    }
     x.* += context.buffer.writeTruncated(area, x.*, area.y, text, remaining, style);
 }
 
 fn formatKey(buffer: *[32]u8, key: keybind.Key) []const u8 {
     var len: usize = 0;
-    if (key.mods.ctrl) append(buffer, &len, "Ctrl+");
-    if (key.mods.alt) append(buffer, &len, "Alt+");
-    if (key.mods.shift) append(buffer, &len, "Shift+");
+    if (key.mods.ctrl) {
+        append(buffer, &len, "Ctrl+");
+    }
+    if (key.mods.alt) {
+        append(buffer, &len, "Alt+");
+    }
+    if (key.mods.shift) {
+        append(buffer, &len, "Shift+");
+    }
     const code: []const u8 = switch (key.code) {
         .char => |char| char.slice(),
         .up => "Up",
@@ -223,8 +225,12 @@ fn append(buffer: *[32]u8, len: *usize, text: []const u8) void {
 }
 
 fn cpuColor(context: *const widget.Context, cpu_percent: u8) ui.Color {
-    if (cpu_percent > 90) return context.palette.red;
-    if (cpu_percent > 70) return context.palette.yellow;
+    if (cpu_percent > 90) {
+        return context.palette.red;
+    }
+    if (cpu_percent > 70) {
+        return context.palette.yellow;
+    }
     return context.palette.teal;
 }
 

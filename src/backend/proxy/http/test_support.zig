@@ -19,7 +19,9 @@ pub const FakeSession = struct {
             .child => .{ fake.child_input, &fake.child_offset },
             .origin => .{ fake.origin_input, &fake.origin_offset },
         };
-        if (offset.* == input.len) return null;
+        if (offset.* == input.len) {
+            return null;
+        }
 
         const available = @min(buffer.len, input.len - offset.*);
         const take = @min(available, fake.max_read_bytes);
@@ -33,7 +35,9 @@ pub const FakeSession = struct {
             .child => .{ &fake.child_output, &fake.child_output_len },
             .origin => .{ &fake.origin_output, &fake.origin_output_len },
         };
-        if (bytes.len > output.len - len.*) return false;
+        if (bytes.len > output.len - len.*) {
+            return false;
+        }
         @memcpy(output[len.*..][0..bytes.len], bytes);
         len.* += bytes.len;
         return true;

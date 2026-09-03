@@ -301,7 +301,9 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
     var vt_screen_bytes: usize = 0;
     for (panes.items) |slot| {
         const pane = slot orelse continue;
-        if (pane.ingest_pending) continue;
+        if (pane.ingest_pending) {
+            continue;
+        }
         pty_response_queue_depth += pane.pty_responses.len;
         pty_response_dropped += pane.pty_responses.dropped;
         pane_input_queue_depth += pane.input_queue.len;
@@ -318,7 +320,9 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
             media_queue_events += batch.event_count;
             media_queue_bytes += batch.len;
         }
-        if (pane.dirty) dirty_panes += 1;
+        if (pane.dirty) {
+            dirty_panes += 1;
+        }
         if (pane.history_observer.worker == null) {
             history_prompt_markers += pane.history_observer.tracker.aux.prompt_markers;
             history_input_markers += pane.history_observer.tracker.aux.input_markers;
@@ -339,8 +343,9 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
                 graphics_images += screen.kitty_images.images.count();
                 graphics_placements += screen.kitty_images.placements.count();
                 graphics_resident_bytes += screen.kitty_images.total_bytes;
-                if (screen.kitty_images.loading) |loading|
+                if (screen.kitty_images.loading) |loading| {
                     graphics_loading_bytes += loading.data.items.len;
+                }
             }
         }
     }
@@ -348,11 +353,15 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
         attachment_count += attachments.len();
         var iterator = attachments.iterator();
         while (iterator.next()) |active| {
-            if (active.pane.ingest_pending) continue;
+            if (active.pane.ingest_pending) {
+                continue;
+            }
             const transfer_bytes = active.graphicsTransferBytes();
             graphics_transfer_bytes += transfer_bytes;
             graphics_resident_bytes += transfer_bytes;
-            if (active.outstandingFrameId() != 0) outstanding_frames += 1;
+            if (active.outstandingFrameId() != 0) {
+                outstanding_frames += 1;
+            }
         }
     }
     const history_stats = sample.history_service.statsSnapshot();

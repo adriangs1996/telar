@@ -34,7 +34,9 @@ pub const ReportAgentSessionHandler = struct {
     /// ```
     pub fn execute(handler: *ReportAgentSessionHandler, command: ReportAgentSession) ReportAgentSessionResult {
         const pane = handler.panes.resolveConst(command.pane) orelse return .pane_not_found;
-        if (pane.exit != null) return .pane_not_found;
+        if (pane.exit != null) {
+            return .pane_not_found;
+        }
         const reference = agent_mod.SessionReference.init(command.session, command.now_ms) catch return .invalid_session;
         const identity = agent_mod.Identity.fromPane(pane);
 

@@ -103,13 +103,15 @@ pub fn render(context: *widget.Context, input: Input) void {
         .bg = context.palette.panel_bg,
     };
     context.buffer.fill(marker_rect, " ", marker_style);
-    if (marker_width >= 2) _ = context.drawIcon(
-        marker_rect,
-        group_x + 1,
-        area.y,
-        .workspace_menu,
-        marker_style,
-    );
+    if (marker_width >= 2) {
+        _ = context.drawIcon(
+            marker_rect,
+            group_x + 1,
+            area.y,
+            .workspace_menu,
+            marker_style,
+        );
+    }
     const list_x = group_x + marker_width;
 
     if (input.workspaces.count == 0) {
@@ -143,13 +145,15 @@ pub fn render(context: *widget.Context, input: Input) void {
             .flags = .{ .bold = true },
         };
         context.buffer.fill(badge, " ", badge_style);
-        if (badge_width >= 2) _ = context.drawIcon(
-            badge,
-            badge.x + 1,
-            badge.y,
-            .proxy_active,
-            badge_style,
-        );
+        if (badge_width >= 2) {
+            _ = context.drawIcon(
+                badge,
+                badge.x + 1,
+                badge.y,
+                .proxy_active,
+                badge_style,
+            );
+        }
     }
 }
 
@@ -212,7 +216,9 @@ fn renderList(context: *widget.Context, input: Input, active_id: ?schema.Workspa
     }
 
     for (0..snapshot.count) |index| {
-        if (x >= row_end) break;
+        if (x >= row_end) {
+            break;
+        }
         x = drawWorkspace(
             context,
             snapshot,
@@ -232,7 +238,9 @@ fn drawWorkspace(context: *widget.Context, snapshot: *const workspace_list.Snaps
         workspaceNameAt(snapshot, index, active_index, active_name),
     }) catch " workspace ";
     const width = @min(ui.measure(label), row_end -| x);
-    if (width == 0) return x;
+    if (width == 0) {
+        return x;
+    }
     const rect: ui.Rect = .{ .x = x, .y = y, .w = width, .h = 1 };
     const is_active = active_index != null and active_index.? == index;
     const action: widget.Action = if (is_active)
@@ -258,17 +266,13 @@ fn drawWorkspace(context: *widget.Context, snapshot: *const workspace_list.Snaps
     return x + width;
 }
 
-fn renderFallback(
-    context: *widget.Context,
-    input: Input,
-    x: u16,
-    row_end: u16,
-    y: u16,
-) void {
+fn renderFallback(context: *widget.Context, input: Input, x: u16, row_end: u16, y: u16) void {
     var workspace_buffer: [schema.max_workspace_name_bytes + 16]u8 = undefined;
     const workspace = workspaceLabel(input.location, input.workspace_name, &workspace_buffer);
     const width = @min(ui.measure(workspace) + 1, row_end -| x);
-    if (width == 0) return;
+    if (width == 0) {
+        return;
+    }
     const rect: ui.Rect = .{ .x = x, .y = y, .w = width, .h = 1 };
     context.hits.add(rect, .active_workspace);
     const style: ui.Style = .{
@@ -283,20 +287,11 @@ fn renderFallback(
     _ = context.buffer.writeTruncated(rect, x, y, workspace, width, style);
 }
 
-fn listFits(
-    snapshot: *const workspace_list.Snapshot,
-    active_index: ?usize,
-    active_name: []const u8,
-    available: u16,
-) bool {
+fn listFits(snapshot: *const workspace_list.Snapshot, active_index: ?usize, active_name: []const u8, available: u16) bool {
     return listWidth(snapshot, active_index, active_name) <= available;
 }
 
-fn listWidth(
-    snapshot: *const workspace_list.Snapshot,
-    active_index: ?usize,
-    active_name: []const u8,
-) u16 {
+fn listWidth(snapshot: *const workspace_list.Snapshot, active_index: ?usize, active_name: []const u8) u16 {
     var total: u16 = 0;
     for (0..snapshot.count) |index| {
         total +|= ui.measure(workspaceNameAt(snapshot, index, active_index, active_name)) + 2;
@@ -304,14 +299,10 @@ fn listWidth(
     return total;
 }
 
-fn workspaceNameAt(
-    snapshot: *const workspace_list.Snapshot,
-    index: usize,
-    active_index: ?usize,
-    active_name: []const u8,
-) []const u8 {
-    if (active_name.len != 0 and active_index != null and active_index.? == index)
+fn workspaceNameAt(snapshot: *const workspace_list.Snapshot, index: usize, active_index: ?usize, active_name: []const u8) []const u8 {
+    if (active_name.len != 0 and active_index != null and active_index.? == index) {
         return workspace_list.truncateName(active_name);
+    }
     return snapshot.nameAt(index);
 }
 
@@ -326,11 +317,7 @@ fn activeWorkspaceId(location: ?schema.TabLocation) ?schema.WorkspaceId {
 /// Fallback for the moment before the first workspace-list snapshot lands.
 /// Worktrees stay out of the chrome until their workflow is settled; a
 /// worktree-located client still names its container by id.
-fn workspaceLabel(
-    location: ?schema.TabLocation,
-    workspace_name: []const u8,
-    buffer: []u8,
-) []const u8 {
+fn workspaceLabel(location: ?schema.TabLocation, workspace_name: []const u8, buffer: []u8) []const u8 {
     const value = location orelse return "-";
     return switch (value.workspace) {
         .workspace => |workspace| if (workspace_name.len == 0)

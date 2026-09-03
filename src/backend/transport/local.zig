@@ -24,7 +24,9 @@ pub const LocalListener = struct {
         errdefer listener.deinit(io);
 
         const stat = try Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
-        if (stat.kind != .unix_domain_socket) return error.InvalidEndpoint;
+        if (stat.kind != .unix_domain_socket) {
+            return error.InvalidEndpoint;
+        }
         errdefer removeIfOwned(io, path, stat.inode);
 
         // The chmod must go through the path: a Unix socket descriptor does
@@ -53,12 +55,16 @@ pub const LocalListener = struct {
         const stream = try listener.listener.accept(io);
         errdefer stream.close(io);
         const peer_uid = try peerUid(stream.socket.handle);
-        if (!sameUserPeer(peer_uid, std.c.geteuid())) return error.PeerNotOwned;
+        if (!sameUserPeer(peer_uid, std.c.geteuid())) {
+            return error.PeerNotOwned;
+        }
         return .init(stream);
     }
 
     pub fn deinit(listener: *LocalListener, io: Io) void {
-        if (!listener.active) return;
+        if (!listener.active) {
+            return;
+        }
         // POSIX does not guarantee that close from another thread interrupts
         // accept. Shutdown does, and the runtime admission actor uses it as
         // the concurrent cancellation mechanism.
@@ -69,13 +75,17 @@ pub const LocalListener = struct {
     }
 
     pub fn shutdown(listener: *LocalListener) void {
-        if (!listener.active) return;
+        if (!listener.active) {
+            return;
+        }
         _ = std.c.shutdown(listener.listener.socket.handle, std.posix.SHUT.RDWR);
     }
 
     fn removeIfOwned(io: Io, path: []const u8, inode: Io.File.INode) void {
         const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch return;
-        if (stat.kind != .unix_domain_socket or stat.inode != inode) return;
+        if (stat.kind != .unix_domain_socket or stat.inode != inode) {
+            return;
+        }
         Io.Dir.deleteFileAbsolute(io, path) catch {};
     }
 };
@@ -101,15 +111,17 @@ fn peerUid(handle: std.c.fd_t) !u32 {
                 @ptrCast(&credentials),
                 &len,
             );
-            if (std.posix.errno(result) != .SUCCESS or len != @sizeOf(Credentials))
+            if (std.posix.errno(result) != .SUCCESS or len != @sizeOf(Credentials)) {
                 return error.PeerCredentialsUnavailable;
+            }
             break :linux credentials.uid;
         },
         .macos, .freebsd, .netbsd, .openbsd, .dragonfly => bsd: {
             var uid: c.uid_t = undefined;
             var gid: c.gid_t = undefined;
-            if (c.getpeereid(handle, &uid, &gid) != 0)
+            if (c.getpeereid(handle, &uid, &gid) != 0) {
                 return error.PeerCredentialsUnavailable;
+            }
             break :bsd @intCast(uid);
         },
         else => @compileError("local peer authentication is unsupported on this platform"),
@@ -136,16 +148,24 @@ const mode_format_mask: u32 = 0o170000;
 const mode_directory: u32 = 0o040000;
 
 pub fn classifyEndpointDirectory(mode: u32, uid: u32, euid: u32) DirectoryTrust {
-    if (mode & mode_format_mask != mode_directory) return .not_a_directory;
-    if (uid != euid) return .wrong_owner;
-    if (mode & 0o022 != 0) return .group_or_world_writable;
+    if (mode & mode_format_mask != mode_directory) {
+        return .not_a_directory;
+    }
+    if (uid != euid) {
+        return .wrong_owner;
+    }
+    if (mode & 0o022 != 0) {
+        return .group_or_world_writable;
+    }
     return .trusted;
 }
 
 fn validateEndpointDirectory(path: []const u8) !void {
     const directory = std.fs.path.dirname(path) orelse return error.RelativePath;
     var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    if (directory.len >= directory_buffer.len) return error.NameTooLong;
+    if (directory.len >= directory_buffer.len) {
+        return error.NameTooLong;
+    }
     @memcpy(directory_buffer[0..directory.len], directory);
     directory_buffer[directory.len] = 0;
     const directory_z = directory_buffer[0..directory.len :0];
@@ -162,7 +182,9 @@ fn directoryTrust(path: [:0]const u8) !DirectoryTrust {
     switch (builtin.os.tag) {
         .linux => {
             var stat: std.os.linux.Stat = undefined;
-            if (std.os.linux.stat(path, &stat) != 0) return error.InvalidEndpoint;
+            if (std.os.linux.stat(path, &stat) != 0) {
+                return error.InvalidEndpoint;
+            }
             return classifyEndpointDirectory(
                 @intCast(stat.mode),
                 @intCast(stat.uid),
@@ -172,10 +194,14 @@ fn directoryTrust(path: [:0]const u8) !DirectoryTrust {
         else => {
             // `std.c` exposes no plain `stat`; go through a descriptor.
             const fd = std.c.open(path, .{});
-            if (fd < 0) return error.InvalidEndpoint;
+            if (fd < 0) {
+                return error.InvalidEndpoint;
+            }
             defer _ = std.c.close(fd);
             var stat: std.c.Stat = undefined;
-            if (std.c.fstat(fd, &stat) != 0) return error.InvalidEndpoint;
+            if (std.c.fstat(fd, &stat) != 0) {
+                return error.InvalidEndpoint;
+            }
             return classifyEndpointDirectory(
                 @intCast(stat.mode),
                 @intCast(stat.uid),
@@ -186,9 +212,13 @@ fn directoryTrust(path: [:0]const u8) !DirectoryTrust {
 }
 
 fn localAddress(path: []const u8) !Io.net.UnixAddress {
-    if (!std.fs.path.isAbsolute(path)) return error.RelativePath;
+    if (!std.fs.path.isAbsolute(path)) {
+        return error.RelativePath;
+    }
     const native_address: std.c.sockaddr.un = .{ .path = undefined };
-    if (path.len >= native_address.path.len) return error.NameTooLong;
+    if (path.len >= native_address.path.len) {
+        return error.NameTooLong;
+    }
     return Io.net.UnixAddress.init(path);
 }
 
@@ -200,10 +230,14 @@ fn reclaimStaleEndpoint(io: Io, path: []const u8) !void {
         error.FileNotFound => return,
         else => |other| return other,
     };
-    if (original.kind != .unix_domain_socket) return error.InvalidEndpoint;
+    if (original.kind != .unix_domain_socket) {
+        return error.InvalidEndpoint;
+    }
 
     const socket = std.c.socket(std.c.AF.UNIX, std.c.SOCK.STREAM, 0);
-    if (socket < 0) return error.ProbeFailed;
+    if (socket < 0) {
+        return error.ProbeFailed;
+    }
     defer _ = std.c.close(socket);
 
     var address: std.c.sockaddr.un = .{ .path = undefined };
@@ -225,8 +259,9 @@ fn reclaimStaleEndpoint(io: Io, path: []const u8) !void {
                     path,
                     .{ .follow_symlinks = false },
                 ) catch return;
-                if (current.kind != .unix_domain_socket or current.inode != original.inode)
+                if (current.kind != .unix_domain_socket or current.inode != original.inode) {
                     return error.EndpointChanged;
+                }
                 try Io.Dir.deleteFileAbsolute(io, path);
                 return;
             },

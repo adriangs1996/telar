@@ -44,7 +44,9 @@ pub const GraphemeIterator = struct {
     };
 
     pub fn next(it: *GraphemeIterator) ?Cluster {
-        if (it.index >= it.bytes.len) return null;
+        if (it.index >= it.bytes.len) {
+            return null;
+        }
 
         // Almost every chrome string is ASCII. A printable ASCII byte that is
         // not followed by a multi-byte sequence cannot join a cluster (only a
@@ -75,7 +77,9 @@ pub const GraphemeIterator = struct {
 
         while (count < window and cursor < it.bytes.len) {
             const length = std.unicode.utf8ByteSequenceLength(it.bytes[cursor]) catch break;
-            if (cursor + length > it.bytes.len) break;
+            if (cursor + length > it.bytes.len) {
+                break;
+            }
             const codepoint = std.unicode.utf8Decode(it.bytes[cursor..][0..length]) catch break;
             codepoints[count] = codepoint;
             count += 1;
@@ -219,7 +223,9 @@ test "iteration terminates on every prefix of a multi byte sequence" {
         var guard: usize = 0;
         while (it.next()) |_| {
             guard += 1;
-            if (guard > sample.len + 1) return error.DidNotTerminate;
+            if (guard > sample.len + 1) {
+                return error.DidNotTerminate;
+            }
         }
     }
 }

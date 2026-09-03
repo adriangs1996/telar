@@ -26,9 +26,15 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
     // function's to free.
     var options_owned = true;
     defer if (options_owned) {
-        if (options.lua_generation) |generation| generation.deinit();
-        if (options.plugin_registry) |registry| gpa.destroy(registry);
-        if (options.trust_store) |store| gpa.destroy(store);
+        if (options.lua_generation) |generation| {
+            generation.deinit();
+        }
+        if (options.plugin_registry) |registry| {
+            gpa.destroy(registry);
+        }
+        if (options.trust_store) |store| {
+            gpa.destroy(store);
+        }
     };
 
     var tty = platform.Tty.open() catch |err| {

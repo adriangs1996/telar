@@ -245,10 +245,12 @@ pub const Delivery = struct {
         const buffer = delivery.send_buffer;
         const workspaces = sources.workspaces;
 
-        if (delivery.stopping_pending) return delivery.stage(
-            try schema.encodeRuntimeStopping(buffer),
-            .stopping,
-        );
+        if (delivery.stopping_pending) {
+            return delivery.stage(
+                try schema.encodeRuntimeStopping(buffer),
+                .stopping,
+            );
+        }
 
         if (delivery.responses.peekManagement()) |entry| {
             var history_result: ?*history.model.QueryResult = null;
@@ -270,22 +272,26 @@ pub const Delivery = struct {
             } });
         }
 
-        if (delivery.responses.resync_workspace) |workspace| return delivery.stage(
-            try schema.encodeResyncRequired(buffer, .{
-                .workspace = workspace,
-                .workspace_closed = !workspaces.containsWorkspace(workspace),
-                .previous_workspace = delivery.responses.resync_previous_workspace,
-            }),
-            .resync,
-        );
+        if (delivery.responses.resync_workspace) |workspace| {
+            return delivery.stage(
+                try schema.encodeResyncRequired(buffer, .{
+                    .workspace = workspace,
+                    .workspace_closed = !workspaces.containsWorkspace(workspace),
+                    .previous_workspace = delivery.responses.resync_previous_workspace,
+                }),
+                .resync,
+            );
+        }
 
-        if (delivery.clipboard_pending) return delivery.stage(
-            try schema.encodePaneClipboard(buffer, .{
-                .pane_id = delivery.clipboard_pane,
-                .bytes = delivery.clipboard_storage[0..delivery.clipboard_len],
-            }),
-            .clipboard,
-        );
+        if (delivery.clipboard_pending) {
+            return delivery.stage(
+                try schema.encodePaneClipboard(buffer, .{
+                    .pane_id = delivery.clipboard_pane,
+                    .bytes = delivery.clipboard_storage[0..delivery.clipboard_len],
+                }),
+                .clipboard,
+            );
+        }
 
         if (delivery.runtime_state_requested and !delivery.client_layout_sent) {
             var storage: client_layout_store.SnapshotStorage = .{};
@@ -302,7 +308,7 @@ pub const Delivery = struct {
             );
         }
 
-        if (delivery.runtime_state_requested and !delivery.proxy_status_sent)
+        if (delivery.runtime_state_requested and !delivery.proxy_status_sent) {
             return delivery.stage(
                 try schema.encodeProxyStatus(buffer, .{
                     .active = sources.proxy_active,
@@ -311,6 +317,7 @@ pub const Delivery = struct {
                 }),
                 .proxy_status,
             );
+        }
 
         // Cells win over every periodic or metadata lane. With one message in
         // flight per client, anything sent ahead of a dirty pane costs the
@@ -341,13 +348,15 @@ pub const Delivery = struct {
                     entry_storage[enriched_count].attachments = sources.manifests.attachments(entry.provider);
                 }
                 entry_storage[enriched_count].pane_index = pane_index;
-                if (workspaces.workspaceName(pane.location.workspace)) |workspace_name|
+                if (workspaces.workspaceName(pane.location.workspace)) |workspace_name| {
                     entry_storage[enriched_count].workspace_label = copyDisplayPrefix(
                         &display_storage[enriched_count].workspace,
                         workspace_name,
                     );
-                if (workspaces.tabLabel(pane.location)) |tab_label|
+                }
+                if (workspaces.tabLabel(pane.location)) |tab_label| {
                     entry_storage[enriched_count].tab_label = tab_label;
+                }
                 if (entry.title_source == .telar and pane.title.len != 0) {
                     entry_storage[enriched_count].session_title = truncateUtf8(
                         pane.title.slice(),
@@ -381,16 +390,18 @@ pub const Delivery = struct {
             delivery.system_metrics_revision_sent < sources.system_metrics.revision)
         {
             const revision = sources.system_metrics.revision;
-            if (sources.system_metrics.latest) |values| return delivery.stage(
-                try schema.encodeSystemMetrics(buffer, .{
-                    .revision = revision,
-                    .cpu_percent = values.cpu_percent,
-                    .memory_used_decigib = values.memory_used_decigib,
-                    .has_battery = values.battery_percent != null,
-                    .battery_percent = values.battery_percent orelse 0,
-                }),
-                .{ .system_metrics_revision = revision },
-            );
+            if (sources.system_metrics.latest) |values| {
+                return delivery.stage(
+                    try schema.encodeSystemMetrics(buffer, .{
+                        .revision = revision,
+                        .cpu_percent = values.cpu_percent,
+                        .memory_used_decigib = values.memory_used_decigib,
+                        .has_battery = values.battery_percent != null,
+                        .battery_percent = values.battery_percent orelse 0,
+                    }),
+                    .{ .system_metrics_revision = revision },
+                );
+            }
             delivery.system_metrics_revision_sent = revision;
         }
 
@@ -417,6 +428,10 @@ pub const Delivery = struct {
         }
 
         if (try delivery.prepareAttachment(preparation, .title)) |prepared| {
+            return prepared;
+        }
+
+        if (try delivery.prepareAttachment(preparation, .progress)) |prepared| {
             return prepared;
         }
 
@@ -472,15 +487,23 @@ pub const Delivery = struct {
                 completion.stopping_delivered = true;
             },
             .response => |response| {
-                if (response.history_result) |result| result.deinit();
-                if (response.history_output) |result| result.deinit();
-                if (response.history_stats) |result| result.deinit();
+                if (response.history_result) |result| {
+                    result.deinit();
+                }
+                if (response.history_output) |result| {
+                    result.deinit();
+                }
+                if (response.history_stats) |result| {
+                    result.deinit();
+                }
                 delivery.responses.removeAt(response.offset);
             },
             .resync => {
                 delivery.responses.resync_workspace = null;
                 delivery.responses.resync_previous_workspace = null;
-                if (comptime diagnostics.enabled) metrics.client_resyncs += 1;
+                if (comptime diagnostics.enabled) {
+                    metrics.client_resyncs += 1;
+                }
             },
             .clipboard => delivery.clipboard_pending = false,
             .client_layout => delivery.client_layout_sent = true,
@@ -537,7 +560,7 @@ pub const Delivery = struct {
         }
     }
 
-    const Lane = enum { cwd, foreground, title, cells, exit, graphics };
+    const Lane = enum { cwd, foreground, title, progress, cells, exit, graphics };
 
     fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) !?Prepared {
         const attachments = preparation.attachments;
@@ -551,12 +574,17 @@ pub const Delivery = struct {
                 .cwd => try attachment.prepareCwd(buffer),
                 .foreground => try attachment.prepareForeground(buffer),
                 .title => try attachment.prepareTitle(buffer),
+                .progress => try attachment.prepareProgress(buffer),
                 .cells => try attachment.prepareNextCells(.{ .io = preparation.io, .buffer = buffer, .metrics = preparation.metrics }),
                 .exit => try attachment.prepareExit(buffer),
                 .graphics => graphics: {
                     const frozen = attachment.hasFrozenGraphics();
-                    if (attachment.pane.ingest_pending and !frozen) break :graphics null;
-                    if (!attachment.hasGraphicsWork()) break :graphics null;
+                    if (attachment.pane.ingest_pending and !frozen) {
+                        break :graphics null;
+                    }
+                    if (!attachment.hasGraphicsWork()) {
+                        break :graphics null;
+                    }
                     if (attachment.pane.media.worker != null and !frozen) {
                         if (comptime diagnostics.enabled) {
                             preparation.metrics.graphics_stage_deferred +|= 1;
@@ -573,10 +601,12 @@ pub const Delivery = struct {
                     };
                 },
             };
-            if (candidate) |attachment_prepared| return delivery.stage(
-                attachment_prepared.bytes,
-                .{ .attachment = .{ .index = index, .prepared = attachment_prepared } },
-            );
+            if (candidate) |attachment_prepared| {
+                return delivery.stage(
+                    attachment_prepared.bytes,
+                    .{ .attachment = .{ .index = index, .prepared = attachment_prepared } },
+                );
+            }
         }
         return null;
     }
@@ -584,7 +614,9 @@ pub const Delivery = struct {
     fn stage(delivery: *Delivery, payload: []const u8, effect: Effect) Prepared {
         const ticket = delivery.next_ticket;
         delivery.next_ticket +%= 1;
-        if (delivery.next_ticket == 0) delivery.next_ticket = 1;
+        if (delivery.next_ticket == 0) {
+            delivery.next_ticket = 1;
+        }
         delivery.phase = .{ .prepared = .{ .ticket = ticket, .effect = effect } };
         return .{ .payload = payload, .ticket = ticket };
     }
@@ -592,7 +624,9 @@ pub const Delivery = struct {
 
 /// Cuts `text` to at most `limit` bytes on a UTF-8 boundary.
 fn truncateUtf8(text: []const u8, limit: usize) []const u8 {
-    if (text.len <= limit) return text;
+    if (text.len <= limit) {
+        return text;
+    }
     var end = limit;
     while (end > 0 and (text[end] & 0xc0) == 0x80) : (end -= 1) {}
     return text[0..end];
@@ -605,13 +639,17 @@ const AgentDisplayStorage = struct {
 };
 
 fn copyDisplayPrefix(output: []u8, source: []const u8) []const u8 {
-    if (!validDisplayText(source)) return output[0..0];
+    if (!validDisplayText(source)) {
+        return output[0..0];
+    }
     if (source.len <= output.len) {
         @memcpy(output[0..source.len], source);
         return output[0..source.len];
     }
     const ellipsis = "…";
-    if (output.len < ellipsis.len) return output[0..0];
+    if (output.len < ellipsis.len) {
+        return output[0..0];
+    }
     var end = output.len - ellipsis.len;
     while (end != 0 and isUtf8Continuation(source[end])) end -= 1;
     @memcpy(output[0..end], source[0..end]);
@@ -620,7 +658,9 @@ fn copyDisplayPrefix(output: []u8, source: []const u8) []const u8 {
 }
 
 fn shortenCwd(output: []u8, path: []const u8, home: ?[]const u8) []const u8 {
-    if (!validDisplayText(path)) return output[0..0];
+    if (!validDisplayText(path)) {
+        return output[0..0];
+    }
     var prefix: []const u8 = "";
     var suffix = path;
     if (home) |home_path| {
@@ -637,7 +677,9 @@ fn shortenCwd(output: []u8, path: []const u8, home: ?[]const u8) []const u8 {
         return output[0 .. prefix.len + suffix.len];
     }
     const ellipsis = "…";
-    if (output.len < ellipsis.len) return output[0..0];
+    if (output.len < ellipsis.len) {
+        return output[0..0];
+    }
     const available = output.len - ellipsis.len;
     var start = suffix.len -| available;
     while (start < suffix.len and isUtf8Continuation(suffix[start])) start += 1;
@@ -648,7 +690,9 @@ fn shortenCwd(output: []u8, path: []const u8, home: ?[]const u8) []const u8 {
 }
 
 fn validDisplayText(bytes: []const u8) bool {
-    if (bytes.len == 0 or !std.unicode.utf8ValidateSlice(bytes)) return false;
+    if (bytes.len == 0 or !std.unicode.utf8ValidateSlice(bytes)) {
+        return false;
+    }
     for (bytes) |byte| if (byte < 0x20 or byte == 0x7f) return false;
     return true;
 }

@@ -40,7 +40,9 @@ fn effects(client: *Client) host_resource_delivery.Effects {
 
 fn applyAppearance(raw_context: *anyopaque, appearance: client_model.HostAppearance) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    if (client.options.theme_locked) return;
+    if (client.options.theme_locked) {
+        return;
+    }
     const theme = switch (appearance) {
         .unknown => return,
         .light => client.appearance_themes.light orelse return,

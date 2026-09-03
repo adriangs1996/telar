@@ -49,17 +49,13 @@ pub const Pane = struct {
     cwd: []u8 = &.{},
     foreground_name: [schema.max_foreground_name_bytes]u8 = @splat(0),
     foreground_name_len: u8 = 0,
+    progress_state: schema.PaneProgressState = .remove,
+    progress_percent: ?u8 = null,
     /// Owned copy of the child's window title; empty until the runtime
     /// reports one. Allocated on change so idle panes cost nothing.
     title: []u8 = &.{},
 
-    fn init(
-        gpa: std.mem.Allocator,
-        pane_id: schema.PaneId,
-        location: schema.TabLocation,
-        size: schema.TerminalSize,
-        attached: bool,
-    ) !Pane {
+    fn init(gpa: std.mem.Allocator, pane_id: schema.PaneId, location: schema.TabLocation, size: schema.TerminalSize, attached: bool) !Pane {
         var buffer = try ui.Buffer.init(gpa, size.cols, size.rows);
         errdefer buffer.deinit();
         const damage_rows = try gpa.alloc(DamageRow, size.rows);
@@ -76,8 +72,12 @@ pub const Pane = struct {
     }
 
     fn deinit(pane: *Pane) void {
-        if (pane.cwd.len != 0) pane.gpa.free(pane.cwd);
-        if (pane.title.len != 0) pane.gpa.free(pane.title);
+        if (pane.cwd.len != 0) {
+            pane.gpa.free(pane.cwd);
+        }
+        if (pane.title.len != 0) {
+            pane.gpa.free(pane.title);
+        }
         pane.gpa.free(pane.damage_rows);
         pane.buffer.deinit();
     }
@@ -129,6 +129,21 @@ pub const Pane = struct {
         return pane.foreground_name[0..pane.foreground_name_len];
     }
 
+    /// Replaces the latest semantic progress report without allocating.
+    ///
+    /// ```zig
+    /// _ = pane.setProgress(progress);
+    /// ```
+    pub fn setProgress(pane: *Pane, progress: schema.PaneProgress) bool {
+        if (pane.progress_state == progress.state and pane.progress_percent == progress.percent) {
+            return false;
+        }
+
+        pane.progress_state = progress.state;
+        pane.progress_percent = progress.percent;
+        return true;
+    }
+
     fn setTitle(pane: *Pane, title: []const u8) !bool {
         std.debug.assert(title.len <= schema.max_pane_title_bytes);
         if (std.mem.eql(u8, pane.title, title)) {
@@ -158,9 +173,13 @@ pub const PaneMousePlan = struct {
 };
 
 fn displayCwdName(path: []const u8) []const u8 {
-    if (path.len == 0) return "";
+    if (path.len == 0) {
+        return "";
+    }
     const basename = cwdBaseName(path);
-    if (!validCwdName(basename)) return "";
+    if (!validCwdName(basename)) {
+        return "";
+    }
     return truncateCwdName(basename);
 }
 
@@ -168,21 +187,27 @@ fn cwdBaseName(path: []const u8) []const u8 {
     var end = path.len;
     while (end > 1 and isPathSeparator(path[end - 1])) end -= 1;
     const trimmed = path[0..end];
-    if (trimmed.len == 1 and isPathSeparator(trimmed[0])) return trimmed;
+    if (trimmed.len == 1 and isPathSeparator(trimmed[0])) {
+        return trimmed;
+    }
     const separator = std.mem.lastIndexOfAny(u8, trimmed, "/\\") orelse return trimmed;
     const name = trimmed[separator + 1 ..];
     return if (name.len == 0) trimmed else name;
 }
 
 fn truncateCwdName(name: []const u8) []const u8 {
-    if (name.len <= max_cwd_name_bytes) return name;
+    if (name.len <= max_cwd_name_bytes) {
+        return name;
+    }
     var end: usize = max_cwd_name_bytes;
     while (end > 0 and name[end] & 0b1100_0000 == 0b1000_0000) end -= 1;
     return name[0..end];
 }
 
 fn validCwdName(name: []const u8) bool {
-    if (!std.unicode.utf8ValidateSlice(name)) return false;
+    if (!std.unicode.utf8ValidateSlice(name)) {
+        return false;
+    }
     for (name) |byte| if (byte < 0x20 or byte == 0x7f) return false;
     return true;
 }
@@ -262,6 +287,7 @@ pub const CompositionInput = struct {
     palette: *const theme.Palette,
     copy: ?CopyProjection = null,
     bottom_reservation: ?layout_mod.PaneBottomReservation = null,
+    progress_animation_frame: u8 = 0,
     force: bool = false,
 };
 
@@ -291,6 +317,7 @@ pub const Compositor = struct {
     layout_snapshot: layout_mod.Snapshot = .{},
     panes: [max_panes]PaneProjection = undefined,
     pane_count: u8 = 0,
+    progress_animation_frame: u8 = 0,
     invalidated: bool = true,
 
     /// Creates an empty composition cache. Buffer allocation is deferred
@@ -337,6 +364,7 @@ pub const Compositor = struct {
         const options = composition.input;
         const previous_copy = compositor.copy;
         const copy_changed = !std.meta.eql(previous_copy, options.copy);
+        const progress_animation_changed = compositor.progress_animation_frame != options.progress_animation_frame;
         const border_theme: BorderTheme = .{
             .focused = options.palette.accent,
             .unfocused = options.palette.overlay0,
@@ -390,6 +418,9 @@ pub const Compositor = struct {
                     drawBorder(target, .{
                         .view = view,
                         .foreground_name = pane.foregroundName(),
+                        .progress_state = pane.progress_state,
+                        .progress_percent = pane.progress_percent,
+                        .animation_frame = options.progress_animation_frame,
                         .palette = options.palette,
                     });
                 }
@@ -441,9 +472,13 @@ pub const Compositor = struct {
                 .previous_copy = previous_copy,
                 .copy_changed = copy_changed,
             };
+            if (progress_animation_changed) {
+                try compositor.composeProgressBorders(&context, options);
+            }
             break :incremental try compositor.composeIncremental(&context);
         };
 
+        compositor.progress_animation_frame = options.progress_animation_frame;
         compositor.invalidated = false;
         return .{ .stats = stats, .commit = commit };
     }
@@ -558,6 +593,29 @@ pub const Compositor = struct {
         return stats;
     }
 
+    fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposition, options: CompositionInput) !void {
+        if (context.model.layout.count() <= 1) {
+            return;
+        }
+
+        for (compositor.layout_snapshot.views()) |view| {
+            const pane = context.model.findConst(view.pane_id) orelse continue;
+            if (pane.progress_state == .remove) {
+                continue;
+            }
+
+            drawBorder(context.target, .{
+                .view = view,
+                .foreground_name = pane.foregroundName(),
+                .progress_state = pane.progress_state,
+                .progress_percent = pane.progress_percent,
+                .animation_frame = options.progress_animation_frame,
+                .palette = options.palette,
+            });
+            _ = try syncComposedRow(context.screen, context.target, view.outer.y);
+        }
+    }
+
     fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, input: CopyChangeComposition) !void {
         const previous = copyView(context.previous_copy, input.pane.id);
         const next = copyView(compositor.copy, input.pane.id);
@@ -612,6 +670,8 @@ pub const Compositor = struct {
                 .rows = pane.buffer.h,
                 .scroll_offset = highlightedScrollOffset(compositor.copy, pane),
                 .graphics_placeholder = pane.graphics_placeholder,
+                .progress_state = pane.progress_state,
+                .progress_percent = pane.progress_percent,
             };
             next_count += 1;
         }
@@ -637,6 +697,8 @@ const PaneProjection = struct {
     rows: u16,
     scroll_offset: u32,
     graphics_placeholder: bool,
+    progress_state: schema.PaneProgressState,
+    progress_percent: ?u8,
 };
 
 const IncrementalComposition = struct {
@@ -727,7 +789,9 @@ pub const Model = struct {
 
     pub fn deinit(model: *Model) void {
         for (&model.panes) |*slot| {
-            if (slot.*) |*pane| pane.deinit();
+            if (slot.*) |*pane| {
+                pane.deinit();
+            }
             slot.* = null;
         }
         model.pane_count = 0;
@@ -747,7 +811,9 @@ pub const Model = struct {
             while (iterator.index < max_panes) {
                 const slot = &iterator.panes[iterator.index];
                 iterator.index += 1;
-                if (slot.*) |*pane| return pane;
+                if (slot.*) |*pane| {
+                    return pane;
+                }
             }
             return null;
         }
@@ -772,13 +838,17 @@ pub const Model = struct {
     }
 
     pub fn find(model: *Model, pane_id: schema.PaneId) ?*Pane {
-        if (pane_id == .invalid) return null;
+        if (pane_id == .invalid) {
+            return null;
+        }
         const slot = model.pane_index.get(schema.id.raw(pane_id)) orelse return null;
         return &model.panes[slot].?;
     }
 
     pub fn findConst(model: *const Model, pane_id: schema.PaneId) ?*const Pane {
-        if (pane_id == .invalid) return null;
+        if (pane_id == .invalid) {
+            return null;
+        }
         const slot = model.pane_index.get(schema.id.raw(pane_id)) orelse return null;
         return &model.panes[slot].?;
     }
@@ -820,27 +890,17 @@ pub const Model = struct {
         return if (try pane.setTitle(title)) .display_changed else .unchanged;
     }
 
-    pub fn addRoot(
-        model: *Model,
-        pane_id: schema.PaneId,
-        location: schema.TabLocation,
-        size: schema.TerminalSize,
-    ) !void {
-        if (model.pane_count != 0) return error.ModelNotEmpty;
+    pub fn addRoot(model: *Model, pane_id: schema.PaneId, location: schema.TabLocation, size: schema.TerminalSize) !void {
+        if (model.pane_count != 0) {
+            return error.ModelNotEmpty;
+        }
         try model.insertPane(pane_id, location, size, true);
         errdefer _ = model.removePane(pane_id);
         try model.layout.addRoot(pane_id);
         model.location = location;
     }
 
-    pub fn split(
-        model: *Model,
-        existing_pane: schema.PaneId,
-        new_pane: schema.PaneId,
-        location: schema.TabLocation,
-        axis: layout_mod.Axis,
-        area: ui.Rect,
-    ) !void {
+    pub fn split(model: *Model, existing_pane: schema.PaneId, new_pane: schema.PaneId, location: schema.TabLocation, axis: layout_mod.Axis, area: ui.Rect) !void {
         const prospective = model.prospectiveSplit(existing_pane, axis, area) orelse
             return error.PaneTooSmall;
         const size = rectSize(prospective.new_content) orelse return error.PaneTooSmall;
@@ -858,13 +918,10 @@ pub const Model = struct {
     /// ```zig
     /// try model.addDiscovered(pane_id, location, area);
     /// ```
-    pub fn addDiscovered(
-        model: *Model,
-        pane_id: schema.PaneId,
-        location: schema.TabLocation,
-        area: ui.Rect,
-    ) !void {
-        if (model.find(pane_id) != null) return;
+    pub fn addDiscovered(model: *Model, pane_id: schema.PaneId, location: schema.TabLocation, area: ui.Rect) !void {
+        if (model.find(pane_id) != null) {
+            return;
+        }
         const focused = model.layout.focused() orelse {
             const size = rectSize(area) orelse placeholder_size;
             try model.insertPane(pane_id, location, size, false);
@@ -883,27 +940,24 @@ pub const Model = struct {
         try model.layout.split(focused, pane_id, .horizontal);
     }
 
-    pub fn restoreDisplayOrder(
-        model: *Model,
-        pane_ids: []const schema.PaneId,
-        focused_pane: schema.PaneId,
-    ) !void {
-        if (pane_ids.len != model.pane_count) return error.UnexpectedPaneCount;
+    pub fn restoreDisplayOrder(model: *Model, pane_ids: []const schema.PaneId, focused_pane: schema.PaneId) !void {
+        if (pane_ids.len != model.pane_count) {
+            return error.UnexpectedPaneCount;
+        }
         for (pane_ids) |pane_id|
             if (model.find(pane_id) == null) return error.PaneNotFound;
         try model.layout.restoreDisplayOrder(pane_ids, focused_pane);
     }
 
-    pub fn restoreSavedLayout(
-        model: *Model,
-        saved: layout_mod.Layout,
-        pane_ids: []const schema.PaneId,
-        focused_pane: schema.PaneId,
-    ) bool {
-        if (pane_ids.len != model.pane_count) return false;
+    pub fn restoreSavedLayout(model: *Model, saved: layout_mod.Layout, pane_ids: []const schema.PaneId, focused_pane: schema.PaneId) bool {
+        if (pane_ids.len != model.pane_count) {
+            return false;
+        }
         for (pane_ids) |pane_id|
             if (model.find(pane_id) == null) return false;
-        if (!model.layout.restoreSaved(saved, pane_ids, focused_pane)) return false;
+        if (!model.layout.restoreSaved(saved, pane_ids, focused_pane)) {
+            return false;
+        }
         return true;
     }
 
@@ -916,55 +970,57 @@ pub const Model = struct {
         var removed = false;
         for (&model.panes) |*slot| {
             const pane = if (slot.*) |*value| value else continue;
-            if (pane.id != pane_id) continue;
+            if (pane.id != pane_id) {
+                continue;
+            }
             pane.deinit();
             slot.* = null;
             model.pane_count -= 1;
             removed = true;
             break;
         }
-        if (removed) model.pane_index.remove(schema.id.raw(pane_id));
+        if (removed) {
+            model.pane_index.remove(schema.id.raw(pane_id));
+        }
         _ = model.layout.remove(pane_id);
-        if (model.pane_count == 0) model.location = null;
+        if (model.pane_count == 0) {
+            model.location = null;
+        }
         return removed;
     }
 
     pub fn focusPane(model: *Model, pane_id: schema.PaneId) bool {
-        if (!model.layout.focusPane(pane_id)) return false;
+        if (!model.layout.focusPane(pane_id)) {
+            return false;
+        }
         return true;
     }
 
-    pub fn focusDirection(
-        model: *Model,
-        direction: layout_mod.Direction,
-        area: ui.Rect,
-    ) ?schema.PaneId {
+    pub fn focusDirection(model: *Model, direction: layout_mod.Direction, area: ui.Rect) ?schema.PaneId {
         _ = model.layout.focused() orelse return null;
         const focused = model.layout.focusDirection(direction, area) orelse return null;
         return focused;
     }
 
-    pub fn resizeFocused(
-        model: *Model,
-        direction: layout_mod.Direction,
-        area: ui.Rect,
-    ) bool {
-        if (!model.layout.resizeFocused(direction, area)) return false;
+    pub fn resizeFocused(model: *Model, direction: layout_mod.Direction, area: ui.Rect) bool {
+        if (!model.layout.resizeFocused(direction, area)) {
+            return false;
+        }
         return true;
     }
 
     pub fn toggleFullscreen(model: *Model) bool {
-        if (!model.layout.toggleFullscreen()) return false;
+        if (!model.layout.toggleFullscreen()) {
+            return false;
+        }
         return true;
     }
 
-    pub fn applyFrame(
-        model: *Model,
-        frame: schema.frame.FrameView,
-    ) !frame_apply.Applied {
+    pub fn applyFrame(model: *Model, frame: schema.frame.FrameView) !frame_apply.Applied {
         const pane = model.find(frame.pane_id) orelse return error.PaneNotFound;
-        if (frame.base_frame_id != 0 and frame.base_frame_id != pane.applied_frame_id)
+        if (frame.base_frame_id != 0 and frame.base_frame_id != pane.applied_frame_id) {
             return error.FrameBaseMismatch;
+        }
         const resized = pane.buffer.w != frame.cols or pane.buffer.h != frame.rows;
         const replacement_damage = if (resized)
             try model.gpa.alloc(DamageRow, frame.rows)
@@ -988,11 +1044,7 @@ pub const Model = struct {
         return applied;
     }
 
-    pub fn contentSize(
-        model: *Model,
-        pane_id: schema.PaneId,
-        area: ui.Rect,
-    ) ?schema.TerminalSize {
+    pub fn contentSize(model: *Model, pane_id: schema.PaneId, area: ui.Rect) ?schema.TerminalSize {
         const view = model.layoutSnapshot(area).find(pane_id) orelse return null;
         var size = rectSize(view.content) orelse return null;
         size.cell_width_px = model.cell_width_px;
@@ -1000,11 +1052,7 @@ pub const Model = struct {
         return size;
     }
 
-    pub fn viewForPane(
-        model: *Model,
-        pane_id: schema.PaneId,
-        area: ui.Rect,
-    ) ?layout_mod.View {
+    pub fn viewForPane(model: *Model, pane_id: schema.PaneId, area: ui.Rect) ?layout_mod.View {
         return model.layoutSnapshot(area).find(pane_id);
     }
 
@@ -1053,17 +1101,14 @@ pub const Model = struct {
         return &model.layout_snapshot;
     }
 
-    pub fn prospectiveSplit(
-        model: *Model,
-        pane_id: schema.PaneId,
-        axis: layout_mod.Axis,
-        area: ui.Rect,
-    ) ?layout_mod.ProspectiveSplit {
+    pub fn prospectiveSplit(model: *Model, pane_id: schema.PaneId, axis: layout_mod.Axis, area: ui.Rect) ?layout_mod.ProspectiveSplit {
         return model.layoutSnapshot(area).prospectiveSplit(pane_id, axis, model.pane_count);
     }
 
     pub fn setCellSize(model: *Model, width: u16, height: u16) void {
-        if (model.cell_width_px == width and model.cell_height_px == height) return;
+        if (model.cell_width_px == width and model.cell_height_px == height) {
+            return;
+        }
         model.cell_width_px = width;
         model.cell_height_px = height;
     }
@@ -1075,7 +1120,9 @@ pub const Model = struct {
     /// ```
     pub fn setGraphicsPlaceholder(model: *Model, pane_id: schema.PaneId, visible: bool) bool {
         const pane = model.find(pane_id) orelse return false;
-        if (pane.graphics_placeholder == visible) return false;
+        if (pane.graphics_placeholder == visible) {
+            return false;
+        }
         pane.graphics_placeholder = visible;
 
         return true;
@@ -1103,16 +1150,16 @@ pub const Model = struct {
         }
     }
 
-    fn insertPane(
-        model: *Model,
-        pane_id: schema.PaneId,
-        location: schema.TabLocation,
-        size: schema.TerminalSize,
-        attached: bool,
-    ) !void {
-        if (pane_id == .invalid) return error.InvalidPaneId;
-        if (model.find(pane_id) != null) return error.DuplicatePane;
-        if (model.pane_count == max_panes) return error.PaneLimitReached;
+    fn insertPane(model: *Model, pane_id: schema.PaneId, location: schema.TabLocation, size: schema.TerminalSize, attached: bool) !void {
+        if (pane_id == .invalid) {
+            return error.InvalidPaneId;
+        }
+        if (model.find(pane_id) != null) {
+            return error.DuplicatePane;
+        }
+        if (model.pane_count == max_panes) {
+            return error.PaneLimitReached;
+        }
         for (&model.panes, 0..) |*slot, slot_index| {
             if (slot.* == null) {
                 slot.* = try Pane.init(model.gpa, pane_id, location, size, attached);
@@ -1167,8 +1214,9 @@ fn syncPaneRange(range: PaneRange) !usize {
         var x = range.start;
         while (x < range.end) {
             var projected = source_row[x];
-            if (selection.selected(x, absolute_y))
+            if (selection.selected(x, absolute_y)) {
                 projected.style.flags.inverse = !projected.style.flags.inverse;
+            }
             if (projected.eqlPublic(&composed_row[x])) {
                 x += 1;
                 continue;
@@ -1176,9 +1224,12 @@ fn syncPaneRange(range: PaneRange) !usize {
             const run_start = x;
             while (x < range.end) : (x += 1) {
                 projected = source_row[x];
-                if (selection.selected(x, absolute_y))
+                if (selection.selected(x, absolute_y)) {
                     projected.style.flags.inverse = !projected.style.flags.inverse;
-                if (projected.eqlPublic(&composed_row[x])) break;
+                }
+                if (projected.eqlPublic(&composed_row[x])) {
+                    break;
+                }
                 composed_row[x] = projected;
             }
             const count: u16 = x - run_start;
@@ -1205,16 +1256,22 @@ const PaneCursor = struct {
 
 fn setPaneCursor(screen: *term.Screen, pane: *const Pane, projection: PaneCursor) void {
     if (projection.copy) |selection| {
-        if (selection.cursor.y < pane.scroll.offset or selection.cursor.x >= projection.content.w) return;
+        if (selection.cursor.y < pane.scroll.offset or selection.cursor.x >= projection.content.w) {
+            return;
+        }
         const visible_y = selection.cursor.y - pane.scroll.offset;
-        if (visible_y >= projection.content.h) return;
+        if (visible_y >= projection.content.h) {
+            return;
+        }
         screen.cursor = .{
             .x = projection.content.x + selection.cursor.x,
             .y = projection.content.y + @as(u16, @intCast(visible_y)),
         };
         return;
     }
-    if (!pane.cursor.visible or pane.cursor.x >= projection.content.w or pane.cursor.y >= projection.content.h) return;
+    if (!pane.cursor.visible or pane.cursor.x >= projection.content.w or pane.cursor.y >= projection.content.h) {
+        return;
+    }
     screen.cursor = .{
         .x = projection.content.x + pane.cursor.x,
         .y = projection.content.y + pane.cursor.y,
@@ -1244,17 +1301,38 @@ fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
     return damaged;
 }
 
+fn syncComposedRow(screen: *term.Screen, composed: *const ui.Buffer, y: u16) !usize {
+    std.debug.assert(screen.sizeMatches(composed.w, composed.h));
+    if (y >= composed.h) {
+        return 0;
+    }
+
+    const row_start = @as(usize, y) * composed.w;
+    const source_row = composed.cells[row_start..][0..composed.w];
+    var sink: term.PatchSink = .{
+        .screen = screen,
+        .source_row = source_row,
+        .base = row_start,
+    };
+    return diff.syncRow(source_row, screen.back.cells[row_start..][0..composed.w], 0, composed.w, &sink);
+}
+
 /// The buffer a discovered pane keeps while the layout gives it no content.
 const placeholder_size: schema.TerminalSize = .{ .cols = 1, .rows = 1 };
 
 pub fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
-    if (rect.w == 0 or rect.h == 0) return null;
+    if (rect.w == 0 or rect.h == 0) {
+        return null;
+    }
     return .{ .cols = rect.w, .rows = rect.h };
 }
 
 const BorderInput = struct {
     view: layout_mod.View,
     foreground_name: []const u8,
+    progress_state: schema.PaneProgressState,
+    progress_percent: ?u8,
+    animation_frame: u8,
     palette: *const theme.Palette,
 };
 
@@ -1270,10 +1348,68 @@ fn drawBorder(buffer: *ui.Buffer, input: BorderInput) void {
         .{ input.view.display_index, if (input.foreground_name.len == 0) "shell" else input.foreground_name },
     ) catch " pane ";
     buffer.box(input.view.outer, style, text);
+    drawProgress(buffer, input, ui.measure(text));
+}
+
+fn drawProgress(buffer: *ui.Buffer, input: BorderInput, title_width: u16) void {
+    if (input.progress_state == .remove or input.view.outer.w < 8) {
+        return;
+    }
+
+    const start = input.view.outer.x + 2 + @min(title_width, input.view.outer.w -| 4);
+    const right = input.view.outer.x + input.view.outer.w - 1;
+    if (start >= right) {
+        return;
+    }
+
+    const width = right - start;
+    const color = switch (input.progress_state) {
+        .@"error" => input.palette.red,
+        .pause => input.palette.yellow,
+        else => input.palette.teal,
+    };
+    const progress_style: ui.Style = .{ .fg = color, .flags = .{ .bold = true } };
+    const head = switch (input.progress_state) {
+        .@"error" => "×",
+        .pause => "Ⅱ",
+        else => if (input.animation_frame % 2 == 0) "◆" else "◇",
+    };
+    const position: u16 = switch (input.progress_state) {
+        .indeterminate => bouncingPosition(width, input.animation_frame),
+        .set, .pause => @intCast((@as(u32, width - 1) * (input.progress_percent orelse 0)) / 100),
+        .@"error" => if (input.progress_percent) |percent|
+            @intCast((@as(u32, width - 1) * percent) / 100)
+        else
+            width - 1,
+        .remove => unreachable,
+    };
+    if (input.progress_state != .indeterminate) {
+        var x: u16 = 0;
+        while (x < position) : (x += 1) {
+            buffer.setCell(start + x, input.view.outer.y, "━", 1, progress_style);
+        }
+    } else if (position > 0) {
+        buffer.setCell(start + position - 1, input.view.outer.y, "·", 1, progress_style);
+    }
+    buffer.setCell(start + position, input.view.outer.y, head, 1, progress_style);
+    if (input.progress_state == .indeterminate and position + 1 < width) {
+        buffer.setCell(start + position + 1, input.view.outer.y, "·", 1, progress_style);
+    }
+}
+
+fn bouncingPosition(width: u16, frame: u8) u16 {
+    if (width <= 1) {
+        return 0;
+    }
+
+    const phase: u16 = if (frame < 128) frame else 255 - @as(u16, frame);
+    return @intCast((@as(u32, width - 1) * phase) / 127);
 }
 
 fn drawGraphicsPlaceholder(buffer: *ui.Buffer, area: ui.Rect, palette: *const theme.Palette) void {
-    if (area.w == 0 or area.h == 0) return;
+    if (area.w == 0 or area.h == 0) {
+        return;
+    }
     const label = "[graphics unavailable]";
     const width = @min(area.w, ui.measure(label));
     const x = area.x + (area.w - width) / 2;
@@ -1283,6 +1419,45 @@ fn drawGraphicsPlaceholder(buffer: *ui.Buffer, area: ui.Rect, palette: *const th
         .bg = palette.surface_dim,
         .flags = .{ .bold = true },
     });
+}
+
+test "progress thread weaves determinate state and moves indeterminate shuttle" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 32, 3);
+    defer buffer.deinit();
+    const view: layout_mod.View = .{
+        .pane_id = @enumFromInt(1),
+        .outer = .{ .x = 0, .y = 0, .w = 32, .h = 3 },
+        .content = .{ .x = 1, .y = 1, .w = 30, .h = 1 },
+        .focused = true,
+        .display_index = 1,
+    };
+
+    drawBorder(&buffer, .{
+        .view = view,
+        .foreground_name = "zsh",
+        .progress_state = .set,
+        .progress_percent = 50,
+        .animation_frame = 0,
+        .palette = &theme.default_theme.palette,
+    });
+    var woven = false;
+    var shuttle = false;
+    for (buffer.cells[0..buffer.w]) |cell| {
+        woven = woven or std.mem.eql(u8, cell.text(), "━");
+        shuttle = shuttle or std.mem.eql(u8, cell.text(), "◆");
+    }
+    try std.testing.expect(woven);
+    try std.testing.expect(shuttle);
+
+    drawBorder(&buffer, .{
+        .view = view,
+        .foreground_name = "zsh",
+        .progress_state = .indeterminate,
+        .progress_percent = null,
+        .animation_frame = 26,
+        .palette = &theme.default_theme.palette,
+    });
+    try std.testing.expectEqualStrings("◆", buffer.at(13, 0).?.text());
 }
 
 const TestingComposition = struct {

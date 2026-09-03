@@ -80,7 +80,9 @@ pub const TabDescriptorIterator = struct {
     remaining: u16,
 
     pub fn next(iterator: *TabDescriptorIterator) !?TabDescriptor {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         return .{
             .tab_id = try id.tab(try iterator.decoder.readInt(u64)),
@@ -139,7 +141,9 @@ pub const WorkspaceListIterator = struct {
     remaining: u16,
 
     pub fn next(iterator: *WorkspaceListIterator) !?WorkspaceListEntry {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         return try decodeWorkspaceListEntry(&iterator.decoder);
     }
@@ -148,14 +152,17 @@ pub const WorkspaceListIterator = struct {
 /// A close that removed a workspace names the surviving predecessor; any
 /// other close must not.
 pub fn validateWorkspaceClosure(workspace: WorkspaceLocation, workspace_closed: bool, previous_workspace: ?WorkspaceId) !void {
-    if (!workspace_closed and previous_workspace != null)
+    if (!workspace_closed and previous_workspace != null) {
         return error.UnexpectedPreviousWorkspace;
+    }
     if (previous_workspace) |previous| {
         const closed = switch (workspace) {
             .workspace => |workspace_id| workspace_id,
             .worktree => return error.InvalidWorkspaceSuccessor,
         };
-        if (previous == closed) return error.InvalidWorkspaceSuccessor;
+        if (previous == closed) {
+            return error.InvalidWorkspaceSuccessor;
+        }
     }
 }
 
@@ -216,7 +223,9 @@ pub fn encodeRequestWorkspaceSnapshot(buffer: []u8, message: RequestWorkspaceSna
 pub fn encodeWorkspaceSnapshot(buffer: []u8, message: WorkspaceSnapshot) ![]const u8 {
     try validateRequestId(message.request_id);
     try validateBytes(message.name, types.max_workspace_name_bytes, false);
-    if (message.tabs.len > types.max_tabs_per_workspace) return error.TooManyTabs;
+    if (message.tabs.len > types.max_tabs_per_workspace) {
+        return error.TooManyTabs;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.workspace_snapshot));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -224,9 +233,15 @@ pub fn encodeWorkspaceSnapshot(buffer: []u8, message: WorkspaceSnapshot) ![]cons
     try encoder.writeSized16(message.name);
     try encoder.writeInt(u16, @intCast(message.tabs.len));
     for (message.tabs, 0..) |tab, index| {
-        if (tab.tab_id == .invalid) return error.InvalidTabId;
-        if (tab.position != index) return error.InvalidTabPosition;
-        if (tab.pane_count > types.max_panes_per_tab) return error.TooManyPanes;
+        if (tab.tab_id == .invalid) {
+            return error.InvalidTabId;
+        }
+        if (tab.position != index) {
+            return error.InvalidTabPosition;
+        }
+        if (tab.pane_count > types.max_panes_per_tab) {
+            return error.TooManyPanes;
+        }
         try validateTabLabel(tab.label, false);
         try encoder.writeInt(u64, id.raw(tab.tab_id));
         try encoder.writeInt(u16, tab.position);
@@ -242,15 +257,21 @@ pub fn decodeWorkspaceSnapshot(decoder: *wire.Decoder) !WorkspaceSnapshotView {
     const name = try decoder.readSized16();
     try validateBytes(name, types.max_workspace_name_bytes, false);
     const tab_count = try decoder.readInt(u16);
-    if (tab_count > types.max_tabs_per_workspace) return error.InvalidTabCount;
+    if (tab_count > types.max_tabs_per_workspace) {
+        return error.InvalidTabCount;
+    }
     const tabs_start = decoder.index;
     var seen: [types.max_tabs_per_workspace]id.TabId = undefined;
     for (0..tab_count) |index| {
         const tab_id = try id.tab(try decoder.readInt(u64));
         const position = try decoder.readInt(u16);
-        if (position != index) return error.InvalidTabPosition;
+        if (position != index) {
+            return error.InvalidTabPosition;
+        }
         const pane_count = try decoder.readInt(u16);
-        if (pane_count > types.max_panes_per_tab) return error.TooManyPanes;
+        if (pane_count > types.max_panes_per_tab) {
+            return error.TooManyPanes;
+        }
         const label = try decoder.readSized16();
         try validateTabLabel(label, false);
         for (seen[0..index]) |previous| if (previous == tab_id) return error.DuplicateTab;
@@ -275,19 +296,29 @@ pub fn encodeResyncRequired(buffer: []u8, message: ResyncRequired) ![]const u8 {
 }
 
 pub fn encodeWorkspaceList(buffer: []u8, message: WorkspaceList) ![]const u8 {
-    if (message.revision == 0) return error.InvalidWorkspaceListRevision;
-    if (message.entries.len > types.max_workspace_list_entries) return error.TooManyWorkspaces;
+    if (message.revision == 0) {
+        return error.InvalidWorkspaceListRevision;
+    }
+    if (message.entries.len > types.max_workspace_list_entries) {
+        return error.TooManyWorkspaces;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.workspace_list));
     try encoder.writeInt(u64, message.revision);
     try encoder.writeInt(u16, @intCast(message.entries.len));
     for (message.entries, 0..) |entry, index| {
-        if (entry.workspace == .invalid) return error.InvalidWorkspaceId;
+        if (entry.workspace == .invalid) {
+            return error.InvalidWorkspaceId;
+        }
         try validateBytes(entry.name, types.max_workspace_name_bytes, false);
         try validateBytes(entry.path, types.max_cwd_bytes, false);
-        if (entry.tab_count > types.max_tabs_per_workspace) return error.TooManyTabs;
+        if (entry.tab_count > types.max_tabs_per_workspace) {
+            return error.TooManyTabs;
+        }
         for (message.entries[0..index]) |previous| {
-            if (previous.workspace == entry.workspace) return error.DuplicateWorkspace;
+            if (previous.workspace == entry.workspace) {
+                return error.DuplicateWorkspace;
+            }
         }
         try encoder.writeInt(u64, id.raw(entry.workspace));
         try encoder.writeSized16(entry.name);
@@ -302,15 +333,21 @@ pub fn encodeWorkspaceList(buffer: []u8, message: WorkspaceList) ![]const u8 {
 
 pub fn decodeWorkspaceList(decoder: *wire.Decoder) !WorkspaceListView {
     const revision = try decoder.readInt(u64);
-    if (revision == 0) return error.InvalidWorkspaceListRevision;
+    if (revision == 0) {
+        return error.InvalidWorkspaceListRevision;
+    }
     const entry_count = try decoder.readInt(u16);
-    if (entry_count > types.max_workspace_list_entries) return error.TooManyWorkspaces;
+    if (entry_count > types.max_workspace_list_entries) {
+        return error.TooManyWorkspaces;
+    }
     const entries_start = decoder.index;
     var seen: [types.max_workspace_list_entries]WorkspaceId = undefined;
     for (0..entry_count) |index| {
         const entry = try decodeWorkspaceListEntry(decoder);
         for (seen[0..index]) |previous| {
-            if (previous == entry.workspace) return error.DuplicateWorkspace;
+            if (previous == entry.workspace) {
+                return error.DuplicateWorkspace;
+            }
         }
         seen[index] = entry.workspace;
     }
@@ -328,7 +365,9 @@ fn decodeWorkspaceListEntry(decoder: *wire.Decoder) !WorkspaceListEntry {
     const path = try decoder.readSized16();
     try validateBytes(path, types.max_cwd_bytes, false);
     const tab_count = try decoder.readInt(u16);
-    if (tab_count > types.max_tabs_per_workspace) return error.TooManyTabs;
+    if (tab_count > types.max_tabs_per_workspace) {
+        return error.TooManyTabs;
+    }
     const branch = try decoder.readSized16();
     try validateBytes(branch, types.max_git_branch_bytes, true);
     const dirty = try decoder.readBool();

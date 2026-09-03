@@ -33,8 +33,12 @@ pub fn SlotIndex(comptime capacity: usize) type {
             var probe = std.hash.int(key) % capacity;
             while (true) : (probe = (probe + 1) % capacity) {
                 const found = index.keys[probe];
-                if (found == key) return index.slots[probe];
-                if (found == empty_key) return null;
+                if (found == key) {
+                    return index.slots[probe];
+                }
+                if (found == empty_key) {
+                    return null;
+                }
             }
         }
 
@@ -46,7 +50,9 @@ pub fn SlotIndex(comptime capacity: usize) type {
                     index.keys[probe] = tombstone_key;
                     return;
                 }
-                if (found == empty_key) return;
+                if (found == empty_key) {
+                    return;
+                }
             }
         }
 

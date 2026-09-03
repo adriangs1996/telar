@@ -41,8 +41,9 @@ pub const Target = struct {
     pane_generation: u64,
 
     pub fn validate(target: Target) !void {
-        if (target.pane_id == .invalid or target.pane_generation == 0)
+        if (target.pane_id == .invalid or target.pane_generation == 0) {
             return error.InvalidAttachmentTarget;
+        }
     }
 };
 
@@ -299,27 +300,33 @@ pub const Store = struct {
     /// on the mouse/input path that requested their dismissal.
     pub fn reapRetired(store: *Store) void {
         for (&store.slots) |*maybe_slot| {
-            if (maybe_slot.* == null or !maybe_slot.*.?.retire_pending) continue;
+            if (maybe_slot.* == null or !maybe_slot.*.?.retire_pending) {
+                continue;
+            }
             store.freeSlot(maybe_slot);
         }
     }
 
-    pub fn configure(
-        store: *Store,
-        support: kitty.Support,
-        cell_width: u16,
-        cell_height: u16,
-    ) bool {
+    pub fn configure(store: *Store, support: kitty.Support, cell_width: u16, cell_height: u16) bool {
         const supported = support == .supported;
         if (store.supported == supported and store.cell_width == cell_width and
-            store.cell_height == cell_height) return false;
-        if (!supported and store.partial != null) store.cancelPartial();
+            store.cell_height == cell_height)
+        {
+            return false;
+        }
+        if (!supported and store.partial != null) {
+            store.cancelPartial();
+        }
         store.supported = supported;
         store.cell_width = cell_width;
         store.cell_height = cell_height;
-        if (supported) for (&store.slots) |*maybe_slot| {
-            if (maybe_slot.*) |*slot| slot.image_dirty = !slot.image_emitted;
-        };
+        if (supported) {
+            for (&store.slots) |*maybe_slot| {
+                if (maybe_slot.*) |*slot| {
+                    slot.image_dirty = !slot.image_emitted;
+                }
+            }
+        }
         return true;
     }
 
@@ -330,13 +337,17 @@ pub const Store = struct {
             if (store.active_target) |active| active.pane_id else null
         else
             null;
-        if (optionalTargetEql(store.active_target, target)) return .{};
+        if (optionalTargetEql(store.active_target, target)) {
+            return .{};
+        }
         store.active_target = target;
         store.marker_deletion_pending = null;
         store.modal = null;
         if (store.partial) |index| {
             const slot = &store.slots[index].?;
-            if (!store.slotVisible(slot)) store.cancelPartial();
+            if (!store.slotVisible(slot)) {
+                store.cancelPartial();
+            }
         }
         const current_pane = if (store.visibleCount() != 0)
             if (target) |active| active.pane_id else null
@@ -374,7 +385,9 @@ pub const Store = struct {
     pub fn snapshot(store: *const Store) Snapshot {
         var result: Snapshot = .{ .modal = store.modal };
         for (store.slots) |maybe_slot| if (maybe_slot) |slot| {
-            if (!store.slotVisible(&slot)) continue;
+            if (!store.slotVisible(&slot)) {
+                continue;
+            }
             result.items[result.len] = .{
                 .id = slot.id,
                 .width = slot.width,
@@ -397,7 +410,9 @@ pub const Store = struct {
         if (result.modal) |id| {
             var found = false;
             for (result.slice()) |item| found = found or item.id == id;
-            if (!found) result.modal = null;
+            if (!found) {
+                result.modal = null;
+            }
         }
         return result;
     }
@@ -406,10 +421,14 @@ pub const Store = struct {
     pub fn adopt(store: *Store, capture: *Capture) !void {
         if (capture.png.len == 0 or capture.png.len > max_png_bytes or
             capture.width == 0 or capture.height == 0)
+        {
             return error.InvalidClipboardImage;
+        }
         const pixels = std.math.mul(u64, capture.width, capture.height) catch
             return error.ClipboardImageTooLarge;
-        if (pixels > max_pixels) return error.ClipboardImageTooLarge;
+        if (pixels > max_pixels) {
+            return error.ClipboardImageTooLarge;
+        }
         while (store.total_bytes + capture.png.len > max_retained_bytes or
             store.freeIndex() == null)
         {
@@ -440,9 +459,13 @@ pub const Store = struct {
 
     pub fn remove(store: *Store, id: Id) bool {
         for (&store.slots, 0..) |*slot, index| {
-            if (slot.* == null or slot.*.?.id != id or slot.*.?.retire_pending) continue;
+            if (slot.* == null or slot.*.?.id != id or slot.*.?.retire_pending) {
+                continue;
+            }
             store.retireAt(index);
-            if (store.modal == id) store.modal = null;
+            if (store.modal == id) {
+                store.modal = null;
+            }
             return true;
         }
         return false;
@@ -665,14 +688,20 @@ pub const Store = struct {
 
     pub fn openModal(store: *Store, id: Id) bool {
         const slot = store.find(id) orelse return false;
-        if (!store.slotVisible(slot)) return false;
-        if (store.modal == id) return false;
+        if (!store.slotVisible(slot)) {
+            return false;
+        }
+        if (store.modal == id) {
+            return false;
+        }
         store.modal = id;
         return true;
     }
 
     pub fn closeModal(store: *Store) bool {
-        if (store.modal == null) return false;
+        if (store.modal == null) {
+            return false;
+        }
         store.modal = null;
         return true;
     }
@@ -682,26 +711,40 @@ pub const Store = struct {
             slot.desired_thumbnail = null;
             slot.desired_modal = null;
         };
-        if (!store.supported or store.cell_width == 0 or store.cell_height == 0) return;
+        if (!store.supported or store.cell_width == 0 or store.cell_height == 0) {
+            return;
+        }
         for (plan.thumbnailSlice()) |item| if (store.find(item.id)) |slot| {
-            if (store.slotVisible(slot))
+            if (store.slotVisible(slot)) {
                 slot.desired_thumbnail = store.fitPlacement(slot, item.area);
+            }
         };
-        if (plan.modal) |item| if (store.find(item.id)) |slot| {
-            if (store.slotVisible(slot))
-                slot.desired_modal = store.fitPlacement(slot, item.area);
-        };
+        if (plan.modal) |item| {
+            if (store.find(item.id)) |slot| {
+                if (store.slotVisible(slot)) {
+                    slot.desired_modal = store.fitPlacement(slot, item.area);
+                }
+            }
+        }
     }
 
     pub fn damaged(store: *const Store) bool {
-        if (!store.supported) return false;
+        if (!store.supported) {
+            return false;
+        }
         if (store.abort_pending or store.partial != null or store.delete_count != 0 or
-            store.delete_all_pending) return true;
+            store.delete_all_pending)
+        {
+            return true;
+        }
         for (store.slots) |maybe_slot| if (maybe_slot) |slot| {
             const wanted = slot.desired_thumbnail != null or slot.desired_modal != null;
             if ((wanted and slot.image_dirty) or
                 !optionalPlacementEql(slot.desired_thumbnail, slot.emitted_thumbnail) or
-                !optionalPlacementEql(slot.desired_modal, slot.emitted_modal)) return true;
+                !optionalPlacementEql(slot.desired_modal, slot.emitted_modal))
+            {
+                return true;
+            }
         };
         return false;
     }
@@ -711,7 +754,9 @@ pub const Store = struct {
     }
 
     pub fn write(store: *Store, writer: *Io.Writer) Io.Writer.Error!usize {
-        if (!store.supported or !store.damaged()) return 0;
+        if (!store.supported or !store.damaged()) {
+            return 0;
+        }
         var written: usize = 0;
         if (store.abort_pending) {
             written += try kitty.writeTransmissionAbort(writer);
@@ -727,7 +772,9 @@ pub const Store = struct {
             );
             written += progress.written;
             slot.transfer_offset = progress.offset;
-            if (progress.offset != slot.png.len) return written;
+            if (progress.offset != slot.png.len) {
+                return written;
+            }
             slot.transfer_offset = 0;
             slot.image_dirty = false;
             slot.image_emitted = true;
@@ -758,7 +805,9 @@ pub const Store = struct {
         for (&store.slots, 0..) |*maybe_slot, index| {
             const slot = if (maybe_slot.*) |*value| value else continue;
             const wanted = slot.desired_thumbnail != null or slot.desired_modal != null;
-            if (!wanted or !slot.image_dirty) continue;
+            if (!wanted or !slot.image_dirty) {
+                continue;
+            }
             const progress = try kitty.writePngTransmissionChunks(
                 writer,
                 slot.image_id,
@@ -780,7 +829,9 @@ pub const Store = struct {
 
         for (&store.slots) |*maybe_slot| {
             const slot = if (maybe_slot.*) |*value| value else continue;
-            if (!slot.image_emitted) continue;
+            if (!slot.image_emitted) {
+                continue;
+            }
             written += try store.writePlacementChange(
                 writer,
                 slot,
@@ -801,28 +852,26 @@ pub const Store = struct {
         return written;
     }
 
-    fn writePlacementChange(
-        store: *Store,
-        writer: *Io.Writer,
-        slot: *Slot,
-        desired: ?kitty.OutputPlacement,
-        emitted: *?kitty.OutputPlacement,
-        placement_id: u32,
-        z: i32,
-    ) Io.Writer.Error!usize {
+    fn writePlacementChange(store: *Store, writer: *Io.Writer, slot: *Slot, desired: ?kitty.OutputPlacement, emitted: *?kitty.OutputPlacement, placement_id: u32, z: i32) Io.Writer.Error!usize {
         _ = store;
-        if (optionalPlacementEql(desired, emitted.*)) return 0;
+        if (optionalPlacementEql(desired, emitted.*)) {
+            return 0;
+        }
         var written: usize = 0;
-        if (emitted.* != null)
+        if (emitted.* != null) {
             written += try kitty.writeDeletePlacement(writer, slot.image_id, placement_id);
-        if (desired) |placement|
+        }
+        if (desired) |placement| {
             written += try kitty.writeUiPlacement(writer, slot.image_id, placement_id, placement, z);
+        }
         emitted.* = desired;
         return written;
     }
 
     fn fitPlacement(store: *const Store, slot: *const Slot, area: ui.Rect) ?kitty.OutputPlacement {
-        if (area.isEmpty()) return null;
+        if (area.isEmpty()) {
+            return null;
+        }
         const max_width_px = @as(u64, area.w) * store.cell_width;
         const max_height_px = @as(u64, area.h) * store.cell_height;
         var columns: u64 = area.w;
@@ -866,21 +915,27 @@ pub const Store = struct {
     }
 
     fn slotVisible(store: *const Store, slot: *const Slot) bool {
-        if (slot.retire_pending) return false;
+        if (slot.retire_pending) {
+            return false;
+        }
         const target = store.active_target orelse return false;
         return std.meta.eql(target, slot.target);
     }
 
     fn find(store: *Store, id: Id) ?*Slot {
         for (&store.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
-            if (slot.id == id) return slot;
+            if (slot.id == id) {
+                return slot;
+            }
         };
         return null;
     }
 
     fn findConst(store: *const Store, id: Id) ?*const Slot {
         for (&store.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
-            if (slot.id == id) return slot;
+            if (slot.id == id) {
+                return slot;
+            }
         };
         return null;
     }
@@ -891,8 +946,9 @@ pub const Store = struct {
     }
 
     fn allocateHostId(store: *Store) !u32 {
-        if (store.next_host_id == 0 or store.next_host_id > max_host_ids)
+        if (store.next_host_id == 0 or store.next_host_id > max_host_ids) {
             return error.AttachmentHostIdExhausted;
+        }
         const result = store.next_host_id;
         store.next_host_id += 1;
         return result;
@@ -914,15 +970,23 @@ pub const Store = struct {
 
     fn removeAt(store: *Store, index: usize) void {
         const slot = &store.slots[index].?;
-        if (store.partial != null and store.partial.? == index) store.cancelPartial();
-        if (slot.image_emitted or slot.transfer_offset != 0) store.queueDelete(slot.image_id);
+        if (store.partial != null and store.partial.? == index) {
+            store.cancelPartial();
+        }
+        if (slot.image_emitted or slot.transfer_offset != 0) {
+            store.queueDelete(slot.image_id);
+        }
         store.freeSlot(&store.slots[index]);
     }
 
     fn retireAt(store: *Store, index: usize) void {
         const slot = &store.slots[index].?;
-        if (store.partial != null and store.partial.? == index) store.cancelPartial();
-        if (slot.image_emitted or slot.transfer_offset != 0) store.queueDelete(slot.image_id);
+        if (store.partial != null and store.partial.? == index) {
+            store.cancelPartial();
+        }
+        if (slot.image_emitted or slot.transfer_offset != 0) {
+            store.queueDelete(slot.image_id);
+        }
         slot.desired_thumbnail = null;
         slot.desired_modal = null;
         slot.retire_pending = true;
@@ -940,7 +1004,9 @@ pub const Store = struct {
     }
 
     fn queueDelete(store: *Store, image_id: u32) void {
-        if (store.delete_all_pending) return;
+        if (store.delete_all_pending) {
+            return;
+        }
         for (store.delete_ids[0..store.delete_count]) |queued|
             if (queued == image_id) return;
         if (store.delete_count == store.delete_ids.len) {
@@ -1308,20 +1374,20 @@ fn atomicSteps(buffer: *const ui.Buffer, start: u16, end: u16, y: u16) ?u8 {
 }
 
 fn optionalTargetEql(a: ?Target, b: ?Target) bool {
-    if (a == null or b == null) return a == null and b == null;
+    if (a == null or b == null) {
+        return a == null and b == null;
+    }
     return std.meta.eql(a.?, b.?);
 }
 
 fn optionalPlacementEql(a: ?kitty.OutputPlacement, b: ?kitty.OutputPlacement) bool {
-    if (a == null or b == null) return a == null and b == null;
+    if (a == null or b == null) {
+        return a == null and b == null;
+    }
     return std.meta.eql(a.?, b.?);
 }
 
-pub fn captureClipboard(
-    gpa: std.mem.Allocator,
-    request: CaptureRequest,
-    orphan: *?*Capture,
-) !*Capture {
+pub fn captureClipboard(gpa: std.mem.Allocator, request: CaptureRequest, orphan: *?*Capture) !*Capture {
     try request.target.validate();
     std.debug.assert(orphan.* == null);
     const image = try readClipboardPng(gpa);
@@ -1347,7 +1413,9 @@ const ClipboardImage = struct {
 };
 
 fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
-    if (comptime builtin.os.tag != .macos) return error.ClipboardImageUnsupported;
+    if (comptime builtin.os.tag != .macos) {
+        return error.ClipboardImageUnsupported;
+    }
 
     var bytes: ?[*]u8 = null;
     var len: usize = 0;
@@ -1363,7 +1431,9 @@ fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
         max_pixels,
     );
     defer if (bytes) |value| {
-        if (len <= max_png_bytes) std.crypto.secureZero(u8, value[0..len]);
+        if (len <= max_png_bytes) {
+            std.crypto.secureZero(u8, value[0..len]);
+        }
         std.c.free(@ptrCast(value));
     };
     switch (result) {
@@ -1373,25 +1443,20 @@ fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
         else => return error.ClipboardReadFailed,
     }
     const source = bytes orelse return error.ClipboardReadFailed;
-    if (len == 0 or len > max_png_bytes or width == 0 or height == 0)
+    if (len == 0 or len > max_png_bytes or width == 0 or height == 0) {
         return error.InvalidClipboardImage;
+    }
     const pixels = std.math.mul(u64, width, height) catch
         return error.ClipboardImageTooLarge;
-    if (pixels > max_pixels) return error.ClipboardImageTooLarge;
+    if (pixels > max_pixels) {
+        return error.ClipboardImageTooLarge;
+    }
     const png = try gpa.alloc(u8, len);
     @memcpy(png, source[0..len]);
     return .{ .png = png, .width = width, .height = height };
 }
 
-extern fn telar_macos_clipboard_copy_png(
-    bytes: *?[*]u8,
-    len: *usize,
-    width: *u32,
-    height: *u32,
-    max_source_bytes_value: usize,
-    max_png_bytes_value: usize,
-    max_pixels_value: u64,
-) c_int;
+extern fn telar_macos_clipboard_copy_png(bytes: *?[*]u8, len: *usize, width: *u32, height: *u32, max_source_bytes_value: usize, max_png_bytes_value: usize, max_pixels_value: u64) c_int;
 
 test {
     _ = path_marker;

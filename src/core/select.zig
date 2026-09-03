@@ -29,7 +29,9 @@ pub const Point = struct {
     /// Reading order, which is what makes a range comparable at all: a
     /// selection dragged upwards has its anchor after its head.
     fn before(a: Point, b: Point) bool {
-        if (a.y != b.y) return a.y < b.y;
+        if (a.y != b.y) {
+            return a.y < b.y;
+        }
         return a.x < b.x;
     }
 };
@@ -78,10 +80,18 @@ pub const Range = struct {
             .block => x >= @min(from.x, to.x) and x <= @max(from.x, to.x) and
                 y >= from.y and y <= to.y,
             .linear => {
-                if (y < from.y or y > to.y) return false;
-                if (from.y == to.y) return x >= from.x and x <= to.x;
-                if (y == from.y) return x >= from.x;
-                if (y == to.y) return x <= to.x;
+                if (y < from.y or y > to.y) {
+                    return false;
+                }
+                if (from.y == to.y) {
+                    return x >= from.x and x <= to.x;
+                }
+                if (y == from.y) {
+                    return x >= from.x;
+                }
+                if (y == to.y) {
+                    return x <= to.x;
+                }
                 return true;
             },
         };
@@ -114,7 +124,9 @@ pub const Range = struct {
 
 fn isWordByte(cell: *const ui.Cell) bool {
     const glyph = cell.text();
-    if (glyph.len == 0) return false;
+    if (glyph.len == 0) {
+        return false;
+    }
     // Anything not a space counts, including punctuation. A path or a URL is
     // what people are usually double-clicking in a terminal, and splitting it
     // at every slash makes the gesture useless.
@@ -125,7 +137,9 @@ fn wordStart(b: *const ui.Buffer, at: Point) u16 {
     var x = at.x;
     while (x > 0) : (x -= 1) {
         const previous = cellAt(b, x - 1, at.y) orelse break;
-        if (!isWordByte(previous)) break;
+        if (!isWordByte(previous)) {
+            break;
+        }
     }
     return x;
 }
@@ -134,13 +148,17 @@ fn wordEnd(b: *const ui.Buffer, at: Point) u16 {
     var x = at.x;
     while (x + 1 < b.w) : (x += 1) {
         const next = cellAt(b, x + 1, at.y) orelse break;
-        if (!isWordByte(next)) break;
+        if (!isWordByte(next)) {
+            break;
+        }
     }
     return x;
 }
 
 fn cellAt(b: *const ui.Buffer, x: u16, y: u16) ?*const ui.Cell {
-    if (x >= b.w or y >= b.h) return null;
+    if (x >= b.w or y >= b.h) {
+        return null;
+    }
     return &b.cells[@as(usize, y) * @as(usize, b.w) + @as(usize, x)];
 }
 
@@ -157,7 +175,9 @@ fn cellAt(b: *const ui.Buffer, x: u16, y: u16) ?*const ui.Cell {
 /// never one long line - unlike a pane, where the emulator knows which breaks
 /// it invented and `blit` asks it instead.
 pub fn text(b: *const ui.Buffer, range: Range, out: []u8) []const u8 {
-    if (range.isEmpty()) return out[0..0];
+    if (range.isEmpty()) {
+        return out[0..0];
+    }
 
     const from, const to = range.ordered();
     var len: usize = 0;
@@ -167,27 +187,41 @@ pub fn text(b: *const ui.Buffer, range: Range, out: []u8) []const u8 {
         var end: ?u16 = null;
         var x: u16 = 0;
         while (x < b.w) : (x += 1) {
-            if (!range.contains(x, y)) continue;
+            if (!range.contains(x, y)) {
+                continue;
+            }
             const cell = cellAt(b, x, y) orelse continue;
-            if (cell.width == 0) continue;
-            if (isWordByte(cell)) end = x;
+            if (cell.width == 0) {
+                continue;
+            }
+            if (isWordByte(cell)) {
+                end = x;
+            }
         }
 
         if (end) |last| {
             x = 0;
             while (x <= last) : (x += 1) {
-                if (!range.contains(x, y)) continue;
+                if (!range.contains(x, y)) {
+                    continue;
+                }
                 const cell = cellAt(b, x, y) orelse continue;
-                if (cell.width == 0) continue;
+                if (cell.width == 0) {
+                    continue;
+                }
                 const bytes = cell.text();
-                if (len + bytes.len > out.len) return out[0..len];
+                if (len + bytes.len > out.len) {
+                    return out[0..len];
+                }
                 @memcpy(out[len..][0..bytes.len], bytes);
                 len += bytes.len;
             }
         }
 
         if (y < to.y) {
-            if (len + 1 > out.len) return out[0..len];
+            if (len + 1 > out.len) {
+                return out[0..len];
+            }
             out[len] = '\n';
             len += 1;
         }
@@ -390,7 +424,9 @@ test "highlighting agrees with what gets copied" {
 
     var painted: usize = 0;
     for (0..b.h) |y| for (0..b.w) |x| {
-        if (range.contains(@intCast(x), @intCast(y))) painted += 1;
+        if (range.contains(@intCast(x), @intCast(y))) {
+            painted += 1;
+        }
     };
     // "ef" + newline + "gh": four characters painted, four copied plus the
     // break the rows imply.

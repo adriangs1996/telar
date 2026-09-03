@@ -90,4 +90,5 @@ pub const ServerTag = enum(u8) {
     pane_focus_command = 0xa7,
     pane_focus_result = 0xa8,
     command_suggestion = 0xa9,
+    pane_progress = 0xaa,
 };

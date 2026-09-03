@@ -27,7 +27,9 @@ pub const ReadFrameError = Io.Reader.Error || error{
 /// Writes one complete frame. No bytes are written when the payload is too
 /// large, so callers can recover from that local programming error.
 pub fn writeFrame(writer: *Io.Writer, payload: []const u8) WriteFrameError!void {
-    if (payload.len > max_frame_size) return error.FrameTooLarge;
+    if (payload.len > max_frame_size) {
+        return error.FrameTooLarge;
+    }
 
     var prefix: [length_prefix_size]u8 = undefined;
     std.mem.writeInt(u32, &prefix, @intCast(payload.len), .little);
@@ -43,16 +45,26 @@ pub fn writeFrame(writer: *Io.Writer, payload: []const u8) WriteFrameError!void 
 pub fn readFrame(reader: *Io.Reader, buffer: []u8) ReadFrameError![]u8 {
     var prefix: [length_prefix_size]u8 = undefined;
     const prefix_len = try reader.readSliceShort(&prefix);
-    if (prefix_len == 0) return error.ConnectionClosed;
-    if (prefix_len != prefix.len) return error.UnexpectedEndOfStream;
+    if (prefix_len == 0) {
+        return error.ConnectionClosed;
+    }
+    if (prefix_len != prefix.len) {
+        return error.UnexpectedEndOfStream;
+    }
 
     const payload_len = std.mem.readInt(u32, &prefix, .little);
-    if (payload_len > max_frame_size) return error.FrameTooLarge;
-    if (payload_len > buffer.len) return error.BufferTooSmall;
+    if (payload_len > max_frame_size) {
+        return error.FrameTooLarge;
+    }
+    if (payload_len > buffer.len) {
+        return error.BufferTooSmall;
+    }
 
     const payload = buffer[0..payload_len];
     const bytes_read = try reader.readSliceShort(payload);
-    if (bytes_read != payload.len) return error.UnexpectedEndOfStream;
+    if (bytes_read != payload.len) {
+        return error.UnexpectedEndOfStream;
+    }
     return payload;
 }
 
@@ -90,13 +102,17 @@ pub const SocketChannel = struct {
     }
 
     pub fn send(channel: *SocketChannel, io: Io, payload: []const u8) WriteFrameError!void {
-        if (!channel.isActive()) return error.ConnectionClosed;
+        if (!channel.isActive()) {
+            return error.ConnectionClosed;
+        }
         var stream_writer = channel.stream.writer(io, &.{});
         try writeFrame(&stream_writer.interface, payload);
     }
 
     pub fn receive(channel: *SocketChannel, io: Io, buffer: []u8) ReadFrameError![]u8 {
-        if (!channel.isActive()) return error.ConnectionClosed;
+        if (!channel.isActive()) {
+            return error.ConnectionClosed;
+        }
         return readFrame(channel.boundReader(io), buffer);
     }
 
@@ -119,12 +135,16 @@ pub const SocketChannel = struct {
     /// Interrupts pending reads and writes without releasing the descriptor.
     /// The owner can wait for its I/O actors before calling `deinit`.
     pub fn shutdown(channel: *SocketChannel, io: Io) void {
-        if (!channel.isActive()) return;
+        if (!channel.isActive()) {
+            return;
+        }
         channel.stream.shutdown(io, .both) catch {};
     }
 
     pub fn deinit(channel: *SocketChannel, io: Io) void {
-        if (!channel.active.swap(false, .acq_rel)) return;
+        if (!channel.active.swap(false, .acq_rel)) {
+            return;
+        }
         // Closing a descriptor from another thread does not reliably wake a
         // blocking read on POSIX. Shutdown does, which lets a dead frontend
         // release its runtime connection while the reader actor is pending.
@@ -206,8 +226,12 @@ test "frames survive a reader that returns one byte at a time" {
 
         fn stream(r: *Io.Reader, w: *Io.Writer, limit: Io.Limit) Io.Reader.StreamError!usize {
             const d: *@This() = @alignCast(@fieldParentPtr("interface", r));
-            if (d.index == d.bytes.len) return error.EndOfStream;
-            if (limit.minInt(1) == 0) return 0;
+            if (d.index == d.bytes.len) {
+                return error.EndOfStream;
+            }
+            if (limit.minInt(1) == 0) {
+                return 0;
+            }
             const n = try w.write(d.bytes[d.index..][0..1]);
             d.index += n;
             return n;

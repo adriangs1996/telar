@@ -117,22 +117,11 @@ pub const State = struct {
         return initWithTheme(gpa, width, height, theme_mod.default_theme);
     }
 
-    pub fn initWithTheme(
-        gpa: std.mem.Allocator,
-        width: u16,
-        height: u16,
-        selected_theme: theme_mod.Theme,
-    ) !State {
+    pub fn initWithTheme(gpa: std.mem.Allocator, width: u16, height: u16, selected_theme: theme_mod.Theme) !State {
         return initWithAppearance(gpa, width, height, selected_theme, .unicode);
     }
 
-    pub fn initWithAppearance(
-        gpa: std.mem.Allocator,
-        width: u16,
-        height: u16,
-        selected_theme: theme_mod.Theme,
-        selected_icons: ui.icons.Theme,
-    ) !State {
+    pub fn initWithAppearance(gpa: std.mem.Allocator, width: u16, height: u16, selected_theme: theme_mod.Theme, selected_icons: ui.icons.Theme) !State {
         return .{
             .scratch = try .init(gpa, width, height),
             .regions = .calculate(width, height, .{
@@ -159,8 +148,9 @@ pub const State = struct {
     }
 
     pub fn resize(state: *State, width: u16, height: u16) !void {
-        if (state.scratch.w != width or state.scratch.h != height)
+        if (state.scratch.w != width or state.scratch.h != height) {
             try state.scratch.resize(width, height);
+        }
         state.recalculateRegions(width, height);
         state.modal_overlay_area = .{};
         state.dirty = true;
@@ -198,7 +188,9 @@ pub const State = struct {
     }
 
     pub fn setIconTheme(state: *State, selected_theme: ui.icons.Theme) void {
-        if (state.icon_theme == selected_theme) return;
+        if (state.icon_theme == selected_theme) {
+            return;
+        }
         state.icon_theme = selected_theme;
         state.dirty = true;
     }
@@ -211,7 +203,9 @@ pub const State = struct {
     }
 
     pub fn setSidebarVisible(state: *State, visible: bool) void {
-        if (state.sidebar_requested == visible) return;
+        if (state.sidebar_requested == visible) {
+            return;
+        }
         state.toggleSidebar();
     }
 
@@ -276,13 +270,7 @@ pub const State = struct {
         state.sidebar.scroll = 0;
     }
 
-    pub fn configureSidebar(
-        state: *State,
-        requested: kitty.SidebarRendering,
-        support: kitty.Support,
-        cell_width: u16,
-        cell_height: u16,
-    ) !void {
+    pub fn configureSidebar(state: *State, requested: kitty.SidebarRendering, support: kitty.Support, cell_width: u16, cell_height: u16) !void {
         const resolved = try requested.resolve(support);
         const toast_changed = state.kitty_toasts.configure(support, cell_width, cell_height);
         const modal_changed = state.kitty_modal.configure(support, cell_width, cell_height);
@@ -348,7 +336,9 @@ pub const State = struct {
     /// ```
     pub fn syncAttachmentTarget(state: *State, target: ?attachments.Target) bool {
         const change = state.attachment_store.setTarget(target);
-        if (!change.changed) return false;
+        if (!change.changed) {
+            return false;
+        }
         state.hovered = null;
         state.dirty = true;
         return change.layout_changed;
@@ -443,7 +433,10 @@ pub const State = struct {
     /// ```
     pub fn prepareGraphics(state: *State, snapshot: *const notifications.Center, media_idle: bool) !bool {
         if (!state.graphics_plan_dirty and
-            !(media_idle and state.kitty_toasts.preparationDeferred())) return false;
+            !(media_idle and state.kitty_toasts.preparationDeferred()))
+        {
+            return false;
+        }
         state.kitty_toasts.setMediaIdle(media_idle);
         state.kitty_toasts.prepareThemed(
             state.graphics_plan.toast_area,
@@ -499,16 +492,20 @@ pub const State = struct {
     /// ```
     pub fn handleMouse(state: *State, mouse: term.Event.Mouse) Interaction {
         var result: Interaction = .{};
-        if (state.attachment_store.hasModal()) result.consumed = true;
+        if (state.attachment_store.hasModal()) {
+            result.consumed = true;
+        }
         const hovered = state.hits.at(mouse.x, mouse.y);
         if (!optionalActionEql(state.hovered, hovered)) {
             state.hovered = hovered;
             state.recordInteraction();
         }
-        if (hovered) |action| switch (action) {
-            .attachment_open, .attachment_dismiss, .attachment_shelf_hold => result.consumed = true,
-            else => {},
-        };
+        if (hovered) |action| {
+            switch (action) {
+                .attachment_open, .attachment_dismiss, .attachment_shelf_hold => result.consumed = true,
+                else => {},
+            }
+        }
         if (state.sidebar_resize_active) {
             result.consumed = true;
             switch (mouse.kind) {
@@ -532,16 +529,20 @@ pub const State = struct {
 
             return result;
         }
-        if (state.regions.sidebar.contains(mouse.x, mouse.y)) switch (mouse.kind) {
-            .scroll_up => if (state.sidebar.scrollBy(-3, state.sidebarListHeight())) {
-                state.recordInteraction();
-            },
-            .scroll_down => if (state.sidebar.scrollBy(3, state.sidebarListHeight())) {
-                state.recordInteraction();
-            },
-            else => {},
-        };
-        if (mouse.kind != .press) return result;
+        if (state.regions.sidebar.contains(mouse.x, mouse.y)) {
+            switch (mouse.kind) {
+                .scroll_up => if (state.sidebar.scrollBy(-3, state.sidebarListHeight())) {
+                    state.recordInteraction();
+                },
+                .scroll_down => if (state.sidebar.scrollBy(3, state.sidebarListHeight())) {
+                    state.recordInteraction();
+                },
+                else => {},
+            }
+        }
+        if (mouse.kind != .press) {
+            return result;
+        }
         const action = hovered orelse return result;
         switch (action) {
             .toggle_sidebar => result.intent = .toggle_sidebar,
@@ -605,7 +606,9 @@ pub const State = struct {
     fn renderDiagnosticBanner(state: *State, screen: *term.Screen, diagnostic: ?[]const u8) void {
         const message = diagnostic orelse return;
         const banner = state.regions.bottom;
-        if (banner.isEmpty()) return;
+        if (banner.isEmpty()) {
+            return;
+        }
         const colors = state.palette();
         const style: ui.Style = .{
             .fg = colors.text,
@@ -625,7 +628,9 @@ pub const State = struct {
         if (!input.force and !state.dirty and !state.attachment_store.hasModal() and
             pickerPrompt(input.prompt) == null and
             !input.notifications.hasItems() and !state.toast_overlay_drawn)
+        {
             return .{};
+        }
         state.hits.clear();
         state.scratch.clear(.{});
         state.graphics_plan.icons.reset();
@@ -717,10 +722,11 @@ pub const State = struct {
                 compositor.copyArea(&state.scratch, toast_area);
             }
             if (has_toasts) {
-                if (graphical_toasts)
-                    widgets.toast.registerHits(&context, toast_area, input.notifications)
-                else
+                if (graphical_toasts) {
+                    widgets.toast.registerHits(&context, toast_area, input.notifications);
+                } else {
                     widgets.toast.render(&context, toast_area, input.notifications);
+                }
             }
         }
         var drawn_modal_area = widgets.attachment_preview.renderModal(&context, .{
@@ -778,13 +784,17 @@ pub const State = struct {
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.sidebar));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.bottom));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, attachment_area));
-        if (has_toasts or state.toast_overlay_drawn)
+        if (has_toasts or state.toast_overlay_drawn) {
             stats = addStats(stats, try syncRegion(screen, &state.scratch, toast_area));
-        if (!state.modal_overlay_area.isEmpty())
+        }
+        if (!state.modal_overlay_area.isEmpty()) {
             stats = addStats(stats, try syncRegion(screen, &state.scratch, state.modal_overlay_area));
+        }
         if (!drawn_modal_area.isEmpty() and
             !std.meta.eql(drawn_modal_area, state.modal_overlay_area))
+        {
             stats = addStats(stats, try syncRegion(screen, &state.scratch, drawn_modal_area));
+        }
         if (composed.cursor) |cursor| {
             screen.cursor = .{
                 .x = cursor.cursor_x,
@@ -998,7 +1008,9 @@ fn renderSuggestPalette(context: *widgets.Context, application: ui.Rect, sources
 }
 
 fn optionalActionEql(a: ?Action, b: ?Action) bool {
-    if (a == null or b == null) return a == null and b == null;
+    if (a == null or b == null) {
+        return a == null and b == null;
+    }
     return std.meta.eql(a.?, b.?);
 }
 
@@ -1530,7 +1542,9 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
 
     _ = try state.render(&screen, .{ .model = &model, .force = true });
     const workspace_mark = for (state.graphics_plan.icons.slice()) |mark| {
-        if (mark.icon == .workspace_menu) break mark;
+        if (mark.icon == .workspace_menu) {
+            break mark;
+        }
     } else null;
     try std.testing.expect(workspace_mark != null);
     try std.testing.expectEqualStrings(
@@ -1565,7 +1579,9 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
 
     _ = try state.render(&screen, .{ .model = &model, .force = true });
     const marker = for (state.hits.registered()) |entry| {
-        if (std.meta.activeTag(entry.action) == .toggle_workspace_list) break entry.rect;
+        if (std.meta.activeTag(entry.action) == .toggle_workspace_list) {
+            break entry.rect;
+        }
     } else null;
     try std.testing.expect(marker != null);
     try std.testing.expectEqualStrings(

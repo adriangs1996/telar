@@ -33,13 +33,7 @@ pub const Notification = struct {
     message_bytes: [schema.max_notification_message_bytes]u8 = @splat(0),
     message_len: u8,
 
-    pub fn init(
-        level: schema.NotificationLevel,
-        duration_ms: u32,
-        target: schema.NotificationTarget,
-        title_text: []const u8,
-        message_text: []const u8,
-    ) !Notification {
+    pub fn init(level: schema.NotificationLevel, duration_ms: u32, target: schema.NotificationTarget, title_text: []const u8, message_text: []const u8) !Notification {
         // Reuse the wire validator so Lua and plugins cannot construct a value
         // that the runtime will reject after the effect batch is committed.
         var validation_buffer: [
@@ -100,14 +94,22 @@ pub const CommandTab = struct {
     /// const command = try CommandTab.init(&.{"lazygit"}, "git");
     /// ```
     pub fn init(arguments: []const []const u8, tab_label: []const u8) !CommandTab {
-        if (arguments.len == 0 or arguments.len > max_arguments) return error.InvalidCommand;
-        if (tab_label.len > max_label_bytes) return error.InvalidTabLabel;
+        if (arguments.len == 0 or arguments.len > max_arguments) {
+            return error.InvalidCommand;
+        }
+        if (tab_label.len > max_label_bytes) {
+            return error.InvalidTabLabel;
+        }
 
         var command: CommandTab = .{ .argument_count = @intCast(arguments.len) };
         var offset: usize = 0;
         for (arguments, 0..) |item, index| {
-            if (item.len == 0 or offset + item.len > max_command_bytes) return error.InvalidCommand;
-            if (std.mem.indexOfScalar(u8, item, 0) != null) return error.InvalidCommand;
+            if (item.len == 0 or offset + item.len > max_command_bytes) {
+                return error.InvalidCommand;
+            }
+            if (std.mem.indexOfScalar(u8, item, 0) != null) {
+                return error.InvalidCommand;
+            }
             @memcpy(command.argument_storage[offset .. offset + item.len], item);
             command.argument_lens[index] = @intCast(item.len);
             offset += item.len;
@@ -172,74 +174,125 @@ pub const Action = union(enum) {
 
     /// Parses stable built-in action names used by configuration and tests.
     pub fn parse(name: []const u8) !Action {
-        if (std.mem.eql(u8, name, "split-horizontal"))
+        if (std.mem.eql(u8, name, "split-horizontal")) {
             return .{ .split_pane = .horizontal };
-        if (std.mem.eql(u8, name, "split-vertical"))
+        }
+        if (std.mem.eql(u8, name, "split-vertical")) {
             return .{ .split_pane = .vertical };
-        if (std.mem.eql(u8, name, "focus-left"))
+        }
+        if (std.mem.eql(u8, name, "focus-left")) {
             return .{ .focus_pane = .left };
-        if (std.mem.eql(u8, name, "focus-right"))
+        }
+        if (std.mem.eql(u8, name, "focus-right")) {
             return .{ .focus_pane = .right };
-        if (std.mem.eql(u8, name, "focus-up"))
+        }
+        if (std.mem.eql(u8, name, "focus-up")) {
             return .{ .focus_pane = .up };
-        if (std.mem.eql(u8, name, "focus-down"))
+        }
+        if (std.mem.eql(u8, name, "focus-down")) {
             return .{ .focus_pane = .down };
-        if (std.mem.eql(u8, name, "navigate-left"))
+        }
+        if (std.mem.eql(u8, name, "navigate-left")) {
             return .{ .navigate_pane = .left };
-        if (std.mem.eql(u8, name, "navigate-right"))
+        }
+        if (std.mem.eql(u8, name, "navigate-right")) {
             return .{ .navigate_pane = .right };
-        if (std.mem.eql(u8, name, "navigate-up"))
+        }
+        if (std.mem.eql(u8, name, "navigate-up")) {
             return .{ .navigate_pane = .up };
-        if (std.mem.eql(u8, name, "navigate-down"))
+        }
+        if (std.mem.eql(u8, name, "navigate-down")) {
             return .{ .navigate_pane = .down };
-        if (std.mem.eql(u8, name, "resize-left"))
+        }
+        if (std.mem.eql(u8, name, "resize-left")) {
             return .{ .resize_pane = .left };
-        if (std.mem.eql(u8, name, "resize-right"))
+        }
+        if (std.mem.eql(u8, name, "resize-right")) {
             return .{ .resize_pane = .right };
-        if (std.mem.eql(u8, name, "resize-up"))
+        }
+        if (std.mem.eql(u8, name, "resize-up")) {
             return .{ .resize_pane = .up };
-        if (std.mem.eql(u8, name, "resize-down"))
+        }
+        if (std.mem.eql(u8, name, "resize-down")) {
             return .{ .resize_pane = .down };
-        if (std.mem.eql(u8, name, "toggle-pane-fullscreen"))
+        }
+        if (std.mem.eql(u8, name, "toggle-pane-fullscreen")) {
             return .toggle_pane_fullscreen;
-        if (std.mem.eql(u8, name, "toggle-sidebar")) return .toggle_sidebar;
-        if (std.mem.eql(u8, name, "resize-sidebar-left"))
+        }
+        if (std.mem.eql(u8, name, "toggle-sidebar")) {
+            return .toggle_sidebar;
+        }
+        if (std.mem.eql(u8, name, "resize-sidebar-left")) {
             return .{ .resize_sidebar = .left };
-        if (std.mem.eql(u8, name, "resize-sidebar-right"))
+        }
+        if (std.mem.eql(u8, name, "resize-sidebar-right")) {
             return .{ .resize_sidebar = .right };
-        if (std.mem.eql(u8, name, "toggle-workspace-list")) return .toggle_workspace_list;
-        if (std.mem.eql(u8, name, "new-workspace")) return .new_workspace;
-        if (std.mem.eql(u8, name, "rename-workspace")) return .rename_workspace;
-        if (std.mem.eql(u8, name, "close-pane")) return .close_pane;
-        if (std.mem.eql(u8, name, "new-tab")) return .new_tab;
-        if (std.mem.eql(u8, name, "next-tab"))
+        }
+        if (std.mem.eql(u8, name, "toggle-workspace-list")) {
+            return .toggle_workspace_list;
+        }
+        if (std.mem.eql(u8, name, "new-workspace")) {
+            return .new_workspace;
+        }
+        if (std.mem.eql(u8, name, "rename-workspace")) {
+            return .rename_workspace;
+        }
+        if (std.mem.eql(u8, name, "close-pane")) {
+            return .close_pane;
+        }
+        if (std.mem.eql(u8, name, "new-tab")) {
+            return .new_tab;
+        }
+        if (std.mem.eql(u8, name, "next-tab")) {
             return .{ .select_tab_offset = 1 };
-        if (std.mem.eql(u8, name, "previous-tab"))
+        }
+        if (std.mem.eql(u8, name, "previous-tab")) {
             return .{ .select_tab_offset = -1 };
-        if (std.mem.eql(u8, name, "rename-tab")) return .rename_tab;
-        if (std.mem.eql(u8, name, "close-tab")) return .close_tab;
-        if (std.mem.eql(u8, name, "move-tab-previous"))
+        }
+        if (std.mem.eql(u8, name, "rename-tab")) {
+            return .rename_tab;
+        }
+        if (std.mem.eql(u8, name, "close-tab")) {
+            return .close_tab;
+        }
+        if (std.mem.eql(u8, name, "move-tab-previous")) {
             return .{ .move_tab = .previous };
-        if (std.mem.eql(u8, name, "move-tab-next"))
+        }
+        if (std.mem.eql(u8, name, "move-tab-next")) {
             return .{ .move_tab = .next };
-        if (std.mem.eql(u8, name, "detach")) return .detach;
-        if (std.mem.eql(u8, name, "copy-mode")) return .enter_copy_mode;
-        if (std.mem.eql(u8, name, "goto-picker")) return .goto_picker;
-        if (std.mem.eql(u8, name, "history-palette")) return .history_palette;
-        if (std.mem.eql(u8, name, "suggest-command")) return .suggest_command;
+        }
+        if (std.mem.eql(u8, name, "detach")) {
+            return .detach;
+        }
+        if (std.mem.eql(u8, name, "copy-mode")) {
+            return .enter_copy_mode;
+        }
+        if (std.mem.eql(u8, name, "goto-picker")) {
+            return .goto_picker;
+        }
+        if (std.mem.eql(u8, name, "history-palette")) {
+            return .history_palette;
+        }
+        if (std.mem.eql(u8, name, "suggest-command")) {
+            return .suggest_command;
+        }
 
         const prefix = "select-tab-";
         if (std.mem.startsWith(u8, name, prefix)) {
             const one_based = std.fmt.parseUnsigned(u8, name[prefix.len..], 10) catch
                 return error.UnknownAction;
-            if (one_based == 0) return error.UnknownAction;
+            if (one_based == 0) {
+                return error.UnknownAction;
+            }
             return .{ .select_tab = one_based - 1 };
         }
         const workspace_prefix = "select-workspace-";
         if (std.mem.startsWith(u8, name, workspace_prefix)) {
             const one_based = std.fmt.parseUnsigned(u8, name[workspace_prefix.len..], 10) catch
                 return error.UnknownAction;
-            if (one_based == 0) return error.UnknownAction;
+            if (one_based == 0) {
+                return error.UnknownAction;
+            }
             return .{ .select_workspace = one_based - 1 };
         }
         return error.UnknownAction;

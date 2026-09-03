@@ -60,10 +60,16 @@ pub const Sampler = struct {
             .memory_used_decigib = decigib(raw.memory_used_bytes),
             .battery_percent = raw.battery_percent,
         };
-        if (sampler.latest) |current| if (std.meta.eql(current, next)) return;
+        if (sampler.latest) |current| {
+            if (std.meta.eql(current, next)) {
+                return;
+            }
+        }
         sampler.latest = next;
         sampler.revision +%= 1;
-        if (sampler.revision == 0) sampler.revision = 1;
+        if (sampler.revision == 0) {
+            sampler.revision = 1;
+        }
     }
 };
 
@@ -122,13 +128,16 @@ const darwin = struct {
 };
 
 fn readDarwin() ?Raw {
-    if (builtin.os.tag != .macos) return null;
+    if (builtin.os.tag != .macos) {
+        return null;
+    }
     const host = darwin.mach_host_self();
 
     var cpu: [darwin.cpu_load_words]u32 = undefined;
     var cpu_count: u32 = darwin.cpu_load_words;
-    if (darwin.host_statistics64(host, darwin.HOST_CPU_LOAD_INFO, &cpu, &cpu_count) != 0)
+    if (darwin.host_statistics64(host, darwin.HOST_CPU_LOAD_INFO, &cpu, &cpu_count) != 0) {
         return null;
+    }
     const user: u64 = cpu[0];
     const system: u64 = cpu[1];
     const idle: u64 = cpu[2];
@@ -136,8 +145,9 @@ fn readDarwin() ?Raw {
 
     var vm: [darwin.vm_info_words]u32 = undefined;
     var vm_count: u32 = darwin.vm_info_words;
-    if (darwin.host_statistics64(host, darwin.HOST_VM_INFO64, &vm, &vm_count) != 0)
+    if (darwin.host_statistics64(host, darwin.HOST_VM_INFO64, &vm, &vm_count) != 0) {
         return null;
+    }
     const page_size: u64 = @intCast(darwin.getpagesize());
     const used_pages: u64 = @as(u64, vm[darwin.vm_active_word]) +
         vm[darwin.vm_wire_word] + vm[darwin.vm_compressor_word];
@@ -211,7 +221,9 @@ fn firstLine(content: []const u8) []const u8 {
 fn meminfoValue(content: []const u8, key: []const u8) ?u64 {
     var lines = std.mem.tokenizeScalar(u8, content, '\n');
     while (lines.next()) |line| {
-        if (!std.mem.startsWith(u8, line, key)) continue;
+        if (!std.mem.startsWith(u8, line, key)) {
+            continue;
+        }
         var tokens = std.mem.tokenizeScalar(u8, line[key.len..], ' ');
         const value = tokens.next() orelse return null;
         return std.fmt.parseInt(u64, value, 10) catch null;

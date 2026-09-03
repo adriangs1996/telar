@@ -412,7 +412,9 @@ pub const Repository = struct {
         _ = try workspace.renameTab(request.first_tab_id, request.first_tab_label);
 
         for (&repository.state.items) |*slot| {
-            if (slot.* != null) continue;
+            if (slot.* != null) {
+                continue;
+            }
             slot.* = workspace;
             repository.state.count += 1;
             break;
@@ -431,7 +433,9 @@ pub const Repository = struct {
     /// ```
     pub fn restoreTab(repository: *Repository, workspace_location: schema.WorkspaceLocation, tab_id: schema.TabId, label: []const u8) !void {
         const workspace = repository.find(workspace_location) orelse return error.WorkspaceNotFound;
-        if (workspace.containsTab(tab_id)) return error.DuplicateTabIdentity;
+        if (workspace.containsTab(tab_id)) {
+            return error.DuplicateTabIdentity;
+        }
         _ = try workspace.createTab(tab_id, label);
         repository.state.next_tab_id = @max(repository.state.next_tab_id, schema.id.raw(tab_id) + 1);
         state_mod.advanceRevision(repository.state);

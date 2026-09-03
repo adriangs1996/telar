@@ -44,11 +44,7 @@ const RuntimeTestChannel = struct {
     }
 };
 
-fn receiveRuntimeFrame(
-    io: std.Io,
-    connection: *core.transport.SocketChannel,
-    buffer: []u8,
-) anyerror![]u8 {
+fn receiveRuntimeFrame(io: std.Io, connection: *core.transport.SocketChannel, buffer: []u8) anyerror![]u8 {
     return connection.receive(io, buffer);
 }
 
@@ -60,9 +56,11 @@ fn waitForFile(io: std.Io, path: []const u8, attempts: usize) !bool {
     for (0..attempts) |_| {
         if (std.Io.Dir.cwd().statFile(io, path, .{})) |_| {
             return true;
-        } else |err| switch (err) {
-            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
-            else => return err,
+        } else |err| {
+            switch (err) {
+                error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
+                else => return err,
+            }
         }
     }
 
@@ -184,7 +182,9 @@ test "frontend and backend accept the same schema" {
     );
     thread.join();
 
-    if (worker.failure) |err| return err;
+    if (worker.failure) |err| {
+        return err;
+    }
     try std.testing.expectEqual(handshake.schema_id, client_response.accepted.schema);
     try std.testing.expectEqualDeep(client_response, worker.response.?);
 }
@@ -222,7 +222,9 @@ test "backend explains an incompatible schema" {
     );
     thread.join();
 
-    if (worker.failure) |err| return err;
+    if (worker.failure) |err| {
+        return err;
+    }
     try std.testing.expectEqual(
         handshake.RejectReason.incompatible_schema,
         client_response.rejected.reason,
@@ -546,7 +548,9 @@ test "runtime destroys a pane after its shell exits" {
         };
         switch (try schema.decodeServer(payload)) {
             .pane_opened => |opened| {
-                if (saw_exit) return error.ExitedPaneReattached;
+                if (saw_exit) {
+                    return error.ExitedPaneReattached;
+                }
                 pane_id = opened.pane_id;
                 location = opened.location;
                 try connection.send(io, try schema.encodePaneInput(&send_buffer, .{
@@ -611,7 +615,9 @@ test "runtime destroys a pane after its shell exits" {
             .pane_cwd, .pane_foreground => {},
             else => return error.UnexpectedTabMessage,
         }
-        if (saw_exit and saw_tab_closed and rejected_reattach and rejected_snapshot) return;
+        if (saw_exit and saw_tab_closed and rejected_reattach and rejected_snapshot) {
+            return;
+        }
     }
     return error.RuntimeDidNotExit;
 }
@@ -680,7 +686,9 @@ test "the last pane closes only its tab when the workspace has another tab" {
             .frame_id = frame.frame_id,
         })),
         .pane_exited => |exited| {
-            if (exited.pane_id != ephemeral_pane) continue;
+            if (exited.pane_id != ephemeral_pane) {
+                continue;
+            }
             try std.testing.expect(ephemeral != null);
             saw_exit = true;
         },
@@ -899,7 +907,9 @@ test "one client drives two attached panes and closes either one" {
                 }
             },
             .pane_exited => |exited| {
-                if (exited.pane_id != second_id) return error.UnexpectedPaneExit;
+                if (exited.pane_id != second_id) {
+                    return error.UnexpectedPaneExit;
+                }
                 saw_second_exit = true;
                 break;
             },
@@ -1365,8 +1375,9 @@ test "tab launch inherits cwd from a runtime-owned pane" {
             source_location = opened.location;
         },
         .pane_cwd => |cwd| {
-            if (cwd.pane_id == source_pane and std.mem.eql(u8, cwd.cwd, nested))
+            if (cwd.pane_id == source_pane and std.mem.eql(u8, cwd.cwd, nested)) {
                 source_cwd_observed = true;
+            }
         },
         .pane_frame => |frame| try connection.send(io, try schema.encodeFrameAck(
             &send_buffer,
@@ -1409,9 +1420,11 @@ test "tab launch inherits cwd from a runtime-owned pane" {
         if (std.Io.Dir.cwd().statFile(io, sentinel_path, .{})) |_| {
             written = true;
             break;
-        } else |err| switch (err) {
-            error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
-            else => return err,
+        } else |err| {
+            switch (err) {
+                error.FileNotFound => try io.sleep(.fromMilliseconds(1), .awake),
+                else => return err,
+            }
         }
     }
     try std.testing.expect(written);
@@ -2014,8 +2027,9 @@ test "runtime persists terminal-edited commands without shell integration" {
                 saw_graphics = true;
             },
             .pane_cwd => |cwd| {
-                if (cwd.pane_id == pane_id and std.mem.eql(u8, cwd.cwd, "/"))
+                if (cwd.pane_id == pane_id and std.mem.eql(u8, cwd.cwd, "/")) {
                     saw_root_cwd = true;
+                }
             },
             .pane_exited => {
                 try std.testing.expect(input_sent);
@@ -2130,10 +2144,14 @@ test "modified Enter follows the compatibility profile and child keyboard negoti
                 .frame_id = frame.frame_id,
             }));
             if (stage == stages.len) {
-                if (rowContains(&cells, "INPUT_OK")) return;
+                if (rowContains(&cells, "INPUT_OK")) {
+                    return;
+                }
                 continue;
             }
-            if (!rowContains(&cells, stages[stage].marker)) continue;
+            if (!rowContains(&cells, stages[stage].marker)) {
+                continue;
+            }
             var input_buffer: [64]u8 = undefined;
             const shifted = try frontend.input.encodeKey(
                 &input_buffer,
@@ -2196,7 +2214,9 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
     });
     var gate_released = false;
     defer {
-        if (!gate_released) release.putOneUncancelable(io, 0) catch {};
+        if (!gate_released) {
+            release.putOneUncancelable(io, 0) catch {};
+        }
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};
     }
@@ -2347,10 +2367,12 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
             },
             .graphics_snapshot => |snapshot| {
                 try store.applySnapshot(snapshot);
-                if (requested_resync) switch (snapshot.phase) {
-                    .begin => snapshot_open = true,
-                    .end => snapshot_complete = snapshot_open,
-                };
+                if (requested_resync) {
+                    switch (snapshot.phase) {
+                        .begin => snapshot_open = true,
+                        .end => snapshot_complete = snapshot_open,
+                    }
+                }
             },
             .graphics_image => |image| {
                 try store.applyImage(image);
@@ -2420,7 +2442,9 @@ test "a silent connection cannot starve later clients" {
     var silent = while (true) {
         if (frontend.transport.local.connect(io, path)) |connection| {
             break connection;
-        } else |_| try io.sleep(.fromMilliseconds(1), .awake);
+        } else |_| {
+            try io.sleep(.fromMilliseconds(1), .awake);
+        }
     };
     defer silent.deinit(io);
 
@@ -2698,7 +2722,9 @@ test "two clients observe one pane with independent frame acknowledgement" {
                 .pane_id = frame.pane_id,
                 .frame_id = frame.frame_id,
             }));
-            if (rowContains(&second_cells, "SECOND_SURVIVES")) second_saw_survives = true;
+            if (rowContains(&second_cells, "SECOND_SURVIVES")) {
+                second_saw_survives = true;
+            }
         },
         // The owner's disconnect frees the geometry lease and the runtime
         // resyncs the survivor so it can re-offer its own size.
@@ -2720,7 +2746,9 @@ test "two clients observe one pane with independent frame acknowledgement" {
                 .pane_id = frame.pane_id,
                 .frame_id = frame.frame_id,
             }));
-            if (frame.cols != 80 or frame.rows != 20) continue;
+            if (frame.cols != 80 or frame.rows != 20) {
+                continue;
+            }
             try applyFrameCells(&resized_cells, frame);
             return;
         },
@@ -2861,7 +2889,9 @@ fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
             try io.sleep(.fromMilliseconds(1), .awake);
             continue;
         };
-        if (negotiated == .accepted) return .{ .channel = connection };
+        if (negotiated == .accepted) {
+            return .{ .channel = connection };
+        }
         connection.deinit(io);
         return error.IncompatibleRuntime;
     }
@@ -2869,12 +2899,16 @@ fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
 }
 
 fn rowContains(cells: []const core.ui.Cell, needle: []const u8) bool {
-    if (needle.len > cells.len) return false;
+    if (needle.len > cells.len) {
+        return false;
+    }
     var start: usize = 0;
     while (start + needle.len <= cells.len) : (start += 1) {
         for (needle, 0..) |byte, offset| {
             const cell = &cells[start + offset];
-            if (cell.len != 1 or cell.bytes[0] != byte) break;
+            if (cell.len != 1 or cell.bytes[0] != byte) {
+                break;
+            }
         } else return true;
     }
     return false;

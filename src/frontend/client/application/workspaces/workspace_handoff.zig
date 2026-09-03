@@ -50,14 +50,16 @@ pub const SelectWorkspaceHandler = struct {
         if (!handler.model.knowsWorkspace(workspace)) {
             return false;
         }
-        if (handler.model.workspaceLocation()) |current| switch (current) {
-            .workspace => |active| {
-                if (active == workspace) {
-                    return false;
-                }
-            },
-            .worktree => {},
-        };
+        if (handler.model.workspaceLocation()) |current| {
+            switch (current) {
+                .workspace => |active| {
+                    if (active == workspace) {
+                        return false;
+                    }
+                },
+                .worktree => {},
+            }
+        }
 
         try handler.effects.request(handler.effects.context, workspace);
 

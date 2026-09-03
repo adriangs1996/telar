@@ -11,11 +11,7 @@ pub const Applied = struct {
     cells: u64 = 0,
 };
 
-pub fn applyBuffer(
-    buffer: *core.ui.Buffer,
-    cursor: *schema.frame.Cursor,
-    frame: schema.frame.FrameView,
-) !Applied {
+pub fn applyBuffer(buffer: *core.ui.Buffer, cursor: *schema.frame.Cursor, frame: schema.frame.FrameView) !Applied {
     if (frame.base_frame_id == 0 and
         (buffer.w != frame.cols or buffer.h != frame.rows))
     {
@@ -30,7 +26,9 @@ pub fn applyBuffer(
         const start: usize = span.start;
         const count: usize = span.cell_count;
         const end = std.math.add(usize, start, count) catch return error.PatchOutOfBounds;
-        if (count == 0 or end > buffer.cells.len) return error.PatchOutOfBounds;
+        if (count == 0 or end > buffer.cells.len) {
+            return error.PatchOutOfBounds;
+        }
         var cells = span.cells();
         var index = start;
         while (try cells.next()) |cell| : (index += 1) {

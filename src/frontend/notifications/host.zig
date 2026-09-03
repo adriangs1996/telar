@@ -68,8 +68,12 @@ pub fn notify(io: Io, payload: Payload) !void {
 fn copySanitized(storage: []u8, text: []const u8) u8 {
     var len: usize = 0;
     for (text) |byte| {
-        if (len == storage.len) break;
-        if (byte < 0x20 or byte == 0x7f or byte == '"' or byte == '\\') continue;
+        if (len == storage.len) {
+            break;
+        }
+        if (byte < 0x20 or byte == 0x7f or byte == '"' or byte == '\\') {
+            continue;
+        }
         storage[len] = byte;
         len += 1;
     }

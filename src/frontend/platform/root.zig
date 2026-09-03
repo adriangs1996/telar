@@ -80,8 +80,12 @@ pub const pane_leave_sequence = sequences.pane_leave;
 // means until a user reports it. This turns that into a build error on every
 // target, because the shapes are checked here rather than at each call site.
 comptime {
-    if (!@hasDecl(impl, "Tty")) @compileError("platform is missing Tty");
-    if (!@hasDecl(impl, "ResizeWatcher")) @compileError("platform is missing ResizeWatcher");
+    if (!@hasDecl(impl, "Tty")) {
+        @compileError("platform is missing Tty");
+    }
+    if (!@hasDecl(impl, "ResizeWatcher")) {
+        @compileError("platform is missing ResizeWatcher");
+    }
 
     const T = impl.Tty;
     assertFn(T, "open", fn () anyerror!T);
@@ -96,11 +100,15 @@ comptime {
     assertFn(W, "deinit", fn (*W) void);
     assertFn(W, "wait", fn (*W, Io) Io.Cancelable!void);
 
-    if (!@hasDecl(impl, "installCrashRestore"))
+    if (!@hasDecl(impl, "installCrashRestore")) {
         @compileError("platform is missing installCrashRestore");
-    if (!@hasDecl(impl, "emergencyRestore"))
+    }
+    if (!@hasDecl(impl, "emergencyRestore")) {
         @compileError("platform is missing emergencyRestore");
-    if (!@hasDecl(impl, "localTime")) @compileError("platform is missing localTime");
+    }
+    if (!@hasDecl(impl, "localTime")) {
+        @compileError("platform is missing localTime");
+    }
     assertFn(impl, "localTime", fn () LocalTime);
 }
 
@@ -117,19 +125,24 @@ test "host keyboard enhancements stay inside the alternate screen" {
 }
 
 fn assertFn(comptime T: type, comptime name: []const u8, comptime Want: type) void {
-    if (!@hasDecl(T, name)) @compileError(@typeName(T) ++ " is missing " ++ name);
+    if (!@hasDecl(T, name)) {
+        @compileError(@typeName(T) ++ " is missing " ++ name);
+    }
     const Got = @TypeOf(@field(T, name));
     const got = @typeInfo(Got).@"fn";
     const want = @typeInfo(Want).@"fn";
-    if (got.params.len != want.params.len)
+    if (got.params.len != want.params.len) {
         @compileError(@typeName(T) ++ "." ++ name ++ " takes the wrong number of arguments");
+    }
     // Return types are compared loosely: an implementation is free to return a
     // narrower error set than `anyerror`, and pinning it here would force every
     // platform to invent the same errors.
     for (got.params, want.params, 0..) |g, w, i| {
-        if (g.type != w.type) @compileError(std.fmt.comptimePrint(
-            "{s}.{s} argument {d} is {s}, expected {s}",
-            .{ @typeName(T), name, i, @typeName(g.type.?), @typeName(w.type.?) },
-        ));
+        if (g.type != w.type) {
+            @compileError(std.fmt.comptimePrint(
+                "{s}.{s} argument {d} is {s}, expected {s}",
+                .{ @typeName(T), name, i, @typeName(g.type.?), @typeName(w.type.?) },
+            ));
+        }
     }
 }

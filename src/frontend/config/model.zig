@@ -82,15 +82,14 @@ pub const CommandSpec = struct {
     }
 
     pub fn argument(command: *const CommandSpec, index: usize) ?[]const u8 {
-        if (index >= command.argument_count) return null;
+        if (index >= command.argument_count) {
+            return null;
+        }
         const start = command.offsets[index];
         return command.bytes[start .. start + command.lengths[index]];
     }
 
-    pub fn arguments(
-        command: *const CommandSpec,
-        storage: *[max_agent_description_command_args][]const u8,
-    ) []const []const u8 {
+    pub fn arguments(command: *const CommandSpec, storage: *[max_agent_description_command_args][]const u8) []const []const u8 {
         for (0..command.argument_count) |index| storage[index] = command.argument(index).?;
         return storage[0..command.argument_count];
     }
@@ -263,7 +262,9 @@ pub const RuntimeSnapshot = struct {
     session_path_len: u16 = 0,
 
     pub fn historyPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
-        if (snapshot.history_path_len == 0) return null;
+        if (snapshot.history_path_len == 0) {
+            return null;
+        }
         return snapshot.history_path_bytes[0..snapshot.history_path_len];
     }
 
@@ -273,12 +274,16 @@ pub const RuntimeSnapshot = struct {
     /// const path = snapshot.sessionPath();
     /// ```
     pub fn sessionPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
-        if (snapshot.session_path_len == 0) return null;
+        if (snapshot.session_path_len == 0) {
+            return null;
+        }
         return snapshot.session_path_bytes[0..snapshot.session_path_len];
     }
 
     pub fn proxyCaDir(snapshot: *const RuntimeSnapshot) ?[]const u8 {
-        if (snapshot.proxy_ca_dir_len == 0) return null;
+        if (snapshot.proxy_ca_dir_len == 0) {
+            return null;
+        }
         return snapshot.proxy_ca_dir_bytes[0..snapshot.proxy_ca_dir_len];
     }
 

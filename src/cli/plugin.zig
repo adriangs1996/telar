@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const frontend = @import("telar-frontend");
 const parser = @import("parser.zig");
+const TestEnvironment = @import("test_environment.zig").TestEnvironment;
 
 const Io = std.Io;
 const File = Io.File;
@@ -208,26 +209,6 @@ fn writeStore(io: Io, path: []const u8, store: *const core.plugin.TrustStore) !v
     committed = true;
 }
 
-fn testEnvironment(entries: []const struct { []const u8, []const u8 }) !struct {
-    map: std.process.Environ.Map,
-    block: std.process.Environ.PosixBlock,
-
-    fn deinit(environment: *@This()) void {
-        environment.block.deinit(std.testing.allocator);
-        environment.map.deinit();
-    }
-} {
-    var map = std.process.Environ.Map.init(std.testing.allocator);
-    errdefer map.deinit();
-    for (entries) |entry| {
-        try map.put(entry[0], entry[1]);
-    }
-    return .{
-        .block = try map.createPosixBlock(std.testing.allocator, .{}),
-        .map = map,
-    };
-}
-
 fn temporaryPath(temp: *std.testing.TmpDir, name: []const u8, buffer: []u8) ![]const u8 {
     var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const directory_len = try temp.dir.realPath(std.testing.io, &directory_buffer);
@@ -235,7 +216,7 @@ fn temporaryPath(temp: *std.testing.TmpDir, name: []const u8, buffer: []u8) ![]c
 }
 
 test "plugin data and trust paths prefer their XDG homes" {
-    var environment = try testEnvironment(&.{
+    var environment = try TestEnvironment.init(&.{
         .{ "XDG_DATA_HOME", "/data" },
         .{ "XDG_CONFIG_HOME", "/config" },
         .{ "HOME", "/home/adrian" },
@@ -250,7 +231,7 @@ test "plugin data and trust paths prefer their XDG homes" {
 }
 
 test "plugin data and trust paths fall back to HOME" {
-    var environment = try testEnvironment(&.{.{ "HOME", "/home/adrian" }});
+    var environment = try TestEnvironment.init(&.{.{ "HOME", "/home/adrian" }});
     defer environment.deinit();
     const environ: std.process.Environ = .{ .block = environment.block };
     var data_buffer: [std.fs.max_path_bytes]u8 = undefined;

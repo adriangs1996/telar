@@ -107,7 +107,9 @@ pub const Pipeline = struct {
     len: u8 = 0,
 
     pub fn add(pipeline: *Pipeline, observer: Observer) !void {
-        if (pipeline.len == pipeline.observers.len) return error.TooManyProxyObservers;
+        if (pipeline.len == pipeline.observers.len) {
+            return error.TooManyProxyObservers;
+        }
         pipeline.observers[pipeline.len] = observer;
         pipeline.len += 1;
     }
@@ -187,14 +189,17 @@ pub const EffectBatch = struct {
     }
 
     fn append(batch: *EffectBatch, effect: Effect) !void {
-        if (batch.len == batch.effects.len) return error.TooManyHeaderEffects;
+        if (batch.len == batch.effects.len) {
+            return error.TooManyHeaderEffects;
+        }
         batch.effects[batch.len] = effect;
         batch.len += 1;
     }
 
     fn copy(batch: *EffectBatch, value: []const u8) ![]const u8 {
-        if (value.len > batch.bytes.len - batch.bytes_len)
+        if (value.len > batch.bytes.len - batch.bytes_len) {
             return error.HeaderEffectsTooLarge;
+        }
         const start = batch.bytes_len;
         @memcpy(batch.bytes[start..][0..value.len], value);
         batch.bytes_len += value.len;
@@ -244,9 +249,12 @@ pub const Headers = struct {
 
         try validateName(header_name);
         try validateValue(header_value);
-        if (headers.len == headers.fields.len) return error.TooManyHeaders;
-        if (header_name.len + header_value.len > headers.bytes.len - headers.bytes_len)
+        if (headers.len == headers.fields.len) {
+            return error.TooManyHeaders;
+        }
+        if (header_name.len + header_value.len > headers.bytes.len - headers.bytes_len) {
             return error.HeadersTooLarge;
+        }
         const name_start = headers.bytes_len;
         @memcpy(headers.bytes[name_start..][0..header_name.len], header_name);
         headers.bytes_len += header_name.len;
@@ -301,7 +309,9 @@ pub const Headers = struct {
     }
 
     pub fn apply(headers: *Headers, effects: []const Effect) !void {
-        if (effects.len == 0) return;
+        if (effects.len == 0) {
+            return;
+        }
         var replacement: Headers = .{};
         var inserted: [max_effects]bool = @splat(false);
 
@@ -313,21 +323,25 @@ pub const Headers = struct {
                     last_match = effect_index;
                 }
             }
-            if (last_match) |effect_index| switch (effects[effect_index]) {
-                .remove => {},
-                .set => |set_effect| if (!inserted[effect_index]) {
-                    try replacement.append(.{
-                        .name = set_effect.name,
-                        .value = set_effect.value,
-                        .sensitive = set_effect.sensitive,
-                    });
-                    inserted[effect_index] = true;
-                },
-            } else try replacement.append(.{
-                .name = field_name,
-                .value = headers.value(field),
-                .sensitive = field.sensitive,
-            });
+            if (last_match) |effect_index| {
+                switch (effects[effect_index]) {
+                    .remove => {},
+                    .set => |set_effect| if (!inserted[effect_index]) {
+                        try replacement.append(.{
+                            .name = set_effect.name,
+                            .value = set_effect.value,
+                            .sensitive = set_effect.sensitive,
+                        });
+                        inserted[effect_index] = true;
+                    },
+                }
+            } else {
+                try replacement.append(.{
+                    .name = field_name,
+                    .value = headers.value(field),
+                    .sensitive = field.sensitive,
+                });
+            }
         }
 
         // New pseudo-headers must precede regular headers. Effects that replace
@@ -341,9 +355,12 @@ pub const Headers = struct {
                         superseded = true;
                         break;
                     };
-                if (superseded) continue;
-                if (set_effect.name.len != 0 and set_effect.name[0] == ':')
+                if (superseded) {
+                    continue;
+                }
+                if (set_effect.name.len != 0 and set_effect.name[0] == ':') {
                     return error.CannotInsertPseudoHeader;
+                }
                 try replacement.append(.{
                     .name = set_effect.name,
                     .value = set_effect.value,
@@ -402,8 +419,9 @@ pub const TransformPipeline = struct {
     len: u8 = 0,
 
     pub fn add(pipeline: *TransformPipeline, transformer: Transformer) !void {
-        if (pipeline.len == pipeline.transformers.len)
+        if (pipeline.len == pipeline.transformers.len) {
             return error.TooManyProxyTransformers;
+        }
         pipeline.transformers[pipeline.len] = transformer;
         pipeline.len += 1;
     }
@@ -434,7 +452,9 @@ pub const TransformPipeline = struct {
                     .effects = &effects,
                 },
             );
-            if (status == .preserve or effects.len == 0) continue;
+            if (status == .preserve or effects.len == 0) {
+                continue;
+            }
             var candidate: Headers = undefined;
             candidate.copyFrom(headers);
             candidate.apply(effects.effects[0..effects.len]) catch continue;
@@ -446,15 +466,21 @@ pub const TransformPipeline = struct {
 };
 
 fn validateName(name: []const u8) !void {
-    if (name.len == 0) return error.InvalidHeaderName;
+    if (name.len == 0) {
+        return error.InvalidHeaderName;
+    }
     for (name, 0..) |byte, index| {
-        if (byte == ':' and index == 0) continue;
+        if (byte == ':' and index == 0) {
+            continue;
+        }
         if (!std.ascii.isAlphanumeric(byte) and
             byte != '!' and byte != '#' and byte != '$' and byte != '%' and
             byte != '&' and byte != '\'' and byte != '*' and byte != '+' and
             byte != '-' and byte != '.' and byte != '^' and byte != '_' and
             byte != '`' and byte != '|' and byte != '~')
+        {
             return error.InvalidHeaderName;
+        }
     }
 }
 

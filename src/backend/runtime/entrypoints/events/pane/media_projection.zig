@@ -57,7 +57,9 @@ pub fn synchronize(pane: *Pane, stores: []const *AttachmentStore, media_reset: b
 fn discardUnwanted(pane: *Pane, stores: []const *AttachmentStore) void {
     for (pane.prepared_transfers.items) |slot| {
         const parked = slot orelse continue;
-        if (wanted(parked.metadata.key, pane.id, stores)) continue;
+        if (wanted(parked.metadata.key, pane.id, stores)) {
+            continue;
+        }
         pane.prepared_transfers.discard(parked.metadata.key, &pane.media_allocator);
     }
 }
@@ -65,10 +67,16 @@ fn discardUnwanted(pane: *Pane, stores: []const *AttachmentStore) void {
 fn wanted(key: core.graphics.ImageKey, pane_id: core.schema.PaneId, stores: []const *AttachmentStore) bool {
     for (stores) |store| {
         const attachment = store.find(pane_id) orelse continue;
-        if (!attachment.graphics.shared_transport) continue;
-        if (attachment_mod.knowsImage(attachment, key)) continue;
+        if (!attachment.graphics.shared_transport) {
+            continue;
+        }
+        if (attachment_mod.knowsImage(attachment, key)) {
+            continue;
+        }
         if (attachment.graphics.transfer) |transfer| {
-            if (std.meta.eql(transfer.metadata.key, key)) continue;
+            if (std.meta.eql(transfer.metadata.key, key)) {
+                continue;
+            }
         }
         return true;
     }
@@ -77,7 +85,9 @@ fn wanted(key: core.graphics.ImageKey, pane_id: core.schema.PaneId, stores: []co
 
 fn objectExists(name: core.graphics.ShmName) bool {
     const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
-    if (std.posix.errno(fd) != .SUCCESS) return false;
+    if (std.posix.errno(fd) != .SUCCESS) {
+        return false;
+    }
     _ = std.c.close(fd);
     return true;
 }
@@ -102,7 +112,9 @@ test "shared transport clients are counted on the pane for the media actor" {
 }
 
 test "a generation the media actor froze is adopted without a runtime-thread copy" {
-    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    if (comptime !shared_memory_supported) {
+        return error.SkipZigTest;
+    }
     var fixture: test_support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -140,7 +152,9 @@ test "a generation the media actor froze is adopted without a runtime-thread cop
 }
 
 test "a replaced generation releases the object the actor parked for it" {
-    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    if (comptime !shared_memory_supported) {
+        return error.SkipZigTest;
+    }
     var fixture: test_support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -171,7 +185,9 @@ test "a replaced generation releases the object the actor parked for it" {
 }
 
 test "parked generations every client already knows are released at synchronization" {
-    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    if (comptime !shared_memory_supported) {
+        return error.SkipZigTest;
+    }
     var fixture: test_support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();

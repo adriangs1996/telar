@@ -92,7 +92,9 @@ pub fn Field(comptime capacity: usize) type {
         /// operation and splitting them is how the two drift apart.
         pub fn insert(f: *Self, input: []const u8) void {
             _ = f.deleteSelection();
-            if (f.len + input.len > capacity) return;
+            if (f.len + input.len > capacity) {
+                return;
+            }
 
             const tail = f.len - f.head;
             std.mem.copyBackwards(u8, f.bytes[f.head + input.len ..][0..tail], f.bytes[f.head..][0..tail]);
@@ -104,7 +106,9 @@ pub fn Field(comptime capacity: usize) type {
 
         /// Deletes the selection, or the cluster before the cursor.
         pub fn backspace(f: *Self) void {
-            if (f.deleteSelection()) return;
+            if (f.deleteSelection()) {
+                return;
+            }
             const from = f.clusterBefore(f.head) orelse return;
             f.remove(from, f.head);
             f.head = from;
@@ -113,13 +117,17 @@ pub fn Field(comptime capacity: usize) type {
 
         /// Deletes the selection, or the cluster at the cursor.
         pub fn delete(f: *Self) void {
-            if (f.deleteSelection()) return;
+            if (f.deleteSelection()) {
+                return;
+            }
             const to = f.clusterAfter(f.head) orelse return;
             f.remove(f.head, to);
         }
 
         fn deleteSelection(f: *Self) bool {
-            if (!f.hasSelection()) return false;
+            if (!f.hasSelection()) {
+                return false;
+            }
             const from = @min(f.head, f.anchor);
             const to = @max(f.head, f.anchor);
             f.remove(from, to);
@@ -132,7 +140,9 @@ pub fn Field(comptime capacity: usize) type {
             const tail = f.len - to;
             std.mem.copyForwards(u8, f.bytes[from..][0..tail], f.bytes[to..][0..tail]);
             f.len -= to - from;
-            if (f.scroll > f.len) f.scroll = 0;
+            if (f.scroll > f.len) {
+                f.scroll = 0;
+            }
         }
 
         // -------------------------------------------------------------------
@@ -150,8 +160,12 @@ pub fn Field(comptime capacity: usize) type {
                 f.anchor = f.head;
                 return;
             }
-            if (f.clusterBefore(f.head)) |from| f.head = from;
-            if (!extend) f.anchor = f.head;
+            if (f.clusterBefore(f.head)) |from| {
+                f.head = from;
+            }
+            if (!extend) {
+                f.anchor = f.head;
+            }
         }
 
         pub fn moveRight(f: *Self, extend: bool) void {
@@ -160,18 +174,26 @@ pub fn Field(comptime capacity: usize) type {
                 f.anchor = f.head;
                 return;
             }
-            if (f.clusterAfter(f.head)) |to| f.head = to;
-            if (!extend) f.anchor = f.head;
+            if (f.clusterAfter(f.head)) |to| {
+                f.head = to;
+            }
+            if (!extend) {
+                f.anchor = f.head;
+            }
         }
 
         pub fn home(f: *Self, extend: bool) void {
             f.head = 0;
-            if (!extend) f.anchor = 0;
+            if (!extend) {
+                f.anchor = 0;
+            }
         }
 
         pub fn end(f: *Self, extend: bool) void {
             f.head = f.len;
-            if (!extend) f.anchor = f.len;
+            if (!extend) {
+                f.anchor = f.len;
+            }
         }
 
         /// Word movement, where a word is a run of non-space.
@@ -184,7 +206,9 @@ pub fn Field(comptime capacity: usize) type {
             while (at > 0 and isSpace(f.bytes[at - 1])) at -= 1;
             while (at > 0 and !isSpace(f.bytes[at - 1])) at -= 1;
             f.head = at;
-            if (!extend) f.anchor = at;
+            if (!extend) {
+                f.anchor = at;
+            }
         }
 
         pub fn moveWordRight(f: *Self, extend: bool) void {
@@ -192,7 +216,9 @@ pub fn Field(comptime capacity: usize) type {
             while (at < f.len and isSpace(f.bytes[at])) at += 1;
             while (at < f.len and !isSpace(f.bytes[at])) at += 1;
             f.head = at;
-            if (!extend) f.anchor = at;
+            if (!extend) {
+                f.anchor = at;
+            }
         }
 
         fn isSpace(byte: u8) bool {
@@ -207,18 +233,24 @@ pub fn Field(comptime capacity: usize) type {
         /// guessing backwards from the byte pattern, is how a backspace ends up
         /// splitting a cluster it cannot see the start of.
         fn clusterBefore(f: *const Self, at: usize) ?usize {
-            if (at == 0) return null;
+            if (at == 0) {
+                return null;
+            }
             var it: ui.GraphemeIterator = .{ .bytes = f.text() };
             var previous: usize = 0;
             while (it.next()) |_| {
-                if (it.index >= at) return previous;
+                if (it.index >= at) {
+                    return previous;
+                }
                 previous = it.index;
             }
             return previous;
         }
 
         fn clusterAfter(f: *const Self, at: usize) ?usize {
-            if (at >= f.len) return null;
+            if (at >= f.len) {
+                return null;
+            }
             var it: ui.GraphemeIterator = .{ .bytes = f.bytes[at..f.len] };
             const cluster = it.next() orelse return null;
             return at + cluster.bytes.len;
@@ -248,10 +280,14 @@ pub fn Field(comptime capacity: usize) type {
         /// the middle of a long value does not make the text jump around under
         /// the user. It only moves when the cursor would otherwise leave.
         pub fn view(f: *Self, width: u16) View {
-            if (width == 0) return .{ .text = "", .cursor = 0 };
+            if (width == 0) {
+                return .{ .text = "", .cursor = 0 };
+            }
 
             // The cursor left the window on the left.
-            if (f.head < f.scroll) f.scroll = f.startOfLine(f.head, width);
+            if (f.head < f.scroll) {
+                f.scroll = f.startOfLine(f.head, width);
+            }
             // Or on the right: scroll until it fits, by clusters so the left
             // edge never lands inside one.
             while (ui.measure(f.bytes[f.scroll..f.head]) >= width) {
@@ -264,7 +300,9 @@ pub fn Field(comptime capacity: usize) type {
             while (end_at < f.len) {
                 const next = f.clusterAfter(end_at) orelse break;
                 const cluster_width = ui.measure(f.bytes[end_at..next]);
-                if (used + cluster_width > width) break;
+                if (used + cluster_width > width) {
+                    break;
+                }
                 used += cluster_width;
                 end_at = next;
             }
@@ -290,7 +328,9 @@ pub fn Field(comptime capacity: usize) type {
             var start = at;
             while (start > 0) {
                 const previous = f.clusterBefore(start) orelse break;
-                if (ui.measure(f.bytes[previous..at]) > width -| 1) break;
+                if (ui.measure(f.bytes[previous..at]) > width -| 1) {
+                    break;
+                }
                 start = previous;
             }
             return start;

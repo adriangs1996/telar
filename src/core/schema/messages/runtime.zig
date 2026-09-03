@@ -65,12 +65,18 @@ pub const SystemMetrics = struct {
     battery_percent: u8,
 
     pub fn validateWire(message: SystemMetrics) !void {
-        if (message.revision == 0) return error.InvalidMetricsRevision;
-        if (message.cpu_percent > 100) return error.InvalidMetricsValue;
-        if (message.has_battery and message.battery_percent > 100)
+        if (message.revision == 0) {
+            return error.InvalidMetricsRevision;
+        }
+        if (message.cpu_percent > 100) {
             return error.InvalidMetricsValue;
-        if (!message.has_battery and message.battery_percent != 0)
+        }
+        if (message.has_battery and message.battery_percent > 100) {
             return error.InvalidMetricsValue;
+        }
+        if (!message.has_battery and message.battery_percent != 0) {
+            return error.InvalidMetricsValue;
+        }
     }
 };
 

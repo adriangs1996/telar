@@ -47,7 +47,9 @@ pub const State = struct {
     /// state.noteChange(now_ns);
     /// ```
     pub fn noteChange(state: *State, now_ns: u64) void {
-        if (!state.enabled()) return;
+        if (!state.enabled()) {
+            return;
+        }
         state.dirty = true;
         state.last_change_ns = now_ns;
     }
@@ -154,7 +156,9 @@ pub fn Checkpointer(comptime Application: type) type {
         /// try SessionCheckpoint.flushIfDue(&application);
         /// ```
         pub fn flushIfDue(application: *Application) !void {
-            if (!application.session.due(nowNs(application))) return;
+            if (!application.session.due(nowNs(application))) {
+                return;
+            }
             const path = application.session.path.?;
 
             const buffer = try application.gpa.alloc(u8, snapshot_bytes);
@@ -191,7 +195,9 @@ pub fn Checkpointer(comptime Application: type) type {
         /// ```
         pub fn writeNow(application: *Application) void {
             const path = application.session.path orelse return;
-            if (application.session.in_flight) return;
+            if (application.session.in_flight) {
+                return;
+            }
             const buffer = application.gpa.alloc(u8, snapshot_bytes) catch return;
             defer application.gpa.free(buffer);
             const len = encode(application, buffer) catch return;
@@ -313,7 +319,9 @@ pub fn Checkpointer(comptime Application: type) type {
                 .tab_id = try schema.id.tab(record.tab_id),
             };
             const reader = application.workspaceReader();
-            if (!reader.contains(location)) return error.TabNotFound;
+            if (!reader.contains(location)) {
+                return error.TabNotFound;
+            }
             const workspace_path = reader.workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
 
             var argument_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
@@ -410,7 +418,9 @@ pub fn Checkpointer(comptime Application: type) type {
             for (reader.listEntries(&entries)) |entry| {
                 const location: schema.WorkspaceLocation = .{ .workspace = entry.workspace };
                 const snapshot = reader.descriptors(location, &descriptor_storage) orelse continue;
-                if (snapshot.tabs.len == 0) continue;
+                if (snapshot.tabs.len == 0) {
+                    continue;
+                }
                 try encoder.workspace(.{
                     .id = schema.id.raw(entry.workspace),
                     .path = entry.path,
@@ -429,8 +439,12 @@ pub fn Checkpointer(comptime Application: type) type {
 
             for (panes.items) |slot| {
                 const pane = slot orelse continue;
-                if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null) continue;
-                if (!pane.launch_record.restorable()) continue;
+                if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null) {
+                    continue;
+                }
+                if (!pane.launch_record.restorable()) {
+                    continue;
+                }
                 const reference = application.model.agents.sessionReference(pane.key());
                 const projected = application.model.agents.projectedProvider(pane.key());
                 const title = if (reference != null) application.model.agents.durableTitle(pane.key()) else null;
@@ -487,10 +501,14 @@ pub const max_resume_command_bytes = 32 + schema.max_agent_session_reference_byt
 /// const line = resumeCommand(&buffer, .claude, session) orelse return;
 /// ```
 pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: schema.AgentProvider, session: []const u8) ?[]const u8 {
-    if (!isUuid(session)) return null;
+    if (!isUuid(session)) {
+        return null;
+    }
     const template = agent_mod.providers.of(provider).resume_prefix orelse return null;
     const len = template.len + session.len + 1;
-    if (len > buffer.len) return null;
+    if (len > buffer.len) {
+        return null;
+    }
     @memcpy(buffer[0..template.len], template);
     @memcpy(buffer[template.len .. template.len + session.len], session);
     buffer[len - 1] = '\r';
@@ -498,12 +516,18 @@ pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: schema.Age
 }
 
 fn isUuid(value: []const u8) bool {
-    if (value.len != 36) return false;
+    if (value.len != 36) {
+        return false;
+    }
     for (value, 0..) |byte, index| {
         const dash = index == 8 or index == 13 or index == 18 or index == 23;
         if (dash) {
-            if (byte != '-') return false;
-        } else if (!std.ascii.isHex(byte)) return false;
+            if (byte != '-') {
+                return false;
+            }
+        } else if (!std.ascii.isHex(byte)) {
+            return false;
+        }
     }
     return true;
 }

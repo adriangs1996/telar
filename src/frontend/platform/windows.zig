@@ -62,10 +62,7 @@ const SYSTEMTIME = extern struct {
 
 extern "kernel32" fn GetConsoleMode(hConsoleHandle: HANDLE, lpMode: *DWORD) callconv(.winapi) BOOL;
 extern "kernel32" fn SetConsoleMode(hConsoleHandle: HANDLE, dwMode: DWORD) callconv(.winapi) BOOL;
-extern "kernel32" fn GetConsoleScreenBufferInfo(
-    hConsoleOutput: HANDLE,
-    lpConsoleScreenBufferInfo: *CONSOLE_SCREEN_BUFFER_INFO,
-) callconv(.winapi) BOOL;
+extern "kernel32" fn GetConsoleScreenBufferInfo(hConsoleOutput: HANDLE, lpConsoleScreenBufferInfo: *CONSOLE_SCREEN_BUFFER_INFO) callconv(.winapi) BOOL;
 extern "kernel32" fn GetLocalTime(system_time: *SYSTEMTIME) callconv(.winapi) void;
 extern "kernel32" fn GetConsoleWindow() callconv(.winapi) ?windows.HWND;
 
@@ -103,8 +100,12 @@ pub const Tty = struct {
 
         var original_input: DWORD = 0;
         var original_output: DWORD = 0;
-        if (GetConsoleMode(input, &original_input) == 0) return error.NotATerminal;
-        if (GetConsoleMode(output, &original_output) == 0) return error.NotATerminal;
+        if (GetConsoleMode(input, &original_input) == 0) {
+            return error.NotATerminal;
+        }
+        if (GetConsoleMode(output, &original_output) == 0) {
+            return error.NotATerminal;
+        }
 
         // Without VIRTUAL_TERMINAL_PROCESSING every escape sequence this
         // program emits is printed literally, which is what makes a Windows
@@ -124,8 +125,12 @@ pub const Tty = struct {
             // reimplemented against console records.
             ENABLE_VIRTUAL_TERMINAL_INPUT;
 
-        if (SetConsoleMode(output, out_mode) == 0) return error.NotATerminal;
-        if (SetConsoleMode(input, in_mode) == 0) return error.NotATerminal;
+        if (SetConsoleMode(output, out_mode) == 0) {
+            return error.NotATerminal;
+        }
+        if (SetConsoleMode(input, in_mode) == 0) {
+            return error.NotATerminal;
+        }
 
         return .{
             .input = input,
@@ -144,7 +149,9 @@ pub const Tty = struct {
 
     pub fn size(t: *const Tty) Size {
         var info: CONSOLE_SCREEN_BUFFER_INFO = undefined;
-        if (GetConsoleScreenBufferInfo(t.output, &info) == 0) return .{ .cols = 80, .rows = 24 };
+        if (GetConsoleScreenBufferInfo(t.output, &info) == 0) {
+            return .{ .cols = 80, .rows = 24 };
+        }
         // `srWindow` and not `dwSize`: the buffer is usually taller than the
         // window, because that is where the scrollback lives. Drawing to the
         // buffer's height puts most of the frame where nobody can see it.
@@ -192,7 +199,9 @@ fn openConsole(comptime name: []const u8, read: bool) !HANDLE {
         0,
         null,
     );
-    if (handle == windows.INVALID_HANDLE_VALUE) return error.NotATerminal;
+    if (handle == windows.INVALID_HANDLE_VALUE) {
+        return error.NotATerminal;
+    }
     return handle;
 }
 

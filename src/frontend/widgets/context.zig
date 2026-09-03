@@ -59,14 +59,7 @@ pub const Context = struct {
     /// Draws the one-cell fallback and, when possible, records an opaque KGP
     /// replacement. Indexed and terminal-default colors stay cell-rendered
     /// because the client cannot reproduce colors it does not know.
-    pub fn drawIcon(
-        context: *Context,
-        area: ui.Rect,
-        x: u16,
-        y: u16,
-        icon: icons.Icon,
-        style: ui.Style,
-    ) u16 {
+    pub fn drawIcon(context: *Context, area: ui.Rect, x: u16, y: u16, icon: icons.Icon, style: ui.Style) u16 {
         const requested = if (context.icon_theme == .nerd_font) context.icon_plan else null;
         const foreground = switch (style.fg) {
             .rgb => |value| value,
@@ -79,8 +72,12 @@ pub const Context = struct {
         const graphical = requested != null and foreground != null and background != null;
         const fallback = if (graphical) icon.cellFallbackGlyph() else icon.unicodeGlyph();
         const written = context.buffer.writeText(area, x, y, fallback, style);
-        if (written != 1 or !graphical) return written;
-        if (!area.contains(x, y) or !context.buffer.clip.contains(x, y)) return written;
+        if (written != 1 or !graphical) {
+            return written;
+        }
+        if (!area.contains(x, y) or !context.buffer.clip.contains(x, y)) {
+            return written;
+        }
         requested.?.add(.{
             .area = .{ .x = x, .y = y, .w = 1, .h = 1 },
             .icon = icon,

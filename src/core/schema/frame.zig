@@ -127,7 +127,9 @@ pub const SpanIterator = struct {
     remaining: u16,
 
     pub fn next(iterator: *SpanIterator) error{Truncated}!?SpanView {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
 
         const start = try iterator.decoder.readInt(u32);
@@ -148,12 +150,16 @@ pub const CellIterator = struct {
     style: ?ui.Style = null,
 
     pub fn next(iterator: *CellIterator) !?ui.Cell {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         const cell = try decodeCell(&iterator.decoder, &iterator.style);
         // The span header promised exactly `cell_count` cells; leftover bytes
         // after the last one are corruption, not padding.
-        if (iterator.remaining == 0) try iterator.decoder.ensureEnd();
+        if (iterator.remaining == 0) {
+            try iterator.decoder.ensureEnd();
+        }
         return cell;
     }
 };
@@ -192,7 +198,9 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
         const cells_start = encoder.index;
         try encodeCells(encoder, span.cells, body_start);
         const encoded_length = encoder.index - cells_start;
-        if (encoded_length > std.math.maxInt(u32)) return error.FrameTooLarge;
+        if (encoded_length > std.math.maxInt(u32)) {
+            return error.FrameTooLarge;
+        }
         std.mem.writeInt(
             u32,
             encoder.buffer[length_index..][0..@sizeOf(u32)],
@@ -265,8 +273,9 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         const count = try decoder.readInt(u32);
         const encoded_length = try decoder.readInt(u32);
         const end = std.math.add(u32, start, count) catch return error.InvalidSpan;
-        if (count == 0 or start < previous_end or end > total_cells)
+        if (count == 0 or start < previous_end or end > total_cells) {
             return error.InvalidSpan;
+        }
         if (span_index == 0) {
             first_start = start;
             first_count = count;
@@ -274,7 +283,9 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         previous_end = end;
         // A cell is at least its header byte, so a length that cannot hold
         // `count` cells is structurally invalid.
-        if (encoded_length < count) return error.InvalidSpan;
+        if (encoded_length < count) {
+            return error.InvalidSpan;
+        }
         _ = try decoder.readBytes(encoded_length);
     }
     if (base_frame_id == 0 and
@@ -282,7 +293,9 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
     {
         return error.InvalidSnapshot;
     }
-    if (decoder.index - body_start > max_body_size) return error.FrameTooLarge;
+    if (decoder.index - body_start > max_body_size) {
+        return error.FrameTooLarge;
+    }
 
     return .{
         .pane_id = pane_id,
@@ -316,11 +329,14 @@ fn validateFrameStructure(frame: Frame) !void {
     const total_cells = try gridCellCount(frame.cols, frame.rows);
     var previous_end: u32 = 0;
     for (frame.spans) |span| {
-        if (span.cells.len > std.math.maxInt(u32)) return error.InvalidSpan;
+        if (span.cells.len > std.math.maxInt(u32)) {
+            return error.InvalidSpan;
+        }
         const count: u32 = @intCast(span.cells.len);
         const end = std.math.add(u32, span.start, count) catch return error.InvalidSpan;
-        if (count == 0 or span.start < previous_end or end > total_cells)
+        if (count == 0 or span.start < previous_end or end > total_cells) {
             return error.InvalidSpan;
+        }
         previous_end = end;
     }
     if (frame.base_frame_id == 0 and
@@ -332,35 +348,43 @@ fn validateFrameStructure(frame: Frame) !void {
     }
 }
 
-fn validateHeader(
-    pane_id: id.PaneId,
-    frame_id: u64,
-    base_frame_id: u64,
-    cols: u16,
-    rows: u16,
-    cursor: Cursor,
-    scroll: Scroll,
-    span_count: usize,
-) !void {
-    if (pane_id == .invalid) return error.InvalidPaneId;
-    if (frame_id == 0 or base_frame_id >= frame_id) return error.InvalidFrameId;
+fn validateHeader(pane_id: id.PaneId, frame_id: u64, base_frame_id: u64, cols: u16, rows: u16, cursor: Cursor, scroll: Scroll, span_count: usize) !void {
+    if (pane_id == .invalid) {
+        return error.InvalidPaneId;
+    }
+    if (frame_id == 0 or base_frame_id >= frame_id) {
+        return error.InvalidFrameId;
+    }
     _ = try gridCellCount(cols, rows);
-    if (span_count > max_span_count) return error.TooManySpans;
-    if (cursor.visible and (cursor.x >= cols or cursor.y >= rows)) return error.InvalidCursor;
-    if (!cursor.visible and (cursor.x != 0 or cursor.y != 0)) return error.InvalidCursor;
-    if (scroll.total_rows < rows or scroll.offset > scroll.maxOffset(rows))
+    if (span_count > max_span_count) {
+        return error.TooManySpans;
+    }
+    if (cursor.visible and (cursor.x >= cols or cursor.y >= rows)) {
+        return error.InvalidCursor;
+    }
+    if (!cursor.visible and (cursor.x != 0 or cursor.y != 0)) {
+        return error.InvalidCursor;
+    }
+    if (scroll.total_rows < rows or scroll.offset > scroll.maxOffset(rows)) {
         return error.InvalidScroll;
+    }
 }
 
 fn gridCellCount(cols: u16, rows: u16) !u32 {
-    if (cols == 0 or rows == 0) return error.InvalidTerminalSize;
+    if (cols == 0 or rows == 0) {
+        return error.InvalidTerminalSize;
+    }
     const count = @as(u32, cols) * @as(u32, rows);
-    if (count > max_cell_count) return error.ScreenTooLarge;
+    if (count > max_cell_count) {
+        return error.ScreenTooLarge;
+    }
     return count;
 }
 
 fn validateCell(cell: ui.Cell) !void {
-    if (cell.len > ui.Cell.max_bytes) return error.InvalidCell;
+    if (cell.len > ui.Cell.max_bytes) {
+        return error.InvalidCell;
+    }
     switch (cell.width) {
         0 => if (cell.len != 0) return error.InvalidCell,
         1, 2 => if (cell.len == 0) return error.InvalidCell,
@@ -383,13 +407,16 @@ fn encodeCells(encoder: *wire.Encoder, cells: []const ui.Cell, body_start: usize
         // FrameTooLarge, never the encoder's BufferTooSmall.
         const cell_size = cell_header_size + cell.len +
             if (style_changed) encodedStyleSize(cell.style) else 0;
-        if (encoder.index - body_start + cell_size > max_body_size)
+        if (encoder.index - body_start + cell_size > max_body_size) {
             return error.FrameTooLarge;
+        }
         const header = cell.len |
             (cell.width << width_shift) |
             if (style_changed) style_changed_bit else 0;
         try encoder.writeByte(header);
-        if (style_changed) try encodeStyle(encoder, cell.style);
+        if (style_changed) {
+            try encodeStyle(encoder, cell.style);
+        }
         try encoder.writeBytes(cell.bytes[0..cell.len]);
         previous_style = cell.style;
     }
@@ -425,12 +452,16 @@ fn decodeCell(decoder: *wire.Decoder, previous_style: *?ui.Style) !ui.Cell {
     const length = header & length_mask;
     const width = (header >> width_shift) & 0x3;
     const style_changed = header & style_changed_bit != 0;
-    if (!style_changed and previous_style.* == null) return error.InvalidCell;
+    if (!style_changed and previous_style.* == null) {
+        return error.InvalidCell;
+    }
     const style = if (style_changed)
         try decodeStyle(decoder)
     else
         previous_style.*.?;
-    if (length > ui.Cell.max_bytes) return error.InvalidCell;
+    if (length > ui.Cell.max_bytes) {
+        return error.InvalidCell;
+    }
     const text = try decoder.readBytes(length);
 
     var cell: ui.Cell = .{
@@ -469,9 +500,12 @@ fn encodedColorSize(color: ui.Color) usize {
 }
 
 fn validateFlags(bits: u16) !void {
-    if (bits & 0xf800 != 0) return error.InvalidStyle;
-    if ((bits >> 8) & 0x7 > @intFromEnum(ui.Style.Underline.dashed))
+    if (bits & 0xf800 != 0) {
         return error.InvalidStyle;
+    }
+    if ((bits >> 8) & 0x7 > @intFromEnum(ui.Style.Underline.dashed)) {
+        return error.InvalidStyle;
+    }
 }
 
 fn encodeColor(encoder: *wire.Encoder, color: ui.Color) !void {

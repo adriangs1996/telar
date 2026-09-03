@@ -40,7 +40,9 @@ const Fixer = struct {
         const conditional = self.tree.fullIf(node).?;
         const then_tag = self.tree.nodeTag(conditional.ast.then_expr);
 
-        if (!syntax.isBlock(then_tag) and then_tag != .if_simple and then_tag != .@"if") {
+        // A nested `if` in then position is wrapped as a whole; the next pass
+        // braces its own branches once it has become a block statement.
+        if (!syntax.isBlock(then_tag)) {
             try self.wrapBranch(conditional.ast.then_expr, conditional.ast.else_expr != .none);
         }
 
@@ -58,26 +60,23 @@ const Fixer = struct {
         const start = self.tree.tokenStart(first_token);
         const expression_end = self.tree.tokenStart(last_token) + self.tree.tokenSlice(last_token).len;
 
-        var close_edit: Edit = undefined;
-        if (closes_before_else) {
-            close_edit = .{
-                .start = expression_end,
-                .end = expression_end,
-                .replacement = "; }",
-            };
-        } else {
-            const semicolon = last_token + 1;
-            if (self.tree.tokenTag(semicolon) != .semicolon) {
-                return;
-            }
+        // A branch such as `switch (x) {}` becomes a brace-terminated statement
+        // inside the new block, so any semicolon after it must go. Every other
+        // branch keeps its semicolon inside the block, or gains one before `else`.
+        const ends_with_block = syntax.endsWithBlock(self.tree, node);
+        const semicolon = last_token + 1;
+        const has_semicolon = !closes_before_else and self.tree.tokenTag(semicolon) == .semicolon;
 
-            const branch_end = self.tree.tokenStart(semicolon) + self.tree.tokenSlice(semicolon).len;
-            close_edit = .{
-                .start = branch_end,
-                .end = branch_end,
-                .replacement = " }",
-            };
+        if (!closes_before_else and !has_semicolon and !ends_with_block) {
+            return;
         }
+
+        const branch_end = if (has_semicolon) self.tree.tokenStart(semicolon) + self.tree.tokenSlice(semicolon).len else expression_end;
+        const close_edit: Edit = .{
+            .start = if (ends_with_block) expression_end else branch_end,
+            .end = branch_end,
+            .replacement = if (closes_before_else and !ends_with_block) "; }" else " }",
+        };
 
         try self.edits.append(self.allocator, .{
             .start = start,
@@ -92,11 +91,26 @@ const Fixer = struct {
 
 /// Applies only deterministic fixes and returns null when the source is unchanged.
 ///
+/// Fixes are applied until the source stops changing, because bracing a branch
+/// can expose statements that were not reachable in the previous shape.
+///
 /// ```zig
 /// const fixed = try fixSource(allocator, "fn run(value: u8,) void {}\n");
 /// defer if (fixed) |source| allocator.free(source);
 /// ```
 pub fn fixSource(allocator: Allocator, source: [:0]const u8) !?[:0]u8 {
+    var current = try fixOnce(allocator, source) orelse return null;
+    errdefer allocator.free(current);
+
+    while (try fixOnce(allocator, current)) |next| {
+        allocator.free(current);
+        current = next;
+    }
+
+    return current;
+}
+
+fn fixOnce(allocator: Allocator, source: [:0]const u8) !?[:0]u8 {
     var tree = try Ast.parse(allocator, source, .zig);
     defer tree.deinit(allocator);
 
@@ -271,6 +285,103 @@ test "wraps statement branches across an else if chain" {
     ,
         \\fn choose(first: bool, second: bool) u8 {
         \\    if (first) return 1 else if (second) return 2 else return 3;
+        \\}
+    );
+}
+
+test "wraps nested if statements across passes" {
+    try expectFixed(
+        \\fn run(first: ?u8, second: bool) bool {
+        \\    if (first) |_| {
+        \\        if (second) {
+        \\            return true;
+        \\        }
+        \\    }
+        \\    return false;
+        \\}
+        \\
+    ,
+        \\fn run(first: ?u8, second: bool) bool {
+        \\    if (first) |_| if (second) return true;
+        \\    return false;
+        \\}
+    );
+}
+
+test "wraps a switch branch without keeping its semicolon" {
+    try expectFixed(
+        \\fn run(value: bool) void {
+        \\    if (value) {
+        \\        switch (value) {
+        \\            else => {},
+        \\        }
+        \\    }
+        \\}
+        \\
+    ,
+        \\fn run(value: bool) void {
+        \\    if (value) switch (value) { else => {} };
+        \\}
+    );
+}
+
+test "wraps a switch branch followed by else" {
+    try expectFixed(
+        \\fn run(value: bool) void {
+        \\    if (value) {
+        \\        switch (value) {
+        \\            else => {},
+        \\        }
+        \\    } else {
+        \\        return;
+        \\    }
+        \\}
+        \\
+    ,
+        \\fn run(value: bool) void {
+        \\    if (value) switch (value) { else => {} } else return;
+        \\}
+    );
+}
+
+test "wraps an else branch holding an error switch" {
+    try expectFixed(
+        \\fn run(value: anyerror!void) !void {
+        \\    if (value) |_| {
+        \\        return;
+        \\    } else |err| {
+        \\        switch (err) {
+        \\            else => return err,
+        \\        }
+        \\    }
+        \\}
+        \\
+    ,
+        \\fn run(value: anyerror!void) !void {
+        \\    if (value) |_| {
+        \\        return;
+        \\    } else |err| switch (err) {
+        \\        else => return err,
+        \\    }
+        \\}
+    );
+}
+
+test "wraps loop branches according to their body" {
+    try expectFixed(
+        \\fn run(value: bool, items: []const u8) void {
+        \\    if (value) {
+        \\        for (items) |_| {}
+        \\    }
+        \\    if (value) {
+        \\        for (items) |item| _ = item;
+        \\    }
+        \\}
+        \\
+    ,
+        \\fn run(value: bool, items: []const u8) void {
+        \\    if (value) for (items) |_| {};
+        \\    if (value) for (items) |item| _ = item;
         \\}
     );
 }

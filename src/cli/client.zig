@@ -9,6 +9,7 @@ const parser = @import("parser.zig");
 const plugin = @import("plugin.zig");
 const remote = @import("remote.zig");
 const runtime_connection = @import("runtime_connection.zig");
+const TestEnvironment = @import("test_environment.zig").TestEnvironment;
 
 const Io = std.Io;
 const RunOptions = parser.RunOptions;
@@ -211,35 +212,15 @@ fn supportsHostSharedMemory(environ: std.process.Environ) bool {
     return std.ascii.eqlIgnoreCase(terminal_program, "ghostty");
 }
 
-fn testEnvironment(entries: []const struct { []const u8, []const u8 }) !struct {
-    map: std.process.Environ.Map,
-    block: std.process.Environ.PosixBlock,
-
-    fn deinit(environment: *@This()) void {
-        environment.block.deinit(std.testing.allocator);
-        environment.map.deinit();
-    }
-} {
-    var map = std.process.Environ.Map.init(std.testing.allocator);
-    errdefer map.deinit();
-    for (entries) |entry| {
-        try map.put(entry[0], entry[1]);
-    }
-    return .{
-        .block = try map.createPosixBlock(std.testing.allocator, .{}),
-        .map = map,
-    };
-}
-
 test "local Ghostty clients may use host shared memory" {
-    var environment = try testEnvironment(&.{.{ "TERM_PROGRAM", "Ghostty" }});
+    var environment = try TestEnvironment.init(&.{.{ "TERM_PROGRAM", "Ghostty" }});
     defer environment.deinit();
 
     try std.testing.expect(supportsHostSharedMemory(.{ .block = environment.block }));
 }
 
 test "SSH clients never use host shared memory" {
-    var environment = try testEnvironment(&.{
+    var environment = try TestEnvironment.init(&.{
         .{ "TERM_PROGRAM", "ghostty" },
         .{ "SSH_CONNECTION", "host 22 host 22" },
     });
@@ -249,7 +230,7 @@ test "SSH clients never use host shared memory" {
 }
 
 test "other terminals do not use Ghostty shared memory" {
-    var environment = try testEnvironment(&.{.{ "TERM_PROGRAM", "iTerm.app" }});
+    var environment = try TestEnvironment.init(&.{.{ "TERM_PROGRAM", "iTerm.app" }});
     defer environment.deinit();
 
     try std.testing.expect(!supportsHostSharedMemory(.{ .block = environment.block }));

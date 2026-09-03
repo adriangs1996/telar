@@ -67,11 +67,15 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
                 .record_command => |record| adapter.recordCommand(result, record),
                 .agent_evidence => |evidence| changed = adapter.applyAgentEvidence(evidence) or changed,
                 .notification => |notification| {
-                    if (adapter.publishNotification(notification)) changed = true;
+                    if (adapter.publishNotification(notification)) {
+                        changed = true;
+                    }
                 },
             };
 
-            if (changed) port.pump_clients(adapter.context);
+            if (changed) {
+                port.pump_clients(adapter.context);
+            }
         }
 
         fn recordCommand(adapter: *Self, result: *const plugins.EffectResult, record: plugins.effects.RecordCommand) void {
@@ -110,7 +114,9 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
 
         fn applyAgentEvidence(adapter: *Self, evidence: plugins.effects.AgentEvidence) bool {
             const pane = adapter.resources.panes.find(evidence.pane) orelse return false;
-            if (pane.exit != null) return false;
+            if (pane.exit != null) {
+                return false;
+            }
             const status: agent_mod.ScreenStatus = switch (evidence.state) {
                 .working => .working,
                 .blocked => .blocked,

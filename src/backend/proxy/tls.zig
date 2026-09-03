@@ -170,7 +170,9 @@ pub fn intercept(options: InterceptOptions) Error!*Session {
 
 fn mirroredAlpn(selected: ?[]const u8) []const []const u8 {
     const protocol = selected orelse return &.{};
-    if (std.mem.eql(u8, protocol, "h2")) return &alpn_h2_only;
+    if (std.mem.eql(u8, protocol, "h2")) {
+        return &alpn_h2_only;
+    }
     return &alpn_http11_only;
 }
 
@@ -186,12 +188,18 @@ const alpn_extension: u16 = 16;
 
 fn parseAlpnOffer(reader: *Io.Reader) ![]const []const u8 {
     const header = try reader.peek(tls_record_header_len);
-    if (header[0] != handshake_record) return error.NotAHandshake;
+    if (header[0] != handshake_record) {
+        return error.NotAHandshake;
+    }
     const record_len: usize = std.mem.readInt(u16, header[3..5], .big);
-    if (record_len > max_plaintext_record_len) return error.RecordTooLarge;
+    if (record_len > max_plaintext_record_len) {
+        return error.RecordTooLarge;
+    }
     const record = try reader.peek(tls_record_header_len + record_len);
     var cursor: Cursor = .{ .bytes = record[tls_record_header_len..] };
-    if (try cursor.byte() != client_hello) return error.NotAClientHello;
+    if (try cursor.byte() != client_hello) {
+        return error.NotAClientHello;
+    }
     _ = try cursor.take(3);
     _ = try cursor.take(2);
     _ = try cursor.take(32);
@@ -203,10 +211,14 @@ fn parseAlpnOffer(reader: *Io.Reader) ![]const []const u8 {
     while (extensions.left() != 0) {
         const kind = try extensions.big16();
         const body = try extensions.take(try extensions.big16());
-        if (kind != alpn_extension) continue;
+        if (kind != alpn_extension) {
+            continue;
+        }
         var names: Cursor = .{ .bytes = body };
         const declared = try names.big16();
-        if (declared != names.left()) return error.InvalidAlpnList;
+        if (declared != names.left()) {
+            return error.InvalidAlpnList;
+        }
         var h2 = false;
         var http11 = false;
         while (names.left() != 0) {
@@ -214,9 +226,15 @@ fn parseAlpnOffer(reader: *Io.Reader) ![]const []const u8 {
             h2 = h2 or std.mem.eql(u8, name, "h2");
             http11 = http11 or std.mem.eql(u8, name, "http/1.1");
         }
-        if (h2 and http11) return &alpn_offer;
-        if (h2) return &alpn_h2_only;
-        if (http11) return &alpn_http11_only;
+        if (h2 and http11) {
+            return &alpn_offer;
+        }
+        if (h2) {
+            return &alpn_h2_only;
+        }
+        if (http11) {
+            return &alpn_http11_only;
+        }
         return &.{};
     }
     return &.{};
@@ -231,7 +249,9 @@ const Cursor = struct {
     }
 
     fn take(cursor: *Cursor, len: usize) ![]const u8 {
-        if (cursor.left() < len) return error.Truncated;
+        if (cursor.left() < len) {
+            return error.Truncated;
+        }
         defer cursor.index += len;
         return cursor.bytes[cursor.index..][0..len];
     }

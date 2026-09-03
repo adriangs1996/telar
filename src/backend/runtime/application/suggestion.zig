@@ -85,7 +85,9 @@ pub fn extractCommand(reply: []const u8) ?[]const u8 {
         }
 
         for (line) |byte| {
-            if (byte < 0x20) return null;
+            if (byte < 0x20) {
+                return null;
+            }
         }
 
         return line;

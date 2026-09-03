@@ -78,8 +78,12 @@ pub const Renderer = struct {
     pub fn deinit(renderer: *Renderer) void {
         for (&renderer.slots) |*slot| if (slot.pixels.len != 0)
             renderer.gpa.free(slot.pixels);
-        if (renderer.text) |*text| text.deinit();
-        if (renderer.icons) |*icons| icons.deinit();
+        if (renderer.text) |*text| {
+            text.deinit();
+        }
+        if (renderer.icons) |*icons| {
+            icons.deinit();
+        }
     }
 
     pub fn retainedBytes(renderer: *const Renderer) usize {
@@ -88,15 +92,13 @@ pub const Renderer = struct {
         return total;
     }
 
-    pub fn configure(
-        renderer: *Renderer,
-        support: kitty.Support,
-        cell_width: u16,
-        cell_height: u16,
-    ) bool {
+    pub fn configure(renderer: *Renderer, support: kitty.Support, cell_width: u16, cell_height: u16) bool {
         const supported = support == .supported;
         if (renderer.supported == supported and renderer.cell_width == cell_width and
-            renderer.cell_height == cell_height) return false;
+            renderer.cell_height == cell_height)
+        {
+            return false;
+        }
         renderer.supported = supported;
         renderer.cell_width = cell_width;
         renderer.cell_height = cell_height;
@@ -111,22 +113,11 @@ pub const Renderer = struct {
         renderer.media_idle = idle;
     }
 
-    pub fn prepare(
-        renderer: *Renderer,
-        area: ui.Rect,
-        center: *const notifications.Center,
-        palette: *const theme.Palette,
-    ) void {
+    pub fn prepare(renderer: *Renderer, area: ui.Rect, center: *const notifications.Center, palette: *const theme.Palette) void {
         renderer.prepareThemed(area, center, palette, .unicode);
     }
 
-    pub fn prepareThemed(
-        renderer: *Renderer,
-        area: ui.Rect,
-        center: *const notifications.Center,
-        palette: *const theme.Palette,
-        icon_theme: ui_icons.Theme,
-    ) void {
+    pub fn prepareThemed(renderer: *Renderer, area: ui.Rect, center: *const notifications.Center, palette: *const theme.Palette, icon_theme: ui_icons.Theme) void {
         for (&renderer.slots) |*slot| slot.visible = false;
         renderer.visible_count = 0;
         renderer.render_deferred = false;
@@ -153,7 +144,9 @@ pub const Renderer = struct {
         // assigning a slot to the new front item. Existing ids retain their
         // stable host image ids even though their vertical order changed.
         for (&renderer.slots) |*slot| {
-            if (slot.id == .invalid) continue;
+            if (slot.id == .invalid) {
+                continue;
+            }
             var retained = false;
             for (0..count) |index| {
                 if (center.itemAt(index).?.id == slot.id) {
@@ -230,13 +223,21 @@ pub const Renderer = struct {
     /// True only after every visible texture and placement reached the host.
     /// Until then the composition keeps the complete cell fallback visible.
     pub fn coversAll(renderer: *const Renderer) bool {
-        if (!renderer.frame_usable or renderer.visible_count == 0) return false;
+        if (!renderer.frame_usable or renderer.visible_count == 0) {
+            return false;
+        }
         var count: u8 = 0;
         for (&renderer.slots) |*slot| {
-            if (!slot.visible) continue;
+            if (!slot.visible) {
+                continue;
+            }
             count += 1;
-            if (!slot.image_emitted or slot.image_dirty) return false;
-            if (slot.placement != null and slot.emitted_placement == null) return false;
+            if (!slot.image_emitted or slot.image_dirty) {
+                return false;
+            }
+            if (slot.placement != null and slot.emitted_placement == null) {
+                return false;
+            }
         }
         return count == renderer.visible_count;
     }
@@ -244,33 +245,52 @@ pub const Renderer = struct {
     /// The notification center may change before the lower-priority media
     /// pass catches up. Never hide the cell fallback for a stale texture set.
     pub fn covers(renderer: *const Renderer, center: *const notifications.Center) bool {
-        if (!renderer.coversAll() or renderer.visible_count != center.count) return false;
+        if (!renderer.coversAll() or renderer.visible_count != center.count) {
+            return false;
+        }
         for (0..center.count) |index| {
             const id = center.itemAt(index).?.id;
             for (renderer.slots) |slot| {
                 if (slot.id == id and slot.visible and slot.image_emitted and
-                    !slot.image_dirty) break;
+                    !slot.image_dirty)
+                {
+                    break;
+                }
             } else return false;
         }
         return true;
     }
 
     pub fn damaged(renderer: *const Renderer) bool {
-        if (renderer.render_deferred) return true;
-        if (renderer.transmissionPending()) return true;
+        if (renderer.render_deferred) {
+            return true;
+        }
+        if (renderer.transmissionPending()) {
+            return true;
+        }
         const placements_enabled = renderer.allImagesReady();
         for (&renderer.slots) |*slot| {
-            if (slot.transfer_offset != 0) return true;
-            if (!renderer.frame_usable and slot.image_emitted) return true;
+            if (slot.transfer_offset != 0) {
+                return true;
+            }
+            if (!renderer.frame_usable and slot.image_emitted) {
+                return true;
+            }
             const desired = if (placements_enabled and slot.visible) slot.placement else null;
-            if (!optionalPlacementEql(desired, slot.emitted_placement)) return true;
-            if (!slot.visible and slot.image_emitted) return true;
+            if (!optionalPlacementEql(desired, slot.emitted_placement)) {
+                return true;
+            }
+            if (!slot.visible and slot.image_emitted) {
+                return true;
+            }
         }
         return false;
     }
 
     pub fn transmissionPending(renderer: *const Renderer) bool {
-        if (!renderer.frame_usable) return false;
+        if (!renderer.frame_usable) {
+            return false;
+        }
         for (&renderer.slots) |slot| if (slot.visible and slot.image_dirty) return true;
         return false;
     }
@@ -287,25 +307,30 @@ pub const Renderer = struct {
     /// True when the remaining toast work cannot emit anything until the
     /// client has been idle long enough to rasterize a replacement texture.
     pub fn waitingForMediaIdle(renderer: *const Renderer) bool {
-        if (!renderer.render_deferred) return false;
+        if (!renderer.render_deferred) {
+            return false;
+        }
         const placements_enabled = renderer.allImagesReady();
         for (renderer.slots) |slot| {
-            if (slot.transfer_offset != 0) return false;
+            if (slot.transfer_offset != 0) {
+                return false;
+            }
             if ((!slot.visible or slot.image_dirty or !renderer.frame_usable) and
-                slot.image_emitted) return false;
+                slot.image_emitted)
+            {
+                return false;
+            }
             const desired = if (placements_enabled and slot.visible) slot.placement else null;
-            if (!optionalPlacementEql(desired, slot.emitted_placement)) return false;
+            if (!optionalPlacementEql(desired, slot.emitted_placement)) {
+                return false;
+            }
         }
         return true;
     }
 
     /// Deletions and placements are always cheap enough to emit. A new image
     /// is sent only when the pane-media writer used no budget in this pass.
-    pub fn write(
-        renderer: *Renderer,
-        writer: *std.Io.Writer,
-        allow_transmission: bool,
-    ) std.Io.Writer.Error!usize {
+    pub fn write(renderer: *Renderer, writer: *std.Io.Writer, allow_transmission: bool) std.Io.Writer.Error!usize {
         var written: usize = 0;
         for (&renderer.slots, 0..) |*slot, index| {
             const transfer_stale = slot.transfer_offset != 0 and
@@ -323,8 +348,9 @@ pub const Renderer = struct {
                 written += try kitty.writeDeleteImage(writer, imageId(index));
                 slot.image_emitted = false;
                 slot.emitted_placement = null;
-                if (renderer.render_deferred and slot.visible and slot.key != null)
+                if (renderer.render_deferred and slot.visible and slot.key != null) {
                     slot.image_dirty = true;
+                }
             }
         }
 
@@ -332,8 +358,12 @@ pub const Renderer = struct {
             renderer.frame_usable)
         transmit: {
             for (&renderer.slots, 0..) |*slot, index| {
-                if (!slot.visible or !slot.image_dirty or slot.key == null) continue;
-                if (slot.transfer_offset == 0) slot.transfer_key = slot.key;
+                if (!slot.visible or !slot.image_dirty or slot.key == null) {
+                    continue;
+                }
+                if (slot.transfer_offset == 0) {
+                    slot.transfer_key = slot.key;
+                }
                 const progress = try kitty.writeTransmissionChunks(writer, imageId(index), .{
                     .key = .{ .image_id = imageId(index), .generation = 1 },
                     .format = .rgba,
@@ -356,12 +386,16 @@ pub const Renderer = struct {
         const placements_enabled = renderer.allImagesReady();
         for (&renderer.slots, 0..) |*slot, index| {
             const desired = if (placements_enabled and slot.visible) slot.placement else null;
-            if (optionalPlacementEql(desired, slot.emitted_placement)) continue;
-            if (slot.emitted_placement != null) written += try kitty.writeDeletePlacement(
-                writer,
-                imageId(index),
-                placementId(index),
-            );
+            if (optionalPlacementEql(desired, slot.emitted_placement)) {
+                continue;
+            }
+            if (slot.emitted_placement != null) {
+                written += try kitty.writeDeletePlacement(
+                    writer,
+                    imageId(index),
+                    placementId(index),
+                );
+            }
             if (desired) |placement| {
                 written += try kitty.writePlacement(
                     writer,
@@ -379,12 +413,16 @@ pub const Renderer = struct {
     fn slotFor(renderer: *Renderer, id: notifications.Id) ?*Slot {
         for (&renderer.slots) |*slot| if (slot.id == id) return slot;
         for (&renderer.slots) |*slot| {
-            if (slot.visible or slot.id != .invalid) continue;
+            if (slot.visible or slot.id != .invalid) {
+                continue;
+            }
             slot.id = id;
             return slot;
         }
         for (&renderer.slots) |*slot| {
-            if (slot.visible) continue;
+            if (slot.visible) {
+                continue;
+            }
             slot.id = id;
             slot.key = null;
             slot.failed_key = null;
@@ -397,7 +435,9 @@ pub const Renderer = struct {
 
     fn retireInvisible(renderer: *Renderer) void {
         for (&renderer.slots) |*slot| {
-            if (slot.visible) continue;
+            if (slot.visible) {
+                continue;
+            }
             slot.id = .invalid;
             slot.key = null;
             slot.failed_key = null;
@@ -406,12 +446,7 @@ pub const Renderer = struct {
         }
     }
 
-    fn renderSlot(
-        renderer: *Renderer,
-        slot: *Slot,
-        item: *const notifications.Item,
-        key: RenderKey,
-    ) !void {
+    fn renderSlot(renderer: *Renderer, slot: *Slot, item: *const notifications.Item, key: RenderKey) !void {
         const width = std.math.mul(u32, key.card_columns, renderer.cell_width) catch
             return error.ToastTooLarge;
         const height = std.math.mul(u32, toast.card_height, renderer.cell_height) catch
@@ -420,12 +455,15 @@ pub const Renderer = struct {
             return error.ToastTooLarge;
         const byte_count = std.math.mul(usize, pixel_count, 4) catch
             return error.ToastTooLarge;
-        if (byte_count > max_image_bytes) return error.ToastTooLarge;
+        if (byte_count > max_image_bytes) {
+            return error.ToastTooLarge;
+        }
         if (slot.pixels.len != byte_count) {
-            if (slot.pixels.len == 0)
-                slot.pixels = try renderer.gpa.alloc(u8, byte_count)
-            else
+            if (slot.pixels.len == 0) {
+                slot.pixels = try renderer.gpa.alloc(u8, byte_count);
+            } else {
                 slot.pixels = try renderer.gpa.realloc(slot.pixels, byte_count);
+            }
         }
         slot.width = width;
         slot.height = height;
@@ -510,12 +548,18 @@ pub const Renderer = struct {
     }
 
     fn allImagesReady(renderer: *const Renderer) bool {
-        if (!renderer.frame_usable or renderer.visible_count == 0) return false;
+        if (!renderer.frame_usable or renderer.visible_count == 0) {
+            return false;
+        }
         var count: u8 = 0;
         for (&renderer.slots) |slot| {
-            if (!slot.visible) continue;
+            if (!slot.visible) {
+                continue;
+            }
             count += 1;
-            if (slot.key == null or slot.image_dirty or !slot.image_emitted) return false;
+            if (slot.key == null or slot.image_dirty or !slot.image_emitted) {
+                return false;
+            }
         }
         return count == renderer.visible_count;
     }
@@ -575,14 +619,7 @@ fn fill(surface: raster.Surface, color: [4]u8) void {
         @memcpy(surface.pixels[index..][0..4], &color);
 }
 
-fn fillRect(
-    surface: raster.Surface,
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
-    color: raster.Color,
-) void {
+fn fillRect(surface: raster.Surface, x: u32, y: u32, width: u32, height: u32, color: raster.Color) void {
     const right = @min(surface.width, x +| width);
     const bottom = @min(surface.height, y +| height);
     var row = y;
@@ -604,7 +641,9 @@ fn placementId(index: usize) u32 {
 }
 
 fn optionalPlacementEql(a: ?kitty.OutputPlacement, b: ?kitty.OutputPlacement) bool {
-    if (a == null or b == null) return a == null and b == null;
+    if (a == null or b == null) {
+        return a == null and b == null;
+    }
     return std.meta.eql(a.?, b.?);
 }
 

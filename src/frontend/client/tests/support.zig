@@ -204,8 +204,9 @@ pub const TestHarness = struct {
 
     pub fn init(harness: *TestHarness) !void {
         var sockets: [2]std.c.fd_t = undefined;
-        if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0)
+        if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0) {
             return error.SocketPairFailed;
+        }
         harness.connection = .init(.{ .socket = .{
             .handle = sockets[0],
             .address = .{ .ip4 = .loopback(0) },
@@ -215,7 +216,9 @@ pub const TestHarness = struct {
             .address = .{ .ip4 = .loopback(0) },
         } });
         var pipe_fds: [2]std.c.fd_t = undefined;
-        if (std.c.pipe(&pipe_fds) != 0) return error.PipeFailed;
+        if (std.c.pipe(&pipe_fds) != 0) {
+            return error.PipeFailed;
+        }
         harness.input_read = .{ .handle = pipe_fds[0], .flags = .{ .nonblocking = false } };
         harness.input_write = .{ .handle = pipe_fds[1], .flags = .{ .nonblocking = false } };
         harness.sink = .init(&.{});

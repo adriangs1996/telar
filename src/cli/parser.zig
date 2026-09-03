@@ -1373,11 +1373,21 @@ pub const ApiOptions = struct {
 };
 
 fn parseWaitStatus(text: []const u8) !core.schema.AgentStatus {
-    if (std.mem.eql(u8, text, "done")) return .done;
-    if (std.mem.eql(u8, text, "ready") or std.mem.eql(u8, text, "idle")) return .ready;
-    if (std.mem.eql(u8, text, "blocked")) return .blocked;
-    if (std.mem.eql(u8, text, "working")) return .working;
-    if (std.mem.eql(u8, text, "failed")) return .failed;
+    if (std.mem.eql(u8, text, "done")) {
+        return .done;
+    }
+    if (std.mem.eql(u8, text, "ready") or std.mem.eql(u8, text, "idle")) {
+        return .ready;
+    }
+    if (std.mem.eql(u8, text, "blocked")) {
+        return .blocked;
+    }
+    if (std.mem.eql(u8, text, "working")) {
+        return .working;
+    }
+    if (std.mem.eql(u8, text, "failed")) {
+        return .failed;
+    }
     return error.InvalidWaitStatus;
 }
 
@@ -1401,8 +1411,12 @@ fn parseLineCount(text: []const u8) !u16 {
 }
 
 fn parseTextSource(text: []const u8) !core.schema.PaneTextSource {
-    if (std.mem.eql(u8, text, "screen")) return .screen;
-    if (std.mem.eql(u8, text, "recent")) return .recent;
+    if (std.mem.eql(u8, text, "screen")) {
+        return .screen;
+    }
+    if (std.mem.eql(u8, text, "recent")) {
+        return .recent;
+    }
     return error.InvalidTextSource;
 }
 

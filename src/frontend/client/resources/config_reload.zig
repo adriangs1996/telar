@@ -47,9 +47,15 @@ pub const State = struct {
     /// Frees whatever a cancelled reload task published. Call only after
     /// the select's tasks are cancelled.
     pub fn deinit(state: *State, gpa: std.mem.Allocator) void {
-        if (state.generation_orphan) |generation| generation.deinit();
-        if (state.registry_orphan) |registry| gpa.destroy(registry);
-        if (state.trust_orphan) |store| gpa.destroy(store);
+        if (state.generation_orphan) |generation| {
+            generation.deinit();
+        }
+        if (state.registry_orphan) |registry| {
+            gpa.destroy(registry);
+        }
+        if (state.trust_orphan) |store| {
+            gpa.destroy(store);
+        }
     }
 
     fn clearOrphans(state: *State) void {
@@ -67,13 +73,7 @@ pub const ScheduleArgs = struct {
     current_registry: *const plugin_broker.Registry,
 };
 
-pub fn schedule(
-    state: *State,
-    io: Io,
-    gpa: std.mem.Allocator,
-    select: *Io.Select(ClientEvent),
-    args: ScheduleArgs,
-) !void {
+pub fn schedule(state: *State, io: Io, gpa: std.mem.Allocator, select: *Io.Select(ClientEvent), args: ScheduleArgs) !void {
     try select.concurrent(.config_reload, waitConfigReload, .{
         io,
         gpa,
@@ -128,12 +128,7 @@ pub const Outcome = union(enum) {
 /// objects and clears the orphan slots here — the unwind lives once. An
 /// adoption clears the slots and hands the objects to the caller, which
 /// owns applying and swapping them.
-pub fn resolve(
-    state: *State,
-    gpa: std.mem.Allocator,
-    reload: ConfigReload,
-    checks: Checks,
-) Outcome {
+pub fn resolve(state: *State, gpa: std.mem.Allocator, reload: ConfigReload, checks: Checks) Outcome {
     switch (reload) {
         .unchanged => |mtime_ns| {
             state.mtime_ns = mtime_ns;
@@ -182,13 +177,7 @@ pub fn resolve(
     }
 }
 
-fn reject(
-    state: *State,
-    gpa: std.mem.Allocator,
-    loaded: Loaded,
-    comptime format: []const u8,
-    args: anytype,
-) Outcome {
+fn reject(state: *State, gpa: std.mem.Allocator, loaded: Loaded, comptime format: []const u8, args: anytype) Outcome {
     var diagnostic: lua_config.Diagnostic = .{};
     diagnostic.set(format, args);
     state.clearOrphans();
@@ -206,39 +195,27 @@ const Partial = struct {
     trust: ?*core.plugin.TrustStore = null,
     registry: ?*plugin_broker.Registry = null,
 
-    fn abandon(
-        partial: Partial,
-        gpa: std.mem.Allocator,
-        orphan: *?*lua_config.Generation,
-        trust_orphan: *?*core.plugin.TrustStore,
-    ) void {
+    fn abandon(partial: Partial, gpa: std.mem.Allocator, orphan: *?*lua_config.Generation, trust_orphan: *?*core.plugin.TrustStore) void {
         orphan.* = null;
         trust_orphan.* = null;
-        if (partial.registry) |registry| gpa.destroy(registry);
+        if (partial.registry) |registry| {
+            gpa.destroy(registry);
+        }
         partial.generation.deinit();
-        if (partial.trust) |trust| gpa.destroy(trust);
+        if (partial.trust) |trust| {
+            gpa.destroy(trust);
+        }
     }
 };
 
-fn waitConfigReload(
-    io: Io,
-    gpa: std.mem.Allocator,
-    path: []const u8,
-    known_mtime_ns: i128,
-    generation_number: u64,
-    profile: ?[]const u8,
-    current_generation: *const lua_config.Generation,
-    current_registry: *const plugin_broker.Registry,
-    trust_path: []const u8,
-    orphan: *?*lua_config.Generation,
-    registry_orphan: *?*plugin_broker.Registry,
-    trust_orphan: *?*core.plugin.TrustStore,
-) anyerror!ConfigReload {
+fn waitConfigReload(io: Io, gpa: std.mem.Allocator, path: []const u8, known_mtime_ns: i128, generation_number: u64, profile: ?[]const u8, current_generation: *const lua_config.Generation, current_registry: *const plugin_broker.Registry, trust_path: []const u8, orphan: *?*lua_config.Generation, registry_orphan: *?*plugin_broker.Registry, trust_orphan: *?*core.plugin.TrustStore) anyerror!ConfigReload {
     try io.sleep(.fromSeconds(1), .awake);
     const mtime_ns = current_generation.watchFingerprint(io, path) ^
         @as(i128, current_registry.watchFingerprint(gpa, io)) ^
         @as(i128, trustWatchFingerprint(io, trust_path));
-    if (mtime_ns == known_mtime_ns) return .{ .unchanged = mtime_ns };
+    if (mtime_ns == known_mtime_ns) {
+        return .{ .unchanged = mtime_ns };
+    }
     var diagnostic: lua_config.Diagnostic = .{};
     const generation = lua_config.Generation.loadFileProfile(
         gpa,
@@ -306,11 +283,7 @@ pub fn trustWatchFingerprint(io: Io, path: []const u8) u64 {
     return hasher.final();
 }
 
-fn loadReloadTrustStore(
-    gpa: std.mem.Allocator,
-    io: Io,
-    path: []const u8,
-) !*core.plugin.TrustStore {
+fn loadReloadTrustStore(gpa: std.mem.Allocator, io: Io, path: []const u8) !*core.plugin.TrustStore {
     const store = try gpa.create(core.plugin.TrustStore);
     errdefer gpa.destroy(store);
     const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
@@ -320,8 +293,9 @@ fn loadReloadTrustStore(
         },
         else => return err,
     };
-    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0)
+    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0) {
         return error.InsecureTrustStore;
+    }
     const source = try Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
     defer gpa.free(source);
     store.* = try core.plugin.TrustStore.parse(gpa, source);

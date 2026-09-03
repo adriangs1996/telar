@@ -102,9 +102,11 @@ pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnect
     while (attempt < connect_attempts) : (attempt += 1) {
         if (connector.connect()) |connection| {
             return connection;
-        } else |err| switch (err) {
-            error.IncompatibleSchema => return err,
-            else => init.io.sleep(.fromMilliseconds(connect_interval_ms), .awake) catch {},
+        } else |err| {
+            switch (err) {
+                error.IncompatibleSchema => return err,
+                else => init.io.sleep(.fromMilliseconds(connect_interval_ms), .awake) catch {},
+            }
         }
     }
 

@@ -9,6 +9,8 @@
 pub const Measured = struct { len: usize, width: u8 };
 
 pub fn graphemeWidth(codepoints: []const u21) Measured {
-    if (codepoints.len == 0) return .{ .len = 0, .width = 0 };
+    if (codepoints.len == 0) {
+        return .{ .len = 0, .width = 0 };
+    }
     return .{ .len = 1, .width = 2 };
 }

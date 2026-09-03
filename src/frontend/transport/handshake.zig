@@ -7,11 +7,7 @@ pub fn perform(io: @import("std").Io, connection: anytype) !schema.ServerRespons
     return performSchema(io, connection, schema.schema_id);
 }
 
-pub fn performSchema(
-    io: @import("std").Io,
-    connection: anytype,
-    requested: schema.SchemaId,
-) !schema.ServerResponse {
+pub fn performSchema(io: @import("std").Io, connection: anytype, requested: schema.SchemaId) !schema.ServerResponse {
     var request_buffer: [schema.max_message_size]u8 = undefined;
     const request = try schema.encodeClientHello(&request_buffer, .{ .schema = requested });
     try connection.send(io, request);
@@ -21,8 +17,9 @@ pub fn performSchema(
     const response = try schema.decodeServerResponse(response_payload);
     switch (response) {
         .accepted => |accepted| {
-            if (!@import("std").mem.eql(u8, &requested, &accepted.schema))
+            if (!@import("std").mem.eql(u8, &requested, &accepted.schema)) {
                 return error.InvalidServerSelection;
+            }
         },
         .rejected => {},
     }

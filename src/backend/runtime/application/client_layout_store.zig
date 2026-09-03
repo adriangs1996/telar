@@ -124,7 +124,9 @@ pub const Store = struct {
     /// ```
     pub fn exportRecord(store: *const Store, index: usize, buffer: []u8) !?Exported {
         const record = &store.records[index];
-        if (record.identity == .invalid) return null;
+        if (record.identity == .invalid) {
+            return null;
+        }
 
         var tabs: [schema.max_client_layout_tabs]schema.ClientTabLayout = undefined;
         for (record.tabs[0..record.tab_count], 0..) |*tab, position| {

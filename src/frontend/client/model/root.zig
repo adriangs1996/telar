@@ -94,6 +94,7 @@ pub const PaneFrameOutcome = model_types.PaneFrameOutcome;
 pub const PaneGraphicsFallbackCommit = model_types.PaneGraphicsFallbackCommit;
 pub const PaneMetadataKind = model_types.PaneMetadataKind;
 pub const PaneMetadataCommand = model_types.PaneMetadataCommand;
+pub const PaneProgressCommit = model_types.PaneProgressCommit;
 pub const PaneMetadataCommit = model_types.PaneMetadataCommit;
 pub const PaneViewportTarget = model_types.PaneViewportTarget;
 pub const PaneViewportCommand = model_types.PaneViewportCommand;
@@ -185,6 +186,7 @@ pub const Model = struct {
     frame_revision: u64 = 0,
     pane_metadata_revision: u64 = 0,
     pane_foreground_revision: u64 = 0,
+    pane_progress_revision: u64 = 0,
     pane_graphics_revision: u64 = 0,
     viewport_revision: u64 = 0,
 
@@ -270,6 +272,7 @@ pub const Model = struct {
             .frame = model.frame_revision,
             .pane_metadata = model.pane_metadata_revision,
             .pane_foreground = model.pane_foreground_revision,
+            .pane_progress = model.pane_progress_revision,
             .pane_graphics = model.pane_graphics_revision,
             .chrome = model.chrome_revision,
             .prompt = model.name_prompt.version(),
@@ -1222,7 +1225,20 @@ pub const Model = struct {
     /// if (model.sidebarAnimationActive()) scheduleTick();
     /// ```
     pub fn sidebarAnimationActive(model: *const Model) bool {
-        return model.agent_snapshot.hasWorkingAgent();
+        if (model.agent_snapshot.hasWorkingAgent()) {
+            return true;
+        }
+
+        for (&model.workspace.items) |tab_slot| {
+            const tab = tab_slot orelse continue;
+            for (&tab.model.panes) |pane_slot| {
+                const pane = pane_slot orelse continue;
+                if (pane.progress_state == .set or pane.progress_state == .indeterminate) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// Returns the current model-owned animation frame rendered by the
@@ -1664,6 +1680,26 @@ pub const Model = struct {
             .display_changed = display_changed,
             .pane_metadata_revision = model.pane_metadata_revision,
             .pane_foreground_revision = model.pane_foreground_revision,
+        };
+    }
+
+    /// Applies one runtime-owned progress fact to its pane replica.
+    ///
+    /// ```zig
+    /// const commit = model.updatePaneProgress(progress) orelse return;
+    /// ```
+    pub fn updatePaneProgress(model: *Model, progress: schema.PaneProgress) ?PaneProgressCommit {
+        const tab = model.workspace.tabForPane(progress.pane_id) orelse return null;
+        const pane = tab.model.find(progress.pane_id) orelse return null;
+        if (!pane.setProgress(progress)) {
+            return null;
+        }
+
+        model.pane_progress_revision +%= 1;
+        return .{
+            .pane_id = progress.pane_id,
+            .active = progress.state != .remove,
+            .pane_progress_revision = model.pane_progress_revision,
         };
     }
 

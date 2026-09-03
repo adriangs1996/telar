@@ -89,7 +89,9 @@ pub const Sync = struct {
 
     fn syncViewportScreen(sync: *Sync, pane: *Pane) void {
         const active_key = pane.terminal.screens.active_key;
-        if (sync.viewport_screen == active_key) return;
+        if (sync.viewport_screen == active_key) {
+            return;
+        }
         sync.clearViewport(pane);
         sync.viewport_screen = active_key;
     }
@@ -160,7 +162,9 @@ pub const Sync = struct {
 
     pub fn acknowledge(sync: *Sync, frame_id: u64, now_ns: u64) ?u64 {
         const outstanding = sync.outstanding orelse return null;
-        if (outstanding.frame_id != frame_id) return null;
+        if (outstanding.frame_id != frame_id) {
+            return null;
+        }
         sync.acknowledged_frame_id = frame_id;
         sync.outstanding = null;
         return diagnostics.elapsed(outstanding.sent_ns, now_ns);
@@ -177,7 +181,9 @@ pub const Sync = struct {
         sync.syncViewportScreen(pane);
         const screen = pane.terminal.screens.active;
         if (sync.viewport_pin) |pin| {
-            if (pin.garbage) pin.garbage = false;
+            if (pin.garbage) {
+                pin.garbage = false;
+            }
             screen.scroll(.{ .pin = pin.* });
             defer screen.scroll(.{ .active = {} });
             {
@@ -227,9 +233,13 @@ pub const Sync = struct {
         const force_snapshot = preparation.force_snapshot;
         const metrics = preparation.metrics;
 
-        if (!force_snapshot and pane.holdFrames(io)) return null;
+        if (!force_snapshot and pane.holdFrames(io)) {
+            return null;
+        }
         const started = diagnostics.now(io);
-        if (pane.render_pending) try pane.render(false);
+        if (pane.render_pending) {
+            try pane.render(false);
+        }
         const projection = try sync.project(pane, force_snapshot);
         const source = projection.buffer;
         var span_storage: [schema.frame.max_span_count]schema.frame.Span = undefined;
@@ -309,8 +319,12 @@ pub const Sync = struct {
             metrics.frame_bytes += payload.len;
             metrics.frame_cells += cell_count;
             metrics.frame_spans += span_count;
-            if (snapshot) metrics.snapshots += 1;
-            if (!snapshot and span_count == 0) metrics.cursor_only_frames += 1;
+            if (snapshot) {
+                metrics.snapshots += 1;
+            }
+            if (!snapshot and span_count == 0) {
+                metrics.cursor_only_frames += 1;
+            }
             metrics.damaged_rows += diff.damaged_rows;
             metrics.diff_scanned_cells += diff.scanned_cells;
             if (!snapshot) {

@@ -68,20 +68,28 @@ pub fn Hits(comptime Action: type, comptime capacity: usize) type {
         /// list behind it. Pass null for an overlay that should not steal
         /// clicks it has no control under - a tooltip, a drag ghost.
         pub fn beginLayer(h: *Self, swallows: ?Rect) void {
-            if (h.layer + 1 >= max_layers) return;
+            if (h.layer + 1 >= max_layers) {
+                return;
+            }
             h.layer += 1;
             h.top = @max(h.top, h.layer);
             h.blocks[h.layer] = swallows;
         }
 
         pub fn endLayer(h: *Self) void {
-            if (h.layer == 0) return;
+            if (h.layer == 0) {
+                return;
+            }
             h.layer -= 1;
         }
 
         pub fn add(h: *Self, rect: Rect, action: Action) void {
-            if (h.len == capacity) return;
-            if (rect.isEmpty()) return;
+            if (h.len == capacity) {
+                return;
+            }
+            if (rect.isEmpty()) {
+                return;
+            }
             h.entries[h.len] = .{ .rect = rect, .action = action, .layer = h.layer };
             h.len += 1;
         }
@@ -101,11 +109,17 @@ pub fn Hits(comptime Action: type, comptime capacity: usize) type {
                 while (index > 0) {
                     index -= 1;
                     const entry = h.entries[index];
-                    if (entry.layer != current) continue;
-                    if (entry.rect.contains(x, y)) return entry.action;
+                    if (entry.layer != current) {
+                        continue;
+                    }
+                    if (entry.rect.contains(x, y)) {
+                        return entry.action;
+                    }
                 }
                 if (h.blocks[current]) |region| {
-                    if (region.contains(x, y)) return null;
+                    if (region.contains(x, y)) {
+                        return null;
+                    }
                 }
             }
             return null;

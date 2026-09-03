@@ -24,10 +24,18 @@ pub const SidebarRendering = enum {
     kitty_full,
 
     pub fn parse(name: []const u8) !SidebarRendering {
-        if (std.ascii.eqlIgnoreCase(name, "automatic") or std.ascii.eqlIgnoreCase(name, "auto")) return .automatic;
-        if (std.ascii.eqlIgnoreCase(name, "cells")) return .cells;
-        if (std.ascii.eqlIgnoreCase(name, "kitty-hybrid")) return .kitty_hybrid;
-        if (std.ascii.eqlIgnoreCase(name, "kitty-full")) return .kitty_full;
+        if (std.ascii.eqlIgnoreCase(name, "automatic") or std.ascii.eqlIgnoreCase(name, "auto")) {
+            return .automatic;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "cells")) {
+            return .cells;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "kitty-hybrid")) {
+            return .kitty_hybrid;
+        }
+        if (std.ascii.eqlIgnoreCase(name, "kitty-full")) {
+            return .kitty_full;
+        }
         return error.UnknownSidebarRenderer;
     }
 

@@ -17,17 +17,7 @@ pub fn tracked(tracking: schema.frame.MouseTracking, kind: term.Event.Mouse.Kind
     };
 }
 
-pub fn encodeSgr(
-    buffer: []u8,
-    event: term.Event.Mouse,
-    pane_x: u16,
-    pane_y: u16,
-    pixels: bool,
-    cell_width: u16,
-    cell_height: u16,
-    exact_pixel_x: ?u32,
-    exact_pixel_y: ?u32,
-) ![]const u8 {
+pub fn encodeSgr(buffer: []u8, event: term.Event.Mouse, pane_x: u16, pane_y: u16, pixels: bool, cell_width: u16, cell_height: u16, exact_pixel_x: ?u32, exact_pixel_y: ?u32) ![]const u8 {
     const final: u8 = if (event.kind == .release) 'm' else 'M';
     const x: u32 = exact_pixel_x orelse if (pixels and cell_width != 0)
         @as(u32, pane_x) * cell_width + cell_width / 2

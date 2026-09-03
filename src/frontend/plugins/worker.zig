@@ -6,13 +6,10 @@ const protocol = @import("protocol.zig");
 
 const Io = std.Io;
 
-pub fn run(
-    init: std.process.Init,
-    entry_path: []const u8,
-    action_name: []const u8,
-    context: lua_config.CallbackContext,
-) !void {
-    if (!validActionName(action_name)) return error.InvalidPluginAction;
+pub fn run(init: std.process.Init, entry_path: []const u8, action_name: []const u8, context: lua_config.CallbackContext) !void {
+    if (!validActionName(action_name)) {
+        return error.InvalidPluginAction;
+    }
     const entry = try Io.Dir.cwd().readFileAlloc(
         init.io,
         entry_path,
@@ -74,7 +71,9 @@ pub fn run(
 }
 
 fn validActionName(value: []const u8) bool {
-    if (value.len == 0) return false;
+    if (value.len == 0) {
+        return false;
+    }
     for (value) |byte|
         if (!std.ascii.isAlphanumeric(byte) and byte != '_' and byte != '-' and byte != '.')
             return false;

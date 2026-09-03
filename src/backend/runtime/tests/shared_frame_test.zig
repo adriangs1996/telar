@@ -36,7 +36,9 @@ fn createChildObject(name: [:0]const u8, pixels: []const u8) !void {
 
 fn objectExists(name: [:0]const u8) bool {
     const fd = std.c.shm_open(name, @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
-    if (std.posix.errno(fd) != .SUCCESS) return false;
+    if (std.posix.errno(fd) != .SUCCESS) {
+        return false;
+    }
     _ = std.c.close(fd);
     return true;
 }
@@ -119,7 +121,9 @@ fn ingest(fixture: *support.PaneFixture, bytes: []const u8) !backend_media.Stats
 }
 
 test "a shared frame is copied once into the object that becomes emulator storage" {
-    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    if (comptime !shared_memory_supported) {
+        return error.SkipZigTest;
+    }
     var fixture: support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -168,7 +172,9 @@ test "a shared frame is copied once into the object that becomes emulator storag
 }
 
 test "replacing a direct frame unmaps the previous object and keeps quota flat" {
-    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    if (comptime !shared_memory_supported) {
+        return error.SkipZigTest;
+    }
     var fixture: support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -200,7 +206,9 @@ test "replacing a direct frame unmaps the previous object and keeps quota flat" 
 }
 
 test "a frame published through a validated file loads with one copy and leaves the file alone" {
-    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    if (comptime !shared_memory_supported) {
+        return error.SkipZigTest;
+    }
     var fixture: support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -228,7 +236,9 @@ test "a frame published through a validated file loads with one copy and leaves 
 }
 
 test "file frames that fail validation keep the current image and count as unavailable" {
-    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    if (comptime !shared_memory_supported) {
+        return error.SkipZigTest;
+    }
     var fixture: support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -288,7 +298,9 @@ test "file frames that fail validation keep the current image and count as unava
 }
 
 test "the pane answers file capability queries the emulator would refuse" {
-    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    if (comptime !shared_memory_supported) {
+        return error.SkipZigTest;
+    }
     var fixture: support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -325,7 +337,9 @@ test "the pane answers file capability queries the emulator would refuse" {
 }
 
 test "without a shared-transport client the frame still loads with one copy and parks nothing" {
-    if (comptime !shared_memory_supported) return error.SkipZigTest;
+    if (comptime !shared_memory_supported) {
+        return error.SkipZigTest;
+    }
     var fixture: support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();

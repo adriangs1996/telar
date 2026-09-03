@@ -18,6 +18,7 @@ const pane_focus_commands = @import("../controllers/panes/pane_focus_commands.zi
 const pane_graphics = @import("../controllers/panes/pane_graphics.zig");
 const pane_metadata = @import("../controllers/panes/pane_metadata.zig");
 const pane_openings = @import("../controllers/panes/pane_openings.zig");
+const pane_progress = @import("../controllers/panes/pane_progress.zig");
 const copy_modes = @import("../controllers/input/copy_modes.zig");
 const history_palettes = @import("../controllers/input/history_palettes.zig");
 const suggestions = @import("../controllers/input/suggestions.zig");
@@ -50,6 +51,7 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_cwd => |cwd| _ = try pane_metadata.applyCwd(client, cwd),
         .pane_foreground => |foreground| _ = try pane_metadata.applyForeground(client, foreground),
         .pane_title => |title| _ = try pane_metadata.applyTitle(client, title),
+        .pane_progress => |progress| _ = try pane_progress.apply(client, progress),
         .pane_focus_command => |command| try pane_focus_commands.apply(client, command),
         .pane_matches => |found| _ = try copy_modes.matches(client, found),
         .pane_clipboard => |clipboard| try pane_clipboards.apply(client, clipboard),

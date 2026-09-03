@@ -62,14 +62,18 @@ pub fn probe(job: Job) Completion {
 fn readHead(io: Io, workspace_path: []const u8, buffer: []u8) ?[]const u8 {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const head_path = std.fmt.bufPrint(&path_buffer, "{s}/.git/HEAD", .{workspace_path}) catch return null;
-    if (readSmall(io, head_path, buffer)) |bytes| return bytes;
+    if (readSmall(io, head_path, buffer)) |bytes| {
+        return bytes;
+    }
 
     // A linked worktree keeps `.git` as a file pointing at its real git dir.
     var gitfile_buffer: [4096]u8 = undefined;
     const gitfile_path = std.fmt.bufPrint(&path_buffer, "{s}/.git", .{workspace_path}) catch return null;
     const gitfile = readSmall(io, gitfile_path, &gitfile_buffer) orelse return null;
     const trimmed = std.mem.trim(u8, gitfile, " \r\n");
-    if (!std.mem.startsWith(u8, trimmed, "gitdir:")) return null;
+    if (!std.mem.startsWith(u8, trimmed, "gitdir:")) {
+        return null;
+    }
     const git_dir = std.mem.trim(u8, trimmed["gitdir:".len..], " \r\n");
     const linked_head = std.fmt.bufPrint(&path_buffer, "{s}/HEAD", .{git_dir}) catch return null;
     return readSmall(io, linked_head, buffer);
@@ -112,7 +116,9 @@ fn statusDirty(io: Io, workspace_path: []const u8) bool {
     }) catch return false;
     defer gpa.free(result.stdout);
     defer gpa.free(result.stderr);
-    if (result.term != .exited or result.term.exited != 0) return false;
+    if (result.term != .exited or result.term.exited != 0) {
+        return false;
+    }
     return std.mem.trim(u8, result.stdout, " \r\n").len != 0;
 }
 
@@ -126,15 +132,21 @@ pub fn Observer(comptime Application: type) type {
         /// GitObserver.tick(&application);
         /// ```
         pub fn tick(application: *Application) void {
-            if (application.git_probe_in_flight) return;
+            if (application.git_probe_in_flight) {
+                return;
+            }
             const now_ms = Io.Timestamp.now(application.io, .real).toMilliseconds();
             var repository = application.workspaceRepository();
 
             var stalest: ?*workspace_mod.Workspace = null;
             for (&repository.state.items) |*slot| {
                 const workspace = if (slot.*) |*value| value else continue;
-                if (workspace.git_probe_pending) continue;
-                if (now_ms - workspace.git_checked_at_ms < probe_interval_ms) continue;
+                if (workspace.git_probe_pending) {
+                    continue;
+                }
+                if (now_ms - workspace.git_checked_at_ms < probe_interval_ms) {
+                    continue;
+                }
                 if (stalest == null or workspace.git_checked_at_ms < stalest.?.git_checked_at_ms) {
                     stalest = workspace;
                 }
@@ -143,7 +155,9 @@ pub fn Observer(comptime Application: type) type {
             const workspace = stalest orelse return;
             var job: Job = .{ .io = application.io, .workspace = workspace.id };
             const path = workspace.pathSlice();
-            if (path.len > job.path.len) return;
+            if (path.len > job.path.len) {
+                return;
+            }
             @memcpy(job.path[0..path.len], path);
             job.path_len = @intCast(path.len);
 

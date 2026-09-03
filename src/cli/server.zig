@@ -9,6 +9,7 @@ const parser = @import("parser.zig");
 const runtime_connection = @import("runtime_connection.zig");
 const plugin_cli = @import("plugin.zig");
 const proxy_cli = @import("proxy.zig");
+const TestEnvironment = @import("test_environment.zig").TestEnvironment;
 
 const Io = std.Io;
 const File = Io.File;
@@ -249,16 +250,24 @@ const Launch = struct {
         );
 
         for (registry.packages[0..registry.count]) |*package| {
-            if (!package.manifest.capabilities.contains(.proxy_tap)) continue;
+            if (!package.manifest.capabilities.contains(.proxy_tap)) {
+                continue;
+            }
             const granted = grantedCapabilities(&trust, package);
-            if (!granted.contains(.proxy_tap)) continue;
-            if (launch.tap_spec_count == backend.plugins.max_workers) return error.TooManyTapPlugins;
+            if (!granted.contains(.proxy_tap)) {
+                continue;
+            }
+            if (launch.tap_spec_count == backend.plugins.max_workers) {
+                return error.TooManyTapPlugins;
+            }
             const snapshot_root = try launch.ensureTapSnapshot();
             var package_buffer: [std.fs.max_path_bytes]u8 = undefined;
             const package_path = try std.fmt.bufPrint(&package_buffer, "{s}/package-{d}", .{ snapshot_root, launch.tap_spec_count });
             try frontend.plugins.installPackage(launch.process.gpa, launch.process.io, package, package_path);
             const copied = try frontend.plugins.inspectPackage(launch.process.gpa, launch.process.io, package_path);
-            if (!std.mem.eql(u8, &copied.digest, &package.digest)) return error.PluginChangedDuringInstall;
+            if (!std.mem.eql(u8, &copied.digest, &package.digest)) {
+                return error.PluginChangedDuringInstall;
+            }
             var entry_buffer: [std.fs.max_path_bytes]u8 = undefined;
             const entry = try std.fmt.bufPrint(&entry_buffer, "{s}/{s}", .{ package_path, copied.manifest.entry() });
             launch.tap_specs[launch.tap_spec_count] = try backend.plugins.Spec.init(launch.tap_spec_count, generation.number, .{
@@ -273,7 +282,9 @@ const Launch = struct {
     }
 
     fn ensureTapSnapshot(launch: *Launch) ![]const u8 {
-        if (launch.tap_snapshot_directory) |path| return path;
+        if (launch.tap_snapshot_directory) |path| {
+            return path;
+        }
         var nonce: [16]u8 = undefined;
         try launch.process.io.randomSecure(&nonce);
         const nonce_hex = std.fmt.bytesToHex(nonce, .lower);
@@ -386,8 +397,12 @@ const Launch = struct {
 fn grantedCapabilities(trust: *const core.plugin.TrustStore, package: *const frontend.plugins.Package) core.plugin.CapabilitySet {
     var granted = core.plugin.CapabilitySet.initEmpty();
     for (trust.entries[0..trust.count]) |entry| {
-        if (entry.grant.plugin_hash != core.plugin.stableId(package.manifest.id())) continue;
-        if (!std.mem.eql(u8, &entry.grant.digest, &package.digest)) continue;
+        if (entry.grant.plugin_hash != core.plugin.stableId(package.manifest.id())) {
+            continue;
+        }
+        if (!std.mem.eql(u8, &entry.grant.digest, &package.digest)) {
+            continue;
+        }
         granted.setUnion(entry.grant.capabilities);
     }
     return granted;
@@ -545,33 +560,13 @@ fn checkDirectoryOwner(owner: std.c.uid_t, current_user: std.c.uid_t) error{Wron
     }
 }
 
-fn testEnvironment(entries: []const struct { []const u8, []const u8 }) !struct {
-    map: std.process.Environ.Map,
-    block: std.process.Environ.PosixBlock,
-
-    fn deinit(environment: *@This()) void {
-        environment.block.deinit(std.testing.allocator);
-        environment.map.deinit();
-    }
-} {
-    var map = std.process.Environ.Map.init(std.testing.allocator);
-    errdefer map.deinit();
-    for (entries) |entry| {
-        try map.put(entry[0], entry[1]);
-    }
-    return .{
-        .block = try map.createPosixBlock(std.testing.allocator, .{}),
-        .map = map,
-    };
-}
-
 fn temporaryDirectory(temp: *std.testing.TmpDir, buffer: []u8) ![]const u8 {
     const len = try temp.dir.realPath(std.testing.io, buffer);
     return buffer[0..len];
 }
 
 test "explicit history storage overrides XDG data storage" {
-    var environment = try testEnvironment(&.{
+    var environment = try TestEnvironment.init(&.{
         .{ "TELAR_HISTORY", "/var/lib/telar/history.db" },
         .{ "XDG_DATA_HOME", "/data" },
     });
@@ -585,7 +580,7 @@ test "explicit history storage overrides XDG data storage" {
 }
 
 test "history and proxy storage prefer XDG data home" {
-    var environment = try testEnvironment(&.{
+    var environment = try TestEnvironment.init(&.{
         .{ "XDG_DATA_HOME", "/data" },
         .{ "HOME", "/home/adrian" },
     });

@@ -62,8 +62,12 @@ pub const Renderer = struct {
     }
 
     pub fn deinit(renderer: *Renderer) void {
-        if (renderer.atlas.len != 0) renderer.gpa.free(renderer.atlas);
-        if (renderer.text) |*text| text.deinit();
+        if (renderer.atlas.len != 0) {
+            renderer.gpa.free(renderer.atlas);
+        }
+        if (renderer.text) |*text| {
+            text.deinit();
+        }
     }
 
     pub fn retainedBytes(renderer: *const Renderer) usize {
@@ -74,15 +78,13 @@ pub const Renderer = struct {
         return renderer.supported and !renderer.failed;
     }
 
-    pub fn configure(
-        renderer: *Renderer,
-        support: kitty.Support,
-        cell_width: u16,
-        cell_height: u16,
-    ) bool {
+    pub fn configure(renderer: *Renderer, support: kitty.Support, cell_width: u16, cell_height: u16) bool {
         const supported = support == .supported and renderer.text != null;
         if (renderer.supported == supported and renderer.cell_width == cell_width and
-            renderer.cell_height == cell_height) return false;
+            renderer.cell_height == cell_height)
+        {
+            return false;
+        }
         renderer.supported = supported;
         renderer.cell_width = cell_width;
         renderer.cell_height = cell_height;
@@ -98,7 +100,9 @@ pub const Renderer = struct {
     }
 
     pub fn prepare(renderer: *Renderer, marks: []const ui_icons.Mark) !void {
-        if (marks.len > ui_icons.max_marks) return error.TooManyIconMarks;
+        if (marks.len > ui_icons.max_marks) {
+            return error.TooManyIconMarks;
+        }
         if (!renderer.supported or renderer.failed or renderer.cell_width == 0 or
             renderer.cell_height == 0 or marks.len == 0)
         {
@@ -143,7 +147,9 @@ pub const Renderer = struct {
             const atlas_height = std.math.mul(u32, raster_size.height, next_slot_count) catch
                 return error.IconAtlasTooLarge;
             const atlas_len = try rgbaLength(raster_size.width, atlas_height);
-            if (atlas_len > max_atlas_bytes) return error.IconAtlasTooLarge;
+            if (atlas_len > max_atlas_bytes) {
+                return error.IconAtlasTooLarge;
+            }
             const next_atlas = try renderer.gpa.alloc(u8, atlas_len);
             errdefer renderer.gpa.free(next_atlas);
             const text = if (renderer.text) |*value| value else unreachable;
@@ -153,7 +159,9 @@ pub const Renderer = struct {
                 raster_size,
                 next_slots[0..next_slot_count],
             );
-            if (renderer.atlas.len != 0) renderer.gpa.free(renderer.atlas);
+            if (renderer.atlas.len != 0) {
+                renderer.gpa.free(renderer.atlas);
+            }
             renderer.atlas = next_atlas;
             renderer.atlas_height = atlas_height;
             renderer.pixel_width = raster_size.width;
@@ -176,7 +184,9 @@ pub const Renderer = struct {
             renderer.placement_count = next_placement_count;
             renderer.placements_dirty = true;
         }
-        if (!renderer.visible) renderer.placements_dirty = true;
+        if (!renderer.visible) {
+            renderer.placements_dirty = true;
+        }
         renderer.visible = true;
     }
 
@@ -190,7 +200,9 @@ pub const Renderer = struct {
     }
 
     pub fn write(renderer: *Renderer, writer: *Io.Writer) Io.Writer.Error!usize {
-        if (!renderer.damaged()) return 0;
+        if (!renderer.damaged()) {
+            return 0;
+        }
         var written: usize = 0;
         if (renderer.transfer_abort_pending) {
             written += try kitty.writeTransmissionAbort(writer);
@@ -203,7 +215,9 @@ pub const Renderer = struct {
                 written += try kitty.writeTransmissionAbort(writer);
                 renderer.transfer_offset = 0;
             }
-            if (renderer.image_emitted) written += try kitty.writeDeleteImage(writer, image_id);
+            if (renderer.image_emitted) {
+                written += try kitty.writeDeleteImage(writer, image_id);
+            }
             renderer.image_emitted = false;
             renderer.image_dirty = false;
             renderer.placements_dirty = false;
@@ -234,7 +248,9 @@ pub const Renderer = struct {
             );
             written += progress.written;
             renderer.transfer_offset = progress.offset;
-            if (progress.offset != renderer.atlas.len) return written;
+            if (progress.offset != renderer.atlas.len) {
+                return written;
+            }
             renderer.transfer_offset = 0;
             renderer.image_dirty = false;
             renderer.image_emitted = true;
@@ -284,8 +300,12 @@ fn slotFromMark(mark: ui_icons.Mark) Slot {
 }
 
 fn ensureSlot(slots: *[ui_icons.max_marks]Slot, count: *u8, wanted: Slot) !u8 {
-    if (findSlot(slots[0..count.*], wanted)) |slot| return slot;
-    if (count.* == slots.len) return error.TooManyIconSlots;
+    if (findSlot(slots[0..count.*], wanted)) |slot| {
+        return slot;
+    }
+    if (count.* == slots.len) {
+        return error.TooManyIconSlots;
+    }
     slots[count.*] = wanted;
     const added = count.*;
     count.* += 1;
@@ -305,19 +325,25 @@ fn isWorkingIcon(icon: ui_icons.Icon) bool {
 
 fn findSlot(slots: []const Slot, wanted: Slot) ?u8 {
     for (slots, 0..) |slot, index| {
-        if (std.meta.eql(slot, wanted)) return @intCast(index);
+        if (std.meta.eql(slot, wanted)) {
+            return @intCast(index);
+        }
     }
     return null;
 }
 
 fn slotsEqual(a: []const Slot, b: []const Slot) bool {
-    if (a.len != b.len) return false;
+    if (a.len != b.len) {
+        return false;
+    }
     for (a, b) |left, right| if (!std.meta.eql(left, right)) return false;
     return true;
 }
 
 fn placementsEqual(a: []const Placement, b: []const Placement) bool {
-    if (a.len != b.len) return false;
+    if (a.len != b.len) {
+        return false;
+    }
     for (a, b) |left, right| if (!std.meta.eql(left, right)) return false;
     return true;
 }
@@ -335,10 +361,12 @@ const RasterSize = struct {
 
 fn fitCell(cell_width: u16, cell_height: u16) RasterSize {
     const longest = @max(cell_width, cell_height);
-    if (longest <= max_pixel_dimension) return .{
-        .width = cell_width,
-        .height = cell_height,
-    };
+    if (longest <= max_pixel_dimension) {
+        return .{
+            .width = cell_width,
+            .height = cell_height,
+        };
+    }
     return .{
         .width = scaledDimension(cell_width, longest),
         .height = scaledDimension(cell_height, longest),
@@ -350,12 +378,7 @@ fn scaledDimension(value: u16, longest: u16) u16 {
     return @intCast(@max(1, numerator / longest));
 }
 
-fn renderAtlas(
-    text: *raster.Rasterizer,
-    pixels: []u8,
-    raster_size: RasterSize,
-    slots: []const Slot,
-) !void {
+fn renderAtlas(text: *raster.Rasterizer, pixels: []u8, raster_size: RasterSize, slots: []const Slot) !void {
     const icon_size = @min(raster_size.width, raster_size.height);
     try text.setPixelHeight(icon_size);
     const metrics = text.metrics();
@@ -384,7 +407,9 @@ fn renderAtlas(
             },
             raster_size.width,
         );
-        if (advance == 0) return error.EmptyIconGlyph;
+        if (advance == 0) {
+            return error.EmptyIconGlyph;
+        }
     }
 }
 
@@ -454,7 +479,9 @@ test "round Nerd Font icons remain square inside a tall cell" {
     for (0..renderer.pixel_height) |y| {
         for (0..renderer.pixel_width) |x| {
             const index = (@as(usize, y) * renderer.pixel_width + x) * 4;
-            if (std.mem.eql(u8, renderer.atlas[index..][0..3], &.{ 20, 20, 20 })) continue;
+            if (std.mem.eql(u8, renderer.atlas[index..][0..3], &.{ 20, 20, 20 })) {
+                continue;
+            }
             found = true;
             min_x = @min(min_x, @as(u16, @intCast(x)));
             min_y = @min(min_y, @as(u16, @intCast(y)));

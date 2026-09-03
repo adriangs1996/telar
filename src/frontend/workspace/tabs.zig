@@ -84,12 +84,7 @@ pub const Tab = struct {
     snapshot_loaded: bool = false,
     restore_display_order: bool = false,
 
-    fn init(
-        gpa: std.mem.Allocator,
-        location: schema.TabLocation,
-        label: []const u8,
-        pane_gaps: bool,
-    ) Tab {
+    fn init(gpa: std.mem.Allocator, location: schema.TabLocation, label: []const u8, pane_gaps: bool) Tab {
         var tab: Tab = .{
             .location = location,
             .model = .init(gpa),
@@ -133,7 +128,9 @@ pub const Model = struct {
 
     pub fn deinit(model: *Model) void {
         for (&model.items) |*slot| {
-            if (slot.*) |*tab| tab.deinit();
+            if (slot.*) |*tab| {
+                tab.deinit();
+            }
             slot.* = null;
         }
         model.count = 0;
@@ -143,7 +140,9 @@ pub const Model = struct {
     }
 
     pub fn setPaneGaps(model: *Model, enabled: bool) void {
-        if (model.pane_gaps == enabled) return;
+        if (model.pane_gaps == enabled) {
+            return;
+        }
         model.pane_gaps = enabled;
         for (model.items[0..model.count]) |*slot|
             if (slot.*) |*tab| tab.model.setPaneGaps(enabled);
@@ -168,13 +167,10 @@ pub const Model = struct {
         }
     }
 
-    pub fn bootstrap(
-        model: *Model,
-        pane_id: schema.PaneId,
-        location: schema.TabLocation,
-        size: schema.TerminalSize,
-    ) !void {
-        if (model.count != 0) return error.ModelNotEmpty;
+    pub fn bootstrap(model: *Model, pane_id: schema.PaneId, location: schema.TabLocation, size: schema.TerminalSize) !void {
+        if (model.count != 0) {
+            return error.ModelNotEmpty;
+        }
 
         try model.replaceWithRoot(.{
             .pane_id = pane_id,
@@ -203,12 +199,10 @@ pub const Model = struct {
         model.workspace = root.location.workspace;
     }
 
-    pub fn restoreLayoutOnNextSnapshot(
-        model: *Model,
-        location: schema.TabLocation,
-        saved: layout_mod.Layout,
-    ) bool {
-        if (model.find(location.tab_id) == null) return false;
+    pub fn restoreLayoutOnNextSnapshot(model: *Model, location: schema.TabLocation, saved: layout_mod.Layout) bool {
+        if (model.find(location.tab_id) == null) {
+            return false;
+        }
         model.pending_layout_restore = .{ .location = location, .layout = saved };
         return true;
     }
@@ -240,7 +234,9 @@ pub const Model = struct {
             while (iterator.index < iterator.items.len) {
                 const slot = &iterator.items[iterator.index];
                 iterator.index += 1;
-                if (slot.*) |*tab| return tab;
+                if (slot.*) |*tab| {
+                    return tab;
+                }
             }
             return null;
         }
@@ -251,12 +247,16 @@ pub const Model = struct {
     }
 
     pub fn active(model: *Model) ?*Tab {
-        if (model.count == 0) return null;
+        if (model.count == 0) {
+            return null;
+        }
         return &model.items[model.active_index].?;
     }
 
     pub fn activeConst(model: *const Model) ?*const Tab {
-        if (model.count == 0) return null;
+        if (model.count == 0) {
+            return null;
+        }
         return &model.items[model.active_index].?;
     }
 
@@ -275,7 +275,9 @@ pub const Model = struct {
     pub fn find(model: *Model, tab_id: schema.TabId) ?*Tab {
         for (model.items[0..model.count]) |*slot| {
             const tab = if (slot.*) |*value| value else continue;
-            if (tab.location.tab_id == tab_id) return tab;
+            if (tab.location.tab_id == tab_id) {
+                return tab;
+            }
         }
         return null;
     }
@@ -289,7 +291,9 @@ pub const Model = struct {
     pub fn findPane(model: *Model, pane_id: schema.PaneId) ?*multiplexer.Pane {
         for (model.items[0..model.count]) |*slot| {
             const tab = if (slot.*) |*value| value else continue;
-            if (tab.model.find(pane_id)) |pane| return pane;
+            if (tab.model.find(pane_id)) |pane| {
+                return pane;
+            }
         }
         return null;
     }
@@ -383,7 +387,9 @@ pub const Model = struct {
     pub fn tabForPane(model: *Model, pane_id: schema.PaneId) ?*Tab {
         for (model.items[0..model.count]) |*slot| {
             const tab = if (slot.*) |*value| value else continue;
-            if (tab.model.find(pane_id) != null) return tab;
+            if (tab.model.find(pane_id) != null) {
+                return tab;
+            }
         }
         return null;
     }

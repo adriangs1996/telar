@@ -41,36 +41,31 @@ pub const Registry = struct {
     grants: [plugin.max_grants]plugin.Grant = undefined,
     grant_count: u8 = 0,
 
-    pub fn load(
-        gpa: std.mem.Allocator,
-        io: Io,
-        config_dir: []const u8,
-        specs: []const lua_config.PluginSpec,
-    ) !Registry {
+    pub fn load(gpa: std.mem.Allocator, io: Io, config_dir: []const u8, specs: []const lua_config.PluginSpec) !Registry {
         const empty: plugin.TrustStore = .{};
         return loadWithTrust(gpa, io, config_dir, specs, &empty);
     }
 
-    pub fn loadWithTrust(
-        gpa: std.mem.Allocator,
-        io: Io,
-        config_dir: []const u8,
-        specs: []const lua_config.PluginSpec,
-        trust: *const plugin.TrustStore,
-    ) !Registry {
+    pub fn loadWithTrust(gpa: std.mem.Allocator, io: Io, config_dir: []const u8, specs: []const lua_config.PluginSpec, trust: *const plugin.TrustStore) !Registry {
         var registry: Registry = .{};
         registry.grant_count = trust.count;
         for (trust.entries[0..trust.count], 0..) |entry, index|
             registry.grants[index] = entry.grant;
         for (specs) |*spec| {
-            if (!spec.enabled) continue;
-            if (registry.count == max_packages) return error.TooManyPlugins;
+            if (!spec.enabled) {
+                continue;
+            }
+            if (registry.count == max_packages) {
+                return error.TooManyPlugins;
+            }
             const package = try loadPackage(gpa, io, config_dir, spec.path());
             for (registry.packages[0..registry.count]) |*existing| {
-                if (std.mem.eql(u8, existing.manifest.id(), package.manifest.id()))
+                if (std.mem.eql(u8, existing.manifest.id(), package.manifest.id())) {
                     return error.DuplicatePluginId;
-                if (plugin.stableId(existing.manifest.id()) == plugin.stableId(package.manifest.id()))
+                }
+                if (plugin.stableId(existing.manifest.id()) == plugin.stableId(package.manifest.id())) {
                     return error.PluginIdHashCollision;
+                }
             }
             registry.packages[registry.count] = package;
             registry.count += 1;
@@ -78,45 +73,41 @@ pub const Registry = struct {
         return registry;
     }
 
-    pub fn resolve(
-        registry: *const Registry,
-        requested: action_mod.PluginAction,
-    ) !Invocation {
+    pub fn resolve(registry: *const Registry, requested: action_mod.PluginAction) !Invocation {
         for (registry.packages[0..registry.count], 0..) |*package, package_index| {
-            if (plugin.stableId(package.manifest.id()) != requested.plugin) continue;
+            if (plugin.stableId(package.manifest.id()) != requested.plugin) {
+                continue;
+            }
             for (package.manifest.actions[0..package.manifest.action_count], 0..) |*name, action_index| {
-                if (plugin.stableId(name.slice()) == requested.action)
+                if (plugin.stableId(name.slice()) == requested.action) {
                     return .{
                         .package_index = @intCast(package_index),
                         .action_index = @intCast(action_index),
                         .plugin_id = requested.plugin,
                         .action_id = requested.action,
                     };
+                }
             }
             return error.UnknownPluginAction;
         }
         return error.PluginNotConfigured;
     }
 
-    pub fn validateConfiguredActions(
-        registry: *const Registry,
-        bindings: []const lua_config.ConfiguredBinding,
-    ) !void {
+    pub fn validateConfiguredActions(registry: *const Registry, bindings: []const lua_config.ConfiguredBinding) !void {
         for (bindings) |binding| switch (binding.action) {
             .plugin => |requested| _ = try registry.resolve(requested),
             else => {},
         };
     }
 
-    pub fn workerRequest(
-        registry: *const Registry,
-        invocation: Invocation,
-        context: lua_config.CallbackContext,
-    ) !WorkerRequest {
-        if (invocation.package_index >= registry.count) return error.PluginNotConfigured;
+    pub fn workerRequest(registry: *const Registry, invocation: Invocation, context: lua_config.CallbackContext) !WorkerRequest {
+        if (invocation.package_index >= registry.count) {
+            return error.PluginNotConfigured;
+        }
         const package = &registry.packages[invocation.package_index];
-        if (invocation.action_index >= package.manifest.action_count)
+        if (invocation.action_index >= package.manifest.action_count) {
             return error.UnknownPluginAction;
+        }
         const action_name = package.manifest.actions[invocation.action_index].slice();
         var request: WorkerRequest = .{
             .package_index = invocation.package_index,
@@ -130,32 +121,29 @@ pub const Registry = struct {
         return request;
     }
 
-    pub fn authorize(
-        registry: *const Registry,
-        package_index: u8,
-        capability: plugin.Capability,
-    ) !void {
-        if (package_index >= registry.count) return error.PluginNotConfigured;
+    pub fn authorize(registry: *const Registry, package_index: u8, capability: plugin.Capability) !void {
+        if (package_index >= registry.count) {
+            return error.PluginNotConfigured;
+        }
         const package = &registry.packages[package_index];
-        if (!package.manifest.capabilities.contains(capability))
+        if (!package.manifest.capabilities.contains(capability)) {
             return error.CapabilityNotDeclared;
+        }
         for (registry.grants[0..registry.grant_count]) |grant|
             if (grant.allows(package.manifest.id(), package.digest, capability)) return;
         return error.CapabilityNotGranted;
     }
 
-    pub fn authorizeBatch(
-        registry: *const Registry,
-        package_index: u8,
-        plugin_id: u64,
-        digest: plugin.Digest,
-        batch: *const lua_config.EffectBatch,
-    ) !void {
-        if (package_index >= registry.count) return error.PluginNotConfigured;
+    pub fn authorizeBatch(registry: *const Registry, package_index: u8, plugin_id: u64, digest: plugin.Digest, batch: *const lua_config.EffectBatch) !void {
+        if (package_index >= registry.count) {
+            return error.PluginNotConfigured;
+        }
         const package = &registry.packages[package_index];
         if (plugin.stableId(package.manifest.id()) != plugin_id or
             !std.mem.eql(u8, &package.digest, &digest))
+        {
             return error.StalePluginWorker;
+        }
         for (batch.slice()) |effect| {
             const capability: ?plugin.Capability = switch (effect) {
                 .split_pane, .close_pane, .new_workspace, .rename_workspace, .new_tab, .rename_tab, .close_tab, .move_tab, .detach => .runtime_control,
@@ -178,15 +166,13 @@ pub const Registry = struct {
                 .notification => .notifications,
                 .lua_callback, .lua_expr, .plugin => return error.InvalidPluginEffect,
             };
-            if (capability) |required| try registry.authorize(package_index, required);
+            if (capability) |required| {
+                try registry.authorize(package_index, required);
+            }
         }
     }
 
-    pub fn watchFingerprint(
-        registry: *const Registry,
-        gpa: std.mem.Allocator,
-        io: Io,
-    ) u64 {
+    pub fn watchFingerprint(registry: *const Registry, gpa: std.mem.Allocator, io: Io) u64 {
         var hasher = std.hash.Wyhash.init(0x74656c61722d706c);
         for (registry.packages[0..registry.count]) |*package|
             updatePackageFingerprint(&hasher, gpa, io, package.root());
@@ -222,11 +208,7 @@ pub const WorkerResult = struct {
     batch: lua_config.EffectBatch,
 };
 
-pub fn executeWorker(
-    io: Io,
-    gpa: std.mem.Allocator,
-    request: WorkerRequest,
-) !WorkerResult {
+pub fn executeWorker(io: Io, gpa: std.mem.Allocator, request: WorkerRequest) !WorkerResult {
     var nonce: [16]u8 = undefined;
     try io.randomSecure(&nonce);
     const nonce_hex = std.fmt.bytesToHex(nonce, .lower);
@@ -298,12 +280,7 @@ pub fn executeWorker(
     };
 }
 
-fn loadPackage(
-    gpa: std.mem.Allocator,
-    io: Io,
-    config_dir: []const u8,
-    configured_path: []const u8,
-) !Package {
+fn loadPackage(gpa: std.mem.Allocator, io: Io, config_dir: []const u8, configured_path: []const u8) !Package {
     const joined = if (std.fs.path.isAbsolute(configured_path))
         try gpa.dupe(u8, configured_path)
     else
@@ -337,7 +314,9 @@ fn loadPackage(
     var entry_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const entry_len = try Io.Dir.cwd().realPathFile(io, candidate, &entry_buffer);
     const entry = entry_buffer[0..entry_len];
-    if (!pathInside(root, entry)) return error.EntrypointEscapesPackage;
+    if (!pathInside(root, entry)) {
+        return error.EntrypointEscapesPackage;
+    }
     const entry_bytes = try Io.Dir.cwd().readFileAlloc(
         io,
         entry,
@@ -369,7 +348,9 @@ fn digestPackage(gpa: std.mem.Allocator, io: Io, root: []const u8) !plugin.Diges
     }
     var entry_count: usize = 0;
     while (try walker.next(io)) |entry| {
-        if (entry_count == max_package_files) return error.TooManyPluginEntries;
+        if (entry_count == max_package_files) {
+            return error.TooManyPluginEntries;
+        }
         entry_count += 1;
         switch (entry.kind) {
             .directory => {},
@@ -424,29 +405,25 @@ fn digestPackage(gpa: std.mem.Allocator, io: Io, root: []const u8) !plugin.Diges
     return hasher.finalResult();
 }
 
-pub fn inspectPackage(
-    gpa: std.mem.Allocator,
-    io: Io,
-    path: []const u8,
-) !Package {
+pub fn inspectPackage(gpa: std.mem.Allocator, io: Io, path: []const u8) !Package {
     return loadPackage(gpa, io, ".", path);
 }
 
-pub fn installPackage(
-    gpa: std.mem.Allocator,
-    io: Io,
-    package: *const Package,
-    destination: []const u8,
-) !void {
+pub fn installPackage(gpa: std.mem.Allocator, io: Io, package: *const Package, destination: []const u8) !void {
     if (Io.Dir.cwd().statFile(io, destination, .{ .follow_symlinks = false })) |stat| {
-        if (stat.kind != .directory) return error.PluginInstallTargetExists;
+        if (stat.kind != .directory) {
+            return error.PluginInstallTargetExists;
+        }
         const installed = try inspectPackage(gpa, io, destination);
-        if (!std.mem.eql(u8, &installed.digest, &package.digest))
+        if (!std.mem.eql(u8, &installed.digest, &package.digest)) {
             return error.PluginInstallTargetMismatch;
+        }
         return;
-    } else |err| switch (err) {
-        error.FileNotFound => {},
-        else => return err,
+    } else |err| {
+        switch (err) {
+            error.FileNotFound => {},
+            else => return err,
+        }
     }
 
     const parent = std.fs.path.dirname(destination) orelse return error.InvalidPluginInstallPath;
@@ -499,23 +476,22 @@ pub fn installPackage(
     const copied = try inspectPackage(gpa, io, temp);
     if (!std.mem.eql(u8, copied.manifest.id(), package.manifest.id()) or
         !std.mem.eql(u8, &copied.digest, &package.digest))
+    {
         return error.PluginChangedDuringInstall;
+    }
     try Io.Dir.cwd().rename(temp, Io.Dir.cwd(), destination, io);
     committed = true;
 }
 
 fn pathInside(root: []const u8, candidate: []const u8) bool {
-    if (!std.mem.startsWith(u8, candidate, root)) return false;
+    if (!std.mem.startsWith(u8, candidate, root)) {
+        return false;
+    }
     return candidate.len == root.len or
         (candidate.len > root.len and candidate[root.len] == std.fs.path.sep);
 }
 
-fn updatePackageFingerprint(
-    hasher: *std.hash.Wyhash,
-    gpa: std.mem.Allocator,
-    io: Io,
-    root: []const u8,
-) void {
+fn updatePackageFingerprint(hasher: *std.hash.Wyhash, gpa: std.mem.Allocator, io: Io, root: []const u8) void {
     hasher.update(root);
     var directory = Io.Dir.cwd().openDir(io, root, .{ .iterate = true }) catch {
         hasher.update("\x00unreadable");

@@ -45,7 +45,9 @@ pub const ArgumentIterator = struct {
     index: u16 = 0,
 
     pub fn next(iterator: *ArgumentIterator) !?[]const u8 {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         defer iterator.index += 1;
         const argument = try iterator.decoder.readSized16();
@@ -59,7 +61,9 @@ pub const EnvironmentIterator = struct {
     remaining: u16,
 
     pub fn next(iterator: *EnvironmentIterator) !?EnvironmentEntry {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         const entry: EnvironmentEntry = .{
             .name = try iterator.decoder.readSized16(),
@@ -72,11 +76,15 @@ pub const EnvironmentIterator = struct {
 
 pub fn encodeLaunch(encoder: *wire.Encoder, launch: Launch) !void {
     try validateBytes(launch.cwd, types.max_cwd_bytes, false);
-    if (launch.cwd_source) |pane_id| try validatePaneId(pane_id);
-    if (launch.arguments.len == 0 or launch.arguments.len > types.max_argument_count)
+    if (launch.cwd_source) |pane_id| {
+        try validatePaneId(pane_id);
+    }
+    if (launch.arguments.len == 0 or launch.arguments.len > types.max_argument_count) {
         return error.InvalidArgumentCount;
-    if (launch.environment.len > types.max_environment_count)
+    }
+    if (launch.environment.len > types.max_environment_count) {
         return error.TooManyEnvironmentEntries;
+    }
 
     try encoder.writeSized16(launch.cwd);
     try encoder.writeInt(u64, if (launch.cwd_source) |pane_id| id.raw(pane_id) else 0);
@@ -86,7 +94,9 @@ pub fn encodeLaunch(encoder: *wire.Encoder, launch: Launch) !void {
         try validateBytes(argument, std.math.maxInt(u16), index != 0);
         argument_bytes = std.math.add(usize, argument_bytes, argument.len) catch
             return error.ArgumentsTooLarge;
-        if (argument_bytes > types.max_argument_bytes) return error.ArgumentsTooLarge;
+        if (argument_bytes > types.max_argument_bytes) {
+            return error.ArgumentsTooLarge;
+        }
         try encoder.writeSized16(argument);
     }
 
@@ -99,7 +109,9 @@ pub fn encodeLaunch(encoder: *wire.Encoder, launch: Launch) !void {
             return error.EnvironmentTooLarge;
         environment_bytes = std.math.add(usize, environment_bytes, entry.value.len) catch
             return error.EnvironmentTooLarge;
-        if (environment_bytes > types.max_environment_bytes) return error.EnvironmentTooLarge;
+        if (environment_bytes > types.max_environment_bytes) {
+            return error.EnvironmentTooLarge;
+        }
         try encoder.writeSized16(entry.name);
         try encoder.writeSized32(entry.value);
     }
@@ -119,26 +131,33 @@ pub fn decodeLaunch(decoder: *wire.Decoder) !LaunchView {
         try id.pane(cwd_source_raw);
 
     const argument_count = try decoder.readInt(u16);
-    if (argument_count == 0 or argument_count > types.max_argument_count)
+    if (argument_count == 0 or argument_count > types.max_argument_count) {
         return error.InvalidArgumentCount;
+    }
     const arguments_start = decoder.index;
     var argument_bytes: usize = 0;
     for (0..argument_count) |_| {
         const argument = try decoder.readSized16();
         argument_bytes += argument.len;
-        if (argument_bytes > types.max_argument_bytes) return error.ArgumentsTooLarge;
+        if (argument_bytes > types.max_argument_bytes) {
+            return error.ArgumentsTooLarge;
+        }
     }
     const encoded_arguments = decoder.consumed(arguments_start);
 
     const environment_mode = try codec.decodeEnvironmentMode(try decoder.readByte());
     const environment_count = try decoder.readInt(u16);
-    if (environment_count > types.max_environment_count) return error.TooManyEnvironmentEntries;
+    if (environment_count > types.max_environment_count) {
+        return error.TooManyEnvironmentEntries;
+    }
     const environment_start = decoder.index;
     var environment_bytes: usize = 0;
     for (0..environment_count) |_| {
         environment_bytes += (try decoder.readSized16()).len;
         environment_bytes += (try decoder.readSized32()).len;
-        if (environment_bytes > types.max_environment_bytes) return error.EnvironmentTooLarge;
+        if (environment_bytes > types.max_environment_bytes) {
+            return error.EnvironmentTooLarge;
+        }
     }
     return .{
         .cwd = cwd,

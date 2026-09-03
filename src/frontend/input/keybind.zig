@@ -27,23 +27,35 @@ pub const max_physical_leases = 64;
 /// Sequences stay arrays at this layer so configuration can parse a prefix and
 /// its suffixes without another string grammar.
 pub fn parseKey(text: []const u8) !Key {
-    if (text.len == 0) return error.EmptyKey;
+    if (text.len == 0) {
+        return error.EmptyKey;
+    }
 
     var mods: Key.Mods = .{};
     var code_text: ?[]const u8 = null;
     var parts = std.mem.splitScalar(u8, text, '+');
     while (parts.next()) |part| {
-        if (part.len == 0) return error.EmptyKeyPart;
-        if (code_text != null) return error.ModifierAfterKey;
+        if (part.len == 0) {
+            return error.EmptyKeyPart;
+        }
+        if (code_text != null) {
+            return error.ModifierAfterKey;
+        }
 
         if (eqlAscii(part, "ctrl") or eqlAscii(part, "control")) {
-            if (mods.ctrl) return error.DuplicateModifier;
+            if (mods.ctrl) {
+                return error.DuplicateModifier;
+            }
             mods.ctrl = true;
         } else if (eqlAscii(part, "alt")) {
-            if (mods.alt) return error.DuplicateModifier;
+            if (mods.alt) {
+                return error.DuplicateModifier;
+            }
             mods.alt = true;
         } else if (eqlAscii(part, "shift")) {
-            if (mods.shift) return error.DuplicateModifier;
+            if (mods.shift) {
+                return error.DuplicateModifier;
+            }
             mods.shift = true;
         } else {
             code_text = part;
@@ -62,56 +74,97 @@ pub fn parseKey(text: []const u8) !Key {
 
     // Ctrl letters arrive as C0 bytes and therefore lose their case. Treat
     // `ctrl+B` and `ctrl+b` as the same configuration value.
-    if (mods.ctrl) switch (code) {
-        .char => |*char| {
-            if (char.len == 1 and std.ascii.isUpper(char.bytes[0]))
-                char.bytes[0] = std.ascii.toLower(char.bytes[0]);
-        },
-        else => {},
-    };
+    if (mods.ctrl) {
+        switch (code) {
+            .char => |*char| {
+                if (char.len == 1 and std.ascii.isUpper(char.bytes[0])) {
+                    char.bytes[0] = std.ascii.toLower(char.bytes[0]);
+                }
+            },
+            else => {},
+        }
+    }
 
     // Legacy terminal input carries the resulting printable character, not a
     // Shift bit. Canonicalize the combinations whose result is independent of
     // keyboard layout and reject the rest instead of accepting a dead binding.
-    if (mods.shift) switch (code) {
-        .char => |*char| {
-            if (mods.ctrl) return error.UnrepresentableKey;
-            if (char.len == 1 and std.ascii.isAlphabetic(char.bytes[0])) {
-                char.bytes[0] = std.ascii.toUpper(char.bytes[0]);
-                mods.shift = false;
-            } else if (char.len == 1 and char.bytes[0] == ' ') {
-                mods.shift = false;
-            } else {
-                return error.UnrepresentableKey;
-            }
-        },
-        else => {},
-    };
+    if (mods.shift) {
+        switch (code) {
+            .char => |*char| {
+                if (mods.ctrl) {
+                    return error.UnrepresentableKey;
+                }
+                if (char.len == 1 and std.ascii.isAlphabetic(char.bytes[0])) {
+                    char.bytes[0] = std.ascii.toUpper(char.bytes[0]);
+                    mods.shift = false;
+                } else if (char.len == 1 and char.bytes[0] == ' ') {
+                    mods.shift = false;
+                } else {
+                    return error.UnrepresentableKey;
+                }
+            },
+            else => {},
+        }
+    }
 
     return .{ .code = code, .mods = mods };
 }
 
 fn parseCode(text: []const u8) !Key.Code {
-    if (eqlAscii(text, "up")) return .up;
-    if (eqlAscii(text, "down")) return .down;
-    if (eqlAscii(text, "left")) return .left;
-    if (eqlAscii(text, "right")) return .right;
-    if (eqlAscii(text, "home")) return .home;
-    if (eqlAscii(text, "end")) return .end;
-    if (eqlAscii(text, "delete") or eqlAscii(text, "del")) return .delete;
-    if (eqlAscii(text, "pageup") or eqlAscii(text, "page-up")) return .page_up;
-    if (eqlAscii(text, "pagedown") or eqlAscii(text, "page-down")) return .page_down;
-    if (eqlAscii(text, "enter") or eqlAscii(text, "return")) return .enter;
-    if (eqlAscii(text, "escape") or eqlAscii(text, "esc")) return .escape;
-    if (eqlAscii(text, "backspace")) return .backspace;
-    if (eqlAscii(text, "tab")) return .tab;
-    if (eqlAscii(text, "backtab")) return .back_tab;
-    if (eqlAscii(text, "space")) return .{ .char = .init(" ") };
-    if (eqlAscii(text, "plus")) return .{ .char = .init("+") };
+    if (eqlAscii(text, "up")) {
+        return .up;
+    }
+    if (eqlAscii(text, "down")) {
+        return .down;
+    }
+    if (eqlAscii(text, "left")) {
+        return .left;
+    }
+    if (eqlAscii(text, "right")) {
+        return .right;
+    }
+    if (eqlAscii(text, "home")) {
+        return .home;
+    }
+    if (eqlAscii(text, "end")) {
+        return .end;
+    }
+    if (eqlAscii(text, "delete") or eqlAscii(text, "del")) {
+        return .delete;
+    }
+    if (eqlAscii(text, "pageup") or eqlAscii(text, "page-up")) {
+        return .page_up;
+    }
+    if (eqlAscii(text, "pagedown") or eqlAscii(text, "page-down")) {
+        return .page_down;
+    }
+    if (eqlAscii(text, "enter") or eqlAscii(text, "return")) {
+        return .enter;
+    }
+    if (eqlAscii(text, "escape") or eqlAscii(text, "esc")) {
+        return .escape;
+    }
+    if (eqlAscii(text, "backspace")) {
+        return .backspace;
+    }
+    if (eqlAscii(text, "tab")) {
+        return .tab;
+    }
+    if (eqlAscii(text, "backtab")) {
+        return .back_tab;
+    }
+    if (eqlAscii(text, "space")) {
+        return .{ .char = .init(" ") };
+    }
+    if (eqlAscii(text, "plus")) {
+        return .{ .char = .init("+") };
+    }
 
     const sequence_len = std.unicode.utf8ByteSequenceLength(text[0]) catch
         return error.InvalidUtf8;
-    if (sequence_len != text.len) return error.KeyMustBeOneCodepoint;
+    if (sequence_len != text.len) {
+        return error.KeyMustBeOneCodepoint;
+    }
     _ = std.unicode.utf8Decode(text) catch return error.InvalidUtf8;
     return .{ .char = .init(text) };
 }
@@ -121,8 +174,9 @@ fn eqlAscii(a: []const u8, b: []const u8) bool {
 }
 
 pub fn Binding(comptime Action: type, comptime max_keys: usize) type {
-    if (max_keys == 0 or max_keys > std.math.maxInt(u8))
+    if (max_keys == 0 or max_keys > std.math.maxInt(u8)) {
         @compileError("max_keys must fit in a non-zero u8");
+    }
 
     return struct {
         // Fully initialized so configuration values remain safe to copy as a
@@ -134,16 +188,24 @@ pub fn Binding(comptime Action: type, comptime max_keys: usize) type {
         const Self = @This();
 
         pub fn init(keys: []const Key, action: Action) !Self {
-            if (keys.len == 0) return error.EmptySequence;
-            if (keys.len > max_keys) return error.SequenceTooLong;
+            if (keys.len == 0) {
+                return error.EmptySequence;
+            }
+            if (keys.len > max_keys) {
+                return error.SequenceTooLong;
+            }
             var binding: Self = .{ .len = @intCast(keys.len), .action = action };
             @memcpy(binding.keys[0..keys.len], keys);
             return binding;
         }
 
         pub fn parse(names: []const []const u8, action: Action) !Self {
-            if (names.len == 0) return error.EmptySequence;
-            if (names.len > max_keys) return error.SequenceTooLong;
+            if (names.len == 0) {
+                return error.EmptySequence;
+            }
+            if (names.len > max_keys) {
+                return error.SequenceTooLong;
+            }
             var binding: Self = .{ .len = @intCast(names.len), .action = action };
             for (names, 0..) |name, index| binding.keys[index] = try parseKey(name);
             return binding;
@@ -166,13 +228,10 @@ pub fn Binding(comptime Action: type, comptime max_keys: usize) type {
     };
 }
 
-pub fn Keymap(
-    comptime Action: type,
-    comptime max_bindings: usize,
-    comptime max_keys: usize,
-) type {
-    if (max_bindings == 0 or max_bindings > std.math.maxInt(u16))
+pub fn Keymap(comptime Action: type, comptime max_bindings: usize, comptime max_keys: usize) type {
+    if (max_bindings == 0 or max_bindings > std.math.maxInt(u16)) {
         @compileError("max_bindings must fit in a non-zero u16");
+    }
 
     const BindingType = Binding(Action, max_keys);
     return struct {
@@ -183,7 +242,9 @@ pub fn Keymap(
         const Self = @This();
 
         pub fn init(configured: []const BindingType) !Self {
-            if (configured.len > max_bindings) return error.TooManyBindings;
+            if (configured.len > max_bindings) {
+                return error.TooManyBindings;
+            }
             var map: Self = .{ .len = @intCast(configured.len) };
             for (configured, 0..) |binding, index| map.bindings[index] = binding;
             for (map.order[0..map.len], 0..) |*slot, index| slot.* = @intCast(index);
@@ -207,7 +268,9 @@ pub fn Keymap(
                 const current = map.bindingAt(index);
                 const shared = commonPrefix(previous.slice(), current.slice());
                 if (shared == previous.len or shared == current.len) {
-                    if (previous.len == current.len) return error.DuplicateBinding;
+                    if (previous.len == current.len) {
+                        return error.DuplicateBinding;
+                    }
                     return error.AmbiguousBindingPrefix;
                 }
             }
@@ -225,22 +288,26 @@ pub fn Keymap(
             var high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (keyOrder(map.bindingAt(middle).keys[depth], key) == .lt)
-                    low = middle + 1
-                else
+                if (keyOrder(map.bindingAt(middle).keys[depth], key) == .lt) {
+                    low = middle + 1;
+                } else {
                     high = middle;
+                }
             }
             const start = low;
 
             high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (keyOrder(map.bindingAt(middle).keys[depth], key) == .gt)
-                    high = middle
-                else
+                if (keyOrder(map.bindingAt(middle).keys[depth], key) == .gt) {
+                    high = middle;
+                } else {
                     low = middle + 1;
+                }
             }
-            if (start == low) return null;
+            if (start == low) {
+                return null;
+            }
             return .{ .start = start, .end = low };
         }
 
@@ -265,20 +332,30 @@ fn sequenceOrder(a: []const Key, b: []const Key) std.math.Order {
     const limit = @min(a.len, b.len);
     for (0..limit) |index| {
         const order = keyOrder(a[index], b[index]);
-        if (order != .eq) return order;
+        if (order != .eq) {
+            return order;
+        }
     }
     return std.math.order(a.len, b.len);
 }
 
 fn keyOrder(a: Key, b: Key) std.math.Order {
-    if (a.mods.ctrl != b.mods.ctrl) return std.math.order(@intFromBool(a.mods.ctrl), @intFromBool(b.mods.ctrl));
-    if (a.mods.alt != b.mods.alt) return std.math.order(@intFromBool(a.mods.alt), @intFromBool(b.mods.alt));
-    if (a.mods.shift != b.mods.shift) return std.math.order(@intFromBool(a.mods.shift), @intFromBool(b.mods.shift));
+    if (a.mods.ctrl != b.mods.ctrl) {
+        return std.math.order(@intFromBool(a.mods.ctrl), @intFromBool(b.mods.ctrl));
+    }
+    if (a.mods.alt != b.mods.alt) {
+        return std.math.order(@intFromBool(a.mods.alt), @intFromBool(b.mods.alt));
+    }
+    if (a.mods.shift != b.mods.shift) {
+        return std.math.order(@intFromBool(a.mods.shift), @intFromBool(b.mods.shift));
+    }
 
     const a_tag = std.meta.activeTag(a.code);
     const b_tag = std.meta.activeTag(b.code);
     const tag_order = std.math.order(@intFromEnum(a_tag), @intFromEnum(b_tag));
-    if (tag_order != .eq or a_tag != .char) return tag_order;
+    if (tag_order != .eq or a_tag != .char) {
+        return tag_order;
+    }
 
     const a_char = a.code.char;
     const b_char = b.code.char;
@@ -286,22 +363,19 @@ fn keyOrder(a: Key, b: Key) std.math.Order {
 }
 
 fn isPlainEscape(key: Key) bool {
-    if (key.mods.ctrl or key.mods.alt or key.mods.shift) return false;
+    if (key.mods.ctrl or key.mods.alt or key.mods.shift) {
+        return false;
+    }
     return switch (key.code) {
         .escape => true,
         else => false,
     };
 }
 
-pub fn Router(
-    comptime Action: type,
-    comptime max_bindings: usize,
-    comptime max_keys: usize,
-    comptime input_capacity: usize,
-    comptime held_capacity: usize,
-) type {
-    if (input_capacity == 0 or held_capacity == 0)
+pub fn Router(comptime Action: type, comptime max_bindings: usize, comptime max_keys: usize, comptime input_capacity: usize, comptime held_capacity: usize) type {
+    if (input_capacity == 0 or held_capacity == 0) {
         @compileError("router buffers must be non-zero");
+    }
 
     const Map = Keymap(Action, max_bindings, max_keys);
     const BindingType = Binding(Action, max_keys);
@@ -378,9 +452,12 @@ pub fn Router(
         pub fn prefixedKeyForAction(router: *const Self, action: Action) ?Key {
             const prefix = router.prefix orelse return null;
             for (router.map.bindings[0..router.map.len]) |*binding| {
-                if (binding.len != 2 or keyOrder(binding.keys[0], prefix) != .eq)
+                if (binding.len != 2 or keyOrder(binding.keys[0], prefix) != .eq) {
                     continue;
-                if (std.meta.eql(binding.action, action)) return binding.keys[1];
+                }
+                if (std.meta.eql(binding.action, action)) {
+                    return binding.keys[1];
+                }
             }
             return null;
         }
@@ -402,7 +479,9 @@ pub fn Router(
                 @memcpy(router.input[router.input_end..][0..take], bytes[offset..][0..take]);
                 router.input_end += take;
                 offset += take;
-                if (try router.drain(now_ns, false, handler) == .stop) return .stop;
+                if (try router.drain(now_ns, false, handler) == .stop) {
+                    return .stop;
+                }
             }
             try router.flushOutput(handler);
             return .continue_routing;
@@ -414,22 +493,29 @@ pub fn Router(
         }
 
         pub fn bindingDeadline(router: *const Self) ?u64 {
-            if (router.prefix_pending) return null;
+            if (router.prefix_pending) {
+                return null;
+            }
             const since = router.binding_since_ns orelse return null;
             return since +| router.sequence_timeout_ns;
         }
 
         pub fn expireInput(router: *Self, now_ns: u64, handler: anytype) !Control {
             const deadline = router.inputDeadline() orelse return .continue_routing;
-            if (now_ns < deadline) return .continue_routing;
+            if (now_ns < deadline) {
+                return .continue_routing;
+            }
 
             const pending = router.input[router.input_start..router.input_end];
             if (pending.len == 1 and pending[0] == 0x1b) {
-                if (try router.drain(now_ns, true, handler) == .stop) return .stop;
+                if (try router.drain(now_ns, true, handler) == .stop) {
+                    return .stop;
+                }
             } else {
                 try router.replayBinding(handler);
-                if (comptime !@hasDecl(@TypeOf(handler.*), "key"))
+                if (comptime !@hasDecl(@TypeOf(handler.*), "key")) {
                     try router.appendOutput(pending, handler);
+                }
                 router.input_start = 0;
                 router.input_end = 0;
                 router.input_since_ns = null;
@@ -440,7 +526,9 @@ pub fn Router(
 
         pub fn expireBinding(router: *Self, now_ns: u64, handler: anytype) !Control {
             const deadline = router.bindingDeadline() orelse return .continue_routing;
-            if (now_ns < deadline) return .continue_routing;
+            if (now_ns < deadline) {
+                return .continue_routing;
+            }
             try router.replayBinding(handler);
             try router.flushOutput(handler);
             return .continue_routing;
@@ -450,13 +538,17 @@ pub fn Router(
             while (router.input_start < router.input_end) {
                 const pending = router.input[router.input_start..router.input_end];
                 if (!force_escape and pending.len == 1 and pending[0] == 0x1b) {
-                    if (router.input_since_ns == null) router.input_since_ns = now_ns;
+                    if (router.input_since_ns == null) {
+                        router.input_since_ns = now_ns;
+                    }
                     break;
                 }
 
                 const parsed = term.parse(pending) orelse break;
                 if (parsed.len == 0) {
-                    if (router.input_since_ns == null) router.input_since_ns = now_ns;
+                    if (router.input_since_ns == null) {
+                        router.input_since_ns = now_ns;
+                    }
                     break;
                 }
 
@@ -464,10 +556,11 @@ pub fn Router(
                 const raw = pending[0..parsed.len];
                 if (router.pasting and std.meta.activeTag(parsed.event) != .paste_end) {
                     try router.flushOutput(handler);
-                    if (comptime @hasDecl(@TypeOf(handler.*), "pasteContent"))
-                        try handler.pasteContent(raw)
-                    else
+                    if (comptime @hasDecl(@TypeOf(handler.*), "pasteContent")) {
+                        try handler.pasteContent(raw);
+                    } else {
                         try router.appendOutput(raw, handler);
+                    }
                     router.input_start += parsed.len;
                     continue;
                 }
@@ -510,31 +603,35 @@ pub fn Router(
                             router.binding_since_ns = null;
                         }
                         try router.flushOutput(handler);
-                        if (comptime @hasDecl(@TypeOf(handler.*), "terminalResponse"))
+                        if (comptime @hasDecl(@TypeOf(handler.*), "terminalResponse")) {
                             try handler.terminalResponse(response);
+                        }
                     },
                     .paste_start => {
                         try router.replayBinding(handler);
                         try router.flushOutput(handler);
                         router.pasting = true;
-                        if (comptime @hasDecl(@TypeOf(handler.*), "pasteStart"))
-                            try handler.pasteStart()
-                        else
+                        if (comptime @hasDecl(@TypeOf(handler.*), "pasteStart")) {
+                            try handler.pasteStart();
+                        } else {
                             try router.appendOutput(raw, handler);
+                        }
                     },
                     .paste_end => {
                         try router.replayBinding(handler);
                         try router.flushOutput(handler);
                         router.pasting = false;
-                        if (comptime @hasDecl(@TypeOf(handler.*), "pasteEnd"))
-                            try handler.pasteEnd()
-                        else
+                        if (comptime @hasDecl(@TypeOf(handler.*), "pasteEnd")) {
+                            try handler.pasteEnd();
+                        } else {
                             try router.appendOutput(raw, handler);
+                        }
                     },
                     .incomplete => {
                         try router.replayBinding(handler);
-                        if (comptime !@hasDecl(@TypeOf(handler.*), "key"))
+                        if (comptime !@hasDecl(@TypeOf(handler.*), "key")) {
                             try router.appendOutput(raw, handler);
+                        }
                     },
                 }
                 router.input_start += parsed.len;
@@ -693,7 +790,9 @@ pub fn Router(
             else
                 router.candidates;
             const matched = router.map.matchingRange(range, router.depth, key) orelse {
-                if (router.depth == 0) return .{ .forward = .{ .key = key, .raw = raw } };
+                if (router.depth == 0) {
+                    return .{ .forward = .{ .key = key, .raw = raw } };
+                }
                 if (router.prefix_pending) {
                     router.resetMatch();
                     return .discard;
@@ -747,14 +846,17 @@ pub fn Router(
             router.candidates = matched;
             router.depth = @intCast(next_depth);
             if (next_depth == 1) {
-                if (router.prefix) |prefix|
+                if (router.prefix) |prefix| {
                     router.prefix_pending = keyOrder(key, prefix) == .eq;
+                }
             }
             return .pending;
         }
 
         fn replayBinding(router: *Self, handler: anytype) !void {
-            if (router.depth == 0) return;
+            if (router.depth == 0) {
+                return;
+            }
             if (router.prefix_pending) {
                 router.resetMatch();
                 router.binding_since_ns = null;
@@ -798,20 +900,25 @@ pub fn Router(
                 try handler.forward(bytes);
                 return;
             }
-            if (router.output_len + bytes.len > router.output.len)
+            if (router.output_len + bytes.len > router.output.len) {
                 try router.flushOutput(handler);
+            }
             @memcpy(router.output[router.output_len..][0..bytes.len], bytes);
             router.output_len += bytes.len;
         }
 
         fn flushOutput(router: *Self, handler: anytype) !void {
-            if (router.output_len == 0) return;
+            if (router.output_len == 0) {
+                return;
+            }
             try handler.forward(router.output[0..router.output_len]);
             router.output_len = 0;
         }
 
         fn compactInput(router: *Self) void {
-            if (router.input_start == 0) return;
+            if (router.input_start == 0) {
+                return;
+            }
             const len = router.input_end - router.input_start;
             std.mem.copyForwards(u8, router.input[0..len], router.input[router.input_start..router.input_end]);
             router.input_start = 0;
@@ -820,8 +927,9 @@ pub fn Router(
 
         fn recoverFullInput(router: *Self, handler: anytype) !void {
             try router.replayBinding(handler);
-            if (comptime !@hasDecl(@TypeOf(handler.*), "key"))
+            if (comptime !@hasDecl(@TypeOf(handler.*), "key")) {
                 try router.appendOutput(router.input[router.input_start..router.input_end], handler);
+            }
             router.input_start = 0;
             router.input_end = 0;
             router.input_since_ns = null;
@@ -848,7 +956,9 @@ const Capture = struct {
     stop_on_action: bool = false,
 
     fn forward(capture: *Capture, bytes: []const u8) !void {
-        if (capture.len + bytes.len > capture.bytes.len) return error.CaptureOverflow;
+        if (capture.len + bytes.len > capture.bytes.len) {
+            return error.CaptureOverflow;
+        }
         @memcpy(capture.bytes[capture.len..][0..bytes.len], bytes);
         capture.len += bytes.len;
     }

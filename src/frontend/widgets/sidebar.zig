@@ -54,7 +54,9 @@ pub const Semantic = struct {
     };
 
     fn addProviderMark(semantic: *Semantic, mark: ProviderMark) void {
-        if (semantic.provider_mark_count == semantic.provider_marks.len) return;
+        if (semantic.provider_mark_count == semantic.provider_marks.len) {
+            return;
+        }
         semantic.provider_marks[semantic.provider_mark_count] = mark;
         semantic.provider_mark_count += 1;
     }
@@ -79,12 +81,18 @@ pub fn render(context: *widget.Context, input: Input) Semantic {
 
 fn renderCells(context: *widget.Context, input: Input, semantic: *Semantic) void {
     const area = input.area;
-    if (area.isEmpty()) return;
+    if (area.isEmpty()) {
+        return;
+    }
     const background = cellBackground(context, input.transparent);
     context.buffer.fill(area, " ", .{ .fg = context.palette.text, .bg = background });
     drawRightSeparator(context, area, background);
-    if (area.w > 10) drawHeader(context, area, background);
-    if (area.w < 24 or area.h < 5) return;
+    if (area.w > 10) {
+        drawHeader(context, area, background);
+    }
+    if (area.w < 24 or area.h < 5) {
+        return;
+    }
 
     const inside: ui.Rect = .{
         .x = area.x + 1,
@@ -102,11 +110,7 @@ fn renderCells(context: *widget.Context, input: Input, semantic: *Semantic) void
     drawAgents(context, input, semantic);
 }
 
-fn drawHeader(
-    context: *widget.Context,
-    area: ui.Rect,
-    background: ui.Color,
-) void {
+fn drawHeader(context: *widget.Context, area: ui.Rect, background: ui.Color) void {
     const row: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 3, .h = 1 };
     context.buffer.fill(row, " ", .{ .bg = background });
     _ = context.buffer.writeText(row, row.x, row.y, minions_icon, .{
@@ -139,7 +143,9 @@ fn drawAgents(context: *widget.Context, input: Input, semantic: *Semantic) void 
     var line: u16 = 0;
     while (line < area.h) : (line += 1) {
         const row_index = input.state.scroll + line;
-        if (row_index >= total) break;
+        if (row_index >= total) {
+            break;
+        }
         const agent_index: usize = row_index / agent_row_stride;
         const card_line: u2 = @intCast(row_index % agent_row_stride);
         if (card_line >= agent_card_rows) {
@@ -159,15 +165,7 @@ fn drawAgents(context: *widget.Context, input: Input, semantic: *Semantic) void 
     drawScrollbar(context, input.state, area, total, background);
 }
 
-fn drawAgentLine(
-    context: *widget.Context,
-    input: Input,
-    semantic: *Semantic,
-    y: u16,
-    agent: *const agents.Agent,
-    line: u2,
-    background: ui.Color,
-) void {
+fn drawAgentLine(context: *widget.Context, input: Input, semantic: *Semantic, y: u16, agent: *const agents.Agent, line: u2, background: ui.Color) void {
     const action: widget.Action = .{ .sidebar_focus_agent = agent.key };
     const focused = if (input.focused_agent) |key| std.meta.eql(key, agent.key) else false;
     const hovered = context.isHovered(action);
@@ -183,13 +181,14 @@ fn drawAgentLine(
         .w = semantic.list_area.w -| 1,
         .h = 1,
     };
-    if (focused and line == 0 and y + 1 < semantic.list_area.y + semantic.list_area.h)
+    if (focused and line == 0 and y + 1 < semantic.list_area.y + semantic.list_area.h) {
         semantic.focused_card = .{
             .x = row.x,
             .y = y,
             .w = row.w,
             .h = @min(agent_card_rows, semantic.list_area.y + semantic.list_area.h - y),
         };
+    }
     context.buffer.fill(row, " ", .{ .bg = row_bg });
     if (focused) {
         const corner_row = if (semantic.focused_card) |card|
@@ -198,12 +197,14 @@ fn drawAgentLine(
             false;
         if (corner_row and row.w != 0) {
             context.buffer.fill(.{ .x = row.x, .y = y, .w = 1, .h = 1 }, " ", .{});
-            if (row.w > 1) context.buffer.fill(.{
-                .x = row.x + row.w - 1,
-                .y = y,
-                .w = 1,
-                .h = 1,
-            }, " ", .{});
+            if (row.w > 1) {
+                context.buffer.fill(.{
+                    .x = row.x + row.w - 1,
+                    .y = y,
+                    .w = 1,
+                    .h = 1,
+                }, " ", .{});
+            }
         }
         _ = context.buffer.writeText(row, row.x, y, "┃", .{
             .fg = context.palette.accent,
@@ -227,15 +228,10 @@ fn drawAgentLine(
     context.hits.add(row, action);
 }
 
-fn drawAgentTitle(
-    context: *widget.Context,
-    input: Input,
-    semantic: *Semantic,
-    area: ui.Rect,
-    agent: *const agents.Agent,
-    background: ui.Color,
-) void {
-    if (area.w == 0) return;
+fn drawAgentTitle(context: *widget.Context, input: Input, semantic: *Semantic, area: ui.Rect, agent: *const agents.Agent, background: ui.Color) void {
+    if (area.w == 0) {
+        return;
+    }
     const mark_area: ui.Rect = .{ .x = area.x, .y = area.y, .w = 2, .h = 2 };
     const icon_style: ui.Style = .{ .fg = context.palette.accent, .bg = background };
     const glyph = agent.iconGlyph();
@@ -309,13 +305,10 @@ fn projectedPaneIndex(input: Input, agent: *const agents.Agent) u16 {
     return active.displayIndex(agent.key.pane_id) orelse agent.pane_index;
 }
 
-fn drawAgentMeta(
-    context: *widget.Context,
-    area: ui.Rect,
-    agent: *const agents.Agent,
-    background: ui.Color,
-) void {
-    if (area.w <= 3) return;
+fn drawAgentMeta(context: *widget.Context, area: ui.Rect, agent: *const agents.Agent, background: ui.Color) void {
+    if (area.w <= 3) {
+        return;
+    }
     const style: ui.Style = .{ .fg = context.palette.overlay0, .bg = background };
     const provider = agent.displayName();
     var x = area.x + 3;
@@ -329,7 +322,9 @@ fn drawAgentMeta(
     remaining -|= provider_width;
     const separator = " · ";
     const separator_width = ui.measure(separator);
-    if (remaining <= separator_width + 1) return;
+    if (remaining <= separator_width + 1) {
+        return;
+    }
     x += context.buffer.writeText(area, x, area.y, separator, style);
     remaining -= separator_width;
     _ = context.buffer.writeLeftTruncated(
@@ -342,15 +337,11 @@ fn drawAgentMeta(
     );
 }
 
-fn drawStatus(
-    context: *widget.Context,
-    area: ui.Rect,
-    status: schema.AgentStatus,
-    animation_frame: u8,
-    background: ui.Color,
-) void {
+fn drawStatus(context: *widget.Context, area: ui.Rect, status: schema.AgentStatus, animation_frame: u8, background: ui.Color) void {
     const width = statusWidth(status);
-    if (width > area.w) return;
+    if (width > area.w) {
+        return;
+    }
     var x = area.x + area.w - width;
     x += context.drawIcon(area, x, area.y, statusIcon(status, animation_frame), .{
         .fg = statusColor(context, status),
@@ -402,30 +393,30 @@ fn statusColor(context: *const widget.Context, status: schema.AgentStatus) ui.Co
 }
 
 fn drawEmpty(context: *widget.Context, area: ui.Rect, background: ui.Color) void {
-    if (area.h < 2) return;
+    if (area.h < 2) {
+        return;
+    }
     _ = context.buffer.writeTruncated(area, area.x + 2, area.y + 1, "No open agents", area.w -| 4, .{
         .fg = context.palette.subtext0,
         .bg = background,
         .flags = .{ .bold = true },
     });
-    if (area.h >= 4) _ = context.buffer.writeTruncated(
-        area,
-        area.x + 2,
-        area.y + 3,
-        "Agent sessions will appear here.",
-        area.w -| 4,
-        .{ .fg = context.palette.overlay0, .bg = background },
-    );
+    if (area.h >= 4) {
+        _ = context.buffer.writeTruncated(
+            area,
+            area.x + 2,
+            area.y + 3,
+            "Agent sessions will appear here.",
+            area.w -| 4,
+            .{ .fg = context.palette.overlay0, .bg = background },
+        );
+    }
 }
 
-fn drawScrollbar(
-    context: *widget.Context,
-    state: *State,
-    list: ui.Rect,
-    total: u16,
-    background: ui.Color,
-) void {
-    if (total <= list.h or list.h == 0) return;
+fn drawScrollbar(context: *widget.Context, state: *State, list: ui.Rect, total: u16, background: ui.Color) void {
+    if (total <= list.h or list.h == 0) {
+        return;
+    }
     const area: ui.Rect = .{ .x = list.x + list.w - 1, .y = list.y, .w = 1, .h = list.h };
     const thumb = @max(1, area.h * area.h / total);
     const travel = area.h - thumb;
@@ -452,7 +443,9 @@ fn drawRule(context: *widget.Context, area: ui.Rect, y: u16, background: ui.Colo
 }
 
 fn drawRightSeparator(context: *widget.Context, area: ui.Rect, background: ui.Color) void {
-    if (area.w == 0) return;
+    if (area.w == 0) {
+        return;
+    }
     const x = area.x + area.w - 1;
     var y = area.y;
     while (y < area.y + area.h) : (y += 1) {

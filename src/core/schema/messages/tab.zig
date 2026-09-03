@@ -136,7 +136,9 @@ pub const PaneDescriptorIterator = struct {
     remaining: u16,
 
     pub fn next(iterator: *PaneDescriptorIterator) !?PaneDescriptor {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         return .{
             .pane_id = try id.pane(try iterator.decoder.readInt(u64)),
@@ -211,7 +213,9 @@ pub fn encodeMoveTab(buffer: []u8, message: MoveTab) ![]const u8 {
 
 pub fn encodeTabSnapshot(buffer: []u8, message: TabSnapshot) ![]const u8 {
     try validateRequestId(message.request_id);
-    if (message.panes.len > types.max_panes_per_tab) return error.TooManyPanes;
+    if (message.panes.len > types.max_panes_per_tab) {
+        return error.TooManyPanes;
+    }
 
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.tab_snapshot));
@@ -221,7 +225,9 @@ pub fn encodeTabSnapshot(buffer: []u8, message: TabSnapshot) ![]const u8 {
     for (message.panes, 0..) |pane, pane_index| {
         try validatePaneId(pane.pane_id);
         for (message.panes[0..pane_index]) |previous| {
-            if (previous.pane_id == pane.pane_id) return error.DuplicatePane;
+            if (previous.pane_id == pane.pane_id) {
+                return error.DuplicatePane;
+            }
         }
         try encoder.writeInt(u64, id.raw(pane.pane_id));
         try encoder.writeByte(@intFromEnum(pane.lifecycle));
@@ -233,7 +239,9 @@ pub fn decodeTabSnapshot(decoder: *wire.Decoder) !TabSnapshotView {
     const request_id = try id.request(try decoder.readInt(u64));
     const location = try decodeTabLocation(decoder);
     const pane_count = try decoder.readInt(u16);
-    if (pane_count > types.max_panes_per_tab) return error.TooManyPanes;
+    if (pane_count > types.max_panes_per_tab) {
+        return error.TooManyPanes;
+    }
 
     const panes_start = decoder.index;
     // Quadratic duplicate scan, acceptable while max_panes_per_tab is 64;
@@ -243,7 +251,9 @@ pub fn decodeTabSnapshot(decoder: *wire.Decoder) !TabSnapshotView {
         const pane_id = try id.pane(try decoder.readInt(u64));
         _ = try decodePaneLifecycle(try decoder.readByte());
         for (seen[0..pane_index]) |previous| {
-            if (previous == pane_id) return error.DuplicatePane;
+            if (previous == pane_id) {
+                return error.DuplicatePane;
+            }
         }
         seen[pane_index] = pane_id;
     }

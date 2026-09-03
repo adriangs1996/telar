@@ -11,7 +11,9 @@ pub const Encoder = struct {
     }
 
     pub fn writeByte(encoder: *Encoder, value: u8) error{BufferTooSmall}!void {
-        if (encoder.index == encoder.buffer.len) return error.BufferTooSmall;
+        if (encoder.index == encoder.buffer.len) {
+            return error.BufferTooSmall;
+        }
         encoder.buffer[encoder.index] = value;
         encoder.index += 1;
     }

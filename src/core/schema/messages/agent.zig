@@ -121,7 +121,9 @@ pub const AgentSnapshotIterator = struct {
     remaining: u16,
 
     pub fn next(iterator: *AgentSnapshotIterator) !?AgentSnapshotEntry {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         return try decodeAgentSnapshotEntry(&iterator.decoder);
     }
@@ -134,12 +136,18 @@ pub const AgentSnapshotIterator = struct {
 /// try validateSessionReference("019a2b3c-...");
 /// ```
 pub fn validateSessionReference(session: []const u8) !void {
-    if (session.len == 0 or session.len > types.max_agent_session_reference_bytes) return error.InvalidSessionReference;
+    if (session.len == 0 or session.len > types.max_agent_session_reference_bytes) {
+        return error.InvalidSessionReference;
+    }
     for (session) |byte| {
         const ok = std.ascii.isAlphanumeric(byte) or byte == '.' or byte == '_' or byte == '-' or byte == ':';
-        if (!ok) return error.InvalidSessionReference;
+        if (!ok) {
+            return error.InvalidSessionReference;
+        }
     }
-    if (session[0] == '-') return error.InvalidSessionReference;
+    if (session[0] == '-') {
+        return error.InvalidSessionReference;
+    }
 }
 
 /// A session title is bounded printable UTF-8: no C0 or DEL bytes, so the
@@ -219,7 +227,9 @@ pub fn decodeReportAgentSession(decoder: *wire.Decoder) !ReportAgentSession {
 pub fn encodeReportAgent(buffer: []u8, message: ReportAgent) ![]const u8 {
     try validateRequestId(message.request_id);
     try validatePaneId(message.pane_id);
-    if (message.session.len != 0) try validateSessionReference(message.session);
+    if (message.session.len != 0) {
+        try validateSessionReference(message.session);
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ClientTag.report_agent));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -240,7 +250,9 @@ pub fn decodeReportAgent(decoder: *wire.Decoder) !ReportAgent {
     const state = std.enums.fromInt(AgentReportState, try decoder.readByte()) orelse
         return error.InvalidAgentReportState;
     const session = try decoder.readSized16();
-    if (session.len != 0) try validateSessionReference(session);
+    if (session.len != 0) {
+        try validateSessionReference(session);
+    }
     const session_file = try decoder.readSized16();
     try validateBytes(session_file, types.max_agent_session_file_bytes, true);
     const session_file_kind = std.enums.fromInt(AgentSessionFileKind, try decoder.readByte()) orelse
@@ -359,7 +371,9 @@ pub fn decodeReportAgentTitle(decoder: *wire.Decoder) !ReportAgentTitle {
 
 pub fn encodeAgentSound(buffer: []u8, message: AgentSoundNotification) ![]const u8 {
     try validatePaneId(message.pane_id);
-    if (message.pane_generation == 0) return error.InvalidPaneGeneration;
+    if (message.pane_generation == 0) {
+        return error.InvalidPaneGeneration;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.agent_sound));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -375,13 +389,19 @@ pub fn decodeAgentSound(decoder: *wire.Decoder) !AgentSoundNotification {
         .sound = std.enums.fromInt(AgentSound, try decoder.readByte()) orelse
             return error.InvalidAgentSound,
     };
-    if (notification.pane_generation == 0) return error.InvalidPaneGeneration;
+    if (notification.pane_generation == 0) {
+        return error.InvalidPaneGeneration;
+    }
     return notification;
 }
 
 pub fn encodeAgentSnapshot(buffer: []u8, message: AgentSnapshot) ![]const u8 {
-    if (message.revision == 0) return error.InvalidAgentRevision;
-    if (message.entries.len > types.max_agent_snapshot_entries) return error.TooManyAgentEntries;
+    if (message.revision == 0) {
+        return error.InvalidAgentRevision;
+    }
+    if (message.entries.len > types.max_agent_snapshot_entries) {
+        return error.TooManyAgentEntries;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.agent_snapshot));
     try encoder.writeInt(u64, message.revision);
@@ -390,7 +410,9 @@ pub fn encodeAgentSnapshot(buffer: []u8, message: AgentSnapshot) ![]const u8 {
         for (message.entries[0..index]) |previous| {
             if (previous.pane_id == entry.pane_id and
                 previous.pane_generation == entry.pane_generation)
+            {
                 return error.DuplicateAgentEntry;
+            }
         }
         try encodeAgentSnapshotEntry(&encoder, entry);
     }
@@ -399,17 +421,22 @@ pub fn encodeAgentSnapshot(buffer: []u8, message: AgentSnapshot) ![]const u8 {
 
 pub fn decodeAgentSnapshot(decoder: *wire.Decoder) !AgentSnapshotView {
     const revision = try decoder.readInt(u64);
-    if (revision == 0) return error.InvalidAgentRevision;
+    if (revision == 0) {
+        return error.InvalidAgentRevision;
+    }
     const entry_count = try decoder.readInt(u16);
-    if (entry_count > types.max_agent_snapshot_entries) return error.TooManyAgentEntries;
+    if (entry_count > types.max_agent_snapshot_entries) {
+        return error.TooManyAgentEntries;
+    }
     const entries_start = decoder.index;
     var seen_ids: [types.max_agent_snapshot_entries]PaneId = undefined;
     var seen_generations: [types.max_agent_snapshot_entries]u64 = undefined;
     for (0..entry_count) |index| {
         const entry = try decodeAgentSnapshotEntry(decoder);
         for (seen_ids[0..index], seen_generations[0..index]) |pane_id, generation| {
-            if (pane_id == entry.pane_id and generation == entry.pane_generation)
+            if (pane_id == entry.pane_id and generation == entry.pane_generation) {
                 return error.DuplicateAgentEntry;
+            }
         }
         seen_ids[index] = entry.pane_id;
         seen_generations[index] = entry.pane_generation;
@@ -425,8 +452,12 @@ fn encodeAgentSnapshotEntry(encoder: *wire.Encoder, entry: AgentSnapshotEntry) !
     try validatePaneId(entry.pane_id);
     if (entry.pane_generation == 0 or entry.pane_index == 0 or
         entry.sequence == 0 or entry.confidence > 100)
+    {
         return error.InvalidAgentEntry;
-    if (entry.expires_at_ms < entry.observed_at_ms) return error.InvalidAgentExpiry;
+    }
+    if (entry.expires_at_ms < entry.observed_at_ms) {
+        return error.InvalidAgentExpiry;
+    }
     try validateAgentDisplayText(entry.workspace_label, types.max_agent_workspace_label_bytes, true);
     try validateAgentDisplayText(entry.tab_label, types.max_tab_label_bytes, true);
     try validateAgentDisplayText(entry.session_title, types.max_agent_session_title_bytes, true);
@@ -497,8 +528,12 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
     };
     if (entry.pane_generation == 0 or entry.pane_index == 0 or
         entry.sequence == 0 or entry.confidence > 100)
+    {
         return error.InvalidAgentEntry;
-    if (entry.expires_at_ms < entry.observed_at_ms) return error.InvalidAgentExpiry;
+    }
+    if (entry.expires_at_ms < entry.observed_at_ms) {
+        return error.InvalidAgentExpiry;
+    }
     try validateAgentDisplayText(entry.workspace_label, types.max_agent_workspace_label_bytes, true);
     try validateAgentDisplayText(entry.tab_label, types.max_tab_label_bytes, true);
     try validateAgentDisplayText(entry.session_title, types.max_agent_session_title_bytes, true);
@@ -511,17 +546,23 @@ fn decodeAgentSnapshotEntry(decoder: *wire.Decoder) !AgentSnapshotEntry {
 }
 
 fn validateAgentProvider(provider: AgentProvider) !void {
-    if (@intFromEnum(provider) > types.max_agent_provider_index) return error.InvalidAgentProvider;
+    if (@intFromEnum(provider) > types.max_agent_provider_index) {
+        return error.InvalidAgentProvider;
+    }
 }
 
 fn decodeAgentProvider(value: u8) !AgentProvider {
-    if (value > types.max_agent_provider_index) return error.InvalidAgentProvider;
+    if (value > types.max_agent_provider_index) {
+        return error.InvalidAgentProvider;
+    }
     return @enumFromInt(value);
 }
 
 fn validateAgentDisplayText(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {
     try validateBytes(bytes, maximum, empty_allowed);
-    if (!std.unicode.utf8ValidateSlice(bytes)) return error.InvalidUtf8;
+    if (!std.unicode.utf8ValidateSlice(bytes)) {
+        return error.InvalidUtf8;
+    }
     for (bytes) |byte| if (byte < 0x20 or byte == 0x7f)
         return error.InvalidAgentDisplayText;
 }

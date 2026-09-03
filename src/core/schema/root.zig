@@ -159,6 +159,8 @@ pub const PaneOpened = messages.pane.PaneOpened;
 pub const PaneExited = messages.pane.PaneExited;
 pub const PaneCwd = messages.pane.PaneCwd;
 pub const PaneForeground = messages.pane.PaneForeground;
+pub const PaneProgressState = messages.pane.PaneProgressState;
+pub const PaneProgress = messages.pane.PaneProgress;
 pub const PaneClipboard = messages.pane.PaneClipboard;
 pub const encodeOpenPane = messages.pane.encodeOpenPane;
 pub const encodePaneInput = messages.pane.encodePaneInput;
@@ -182,6 +184,7 @@ pub const encodePaneClipboard = messages.pane.encodePaneClipboard;
 pub const encodePaneExited = messages.pane.encodePaneExited;
 pub const encodePaneCwd = messages.pane.encodePaneCwd;
 pub const encodePaneForeground = messages.pane.encodePaneForeground;
+pub const encodePaneProgress = messages.pane.encodePaneProgress;
 
 pub const ClientRoute = messages.focus.ClientRoute;
 pub const RequestPaneFocus = messages.focus.RequestPaneFocus;

@@ -112,7 +112,9 @@ pub const Workspace = struct {
     /// const explicit = workspace.explicitName() orelse "";
     /// ```
     pub fn explicitName(workspace: *const Workspace) ?[]const u8 {
-        if (workspace.explicit_name_len == 0) return null;
+        if (workspace.explicit_name_len == 0) {
+            return null;
+        }
         return workspace.explicit_name[0..workspace.explicit_name_len];
     }
 

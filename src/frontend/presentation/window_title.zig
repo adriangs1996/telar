@@ -112,10 +112,18 @@ pub fn render(buffer: *[max_title_bytes]u8, template: []const u8, tokens: Tokens
 }
 
 fn tokenValue(name: []const u8, tokens: Tokens) ?[]const u8 {
-    if (std.mem.eql(u8, name, "workspace")) return tokens.workspace;
-    if (std.mem.eql(u8, name, "tab")) return tokens.tab;
-    if (std.mem.eql(u8, name, "pane_title")) return tokens.pane_title;
-    if (std.mem.eql(u8, name, "hostname")) return tokens.hostname;
+    if (std.mem.eql(u8, name, "workspace")) {
+        return tokens.workspace;
+    }
+    if (std.mem.eql(u8, name, "tab")) {
+        return tokens.tab;
+    }
+    if (std.mem.eql(u8, name, "pane_title")) {
+        return tokens.pane_title;
+    }
+    if (std.mem.eql(u8, name, "hostname")) {
+        return tokens.hostname;
+    }
     return null;
 }
 

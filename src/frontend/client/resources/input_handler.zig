@@ -75,7 +75,9 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
     _ = try host_capabilities.observe(handler.client, response);
     switch (response) {
         .kitty_graphics => |reply| {
-            if (!handler.client.graphics_store.noteHostReply(reply.image_id, reply.supported)) return;
+            if (!handler.client.graphics_store.noteHostReply(reply.image_id, reply.supported)) {
+                return;
+            }
             try runtime_transport.flushGraphicsCredits(handler.client);
             try presentation_lifecycle.observe(handler.client);
         },

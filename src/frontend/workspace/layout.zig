@@ -87,7 +87,9 @@ pub const Snapshot = struct {
     }
 
     pub fn find(snapshot: *const Snapshot, pane_id: schema.PaneId) ?View {
-        if (pane_id == .invalid) return null;
+        if (pane_id == .invalid) {
+            return null;
+        }
         const view_index = snapshot.index.get(schema.id.raw(pane_id)) orelse return null;
         return snapshot.storage[view_index];
     }
@@ -116,20 +118,19 @@ pub const Snapshot = struct {
         return reserved;
     }
 
-    pub fn prospectiveSplit(
-        snapshot: *const Snapshot,
-        pane_id: schema.PaneId,
-        axis: Axis,
-        pane_count: usize,
-    ) ?ProspectiveSplit {
-        if (pane_count == max_panes) return null;
+    pub fn prospectiveSplit(snapshot: *const Snapshot, pane_id: schema.PaneId, axis: Axis, pane_count: usize) ?ProspectiveSplit {
+        if (pane_count == max_panes) {
+            return null;
+        }
         const view = snapshot.find(pane_id) orelse return null;
         const minimum_split_extent: u16 = 6 + @as(u16, @intFromBool(snapshot.pane_gaps));
         const enough_space = switch (axis) {
             .horizontal => view.outer.w >= minimum_split_extent and view.outer.h >= 3,
             .vertical => view.outer.w >= 3 and view.outer.h >= minimum_split_extent,
         };
-        if (!enough_space) return null;
+        if (!enough_space) {
+            return null;
+        }
         const first, const second = splitArea(
             view.outer,
             axis,
@@ -142,18 +143,16 @@ pub const Snapshot = struct {
         };
     }
 
-    pub fn focusTarget(
-        snapshot: *const Snapshot,
-        current_id: schema.PaneId,
-        direction: Direction,
-    ) ?schema.PaneId {
+    pub fn focusTarget(snapshot: *const Snapshot, current_id: schema.PaneId, direction: Direction) ?schema.PaneId {
         const source = snapshot.find(current_id) orelse return null;
         var candidate: ?schema.PaneId = null;
         var best_score: u64 = std.math.maxInt(u64);
         const source_x = center(source.outer.x, source.outer.w);
         const source_y = center(source.outer.y, source.outer.h);
         for (snapshot.views()) |view| {
-            if (view.pane_id == current_id) continue;
+            if (view.pane_id == current_id) {
+                continue;
+            }
             const candidate_x = center(view.outer.x, view.outer.w);
             const candidate_y = center(view.outer.y, view.outer.h);
             const source_left: u32 = source.outer.x;
@@ -186,7 +185,9 @@ pub const Snapshot = struct {
                     candidate_top >= source_bottom,
                 },
             };
-            if (!forward) continue;
+            if (!forward) {
+                continue;
+            }
             const score = @as(u64, primary) * 65536 + secondary;
             if (score < best_score) {
                 best_score = score;
@@ -300,7 +301,9 @@ pub const Layout = struct {
     }
 
     pub fn setPaneGaps(layout: *Layout, enabled: bool) bool {
-        if (layout.pane_gaps == enabled) return false;
+        if (layout.pane_gaps == enabled) {
+            return false;
+        }
         layout.pane_gaps = enabled;
         layout.changed();
         return true;
@@ -324,7 +327,9 @@ pub const Layout = struct {
                 .empty => unreachable,
                 .leaf => |candidate| {
                     index += 1;
-                    if (candidate == pane_id) return index;
+                    if (candidate == pane_id) {
+                        return index;
+                    }
                 },
                 .split => |branch| {
                     stack[stack_len] = branch.second;
@@ -338,8 +343,12 @@ pub const Layout = struct {
     }
 
     pub fn addRoot(layout: *Layout, pane_id: schema.PaneId) !void {
-        if (pane_id == .invalid) return error.InvalidPaneId;
-        if (layout.root != null) return error.LayoutNotEmpty;
+        if (pane_id == .invalid) {
+            return error.InvalidPaneId;
+        }
+        if (layout.root != null) {
+            return error.LayoutNotEmpty;
+        }
         layout.nodes[0] = .{ .node = .{ .leaf = pane_id } };
         layout.root = 0;
         layout.focused_pane = pane_id;
@@ -359,7 +368,9 @@ pub const Layout = struct {
     /// try layout.restoreDisplayOrder(&.{ first, second, third }, second);
     /// ```
     pub fn restoreDisplayOrder(layout: *Layout, pane_ids: []const schema.PaneId, focused_pane: schema.PaneId) !void {
-        if (pane_ids.len == 0) return error.LayoutEmpty;
+        if (pane_ids.len == 0) {
+            return error.LayoutEmpty;
+        }
         var restored: Layout = .{
             .pane_gaps = layout.pane_gaps,
             .revision = layout.revision,
@@ -371,7 +382,9 @@ pub const Layout = struct {
             restored.setParentRatio(pane_id, equalShareRatio(pane_ids.len - index + 1));
             previous = pane_id;
         }
-        if (!restored.focusPane(focused_pane)) return error.PaneNotFound;
+        if (!restored.focusPane(focused_pane)) {
+            return error.PaneNotFound;
+        }
         layout.* = restored;
     }
 
@@ -384,19 +397,21 @@ pub const Layout = struct {
     /// Restores an earlier client-owned split tree when it still describes
     /// exactly the panes reported by the runtime. Focus remains a separate
     /// navigation choice and the current pane-gap preference wins.
-    pub fn restoreSaved(
-        layout: *Layout,
-        saved: Layout,
-        pane_ids: []const schema.PaneId,
-        focused_pane: schema.PaneId,
-    ) bool {
-        if (pane_ids.len == 0 or pane_ids.len != saved.count()) return false;
-        for (pane_ids, 0..) |pane_id, index| {
-            if (!saved.contains(pane_id)) return false;
-            if (std.mem.findScalar(schema.PaneId, pane_ids[0..index], pane_id) != null)
-                return false;
+    pub fn restoreSaved(layout: *Layout, saved: Layout, pane_ids: []const schema.PaneId, focused_pane: schema.PaneId) bool {
+        if (pane_ids.len == 0 or pane_ids.len != saved.count()) {
+            return false;
         }
-        if (!saved.contains(focused_pane)) return false;
+        for (pane_ids, 0..) |pane_id, index| {
+            if (!saved.contains(pane_id)) {
+                return false;
+            }
+            if (std.mem.findScalar(schema.PaneId, pane_ids[0..index], pane_id) != null) {
+                return false;
+            }
+        }
+        if (!saved.contains(focused_pane)) {
+            return false;
+        }
 
         var restored = saved;
         restored.pane_gaps = layout.pane_gaps;
@@ -412,15 +427,16 @@ pub const Layout = struct {
         try layout.split(focused_pane, pane_id, axis);
     }
 
-    pub fn split(
-        layout: *Layout,
-        existing_pane: schema.PaneId,
-        new_pane: schema.PaneId,
-        axis: Axis,
-    ) !void {
-        if (new_pane == .invalid) return error.InvalidPaneId;
-        if (layout.contains(new_pane)) return error.DuplicatePane;
-        if (layout.pane_count == max_panes) return error.PaneLimitReached;
+    pub fn split(layout: *Layout, existing_pane: schema.PaneId, new_pane: schema.PaneId, axis: Axis) !void {
+        if (new_pane == .invalid) {
+            return error.InvalidPaneId;
+        }
+        if (layout.contains(new_pane)) {
+            return error.DuplicatePane;
+        }
+        if (layout.pane_count == max_panes) {
+            return error.PaneLimitReached;
+        }
         const target = layout.findLeaf(existing_pane) orelse return error.PaneNotFound;
 
         const first = layout.allocateNode() orelse return error.NodeLimitReached;
@@ -469,26 +485,29 @@ pub const Layout = struct {
         layout.nodes[leaf] = .{};
         layout.nodes[sibling] = .{};
         layout.pane_count -= 1;
-        if (layout.focused_pane == pane_id)
+        if (layout.focused_pane == pane_id) {
             layout.focused_pane = layout.firstLeaf(parent).?;
-        if (layout.pane_count <= 1) layout.fullscreen = false;
+        }
+        if (layout.pane_count <= 1) {
+            layout.fullscreen = false;
+        }
         layout.changed();
         return true;
     }
 
     pub fn focusPane(layout: *Layout, pane_id: schema.PaneId) bool {
-        if (!layout.contains(pane_id)) return false;
-        if (layout.focused_pane == pane_id) return true;
+        if (!layout.contains(pane_id)) {
+            return false;
+        }
+        if (layout.focused_pane == pane_id) {
+            return true;
+        }
         layout.focused_pane = pane_id;
         layout.changed();
         return true;
     }
 
-    pub fn focusDirection(
-        layout: *Layout,
-        direction: Direction,
-        area: ui.Rect,
-    ) ?schema.PaneId {
+    pub fn focusDirection(layout: *Layout, direction: Direction, area: ui.Rect) ?schema.PaneId {
         const current_id = layout.focused() orelse return null;
         var geometry: Snapshot = .{};
         layout.snapshotTiled(area, &geometry);
@@ -504,11 +523,7 @@ pub const Layout = struct {
     /// requested edge is outside the tab, the nearest opposite edge moves in
     /// that direction instead. Ratios stay bounded and every leaf retains at
     /// least one content cell along the resized axis.
-    pub fn resizeFocused(
-        layout: *Layout,
-        direction: Direction,
-        area: ui.Rect,
-    ) bool {
+    pub fn resizeFocused(layout: *Layout, direction: Direction, area: ui.Rect) bool {
         const leaf = layout.findLeaf(layout.focused_pane) orelse return false;
         const target = layout.resizeSplit(leaf, direction) orelse return false;
         const branch = layout.nodes[target].node.split;
@@ -522,38 +537,34 @@ pub const Layout = struct {
             minimum_split_ratio,
             maximum_split_ratio,
         );
-        if (candidate == previous) return false;
+        if (candidate == previous) {
+            return false;
+        }
         const target_area = layout.nodeArea(target, area);
-        if (!layout.ratioFits(branch, target_area, candidate)) return false;
+        if (!layout.ratioFits(branch, target_area, candidate)) {
+            return false;
+        }
         layout.nodes[target].node.split.ratio = candidate;
         layout.changed();
         return true;
     }
 
     pub fn toggleFullscreen(layout: *Layout) bool {
-        if (layout.pane_count <= 1) return false;
+        if (layout.pane_count <= 1) {
+            return false;
+        }
         layout.fullscreen = !layout.fullscreen;
         layout.changed();
         return true;
     }
 
-    pub fn canSplit(
-        layout: *const Layout,
-        pane_id: schema.PaneId,
-        axis: Axis,
-        area: ui.Rect,
-    ) bool {
+    pub fn canSplit(layout: *const Layout, pane_id: schema.PaneId, axis: Axis, area: ui.Rect) bool {
         var geometry: Snapshot = .{};
         layout.snapshot(area, &geometry);
         return geometry.prospectiveSplit(pane_id, axis, layout.pane_count) != null;
     }
 
-    pub fn prospectiveSplit(
-        layout: *const Layout,
-        pane_id: schema.PaneId,
-        axis: Axis,
-        area: ui.Rect,
-    ) ?ProspectiveSplit {
+    pub fn prospectiveSplit(layout: *const Layout, pane_id: schema.PaneId, axis: Axis, area: ui.Rect) ?ProspectiveSplit {
         var geometry: Snapshot = .{};
         layout.snapshot(area, &geometry);
         return geometry.prospectiveSplit(pane_id, axis, layout.pane_count);
@@ -562,7 +573,9 @@ pub const Layout = struct {
     /// A fullscreen pane keeps its border: fullscreen requires two panes, and
     /// the border is what tells the user the tab still has more than one.
     pub fn snapshot(layout: *const Layout, area: ui.Rect, output: *Snapshot) void {
-        if (!layout.fullscreen) return layout.snapshotTiled(area, output);
+        if (!layout.fullscreen) {
+            return layout.snapshotTiled(area, output);
+        }
         output.reset(area, layout.revision, layout.pane_gaps);
         const pane_id = layout.focused() orelse return;
         output.append(.{
@@ -616,22 +629,14 @@ pub const Layout = struct {
         }
     }
 
-    pub fn views(
-        layout: *const Layout,
-        area: ui.Rect,
-        output: *[max_panes]View,
-    ) []View {
+    pub fn views(layout: *const Layout, area: ui.Rect, output: *[max_panes]View) []View {
         var snapshot_output: Snapshot = .{};
         layout.snapshot(area, &snapshot_output);
         @memcpy(output[0..snapshot_output.len], snapshot_output.views());
         return output[0..snapshot_output.len];
     }
 
-    fn resizeSplit(
-        layout: *const Layout,
-        leaf: NodeIndex,
-        direction: Direction,
-    ) ?NodeIndex {
+    fn resizeSplit(layout: *const Layout, leaf: NodeIndex, direction: Direction) ?NodeIndex {
         const target_axis: Axis = switch (direction) {
             .left, .right => .horizontal,
             .up, .down => .vertical,
@@ -646,8 +651,12 @@ pub const Layout = struct {
                     .left, .up => !child_is_first,
                     .right, .down => child_is_first,
                 };
-                if (requested_edge) return parent;
-                if (fallback == null) fallback = parent;
+                if (requested_edge) {
+                    return parent;
+                }
+                if (fallback == null) {
+                    fallback = parent;
+                }
             }
             child = parent;
         }
@@ -680,12 +689,7 @@ pub const Layout = struct {
         return current_area;
     }
 
-    fn ratioFits(
-        layout: *const Layout,
-        branch: Split,
-        area: ui.Rect,
-        ratio: u16,
-    ) bool {
+    fn ratioFits(layout: *const Layout, branch: Split, area: ui.Rect, ratio: u16) bool {
         const first, const second = splitArea(area, branch.axis, ratio, layout.pane_gaps);
         const first_extent = extent(first, branch.axis);
         const second_extent = extent(second, branch.axis);
@@ -700,8 +704,9 @@ pub const Layout = struct {
             .split => |branch| {
                 const first = layout.minimumExtent(branch.first, axis);
                 const second = layout.minimumExtent(branch.second, axis);
-                if (branch.axis == axis)
+                if (branch.axis == axis) {
                     return first +| @intFromBool(layout.pane_gaps) +| second;
+                }
                 return @max(first, second);
             },
         };
@@ -709,7 +714,9 @@ pub const Layout = struct {
 
     fn allocateNode(layout: *Layout) ?NodeIndex {
         for (&layout.nodes, 0..) |*slot, index| {
-            if (slot.node == .empty) return @intCast(index);
+            if (slot.node == .empty) {
+                return @intCast(index);
+            }
         }
         return null;
     }
@@ -733,7 +740,9 @@ pub const Layout = struct {
 
     fn changed(layout: *Layout) void {
         layout.revision +%= 1;
-        if (layout.revision == 0) layout.revision = 1;
+        if (layout.revision == 0) {
+            layout.revision = 1;
+        }
     }
 };
 

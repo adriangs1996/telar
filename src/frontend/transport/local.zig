@@ -5,19 +5,25 @@ const core = @import("telar-core");
 
 pub fn connect(io: std.Io, path: []const u8) !core.transport.SocketChannel {
     _ = io;
-    if (!std.fs.path.isAbsolute(path)) return error.RelativePath;
+    if (!std.fs.path.isAbsolute(path)) {
+        return error.RelativePath;
+    }
     var address: std.c.sockaddr.un = .{ .path = undefined };
-    if (path.len >= address.path.len) return error.NameTooLong;
+    if (path.len >= address.path.len) {
+        return error.NameTooLong;
+    }
 
     const socket = std.c.socket(std.c.AF.UNIX, std.c.SOCK.STREAM, 0);
-    if (socket < 0) return switch (std.posix.errno(socket)) {
-        .MFILE => error.ProcessFdQuotaExceeded,
-        .NFILE => error.SystemFdQuotaExceeded,
-        .NOBUFS, .NOMEM => error.SystemResources,
-        .ACCES, .PERM => error.PermissionDenied,
-        .AFNOSUPPORT => error.AddressFamilyUnsupported,
-        else => error.SocketFailed,
-    };
+    if (socket < 0) {
+        return switch (std.posix.errno(socket)) {
+            .MFILE => error.ProcessFdQuotaExceeded,
+            .NFILE => error.SystemFdQuotaExceeded,
+            .NOBUFS, .NOMEM => error.SystemResources,
+            .ACCES, .PERM => error.PermissionDenied,
+            .AFNOSUPPORT => error.AddressFamilyUnsupported,
+            else => error.SocketFailed,
+        };
+    }
     errdefer _ = std.c.close(socket);
 
     @memset(&address.path, 0);

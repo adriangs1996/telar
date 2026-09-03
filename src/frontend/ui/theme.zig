@@ -69,8 +69,9 @@ pub const Theme = struct {
     pub fn withOverrides(value: Theme, overrides: Overrides) Theme {
         var result = value;
         inline for (std.meta.fields(Overrides)) |field| {
-            if (@field(overrides, field.name)) |color|
+            if (@field(overrides, field.name)) |color| {
                 @field(result.palette, field.name) = color;
+            }
         }
         return result;
     }
@@ -79,12 +80,18 @@ pub const Theme = struct {
 pub const default_theme = builtin(.vesper);
 
 pub fn fromName(name: []const u8) ?Theme {
-    if (eql(name, "vesper")) return builtin(.vesper);
-    if (eql(name, "catppuccin") or eql(name, "catppuccin-mocha") or eql(name, "mocha"))
+    if (eql(name, "vesper")) {
+        return builtin(.vesper);
+    }
+    if (eql(name, "catppuccin") or eql(name, "catppuccin-mocha") or eql(name, "mocha")) {
         return builtin(.catppuccin);
-    if (eql(name, "tokyo-night") or eql(name, "tokyonight") or eql(name, "tokyo_night"))
+    }
+    if (eql(name, "tokyo-night") or eql(name, "tokyonight") or eql(name, "tokyo_night")) {
         return builtin(.tokyo_night);
-    if (eql(name, "terminal") or eql(name, "default")) return builtin(.terminal);
+    }
+    if (eql(name, "terminal") or eql(name, "default")) {
+        return builtin(.terminal);
+    }
     return null;
 }
 

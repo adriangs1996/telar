@@ -9,7 +9,9 @@ pub const card_gap: u16 = 1;
 pub const max_width: u16 = 48;
 
 pub fn overlayArea(workbench: ui.Rect) ui.Rect {
-    if (workbench.w < 12 or workbench.h < card_height) return .{};
+    if (workbench.w < 12 or workbench.h < card_height) {
+        return .{};
+    }
     const horizontal_margin: u16 = @intFromBool(workbench.w > 16);
     const vertical_margin: u16 = @intFromBool(workbench.h > card_height);
     const available_width = workbench.w -| horizontal_margin * 2;
@@ -27,30 +29,19 @@ pub fn overlayArea(workbench: ui.Rect) ui.Rect {
     };
 }
 
-pub fn render(
-    context: *widget.Context,
-    area: ui.Rect,
-    center: *const notifications.Center,
-) void {
+pub fn render(context: *widget.Context, area: ui.Rect, center: *const notifications.Center) void {
     renderMode(context, area, center, true);
 }
 
 /// Keeps the cell-aligned semantic targets when KGP owns the pixels.
-pub fn registerHits(
-    context: *widget.Context,
-    area: ui.Rect,
-    center: *const notifications.Center,
-) void {
+pub fn registerHits(context: *widget.Context, area: ui.Rect, center: *const notifications.Center) void {
     renderMode(context, area, center, false);
 }
 
-fn renderMode(
-    context: *widget.Context,
-    area: ui.Rect,
-    center: *const notifications.Center,
-    paint: bool,
-) void {
-    if (area.isEmpty() or !center.hasItems()) return;
+fn renderMode(context: *widget.Context, area: ui.Rect, center: *const notifications.Center, paint: bool) void {
+    if (area.isEmpty() or !center.hasItems()) {
+        return;
+    }
     context.hits.beginLayer(null);
     defer context.hits.endLayer();
 
@@ -71,13 +62,10 @@ fn renderMode(
     }
 }
 
-fn drawCard(
-    context: *widget.Context,
-    card: ui.Rect,
-    item: *const notifications.Item,
-    paint: bool,
-) void {
-    if (card.isEmpty()) return;
+fn drawCard(context: *widget.Context, card: ui.Rect, item: *const notifications.Item, paint: bool) void {
+    if (card.isEmpty()) {
+        return;
+    }
     const activate: widget.Action = .{ .notification_activate = item.id };
     context.hits.add(card, activate);
 
@@ -90,7 +78,9 @@ fn drawCard(
             .h = 1,
         }, dismiss);
     }
-    if (!paint) return;
+    if (!paint) {
+        return;
+    }
 
     const accent = levelColor(context, item.level);
     const hovered = context.isHovered(activate);
@@ -104,7 +94,9 @@ fn drawCard(
     context.buffer.fill(card, " ", body_style);
     context.buffer.box(card, border_style, if (card.w >= 12) item.title() else null);
 
-    if (card.w < 8) return;
+    if (card.w < 8) {
+        return;
+    }
     const content: ui.Rect = .{
         .x = card.x + 2,
         .y = card.y + 1,

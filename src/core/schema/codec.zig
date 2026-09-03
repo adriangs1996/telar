@@ -9,33 +9,48 @@ const types = @import("types.zig");
 // -- validators -------------------------------------------------------------
 
 pub fn validateRequestId(request_id: id.RequestId) !void {
-    if (request_id == .none) return error.InvalidRequestId;
+    if (request_id == .none) {
+        return error.InvalidRequestId;
+    }
 }
 
 pub fn validatePaneId(pane_id: id.PaneId) !void {
-    if (pane_id == .invalid) return error.InvalidPaneId;
+    if (pane_id == .invalid) {
+        return error.InvalidPaneId;
+    }
 }
 
 pub fn validateBytes(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {
-    if ((!empty_allowed and bytes.len == 0) or bytes.len > maximum)
+    if ((!empty_allowed and bytes.len == 0) or bytes.len > maximum) {
         return error.InvalidByteString;
-    if (std.mem.findScalar(u8, bytes, 0) != null) return error.EmbeddedNul;
+    }
+    if (std.mem.findScalar(u8, bytes, 0) != null) {
+        return error.EmbeddedNul;
+    }
 }
 
 pub fn validateEnvironmentEntry(entry: types.EnvironmentEntry) !void {
     try validateBytes(entry.name, std.math.maxInt(u16), false);
     try validateBytes(entry.value, std.math.maxInt(u32), true);
-    if (std.mem.findScalar(u8, entry.name, '=') != null) return error.InvalidEnvironmentName;
+    if (std.mem.findScalar(u8, entry.name, '=') != null) {
+        return error.InvalidEnvironmentName;
+    }
 }
 
 pub fn validateErrorMessage(message: []const u8) !void {
-    if (message.len > types.max_error_message_bytes) return error.ErrorMessageTooLarge;
-    if (!std.unicode.utf8ValidateSlice(message)) return error.InvalidUtf8;
+    if (message.len > types.max_error_message_bytes) {
+        return error.ErrorMessageTooLarge;
+    }
+    if (!std.unicode.utf8ValidateSlice(message)) {
+        return error.InvalidUtf8;
+    }
 }
 
 pub fn validateTabLabel(label: []const u8, empty_allowed: bool) !void {
     try validateBytes(label, types.max_tab_label_bytes, empty_allowed);
-    if (!std.unicode.utf8ValidateSlice(label)) return error.InvalidUtf8;
+    if (!std.unicode.utf8ValidateSlice(label)) {
+        return error.InvalidUtf8;
+    }
     for (label) |byte| if (byte < 0x20 or byte == 0x7f) return error.InvalidTabLabel;
 }
 
@@ -61,22 +76,25 @@ pub fn decodeSize(decoder: *wire.Decoder) !types.TerminalSize {
 
 pub fn encodeTabLocation(encoder: *wire.Encoder, location: types.TabLocation) !void {
     try encodeWorkspaceLocation(encoder, location.workspace);
-    if (location.tab_id == .invalid) return error.InvalidTabId;
+    if (location.tab_id == .invalid) {
+        return error.InvalidTabId;
+    }
     try encoder.writeInt(u64, id.raw(location.tab_id));
 }
 
-pub fn encodeWorkspaceLocation(
-    encoder: *wire.Encoder,
-    location: types.WorkspaceLocation,
-) !void {
+pub fn encodeWorkspaceLocation(encoder: *wire.Encoder, location: types.WorkspaceLocation) !void {
     switch (location) {
         .workspace => |workspace_id| {
-            if (workspace_id == .invalid) return error.InvalidWorkspaceId;
+            if (workspace_id == .invalid) {
+                return error.InvalidWorkspaceId;
+            }
             try encoder.writeByte(0);
             try encoder.writeInt(u64, id.raw(workspace_id));
         },
         .worktree => |worktree_id| {
-            if (worktree_id == .invalid) return error.InvalidWorktreeId;
+            if (worktree_id == .invalid) {
+                return error.InvalidWorktreeId;
+            }
             try encoder.writeByte(1);
             try encoder.writeInt(u64, id.raw(worktree_id));
         },
@@ -142,7 +160,9 @@ pub fn Derived(comptime T: type) type {
         @hasDecl(T, "wire_allow_zero_request_id") and T.wire_allow_zero_request_id;
     return struct {
         pub fn encode(encoder: *wire.Encoder, message: T) !void {
-            if (@hasDecl(T, "validateWire")) try message.validateWire();
+            if (@hasDecl(T, "validateWire")) {
+                try message.validateWire();
+            }
             inline for (@typeInfo(T).@"struct".fields) |field| {
                 try encodeField(field.type, encoder, @field(message, field.name));
             }
@@ -153,14 +173,18 @@ pub fn Derived(comptime T: type) type {
             inline for (@typeInfo(T).@"struct".fields) |field| {
                 @field(message, field.name) = try decodeField(field.type, decoder);
             }
-            if (@hasDecl(T, "validateWire")) try message.validateWire();
+            if (@hasDecl(T, "validateWire")) {
+                try message.validateWire();
+            }
             return message;
         }
 
         fn encodeField(comptime F: type, encoder: *wire.Encoder, value: F) !void {
             switch (F) {
                 id.RequestId => {
-                    if (!allow_zero_request_id) try validateRequestId(value);
+                    if (!allow_zero_request_id) {
+                        try validateRequestId(value);
+                    }
                     try encoder.writeInt(u64, id.raw(value));
                 },
                 id.PaneId => {
@@ -170,7 +194,9 @@ pub fn Derived(comptime T: type) type {
                 ?id.WorkspaceId => {
                     try encoder.writeByte(@intFromBool(value != null));
                     if (value) |workspace_id| {
-                        if (workspace_id == .invalid) return error.InvalidWorkspaceId;
+                        if (workspace_id == .invalid) {
+                            return error.InvalidWorkspaceId;
+                        }
                         try encoder.writeInt(u64, id.raw(workspace_id));
                     }
                 },

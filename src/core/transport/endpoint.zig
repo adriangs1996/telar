@@ -8,8 +8,12 @@ pub const Local = struct {
     directory_len: usize = 0,
 
     pub fn explicit(endpoint_path: []const u8) !Local {
-        if (!std.fs.path.isAbsolute(endpoint_path)) return error.RelativePath;
-        if (endpoint_path.len > std.Io.net.UnixAddress.max_len) return error.NameTooLong;
+        if (!std.fs.path.isAbsolute(endpoint_path)) {
+            return error.RelativePath;
+        }
+        if (endpoint_path.len > std.Io.net.UnixAddress.max_len) {
+            return error.NameTooLong;
+        }
 
         var endpoint = Local{ .path_len = endpoint_path.len };
         std.mem.copyForwards(u8, endpoint.storage[0..endpoint_path.len], endpoint_path);
@@ -19,7 +23,9 @@ pub const Local = struct {
     /// Builds `<base>/<directory_name>/runtime.sock`. Only the final directory
     /// belongs to telar; the bootstrap must never chmod `base` itself.
     pub fn managed(base: []const u8, directory_name: []const u8) !Local {
-        if (!std.fs.path.isAbsolute(base)) return error.RelativePath;
+        if (!std.fs.path.isAbsolute(base)) {
+            return error.RelativePath;
+        }
         if (directory_name.len == 0 or
             std.mem.indexOfAny(u8, directory_name, "/\\") != null)
         {
@@ -47,7 +53,9 @@ pub const Local = struct {
     }
 
     pub fn managedDirectory(endpoint: *const Local) ?[]const u8 {
-        if (endpoint.directory_len == 0) return null;
+        if (endpoint.directory_len == 0) {
+            return null;
+        }
         return endpoint.storage[0..endpoint.directory_len];
     }
 };

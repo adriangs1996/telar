@@ -81,10 +81,14 @@ const OwnedCreateTab = struct {
     argument_count: u8 = 0,
 
     fn ownArguments(value: *OwnedCreateTab, arguments: []const []const u8) bool {
-        if (arguments.len == 0 or arguments.len > max_owned_arguments) return false;
+        if (arguments.len == 0 or arguments.len > max_owned_arguments) {
+            return false;
+        }
         var total: usize = 0;
         for (arguments) |argument| total += argument.len;
-        if (total > max_owned_argument_bytes) return false;
+        if (total > max_owned_argument_bytes) {
+            return false;
+        }
 
         var offset: usize = 0;
         for (arguments, 0..) |argument, index| {
@@ -346,21 +350,24 @@ pub const Outbox = struct {
     }
 
     pub fn pushInput(outbox: *Outbox, pane_id: schema.PaneId, bytes: []const u8) !void {
-        if (bytes.len == 0 or bytes.len > max_input_bytes)
+        if (bytes.len == 0 or bytes.len > max_input_bytes) {
             return error.InvalidInputLength;
-        if (outbox.mutableTailIndex()) |index| switch (outbox.items[index]) {
-            .pane_input => |*input| {
-                if (input.pane_id == pane_id and
-                    bytes.len <= outbox.input_bytes[index].len - input.len)
-                {
-                    @memcpy(outbox.input_bytes[index][input.len..][0..bytes.len], bytes);
-                    input.len += @intCast(bytes.len);
-                    outbox.stats.coalesced_input +|= 1;
-                    return;
-                }
-            },
-            else => {},
-        };
+        }
+        if (outbox.mutableTailIndex()) |index| {
+            switch (outbox.items[index]) {
+                .pane_input => |*input| {
+                    if (input.pane_id == pane_id and
+                        bytes.len <= outbox.input_bytes[index].len - input.len)
+                    {
+                        @memcpy(outbox.input_bytes[index][input.len..][0..bytes.len], bytes);
+                        input.len += @intCast(bytes.len);
+                        outbox.stats.coalesced_input +|= 1;
+                        return;
+                    }
+                },
+                else => {},
+            }
+        }
         const index = try outbox.reserve();
         outbox.item_launch_cwd[index] = null;
         outbox.items[index] = .{ .pane_input = .{
@@ -385,8 +392,9 @@ pub const Outbox = struct {
     }
 
     pub fn pushWorkspaceRename(outbox: *Outbox, rename: schema.RenameWorkspace) !void {
-        if (rename.name.len == 0 or rename.name.len > schema.max_tab_label_bytes)
+        if (rename.name.len == 0 or rename.name.len > schema.max_tab_label_bytes) {
             return error.InvalidWorkspaceName;
+        }
         var owned: OwnedWorkspaceRename = .{
             .request_id = rename.request_id,
             .workspace = rename.workspace,
@@ -431,7 +439,9 @@ pub const Outbox = struct {
     pub fn pushNotification(outbox: *Outbox, request: schema.ShowNotification) !void {
         if (request.notification.title.len > schema.max_notification_title_bytes or
             request.notification.message.len > schema.max_notification_message_bytes)
+        {
             return error.NotificationTooLarge;
+        }
         var owned: OwnedNotification = .{
             .request_id = request.request_id,
             .level = request.notification.level,
@@ -476,7 +486,9 @@ pub const Outbox = struct {
     }
 
     pub fn peek(outbox: *const Outbox) ?*const Message {
-        if (outbox.len == 0) return null;
+        if (outbox.len == 0) {
+            return null;
+        }
         return &outbox.items[outbox.head];
     }
 
@@ -485,7 +497,9 @@ pub const Outbox = struct {
     /// queue is empty. The claim ends in exactly one of `popSent` (the
     /// scheduler delivered it) or `sendFailed` (it never left).
     pub fn beginSend(outbox: *Outbox, buffer: []u8) !?[]const u8 {
-        if (outbox.send_pending or outbox.len == 0) return null;
+        if (outbox.send_pending or outbox.len == 0) {
+            return null;
+        }
         const payload = try outbox.encodeNext(buffer);
         outbox.send_pending = true;
         return payload;
@@ -533,7 +547,9 @@ pub const Outbox = struct {
         return switch (message.*) {
             .open_pane => |value| {
                 var owned = value;
-                if (owned.launch) |*launch| launch.cwd = outbox.launchCwd(outbox.head);
+                if (owned.launch) |*launch| {
+                    launch.cwd = outbox.launchCwd(outbox.head);
+                }
                 return schema.encodeOpenPane(buffer, owned);
             },
             .pane_input => |value| schema.encodePaneInput(buffer, .{
@@ -603,10 +619,13 @@ pub const Outbox = struct {
     }
 
     fn claimLaunchCwd(outbox: *Outbox, cwd: []const u8) !u8 {
-        if (cwd.len == 0 or cwd.len > schema.max_cwd_bytes)
+        if (cwd.len == 0 or cwd.len > schema.max_cwd_bytes) {
             return error.InvalidCwd;
+        }
         for (&outbox.launch_cwds, 0..) |*slot, index| {
-            if (slot.used) continue;
+            if (slot.used) {
+                continue;
+            }
             @memcpy(slot.bytes[0..cwd.len], cwd);
             slot.len = @intCast(cwd.len);
             slot.used = true;
@@ -676,13 +695,17 @@ pub const Outbox = struct {
     }
 
     fn tailIndex(outbox: *const Outbox) ?usize {
-        if (outbox.len == 0) return null;
+        if (outbox.len == 0) {
+            return null;
+        }
         return (@as(usize, outbox.head) + outbox.len - 1) % capacity;
     }
 
     fn mutableTailIndex(outbox: *const Outbox) ?usize {
         const index = outbox.tailIndex() orelse return null;
-        if (outbox.send_pending and index == outbox.head) return null;
+        if (outbox.send_pending and index == outbox.head) {
+            return null;
+        }
         return index;
     }
 

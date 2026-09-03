@@ -48,9 +48,13 @@ pub fn read(session: anytype, side: tls.Session.Side, buffer: []u8) ?usize {
     var len: usize = 0;
     while (len < buffer.len) {
         const read_len = session.read(side, buffer[len..][0..1]) orelse return null;
-        if (read_len != 1) return null;
+        if (read_len != 1) {
+            return null;
+        }
         len += 1;
-        if (len >= 4 and std.mem.eql(u8, buffer[len - 4 .. len], "\r\n\r\n")) return len;
+        if (len >= 4 and std.mem.eql(u8, buffer[len - 4 .. len], "\r\n\r\n")) {
+            return len;
+        }
     }
     return null;
 }
@@ -154,7 +158,9 @@ fn classifyRequest(start_line: []const u8, dialect: provider.ApiDialect) provide
 }
 
 fn framingOf(bytes: []const u8, is_response: bool, bodyless: bool) ?Framing {
-    if (bodyless) return .none;
+    if (bodyless) {
+        return .none;
+    }
 
     var transfer_encoding: ?[]const u8 = null;
     var content_length: ?usize = null;
@@ -165,7 +171,9 @@ fn framingOf(bytes: []const u8, is_response: bool, bodyless: bool) ?Framing {
         const name = std.mem.trim(u8, line[0..colon], " \t");
         const value = std.mem.trim(u8, line[colon + 1 ..], " \t");
         if (std.ascii.eqlIgnoreCase(name, "transfer-encoding")) {
-            if (transfer_encoding != null or value.len == 0) return null;
+            if (transfer_encoding != null or value.len == 0) {
+                return null;
+            }
             transfer_encoding = value;
         }
         if (std.ascii.eqlIgnoreCase(name, "content-length")) {
@@ -173,25 +181,37 @@ fn framingOf(bytes: []const u8, is_response: bool, bodyless: bool) ?Framing {
             var found = false;
             while (values.next()) |part| {
                 const text = std.mem.trim(u8, part, " \t");
-                if (text.len == 0) return null;
+                if (text.len == 0) {
+                    return null;
+                }
                 const len = std.fmt.parseInt(usize, text, 10) catch return null;
                 if (content_length) |previous| {
-                    if (previous != len) return null;
+                    if (previous != len) {
+                        return null;
+                    }
                 } else {
                     content_length = len;
                 }
                 found = true;
             }
-            if (!found) return null;
+            if (!found) {
+                return null;
+            }
         }
     }
 
     if (transfer_encoding) |value| {
-        if (content_length != null) return null;
-        if (lastTokenEquals(value, "chunked")) return .chunked;
+        if (content_length != null) {
+            return null;
+        }
+        if (lastTokenEquals(value, "chunked")) {
+            return .chunked;
+        }
         return if (is_response) .until_close else null;
     }
-    if (content_length) |len| return .{ .content_length = len };
+    if (content_length) |len| {
+        return .{ .content_length = len };
+    }
     return if (is_response) .until_close else .none;
 }
 
@@ -201,7 +221,10 @@ fn connectionCloses(bytes: []const u8) bool {
     while (lines.next()) |line| {
         const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
         if (std.ascii.eqlIgnoreCase(std.mem.trim(u8, line[0..colon], " \t"), "connection") and
-            containsToken(std.mem.trim(u8, line[colon + 1 ..], " \t"), "close")) return true;
+            containsToken(std.mem.trim(u8, line[colon + 1 ..], " \t"), "close"))
+        {
+            return true;
+        }
     }
     return false;
 }
@@ -220,7 +243,9 @@ fn lastTokenEquals(value: []const u8, wanted: []const u8) bool {
     var last: ?[]const u8 = null;
     while (tokens.next()) |token| {
         const trimmed = std.mem.trim(u8, token, " \t");
-        if (trimmed.len == 0) return false;
+        if (trimmed.len == 0) {
+            return false;
+        }
         last = trimmed;
     }
     return if (last) |token| std.ascii.eqlIgnoreCase(token, wanted) else false;

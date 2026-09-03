@@ -69,19 +69,25 @@ pub fn Focus(comptime Id: type, comptime capacity: usize) type {
         }
 
         pub fn beginLayer(f: *Self) void {
-            if (f.layer + 1 >= max_layers) return;
+            if (f.layer + 1 >= max_layers) {
+                return;
+            }
             f.layer += 1;
             f.top = @max(f.top, f.layer);
         }
 
         pub fn endLayer(f: *Self) void {
-            if (f.layer == 0) return;
+            if (f.layer == 0) {
+                return;
+            }
             f.layer -= 1;
         }
 
         /// Declares that `id` can hold the keyboard. Order is tab order.
         pub fn register(f: *Self, id: Id) void {
-            if (f.len == capacity) return;
+            if (f.len == capacity) {
+                return;
+            }
             f.entries[f.len] = .{ .id = id, .layer = f.layer };
             f.len += 1;
         }
@@ -98,7 +104,9 @@ pub fn Focus(comptime Id: type, comptime capacity: usize) type {
             }
             if (f.current) |id| {
                 if (f.layerOf(id)) |layer| {
-                    if (layer == f.top) return;
+                    if (layer == f.top) {
+                        return;
+                    }
                     // Focus is valid but buried. Remember where, so closing
                     // whatever covered it puts the keyboard back.
                     f.remembered[layer] = id;
@@ -160,7 +168,9 @@ pub fn Focus(comptime Id: type, comptime capacity: usize) type {
         /// cannot see.
         fn step(f: *Self, delta: i32) void {
             const count = f.countIn(f.top);
-            if (count == 0) return;
+            if (count == 0) {
+                return;
+            }
 
             const at = f.indexIn(f.top, f.current) orelse {
                 f.current = f.firstIn(f.top);
@@ -169,12 +179,16 @@ pub fn Focus(comptime Id: type, comptime capacity: usize) type {
             const size: i32 = @intCast(count);
             const moved = @mod(@as(i32, @intCast(at)) + delta + size, size);
             f.current = f.nthIn(f.top, @intCast(moved));
-            if (f.current) |id| f.remembered[f.top] = id;
+            if (f.current) |id| {
+                f.remembered[f.top] = id;
+            }
         }
 
         fn layerOf(f: *const Self, id: Id) ?u8 {
             for (f.entries[0..f.len]) |entry| {
-                if (std.meta.eql(entry.id, id)) return entry.layer;
+                if (std.meta.eql(entry.id, id)) {
+                    return entry.layer;
+                }
             }
             return null;
         }
@@ -182,7 +196,9 @@ pub fn Focus(comptime Id: type, comptime capacity: usize) type {
         fn countIn(f: *const Self, layer: u8) usize {
             var total: usize = 0;
             for (f.entries[0..f.len]) |entry| {
-                if (entry.layer == layer) total += 1;
+                if (entry.layer == layer) {
+                    total += 1;
+                }
             }
             return total;
         }
@@ -194,8 +210,12 @@ pub fn Focus(comptime Id: type, comptime capacity: usize) type {
         fn nthIn(f: *const Self, layer: u8, n: usize) ?Id {
             var seen: usize = 0;
             for (f.entries[0..f.len]) |entry| {
-                if (entry.layer != layer) continue;
-                if (seen == n) return entry.id;
+                if (entry.layer != layer) {
+                    continue;
+                }
+                if (seen == n) {
+                    return entry.id;
+                }
                 seen += 1;
             }
             return null;
@@ -205,8 +225,12 @@ pub fn Focus(comptime Id: type, comptime capacity: usize) type {
             const wanted = id orelse return null;
             var seen: usize = 0;
             for (f.entries[0..f.len]) |entry| {
-                if (entry.layer != layer) continue;
-                if (std.meta.eql(entry.id, wanted)) return seen;
+                if (entry.layer != layer) {
+                    continue;
+                }
+                if (std.meta.eql(entry.id, wanted)) {
+                    return seen;
+                }
                 seen += 1;
             }
             return null;

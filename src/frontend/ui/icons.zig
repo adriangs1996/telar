@@ -13,10 +13,15 @@ pub const Theme = enum {
     nerd_font,
 
     pub fn parse(name: []const u8) !Theme {
-        if (std.ascii.eqlIgnoreCase(name, "unicode")) return .unicode;
+        if (std.ascii.eqlIgnoreCase(name, "unicode")) {
+            return .unicode;
+        }
         if (std.ascii.eqlIgnoreCase(name, "nerd-font") or
             std.ascii.eqlIgnoreCase(name, "nerdfont") or
-            std.ascii.eqlIgnoreCase(name, "nerd")) return .nerd_font;
+            std.ascii.eqlIgnoreCase(name, "nerd"))
+        {
+            return .nerd_font;
+        }
         return error.UnknownIconTheme;
     }
 
@@ -209,7 +214,9 @@ pub const Plan = struct {
     }
 
     pub fn add(plan: *Plan, mark: Mark) void {
-        if (plan.len == plan.marks.len) return;
+        if (plan.len == plan.marks.len) {
+            return;
+        }
         plan.marks[plan.len] = mark;
         plan.len += 1;
     }

@@ -12,6 +12,7 @@ pub const pane_geometry = @import("pane_geometry.zig");
 pub const pane_graphics = @import("pane_graphics.zig");
 pub const pane_metadata = @import("pane_metadata.zig");
 pub const pane_openings = @import("pane_openings.zig");
+pub const pane_progress = @import("pane_progress.zig");
 pub const pane_resources = @import("pane_resources.zig");
 pub const pane_splits = @import("pane_splits.zig");
 pub const pane_viewports = @import("pane_viewports.zig");
@@ -29,6 +30,7 @@ test {
     _ = pane_graphics;
     _ = pane_metadata;
     _ = pane_openings;
+    _ = pane_progress;
     _ = pane_resources;
     _ = pane_splits;
     _ = pane_viewports;

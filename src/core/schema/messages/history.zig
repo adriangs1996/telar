@@ -70,7 +70,9 @@ pub const HistoryEntryIterator = struct {
     remaining: u16,
 
     pub fn next(iterator: *HistoryEntryIterator) !?HistoryEntry {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         return try decodeHistoryEntry(&iterator.decoder);
     }
@@ -112,12 +114,15 @@ pub const ImportEntryIterator = struct {
     remaining: u16,
 
     pub fn next(iterator: *ImportEntryIterator) !?ImportEntry {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         const started_at_ms = try iterator.decoder.readInt(i64);
         const command = try iterator.decoder.readSized16();
-        if (command.len == 0 or command.len > max_import_command_bytes)
+        if (command.len == 0 or command.len > max_import_command_bytes) {
             return error.InvalidByteString;
+        }
         return .{ .started_at_ms = started_at_ms, .command = command };
     }
 };
@@ -200,12 +205,15 @@ pub const HistoryStatsTopIterator = struct {
     remaining: u8,
 
     pub fn next(iterator: *HistoryStatsTopIterator) !?HistoryStatsTop {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         const count = try iterator.decoder.readInt(u64);
         const command = try iterator.decoder.readSized16();
-        if (command.len == 0 or command.len > types.max_history_command_bytes)
+        if (command.len == 0 or command.len > types.max_history_command_bytes) {
             return error.InvalidByteString;
+        }
         return .{ .count = count, .command = command };
     }
 };
@@ -213,18 +221,23 @@ pub const HistoryStatsTopIterator = struct {
 pub fn encodeQueryHistory(buffer: []u8, message: QueryHistory) ![]const u8 {
     try validateRequestId(message.request_id);
     try validateBytes(message.query, types.max_history_query_bytes, true);
-    if (message.limit == 0 or message.limit > types.max_history_results)
+    if (message.limit == 0 or message.limit > types.max_history_results) {
         return error.InvalidHistoryLimit;
+    }
     switch (message.scope) {
         .global => if (message.scope_value.len != 0 or message.pane_id != .invalid)
             return error.InvalidHistoryScope,
         .cwd, .workspace => {
             try validateBytes(message.scope_value, types.max_cwd_bytes, false);
-            if (message.pane_id != .invalid) return error.InvalidHistoryScope;
+            if (message.pane_id != .invalid) {
+                return error.InvalidHistoryScope;
+            }
         },
         .pane => {
             try validatePaneId(message.pane_id);
-            if (message.scope_value.len != 0) return error.InvalidHistoryScope;
+            if (message.scope_value.len != 0) {
+                return error.InvalidHistoryScope;
+            }
         },
     }
     var encoder = wire.Encoder.init(buffer);
@@ -267,7 +280,9 @@ pub fn decodeQueryHistory(decoder: *wire.Decoder) !QueryHistory {
         return error.InvalidHistoryMatch;
     const distinct = try decoder.readBool();
     const limit = try decoder.readInt(u16);
-    if (limit == 0 or limit > types.max_history_results) return error.InvalidHistoryLimit;
+    if (limit == 0 or limit > types.max_history_results) {
+        return error.InvalidHistoryLimit;
+    }
     return .{
         .request_id = request_id,
         .query = query,
@@ -284,7 +299,9 @@ pub fn decodeQueryHistory(decoder: *wire.Decoder) !QueryHistory {
 
 pub fn encodeHistoryResults(buffer: []u8, message: HistoryResults) ![]const u8 {
     try validateRequestId(message.request_id);
-    if (message.entries.len > types.max_history_results) return error.TooManyHistoryResults;
+    if (message.entries.len > types.max_history_results) {
+        return error.TooManyHistoryResults;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.history_results));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -296,7 +313,9 @@ pub fn encodeHistoryResults(buffer: []u8, message: HistoryResults) ![]const u8 {
 pub fn decodeHistoryResults(decoder: *wire.Decoder) !HistoryResultsView {
     const request_id = try id.request(try decoder.readInt(u64));
     const entry_count = try decoder.readInt(u16);
-    if (entry_count > types.max_history_results) return error.TooManyHistoryResults;
+    if (entry_count > types.max_history_results) {
+        return error.TooManyHistoryResults;
+    }
     const entries_start = decoder.index;
     for (0..entry_count) |_| try skipHistoryEntry(decoder);
     return .{
@@ -309,8 +328,9 @@ pub fn decodeHistoryResults(decoder: *wire.Decoder) !HistoryResultsView {
 pub fn encodeImportHistory(buffer: []u8, message: ImportHistory) ![]const u8 {
     try validateRequestId(message.request_id);
     try validateBytes(message.source, max_import_source_bytes, false);
-    if (message.entries.len == 0 or message.entries.len > max_import_entries)
+    if (message.entries.len == 0 or message.entries.len > max_import_entries) {
         return error.InvalidImportBatch;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ClientTag.import_history));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -331,13 +351,15 @@ pub fn decodeImportHistory(decoder: *wire.Decoder) !ImportHistoryView {
     try validateBytes(source, max_import_source_bytes, false);
     const base_sequence = try decoder.readInt(u64);
     const entry_count = try decoder.readInt(u16);
-    if (entry_count == 0 or entry_count > max_import_entries)
+    if (entry_count == 0 or entry_count > max_import_entries) {
         return error.InvalidImportBatch;
+    }
     const entries_start = decoder.index;
     for (0..entry_count) |_| {
         _ = try decoder.readInt(i64);
-        if ((try decoder.readSized16()).len > max_import_command_bytes)
+        if ((try decoder.readSized16()).len > max_import_command_bytes) {
             return error.InvalidByteString;
+        }
     }
     return .{
         .request_id = request_id,
@@ -350,7 +372,9 @@ pub fn decodeImportHistory(decoder: *wire.Decoder) !ImportHistoryView {
 
 pub fn encodeDeleteHistory(buffer: []u8, message: DeleteHistory) ![]const u8 {
     try validateRequestId(message.request_id);
-    if (message.id == 0) return error.InvalidHistoryId;
+    if (message.id == 0) {
+        return error.InvalidHistoryId;
+    }
     return encodeDerived(@intFromEnum(ClientTag.delete_history), DeleteHistory, buffer, message);
 }
 
@@ -363,17 +387,22 @@ pub fn encodePruneHistory(buffer: []u8, message: PruneHistory) ![]const u8 {
     try encoder.writeByte(@intFromEnum(message.scope));
     switch (message.scope) {
         .global => {
-            if (message.scope_value.len != 0 or message.pane_id != .invalid)
+            if (message.scope_value.len != 0 or message.pane_id != .invalid) {
                 return error.InvalidHistoryScope;
+            }
         },
         .cwd, .workspace => {
             try validateBytes(message.scope_value, types.max_cwd_bytes, false);
-            if (message.pane_id != .invalid) return error.InvalidHistoryScope;
+            if (message.pane_id != .invalid) {
+                return error.InvalidHistoryScope;
+            }
             try encoder.writeSized16(message.scope_value);
         },
         .pane => {
             try validatePaneId(message.pane_id);
-            if (message.scope_value.len != 0) return error.InvalidHistoryScope;
+            if (message.scope_value.len != 0) {
+                return error.InvalidHistoryScope;
+            }
             try encoder.writeInt(u64, id.raw(message.pane_id));
         },
     }
@@ -418,7 +447,9 @@ pub fn encodeHistoryPruned(buffer: []u8, message: HistoryPruned) ![]const u8 {
 
 pub fn encodeReadHistoryOutput(buffer: []u8, message: ReadHistoryOutput) ![]const u8 {
     try validateRequestId(message.request_id);
-    if (message.id == 0) return error.InvalidHistoryId;
+    if (message.id == 0) {
+        return error.InvalidHistoryId;
+    }
     return encodeDerived(@intFromEnum(ClientTag.read_history_output), ReadHistoryOutput, buffer, message);
 }
 
@@ -441,7 +472,9 @@ pub fn decodeHistoryOutput(decoder: *wire.Decoder) !HistoryOutput {
     const truncated = try decoder.readBool();
     const observed_bytes = try decoder.readInt(u64);
     const content = try decoder.readSized32();
-    if (content.len > max_history_output_bytes) return error.InvalidByteString;
+    if (content.len > max_history_output_bytes) {
+        return error.InvalidByteString;
+    }
     return .{
         .request_id = request_id,
         .id = history_id,
@@ -459,17 +492,22 @@ pub fn encodeHistoryStatsQuery(buffer: []u8, message: HistoryStatsQuery) ![]cons
     try encoder.writeByte(@intFromEnum(message.scope));
     switch (message.scope) {
         .global => {
-            if (message.scope_value.len != 0 or message.pane_id != .invalid)
+            if (message.scope_value.len != 0 or message.pane_id != .invalid) {
                 return error.InvalidHistoryScope;
+            }
         },
         .cwd, .workspace => {
             try validateBytes(message.scope_value, types.max_cwd_bytes, false);
-            if (message.pane_id != .invalid) return error.InvalidHistoryScope;
+            if (message.pane_id != .invalid) {
+                return error.InvalidHistoryScope;
+            }
             try encoder.writeSized16(message.scope_value);
         },
         .pane => {
             try validatePaneId(message.pane_id);
-            if (message.scope_value.len != 0) return error.InvalidHistoryScope;
+            if (message.scope_value.len != 0) {
+                return error.InvalidHistoryScope;
+            }
             try encoder.writeInt(u64, id.raw(message.pane_id));
         },
     }
@@ -502,7 +540,9 @@ pub fn decodeHistoryStatsQuery(decoder: *wire.Decoder) !HistoryStatsQuery {
 
 pub fn encodeHistoryStats(buffer: []u8, message: HistoryStats) ![]const u8 {
     try validateRequestId(message.request_id);
-    if (message.top.len > max_history_stats_top) return error.InvalidHistoryStats;
+    if (message.top.len > max_history_stats_top) {
+        return error.InvalidHistoryStats;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.history_stats_result));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -522,12 +562,15 @@ pub fn decodeHistoryStats(decoder: *wire.Decoder) !HistoryStatsView {
     const total = try decoder.readInt(u64);
     const unique = try decoder.readInt(u64);
     const top_count = try decoder.readByte();
-    if (top_count > max_history_stats_top) return error.InvalidHistoryStats;
+    if (top_count > max_history_stats_top) {
+        return error.InvalidHistoryStats;
+    }
     const top_start = decoder.index;
     for (0..top_count) |_| {
         _ = try decoder.readInt(u64);
-        if ((try decoder.readSized16()).len > types.max_history_command_bytes)
+        if ((try decoder.readSized16()).len > types.max_history_command_bytes) {
             return error.InvalidByteString;
+        }
     }
     return .{
         .request_id = request_id,
@@ -539,7 +582,9 @@ pub fn decodeHistoryStats(decoder: *wire.Decoder) !HistoryStatsView {
 }
 
 fn encodeHistoryEntry(encoder: *wire.Encoder, entry: HistoryEntry) !void {
-    if (entry.id == 0) return error.InvalidHistoryId;
+    if (entry.id == 0) {
+        return error.InvalidHistoryId;
+    }
     try validatePaneId(entry.pane_id);
     try validateBytes(entry.command, types.max_history_command_bytes, false);
     // Imported foreign history legitimately lacks a cwd and workspace path.
@@ -567,7 +612,9 @@ fn encodeHistoryEntry(encoder: *wire.Encoder, entry: HistoryEntry) !void {
 
 fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
     const history_id = try decoder.readInt(u64);
-    if (history_id == 0) return error.InvalidHistoryId;
+    if (history_id == 0) {
+        return error.InvalidHistoryId;
+    }
     const pane_id = try id.pane(try decoder.readInt(u64));
     const started_at_ms = try decoder.readInt(i64);
     const duration_ns = try decoder.readInt(i64);
@@ -611,13 +658,22 @@ fn skipHistoryEntry(decoder: *wire.Decoder) !void {
     _ = try decoder.readInt(u64); // pane_id
     _ = try decoder.readInt(i64); // started_at_ms
     _ = try decoder.readInt(i64); // duration_ns
-    if (try decoder.readBool()) _ = try decoder.readInt(i32);
+    if (try decoder.readBool()) {
+        _ = try decoder.readInt(i32);
+    }
     _ = try decoder.readByte(); // status
     _ = try decoder.readByte(); // author
     _ = try decoder.readByte(); // origin
-    if ((try decoder.readSized16()).len > types.max_history_provider_bytes) return error.InvalidByteString;
-    if ((try decoder.readSized32()).len > types.max_history_command_bytes)
+    if ((try decoder.readSized16()).len > types.max_history_provider_bytes) {
         return error.InvalidByteString;
-    if ((try decoder.readSized16()).len > types.max_cwd_bytes) return error.InvalidByteString;
-    if ((try decoder.readSized16()).len > types.max_cwd_bytes) return error.InvalidByteString;
+    }
+    if ((try decoder.readSized32()).len > types.max_history_command_bytes) {
+        return error.InvalidByteString;
+    }
+    if ((try decoder.readSized16()).len > types.max_cwd_bytes) {
+        return error.InvalidByteString;
+    }
+    if ((try decoder.readSized16()).len > types.max_cwd_bytes) {
+        return error.InvalidByteString;
+    }
 }

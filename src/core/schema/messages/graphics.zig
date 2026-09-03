@@ -19,7 +19,9 @@ pub const GraphicsCredit = struct {
     bytes: u64,
 
     pub fn validateWire(message: GraphicsCredit) !void {
-        if (message.bytes == 0) return error.InvalidGraphicsCredit;
+        if (message.bytes == 0) {
+            return error.InvalidGraphicsCredit;
+        }
     }
 };
 

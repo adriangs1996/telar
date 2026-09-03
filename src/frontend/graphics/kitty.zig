@@ -227,21 +227,25 @@ pub const Store = struct {
 
     fn allocatePixels(store: *Store, byte_len: usize) !PixelAllocation {
         if (store.shared_memory) {
-            if (store.allocateSharedPixels(byte_len)) |allocation|
-                return allocation
-            else |_| {}
+            if (store.allocateSharedPixels(byte_len)) |allocation| {
+                return allocation;
+            } else |_| {}
         }
         return .{ .pixels = try store.gpa.alloc(u8, byte_len) };
     }
 
     fn allocateSharedPixels(store: *Store, byte_len: usize) !PixelAllocation {
-        if (comptime !supportsSharedMemory()) return error.SharedMemoryUnavailable;
+        if (comptime !supportsSharedMemory()) {
+            return error.SharedMemoryUnavailable;
+        }
 
         var attempts: u8 = 0;
         while (attempts < 8) : (attempts += 1) {
             const sequence = store.next_shm_id;
             store.next_shm_id +%= 1;
-            if (store.next_shm_id == 0) store.next_shm_id = 1;
+            if (store.next_shm_id == 0) {
+                store.next_shm_id = 1;
+            }
             var shared: SharedPixels = .{ .len = 0 };
             const name = std.fmt.bufPrintZ(
                 &shared.name,
@@ -265,8 +269,9 @@ pub const Store = struct {
             }
             defer _ = std.c.close(fd);
             errdefer _ = std.c.shm_unlink(name);
-            if (std.c.ftruncate(fd, @intCast(byte_len)) != 0)
+            if (std.c.ftruncate(fd, @intCast(byte_len)) != 0) {
                 return error.SharedMemoryUnavailable;
+            }
             const map = std.posix.mmap(
                 null,
                 byte_len,
@@ -281,7 +286,9 @@ pub const Store = struct {
     }
 
     fn freeAllocation(store: *Store, allocation: *PixelAllocation) void {
-        if (allocation.pixels.len == 0) return;
+        if (allocation.pixels.len == 0) {
+            return;
+        }
         var entry: ImageEntry = .{
             .metadata = undefined,
             .pixels = allocation.pixels,
@@ -326,9 +333,15 @@ pub const Store = struct {
     /// working memory outside the pane quota: it is bounded by the raw size
     /// it must undercut and freed as soon as the transmission closes.
     fn advanceCompression(store: *Store, entry: *ImageEntry, budget: *usize) bool {
-        if (entry.compressed != null or entry.incompressible) return true;
-        if (!store.host_zlib or entry.pixels.len < compression_min_bytes) return true;
-        if (budget.* == 0) return false;
+        if (entry.compressed != null or entry.incompressible) {
+            return true;
+        }
+        if (!store.host_zlib or entry.pixels.len < compression_min_bytes) {
+            return true;
+        }
+        if (budget.* == 0) {
+            return false;
+        }
         const state = entry.compression orelse create: {
             const state = store.gpa.create(Compression) catch {
                 entry.incompressible = true;
@@ -364,7 +377,9 @@ pub const Store = struct {
         };
         state.offset += take;
         budget.* -= take;
-        if (state.offset < entry.pixels.len) return false;
+        if (state.offset < entry.pixels.len) {
+            return false;
+        }
         state.compress.finish() catch {
             store.freeCompression(entry);
             entry.incompressible = true;
@@ -390,9 +405,15 @@ pub const Store = struct {
 
     fn sharedPixelsConsumed(_: *Store, entry: *const ImageEntry) bool {
         const shared = entry.shared orelse return true;
-        if (!entry.emitted_shared) return true;
-        if (entry.host_acked) return true;
-        if (comptime !supportsSharedMemory()) return false;
+        if (!entry.emitted_shared) {
+            return true;
+        }
+        if (entry.host_acked) {
+            return true;
+        }
+        if (comptime !supportsSharedMemory()) {
+            return false;
+        }
         const fd = std.c.shm_open(
             shared.sliceZ(),
             @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
@@ -414,18 +435,26 @@ pub const Store = struct {
     /// valid mapping, and a host that keeps ignoring names loses them for
     /// the rest of the session.
     fn expireSharedTransmissions(store: *Store) void {
-        if (comptime !supportsSharedMemory()) return;
+        if (comptime !supportsSharedMemory()) {
+            return;
+        }
         var images = store.images.iterator();
         while (images.next()) |entry| {
             const image = entry.value_ptr;
-            if (image.shared == null or !image.emitted_shared) continue;
-            if (store.pass_counter -% image.transmitted_pass < shared_consume_deadline_passes)
+            if (image.shared == null or !image.emitted_shared) {
                 continue;
-            if (store.sharedPixelsConsumed(image)) continue;
+            }
+            if (store.pass_counter -% image.transmitted_pass < shared_consume_deadline_passes) {
+                continue;
+            }
+            if (store.sharedPixelsConsumed(image)) {
+                continue;
+            }
             store.loseSharedName(entry.key_ptr.pane_id, image);
             store.shared_expiries +|= 1;
-            if (store.shared_expiries >= shared_expiry_disable_threshold)
+            if (store.shared_expiries >= shared_expiry_disable_threshold) {
                 store.shared_memory = false;
+            }
         }
     }
 
@@ -442,9 +471,12 @@ pub const Store = struct {
         // follow the inline retransmission.
         var placements = store.placements.iterator();
         while (placements.next()) |placement_entry| {
-            if (placement_entry.key_ptr.pane_id != pane_id) continue;
-            if (!std.meta.eql(placement_entry.value_ptr.placement.key, image.metadata.key))
+            if (placement_entry.key_ptr.pane_id != pane_id) {
                 continue;
+            }
+            if (!std.meta.eql(placement_entry.value_ptr.placement.key, image.metadata.key)) {
+                continue;
+            }
             placement_entry.value_ptr.emitted_image_id = null;
             placement_entry.value_ptr.dirty = true;
         }
@@ -463,7 +495,9 @@ pub const Store = struct {
         var images = store.images.iterator();
         while (images.next()) |entry| {
             const image = entry.value_ptr;
-            if (image.external_id != external_id or !image.emitted_shared) continue;
+            if (image.external_id != external_id or !image.emitted_shared) {
+                continue;
+            }
             if (ok) {
                 image.host_acked = true;
                 store.collectRetired(entry.key_ptr.pane_id, entry.key_ptr.image_id);
@@ -480,8 +514,13 @@ pub const Store = struct {
         var images = store.images.iterator();
         while (images.next()) |entry| {
             if (!entry.value_ptr.retire_pending or
-                store.exteriorGenerationLive(entry.key_ptr.*, entry.value_ptr.external_id)) continue;
-            if (!store.sharedPixelsConsumed(entry.value_ptr)) return true;
+                store.exteriorGenerationLive(entry.key_ptr.*, entry.value_ptr.external_id))
+            {
+                continue;
+            }
+            if (!store.sharedPixelsConsumed(entry.value_ptr)) {
+                return true;
+            }
         }
         return false;
     }
@@ -511,7 +550,9 @@ pub const Store = struct {
     }
 
     pub fn applyImage(store: *Store, message: schema.graphics.Image) !void {
-        if (!try store.acceptRevision(message.pane_id, message.revision)) return;
+        if (!try store.acceptRevision(message.pane_id, message.revision)) {
+            return;
+        }
         const byte_len = try store.admitImage(message.pane_id, message.image);
         var allocation = try store.allocatePixels(byte_len);
         errdefer store.freeAllocation(&allocation);
@@ -525,8 +566,12 @@ pub const Store = struct {
     /// both the compact `t=s` hand-off to the host and the inline fallback,
     /// and survives the unlink whoever consumes the object performs.
     pub fn applySharedImage(store: *Store, message: schema.graphics.SharedImage) !void {
-        if (comptime !supportsSharedMemory()) return error.GraphicsSharedMappingFailed;
-        if (!try store.acceptRevision(message.pane_id, message.revision)) return;
+        if (comptime !supportsSharedMemory()) {
+            return error.GraphicsSharedMappingFailed;
+        }
+        if (!try store.acceptRevision(message.pane_id, message.revision)) {
+            return;
+        }
         const byte_len = try store.admitImage(message.pane_id, message.image);
         var allocation = store.mapSharedPixels(message.name, byte_len) catch {
             // Nothing references the object if the map fails, so reclaim it
@@ -540,24 +585,27 @@ pub const Store = struct {
         store.noteIngressChange();
     }
 
-    fn mapSharedPixels(
-        store: *Store,
-        name: graphics.ShmName,
-        byte_len: usize,
-    ) !PixelAllocation {
+    fn mapSharedPixels(store: *Store, name: graphics.ShmName, byte_len: usize) !PixelAllocation {
         _ = store;
-        if (comptime !supportsSharedMemory()) return error.SharedMemoryUnavailable;
+        if (comptime !supportsSharedMemory()) {
+            return error.SharedMemoryUnavailable;
+        }
         const fd = std.c.shm_open(
             name.sliceZ(),
             @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
             @as(u16, 0),
         );
-        if (std.posix.errno(fd) != .SUCCESS) return error.SharedMemoryUnavailable;
+        if (std.posix.errno(fd) != .SUCCESS) {
+            return error.SharedMemoryUnavailable;
+        }
         defer _ = std.c.close(fd);
         var stat: std.c.Stat = undefined;
-        if (std.c.fstat(fd, &stat) != 0) return error.SharedMemoryUnavailable;
-        if (stat.size < 0 or @as(u64, @intCast(stat.size)) < byte_len)
+        if (std.c.fstat(fd, &stat) != 0) {
             return error.SharedMemoryUnavailable;
+        }
+        if (stat.size < 0 or @as(u64, @intCast(stat.size)) < byte_len) {
+            return error.SharedMemoryUnavailable;
+        }
         const map = std.posix.mmap(
             null,
             byte_len,
@@ -574,11 +622,7 @@ pub const Store = struct {
 
     /// Validates one incoming image against every quota and evicts what it
     /// supersedes. Returns the pixel length the caller must provide.
-    fn admitImage(
-        store: *Store,
-        pane_id: schema.PaneId,
-        image: graphics.Image,
-    ) !usize {
+    fn admitImage(store: *Store, pane_id: schema.PaneId, image: graphics.Image) !usize {
         const byte_len = try image.validate(graphics.max_image_bytes_per_pane);
         const key = identity(pane_id, image.key);
         // A new header supersedes every transfer of this image id that never
@@ -589,23 +633,26 @@ pub const Store = struct {
         const pane_usage: PaneUsage = store.usage.get(pane_id) orelse .{};
         const logical_count = store.paneLogicalImageCount(pane_id, image.key.image_id);
         const replacing = store.hasImageId(pane_id, image.key.image_id);
-        if (previous == null and !replacing and logical_count >= graphics.max_images_per_pane)
+        if (previous == null and !replacing and logical_count >= graphics.max_images_per_pane) {
             return error.GraphicsImageLimitExceeded;
+        }
         const previous_len = if (previous) |entry| entry.pixels.len else 0;
         const next_pane_bytes = std.math.add(
             usize,
             pane_usage.bytes - previous_len,
             byte_len,
         ) catch return error.GraphicsQuotaExceeded;
-        if (next_pane_bytes > graphics.max_image_bytes_per_pane)
+        if (next_pane_bytes > graphics.max_image_bytes_per_pane) {
             return error.GraphicsQuotaExceeded;
+        }
         const next_total = std.math.add(
             usize,
             store.total_bytes - previous_len,
             byte_len,
         ) catch return error.GraphicsQuotaExceeded;
-        if (next_total > graphics.max_image_bytes_global)
+        if (next_total > graphics.max_image_bytes_global) {
             return error.GraphicsQuotaExceeded;
+        }
 
         if (store.images.fetchRemove(key)) |removed| {
             store.total_bytes -= removed.value.pixels.len;
@@ -617,13 +664,7 @@ pub const Store = struct {
         return byte_len;
     }
 
-    fn commitImage(
-        store: *Store,
-        pane_id: schema.PaneId,
-        image: graphics.Image,
-        allocation: *PixelAllocation,
-        received: usize,
-    ) !void {
+    fn commitImage(store: *Store, pane_id: schema.PaneId, image: graphics.Image, allocation: *PixelAllocation, received: usize) !void {
         const byte_len = allocation.pixels.len;
         const external_id = try store.allocateImageId();
         const usage = try store.usageFor(pane_id);
@@ -643,15 +684,22 @@ pub const Store = struct {
     }
 
     pub fn applyChunk(store: *Store, message: schema.graphics.ImageChunk) !void {
-        if (!try store.acceptRevision(message.pane_id, message.revision)) return;
+        if (!try store.acceptRevision(message.pane_id, message.revision)) {
+            return;
+        }
         const entry = store.images.getPtr(identity(message.pane_id, message.key)) orelse
             return error.UnknownGraphicsImage;
-        if (message.offset != entry.received) return error.InvalidGraphicsChunkOffset;
-        if (entry.chunks == graphics.max_chunks_per_image)
+        if (message.offset != entry.received) {
+            return error.InvalidGraphicsChunkOffset;
+        }
+        if (entry.chunks == graphics.max_chunks_per_image) {
             return error.GraphicsChunkLimitExceeded;
+        }
         const end = std.math.add(usize, entry.received, message.bytes.len) catch
             return error.InvalidGraphicsChunkLength;
-        if (end > entry.pixels.len) return error.InvalidGraphicsChunkLength;
+        if (end > entry.pixels.len) {
+            return error.InvalidGraphicsChunkLength;
+        }
         @memcpy(entry.pixels[entry.received..end], message.bytes);
         entry.received = end;
         entry.chunks += 1;
@@ -665,7 +713,9 @@ pub const Store = struct {
     }
 
     pub fn applyPlacement(store: *Store, message: schema.graphics.Placement) !void {
-        if (!try store.acceptRevision(message.pane_id, message.revision)) return;
+        if (!try store.acceptRevision(message.pane_id, message.revision)) {
+            return;
+        }
         const pane_id = message.pane_id;
         const placement = message.placement;
         const image = store.images.get(identity(pane_id, placement.key)) orelse
@@ -677,8 +727,9 @@ pub const Store = struct {
             entry.dirty = true;
             store.rememberPartialPlacement(pane_id, placement, entry.external_id);
         } else {
-            if (store.panePlacementCount(pane_id) == graphics.max_placements_per_pane)
+            if (store.panePlacementCount(pane_id) == graphics.max_placements_per_pane) {
                 return error.GraphicsPlacementLimitExceeded;
+            }
             const usage = try store.usageFor(pane_id);
             const external_id = try store.allocatePlacementId();
             try store.placements.put(store.gpa, key, .{
@@ -693,7 +744,9 @@ pub const Store = struct {
     }
 
     pub fn deleteImage(store: *Store, message: schema.graphics.DeleteImage) !void {
-        if (!try store.acceptRevision(message.pane_id, message.revision)) return;
+        if (!try store.acceptRevision(message.pane_id, message.revision)) {
+            return;
+        }
         if (store.deleteImageData(message.pane_id, message.key)) {
             store.noteIngressChange();
         }
@@ -725,12 +778,14 @@ pub const Store = struct {
             if (entry.key_ptr.pane_id == pane_id and
                 std.meta.eql(entry.value_ptr.placement.key, key))
             {
-                if (entry.value_ptr.emitted_image_id) |image_id| store.queueDelete(.{
-                    .placement = .{
-                        .image_id = image_id,
-                        .placement_id = entry.value_ptr.external_id,
-                    },
-                });
+                if (entry.value_ptr.emitted_image_id) |image_id| {
+                    store.queueDelete(.{
+                        .placement = .{
+                            .image_id = image_id,
+                            .placement_id = entry.value_ptr.external_id,
+                        },
+                    });
+                }
                 _ = store.placements.removeByPtr(entry.key_ptr);
                 store.notePlacementRemoved(pane_id);
             }
@@ -738,17 +793,21 @@ pub const Store = struct {
     }
 
     pub fn deletePlacement(store: *Store, message: schema.graphics.DeletePlacement) !void {
-        if (!try store.acceptRevision(message.pane_id, message.revision)) return;
+        if (!try store.acceptRevision(message.pane_id, message.revision)) {
+            return;
+        }
         const key: PlacementIdentity = .{
             .pane_id = message.pane_id,
             .virtual_id = message.virtual_id,
         };
         const removed = store.placements.fetchRemove(key) orelse return;
         store.notePlacementRemoved(message.pane_id);
-        if (removed.value.emitted_image_id) |image_id| store.queueDelete(.{ .placement = .{
-            .image_id = image_id,
-            .placement_id = removed.value.external_id,
-        } });
+        if (removed.value.emitted_image_id) |image_id| {
+            store.queueDelete(.{ .placement = .{
+                .image_id = image_id,
+                .placement_id = removed.value.external_id,
+            } });
+        }
         store.collectRetired(message.pane_id, message.key.image_id);
         store.damage = true;
         store.noteIngressChange();
@@ -772,22 +831,27 @@ pub const Store = struct {
     fn clearPaneData(store: *Store, pane_id: schema.PaneId, release_credit: bool) void {
         var placements = store.placements.iterator();
         while (placements.next()) |entry| {
-            if (entry.key_ptr.pane_id != pane_id) continue;
+            if (entry.key_ptr.pane_id != pane_id) {
+                continue;
+            }
             _ = store.placements.removeByPtr(entry.key_ptr);
         }
         var images = store.images.iterator();
         while (images.next()) |entry| {
-            if (entry.key_ptr.pane_id != pane_id) continue;
+            if (entry.key_ptr.pane_id != pane_id) {
+                continue;
+            }
             store.total_bytes -= entry.value_ptr.pixels.len;
             store.freePixels(entry.value_ptr);
             store.queueDelete(.{ .image = entry.value_ptr.external_id });
             _ = store.images.removeByPtr(entry.key_ptr);
         }
         if (store.usage.getPtr(pane_id)) |usage| {
-            if (release_credit)
-                usage.released_bytes +|= usage.bytes
-            else
+            if (release_credit) {
+                usage.released_bytes +|= usage.bytes;
+            } else {
                 usage.released_bytes = 0;
+            }
             usage.count = 0;
             usage.bytes = 0;
             usage.placements = 0;
@@ -799,7 +863,9 @@ pub const Store = struct {
     pub fn peekCredit(store: *Store) ?Credit {
         var usage = store.usage.iterator();
         while (usage.next()) |entry| {
-            if (entry.value_ptr.released_bytes == 0) continue;
+            if (entry.value_ptr.released_bytes == 0) {
+                continue;
+            }
             return .{
                 .pane_id = entry.key_ptr.*,
                 .bytes = entry.value_ptr.released_bytes,
@@ -840,17 +906,23 @@ pub const Store = struct {
 
         var iterator = store.placements.iterator();
         while (iterator.next()) |entry| {
-            if (entry.key_ptr.pane_id != pane_id) continue;
-            if (!visible) if (entry.value_ptr.emitted_image_id) |image_id| {
-                store.queueDelete(.{ .placement = .{
-                    .image_id = image_id,
-                    .placement_id = entry.value_ptr.external_id,
-                } });
-            };
+            if (entry.key_ptr.pane_id != pane_id) {
+                continue;
+            }
+            if (!visible) {
+                if (entry.value_ptr.emitted_image_id) |image_id| {
+                    store.queueDelete(.{ .placement = .{
+                        .image_id = image_id,
+                        .placement_id = entry.value_ptr.external_id,
+                    } });
+                }
+            }
             entry.value_ptr.emitted_image_id = null;
             entry.value_ptr.dirty = visible;
         }
-        if (!visible) store.collectRetired(pane_id, null);
+        if (!visible) {
+            store.collectRetired(pane_id, null);
+        }
         store.damage = true;
     }
 
@@ -864,13 +936,17 @@ pub const Store = struct {
     }
 
     fn allocateImageId(store: *Store) !u32 {
-        if (store.next_image_id >= 0x40000000) return error.GraphicsIdExhausted;
+        if (store.next_image_id >= 0x40000000) {
+            return error.GraphicsIdExhausted;
+        }
         defer store.next_image_id += 1;
         return store.next_image_id;
     }
 
     fn allocatePlacementId(store: *Store) !u32 {
-        if (store.next_placement_id >= 0x40000000) return error.GraphicsIdExhausted;
+        if (store.next_placement_id >= 0x40000000) {
+            return error.GraphicsIdExhausted;
+        }
         defer store.next_placement_id += 1;
         return store.next_placement_id;
     }
@@ -890,7 +966,9 @@ pub const Store = struct {
     }
 
     fn popDelete(store: *Store) ?Delete {
-        if (store.delete_len == 0) return null;
+        if (store.delete_len == 0) {
+            return null;
+        }
         const value = store.delete_queue[store.delete_head];
         store.delete_head = (store.delete_head + 1) % store.delete_queue.len;
         store.delete_len -= 1;
@@ -904,7 +982,9 @@ pub const Store = struct {
 
     fn usageFor(store: *Store, pane_id: schema.PaneId) !*PaneUsage {
         const entry = try store.usage.getOrPut(store.gpa, pane_id);
-        if (!entry.found_existing) entry.value_ptr.* = .{};
+        if (!entry.found_existing) {
+            entry.value_ptr.* = .{};
+        }
         return entry.value_ptr;
     }
 
@@ -923,8 +1003,9 @@ pub const Store = struct {
     }
 
     fn pruneUsage(store: *Store, pane_id: schema.PaneId, usage: PaneUsage) void {
-        if (usage.count == 0 and usage.placements == 0 and usage.released_bytes == 0)
+        if (usage.count == 0 and usage.placements == 0 and usage.released_bytes == 0) {
             _ = store.usage.remove(pane_id);
+        }
     }
 
     fn paneLogicalImageCount(store: *const Store, pane_id: schema.PaneId, replacing_id: u32) usize {
@@ -933,18 +1014,24 @@ pub const Store = struct {
         var replacing_present = false;
         var iterator = store.images.iterator();
         while (iterator.next()) |entry| {
-            if (entry.key_ptr.pane_id != pane_id) continue;
+            if (entry.key_ptr.pane_id != pane_id) {
+                continue;
+            }
             if (entry.key_ptr.image_id == replacing_id) {
                 replacing_present = true;
                 continue;
             }
             var duplicate = false;
             for (ids[0..count]) |seen| {
-                if (seen != entry.key_ptr.image_id) continue;
+                if (seen != entry.key_ptr.image_id) {
+                    continue;
+                }
                 duplicate = true;
                 break;
             }
-            if (duplicate) continue;
+            if (duplicate) {
+                continue;
+            }
             ids[count] = entry.key_ptr.image_id;
             count += 1;
         }
@@ -954,53 +1041,54 @@ pub const Store = struct {
     fn hasImageId(store: *const Store, pane_id: schema.PaneId, image_id: u32) bool {
         var iterator = store.images.iterator();
         while (iterator.next()) |entry| {
-            if (entry.key_ptr.pane_id == pane_id and entry.key_ptr.image_id == image_id)
+            if (entry.key_ptr.pane_id == pane_id and entry.key_ptr.image_id == image_id) {
                 return true;
+            }
         }
         return false;
     }
 
-    fn removeOtherGenerations(
-        store: *Store,
-        pane_id: schema.PaneId,
-        current: graphics.ImageKey,
-    ) void {
+    fn removeOtherGenerations(store: *Store, pane_id: schema.PaneId, current: graphics.ImageKey) void {
         store.retireOtherGenerations(pane_id, current);
     }
 
     /// A new frame replaces pending work, but not the frame the host terminal
     /// is displaying or a KGP transmission whose `m=0` has not been sent yet.
-    fn evictReplacedGenerations(
-        store: *Store,
-        pane_id: schema.PaneId,
-        incoming: graphics.ImageKey,
-    ) void {
+    fn evictReplacedGenerations(store: *Store, pane_id: schema.PaneId, incoming: graphics.ImageKey) void {
         store.retireOtherGenerations(pane_id, incoming);
     }
 
-    fn retireOtherGenerations(
-        store: *Store,
-        pane_id: schema.PaneId,
-        current: graphics.ImageKey,
-    ) void {
+    fn retireOtherGenerations(store: *Store, pane_id: schema.PaneId, current: graphics.ImageKey) void {
         var images = store.images.iterator();
         while (images.next()) |entry| {
             if (entry.key_ptr.pane_id != pane_id or
                 entry.key_ptr.image_id != current.image_id or
-                entry.key_ptr.generation == current.generation) continue;
+                entry.key_ptr.generation == current.generation)
+            {
+                continue;
+            }
             entry.value_ptr.retire_pending = true;
         }
         store.collectRetired(pane_id, current.image_id);
     }
 
     fn exteriorGenerationLive(store: *const Store, key: ImageIdentity, external_id: u32) bool {
-        if (store.partial) |partial| if (std.meta.eql(partial.key, key)) return true;
+        if (store.partial) |partial| {
+            if (std.meta.eql(partial.key, key)) {
+                return true;
+            }
+        }
         var placements = store.placements.iterator();
         while (placements.next()) |entry| {
-            if (entry.key_ptr.pane_id != key.pane_id) continue;
+            if (entry.key_ptr.pane_id != key.pane_id) {
+                continue;
+            }
             if (entry.value_ptr.emitted_image_id == external_id or
                 (entry.value_ptr.placement.key.image_id == key.image_id and
-                    entry.value_ptr.placement.key.generation == key.generation)) return true;
+                    entry.value_ptr.placement.key.generation == key.generation))
+            {
+                return true;
+            }
         }
         return false;
     }
@@ -1013,11 +1101,22 @@ pub const Store = struct {
             var count: usize = 0;
             var images = store.images.iterator();
             while (images.next()) |entry| {
-                if (pane_id) |expected| if (entry.key_ptr.pane_id != expected) continue;
-                if (image_id) |expected| if (entry.key_ptr.image_id != expected) continue;
+                if (pane_id) |expected| {
+                    if (entry.key_ptr.pane_id != expected) {
+                        continue;
+                    }
+                }
+                if (image_id) |expected| {
+                    if (entry.key_ptr.image_id != expected) {
+                        continue;
+                    }
+                }
                 if (!entry.value_ptr.retire_pending or
                     store.exteriorGenerationLive(entry.key_ptr.*, entry.value_ptr.external_id) or
-                    !store.sharedPixelsConsumed(entry.value_ptr)) continue;
+                    !store.sharedPixelsConsumed(entry.value_ptr))
+                {
+                    continue;
+                }
                 if (comptime diagnostics.enabled) {
                     if (entry.value_ptr.emitted_shared and entry.value_ptr.transmitted_ns != 0 and
                         store.clock_ns != 0)
@@ -1027,29 +1126,35 @@ pub const Store = struct {
                 }
                 retired[count] = entry.key_ptr.*;
                 count += 1;
-                if (count == retired.len) break;
+                if (count == retired.len) {
+                    break;
+                }
             }
-            if (count == 0) return;
+            if (count == 0) {
+                return;
+            }
             for (retired[0..count]) |key| store.removeImageData(key);
         }
     }
 
-    fn rememberPartialPlacement(
-        store: *Store,
-        pane_id: schema.PaneId,
-        placement: graphics.Placement,
-        external_id: u32,
-    ) void {
+    fn rememberPartialPlacement(store: *Store, pane_id: schema.PaneId, placement: graphics.Placement, external_id: u32) void {
         const partial = if (store.partial) |*value| value else return;
         if (partial.key.pane_id != pane_id or
             partial.key.image_id != placement.key.image_id or
-            partial.key.generation != placement.key.generation) return;
+            partial.key.generation != placement.key.generation)
+        {
+            return;
+        }
         for (partial.fallbacks[0..partial.fallback_count]) |*fallback| {
-            if (fallback.placement.virtual_id != placement.virtual_id) continue;
+            if (fallback.placement.virtual_id != placement.virtual_id) {
+                continue;
+            }
             fallback.* = .{ .placement = placement, .external_id = external_id };
             return;
         }
-        if (partial.fallback_count == partial.fallbacks.len) return;
+        if (partial.fallback_count == partial.fallbacks.len) {
+            return;
+        }
         partial.fallbacks[partial.fallback_count] = .{
             .placement = placement,
             .external_id = external_id,
@@ -1058,7 +1163,9 @@ pub const Store = struct {
     }
 
     fn capturePartialPlacements(store: *Store) void {
-        if (store.partial == null) return;
+        if (store.partial == null) {
+            return;
+        }
         var placements = store.placements.iterator();
         while (placements.next()) |entry| {
             store.rememberPartialPlacement(
@@ -1072,7 +1179,9 @@ pub const Store = struct {
     fn removeIncomplete(store: *Store, pane_id: schema.PaneId) void {
         var placements = store.placements.iterator();
         while (placements.next()) |entry| {
-            if (entry.key_ptr.pane_id != pane_id) continue;
+            if (entry.key_ptr.pane_id != pane_id) {
+                continue;
+            }
             const image = store.images.get(identity(
                 pane_id,
                 entry.value_ptr.placement.key,
@@ -1091,7 +1200,10 @@ pub const Store = struct {
         var iterator = store.images.iterator();
         while (iterator.next()) |entry| {
             if (entry.key_ptr.pane_id != pane_id or
-                entry.value_ptr.received == entry.value_ptr.pixels.len) continue;
+                entry.value_ptr.received == entry.value_ptr.pixels.len)
+            {
+                continue;
+            }
             store.total_bytes -= entry.value_ptr.pixels.len;
             store.noteImageRemoved(pane_id, entry.value_ptr.pixels.len);
             store.freePixels(entry.value_ptr);
@@ -1103,13 +1215,17 @@ pub const Store = struct {
 
     fn revisionState(store: *Store, pane_id: schema.PaneId) !*RevisionState {
         const entry = try store.revisions.getOrPut(store.gpa, pane_id);
-        if (!entry.found_existing) entry.value_ptr.* = .{};
+        if (!entry.found_existing) {
+            entry.value_ptr.* = .{};
+        }
         return entry.value_ptr;
     }
 
     fn acceptRevision(store: *Store, pane_id: schema.PaneId, value: u64) !bool {
         const state = try store.revisionState(pane_id);
-        if (state.awaiting_snapshot) return false;
+        if (state.awaiting_snapshot) {
+            return false;
+        }
         if (state.snapshot) |snapshot| {
             if (value != snapshot) {
                 state.awaiting_snapshot = true;
@@ -1118,7 +1234,9 @@ pub const Store = struct {
             }
             return true;
         }
-        if (value < state.latest) return false;
+        if (value < state.latest) {
+            return false;
+        }
         state.latest = value;
         return true;
     }
@@ -1181,11 +1299,15 @@ pub const KittyGraphicsWriter = struct {
         self.store.pass_counter +%= 1;
         self.store.clock_ns = self.now_ns;
         self.store.expireSharedTransmissions();
-        if (!self.store.damage or self.cell_width == 0 or self.cell_height == 0) return 0;
+        if (!self.store.damage or self.cell_width == 0 or self.cell_height == 0) {
+            return 0;
+        }
         self.store.collectRetired(null, null);
         // An open chunked transfer owns the stream until the bulk pass closes
         // it; a control pass may not even emit a delete in between.
-        if (self.mode == .control and self.store.partial != null) return 0;
+        if (self.mode == .control and self.store.partial != null) {
+            return 0;
+        }
         var written: usize = 0;
         var budget: usize = self.budget;
         var compress_budget: usize = compression_slice_per_frame;
@@ -1269,28 +1391,36 @@ pub const KittyGraphicsWriter = struct {
 
         var images = self.store.images.iterator();
         while (images.next()) |entry| {
-            if (!self.store.paneVisible(entry.key_ptr.pane_id)) continue;
+            if (!self.store.paneVisible(entry.key_ptr.pane_id)) {
+                continue;
+            }
             const image = entry.value_ptr;
-            if (image.received != image.pixels.len or image.transmitted) continue;
+            if (image.received != image.pixels.len or image.transmitted) {
+                continue;
+            }
             // Budget spent: the rest keeps its damage and waits for the next
             // frame, so no image can park itself in front of a keystroke.
-            if (budget == 0) return written;
-            if (image.shared) |*shared| if (!image.force_direct and self.store.shared_memory) {
-                const emitted = try writeSharedTransmission(
-                    writer,
-                    image.external_id,
-                    image.metadata,
-                    shared.slice(),
-                );
-                written += emitted;
-                image.transmitted = true;
-                image.emitted_shared = true;
-                image.transmitted_pass = self.store.pass_counter;
-                image.transmitted_ns = self.now_ns;
-                self.stats.shared_images += 1;
-                budget -= @min(budget, emitted);
-                continue;
-            };
+            if (budget == 0) {
+                return written;
+            }
+            if (image.shared) |*shared| {
+                if (!image.force_direct and self.store.shared_memory) {
+                    const emitted = try writeSharedTransmission(
+                        writer,
+                        image.external_id,
+                        image.metadata,
+                        shared.slice(),
+                    );
+                    written += emitted;
+                    image.transmitted = true;
+                    image.emitted_shared = true;
+                    image.transmitted_pass = self.store.pass_counter;
+                    image.transmitted_ns = self.now_ns;
+                    self.stats.shared_images += 1;
+                    budget -= @min(budget, emitted);
+                    continue;
+                }
+            }
             if (self.mode == .control) {
                 bulk_pending = true;
                 continue;
@@ -1338,14 +1468,20 @@ pub const KittyGraphicsWriter = struct {
 
         var placements = self.store.placements.iterator();
         while (placements.next()) |entry| {
-            if (!self.store.paneVisible(entry.key_ptr.pane_id)) continue;
+            if (!self.store.paneVisible(entry.key_ptr.pane_id)) {
+                continue;
+            }
             const placement = entry.value_ptr;
-            if (!placement.dirty) continue;
+            if (!placement.dirty) {
+                continue;
+            }
             const image = self.store.images.get(identity(
                 entry.key_ptr.pane_id,
                 placement.placement.key,
             )) orelse continue;
-            if (!image.transmitted) continue;
+            if (!image.transmitted) {
+                continue;
+            }
             const output = self.geometry(entry.key_ptr.pane_id, placement.placement, image.metadata) orelse {
                 if (placement.emitted_image_id) |previous_image_id| {
                     written += try writeDeletePlacement(
@@ -1370,12 +1506,13 @@ pub const KittyGraphicsWriter = struct {
                 placement.placement.z_index,
             );
             if (placement.emitted_image_id) |previous_image_id| {
-                if (previous_image_id != image.external_id)
+                if (previous_image_id != image.external_id) {
                     written += try writeDeletePlacement(
                         writer,
                         previous_image_id,
                         placement.external_id,
                     );
+                }
             }
             placement.emitted_image_id = image.external_id;
             placement.dirty = false;
@@ -1392,13 +1529,10 @@ pub const KittyGraphicsWriter = struct {
     /// Presents a completed frame even if a newer generation arrived while
     /// it crossed the host terminal. This bounds the queue to the visible,
     /// in-flight and latest generations without starving continuous repaint.
-    fn writeFallbackPlacements(
-        self: *KittyGraphicsWriter,
-        writer: *Io.Writer,
-        partial: PartialTransmission,
-        image: ImageEntry,
-    ) Io.Writer.Error!usize {
-        if (!self.store.paneVisible(partial.key.pane_id)) return 0;
+    fn writeFallbackPlacements(self: *KittyGraphicsWriter, writer: *Io.Writer, partial: PartialTransmission, image: ImageEntry) Io.Writer.Error!usize {
+        if (!self.store.paneVisible(partial.key.pane_id)) {
+            return 0;
+        }
         var written: usize = 0;
         for (partial.fallbacks[0..partial.fallback_count]) |fallback| {
             const key: PlacementIdentity = .{
@@ -1408,7 +1542,10 @@ pub const KittyGraphicsWriter = struct {
             const placement = self.store.placements.getPtr(key) orelse continue;
             if (placement.external_id != fallback.external_id or
                 placement.placement.key.image_id != partial.key.image_id or
-                placement.placement.key.generation < partial.key.generation) continue;
+                placement.placement.key.generation < partial.key.generation)
+            {
+                continue;
+            }
             const output = self.geometry(
                 partial.key.pane_id,
                 fallback.placement,
@@ -1422,12 +1559,13 @@ pub const KittyGraphicsWriter = struct {
                 fallback.placement.z_index,
             );
             if (placement.emitted_image_id) |previous_image_id| {
-                if (previous_image_id != image.external_id)
+                if (previous_image_id != image.external_id) {
                     written += try writeDeletePlacement(
                         writer,
                         previous_image_id,
                         placement.external_id,
                     );
+                }
             }
             placement.emitted_image_id = image.external_id;
             placement.dirty = !std.meta.eql(placement.placement, fallback.placement);
@@ -1435,12 +1573,7 @@ pub const KittyGraphicsWriter = struct {
         return written;
     }
 
-    fn geometry(
-        self: *const KittyGraphicsWriter,
-        pane_id: schema.PaneId,
-        placement: graphics.Placement,
-        image: graphics.Image,
-    ) ?OutputPlacement {
+    fn geometry(self: *const KittyGraphicsWriter, pane_id: schema.PaneId, placement: graphics.Placement, image: graphics.Image) ?OutputPlacement {
         const view = self.layout_snapshot.find(pane_id) orelse return null;
         const source = placement.sourceRect(image) catch return null;
         const source_width: u32 = @intCast(source.width);
@@ -1452,7 +1585,9 @@ pub const KittyGraphicsWriter = struct {
             self.cell_width,
             self.cell_height,
         );
-        if (width == 0 or height == 0) return null;
+        if (width == 0 or height == 0) {
+            return null;
+        }
         const destination: graphics.Rect = .{
             .x = (@as(i64, view.content.x) + placement.x) * self.cell_width + placement.offset_x,
             .y = (@as(i64, view.content.y) + placement.y) * self.cell_height + placement.offset_y,
@@ -1501,19 +1636,16 @@ pub const OutputPlacement = struct {
     rows: u32,
 };
 
-fn destinationSize(
-    placement: graphics.Placement,
-    source_width: u32,
-    source_height: u32,
-    cell_width: u16,
-    cell_height: u16,
-) struct { u64, u64 } {
-    if (placement.columns == 0 and placement.rows == 0)
+fn destinationSize(placement: graphics.Placement, source_width: u32, source_height: u32, cell_width: u16, cell_height: u16) struct { u64, u64 } {
+    if (placement.columns == 0 and placement.rows == 0) {
         return .{ source_width, source_height };
-    if (placement.columns != 0 and placement.rows != 0) return .{
-        @as(u64, placement.columns) * cell_width -| placement.offset_x,
-        @as(u64, placement.rows) * cell_height -| placement.offset_y,
-    };
+    }
+    if (placement.columns != 0 and placement.rows != 0) {
+        return .{
+            @as(u64, placement.columns) * cell_width -| placement.offset_x,
+            @as(u64, placement.rows) * cell_height -| placement.offset_y,
+        };
+    }
     if (placement.columns != 0) {
         const width = @as(u64, placement.columns) * cell_width -| placement.offset_x;
         return .{ width, width * source_height / source_width };
@@ -1525,11 +1657,7 @@ fn destinationSize(
 /// Formats once into a bounded scratch buffer, writes the result, and
 /// returns its length. Every control sequence here fits with room to spare;
 /// the alternative, `std.fmt.count` after `print`, formats everything twice.
-fn printCounted(
-    writer: *Io.Writer,
-    comptime format: []const u8,
-    args: anytype,
-) Io.Writer.Error!usize {
+fn printCounted(writer: *Io.Writer, comptime format: []const u8, args: anytype) Io.Writer.Error!usize {
     var buffer: [256]u8 = undefined;
     const text = std.fmt.bufPrint(&buffer, format, args) catch unreachable;
     try writer.writeAll(text);
@@ -1543,22 +1671,16 @@ pub const ChunkProgress = struct { written: usize, offset: usize };
 /// one chunk goes out even under a zero budget, so a caller looping on the
 /// offset cannot stall. `offset == pixels.len` in the result means the final
 /// `m=0` chunk went out and the transfer is closed.
-pub fn writeTransmissionChunks(
-    writer: *Io.Writer,
-    external_id: u32,
-    image: graphics.Image,
-    pixels: []const u8,
-    start_offset: usize,
-    budget: usize,
-    compressed: bool,
-) Io.Writer.Error!ChunkProgress {
+pub fn writeTransmissionChunks(writer: *Io.Writer, external_id: u32, image: graphics.Image, pixels: []const u8, start_offset: usize, budget: usize, compressed: bool) Io.Writer.Error!ChunkProgress {
     const Encoder = std.base64.standard.Encoder;
     const raw_chunk_size = 3072;
     var encoded: [4096]u8 = undefined;
     var offset = start_offset;
     var written: usize = 0;
     while (offset < pixels.len) {
-        if (written != 0 and written >= budget) break;
+        if (written != 0 and written >= budget) {
+            break;
+        }
         const take = @min(raw_chunk_size, pixels.len - offset);
         const payload = Encoder.encode(encoded[0..Encoder.calcSize(take)], pixels[offset..][0..take]);
         const more = offset + take < pixels.len;
@@ -1581,20 +1703,16 @@ pub fn writeTransmissionChunks(
 /// Emits an already encoded PNG using Kitty's direct-data transport. PNG is
 /// the one encoded format the protocol standardizes (`f=100`), so local
 /// clipboard previews can stay compressed in client memory and on the wire.
-pub fn writePngTransmissionChunks(
-    writer: *Io.Writer,
-    external_id: u32,
-    png: []const u8,
-    start_offset: usize,
-    budget: usize,
-) Io.Writer.Error!ChunkProgress {
+pub fn writePngTransmissionChunks(writer: *Io.Writer, external_id: u32, png: []const u8, start_offset: usize, budget: usize) Io.Writer.Error!ChunkProgress {
     const Encoder = std.base64.standard.Encoder;
     const raw_chunk_size = 3072;
     var encoded: [4096]u8 = undefined;
     var offset = start_offset;
     var written: usize = 0;
     while (offset < png.len) {
-        if (written != 0 and written >= budget) break;
+        if (written != 0 and written >= budget) {
+            break;
+        }
         const take = @min(raw_chunk_size, png.len - offset);
         const payload = Encoder.encode(encoded[0..Encoder.calcSize(take)], png[offset..][0..take]);
         const more = offset + take < png.len;
@@ -1615,12 +1733,7 @@ pub fn writePngTransmissionChunks(
     return .{ .written = written, .offset = offset };
 }
 
-pub fn writeTransmission(
-    writer: *Io.Writer,
-    external_id: u32,
-    image: graphics.Image,
-    pixels: []const u8,
-) Io.Writer.Error!usize {
+pub fn writeTransmission(writer: *Io.Writer, external_id: u32, image: graphics.Image, pixels: []const u8) Io.Writer.Error!usize {
     const progress = try writeTransmissionChunks(
         writer,
         external_id,
@@ -1636,12 +1749,7 @@ pub fn writeTransmission(
 /// Hands the host a shared object's name. Unlike every other pane escape it
 /// asks for a reply (`q=0`): the host's `OK` is the consume signal that
 /// retires the image, and an error reclaims the name at once.
-pub fn writeSharedTransmission(
-    writer: *Io.Writer,
-    external_id: u32,
-    image: graphics.Image,
-    name: []const u8,
-) Io.Writer.Error!usize {
+pub fn writeSharedTransmission(writer: *Io.Writer, external_id: u32, image: graphics.Image, name: []const u8) Io.Writer.Error!usize {
     const Encoder = std.base64.standard.Encoder;
     var encoded: [128]u8 = undefined;
     const payload = Encoder.encode(encoded[0..Encoder.calcSize(name.len)], name);
@@ -1664,13 +1772,7 @@ pub fn writeTransmissionAbort(writer: *Io.Writer) Io.Writer.Error!usize {
     return closing.len;
 }
 
-pub fn writePlacement(
-    writer: *Io.Writer,
-    image_id: u32,
-    placement_id: u32,
-    value: OutputPlacement,
-    child_z: i32,
-) Io.Writer.Error!usize {
+pub fn writePlacement(writer: *Io.Writer, image_id: u32, placement_id: u32, value: OutputPlacement, child_z: i32) Io.Writer.Error!usize {
     return writePlacementAtZ(
         writer,
         image_id,
@@ -1682,24 +1784,12 @@ pub fn writePlacement(
 
 /// Places client chrome above the z-index range available to child
 /// applications. Callers must use a fixed client-owned z value.
-pub fn writeUiPlacement(
-    writer: *Io.Writer,
-    image_id: u32,
-    placement_id: u32,
-    value: OutputPlacement,
-    z: i32,
-) Io.Writer.Error!usize {
+pub fn writeUiPlacement(writer: *Io.Writer, image_id: u32, placement_id: u32, value: OutputPlacement, z: i32) Io.Writer.Error!usize {
     std.debug.assert(z > 1000);
     return writePlacementAtZ(writer, image_id, placement_id, value, z);
 }
 
-fn writePlacementAtZ(
-    writer: *Io.Writer,
-    image_id: u32,
-    placement_id: u32,
-    value: OutputPlacement,
-    z: i32,
-) Io.Writer.Error!usize {
+fn writePlacementAtZ(writer: *Io.Writer, image_id: u32, placement_id: u32, value: OutputPlacement, z: i32) Io.Writer.Error!usize {
     var written = try printCounted(writer, "\x1b[{d};{d}H", .{ value.row + 1, value.column + 1 });
     written += try printCounted(
         writer,
@@ -1820,24 +1910,22 @@ pub const KittySidebarRenderer = struct {
     }
 
     pub fn deinit(renderer: *KittySidebarRenderer) void {
-        if (renderer.focused_card_pixels.len != 0) renderer.gpa.free(renderer.focused_card_pixels);
-        if (renderer.provider_atlas.len != 0) renderer.gpa.free(renderer.provider_atlas);
+        if (renderer.focused_card_pixels.len != 0) {
+            renderer.gpa.free(renderer.focused_card_pixels);
+        }
+        if (renderer.provider_atlas.len != 0) {
+            renderer.gpa.free(renderer.provider_atlas);
+        }
     }
 
     pub fn retainedBytes(renderer: *const KittySidebarRenderer) usize {
         return renderer.focused_card_pixels.len + renderer.provider_atlas.len;
     }
 
-    pub fn prepare(
-        renderer: *KittySidebarRenderer,
-        area: core.ui.Rect,
-        focused_card: ?SidebarFocus,
-        provider_marks: []const SidebarProviderPlacement,
-        cell_width: u16,
-        cell_height: u16,
-    ) !void {
-        if (provider_marks.len > max_provider_placements)
+    pub fn prepare(renderer: *KittySidebarRenderer, area: core.ui.Rect, focused_card: ?SidebarFocus, provider_marks: []const SidebarProviderPlacement, cell_width: u16, cell_height: u16) !void {
+        if (provider_marks.len > max_provider_placements) {
             return error.TooManySidebarPlacements;
+        }
         if (area.isEmpty() or cell_width == 0 or cell_height == 0) {
             renderer.visible = false;
             renderer.placements_dirty = renderer.emitted;
@@ -1854,7 +1942,9 @@ pub const KittySidebarRenderer = struct {
             renderer.provider_slot_height != provider_slot_height;
         if (resized) {
             const next_provider_atlas = try renderer.gpa.alloc(u8, provider_atlas_len);
-            if (renderer.provider_atlas.len != 0) renderer.gpa.free(renderer.provider_atlas);
+            if (renderer.provider_atlas.len != 0) {
+                renderer.gpa.free(renderer.provider_atlas);
+            }
             renderer.provider_atlas = next_provider_atlas;
             renderer.provider_slot_width = provider_slot_width;
             renderer.provider_slot_height = provider_slot_height;
@@ -1875,25 +1965,26 @@ pub const KittySidebarRenderer = struct {
             renderer.provider_dirty = provider_marks.len != 0;
             renderer.placements_dirty = true;
         }
-        if (!std.meta.eql(renderer.area, area)) renderer.placements_dirty = true;
+        if (!std.meta.eql(renderer.area, area)) {
+            renderer.placements_dirty = true;
+        }
         if (!providerPlacementsEqual(renderer.provider_marks[0..renderer.provider_mark_count], provider_marks)) {
             @memcpy(renderer.provider_marks[0..provider_marks.len], provider_marks);
             renderer.provider_mark_count = @intCast(provider_marks.len);
             renderer.placements_dirty = true;
         }
-        if (provider_marks.len != 0 and !renderer.provider_emitted) renderer.provider_dirty = true;
+        if (provider_marks.len != 0 and !renderer.provider_emitted) {
+            renderer.provider_dirty = true;
+        }
         renderer.area = area;
         renderer.visible = true;
     }
 
-    fn prepareFocusedCard(
-        renderer: *KittySidebarRenderer,
-        focused: ?SidebarFocus,
-        cell_width: u16,
-        cell_height: u16,
-    ) !void {
+    fn prepareFocusedCard(renderer: *KittySidebarRenderer, focused: ?SidebarFocus, cell_width: u16, cell_height: u16) !void {
         const next_card = if (focused) |value| value.area else null;
-        if (!std.meta.eql(renderer.focused_card, next_card)) renderer.placements_dirty = true;
+        if (!std.meta.eql(renderer.focused_card, next_card)) {
+            renderer.placements_dirty = true;
+        }
         renderer.focused_card = next_card;
         const value = focused orelse {
             renderer.focused_card_dirty = false;
@@ -1912,7 +2003,9 @@ pub const KittySidebarRenderer = struct {
             renderer.focused_card_height != raster_size.height or
             !std.mem.eql(u8, &renderer.focused_card_color, &value.color);
         if (!changed) {
-            if (!renderer.focused_card_emitted) renderer.focused_card_dirty = true;
+            if (!renderer.focused_card_emitted) {
+                renderer.focused_card_dirty = true;
+            }
             return;
         }
         const byte_len = try rgbaLength(raster_size.width, raster_size.height);
@@ -1930,7 +2023,9 @@ pub const KittySidebarRenderer = struct {
             @intCast(raster_radius),
             value.color,
         );
-        if (renderer.focused_card_pixels.len != 0) renderer.gpa.free(renderer.focused_card_pixels);
+        if (renderer.focused_card_pixels.len != 0) {
+            renderer.gpa.free(renderer.focused_card_pixels);
+        }
         renderer.focused_card_pixels = next_pixels;
         renderer.focused_card_width = raster_size.width;
         renderer.focused_card_height = raster_size.height;
@@ -1947,11 +2042,17 @@ pub const KittySidebarRenderer = struct {
     /// `prepare` rasterized: taking live cell sizes here let a resize between
     /// the two calls mismatch the placement against the pixels.
     pub fn write(renderer: *KittySidebarRenderer, writer: *Io.Writer) Io.Writer.Error!usize {
-        if (!renderer.damaged()) return 0;
+        if (!renderer.damaged()) {
+            return 0;
+        }
         var written: usize = 0;
         if (!renderer.visible) {
-            if (renderer.focused_card_emitted) written += try writeDeleteImage(writer, focused_card_id);
-            if (renderer.provider_emitted) written += try writeDeleteImage(writer, provider_atlas_id);
+            if (renderer.focused_card_emitted) {
+                written += try writeDeleteImage(writer, focused_card_id);
+            }
+            if (renderer.provider_emitted) {
+                written += try writeDeleteImage(writer, provider_atlas_id);
+            }
             renderer.emitted = false;
             renderer.focused_card_emitted = false;
             renderer.emitted_focused_card = null;
@@ -1983,11 +2084,13 @@ pub const KittySidebarRenderer = struct {
             renderer.provider_emitted = true;
         }
         if (renderer.placements_dirty) {
-            if (renderer.emitted_focused_card != null) written += try writeDeletePlacement(
-                writer,
-                focused_card_id,
-                focused_card_placement_id,
-            );
+            if (renderer.emitted_focused_card != null) {
+                written += try writeDeletePlacement(
+                    writer,
+                    focused_card_id,
+                    focused_card_placement_id,
+                );
+            }
             if (renderer.focused_card) |card| {
                 if (renderer.focused_card_emitted) {
                     written += try writePlacement(
@@ -2047,7 +2150,9 @@ pub const KittySidebarRenderer = struct {
 };
 
 fn providerPlacementsEqual(a: []const SidebarProviderPlacement, b: []const SidebarProviderPlacement) bool {
-    if (a.len != b.len) return false;
+    if (a.len != b.len) {
+        return false;
+    }
     for (a, b) |left, right| if (!std.meta.eql(left, right)) return false;
     return true;
 }
@@ -2063,7 +2168,9 @@ const PixelSize = struct {
 };
 
 fn fitWithinPixels(width: u32, height: u32, max_pixels: usize) PixelSize {
-    if (@as(u64, width) * height <= max_pixels) return .{ .width = width, .height = height };
+    if (@as(u64, width) * height <= max_pixels) {
+        return .{ .width = width, .height = height };
+    }
     const longest = @max(width, height);
     var lower: u32 = 1;
     var upper = longest;
@@ -2071,10 +2178,11 @@ fn fitWithinPixels(width: u32, height: u32, max_pixels: usize) PixelSize {
         const candidate = lower + (upper - lower + 1) / 2;
         const candidate_width = scaledPixelDimension(width, candidate, longest);
         const candidate_height = scaledPixelDimension(height, candidate, longest);
-        if (@as(u64, candidate_width) * candidate_height <= max_pixels)
-            lower = candidate
-        else
+        if (@as(u64, candidate_width) * candidate_height <= max_pixels) {
+            lower = candidate;
+        } else {
             upper = candidate - 1;
+        }
     }
     return .{
         .width = scaledPixelDimension(width, lower, longest),
@@ -2088,13 +2196,7 @@ fn scaledPixelDimension(value: u32, fitted_longest: u32, original_longest: u32) 
     )));
 }
 
-fn renderRoundedRectangle(
-    pixels: []u8,
-    width: u32,
-    height: u32,
-    requested_radius: u32,
-    color: [3]u8,
-) void {
+fn renderRoundedRectangle(pixels: []u8, width: u32, height: u32, requested_radius: u32, color: [3]u8) void {
     const radius = @min(requested_radius, @min(width, height) / 2);
     var y: u32 = 0;
     while (y < height) : (y += 1) {
@@ -2110,7 +2212,9 @@ fn renderRoundedRectangle(
 }
 
 fn roundedCoverage(x: u32, y: u32, width: u32, height: u32, radius: u32) u8 {
-    if (radius == 0) return 255;
+    if (radius == 0) {
+        return 255;
+    }
     const supersample: u32 = 4;
     const units_per_pixel: u32 = supersample * 2;
     var inside: u32 = 0;
@@ -2131,15 +2235,12 @@ fn roundedCoverage(x: u32, y: u32, width: u32, height: u32, radius: u32) u8 {
         (supersample * supersample));
 }
 
-fn insideRoundedRectangle(
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
-    radius: u32,
-) bool {
+fn insideRoundedRectangle(x: u32, y: u32, width: u32, height: u32, radius: u32) bool {
     if ((x >= radius and x <= width - radius) or
-        (y >= radius and y <= height - radius)) return true;
+        (y >= radius and y <= height - radius))
+    {
+        return true;
+    }
     const center_x = if (x < radius) radius else width - radius;
     const center_y = if (y < radius) radius else height - radius;
     const delta_x = @as(i64, x) - center_x;
@@ -2151,13 +2252,7 @@ fn clearRgba(pixels: []u8) void {
     @memset(pixels, 0);
 }
 
-fn renderProviderAtlas(
-    destination: []u8,
-    atlas_width: u32,
-    atlas_height: u32,
-    slot_width: u32,
-    slot_height: u32,
-) void {
+fn renderProviderAtlas(destination: []u8, atlas_width: u32, atlas_height: u32, slot_width: u32, slot_height: u32) void {
     std.debug.assert(atlas_width == providerAtlasSourceCount() * slot_width);
     std.debug.assert(atlas_height == slot_height);
     clearRgba(destination);
@@ -2185,13 +2280,7 @@ fn renderProviderAtlas(
     }
 }
 
-fn sampleProviderPixel(
-    destination: *[4]u8,
-    provider: u32,
-    destination_x: u32,
-    destination_y: u32,
-    destination_size: u32,
-) void {
+fn sampleProviderPixel(destination: *[4]u8, provider: u32, destination_x: u32, destination_y: u32, destination_size: u32) void {
     const source_x = sampleAxis(destination_x, destination_size);
     const source_y = sampleAxis(destination_y, destination_size);
     const one: u64 = 1 << 16;
@@ -2234,11 +2323,13 @@ const SampleAxis = struct {
 
 fn sampleAxis(destination: u32, destination_size: u32) SampleAxis {
     const source_last = KittySidebarRenderer.provider_source_size - 1;
-    if (destination_size <= 1) return .{
-        .index = source_last / 2,
-        .next = source_last / 2,
-        .fraction = 0,
-    };
+    if (destination_size <= 1) {
+        return .{
+            .index = source_last / 2,
+            .next = source_last / 2,
+            .fraction = 0,
+        };
+    }
     const fixed = @as(u64, destination) * source_last * (1 << 16) /
         (destination_size - 1);
     const index: u32 = @intCast(fixed >> 16);
@@ -2451,7 +2542,9 @@ test "image transmission is paced across frames by the byte budget" {
         try std.testing.expect(frames < 32);
         var next = Io.Writer.fixed(frame_buffer);
         _ = try graphics_writer.write(&next);
-        if (std.mem.indexOf(u8, next.buffered(), "a=p") != null) placed = true;
+        if (std.mem.indexOf(u8, next.buffered(), "a=p") != null) {
+            placed = true;
+        }
     }
     try std.testing.expect(frames > 1);
     try std.testing.expect(placed);
@@ -2537,7 +2630,10 @@ fn decodeTransmissionPayloads(gpa: std.mem.Allocator, bytes: []const u8) ![]u8 {
         const separator = std.mem.indexOfScalar(u8, body, ';') orelse continue;
         const control = body[0..separator];
         if (std.mem.indexOf(u8, control, "a=t") == null and
-            !std.mem.startsWith(u8, control, "m=")) continue;
+            !std.mem.startsWith(u8, control, "m="))
+        {
+            continue;
+        }
         const encoded = body[separator + 1 ..];
         const Decoder = std.base64.standard.Decoder;
         var decoded: [4096]u8 = undefined;
@@ -2608,7 +2704,9 @@ test "a zlib host ships a deflated stream that inflates to the pixels" {
         var writer = Io.Writer.fixed(frame_buffer);
         total_written += try graphics_writer.write(&writer);
         try collected.writer.writeAll(writer.buffered());
-        if (!fixture.store.damage) break;
+        if (!fixture.store.damage) {
+            break;
+        }
     }
 
     // The header advertises the compression the payload actually carries.
@@ -2652,7 +2750,9 @@ test "incompressible pixels fall back to a raw transmission" {
         var writer = Io.Writer.fixed(frame_buffer);
         _ = try graphics_writer.write(&writer);
         try collected.writer.writeAll(writer.buffered());
-        if (!fixture.store.damage) break;
+        if (!fixture.store.damage) {
+            break;
+        }
     }
 
     try std.testing.expect(std.mem.indexOf(u8, collected.written(), "o=z") == null);
@@ -2695,7 +2795,9 @@ test "a compressed transmission resumes across frames" {
             try std.testing.expect(fixture.store.partial.?.compressed);
             resumed = true;
         }
-        if (!fixture.store.damage) break;
+        if (!fixture.store.damage) {
+            break;
+        }
     }
 
     try std.testing.expect(resumed);
@@ -2887,14 +2989,18 @@ test "continuous replacements complete and hand off without a blank frame" {
             try std.testing.expect(placement_at < delete_at);
             third_handoff = true;
         }
-        if (!second_handoff) try std.testing.expectEqual(
-            first_id,
-            store.placements.get(placement_key).?.emitted_image_id.?,
-        );
-        if (second_handoff and !third_handoff) try std.testing.expectEqual(
-            second_id,
-            store.placements.get(placement_key).?.emitted_image_id.?,
-        );
+        if (!second_handoff) {
+            try std.testing.expectEqual(
+                first_id,
+                store.placements.get(placement_key).?.emitted_image_id.?,
+            );
+        }
+        if (second_handoff and !third_handoff) {
+            try std.testing.expectEqual(
+                second_id,
+                store.placements.get(placement_key).?.emitted_image_id.?,
+            );
+        }
     }
 
     try std.testing.expect(second_handoff);
@@ -3166,13 +3272,17 @@ test "pane usage counters match a full recount" {
         var counted: Store.PaneUsage = .{};
         var images = store.images.iterator();
         while (images.next()) |entry| {
-            if (entry.key_ptr.pane_id != pane_id) continue;
+            if (entry.key_ptr.pane_id != pane_id) {
+                continue;
+            }
             counted.count += 1;
             counted.bytes += entry.value_ptr.pixels.len;
         }
         var placements = store.placements.iterator();
         while (placements.next()) |entry| {
-            if (entry.key_ptr.pane_id == pane_id) counted.placements += 1;
+            if (entry.key_ptr.pane_id == pane_id) {
+                counted.placements += 1;
+            }
         }
         const tracked: Store.PaneUsage = store.usage.get(pane_id) orelse .{};
         try std.testing.expectEqual(counted.count, tracked.count);
@@ -3216,7 +3326,9 @@ test "snapshot replacement returns client image credit" {
 }
 
 test "shared client pixels have a bounded POSIX lifetime" {
-    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+    if (comptime !supportsSharedMemory()) {
+        return error.SkipZigTest;
+    }
 
     var store = Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
@@ -3325,7 +3437,9 @@ test "shared transmission sends only a KGP resource name" {
 }
 
 test "a host acknowledgement retires a replaced shared image without probing" {
-    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+    if (comptime !supportsSharedMemory()) {
+        return error.SkipZigTest;
+    }
 
     var store = Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
@@ -3392,7 +3506,9 @@ test "a host acknowledgement retires a replaced shared image without probing" {
 }
 
 test "a host error reply reclaims the shared name and retransmits inline" {
-    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+    if (comptime !supportsSharedMemory()) {
+        return error.SkipZigTest;
+    }
 
     var store = Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
@@ -3580,7 +3696,9 @@ fn testCreateSharedObject(name: [:0]const u8, pixels: []const u8) !void {
 }
 
 test "a runtime-named image maps without copying and hands the host its name" {
-    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+    if (comptime !supportsSharedMemory()) {
+        return error.SkipZigTest;
+    }
 
     var store = Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
@@ -3661,7 +3779,9 @@ test "a runtime-named image maps without copying and hands the host its name" {
 }
 
 test "a control pass hands the host shared names and placements without pixel streams" {
-    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+    if (comptime !supportsSharedMemory()) {
+        return error.SkipZigTest;
+    }
 
     var store = Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
@@ -3807,7 +3927,9 @@ test "a control pass emits nothing while a chunked transfer is open" {
 }
 
 test "a host that never consumes shared names loses them and gets pixels inline" {
-    if (comptime !supportsSharedMemory()) return error.SkipZigTest;
+    if (comptime !supportsSharedMemory()) {
+        return error.SkipZigTest;
+    }
 
     var store = Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();

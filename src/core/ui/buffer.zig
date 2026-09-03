@@ -52,14 +52,18 @@ pub const Buffer = struct {
     /// draw path that can fail, and a frame that draws one widget unclipped is
     /// a cosmetic bug where a frame that returns an error is a blank screen.
     pub fn pushClip(b: *Buffer, r: Rect) void {
-        if (b.depth == max_clip_depth) return;
+        if (b.depth == max_clip_depth) {
+            return;
+        }
         b.stack[b.depth] = b.clip;
         b.depth += 1;
         b.clip = b.clip.intersect(r);
     }
 
     pub fn popClip(b: *Buffer) void {
-        if (b.depth == 0) return;
+        if (b.depth == 0) {
+            return;
+        }
         b.depth -= 1;
         b.clip = b.stack[b.depth];
     }
@@ -88,7 +92,9 @@ pub const Buffer = struct {
     }
 
     pub fn at(b: *Buffer, x: u16, y: u16) ?*Cell {
-        if (x >= b.w or y >= b.h) return null;
+        if (x >= b.w or y >= b.h) {
+            return null;
+        }
         return &b.cells[@as(usize, y) * @as(usize, b.w) + @as(usize, x)];
     }
 
@@ -116,7 +122,9 @@ pub const Buffer = struct {
     /// knows each cluster's width from the pane's own tables and must not have
     /// them measured a second time.
     pub fn setCell(b: *Buffer, x: u16, y: u16, bytes: []const u8, width: u8, style: Style) void {
-        if (!b.clip.contains(x, y)) return;
+        if (!b.clip.contains(x, y)) {
+            return;
+        }
 
         // A wide glyph occupies the next column whether or not that column is
         // ours to write. Drawing the head alone makes the terminal advance two
@@ -141,7 +149,9 @@ pub const Buffer = struct {
         // emitting anything there and keeps a later write from leaving half of
         // a character behind.
         if (drawn == 2) {
-            if (b.at(x + 1, y)) |tail| tail.* = .{ .len = 0, .width = 0, .style = style };
+            if (b.at(x + 1, y)) |tail| {
+                tail.* = .{ .len = 0, .width = 0, .style = style };
+            }
         }
     }
 
@@ -154,17 +164,23 @@ pub const Buffer = struct {
     /// does, and a UI whose idea of a column disagrees with the terminal's
     /// smears on the first accented character.
     pub fn writeText(b: *Buffer, r: Rect, x: u16, y: u16, text: []const u8, style: Style) u16 {
-        if (y < r.y or y >= @as(u32, r.y) + r.h) return 0;
+        if (y < r.y or y >= @as(u32, r.y) + r.h) {
+            return 0;
+        }
 
         var column: u32 = x;
         const limit = @min(@as(u32, r.x) + r.w, @as(u32, std.math.maxInt(u16)) + 1);
         var it: GraphemeIterator = .{ .bytes = text };
 
         while (it.next()) |cluster| {
-            if (column >= limit) break;
+            if (column >= limit) {
+                break;
+            }
             // A wide glyph that would straddle the edge is dropped rather than
             // cut in half.
-            if (cluster.width == 2 and column + 1 >= limit) break;
+            if (cluster.width == 2 and column + 1 >= limit) {
+                break;
+            }
             if (column >= r.x) {
                 b.setCell(@intCast(column), y, cluster.bytes, cluster.width, style);
             }
@@ -178,17 +194,13 @@ pub const Buffer = struct {
     /// The ellipsis has to be measured too, and the cut has to land on a
     /// grapheme boundary: truncating by bytes is how a name ending in an accent
     /// turns into a replacement character.
-    pub fn writeTruncated(
-        b: *Buffer,
-        r: Rect,
-        x: u16,
-        y: u16,
-        text: []const u8,
-        max_width: u16,
-        style: Style,
-    ) u16 {
-        if (max_width == 0) return 0;
-        if (measure(text) <= max_width) return b.writeText(r, x, y, text, style);
+    pub fn writeTruncated(b: *Buffer, r: Rect, x: u16, y: u16, text: []const u8, max_width: u16, style: Style) u16 {
+        if (max_width == 0) {
+            return 0;
+        }
+        if (measure(text) <= max_width) {
+            return b.writeText(r, x, y, text, style);
+        }
 
         // Measured, not assumed to be one column. It is one in every real
         // table, but reserving a column and then drawing something wider is
@@ -197,42 +209,46 @@ pub const Buffer = struct {
         const marker = measure(ellipsis);
         // Not even room for the marker. Drawing it alone would say a value was
         // cut without saying anything about the value.
-        if (marker >= max_width) return 0;
+        if (marker >= max_width) {
+            return 0;
+        }
         const budget = max_width - marker;
 
         var it: GraphemeIterator = .{ .bytes = text };
         var used: u32 = 0;
         var cut: usize = 0;
         while (it.next()) |cluster| {
-            if (used + cluster.width > budget) break;
+            if (used + cluster.width > budget) {
+                break;
+            }
             used += cluster.width;
             cut = it.index;
         }
         const written = b.writeText(r, x, y, text[0..cut], style);
         const ellipsis_x = @as(u32, x) + written;
-        if (ellipsis_x > std.math.maxInt(u16)) return written;
+        if (ellipsis_x > std.math.maxInt(u16)) {
+            return written;
+        }
         return written + b.writeText(r, @intCast(ellipsis_x), y, ellipsis, style);
     }
 
     /// Draws the end of `text`, prepending an ellipsis when it does not fit.
     /// Paths use this form because their basename carries more information
     /// than a repeated home-directory prefix.
-    pub fn writeLeftTruncated(
-        b: *Buffer,
-        r: Rect,
-        x: u16,
-        y: u16,
-        text: []const u8,
-        max_width: u16,
-        style: Style,
-    ) u16 {
-        if (max_width == 0) return 0;
+    pub fn writeLeftTruncated(b: *Buffer, r: Rect, x: u16, y: u16, text: []const u8, max_width: u16, style: Style) u16 {
+        if (max_width == 0) {
+            return 0;
+        }
         const total = measure(text);
-        if (total <= max_width) return b.writeText(r, x, y, text, style);
+        if (total <= max_width) {
+            return b.writeText(r, x, y, text, style);
+        }
 
         const ellipsis = "\u{2026}";
         const marker = measure(ellipsis);
-        if (marker >= max_width) return 0;
+        if (marker >= max_width) {
+            return 0;
+        }
         const budget = max_width - marker;
         var it: GraphemeIterator = .{ .bytes = text };
         var prefix_width: u32 = 0;
@@ -248,26 +264,37 @@ pub const Buffer = struct {
         }
         const written = b.writeText(r, x, y, ellipsis, style);
         const text_x = @as(u32, x) + written;
-        if (text_x > std.math.maxInt(u16)) return written;
+        if (text_x > std.math.maxInt(u16)) {
+            return written;
+        }
         return written + b.writeText(r, @intCast(text_x), y, text[cut..], style);
     }
 
     /// Draws `text` so that it ends at the right edge of `r`.
     pub fn writeRight(b: *Buffer, r: Rect, y: u16, text: []const u8, style: Style) u16 {
         const width = measure(text);
-        if (width > r.w) return b.writeTruncated(r, r.x, y, text, r.w, style);
+        if (width > r.w) {
+            return b.writeTruncated(r, r.x, y, text, r.w, style);
+        }
         const start = @as(u32, r.x) + (r.w - width);
-        if (start > std.math.maxInt(u16)) return 0;
+        if (start > std.math.maxInt(u16)) {
+            return 0;
+        }
         return b.writeText(r, @intCast(start), y, text, style);
     }
 
     /// Draws a box, with an optional title in the top edge.
     pub fn box(b: *Buffer, r: Rect, style: Style, title: ?[]const u8) void {
-        if (r.w < 2 or r.h < 2) return;
+        if (r.w < 2 or r.h < 2) {
+            return;
+        }
         // A box whose far edge leaves the addressable plane cannot be drawn
         // whole, and a partial box misleads more than no box.
         if (@as(u32, r.x) + r.w - 1 > std.math.maxInt(u16) or
-            @as(u32, r.y) + r.h - 1 > std.math.maxInt(u16)) return;
+            @as(u32, r.y) + r.h - 1 > std.math.maxInt(u16))
+        {
+            return;
+        }
         const right = r.x + r.w - 1;
         const bottom = r.y + r.h - 1;
 
@@ -302,7 +329,9 @@ pub const Buffer = struct {
     /// buffer.fillWithoutCorners(area, .{ .bg = palette.panel_bg });
     /// ```
     pub fn fillWithoutCorners(b: *Buffer, r: Rect, style: Style) void {
-        if (r.w < 2 or r.h < 2) return;
+        if (r.w < 2 or r.h < 2) {
+            return;
+        }
 
         b.fill(.{ .x = r.x + 1, .y = r.y, .w = r.w - 2, .h = 1 }, " ", style);
         b.fill(.{ .x = r.x, .y = r.y + 1, .w = r.w, .h = r.h - 2 }, " ", style);

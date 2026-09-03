@@ -9,13 +9,13 @@ const std = @import("std");
 pub const SchemaId = [8]u8;
 /// Human-readable schema generation. Bump it on any breaking wire change so a
 /// mismatch log can say which side is newer.
-pub const schema_version: *const [2]u8 = "37";
+pub const schema_version: *const [2]u8 = "38";
 /// Version prefix plus a fingerprint of the golden corpus in
 /// `schema_contract_test.zig`. The test "the handshake fingerprint derives from the
 /// golden corpus" recomputes the hash, so an encoding change cannot ship
 /// without updating this constant. Do not keep the old decoder until rolling
 /// upgrades become a supported product requirement.
-pub const schema_id: SchemaId = (schema_version.* ++ "daf1d7".*);
+pub const schema_id: SchemaId = (schema_version.* ++ "326cff".*);
 
 pub const magic: [8]u8 = "TELARIPC".*;
 
@@ -64,8 +64,9 @@ pub const DecodeError = error{
 };
 
 pub fn negotiate(client: SchemaId, server: SchemaId) ServerResponse {
-    if (std.mem.eql(u8, &client, &server))
+    if (std.mem.eql(u8, &client, &server)) {
         return .{ .accepted = .{ .schema = server } };
+    }
     return .{ .rejected = .{
         .reason = .incompatible_schema,
         .expected_schema = server,
@@ -73,15 +74,21 @@ pub fn negotiate(client: SchemaId, server: SchemaId) ServerResponse {
 }
 
 pub fn encodeClientHello(buffer: []u8, hello: ClientHello) EncodeError![]const u8 {
-    if (buffer.len < client_hello_size) return error.BufferTooSmall;
+    if (buffer.len < client_hello_size) {
+        return error.BufferTooSmall;
+    }
     writeHeader(buffer, .client_hello);
     @memcpy(buffer[header_size..client_hello_size], &hello.schema);
     return buffer[0..client_hello_size];
 }
 
 pub fn decodeClientHello(payload: []const u8) DecodeError!ClientHello {
-    if (try decodeHeader(payload) != .client_hello) return error.UnexpectedMessage;
-    if (payload.len != client_hello_size) return error.InvalidLength;
+    if (try decodeHeader(payload) != .client_hello) {
+        return error.UnexpectedMessage;
+    }
+    if (payload.len != client_hello_size) {
+        return error.InvalidLength;
+    }
     return .{ .schema = payload[header_size..client_hello_size][0..schema_id.len].* };
 }
 
@@ -101,19 +108,25 @@ pub fn decodeServerResponse(payload: []const u8) DecodeError!ServerResponse {
 }
 
 fn encodeServerAccept(buffer: []u8, accepted: ServerAccept) EncodeError![]const u8 {
-    if (buffer.len < server_accept_size) return error.BufferTooSmall;
+    if (buffer.len < server_accept_size) {
+        return error.BufferTooSmall;
+    }
     writeHeader(buffer, .server_accept);
     @memcpy(buffer[header_size..server_accept_size], &accepted.schema);
     return buffer[0..server_accept_size];
 }
 
 fn decodeServerAccept(payload: []const u8) DecodeError!ServerAccept {
-    if (payload.len != server_accept_size) return error.InvalidLength;
+    if (payload.len != server_accept_size) {
+        return error.InvalidLength;
+    }
     return .{ .schema = payload[header_size..server_accept_size][0..schema_id.len].* };
 }
 
 fn encodeServerReject(buffer: []u8, rejected: ServerReject) EncodeError![]const u8 {
-    if (buffer.len < server_reject_size) return error.BufferTooSmall;
+    if (buffer.len < server_reject_size) {
+        return error.BufferTooSmall;
+    }
     writeHeader(buffer, .server_reject);
     buffer[header_size] = @intFromEnum(rejected.reason);
     @memcpy(buffer[header_size + 1 .. server_reject_size], &rejected.expected_schema);
@@ -121,7 +134,9 @@ fn encodeServerReject(buffer: []u8, rejected: ServerReject) EncodeError![]const 
 }
 
 fn decodeServerReject(payload: []const u8) DecodeError!ServerReject {
-    if (payload.len != server_reject_size) return error.InvalidLength;
+    if (payload.len != server_reject_size) {
+        return error.InvalidLength;
+    }
     const reason: RejectReason = switch (payload[header_size]) {
         @intFromEnum(RejectReason.incompatible_schema) => .incompatible_schema,
         else => return error.UnknownRejectReason,
@@ -138,8 +153,12 @@ fn writeHeader(buffer: []u8, tag: Tag) void {
 }
 
 fn decodeHeader(payload: []const u8) DecodeError!Tag {
-    if (payload.len < header_size) return error.InvalidLength;
-    if (!std.mem.eql(u8, payload[0..magic.len], &magic)) return error.InvalidMagic;
+    if (payload.len < header_size) {
+        return error.InvalidLength;
+    }
+    if (!std.mem.eql(u8, payload[0..magic.len], &magic)) {
+        return error.InvalidMagic;
+    }
     return switch (payload[magic.len]) {
         @intFromEnum(Tag.client_hello) => .client_hello,
         @intFromEnum(Tag.server_accept) => .server_accept,

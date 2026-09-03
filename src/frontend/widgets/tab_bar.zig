@@ -21,6 +21,7 @@ pub const Input = struct {
     tabs: ?*const tabs_mod.Model,
     model: *const multiplexer.Model,
     alignment: bars.Alignment = .right,
+    animation_frame: u8 = 0,
 };
 
 /// The text a tab shows: its display number, its name and, while one of its
@@ -173,8 +174,53 @@ fn renderCollection(context: *widget.Context, input: Input, collection: *const t
         else
             inactiveStyle(context);
         label.draw(context, .{ .rect = rect, .style = style });
+        if (index == collection.active_index and input.model.layout.count() == 1) {
+            decorateProgress(context, input, rect);
+        }
         x += width;
     }
+}
+
+fn decorateProgress(context: *widget.Context, input: Input, rect: ui.Rect) void {
+    const pane = input.model.focusedPaneConst() orelse return;
+    if (pane.progress_state == .remove or rect.w == 0) {
+        return;
+    }
+
+    const color = switch (pane.progress_state) {
+        .@"error" => context.palette.red,
+        .pause => context.palette.yellow,
+        else => context.palette.teal,
+    };
+    const length: u16 = switch (pane.progress_state) {
+        .indeterminate => 1,
+        .set, .pause => @max(1, @as(u16, @intCast((@as(u32, rect.w) * (pane.progress_percent orelse 0)) / 100))),
+        .@"error" => if (pane.progress_percent) |percent|
+            @max(1, @as(u16, @intCast((@as(u32, rect.w) * percent) / 100)))
+        else
+            rect.w,
+        .remove => unreachable,
+    };
+    const start = if (pane.progress_state == .indeterminate)
+        rect.x + bouncingPosition(rect.w, input.animation_frame)
+    else
+        rect.x;
+    var x: u16 = 0;
+    while (x < length and start + x < rect.x + rect.w) : (x += 1) {
+        const cell = context.buffer.at(start + x, rect.y) orelse continue;
+        cell.style.bg = color;
+        cell.style.fg = context.palette.surface_dim;
+        cell.style.flags.bold = true;
+    }
+}
+
+fn bouncingPosition(width: u16, frame: u8) u16 {
+    if (width <= 1) {
+        return 0;
+    }
+
+    const phase: u16 = if (frame < 128) frame else 255 - @as(u16, frame);
+    return @intCast((@as(u32, width - 1) * phase) / 127);
 }
 
 /// The active tab is always visible; earlier tabs are added while they fit.

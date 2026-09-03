@@ -34,7 +34,9 @@ pub const DamageRow = struct {
 /// splitting the span at row boundaries. The caller validates bounds; this
 /// assumes `start + count` lies inside `damage_rows.len * width`.
 pub fn markRows(damage_rows: []DamageRow, width: usize, start: usize, count: usize) void {
-    if (count == 0) return;
+    if (count == 0) {
+        return;
+    }
     var cursor = start;
     const end = start + count;
     while (cursor < end) {
@@ -52,13 +54,7 @@ pub fn markRows(damage_rows: []DamageRow, width: usize, start: usize, count: usi
 /// `reference_row` disagree, and hands it to `sink.copyRun(run_start, count)`.
 /// Returns the cells copied. The sink may write into `reference_row`'s
 /// memory: every index a run covers has already been compared.
-pub fn syncRow(
-    source_row: []const ui.Cell,
-    reference_row: []const ui.Cell,
-    start: u16,
-    end: u16,
-    sink: anytype,
-) !usize {
+pub fn syncRow(source_row: []const ui.Cell, reference_row: []const ui.Cell, start: u16, end: u16, sink: anytype) !usize {
     var copied: usize = 0;
     var x = start;
     while (x < end) {
@@ -69,7 +65,9 @@ pub fn syncRow(
         const run_start = x;
         x += 1;
         while (x < end) : (x += 1) {
-            if (source_row[x].eqlPublic(&reference_row[x])) break;
+            if (source_row[x].eqlPublic(&reference_row[x])) {
+                break;
+            }
         }
         try sink.copyRun(run_start, @intCast(x - run_start));
         copied += x - run_start;

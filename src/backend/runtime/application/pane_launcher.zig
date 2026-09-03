@@ -100,8 +100,12 @@ pub const LaunchTestFault = struct {
     claimed: std.atomic.Value(bool) = .init(false),
 
     pub fn inject(fault: *LaunchTestFault, phase: history.LaunchPhase) !void {
-        if (fault.phase != phase) return;
-        if (fault.claimed.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) return;
+        if (fault.phase != phase) {
+            return;
+        }
+        if (fault.claimed.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) {
+            return;
+        }
         return error.InjectedLaunchFailure;
     }
 };
@@ -235,7 +239,9 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
         }
 
         fn injectFault(launcher: *Self, phase: history.LaunchPhase) !void {
-            if (launcher.launch_fault) |fault| try fault.inject(phase);
+            if (launcher.launch_fault) |fault| {
+                try fault.inject(phase);
+            }
         }
 
         fn recordFailure(launcher: *Self, pane: *const Pane, failure: LaunchFailure) void {
@@ -270,8 +276,9 @@ const OwnedCommand = struct {
         const cwd_path = initialization.cwd_path;
         const environment = initialization.environment;
 
-        if (launch.environment_mode != .inherit_runtime or launch.environment_count != 0)
+        if (launch.environment_mode != .inherit_runtime or launch.environment_count != 0) {
             return error.UnsupportedEnvironment;
+        }
 
         const arguments = try gpa.alloc([:0]u8, launch.argument_count);
         errdefer gpa.free(arguments);

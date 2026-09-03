@@ -27,27 +27,37 @@ pub const RequestId = enum(u64) {
 };
 
 pub fn workspace(value: u64) !WorkspaceId {
-    if (value == 0) return error.InvalidWorkspaceId;
+    if (value == 0) {
+        return error.InvalidWorkspaceId;
+    }
     return @enumFromInt(value);
 }
 
 pub fn worktree(value: u64) !WorktreeId {
-    if (value == 0) return error.InvalidWorktreeId;
+    if (value == 0) {
+        return error.InvalidWorktreeId;
+    }
     return @enumFromInt(value);
 }
 
 pub fn tab(value: u64) !TabId {
-    if (value == 0) return error.InvalidTabId;
+    if (value == 0) {
+        return error.InvalidTabId;
+    }
     return @enumFromInt(value);
 }
 
 pub fn pane(value: u64) !PaneId {
-    if (value == 0) return error.InvalidPaneId;
+    if (value == 0) {
+        return error.InvalidPaneId;
+    }
     return @enumFromInt(value);
 }
 
 pub fn request(value: u64) !RequestId {
-    if (value == 0) return error.InvalidRequestId;
+    if (value == 0) {
+        return error.InvalidRequestId;
+    }
     return @enumFromInt(value);
 }
 

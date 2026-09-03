@@ -141,6 +141,7 @@ fn renderBottom(context: *context_mod.Context, input: Input) void {
                 .tabs = input.tabs,
                 .model = input.model,
                 .alignment = alignment,
+                .animation_frame = input.sidebar_animation_frame,
             }),
             .metrics => status_bar.render(context, area, input.system_metrics),
             .content => |*content| bar_content.render(context, area, .{

@@ -41,6 +41,7 @@ pub const Version = struct {
     frame: u64 = 0,
     pane_metadata: u64 = 0,
     pane_foreground: u64 = 0,
+    pane_progress: u64 = 0,
     pane_graphics: u64 = 0,
     chrome: u64 = 0,
     prompt: u64 = 0,
@@ -619,6 +620,12 @@ pub const PaneMetadataCommit = struct {
     display_changed: bool,
     pane_metadata_revision: u64,
     pane_foreground_revision: u64,
+};
+
+pub const PaneProgressCommit = struct {
+    pane_id: schema.PaneId,
+    active: bool,
+    pane_progress_revision: u64,
 };
 
 pub const PaneViewportTarget = union(enum) {

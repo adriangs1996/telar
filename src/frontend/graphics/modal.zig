@@ -76,15 +76,13 @@ pub const Renderer = struct {
         return total;
     }
 
-    pub fn configure(
-        renderer: *Renderer,
-        support: kitty.Support,
-        cell_width: u16,
-        cell_height: u16,
-    ) bool {
+    pub fn configure(renderer: *Renderer, support: kitty.Support, cell_width: u16, cell_height: u16) bool {
         const supported = support == .supported;
         if (renderer.supported == supported and renderer.cell_width == cell_width and
-            renderer.cell_height == cell_height) return false;
+            renderer.cell_height == cell_height)
+        {
+            return false;
+        }
         renderer.cancelPartial();
         renderer.supported = supported;
         renderer.cell_width = cell_width;
@@ -97,11 +95,7 @@ pub const Renderer = struct {
         return true;
     }
 
-    pub fn prepare(
-        renderer: *Renderer,
-        area: ui.Rect,
-        palette: *const theme.Palette,
-    ) void {
+    pub fn prepare(renderer: *Renderer, area: ui.Rect, palette: *const theme.Palette) void {
         renderer.frame_usable = renderer.supported and renderer.cell_width != 0 and
             renderer.cell_height != 0 and !area.isEmpty();
         const background = rgb(palette.panel_bg) orelse {
@@ -147,7 +141,9 @@ pub const Renderer = struct {
         renderer.desired_area = area;
         if (renderer.key != null and std.meta.eql(renderer.key.?, key)) {
             for (&renderer.assets) |*asset| {
-                if (!asset.emitted) asset.dirty = true;
+                if (!asset.emitted) {
+                    asset.dirty = true;
+                }
             }
             return;
         }
@@ -203,19 +199,27 @@ pub const Renderer = struct {
     pub fn covers(renderer: *const Renderer, area: ui.Rect) bool {
         if (!renderer.frame_usable or renderer.partial != null or renderer.abort_pending or
             !optionalAreaEql(renderer.desired_area, area) or
-            !optionalAreaEql(renderer.emitted_area, area)) return false;
+            !optionalAreaEql(renderer.emitted_area, area))
+        {
+            return false;
+        }
         for (renderer.assets) |asset| if (asset.dirty or !asset.emitted) return false;
         return true;
     }
 
     pub fn damaged(renderer: *const Renderer) bool {
         if (renderer.abort_pending or renderer.partial != null or
-            !optionalAreaEql(renderer.desired_area, renderer.emitted_area)) return true;
+            !optionalAreaEql(renderer.desired_area, renderer.emitted_area))
+        {
+            return true;
+        }
         if (!renderer.supported) {
             for (renderer.assets) |asset| if (asset.emitted) return true;
             return false;
         }
-        if (renderer.frame_usable) for (renderer.assets) |asset| if (asset.dirty) return true;
+        if (renderer.frame_usable) {
+            for (renderer.assets) |asset| if (asset.dirty) return true;
+        }
         return false;
     }
 
@@ -224,7 +228,9 @@ pub const Renderer = struct {
     }
 
     pub fn write(renderer: *Renderer, writer: *Io.Writer) Io.Writer.Error!usize {
-        if (!renderer.damaged()) return 0;
+        if (!renderer.damaged()) {
+            return 0;
+        }
         var written: usize = 0;
         if (renderer.abort_pending) {
             written += try kitty.writeTransmissionAbort(writer);
@@ -232,8 +238,9 @@ pub const Renderer = struct {
         }
         if (!renderer.supported) {
             for (&renderer.assets, 0..) |*asset, index| {
-                if (asset.emitted)
+                if (asset.emitted) {
                     written += try kitty.writeDeleteImage(writer, imageId(index));
+                }
                 asset.emitted = false;
                 asset.dirty = false;
                 asset.transfer_offset = 0;
@@ -246,46 +253,53 @@ pub const Renderer = struct {
             written += try renderer.deletePlacements(writer);
             renderer.emitted_area = null;
         }
-        if (renderer.frame_usable) for (&renderer.assets, 0..) |*asset, index| {
-            if (!asset.dirty) continue;
-            if (asset.emitted) {
-                written += try kitty.writeDeleteImage(writer, imageId(index));
-                asset.emitted = false;
-            }
-            const progress = try kitty.writeTransmissionChunks(
-                writer,
-                imageId(index),
-                .{
-                    .key = .{ .image_id = imageId(index), .generation = 1 },
-                    .format = .rgba,
-                    .width = asset.width,
-                    .height = asset.height,
-                    .byte_len = asset.pixels.len,
-                },
-                asset.pixels,
-                asset.transfer_offset,
-                kitty.transmission_budget_per_frame,
-                false,
-            );
-            written += progress.written;
-            asset.transfer_offset = progress.offset;
-            if (progress.offset != asset.pixels.len) {
-                renderer.partial = @enumFromInt(index);
+        if (renderer.frame_usable) {
+            for (&renderer.assets, 0..) |*asset, index| {
+                if (!asset.dirty) {
+                    continue;
+                }
+                if (asset.emitted) {
+                    written += try kitty.writeDeleteImage(writer, imageId(index));
+                    asset.emitted = false;
+                }
+                const progress = try kitty.writeTransmissionChunks(
+                    writer,
+                    imageId(index),
+                    .{
+                        .key = .{ .image_id = imageId(index), .generation = 1 },
+                        .format = .rgba,
+                        .width = asset.width,
+                        .height = asset.height,
+                        .byte_len = asset.pixels.len,
+                    },
+                    asset.pixels,
+                    asset.transfer_offset,
+                    kitty.transmission_budget_per_frame,
+                    false,
+                );
+                written += progress.written;
+                asset.transfer_offset = progress.offset;
+                if (progress.offset != asset.pixels.len) {
+                    renderer.partial = @enumFromInt(index);
+                    return written;
+                }
+                asset.transfer_offset = 0;
+                asset.dirty = false;
+                asset.emitted = true;
+                renderer.partial = null;
                 return written;
             }
-            asset.transfer_offset = 0;
-            asset.dirty = false;
-            asset.emitted = true;
-            renderer.partial = null;
-            return written;
-        };
+        }
 
         if (!optionalAreaEql(renderer.desired_area, renderer.emitted_area)) {
-            if (renderer.emitted_area != null)
+            if (renderer.emitted_area != null) {
                 written += try renderer.deletePlacements(writer);
+            }
             const ready = renderer.allImagesReady();
             if (renderer.desired_area) |area| {
-                if (ready) written += try renderer.writePlacements(writer, area);
+                if (ready) {
+                    written += try renderer.writePlacements(writer, area);
+                }
             }
             renderer.emitted_area = if (ready) renderer.desired_area else null;
         }
@@ -302,7 +316,9 @@ pub const Renderer = struct {
     }
 
     fn allImagesReady(renderer: *const Renderer) bool {
-        if (!renderer.frame_usable) return false;
+        if (!renderer.frame_usable) {
+            return false;
+        }
         for (renderer.assets) |asset| if (asset.dirty or !asset.emitted) return false;
         return true;
     }
@@ -332,11 +348,7 @@ pub const Renderer = struct {
         return written;
     }
 
-    fn writePlacements(
-        renderer: *const Renderer,
-        writer: *Io.Writer,
-        area: ui.Rect,
-    ) Io.Writer.Error!usize {
+    fn writePlacements(renderer: *const Renderer, writer: *Io.Writer, area: ui.Rect) Io.Writer.Error!usize {
         const key = renderer.key.?;
         const horizontal = renderer.assets[@intFromEnum(AssetKind.horizontal)];
         const vertical = renderer.assets[@intFromEnum(AssetKind.vertical)];
@@ -437,16 +449,7 @@ fn renderCorners(asset: *Asset, key: RenderKey) void {
     }
 }
 
-fn renderCornerPixel(
-    asset: *Asset,
-    destination_x: u32,
-    destination_y: u32,
-    local_x: u32,
-    local_y: u32,
-    right: bool,
-    bottom: bool,
-    key: RenderKey,
-) void {
+fn renderCornerPixel(asset: *Asset, destination_x: u32, destination_y: u32, local_x: u32, local_y: u32, right: bool, bottom: bool, key: RenderKey) void {
     const width_units = key.target_width * units_per_pixel;
     const height_units = key.target_height * units_per_pixel;
     const radius_units = @as(u32, key.radius) * units_per_pixel;
@@ -459,7 +462,9 @@ fn renderCornerPixel(
                 local_x * units_per_pixel + @as(u32, @intCast(sample_x * 2 + 1));
             const y = (if (bottom) key.target_height - key.cell_height else 0) * units_per_pixel +
                 local_y * units_per_pixel + @as(u32, @intCast(sample_y * 2 + 1));
-            if (!insideRoundedRectangle(x, y, width_units, height_units, radius_units)) continue;
+            if (!insideRoundedRectangle(x, y, width_units, height_units, radius_units)) {
+                continue;
+            }
             const in_inner = x >= border_units and y >= border_units and
                 x + border_units < width_units and y + border_units < height_units and
                 insideRoundedRectangle(
@@ -469,14 +474,17 @@ fn renderCornerPixel(
                     height_units - border_units * 2,
                     radius_units -| border_units,
                 );
-            if (in_inner)
-                background_samples += 1
-            else
+            if (in_inner) {
+                background_samples += 1;
+            } else {
                 border_samples += 1;
+            }
         }
     }
     const painted = border_samples + background_samples;
-    if (painted == 0) return;
+    if (painted == 0) {
+        return;
+    }
     const index = (@as(usize, destination_y) * asset.width + destination_x) * 4;
     inline for (0..3) |channel| {
         asset.pixels[index + channel] = @intCast(
@@ -492,9 +500,14 @@ fn renderCornerPixel(
 }
 
 fn insideRoundedRectangle(x: u32, y: u32, width: u32, height: u32, radius: u32) bool {
-    if (radius == 0) return true;
+    if (radius == 0) {
+        return true;
+    }
     if ((x >= radius and x <= width - radius) or
-        (y >= radius and y <= height - radius)) return true;
+        (y >= radius and y <= height - radius))
+    {
+        return true;
+    }
     const center_x = if (x < radius) radius else width - radius;
     const center_y = if (y < radius) radius else height - radius;
     const delta_x = @as(i64, x) - center_x;
@@ -528,7 +541,9 @@ fn placementImageId(index: usize) u32 {
 }
 
 fn optionalAreaEql(a: ?ui.Rect, b: ?ui.Rect) bool {
-    if (a == null or b == null) return a == null and b == null;
+    if (a == null or b == null) {
+        return a == null and b == null;
+    }
     return std.meta.eql(a.?, b.?);
 }
 

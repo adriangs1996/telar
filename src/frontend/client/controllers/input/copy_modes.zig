@@ -65,7 +65,9 @@ pub fn matches(client: *Client, view: schema.PaneMatchesView) !copy_mode.Outcome
     var count: usize = 0;
     var iterator = view.matches();
     while (try iterator.next()) |match| {
-        if (count == storage.len) break;
+        if (count == storage.len) {
+            break;
+        }
         storage[count] = match;
         count += 1;
     }

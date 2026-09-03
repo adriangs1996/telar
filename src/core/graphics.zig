@@ -32,9 +32,12 @@ pub const ShmName = struct {
     len: u8 = 0,
 
     pub fn init(name: []const u8) error{InvalidShmName}!ShmName {
-        if (name.len < 2 or name.len > max_shm_name_bytes)
+        if (name.len < 2 or name.len > max_shm_name_bytes) {
             return error.InvalidShmName;
-        if (name[0] != '/') return error.InvalidShmName;
+        }
+        if (name[0] != '/') {
+            return error.InvalidShmName;
+        }
         for (name[1..]) |byte| switch (byte) {
             'a'...'z', '0'...'9', '-' => {},
             else => return error.InvalidShmName,
@@ -79,15 +82,22 @@ pub const Image = struct {
     byte_len: u64,
 
     pub fn validate(image: Image, limit: usize) !usize {
-        if (image.key.image_id == 0 or image.key.generation == 0)
+        if (image.key.image_id == 0 or image.key.generation == 0) {
             return error.InvalidImageIdentity;
-        if (image.width == 0 or image.height == 0) return error.InvalidImageDimensions;
+        }
+        if (image.width == 0 or image.height == 0) {
+            return error.InvalidImageDimensions;
+        }
         const pixels = std.math.mul(usize, image.width, image.height) catch
             return error.ImageSizeOverflow;
         const expected = std.math.mul(usize, pixels, image.format.bytesPerPixel()) catch
             return error.ImageSizeOverflow;
-        if (image.byte_len != expected) return error.InvalidImageLength;
-        if (expected > limit) return error.ImageQuotaExceeded;
+        if (image.byte_len != expected) {
+            return error.InvalidImageLength;
+        }
+        if (expected > limit) {
+            return error.ImageQuotaExceeded;
+        }
         return expected;
     }
 };
@@ -113,10 +123,15 @@ pub const Placement = struct {
     z_index: i32 = 0,
 
     pub fn sourceRect(placement: Placement, image: Image) !Rect {
-        if (placement.virtual_id == 0) return error.InvalidPlacementIdentity;
-        if (!std.meta.eql(placement.key, image.key)) return error.PlacementImageMismatch;
-        if (placement.source_x >= image.width or placement.source_y >= image.height)
+        if (placement.virtual_id == 0) {
+            return error.InvalidPlacementIdentity;
+        }
+        if (!std.meta.eql(placement.key, image.key)) {
+            return error.PlacementImageMismatch;
+        }
+        if (placement.source_x >= image.width or placement.source_y >= image.height) {
             return error.InvalidSourceRectangle;
+        }
         const width = if (placement.source_width == 0)
             image.width - placement.source_x
         else
@@ -129,8 +144,9 @@ pub const Placement = struct {
             return error.InvalidSourceRectangle;
         const bottom = std.math.add(u32, placement.source_y, height) catch
             return error.InvalidSourceRectangle;
-        if (width == 0 or height == 0 or right > image.width or bottom > image.height)
+        if (width == 0 or height == 0 or right > image.width or bottom > image.height) {
             return error.InvalidSourceRectangle;
+        }
         return .{
             .x = placement.source_x,
             .y = placement.source_y,
@@ -158,7 +174,10 @@ pub const Clip = struct {
 pub fn clipScaled(destination: Rect, source: Rect, bounds: Rect) ?Clip {
     if (destination.width == 0 or destination.height == 0 or
         source.width == 0 or source.height == 0 or
-        bounds.width == 0 or bounds.height == 0) return null;
+        bounds.width == 0 or bounds.height == 0)
+    {
+        return null;
+    }
 
     const destination_right = addExtent(destination.x, destination.width) orelse return null;
     const destination_bottom = addExtent(destination.y, destination.height) orelse return null;
@@ -168,7 +187,9 @@ pub fn clipScaled(destination: Rect, source: Rect, bounds: Rect) ?Clip {
     const top = @max(destination.y, bounds.y);
     const right = @min(destination_right, bounds_right);
     const bottom = @min(destination_bottom, bounds_bottom);
-    if (left >= right or top >= bottom) return null;
+    if (left >= right or top >= bottom) {
+        return null;
+    }
 
     const clipped_left: u64 = @intCast(left - destination.x);
     const clipped_top: u64 = @intCast(top - destination.y);
@@ -179,7 +200,10 @@ pub fn clipScaled(destination: Rect, source: Rect, bounds: Rect) ?Clip {
     const source_right = scaleCeil(clipped_right, source.width, destination.width);
     const source_bottom = scaleCeil(clipped_bottom, source.height, destination.height);
     if (source_left + source_right >= source.width or
-        source_top + source_bottom >= source.height) return null;
+        source_top + source_bottom >= source.height)
+    {
+        return null;
+    }
 
     return .{
         .destination = .{

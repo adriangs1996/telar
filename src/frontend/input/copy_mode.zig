@@ -52,11 +52,7 @@ pub const State = struct {
     match_count: u8 = 0,
     match_index: u8 = 0,
 
-    pub fn init(
-        pane_id: schema.PaneId,
-        cursor: Point,
-        viewport_offset: u32,
-    ) State {
+    pub fn init(pane_id: schema.PaneId, cursor: Point, viewport_offset: u32) State {
         return .{
             .pane_id = pane_id,
             .cursor = cursor,
@@ -84,25 +80,29 @@ pub const State = struct {
     }
 
     pub fn clearSelection(state: *State) bool {
-        if (state.anchor == null) return false;
+        if (state.anchor == null) {
+            return false;
+        }
         state.anchor = null;
         state.linewise = false;
         return true;
     }
 
     pub fn horizontal(state: *State, delta: i32, cols: u16) void {
-        if (delta < 0)
-            state.cursor.x -|= @intCast(-delta)
-        else
+        if (delta < 0) {
+            state.cursor.x -|= @intCast(-delta);
+        } else {
             state.cursor.x = @min(cols -| 1, state.cursor.x +| @as(u16, @intCast(delta)));
+        }
     }
 
     pub fn vertical(state: *State, delta: i32, scroll: schema.frame.Scroll, rows: u16) void {
         const last = scroll.total_rows -| 1;
-        if (delta < 0)
-            state.cursor.y -|= @intCast(-delta)
-        else
+        if (delta < 0) {
+            state.cursor.y -|= @intCast(-delta);
+        } else {
             state.cursor.y = @min(last, state.cursor.y +| @as(u32, @intCast(delta)));
+        }
         state.reveal(rows, scroll);
     }
 
@@ -224,12 +224,7 @@ pub const Effect = struct {
 
 /// Interprets one key over the pane's visible cells. Pure: the only mutation
 /// is the copy-mode state itself.
-pub fn applyKey(
-    state: *State,
-    pressed: keybind.Key,
-    buffer: *const ui.Buffer,
-    scroll: schema.frame.Scroll,
-) Effect {
+pub fn applyKey(state: *State, pressed: keybind.Key, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) Effect {
     const page: i32 = @intCast(@max(@as(u16, 1), buffer.h -| 1));
     switch (pressed.code) {
         .escape => if (!state.clearSelection()) return .{ .exit = true },
@@ -243,16 +238,17 @@ pub fn applyKey(
         .page_up => state.vertical(-page, scroll, buffer.h),
         .page_down => state.vertical(page, scroll, buffer.h),
         .char => |char| if (pressed.mods.ctrl) {
-            if (char.eql("b"))
-                state.vertical(-page, scroll, buffer.h)
-            else if (char.eql("f"))
-                state.vertical(page, scroll, buffer.h)
-            else if (char.eql("u"))
-                state.vertical(-@divTrunc(page, 2), scroll, buffer.h)
-            else if (char.eql("d"))
-                state.vertical(@divTrunc(page, 2), scroll, buffer.h)
-            else
+            if (char.eql("b")) {
+                state.vertical(-page, scroll, buffer.h);
+            } else if (char.eql("f")) {
+                state.vertical(page, scroll, buffer.h);
+            } else if (char.eql("u")) {
+                state.vertical(-@divTrunc(page, 2), scroll, buffer.h);
+            } else if (char.eql("d")) {
+                state.vertical(@divTrunc(page, 2), scroll, buffer.h);
+            } else {
                 return .{ .handled = false };
+            }
         } else if (char.eql("h")) {
             state.horizontal(-1, buffer.w);
         } else if (char.eql("j")) {
@@ -314,19 +310,23 @@ pub fn onFrame(state: *State, previous_offset: u32, scroll: schema.frame.Scroll)
     if (scroll.offset < previous_offset and state.viewport_offset == previous_offset) {
         const pruned = previous_offset - scroll.offset;
         state.cursor.y -|= pruned;
-        if (state.anchor) |*anchor| anchor.y -|= pruned;
+        if (state.anchor) |*anchor| {
+            anchor.y -|= pruned;
+        }
     }
     state.cursor.y = @min(state.cursor.y, scroll.total_rows -| 1);
-    if (state.anchor) |*anchor|
+    if (state.anchor) |*anchor| {
         anchor.y = @min(anchor.y, scroll.total_rows -| 1);
+    }
     state.viewport_offset = scroll.offset;
 }
 
 const WordClass = enum { space, word, punctuation };
 
 fn rowIndex(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, absolute_y: u32) ?u16 {
-    if (absolute_y < scroll.offset or absolute_y >= scroll.offset + buffer.h)
+    if (absolute_y < scroll.offset or absolute_y >= scroll.offset + buffer.h) {
         return null;
+    }
     return @intCast(absolute_y - scroll.offset);
 }
 
@@ -335,7 +335,9 @@ fn firstNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.S
     var x: u16 = 0;
     while (x < buffer.w) : (x += 1) {
         const text = buffer.cells[@as(usize, row) * buffer.w + x].text();
-        if (text.len != 0 and !std.ascii.isWhitespace(text[0])) break;
+        if (text.len != 0 and !std.ascii.isWhitespace(text[0])) {
+            break;
+        }
     }
     state.cursor.x = @min(x, buffer.w -| 1);
 }
@@ -346,21 +348,20 @@ fn lastNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Sc
     while (x != 0) {
         x -= 1;
         const text = buffer.cells[@as(usize, row) * buffer.w + x].text();
-        if (text.len != 0 and !std.ascii.isWhitespace(text[0])) break;
+        if (text.len != 0 and !std.ascii.isWhitespace(text[0])) {
+            break;
+        }
     }
     state.cursor.x = x;
 }
 
-fn paragraph(
-    state: *State,
-    buffer: *const ui.Buffer,
-    scroll: schema.frame.Scroll,
-    direction: i32,
-) void {
+fn paragraph(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll, direction: i32) void {
     var y = state.cursor.y;
     while (true) {
         const next = if (direction < 0) y -| 1 else @min(y +| 1, scroll.total_rows -| 1);
-        if (next == y) break;
+        if (next == y) {
+            break;
+        }
         y = next;
         const row = rowIndex(buffer, scroll, y) orelse break;
         var blank = true;
@@ -371,7 +372,9 @@ fn paragraph(
                 break;
             }
         }
-        if (blank) break;
+        if (blank) {
+            break;
+        }
     }
     state.cursor.y = y;
     state.cursor.x = 0;
@@ -382,7 +385,9 @@ fn wordClass(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, point: Point
     const row = rowIndex(buffer, scroll, point.y) orelse return null;
     const cell = buffer.cells[@as(usize, row) * buffer.w + point.x];
     const text = cell.text();
-    if (text.len == 0 or std.ascii.isWhitespace(text[0])) return .space;
+    if (text.len == 0 or std.ascii.isWhitespace(text[0])) {
+        return .space;
+    }
     return if (std.ascii.isAlphanumeric(text[0]) or text[0] == '_')
         .word
     else
@@ -390,23 +395,26 @@ fn wordClass(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, point: Point
 }
 
 fn nextPoint(point: Point, cols: u16, total_rows: u32) Point {
-    if (point.x + 1 < cols) return .{ .x = point.x + 1, .y = point.y };
-    if (point.y + 1 < total_rows) return .{ .x = 0, .y = point.y + 1 };
+    if (point.x + 1 < cols) {
+        return .{ .x = point.x + 1, .y = point.y };
+    }
+    if (point.y + 1 < total_rows) {
+        return .{ .x = 0, .y = point.y + 1 };
+    }
     return point;
 }
 
 fn previousPoint(point: Point, cols: u16) Point {
-    if (point.x != 0) return .{ .x = point.x - 1, .y = point.y };
-    if (point.y != 0) return .{ .x = cols - 1, .y = point.y - 1 };
+    if (point.x != 0) {
+        return .{ .x = point.x - 1, .y = point.y };
+    }
+    if (point.y != 0) {
+        return .{ .x = cols - 1, .y = point.y - 1 };
+    }
     return point;
 }
 
-fn wordForward(
-    state: *State,
-    buffer: *const ui.Buffer,
-    scroll: schema.frame.Scroll,
-    end: bool,
-) void {
+fn wordForward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll, end: bool) void {
     const initial = wordClass(buffer, scroll, state.cursor) orelse {
         state.vertical(1, scroll, buffer.h);
         state.lineStart();
@@ -416,26 +424,36 @@ fn wordForward(
     if (end and initial != .space) {
         while (true) {
             const next = nextPoint(point, buffer.w, scroll.total_rows);
-            if (std.meta.eql(next, point) or wordClass(buffer, scroll, next) != initial) break;
+            if (std.meta.eql(next, point) or wordClass(buffer, scroll, next) != initial) {
+                break;
+            }
             point = next;
         }
     } else {
         while (wordClass(buffer, scroll, point)) |class| {
-            if (class != initial) break;
+            if (class != initial) {
+                break;
+            }
             const next = nextPoint(point, buffer.w, scroll.total_rows);
-            if (std.meta.eql(next, point)) break;
+            if (std.meta.eql(next, point)) {
+                break;
+            }
             point = next;
         }
         while (wordClass(buffer, scroll, point) == .space) {
             const next = nextPoint(point, buffer.w, scroll.total_rows);
-            if (std.meta.eql(next, point)) break;
+            if (std.meta.eql(next, point)) {
+                break;
+            }
             point = next;
         }
         if (end) {
             const class = wordClass(buffer, scroll, point) orelse .space;
             while (true) {
                 const next = nextPoint(point, buffer.w, scroll.total_rows);
-                if (std.meta.eql(next, point) or wordClass(buffer, scroll, next) != class) break;
+                if (std.meta.eql(next, point) or wordClass(buffer, scroll, next) != class) {
+                    break;
+                }
                 point = next;
             }
         }
@@ -448,7 +466,9 @@ fn wordBackward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Sc
     var point = previousPoint(state.cursor, buffer.w);
     while (wordClass(buffer, scroll, point) == .space) {
         const previous = previousPoint(point, buffer.w);
-        if (std.meta.eql(previous, point)) break;
+        if (std.meta.eql(previous, point)) {
+            break;
+        }
         point = previous;
     }
     const class = wordClass(buffer, scroll, point) orelse {
@@ -458,7 +478,9 @@ fn wordBackward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Sc
     };
     while (true) {
         const previous = previousPoint(point, buffer.w);
-        if (std.meta.eql(previous, point) or wordClass(buffer, scroll, previous) != class) break;
+        if (std.meta.eql(previous, point) or wordClass(buffer, scroll, previous) != class) {
+            break;
+        }
         point = previous;
     }
     state.cursor = point;

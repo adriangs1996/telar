@@ -65,7 +65,9 @@ pub fn decodeSuggestCommand(decoder: *wire.Decoder) !SuggestCommand {
 pub fn encodeCommandSuggestion(buffer: []u8, message: CommandSuggestion) ![]const u8 {
     try validateRequestId(message.request_id);
     try validateBytes(message.text, types.max_suggestion_bytes, true);
-    if (message.status != .ready and message.text.len != 0) return error.InvalidSuggestion;
+    if (message.status != .ready and message.text.len != 0) {
+        return error.InvalidSuggestion;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.command_suggestion));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -79,6 +81,8 @@ pub fn decodeCommandSuggestion(decoder: *wire.Decoder) !CommandSuggestion {
     const status = std.enums.fromInt(SuggestionStatus, try decoder.readByte()) orelse return error.InvalidSuggestion;
     const text = try decoder.readSized16();
     try validateBytes(text, types.max_suggestion_bytes, true);
-    if (status != .ready and text.len != 0) return error.InvalidSuggestion;
+    if (status != .ready and text.len != 0) {
+        return error.InvalidSuggestion;
+    }
     return .{ .request_id = request_id, .status = status, .text = text };
 }

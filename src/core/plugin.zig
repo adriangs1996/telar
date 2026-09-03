@@ -28,7 +28,9 @@ pub const Capability = enum(u8) {
     pub fn parse(name: []const u8) !Capability {
         inline for (std.meta.fields(Capability)) |field| {
             const value: Capability = @enumFromInt(field.value);
-            if (std.mem.eql(u8, name, value.canonicalName())) return value;
+            if (std.mem.eql(u8, name, value.canonicalName())) {
+                return value;
+            }
         }
         return error.UnknownCapability;
     }
@@ -116,21 +118,35 @@ const WireManifest = struct {
 };
 
 pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !Manifest {
-    if (source.len > max_manifest_bytes) return error.ManifestTooLarge;
+    if (source.len > max_manifest_bytes) {
+        return error.ManifestTooLarge;
+    }
     const parsed = try std.json.parseFromSlice(WireManifest, gpa, source, .{
         .ignore_unknown_fields = false,
     });
     defer parsed.deinit();
     const wire = parsed.value;
-    if (wire.api_version != manifest_api_version) return error.IncompatibleManifestApi;
-    if (!validIdentifier(wire.id) or wire.id.len > max_id_bytes) return error.InvalidPluginId;
-    if (wire.version.len == 0 or wire.version.len > max_version_bytes) return error.InvalidVersion;
-    if (!validRelativePath(wire.entry) or wire.entry.len > max_entry_bytes) return error.InvalidEntrypoint;
-    if (wire.source.url.len == 0 or wire.source.url.len > max_source_bytes)
+    if (wire.api_version != manifest_api_version) {
+        return error.IncompatibleManifestApi;
+    }
+    if (!validIdentifier(wire.id) or wire.id.len > max_id_bytes) {
+        return error.InvalidPluginId;
+    }
+    if (wire.version.len == 0 or wire.version.len > max_version_bytes) {
+        return error.InvalidVersion;
+    }
+    if (!validRelativePath(wire.entry) or wire.entry.len > max_entry_bytes) {
+        return error.InvalidEntrypoint;
+    }
+    if (wire.source.url.len == 0 or wire.source.url.len > max_source_bytes) {
         return error.InvalidSource;
-    if (wire.source.revision.len == 0 or wire.source.revision.len > max_revision_bytes)
+    }
+    if (wire.source.revision.len == 0 or wire.source.revision.len > max_revision_bytes) {
         return error.InvalidRevision;
-    if (wire.actions.len > max_actions) return error.TooManyActions;
+    }
+    if (wire.actions.len > max_actions) {
+        return error.TooManyActions;
+    }
 
     var manifest: Manifest = .{
         .id_len = @intCast(wire.id.len),
@@ -147,7 +163,9 @@ pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !Manifest {
     @memcpy(manifest.source_bytes[0..wire.source.url.len], wire.source.url);
     @memcpy(manifest.revision_bytes[0..wire.source.revision.len], wire.source.revision);
     for (wire.actions, 0..) |name, index| {
-        if (!validIdentifier(name) or name.len > max_action_bytes) return error.InvalidActionName;
+        if (!validIdentifier(name) or name.len > max_action_bytes) {
+            return error.InvalidActionName;
+        }
         for (wire.actions[0..index]) |previous|
             if (std.mem.eql(u8, previous, name)) return error.DuplicateAction;
         manifest.actions[index].len = @intCast(name.len);
@@ -155,7 +173,9 @@ pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !Manifest {
     }
     for (wire.capabilities) |name| {
         const capability = try Capability.parse(name);
-        if (manifest.capabilities.contains(capability)) return error.DuplicateCapability;
+        if (manifest.capabilities.contains(capability)) {
+            return error.DuplicateCapability;
+        }
         manifest.capabilities.insert(capability);
     }
     return manifest;
@@ -215,19 +235,28 @@ pub const TrustStore = struct {
             .ignore_unknown_fields = false,
         });
         defer parsed.deinit();
-        if (parsed.value.version != 1) return error.IncompatibleTrustStore;
-        if (parsed.value.grants.len > max_grants) return error.TooManyTrustGrants;
+        if (parsed.value.version != 1) {
+            return error.IncompatibleTrustStore;
+        }
+        if (parsed.value.grants.len > max_grants) {
+            return error.TooManyTrustGrants;
+        }
         var store: TrustStore = .{};
         for (parsed.value.grants) |wire| {
-            if (!validIdentifier(wire.plugin) or wire.plugin.len > max_id_bytes)
+            if (!validIdentifier(wire.plugin) or wire.plugin.len > max_id_bytes) {
                 return error.InvalidPluginId;
+            }
             var digest: Digest = undefined;
-            if (wire.digest.len != digest.len * 2) return error.InvalidDigest;
+            if (wire.digest.len != digest.len * 2) {
+                return error.InvalidDigest;
+            }
             _ = std.fmt.hexToBytes(&digest, wire.digest) catch return error.InvalidDigest;
             var capabilities = CapabilitySet.initEmpty();
             for (wire.capabilities) |name| {
                 const capability = try Capability.parse(name);
-                if (capabilities.contains(capability)) return error.DuplicateCapability;
+                if (capabilities.contains(capability)) {
+                    return error.DuplicateCapability;
+                }
                 capabilities.insert(capability);
             }
             var entry: StoredGrant = .{
@@ -248,14 +277,11 @@ pub const TrustStore = struct {
         return store;
     }
 
-    pub fn upsert(
-        store: *TrustStore,
-        manifest: *const Manifest,
-        digest: Digest,
-        capabilities: CapabilitySet,
-    ) !void {
+    pub fn upsert(store: *TrustStore, manifest: *const Manifest, digest: Digest, capabilities: CapabilitySet) !void {
         for (store.entries[0..store.count]) |*entry| {
-            if (!std.mem.eql(u8, entry.pluginId(), manifest.id())) continue;
+            if (!std.mem.eql(u8, entry.pluginId(), manifest.id())) {
+                continue;
+            }
             entry.grant = .{
                 .plugin_hash = stableId(manifest.id()),
                 .digest = digest,
@@ -263,7 +289,9 @@ pub const TrustStore = struct {
             };
             return;
         }
-        if (store.count == max_grants) return error.TooManyTrustGrants;
+        if (store.count == max_grants) {
+            return error.TooManyTrustGrants;
+        }
         var entry: StoredGrant = .{
             .plugin_len = manifest.id_len,
             .grant = .{
@@ -285,14 +313,18 @@ pub const TrustStore = struct {
     pub fn writeJson(store: *const TrustStore, writer: *std.Io.Writer) !void {
         try writer.writeAll("{\"version\":1,\"grants\":[");
         for (store.entries[0..store.count], 0..) |*entry, index| {
-            if (index != 0) try writer.writeByte(',');
+            if (index != 0) {
+                try writer.writeByte(',');
+            }
             try writer.print("{{\"plugin\":\"{s}\",\"digest\":\"", .{entry.pluginId()});
             for (entry.grant.digest) |byte| try writer.print("{x:0>2}", .{byte});
             try writer.writeAll("\",\"capabilities\":[");
             var capability_index: usize = 0;
             var iterator = entry.grant.capabilities.iterator();
             while (iterator.next()) |capability| {
-                if (capability_index != 0) try writer.writeByte(',');
+                if (capability_index != 0) {
+                    try writer.writeByte(',');
+                }
                 try writer.print("\"{s}\"", .{capability.canonicalName()});
                 capability_index += 1;
             }
@@ -312,26 +344,37 @@ pub fn stableId(name: []const u8) u64 {
 }
 
 fn validIdentifier(value: []const u8) bool {
-    if (value.len == 0 or value[0] == '.' or value[value.len - 1] == '.') return false;
+    if (value.len == 0 or value[0] == '.' or value[value.len - 1] == '.') {
+        return false;
+    }
     var previous_dot = false;
     for (value) |byte| {
         if (byte == '.') {
-            if (previous_dot) return false;
+            if (previous_dot) {
+                return false;
+            }
             previous_dot = true;
             continue;
         }
         previous_dot = false;
-        if (!std.ascii.isAlphanumeric(byte) and byte != '_' and byte != '-') return false;
+        if (!std.ascii.isAlphanumeric(byte) and byte != '_' and byte != '-') {
+            return false;
+        }
     }
     return true;
 }
 
 fn validRelativePath(path: []const u8) bool {
-    if (path.len == 0 or std.fs.path.isAbsolute(path)) return false;
+    if (path.len == 0 or std.fs.path.isAbsolute(path)) {
+        return false;
+    }
     var components = std.mem.splitAny(u8, path, "/\\");
     while (components.next()) |component| {
         if (component.len == 0 or std.mem.eql(u8, component, ".") or
-            std.mem.eql(u8, component, "..")) return false;
+            std.mem.eql(u8, component, ".."))
+        {
+            return false;
+        }
     }
     return true;
 }

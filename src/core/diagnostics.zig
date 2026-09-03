@@ -52,7 +52,9 @@ pub const Sink = struct {
     file: if (enabled) ?File else void = if (enabled) null else {},
 
     pub fn init(io: Io, endpoint: []const u8, suffix: []const u8) Sink {
-        if (!enabled) return .{};
+        if (!enabled) {
+            return .{};
+        }
 
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const path = std.fmt.bufPrint(&path_buffer, "{s}.{s}.log", .{ endpoint, suffix }) catch
@@ -65,8 +67,12 @@ pub const Sink = struct {
     }
 
     pub fn deinit(sink: *Sink, io: Io) void {
-        if (!enabled) return;
-        if (sink.file) |file| file.close(io);
+        if (!enabled) {
+            return;
+        }
+        if (sink.file) |file| {
+            file.close(io);
+        }
         sink.file = null;
     }
 
@@ -75,13 +81,17 @@ pub const Sink = struct {
     }
 
     pub fn write(sink: *Sink, io: Io, bytes: []const u8) !void {
-        if (!enabled or sink.file == null) return;
+        if (!enabled or sink.file == null) {
+            return;
+        }
         try sink.file.?.writeStreamingAll(io, bytes);
     }
 };
 
 pub fn now(io: Io) u64 {
-    if (!enabled) return 0;
+    if (!enabled) {
+        return 0;
+    }
     const timestamp = Io.Timestamp.now(io, .awake);
     return @intCast(@max(timestamp.nanoseconds, 0));
 }
@@ -111,13 +121,17 @@ pub const Guard = struct {
     previous: Path,
 
     pub fn restore(guard: Guard) void {
-        if (!enabled) return;
+        if (!enabled) {
+            return;
+        }
         current_path = guard.previous;
     }
 };
 
 pub fn enter(path: Path) Guard {
-    if (!enabled) return .{ .previous = .other };
+    if (!enabled) {
+        return .{ .previous = .other };
+    }
     const previous = current_path;
     current_path = path;
     return .{ .previous = previous };
@@ -127,7 +141,9 @@ pub const TerminalAllocationGuard = struct {
     previous: bool,
 
     pub fn restore(guard: TerminalAllocationGuard) void {
-        if (!enabled) return;
+        if (!enabled) {
+            return;
+        }
         terminal_allocation_scope = guard.previous;
     }
 };
@@ -136,7 +152,9 @@ pub const TerminalAllocationGuard = struct {
 /// preserving their interactive-path total. Debug telemetry can then
 /// distinguish VT state growth from Telar-owned transient allocation.
 pub fn enterTerminalAllocations() TerminalAllocationGuard {
-    if (!enabled) return .{ .previous = false };
+    if (!enabled) {
+        return .{ .previous = false };
+    }
     const previous = terminal_allocation_scope;
     terminal_allocation_scope = true;
     return .{ .previous = previous };
@@ -146,17 +164,23 @@ const Counter = if (enabled) std.atomic.Value(u64) else void;
 const counter_init: Counter = if (enabled) .init(0) else {};
 
 fn add(counter: *Counter, n: u64) void {
-    if (!enabled) return;
+    if (!enabled) {
+        return;
+    }
     _ = counter.fetchAdd(n, .monotonic);
 }
 
 fn sub(counter: *Counter, n: u64) void {
-    if (!enabled) return;
+    if (!enabled) {
+        return;
+    }
     _ = counter.fetchSub(n, .monotonic);
 }
 
 fn load(counter: *const Counter) u64 {
-    if (!enabled) return 0;
+    if (!enabled) {
+        return 0;
+    }
     return counter.load(.monotonic);
 }
 
@@ -198,7 +222,9 @@ pub const Heap = struct {
     }
 
     pub fn allocator(heap: *Heap) Allocator {
-        if (!enabled) return heap.child;
+        if (!enabled) {
+            return heap.child;
+        }
         return .{
             .ptr = heap,
             .vtable = &.{
@@ -248,8 +274,9 @@ pub const Heap = struct {
         add(&heap.live_bytes, delta);
         add(&heap.alloc_bytes, delta);
         add(&heap.path_alloc_bytes[@intFromEnum(current_path)], delta);
-        if (current_path == .interactive and terminal_allocation_scope)
+        if (current_path == .interactive and terminal_allocation_scope) {
             add(&heap.interactive_vt_alloc_bytes, delta);
+        }
     }
 
     fn recordShrink(heap: *Heap, delta: usize) void {
@@ -262,53 +289,41 @@ pub const Heap = struct {
         add(&heap.frees, 1);
     }
 
-    fn alloc(
-        context: *anyopaque,
-        len: usize,
-        alignment: std.mem.Alignment,
-        ret_addr: usize,
-    ) ?[*]u8 {
+    fn alloc(context: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
         const heap: *Heap = @ptrCast(@alignCast(context));
         const result = heap.child.rawAlloc(len, alignment, ret_addr) orelse return null;
         heap.recordAlloc(len);
         return result;
     }
 
-    fn resize(
-        context: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        new_len: usize,
-        ret_addr: usize,
-    ) bool {
+    fn resize(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
         const heap: *Heap = @ptrCast(@alignCast(context));
-        if (!heap.child.rawResize(memory, alignment, new_len, ret_addr)) return false;
-        if (new_len > memory.len) heap.recordGrow(new_len - memory.len);
-        if (new_len < memory.len) heap.recordShrink(memory.len - new_len);
+        if (!heap.child.rawResize(memory, alignment, new_len, ret_addr)) {
+            return false;
+        }
+        if (new_len > memory.len) {
+            heap.recordGrow(new_len - memory.len);
+        }
+        if (new_len < memory.len) {
+            heap.recordShrink(memory.len - new_len);
+        }
         return true;
     }
 
-    fn remap(
-        context: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        new_len: usize,
-        ret_addr: usize,
-    ) ?[*]u8 {
+    fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const heap: *Heap = @ptrCast(@alignCast(context));
         const result = heap.child.rawRemap(memory, alignment, new_len, ret_addr) orelse
             return null;
-        if (new_len > memory.len) heap.recordGrow(new_len - memory.len);
-        if (new_len < memory.len) heap.recordShrink(memory.len - new_len);
+        if (new_len > memory.len) {
+            heap.recordGrow(new_len - memory.len);
+        }
+        if (new_len < memory.len) {
+            heap.recordShrink(memory.len - new_len);
+        }
         return result;
     }
 
-    fn free(
-        context: *anyopaque,
-        memory: []u8,
-        alignment: std.mem.Alignment,
-        ret_addr: usize,
-    ) void {
+    fn free(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
         const heap: *Heap = @ptrCast(@alignCast(context));
         heap.child.rawFree(memory, alignment, ret_addr);
         heap.recordFree(memory.len);
@@ -328,9 +343,14 @@ pub fn rssBytes() u64 {
 fn rssDarwin() u64 {
     if (builtin.os.tag != .macos and builtin.os.tag != .ios and
         builtin.os.tag != .tvos and builtin.os.tag != .watchos and
-        builtin.os.tag != .visionos) return 0;
+        builtin.os.tag != .visionos)
+    {
+        return 0;
+    }
     const task_port = std.c.mach_task_self();
-    if (task_port == std.c.TASK.NULL) return 0;
+    if (task_port == std.c.TASK.NULL) {
+        return 0;
+    }
     var info_count = std.c.TASK.VM.INFO_COUNT;
     var vm_info: std.c.task_vm_info_data_t = undefined;
     if (std.c.task_info(
@@ -338,12 +358,16 @@ fn rssDarwin() u64 {
         std.c.TASK.VM.INFO,
         @ptrCast(&vm_info),
         &info_count,
-    ) != 0) return 0;
+    ) != 0) {
+        return 0;
+    }
     return vm_info.resident_size;
 }
 
 fn rssLinux() u64 {
-    if (builtin.os.tag != .linux) return 0;
+    if (builtin.os.tag != .linux) {
+        return 0;
+    }
     var buffer: [128]u8 = undefined;
     const file = std.fs.openFileAbsolute("/proc/self/statm", .{}) catch return 0;
     defer file.close();
@@ -377,7 +401,9 @@ test "merged timings add counts and keep the worst sample" {
 }
 
 test "heap tracks live bytes and frees them" {
-    if (!enabled) return;
+    if (!enabled) {
+        return;
+    }
     var heap = Heap.init(std.testing.allocator);
     const gpa = heap.allocator();
     const bytes = try gpa.alloc(u8, 32);
@@ -394,7 +420,9 @@ test "heap tracks live bytes and frees them" {
 }
 
 test "heap attributes allocations to the entered path" {
-    if (!enabled) return;
+    if (!enabled) {
+        return;
+    }
     var heap = Heap.init(std.testing.allocator);
     const gpa = heap.allocator();
     {

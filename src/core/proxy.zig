@@ -15,8 +15,12 @@ pub fn orderHostname(left: []const u8, right: []const u8) std.math.Order {
     for (left[0..common_len], right[0..common_len]) |left_byte, right_byte| {
         const left_lower = std.ascii.toLower(left_byte);
         const right_lower = std.ascii.toLower(right_byte);
-        if (left_lower < right_lower) return .lt;
-        if (left_lower > right_lower) return .gt;
+        if (left_lower < right_lower) {
+            return .lt;
+        }
+        if (left_lower > right_lower) {
+            return .gt;
+        }
     }
     return std.math.order(left.len, right.len);
 }

@@ -91,16 +91,17 @@ pub const History = struct {
                 free = slot;
             }
         }
-        if (free) |slot| slot.* = bookmark;
+        if (free) |slot| {
+            slot.* = bookmark;
+        }
     }
 
-    pub fn find(
-        history: *const History,
-        workspace: schema.WorkspaceLocation,
-    ) ?Bookmark {
+    pub fn find(history: *const History, workspace: schema.WorkspaceLocation) ?Bookmark {
         for (history.entries) |slot| {
             const entry = slot orelse continue;
-            if (std.meta.eql(entry.location.workspace, workspace)) return entry;
+            if (std.meta.eql(entry.location.workspace, workspace)) {
+                return entry;
+            }
         }
         return null;
     }

@@ -296,7 +296,9 @@ fn createSharedObject(name: [:0]const u8, pixels: []const u8) !void {
 }
 
 test "shared pane graphics reach the host inside the cell frame" {
-    if (comptime !kitty.supportsSharedMemory()) return error.SkipZigTest;
+    if (comptime !kitty.supportsSharedMemory()) {
+        return error.SkipZigTest;
+    }
 
     var harness: TestHarness = undefined;
     try harness.init();

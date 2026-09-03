@@ -86,13 +86,19 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
 }
 
 pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
-    if (bytes.len == 0) return error.TruncatedWorkerResult;
+    if (bytes.len == 0) {
+        return error.TruncatedWorkerResult;
+    }
     const count = bytes[0];
-    if (count > lua_config.max_callback_effects) return error.TooManyWorkerEffects;
+    if (count > lua_config.max_callback_effects) {
+        return error.TooManyWorkerEffects;
+    }
     var batch: lua_config.EffectBatch = .{};
     var offset: usize = 1;
     for (0..count) |index| {
-        if (offset >= bytes.len) return error.TruncatedWorkerResult;
+        if (offset >= bytes.len) {
+            return error.TruncatedWorkerResult;
+        }
         const tag = bytes[offset];
         offset += 1;
         batch.items[index] = switch (tag) {
@@ -158,7 +164,9 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
             else => return error.UnknownWorkerEffect,
         };
     }
-    if (offset != bytes.len) return error.TrailingWorkerResult;
+    if (offset != bytes.len) {
+        return error.TrailingWorkerResult;
+    }
     batch.len = count;
     return batch;
 }
@@ -176,32 +184,42 @@ fn writeU64(writer: *std.Io.Writer, value: u64) !void {
 }
 
 fn writeSized8(writer: *std.Io.Writer, bytes: []const u8) !void {
-    if (bytes.len > std.math.maxInt(u8)) return error.InvalidWorkerEffect;
+    if (bytes.len > std.math.maxInt(u8)) {
+        return error.InvalidWorkerEffect;
+    }
     try writer.writeByte(@intCast(bytes.len));
     try writer.writeAll(bytes);
 }
 
 fn readU32(bytes: []const u8, offset: *usize) !u32 {
-    if (bytes.len -| offset.* < 4) return error.TruncatedWorkerResult;
+    if (bytes.len -| offset.* < 4) {
+        return error.TruncatedWorkerResult;
+    }
     defer offset.* += 4;
     return std.mem.readInt(u32, bytes[offset.*..][0..4], .little);
 }
 
 fn readU64(bytes: []const u8, offset: *usize) !u64 {
-    if (bytes.len -| offset.* < 8) return error.TruncatedWorkerResult;
+    if (bytes.len -| offset.* < 8) {
+        return error.TruncatedWorkerResult;
+    }
     defer offset.* += 8;
     return std.mem.readInt(u64, bytes[offset.*..][0..8], .little);
 }
 
 fn sized8(bytes: []const u8, offset: *usize) ![]const u8 {
     const len = try byte(bytes, offset);
-    if (bytes.len -| offset.* < len) return error.TruncatedWorkerResult;
+    if (bytes.len -| offset.* < len) {
+        return error.TruncatedWorkerResult;
+    }
     defer offset.* += len;
     return bytes[offset.*..][0..len];
 }
 
 fn byte(bytes: []const u8, offset: *usize) !u8 {
-    if (offset.* >= bytes.len) return error.TruncatedWorkerResult;
+    if (offset.* >= bytes.len) {
+        return error.TruncatedWorkerResult;
+    }
     defer offset.* += 1;
     return bytes[offset.*];
 }

@@ -101,12 +101,16 @@ fn encodeNotificationBody(encoder: *wire.Encoder, notification: Notification) !v
             try encoder.writeInt(u64, id.raw(pane_id));
         },
         .tab => |tab_id| {
-            if (tab_id == .invalid) return error.InvalidTabId;
+            if (tab_id == .invalid) {
+                return error.InvalidTabId;
+            }
             try encoder.writeByte(2);
             try encoder.writeInt(u64, id.raw(tab_id));
         },
         .workspace => |workspace_id| {
-            if (workspace_id == .invalid) return error.InvalidWorkspaceId;
+            if (workspace_id == .invalid) {
+                return error.InvalidWorkspaceId;
+            }
             try encoder.writeByte(3);
             try encoder.writeInt(u64, id.raw(workspace_id));
         },
@@ -118,14 +122,18 @@ fn encodeNotificationBody(encoder: *wire.Encoder, notification: Notification) !v
 fn validateNotification(notification: Notification) !void {
     if (notification.duration_ms < types.min_notification_duration_ms or
         notification.duration_ms > types.max_notification_duration_ms)
+    {
         return error.InvalidNotificationDuration;
+    }
     try validateNotificationText(notification.title, types.max_notification_title_bytes, false);
     try validateNotificationText(notification.message, types.max_notification_message_bytes, true);
 }
 
 fn validateNotificationText(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {
     try validateBytes(bytes, maximum, empty_allowed);
-    if (!std.unicode.utf8ValidateSlice(bytes)) return error.InvalidUtf8;
+    if (!std.unicode.utf8ValidateSlice(bytes)) {
+        return error.InvalidUtf8;
+    }
     for (bytes) |byte| if (byte < 0x20 or byte == 0x7f)
         return error.InvalidNotificationText;
 }

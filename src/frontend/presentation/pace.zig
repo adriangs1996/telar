@@ -203,7 +203,9 @@ const max_kinds = 16;
 /// occurrence, so a resize that happened after three keystrokes is still
 /// applied after them.
 pub fn coalesce(comptime T: type, items: []T, comptime keyOf: fn (T) ?u32) usize {
-    if (items.len < 2) return items.len;
+    if (items.len < 2) {
+        return items.len;
+    }
 
     var seen: [max_kinds]u32 = undefined;
     var seen_len: usize = 0;
@@ -224,7 +226,9 @@ pub fn coalesce(comptime T: type, items: []T, comptime keyOf: fn (T) ?u32) usize
                 while (true) {
                     write -= 1;
                     items[write] = items[i];
-                    if (i == 0) break;
+                    if (i == 0) {
+                        break;
+                    }
                     i -= 1;
                 }
                 break;
@@ -399,7 +403,9 @@ test "a burst is bounded and the frames it skips are counted" {
 
     while (now < 300 * ns_per_ms) : (now += ns_per_ms) {
         absorbed += 1;
-        if (p.waitUntil(now) != null) continue;
+        if (p.waitUntil(now) != null) {
+            continue;
+        }
         p.record(now, null, absorbed);
         absorbed = 0;
         frames += 1;

@@ -57,9 +57,15 @@ pub fn BoundedList(comptime capacity: usize, comptime entry_bytes: usize) type {
         count: u8 = 0,
 
         pub fn append(list: *Self, text: []const u8) ListError!void {
-            if (text.len == 0) return error.EmptyEntry;
-            if (text.len > entry_bytes) return error.EntryTooLong;
-            if (list.count == capacity) return error.TooManyEntries;
+            if (text.len == 0) {
+                return error.EmptyEntry;
+            }
+            if (text.len > entry_bytes) {
+                return error.EntryTooLong;
+            }
+            if (list.count == capacity) {
+                return error.TooManyEntries;
+            }
             @memcpy(list.items[list.count][0..text.len], text);
             list.lens[list.count] = @intCast(text.len);
             list.count += 1;
@@ -73,7 +79,9 @@ pub fn BoundedList(comptime capacity: usize, comptime entry_bytes: usize) type {
         /// case-insensitively.
         pub fn matches(list: *const Self, haystack: []const u8) bool {
             for (0..list.count) |index| {
-                if (containsAsciiInsensitive(haystack, list.get(index))) return true;
+                if (containsAsciiInsensitive(haystack, list.get(index))) {
+                    return true;
+                }
             }
             return false;
         }
@@ -223,8 +231,12 @@ pub const Manifest = struct {
 };
 
 fn copyText(storage: []u8, text: []const u8) TextError!u8 {
-    if (text.len == 0) return error.EmptyText;
-    if (text.len > storage.len) return error.TextTooLong;
+    if (text.len == 0) {
+        return error.EmptyText;
+    }
+    if (text.len > storage.len) {
+        return error.TextTooLong;
+    }
     @memcpy(storage[0..text.len], text);
     return @intCast(text.len);
 }
@@ -244,12 +256,18 @@ pub const Table = struct {
     /// try gemini.process_names.append("gemini");
     /// ```
     pub fn add(table: *Table, name: []const u8) AddError!*Manifest {
-        if (!validName(name)) return error.InvalidName;
+        if (!validName(name)) {
+            return error.InvalidName;
+        }
         if (table.findByName(name)) |existing| {
-            if (isBuiltinProvider(existing.provider)) return existing;
+            if (isBuiltinProvider(existing.provider)) {
+                return existing;
+            }
             return error.DuplicateName;
         }
-        if (table.count == max_agents) return error.TooManyAgents;
+        if (table.count == max_agents) {
+            return error.TooManyAgents;
+        }
 
         const provider: AgentProvider = builtinProvider(name) orelse
             @enumFromInt(first_custom_provider + table.customCount());
@@ -267,14 +285,18 @@ pub const Table = struct {
 
     pub fn find(table: *const Table, provider: AgentProvider) ?*const Manifest {
         for (table.slice()) |*manifest| {
-            if (manifest.provider == provider) return manifest;
+            if (manifest.provider == provider) {
+                return manifest;
+            }
         }
         return null;
     }
 
     pub fn findByName(table: *Table, name: []const u8) ?*Manifest {
         for (table.items[0..table.count]) |*manifest| {
-            if (std.mem.eql(u8, manifest.nameSlice(), name)) return manifest;
+            if (std.mem.eql(u8, manifest.nameSlice(), name)) {
+                return manifest;
+            }
         }
         return null;
     }
@@ -405,7 +427,9 @@ pub const Table = struct {
     pub fn providerFromExecutable(table: *const Table, basename: []const u8) ?AgentProvider {
         for (table.slice()) |*manifest| {
             for (0..manifest.process_names.count) |index| {
-                if (equalExecutableName(basename, manifest.process_names.get(index))) return manifest.provider;
+                if (equalExecutableName(basename, manifest.process_names.get(index))) {
+                    return manifest.provider;
+                }
             }
         }
         return null;
@@ -418,14 +442,18 @@ pub const Table = struct {
     /// ```
     pub fn providerFromPath(table: *const Table, path: []const u8) ?AgentProvider {
         for (table.slice()) |*manifest| {
-            if (manifest.process_paths.matches(path)) return manifest.provider;
+            if (manifest.process_paths.matches(path)) {
+                return manifest.provider;
+            }
         }
         return null;
     }
 
     fn inferProvider(table: *const Table, text: []const u8) AgentProvider {
         for (table.slice()) |*manifest| {
-            if (manifest.brand.matches(text)) return manifest.provider;
+            if (manifest.brand.matches(text)) {
+                return manifest.provider;
+            }
         }
         return .unknown;
     }
@@ -433,7 +461,9 @@ pub const Table = struct {
     fn customCount(table: *const Table) u8 {
         var count: u8 = 0;
         for (table.slice()) |*manifest| {
-            if (@intFromEnum(manifest.provider) >= first_custom_provider) count += 1;
+            if (@intFromEnum(manifest.provider) >= first_custom_provider) {
+                count += 1;
+            }
         }
         return count;
     }
@@ -453,9 +483,15 @@ pub fn isBuiltinProvider(provider: AgentProvider) bool {
 }
 
 fn builtinProvider(name: []const u8) ?AgentProvider {
-    if (std.mem.eql(u8, name, "claude")) return .claude;
-    if (std.mem.eql(u8, name, "codex")) return .codex;
-    if (std.mem.eql(u8, name, "pi")) return .pi;
+    if (std.mem.eql(u8, name, "claude")) {
+        return .claude;
+    }
+    if (std.mem.eql(u8, name, "codex")) {
+        return .codex;
+    }
+    if (std.mem.eql(u8, name, "pi")) {
+        return .pi;
+    }
     return null;
 }
 
@@ -528,10 +564,14 @@ fn buildBuiltin() Table {
 }
 
 fn validName(name: []const u8) bool {
-    if (name.len == 0 or name.len > max_name_bytes) return false;
+    if (name.len == 0 or name.len > max_name_bytes) {
+        return false;
+    }
     for (name) |byte| {
         const ok = std.ascii.isAlphanumeric(byte) or byte == '-' or byte == '_' or byte == '.';
-        if (!ok or std.ascii.isUpper(byte)) return false;
+        if (!ok or std.ascii.isUpper(byte)) {
+            return false;
+        }
     }
     return true;
 }
@@ -550,16 +590,22 @@ pub fn equalExecutableName(actual: []const u8, expected: []const u8) bool {
 }
 
 pub fn containsAsciiInsensitive(haystack: []const u8, needle: []const u8) bool {
-    if (needle.len == 0 or needle.len > haystack.len) return false;
+    if (needle.len == 0 or needle.len > haystack.len) {
+        return false;
+    }
     var index: usize = 0;
     while (index + needle.len <= haystack.len) : (index += 1) {
-        if (std.ascii.eqlIgnoreCase(haystack[index .. index + needle.len], needle)) return true;
+        if (std.ascii.eqlIgnoreCase(haystack[index .. index + needle.len], needle)) {
+            return true;
+        }
     }
     return false;
 }
 
 fn endsWithAsciiInsensitive(haystack: []const u8, suffix: []const u8) bool {
-    if (suffix.len > haystack.len) return false;
+    if (suffix.len > haystack.len) {
+        return false;
+    }
     return std.ascii.eqlIgnoreCase(haystack[haystack.len - suffix.len ..], suffix);
 }
 

@@ -18,9 +18,10 @@ const Processor = struct {
         defer file.deinit();
 
         if (self.fix) {
-            if (try codestyle.fixSource(self.allocator, file.source)) |fixed| {
-                defer self.allocator.free(fixed);
+            const result = try codestyle.fixSource(self.allocator, file.source);
 
+            if (result) |fixed| {
+                defer self.allocator.free(fixed);
                 try file.replace(self.io, fixed);
                 self.reporter.recordFixed();
                 try self.analyze(path, fixed);

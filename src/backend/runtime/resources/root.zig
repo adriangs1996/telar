@@ -149,7 +149,9 @@ pub const Resources = struct {
     /// resources.deinitUnstarted();
     /// ```
     pub fn deinitUnstarted(resources: *Resources) void {
-        if (resources.engine) |*engine| engine.deinit();
+        if (resources.engine) |*engine| {
+            engine.deinit();
+        }
         resources.proxy.deinit();
         resources.plugins.deinit();
         resources.history.deinit();

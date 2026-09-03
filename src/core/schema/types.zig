@@ -58,9 +58,13 @@ pub const TerminalSize = struct {
     cell_height_px: u16 = 0,
 
     pub fn validate(size: TerminalSize) !void {
-        if (size.cols == 0 or size.rows == 0) return error.InvalidTerminalSize;
+        if (size.cols == 0 or size.rows == 0) {
+            return error.InvalidTerminalSize;
+        }
         const cells = @as(u32, size.cols) * @as(u32, size.rows);
-        if (cells > frame.max_cell_count) return error.ScreenTooLarge;
+        if (cells > frame.max_cell_count) {
+            return error.ScreenTooLarge;
+        }
     }
 };
 

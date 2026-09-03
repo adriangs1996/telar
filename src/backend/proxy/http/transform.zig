@@ -67,7 +67,9 @@ pub fn decide(input: Input) Decision {
         .is_response = is_response,
         .response_to_head = response_to_head,
     }) orelse return .preserve;
-    if (!compatible(original_head, transformed)) return .preserve;
+    if (!compatible(original_head, transformed)) {
+        return .preserve;
+    }
 
     transformed.classification = original_head.classification;
     return .{ .replace = .{ .head = transformed, .len = len } };
@@ -91,14 +93,18 @@ fn parseHeaders(bytes: []const u8, is_response: bool, headers: *middleware.Heade
     } else {
         const method_end = std.mem.indexOfScalar(u8, start_line, ' ') orelse return null;
         const version_start = std.mem.lastIndexOfScalar(u8, start_line, ' ') orelse return null;
-        if (method_end == version_start) return null;
+        if (method_end == version_start) {
+            return null;
+        }
         headers.append(.{ .name = ":method", .value = start_line[0..method_end] }) catch return null;
         headers.append(.{ .name = ":path", .value = start_line[method_end + 1 .. version_start] }) catch return null;
     }
 
     var lines = std.mem.splitSequence(u8, bytes[first_line_end + 2 ..], "\r\n");
     while (lines.next()) |line| {
-        if (line.len == 0) break;
+        if (line.len == 0) {
+            break;
+        }
         const colon = std.mem.indexOfScalar(u8, line, ':') orelse return null;
         const name = std.mem.trim(u8, line[0..colon], " \t");
         const value = std.mem.trim(u8, line[colon + 1 ..], " \t");
@@ -120,7 +126,9 @@ fn encodeHead(encoding: Encoding) ?usize {
             start_line.len;
         const status = headers.find(":status") orelse return null;
         const status_code = std.fmt.parseInt(u16, status, 10) catch return null;
-        if (status.len != 3 or status_code < 100 or status_code > 599) return null;
+        if (status.len != 3 or status_code < 100 or status_code > 599) {
+            return null;
+        }
         append(output, &len, start_line[0..version_end]) orelse return null;
         append(output, &len, " ") orelse return null;
         append(output, &len, status) orelse return null;
@@ -130,9 +138,15 @@ fn encodeHead(encoding: Encoding) ?usize {
         const method = headers.find(":method") orelse return null;
         const target = headers.find(":path") orelse return null;
         if (!validMethod(method) or target.len == 0 or
-            std.mem.indexOfAny(u8, target, " \t") != null) return null;
+            std.mem.indexOfAny(u8, target, " \t") != null)
+        {
+            return null;
+        }
         if (std.mem.eql(u8, start_line[version_start + 1 ..], "HTTP/1.1") and
-            !hasOneNonemptyHeader(headers, "host")) return null;
+            !hasOneNonemptyHeader(headers, "host"))
+        {
+            return null;
+        }
         append(output, &len, method) orelse return null;
         append(output, &len, " ") orelse return null;
         append(output, &len, target) orelse return null;
@@ -141,7 +155,9 @@ fn encodeHead(encoding: Encoding) ?usize {
 
     append(output, &len, "\r\n") orelse return null;
     for (headers.fields[0..headers.len]) |field| {
-        if (headers.name(field)[0] == ':') continue;
+        if (headers.name(field)[0] == ':') {
+            continue;
+        }
         append(output, &len, headers.name(field)) orelse return null;
         append(output, &len, ": ") orelse return null;
         append(output, &len, headers.value(field)) orelse return null;
@@ -154,15 +170,21 @@ fn encodeHead(encoding: Encoding) ?usize {
 fn hasOneNonemptyHeader(headers: *const middleware.Headers, wanted: []const u8) bool {
     var count: usize = 0;
     for (headers.fields[0..headers.len]) |field| {
-        if (!std.ascii.eqlIgnoreCase(headers.name(field), wanted)) continue;
-        if (headers.value(field).len == 0) return false;
+        if (!std.ascii.eqlIgnoreCase(headers.name(field), wanted)) {
+            continue;
+        }
+        if (headers.value(field).len == 0) {
+            return false;
+        }
         count += 1;
     }
     return count == 1;
 }
 
 fn validMethod(method: []const u8) bool {
-    if (method.len == 0) return false;
+    if (method.len == 0) {
+        return false;
+    }
     for (method) |byte| if (!std.ascii.isAlphanumeric(byte) and
         byte != '!' and byte != '#' and byte != '$' and byte != '%' and
         byte != '&' and byte != '\'' and byte != '*' and byte != '+' and
@@ -172,7 +194,9 @@ fn validMethod(method: []const u8) bool {
 }
 
 fn append(output: []u8, len: *usize, bytes: []const u8) ?void {
-    if (bytes.len > output.len - len.*) return null;
+    if (bytes.len > output.len - len.*) {
+        return null;
+    }
     @memcpy(output[len.*..][0..bytes.len], bytes);
     len.* += bytes.len;
 }

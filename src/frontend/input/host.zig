@@ -210,9 +210,13 @@ fn encodeLegacyCharacter(writer: *std.Io.Writer, char: term.Event.Char, key: Key
 
 pub fn encodePaste(buffer: []u8, text: []const u8, modes: Modes) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
-    if (modes.bracketed_paste) try writer.writeAll("\x1b[200~");
+    if (modes.bracketed_paste) {
+        try writer.writeAll("\x1b[200~");
+    }
     try writer.writeAll(text);
-    if (modes.bracketed_paste) try writer.writeAll("\x1b[201~");
+    if (modes.bracketed_paste) {
+        try writer.writeAll("\x1b[201~");
+    }
     return writer.buffered();
 }
 
@@ -244,7 +248,9 @@ fn encodeNumbered(writer: *std.Io.Writer, number: u8, encoding: Encoding) !void 
 }
 
 fn withAlt(writer: *std.Io.Writer, alt: bool, bytes: []const u8) !void {
-    if (alt) try writer.writeByte(0x1b);
+    if (alt) {
+        try writer.writeByte(0x1b);
+    }
     try writer.writeAll(bytes);
 }
 

@@ -38,7 +38,9 @@ pub const ReportAgentHandler = struct {
     /// ```
     pub fn execute(handler: *ReportAgentHandler, command: ReportAgent) ReportAgentResult {
         const pane = handler.panes.resolveConst(command.pane) orelse return .{ .outcome = .pane_not_found };
-        if (pane.exit != null) return .{ .outcome = .pane_not_found };
+        if (pane.exit != null) {
+            return .{ .outcome = .pane_not_found };
+        }
         const session: ?agent_mod.SessionReference = if (command.session.len == 0)
             null
         else

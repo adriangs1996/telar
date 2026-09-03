@@ -78,9 +78,11 @@ pub const Sync = struct {
         if (sync.transfer) |transfer| {
             sync.gpa.free(transfer.pixels);
             sync.pane.media_allocator.releaseManual(transfer.reserved_len);
-            if (transfer.shared_name) |name| if (!transfer.metadata_sent) {
-                _ = std.c.shm_unlink(name.sliceZ());
-            };
+            if (transfer.shared_name) |name| {
+                if (!transfer.metadata_sent) {
+                    _ = std.c.shm_unlink(name.sliceZ());
+                }
+            }
         }
         sync.transfer = null;
     }

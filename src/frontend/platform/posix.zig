@@ -98,7 +98,9 @@ pub const Tty = struct {
         // A terminal that will not answer is not a reason to abort. Eighty by
         // twenty-four is what every terminal since 1978 has defaulted to, and
         // a wrong size draws a wrong frame where a crash draws nothing.
-        if (std.c.ioctl(t.fd, TIOCGWINSZ, &ws) != 0) return .{ .cols = 80, .rows = 24 };
+        if (std.c.ioctl(t.fd, TIOCGWINSZ, &ws) != 0) {
+            return .{ .cols = 80, .rows = 24 };
+        }
         return .{
             .cols = ws.col,
             .rows = ws.row,
@@ -178,7 +180,9 @@ pub fn installCrashRestore(t: *const Tty) void {
 /// already ran it.
 pub fn emergencyRestore() void {
     const state = crash_restore;
-    if (state.fd < 0) return;
+    if (state.fd < 0) {
+        return;
+    }
     _ = std.c.write(state.fd, state.leave.ptr, state.leave.len);
     std.posix.tcsetattr(state.fd, .FLUSH, state.original) catch {};
 }
@@ -231,14 +235,18 @@ test "emergency restore is armed, idempotent, and disarmable" {
 var wake: [2]std.c.fd_t = .{ -1, -1 };
 
 fn onWinch(_: std.posix.SIG) callconv(.c) void {
-    if (wake[1] >= 0) _ = std.c.write(wake[1], "!", 1);
+    if (wake[1] >= 0) {
+        _ = std.c.write(wake[1], "!", 1);
+    }
 }
 
 pub const ResizeWatcher = struct {
     read_end: File,
 
     pub fn init(_: *Tty) !ResizeWatcher {
-        if (std.c.pipe(&wake) != 0) return error.PipeFailed;
+        if (std.c.pipe(&wake) != 0) {
+            return error.PipeFailed;
+        }
         var action: std.posix.Sigaction = .{
             .handler = .{ .handler = onWinch },
             .mask = std.posix.sigemptyset(),

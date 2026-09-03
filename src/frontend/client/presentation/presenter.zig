@@ -330,6 +330,8 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         projection.version.pane_metadata;
     const pane_foreground_changed = presenter.presented_model_version.pane_foreground !=
         projection.version.pane_foreground;
+    const pane_progress_changed = presenter.presented_model_version.pane_progress !=
+        projection.version.pane_progress;
     const pane_graphics_changed = presenter.presented_model_version.pane_graphics !=
         projection.version.pane_graphics;
     const chrome_changed = presenter.presented_model_version.chrome !=
@@ -361,6 +363,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         workspace_list_changed or agents_changed or sidebar_animation_changed or
         proxy_status_changed or system_metrics_changed or bars_changed or notifications_changed or tabs_changed or
         active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or
+        pane_progress_changed or
         prompt_changed or history_changed or suggestion_changed or copy_status_changed or
         view_interaction_changed or input_routing_changed)
     {
@@ -475,7 +478,9 @@ pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Re
 }
 
 fn notePaneGraphics(presenter: *Presenter, graphics_stats: kitty.KittyGraphicsWriter.Stats) void {
-    if (comptime !diagnostics.enabled) return;
+    if (comptime !diagnostics.enabled) {
+        return;
+    }
     presenter.metrics.pane_shared_images += graphics_stats.shared_images;
     presenter.metrics.pane_inline_images += graphics_stats.inline_images;
     presenter.metrics.pane_compressed_images += graphics_stats.compressed_images;
@@ -494,8 +499,12 @@ fn notePaneGraphics(presenter: *Presenter, graphics_stats: kitty.KittyGraphicsWr
 /// chunked transfer owns the graphics stream, so the frame stays clean until
 /// the bulk pass closes it.
 fn controlGraphicsReady(projection: Projection, resources: Resources) bool {
-    if (projection.host_capabilities.kitty_graphics != .supported) return false;
-    if (!resources.graphics_store.damage or resources.graphics_store.partial != null) return false;
+    if (projection.host_capabilities.kitty_graphics != .supported) {
+        return false;
+    }
+    if (!resources.graphics_store.damage or resources.graphics_store.partial != null) {
+        return false;
+    }
     const view = resources.view;
     return !view.kittyAttachments().transferInProgress() and
         !view.kittyModal().transferInProgress() and
@@ -573,6 +582,7 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
             .palette = input.resources.view.palette(),
             .copy = input.projection.copy,
             .bottom_reservation = input.resources.view.attachmentReservation(),
+            .progress_animation_frame = input.projection.sidebar_animation_frame,
             .force = input.force,
         },
     });

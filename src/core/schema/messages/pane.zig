@@ -66,7 +66,9 @@ pub const FrameAck = struct {
     frame_id: u64,
 
     pub fn validateWire(message: FrameAck) !void {
-        if (message.frame_id == 0) return error.InvalidFrameId;
+        if (message.frame_id == 0) {
+            return error.InvalidFrameId;
+        }
     }
 };
 
@@ -114,7 +116,9 @@ pub const ReadPane = struct {
     source: PaneTextSource,
 
     pub fn validateWire(message: ReadPane) !void {
-        if (message.rows == 0 or message.rows > types.max_pane_text_rows) return error.InvalidPaneTextRows;
+        if (message.rows == 0 or message.rows > types.max_pane_text_rows) {
+            return error.InvalidPaneTextRows;
+        }
     }
 };
 
@@ -161,7 +165,9 @@ pub const SearchMatchIterator = struct {
     remaining: u16,
 
     pub fn next(iterator: *SearchMatchIterator) !?SearchMatch {
-        if (iterator.remaining == 0) return null;
+        if (iterator.remaining == 0) {
+            return null;
+        }
         iterator.remaining -= 1;
         return .{
             .x = try iterator.decoder.readInt(u16),
@@ -220,6 +226,43 @@ pub const PaneForeground = struct {
     name: []const u8,
 };
 
+pub const PaneProgressState = enum(u8) {
+    remove,
+    set,
+    @"error",
+    indeterminate,
+    pause,
+};
+
+pub const PaneProgress = struct {
+    pane_id: PaneId,
+    state: PaneProgressState,
+    percent: ?u8 = null,
+
+    /// Rejects state and percentage combinations that have no protocol meaning.
+    ///
+    /// ```zig
+    /// try progress.validateWire();
+    /// ```
+    pub fn validateWire(message: PaneProgress) !void {
+        if (message.percent) |percent| {
+            if (percent > 100) {
+                return error.InvalidProgressPercent;
+            }
+        }
+
+        switch (message.state) {
+            .remove, .indeterminate => if (message.percent != null) {
+                return error.UnexpectedProgressPercent;
+            },
+            .set => if (message.percent == null) {
+                return error.MissingProgressPercent;
+            },
+            .@"error", .pause => {},
+        }
+    }
+};
+
 pub const PaneClipboard = struct {
     pane_id: PaneId,
     bytes: []const u8,
@@ -240,19 +283,27 @@ pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
         },
         .pane => |pane_id| {
             try validatePaneId(pane_id);
-            if (message.launch != null) return error.UnexpectedLaunch;
+            if (message.launch != null) {
+                return error.UnexpectedLaunch;
+            }
             try encoder.writeByte(1);
             try encoder.writeInt(u64, id.raw(pane_id));
         },
         .workspace => |workspace_id| {
-            if (workspace_id == .invalid) return error.InvalidWorkspaceId;
-            if (message.launch != null) return error.UnexpectedLaunch;
+            if (workspace_id == .invalid) {
+                return error.InvalidWorkspaceId;
+            }
+            if (message.launch != null) {
+                return error.UnexpectedLaunch;
+            }
             try encoder.writeByte(2);
             try encoder.writeInt(u64, id.raw(workspace_id));
         },
     }
     try encodeSize(&encoder, message.size);
-    if (default_launch) |launch| try launch_mod.encodeLaunch(&encoder, launch);
+    if (default_launch) |launch| {
+        try launch_mod.encodeLaunch(&encoder, launch);
+    }
     return encoder.finish();
 }
 
@@ -281,8 +332,9 @@ pub fn decodeOpenPane(decoder: *wire.Decoder) !OpenPaneView {
 
 pub fn encodePaneInput(buffer: []u8, message: PaneInput) ![]const u8 {
     try validatePaneId(message.pane_id);
-    if (message.bytes.len == 0 or message.bytes.len > types.max_input_bytes)
+    if (message.bytes.len == 0 or message.bytes.len > types.max_input_bytes) {
         return error.InvalidInputLength;
+    }
 
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ClientTag.pane_input));
@@ -294,7 +346,9 @@ pub fn encodePaneInput(buffer: []u8, message: PaneInput) ![]const u8 {
 pub fn decodePaneInput(decoder: *wire.Decoder) !PaneInput {
     const pane_id = try id.pane(try decoder.readInt(u64));
     const bytes = try decoder.readBytes(decoder.bytes.len - decoder.index);
-    if (bytes.len == 0 or bytes.len > types.max_input_bytes) return error.InvalidInputLength;
+    if (bytes.len == 0 or bytes.len > types.max_input_bytes) {
+        return error.InvalidInputLength;
+    }
     return .{ .pane_id = pane_id, .bytes = bytes };
 }
 
@@ -387,7 +441,9 @@ pub fn encodeSearchPane(buffer: []u8, message: SearchPane) ![]const u8 {
     try validateRequestId(message.request_id);
     try validatePaneId(message.pane_id);
     try validateBytes(message.needle, types.max_search_needle_bytes, false);
-    if (!std.unicode.utf8ValidateSlice(message.needle)) return error.InvalidUtf8;
+    if (!std.unicode.utf8ValidateSlice(message.needle)) {
+        return error.InvalidUtf8;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ClientTag.search_pane));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -401,14 +457,18 @@ pub fn decodeSearchPane(decoder: *wire.Decoder) !SearchPane {
     const pane_id = try id.pane(try decoder.readInt(u64));
     const needle = try decoder.readSized16();
     try validateBytes(needle, types.max_search_needle_bytes, false);
-    if (!std.unicode.utf8ValidateSlice(needle)) return error.InvalidUtf8;
+    if (!std.unicode.utf8ValidateSlice(needle)) {
+        return error.InvalidUtf8;
+    }
     return .{ .request_id = request_id, .pane_id = pane_id, .needle = needle };
 }
 
 pub fn encodePaneMatches(buffer: []u8, message: PaneMatches) ![]const u8 {
     try validateRequestId(message.request_id);
     try validatePaneId(message.pane_id);
-    if (message.matches.len > types.max_search_matches) return error.TooManySearchMatches;
+    if (message.matches.len > types.max_search_matches) {
+        return error.TooManySearchMatches;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.pane_matches));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -416,7 +476,9 @@ pub fn encodePaneMatches(buffer: []u8, message: PaneMatches) ![]const u8 {
     try encoder.writeByte(@intFromBool(message.truncated));
     try encoder.writeInt(u16, @intCast(message.matches.len));
     for (message.matches) |match| {
-        if (match.len == 0) return error.InvalidSearchMatch;
+        if (match.len == 0) {
+            return error.InvalidSearchMatch;
+        }
         try encoder.writeInt(u16, match.x);
         try encoder.writeInt(u32, match.y);
         try encoder.writeInt(u16, match.len);
@@ -429,12 +491,16 @@ pub fn decodePaneMatches(decoder: *wire.Decoder) !PaneMatchesView {
     const pane_id = try id.pane(try decoder.readInt(u64));
     const truncated = try decoder.readBool();
     const match_count = try decoder.readInt(u16);
-    if (match_count > types.max_search_matches) return error.TooManySearchMatches;
+    if (match_count > types.max_search_matches) {
+        return error.TooManySearchMatches;
+    }
     const start = decoder.index;
     for (0..match_count) |_| {
         _ = try decoder.readInt(u16);
         _ = try decoder.readInt(u32);
-        if (try decoder.readInt(u16) == 0) return error.InvalidSearchMatch;
+        if (try decoder.readInt(u16) == 0) {
+            return error.InvalidSearchMatch;
+        }
     }
     return .{
         .request_id = request_id,
@@ -448,7 +514,9 @@ pub fn decodePaneMatches(decoder: *wire.Decoder) !PaneMatchesView {
 pub fn encodePaneText(buffer: []u8, message: PaneText) ![]const u8 {
     try validateRequestId(message.request_id);
     try validatePaneId(message.pane_id);
-    if (message.text.len > types.max_pane_text_bytes) return error.InvalidByteString;
+    if (message.text.len > types.max_pane_text_bytes) {
+        return error.InvalidByteString;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.pane_text));
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -463,7 +531,9 @@ pub fn decodePaneText(decoder: *wire.Decoder) !PaneText {
     const pane_id = try id.pane(try decoder.readInt(u64));
     const truncated = try decoder.readBool();
     const text = try decoder.readSized32();
-    if (text.len > types.max_pane_text_bytes) return error.InvalidByteString;
+    if (text.len > types.max_pane_text_bytes) {
+        return error.InvalidByteString;
+    }
     return .{
         .request_id = request_id,
         .pane_id = pane_id,
@@ -511,7 +581,9 @@ pub fn encodePaneFrame(buffer: []u8, message: frame.Frame) ![]const u8 {
 
 pub fn encodePaneClipboard(buffer: []u8, message: PaneClipboard) ![]const u8 {
     try validatePaneId(message.pane_id);
-    if (message.bytes.len > max_clipboard_bytes) return error.ClipboardTooLarge;
+    if (message.bytes.len > max_clipboard_bytes) {
+        return error.ClipboardTooLarge;
+    }
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(ServerTag.pane_clipboard));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -524,7 +596,9 @@ pub fn decodePaneClipboard(decoder: *wire.Decoder) !PaneClipboard {
         .pane_id = try id.pane(try decoder.readInt(u64)),
         .bytes = try decoder.readSized32(),
     };
-    if (clipboard.bytes.len > max_clipboard_bytes) return error.ClipboardTooLarge;
+    if (clipboard.bytes.len > max_clipboard_bytes) {
+        return error.ClipboardTooLarge;
+    }
     return clipboard;
 }
 
@@ -564,4 +638,36 @@ pub fn decodePaneForeground(decoder: *wire.Decoder) !PaneForeground {
     const name = try decoder.readSized16();
     try validateBytes(name, types.max_foreground_name_bytes, false);
     return .{ .pane_id = pane_id, .name = name };
+}
+
+pub fn encodePaneProgress(buffer: []u8, message: PaneProgress) ![]const u8 {
+    try validatePaneId(message.pane_id);
+    try message.validateWire();
+
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ServerTag.pane_progress));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeByte(@intFromEnum(message.state));
+    try encoder.writeByte(message.percent orelse 255);
+    return encoder.finish();
+}
+
+pub fn decodePaneProgress(decoder: *wire.Decoder) !PaneProgress {
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const state: PaneProgressState = switch (try decoder.readByte()) {
+        0 => .remove,
+        1 => .set,
+        2 => .@"error",
+        3 => .indeterminate,
+        4 => .pause,
+        else => return error.InvalidProgressState,
+    };
+    const encoded_percent = try decoder.readByte();
+    const message: PaneProgress = .{
+        .pane_id = pane_id,
+        .state = state,
+        .percent = if (encoded_percent == 255) null else encoded_percent,
+    };
+    try message.validateWire();
+    return message;
 }

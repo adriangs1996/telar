@@ -25,7 +25,9 @@ pub const Rect = struct {
     /// a rectangle too small to shrink becomes empty, which draws as nothing.
     pub fn inner(r: Rect, margin: u16) Rect {
         const shrink = @as(u32, margin) * 2;
-        if (r.w <= shrink or r.h <= shrink) return .{ .x = r.x, .y = r.y };
+        if (r.w <= shrink or r.h <= shrink) {
+            return .{ .x = r.x, .y = r.y };
+        }
         return .{
             .x = r.x +| margin,
             .y = r.y +| margin,
@@ -71,7 +73,9 @@ pub const Rect = struct {
         const y = @max(a.y, b.y);
         const right = @min(@as(u32, a.x) + a.w, @as(u32, b.x) + b.w);
         const bottom = @min(@as(u32, a.y) + a.h, @as(u32, b.y) + b.h);
-        if (right <= x or bottom <= y) return .{ .x = x, .y = y };
+        if (right <= x or bottom <= y) {
+            return .{ .x = x, .y = y };
+        }
         // The overlap starts at a u16 corner and each edge is bounded by one
         // input's width, so the differences fit u16 again.
         return .{
@@ -87,7 +91,9 @@ pub const Rect = struct {
     }
 
     pub fn row(r: Rect, index: u16) Rect {
-        if (index >= r.h) return .{ .x = r.x, .y = r.y };
+        if (index >= r.h) {
+            return .{ .x = r.x, .y = r.y };
+        }
         return .{ .x = r.x, .y = r.y +| index, .w = r.w, .h = 1 };
     }
 };

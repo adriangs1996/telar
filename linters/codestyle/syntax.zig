@@ -86,6 +86,32 @@ pub fn statementIfNodes(allocator: Allocator, tree: *const Ast) ![]Ast.Node.Inde
     return nodes.toOwnedSlice(allocator);
 }
 
+/// Tells whether an expression, once placed inside a block, is a statement that
+/// Zig terminates with its closing brace instead of a semicolon.
+///
+/// ```zig
+/// if (endsWithBlock(&tree, branch)) {}
+/// ```
+pub fn endsWithBlock(tree: *const Ast, node: Ast.Node.Index) bool {
+    return switch (tree.nodeTag(node)) {
+        .block, .block_semicolon, .block_two, .block_two_semicolon, .@"switch", .switch_comma => true,
+        .if_simple, .@"if" => blk: {
+            const conditional = tree.fullIf(node).?;
+            break :blk endsWithBlock(tree, conditional.ast.else_expr.unwrap() orelse conditional.ast.then_expr);
+        },
+        .while_simple, .while_cont, .@"while" => blk: {
+            const loop = tree.fullWhile(node).?;
+            break :blk endsWithBlock(tree, loop.ast.else_expr.unwrap() orelse loop.ast.then_expr);
+        },
+        .for_simple, .@"for" => blk: {
+            const loop = tree.fullFor(node).?;
+            break :blk endsWithBlock(tree, loop.ast.else_expr.unwrap() orelse loop.ast.then_expr);
+        },
+        .@"comptime", .@"nosuspend", .@"suspend" => endsWithBlock(tree, tree.nodeData(node).node),
+        else => false,
+    };
+}
+
 fn isIf(tag: Ast.Node.Tag) bool {
     return tag == .if_simple or tag == .@"if";
 }
@@ -107,4 +133,29 @@ test "classifies statement if chains without classifying if expressions" {
     defer std.testing.allocator.free(nodes);
 
     try std.testing.expectEqual(@as(usize, 3), nodes.len);
+}
+
+test "recognizes branch expressions that end with a block" {
+    const source: [:0]const u8 =
+        \\fn run(value: bool, items: []const u8) void {
+        \\    if (value) switch (value) { else => {} };
+        \\    if (value) for (items) |item| _ = item;
+        \\    if (value) for (items) |_| {};
+        \\    if (value) while (value) {} else return;
+        \\    if (value) return;
+        \\}
+    ;
+    var tree = try Ast.parse(std.testing.allocator, source, .zig);
+    defer tree.deinit(std.testing.allocator);
+
+    const nodes = try statementIfNodes(std.testing.allocator, &tree);
+    defer std.testing.allocator.free(nodes);
+
+    const expected = [_]bool{ true, false, true, false, false };
+    try std.testing.expectEqual(expected.len, nodes.len);
+
+    for (nodes, expected) |node, ends_with_block| {
+        const branch = tree.fullIf(node).?.ast.then_expr;
+        try std.testing.expectEqual(ends_with_block, endsWithBlock(&tree, branch));
+    }
 }

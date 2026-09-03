@@ -737,6 +737,9 @@ pub const Pane = struct {
     history_observer: history.observer.Observer,
     agent_process_cache: agent_process.Cache = .{},
     foreground_revision: u64 = 1,
+    progress_state: schema.PaneProgressState = .remove,
+    progress_percent: ?u8 = null,
+    progress_revision: u64 = 1,
     history_session_id: history.SessionId,
     started_at_ms: i64,
     history_sequence: u64 = 0,
@@ -827,6 +830,7 @@ pub const Pane = struct {
         handler.apc_handler.enable(.kitty, false);
         handler.effects.write_pty = Pane.writePty;
         handler.effects.size = Pane.reportSize;
+        handler.effects.progress_report = Pane.reportProgress;
         pane.stream = vt.TerminalStream.init(.{
             .allocator = gpa,
             .handler = handler,
@@ -1781,13 +1785,15 @@ pub const Pane = struct {
 
         const chunk_limit_exceeded = pane.kitty_loading_chunks > pane.graphics_limits.chunks_per_image;
         const loading = storage.loading orelse {
-            if (chunk_limit_exceeded) if (previous_loading_id) |image_id| {
-                storage.delete(io, pane.media_allocator.allocator(), &pane.media.terminal, .{ .id = .{
-                    .delete = true,
-                    .image_id = image_id,
-                } });
-                pane.queueGraphicsLimitResponse(image_id);
-            };
+            if (chunk_limit_exceeded) {
+                if (previous_loading_id) |image_id| {
+                    storage.delete(io, pane.media_allocator.allocator(), &pane.media.terminal, .{ .id = .{
+                        .delete = true,
+                        .image_id = image_id,
+                    } });
+                    pane.queueGraphicsLimitResponse(image_id);
+                }
+            }
             pane.kitty_loading_chunks = 0;
             return;
         };
@@ -1830,6 +1836,28 @@ pub const Pane = struct {
         const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
         const pane: *Pane = @fieldParentPtr("stream", stream);
         _ = pane.pty_responses.push(response);
+    }
+
+    pub fn reportProgress(handler: *vt.TerminalStream.Handler, report: vt.osc.Command.ProgressReport) void {
+        const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
+        const pane: *Pane = @fieldParentPtr("stream", stream);
+        const state: schema.PaneProgressState = switch (report.state) {
+            .remove => .remove,
+            .set => .set,
+            .@"error" => .@"error",
+            .indeterminate => .indeterminate,
+            .pause => .pause,
+        };
+        if (pane.progress_state == state and pane.progress_percent == report.progress) {
+            return;
+        }
+
+        pane.progress_state = state;
+        pane.progress_percent = report.progress;
+        pane.progress_revision +%= 1;
+        if (pane.progress_revision == 0) {
+            pane.progress_revision = 1;
+        }
     }
 
     pub fn writeMediaPty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) void {
@@ -2593,6 +2621,48 @@ test "pane keeps launch cwd separate from workspace path" {
     }
     try std.testing.expectEqualStrings("/", pane.cwd.slice());
     try std.testing.expectEqualStrings("/work/telar", pane.workspace_path);
+}
+
+test "pane retains OSC 9 progress without painting it into terminal cells" {
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
+    var history_service = try history.Service.init(gpa, .{ .database_path = ":memory:" });
+    defer history_service.deinit(io);
+    const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
+    const command = try pty.Command.fromArgv(&argv);
+    var budget = GraphicsBudget.init(core.graphics.max_image_bytes_global);
+    const pane = try Pane.create(.{
+        .io = io,
+        .gpa = gpa,
+        .history_service = &history_service,
+        .graphics_budget = &budget,
+    }, .{
+        .identity = .{ .id = @enumFromInt(1), .generation = 1 },
+        .location = .{
+            .workspace = .{ .workspace = @enumFromInt(1) },
+            .tab_id = @enumFromInt(1),
+        },
+        .command = &command,
+        .launch_cwd = "/",
+        .workspace_path = "/work/telar",
+        .size = .{ .cols = 20, .rows = 5 },
+        .graphics_limits = .{},
+    });
+    defer {
+        pane.session.shutdown();
+        pane.destroy();
+    }
+
+    const initial_revision = pane.progress_revision;
+    _ = try pane.ingest(io, "\x1b]9;4;1;42\x1b\\");
+
+    try std.testing.expectEqual(schema.PaneProgressState.set, pane.progress_state);
+    try std.testing.expectEqual(@as(?u8, 42), pane.progress_percent);
+    try std.testing.expectEqual(initial_revision + 1, pane.progress_revision);
+
+    _ = try pane.ingest(io, "\x1b]9;4;0\x1b\\");
+    try std.testing.expectEqual(schema.PaneProgressState.remove, pane.progress_state);
+    try std.testing.expectEqual(@as(?u8, null), pane.progress_percent);
 }
 
 test "pane close requests shut down the PTY exactly once" {
