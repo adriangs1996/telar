@@ -563,7 +563,9 @@ fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability: any
         var group_end = first.end;
         var overflow = !recordSharedFrame(&selected, &selected_count, first);
         while (sharedFrameAt(bytes, group_end)) |frame| {
-            if (!recordSharedFrame(&selected, &selected_count, frame)) overflow = true;
+            if (!recordSharedFrame(&selected, &selected_count, frame)) {
+                overflow = true;
+            }
             group_end = frame.end;
         }
 
