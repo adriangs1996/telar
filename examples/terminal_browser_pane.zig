@@ -131,7 +131,16 @@ const Emulator = struct {
     render_state: vt.RenderState = .empty,
     responses: ResponseQueue = .{},
 
-    fn init(emulator: *Emulator, io: Io, gpa: std.mem.Allocator, size: schema.TerminalSize) !void {
+    const InitOptions = struct {
+        io: Io,
+        allocator: std.mem.Allocator,
+        size: schema.TerminalSize,
+    };
+
+    fn init(emulator: *Emulator, options: InitOptions) !void {
+        const io = options.io;
+        const gpa = options.allocator;
+        const size = options.size;
         emulator.* = .{
             .gpa = gpa,
             .size = size,
@@ -696,7 +705,7 @@ pub fn main(init: std.process.Init) !void {
     defer session.deinit();
 
     var emulator: Emulator = undefined;
-    try emulator.init(io, gpa, initial_size);
+    try emulator.init(.{ .io = io, .allocator = gpa, .size = initial_size });
     defer emulator.deinit();
 
     var screen = try term.Screen.init(gpa, host_size.cols, host_size.rows);
@@ -877,7 +886,7 @@ test "child KGP becomes an exterior placement at the centered pane offset" {
         .cell_height_px = 20,
     };
     var emulator: Emulator = undefined;
-    try emulator.init(std.testing.io, std.testing.allocator, size);
+    try emulator.init(.{ .io = std.testing.io, .allocator = std.testing.allocator, .size = size });
     defer emulator.deinit();
     emulator.ingest(
         "\x1b_Ga=T,f=32,s=1,v=1,t=d,i=7,p=3,c=2,r=1;AQID/w==\x1b\\",
