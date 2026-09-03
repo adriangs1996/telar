@@ -176,7 +176,6 @@ pub const InterceptConnection = struct {
 pub fn intercept(resources: InterceptResources, connection: InterceptConnection, cause: *anyerror) Error!*Session {
     const io = resources.io;
     const gpa = resources.allocator;
-    const authority = resources.authority;
     const roots = resources.roots;
     const host = connection.host;
     const child = connection.child;
@@ -190,7 +189,7 @@ pub fn intercept(resources: InterceptResources, connection: InterceptConnection,
         .io = io,
         .gpa = gpa,
         .rng_source = .{ .io = io },
-        .auth = try mintAuth(io, gpa, authority, host, cause),
+        .auth = try mintAuth(resources, host, cause),
         .child = .{ .stream = child },
         .origin = .{ .stream = origin },
     };
@@ -389,7 +388,10 @@ const Cursor = struct {
 /// The chain is leaf then CA: a client that pinned only the root still needs the
 /// issuer to build a path. The PEM never touches the filesystem, so the leaf's
 /// private key exists only in this process.
-fn mintAuth(io: Io, gpa: std.mem.Allocator, authority: ca.Authority, host: []const u8, cause: *anyerror) Error!tlsz.config.CertKeyPair {
+fn mintAuth(resources: InterceptResources, host: []const u8, cause: *anyerror) Error!tlsz.config.CertKeyPair {
+    const io = resources.io;
+    const gpa = resources.allocator;
+    const authority = resources.authority;
     const leaf = authority.mint(io, host) catch |err| {
         cause.* = err;
         return error.MintFailed;
