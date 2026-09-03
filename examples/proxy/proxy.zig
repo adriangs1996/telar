@@ -229,7 +229,7 @@ fn tunnel(io: Io, stream: net.Stream, authority: ca.Authority, roots: tls.Roots,
     while (true) {
         const started = Io.Timestamp.now(io, .awake);
 
-        const request = http.relay(session, .child, .origin, &msg_buf, &req_body, false) orelse break;
+        const request = http.relay(session, .{ .from = .child, .to = .origin, .is_response = false }, .{ .scratch = &msg_buf, .capture = &req_body }) orelse break;
         // Both the head and the body capture live in buffers the response relay
         // is about to reuse, so copy what has to survive it.
         @memcpy(req_head[0..request.head.len], request.head);
@@ -238,7 +238,7 @@ fn tunnel(io: Io, stream: net.Stream, authority: ca.Authority, roots: tls.Roots,
         const req_bytes = request.body_bytes;
         const req_truncated = request.truncated;
 
-        const response = http.relay(session, .origin, .child, &msg_buf, &res_body, true) orelse break;
+        const response = http.relay(session, .{ .from = .origin, .to = .child, .is_response = true }, .{ .scratch = &msg_buf, .capture = &res_body }) orelse break;
 
         total_up += req_bytes;
         total_down += response.body_bytes;

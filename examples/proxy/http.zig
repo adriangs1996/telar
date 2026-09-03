@@ -122,7 +122,23 @@ fn withoutCompression(head: []const u8, out: []u8) ?usize {
 /// Reads one message from `from`, forwards it to `to`, and reports what it was.
 /// `scratch` holds the head; `capture` receives up to its own length of body.
 /// Returns null when the peer is done talking.
-pub fn relay(session: *tls.Session, from: tls.Session.Side, to: tls.Session.Side, scratch: []u8, capture: []u8, is_response: bool) ?Summary {
+pub const Direction = struct {
+    from: tls.Session.Side,
+    to: tls.Session.Side,
+    is_response: bool,
+};
+
+pub const Buffers = struct {
+    scratch: []u8,
+    capture: []u8,
+};
+
+pub fn relay(session: *tls.Session, direction: Direction, buffers: Buffers) ?Summary {
+    const from = direction.from;
+    const to = direction.to;
+    const is_response = direction.is_response;
+    const scratch = buffers.scratch;
+    const capture = buffers.capture;
     // ---- head: read until the blank line, one byte at a time. Slow, but it
     // guarantees not consuming a single byte of the body, which matters when
     // the body is framed by a header we have not parsed yet.
