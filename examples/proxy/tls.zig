@@ -94,8 +94,12 @@ pub const Session = struct {
         /// something wrong are very different findings, so dig the real error
         /// back out before reporting.
         fn concrete(self: *End, err: anyerror) anyerror {
-            if (err == error.WriteFailed) return self.writer.err orelse err;
-            if (err == error.ReadFailed) return self.reader.err orelse err;
+            if (err == error.WriteFailed) {
+                return self.writer.err orelse err;
+            }
+            if (err == error.ReadFailed) {
+                return self.reader.err orelse err;
+            }
             return err;
         }
     };
@@ -116,7 +120,9 @@ pub const Session = struct {
     /// relays treat identically: the conversation is over either way.
     pub fn read(self: *Session, side: Side, buf: []u8) ?usize {
         const n = self.end(side).conn.read(buf) catch return null;
-        if (n == 0) return null;
+        if (n == 0) {
+            return null;
+        }
         return n;
     }
 
@@ -154,16 +160,7 @@ pub const Session = struct {
 /// Handshakes both ends. `host` is the CONNECT target, used both to mint the
 /// certificate the child will check and to verify the real server. `cause`
 /// receives the underlying failure, which the returned `Error` only categorises.
-pub fn intercept(
-    io: Io,
-    gpa: std.mem.Allocator,
-    authority: ca.Authority,
-    roots: Roots,
-    host: []const u8,
-    child: net.Stream,
-    origin: net.Stream,
-    cause: *anyerror,
-) Error!*Session {
+pub fn intercept(io: Io, gpa: std.mem.Allocator, authority: ca.Authority, roots: Roots, host: []const u8, child: net.Stream, origin: net.Stream, cause: *anyerror) Error!*Session {
     cause.* = error.Unknown;
 
     const self = gpa.create(Session) catch return error.ContextFailed;
@@ -238,7 +235,9 @@ pub fn intercept(
 /// would let the two ends disagree.
 fn mirroredAlpn(selected: ?[]const u8) []const []const u8 {
     const protocol = selected orelse return &.{};
-    if (std.mem.eql(u8, protocol, "h2")) return &alpn_h2_only;
+    if (std.mem.eql(u8, protocol, "h2")) {
+        return &alpn_h2_only;
+    }
     return &alpn_http11_only;
 }
 
@@ -267,7 +266,9 @@ fn peekAlpnOffer(reader: *Io.Reader) []const []const u8 {
 
 fn parseAlpnOffer(reader: *Io.Reader) !([]const []const u8) {
     const header = try reader.peek(tls_record_header_len);
-    if (header[0] != handshake_record) return error.NotAHandshake;
+    if (header[0] != handshake_record) {
+        return error.NotAHandshake;
+    }
 
     // Widened before it is added to, and bounded before it is asked for. This
     // length is the first attacker-controlled number in the connection: as a
@@ -275,12 +276,16 @@ fn parseAlpnOffer(reader: *Io.Reader) !([]const []const u8) {
     // than its buffer holds is an assertion failure, not an error. A plaintext
     // TLS record cannot exceed 2^14 anyway.
     const record_len: usize = std.mem.readInt(u16, header[3..5], .big);
-    if (record_len > max_plaintext_record_len) return error.RecordTooLarge;
+    if (record_len > max_plaintext_record_len) {
+        return error.RecordTooLarge;
+    }
 
     const record = try reader.peek(tls_record_header_len + record_len);
     var cursor: Cursor = .{ .bytes = record[tls_record_header_len..] };
 
-    if (try cursor.byte() != client_hello) return error.NotAClientHello;
+    if (try cursor.byte() != client_hello) {
+        return error.NotAClientHello;
+    }
     _ = try cursor.take(3); // handshake length
     _ = try cursor.take(2); // legacy version
     _ = try cursor.take(32); // random
@@ -292,7 +297,9 @@ fn parseAlpnOffer(reader: *Io.Reader) !([]const []const u8) {
     while (extensions.left() > 0) {
         const kind = try extensions.big16();
         const body = try extensions.take(try extensions.big16());
-        if (kind != alpn_extension) continue;
+        if (kind != alpn_extension) {
+            continue;
+        }
 
         var names: Cursor = .{ .bytes = body };
         _ = try names.big16(); // list length, already bounded by the extension
@@ -300,12 +307,22 @@ fn parseAlpnOffer(reader: *Io.Reader) !([]const []const u8) {
         var http11 = false;
         while (names.left() > 0) {
             const name = try names.take(try names.byte());
-            if (std.mem.eql(u8, name, "h2")) h2 = true;
-            if (std.mem.eql(u8, name, "http/1.1")) http11 = true;
+            if (std.mem.eql(u8, name, "h2")) {
+                h2 = true;
+            }
+            if (std.mem.eql(u8, name, "http/1.1")) {
+                http11 = true;
+            }
         }
-        if (h2 and http11) return &alpn_offer;
-        if (h2) return &alpn_h2_only;
-        if (http11) return &alpn_http11_only;
+        if (h2 and http11) {
+            return &alpn_offer;
+        }
+        if (h2) {
+            return &alpn_h2_only;
+        }
+        if (http11) {
+            return &alpn_http11_only;
+        }
         // An ALPN extension listing only protocols this relay cannot read.
         // Forwarding it would let the origin pick one of them.
         return &.{};
@@ -331,7 +348,9 @@ const Cursor = struct {
     }
 
     fn take(self: *Cursor, n: usize) ![]const u8 {
-        if (self.left() < n) return error.Truncated;
+        if (self.left() < n) {
+            return error.Truncated;
+        }
         defer self.idx += n;
         return self.bytes[self.idx..][0..n];
     }
@@ -350,13 +369,7 @@ const Cursor = struct {
 /// The chain is leaf then CA: a client that pinned only the root still needs the
 /// issuer to build a path. The PEM never touches the filesystem, so the leaf's
 /// private key exists only in this process.
-fn mintAuth(
-    io: Io,
-    gpa: std.mem.Allocator,
-    authority: ca.Authority,
-    host: []const u8,
-    cause: *anyerror,
-) Error!tlsz.config.CertKeyPair {
+fn mintAuth(io: Io, gpa: std.mem.Allocator, authority: ca.Authority, host: []const u8, cause: *anyerror) Error!tlsz.config.CertKeyPair {
     const leaf = authority.mint(io, host) catch |err| {
         cause.* = err;
         return error.MintFailed;

@@ -86,7 +86,9 @@ pub const Scanner = struct {
                 .osc => switch (byte) {
                     bel => {
                         s.state = .ground;
-                        if (s.finish(bel)) |marker| return marker;
+                        if (s.finish(bel)) |marker| {
+                            return marker;
+                        }
                     },
                     esc => s.state = .osc_escape,
                     else => s.parser.next(byte),
@@ -96,7 +98,9 @@ pub const Scanner = struct {
                     // ESC \ is ST, the other legal OSC terminator.
                     '\\' => {
                         s.state = .ground;
-                        if (s.finish(st)) |marker| return marker;
+                        if (s.finish(st)) |marker| {
+                            return marker;
+                        }
                     },
                     // ESC ESC: abandon this one, the second ESC starts anew.
                     esc => {

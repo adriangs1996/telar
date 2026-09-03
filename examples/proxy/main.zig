@@ -43,13 +43,7 @@ const TIOC = switch (builtin.os.tag) {
     else => @compileError("unsupported platform"),
 };
 
-extern "c" fn openpty(
-    amaster: *std.c.fd_t,
-    aslave: *std.c.fd_t,
-    name: ?[*]u8,
-    termp: ?*const std.posix.termios,
-    winp: ?*const std.posix.winsize,
-) c_int;
+extern "c" fn openpty(amaster: *std.c.fd_t, aslave: *std.c.fd_t, name: ?[*]u8, termp: ?*const std.posix.termios, winp: ?*const std.posix.winsize) c_int;
 
 extern "c" fn execvp(file: [*:0]const u8, argv: [*:null]const ?[*:0]const u8) c_int;
 
@@ -107,11 +101,15 @@ const Pty = struct {
 
 fn openPty(host_tty: std.c.fd_t) !Pty {
     var ws: std.posix.winsize = undefined;
-    if (std.c.ioctl(host_tty, TIOC.GWINSZ, &ws) != 0) return error.GetWindowSizeFailed;
+    if (std.c.ioctl(host_tty, TIOC.GWINSZ, &ws) != 0) {
+        return error.GetWindowSizeFailed;
+    }
 
     var master: std.c.fd_t = undefined;
     var slave: std.c.fd_t = undefined;
-    if (openpty(&master, &slave, null, null, &ws) < 0) return error.OpenPtyFailed;
+    if (openpty(&master, &slave, null, null, &ws) < 0) {
+        return error.OpenPtyFailed;
+    }
 
     return .{ .master = master, .slave = slave };
 }
@@ -120,8 +118,12 @@ fn openPty(host_tty: std.c.fd_t) !Pty {
 /// the kernel raise SIGWINCH in the child's foreground process group.
 fn syncWindowSize(host_tty: std.c.fd_t, master: std.c.fd_t) !void {
     var ws: std.posix.winsize = undefined;
-    if (std.c.ioctl(host_tty, TIOC.GWINSZ, &ws) != 0) return error.GetWindowSizeFailed;
-    if (std.c.ioctl(master, TIOC.SWINSZ, &ws) != 0) return error.SetWindowSizeFailed;
+    if (std.c.ioctl(host_tty, TIOC.GWINSZ, &ws) != 0) {
+        return error.GetWindowSizeFailed;
+    }
+    if (std.c.ioctl(master, TIOC.SWINSZ, &ws) != 0) {
+        return error.SetWindowSizeFailed;
+    }
 }
 
 /// Forks and execs `command` on the slave side. Everything after the fork in the
@@ -129,11 +131,17 @@ fn syncWindowSize(host_tty: std.c.fd_t, master: std.c.fd_t) !void {
 /// because unwinding would run the parent's cleanup on the parent's terminal.
 fn spawnChild(pty: Pty, child: *const Child) !std.c.pid_t {
     const pid = std.c.fork();
-    if (pid < 0) return error.ForkFailed;
-    if (pid > 0) return pid;
+    if (pid < 0) {
+        return error.ForkFailed;
+    }
+    if (pid > 0) {
+        return pid;
+    }
 
     _ = std.c.setsid();
-    if (std.c.ioctl(pty.slave, TIOC.SCTTY, @as(c_int, 0)) != 0) std.c._exit(1);
+    if (std.c.ioctl(pty.slave, TIOC.SCTTY, @as(c_int, 0)) != 0) {
+        std.c._exit(1);
+    }
 
     _ = std.c.dup2(pty.slave, std.c.STDIN_FILENO);
     _ = std.c.dup2(pty.slave, std.c.STDOUT_FILENO);
@@ -155,7 +163,9 @@ fn waitForChild(pid: std.c.pid_t) !ChildExit {
 
     while (true) {
         const rc = std.c.waitpid(pid, &child_status, 0);
-        if (rc > 0) break;
+        if (rc > 0) {
+            break;
+        }
 
         switch (std.posix.errno(rc)) {
             .INTR => continue,
@@ -165,8 +175,12 @@ fn waitForChild(pid: std.c.pid_t) !ChildExit {
     }
 
     const status: u32 = @bitCast(child_status);
-    if (std.posix.W.IFEXITED(status)) return .{ .exited = std.posix.W.EXITSTATUS(status) };
-    if (std.posix.W.IFSIGNALED(status)) return .{ .signaled = std.posix.W.TERMSIG(status) };
+    if (std.posix.W.IFEXITED(status)) {
+        return .{ .exited = std.posix.W.EXITSTATUS(status) };
+    }
+    if (std.posix.W.IFSIGNALED(status)) {
+        return .{ .signaled = std.posix.W.TERMSIG(status) };
+    }
     return error.UnexpectedChildStatus;
 }
 
@@ -199,15 +213,7 @@ fn inputActor(io: Io, stdin: File, queue: *event.Queue) Io.Cancelable!void {
 /// Drains the pty master onto the host terminal. This is herdr's PtyIoActor read
 /// side: the tap runs here, in the actor, so only parsed events reach the main
 /// loop rather than every byte of output.
-fn outputActor(
-    io: Io,
-    gpa: std.mem.Allocator,
-    master: File,
-    host_tty: File,
-    rows: u16,
-    cols: u16,
-    queue: *event.Queue,
-) Io.Cancelable!void {
+fn outputActor(io: Io, gpa: std.mem.Allocator, master: File, host_tty: File, rows: u16, cols: u16, queue: *event.Queue) Io.Cancelable!void {
     var buffer: [64 * KB]u8 = undefined;
     var scanner: osc.Scanner = .init(gpa);
     defer scanner.deinit();
@@ -233,7 +239,9 @@ fn outputActor(
         var cursor: usize = 0;
         while (scanner.next()) |marker| {
             const at = scanner.offsetIn(chunk);
-            if (capturing) capture.feed(chunk[cursor..at]);
+            if (capturing) {
+                capture.feed(chunk[cursor..at]);
+            }
             cursor = at;
 
             const parsed: event.Event = switch (marker) {
@@ -242,7 +250,9 @@ fn outputActor(
                     continue;
                 },
                 .output_start => blk: {
-                    if (capturing) capture.begin();
+                    if (capturing) {
+                        capture.begin();
+                    }
                     break :blk .{ .command_started = last_title };
                 },
                 .command_end => |status| blk: {
@@ -259,7 +269,9 @@ fn outputActor(
             queue.putOne(io, parsed) catch |err| {
                 // Ownership never transferred, so the text is ours to release.
                 if (parsed == .command_finished) {
-                    if (parsed.command_finished.output) |text| gpa.free(text);
+                    if (parsed.command_finished.output) |text| {
+                        gpa.free(text);
+                    }
                 }
                 switch (err) {
                     error.Canceled => |e| return e,
@@ -267,7 +279,9 @@ fn outputActor(
                 }
             };
         }
-        if (capturing) capture.feed(chunk[cursor..]);
+        if (capturing) {
+            capture.feed(chunk[cursor..]);
+        }
 
         host_tty.writeStreamingAll(io, chunk) catch break;
     }
@@ -334,12 +348,18 @@ const Child = struct {
 
         var n: usize = 0;
         while (it.next()) |arg| {
-            if (n == max_argv - 1) break;
-            if (n == 0) child.file = arg.ptr;
+            if (n == max_argv - 1) {
+                break;
+            }
+            if (n == 0) {
+                child.file = arg.ptr;
+            }
             child.argv[n] = arg.ptr;
             n += 1;
         }
-        if (n == 0) child.argv[0] = default_shell;
+        if (n == 0) {
+            child.argv[0] = default_shell;
+        }
         return child;
     }
 };
@@ -368,7 +388,9 @@ const ca_bundle_path = "mitm-ca-bundle.crt";
 /// variable, and none of them read the system keychain by default.
 fn exportTrustEnv() void {
     var buf: [1024]u8 = undefined;
-    if (std.c.getcwd(&buf, buf.len) == null) return;
+    if (std.c.getcwd(&buf, buf.len) == null) {
+        return;
+    }
     const cwd = std.mem.sliceTo(&buf, 0);
 
     var ca_buf: [1100]u8 = undefined;
@@ -424,7 +446,9 @@ fn drainQueue(io: Io, gpa: std.mem.Allocator, queue: *event.Queue) void {
     while (true) {
         // `min = 0` makes this a non-blocking take of whatever is there.
         const n = queue.get(io, &leftovers, 0) catch break;
-        if (n == 0) break;
+        if (n == 0) {
+            break;
+        }
         for (leftovers[0..n]) |item| releaseEvent(gpa, item);
     }
 }
@@ -472,7 +496,9 @@ pub fn main(init: std.process.Init) !void {
 
     const proxy_port = if (authority != null) proxy.reservePort(8099, 20) else null;
     if (proxy_port) |port| {
-        if (authority) |a| a.writeBundle(io, init.gpa, ca_bundle_path) catch {};
+        if (authority) |a| {
+            a.writeBundle(io, init.gpa, ca_bundle_path) catch {};
+        }
         exportProxyEnv(port);
         exportTrustEnv();
     }
@@ -482,7 +508,9 @@ pub fn main(init: std.process.Init) !void {
     _ = std.c.close(pty.slave); // The parent must let go, or the master never sees EOF.
 
     var winch_pipe: [2]std.c.fd_t = undefined;
-    if (std.c.pipe(&winch_pipe) != 0) return error.PipeFailed;
+    if (std.c.pipe(&winch_pipe) != 0) {
+        return error.PipeFailed;
+    }
     defer _ = std.c.close(winch_pipe[0]);
     defer _ = std.c.close(winch_pipe[1]);
     installWindowChangeHandler(winch_pipe[1]);
@@ -491,7 +519,9 @@ pub fn main(init: std.process.Init) !void {
     defer winch_pipe_write = -1;
 
     var winsize: std.posix.winsize = undefined;
-    if (std.c.ioctl(host_fd, TIOC.GWINSZ, &winsize) != 0) return error.GetWindowSizeFailed;
+    if (std.c.ioctl(host_fd, TIOC.GWINSZ, &winsize) != 0) {
+        return error.GetWindowSizeFailed;
+    }
 
     var tio = original.?;
     try makeRaw(host_fd, &tio);
@@ -501,12 +531,14 @@ pub fn main(init: std.process.Init) !void {
     const master: File = .{ .handle = pty.master, .flags = blocking };
     const wake: File = .{ .handle = winch_pipe[0], .flags = blocking };
 
-    if (proxy_port != null) try host_tty.writeStreamingAll(
-        io,
-        "\x1b]2;telar proxy: HTTPS interception active\x07" ++
-            "\r\n\x1b[1;37;41m TELAR HTTPS INTERCEPTION ACTIVE " ++
-            "(bodies are not stored) \x1b[0m\r\n",
-    );
+    if (proxy_port != null) {
+        try host_tty.writeStreamingAll(
+            io,
+            "\x1b]2;telar proxy: HTTPS interception active\x07" ++
+                "\r\n\x1b[1;37;41m TELAR HTTPS INTERCEPTION ACTIVE " ++
+                "(bodies are not stored) \x1b[0m\r\n",
+        );
+    }
 
     var slots: [64]event.Event = undefined;
     var queue: event.Queue = .init(&slots);

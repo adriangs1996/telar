@@ -55,12 +55,16 @@ pub const Decoder = struct {
 
     pub fn init(gpa: std.mem.Allocator) !Decoder {
         var self: Decoder = .{ .gpa = gpa };
-        if (c.nghttp2_hd_inflate_new(&self.inflater) != 0) return error.InflaterFailed;
+        if (c.nghttp2_hd_inflate_new(&self.inflater) != 0) {
+            return error.InflaterFailed;
+        }
         return self;
     }
 
     pub fn deinit(self: *Decoder) void {
-        if (self.inflater) |inf| c.nghttp2_hd_inflate_del(inf);
+        if (self.inflater) |inf| {
+            c.nghttp2_hd_inflate_del(inf);
+        }
         self.block.deinit(self.gpa);
     }
 
@@ -80,7 +84,9 @@ pub const Decoder = struct {
                 input.len,
                 1, // in_final
             );
-            if (consumed < 0) break;
+            if (consumed < 0) {
+                break;
+            }
             input = input[@intCast(consumed)..];
 
             if (flags & c.NGHTTP2_HD_INFLATE_EMIT != 0) {
@@ -89,8 +95,12 @@ pub const Decoder = struct {
                     nv.value[0..nv.valuelen],
                 }) catch {};
             }
-            if (flags & c.NGHTTP2_HD_INFLATE_FINAL != 0) break;
-            if (input.len == 0) break;
+            if (flags & c.NGHTTP2_HD_INFLATE_FINAL != 0) {
+                break;
+            }
+            if (input.len == 0) {
+                break;
+            }
         }
 
         _ = c.nghttp2_hd_inflate_end_headers(inf);
@@ -110,16 +120,7 @@ pub const Observed = struct {
 ///
 /// `text` receives decoded headers, `body` the DATA payloads. Both are the
 /// caller's buffers and both may fill up; the relay itself never stops.
-pub fn relay(
-    session: *tls.Session,
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    decoder: *Decoder,
-    text: *std.Io.Writer,
-    body: []u8,
-    body_len: *usize,
-    seen: *Observed,
-) void {
+pub fn relay(session: *tls.Session, from: tls.Session.Side, to: tls.Session.Side, decoder: *Decoder, text: *std.Io.Writer, body: []u8, body_len: *usize, seen: *Observed) void {
     // Carries the bytes of a frame that a single read did not deliver whole.
     var pending: std.ArrayList(u8) = .empty;
     defer pending.deinit(decoder.gpa);
@@ -131,7 +132,9 @@ pub fn relay(
         const n = session.read(from, &chunk) orelse break;
         // Forward first and unchanged: observation must never delay or alter the
         // conversation it is watching.
-        if (!session.writeAll(to, chunk[0..n])) break;
+        if (!session.writeAll(to, chunk[0..n])) {
+            break;
+        }
 
         var input: []const u8 = chunk[0..n];
 
@@ -140,7 +143,9 @@ pub fn relay(
             const skip = @min(preface_left, input.len);
             preface_left -= skip;
             input = input[skip..];
-            if (input.len == 0) continue;
+            if (input.len == 0) {
+                continue;
+            }
         }
 
         pending.appendSlice(decoder.gpa, input) catch {
@@ -153,7 +158,9 @@ pub fn relay(
             const h = pending.items;
             const payload_len: usize = (@as(usize, h[0]) << 16) | (@as(usize, h[1]) << 8) | h[2];
             const total = frame_header_len + payload_len;
-            if (pending.items.len < total) break;
+            if (pending.items.len < total) {
+                break;
+            }
 
             const kind: FrameType = @enumFromInt(h[3]);
             const flags = h[4];
@@ -167,9 +174,13 @@ pub fn relay(
                         if (flags & flag_padded != 0 and payload.len >= 1) {
                             const pad = payload[0];
                             payload = payload[1..];
-                            if (payload.len >= pad) payload = payload[0 .. payload.len - pad];
+                            if (payload.len >= pad) {
+                                payload = payload[0 .. payload.len - pad];
+                            }
                         }
-                        if (flags & flag_priority != 0 and payload.len >= 5) payload = payload[5..];
+                        if (flags & flag_priority != 0 and payload.len >= 5) {
+                            payload = payload[5..];
+                        }
                     }
                     decoder.block.appendSlice(decoder.gpa, payload) catch {};
                     if (flags & flag_end_headers != 0) {
@@ -186,7 +197,9 @@ pub fn relay(
                         @memcpy(body[body_len.* .. body_len.* + take], payload[0..take]);
                         body_len.* += take;
                     }
-                    if (take < payload.len) seen.truncated = true;
+                    if (take < payload.len) {
+                        seen.truncated = true;
+                    }
                 },
                 else => {},
             }

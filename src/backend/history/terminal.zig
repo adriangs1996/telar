@@ -105,7 +105,9 @@ pub const Tracker = struct {
     }
 
     pub fn deinit(tracker: *Tracker, terminal: *vt.Terminal) void {
-        if (tracker.output_tail) |tail| tracker.gpa.free(tail);
+        if (tracker.output_tail) |tail| {
+            tracker.gpa.free(tail);
+        }
         tracker.output_tail = null;
         tracker.freeCommand();
         terminal.screens.active.pages.untrackPin(tracker.right_prompt);
@@ -125,29 +127,38 @@ pub const Tracker = struct {
         const clock = observation.clock;
 
         _ = tracker.aux.input(bytes);
-        if (!shell_foreground or bytes.len == 0) return 0;
+        if (!shell_foreground or bytes.len == 0) {
+            return 0;
+        }
 
         // A new edit proves the previous command returned control to the shell.
         // Use its last PTY output as the end time so user think-time is excluded.
         if (tracker.phase == .running) {
-            if (comptime builtin.mode == .Debug)
+            if (comptime builtin.mode == .Debug) {
                 tracker.next_input_completions += 1;
+            }
             var finished = clock;
-            if (tracker.last_output_awake_ns >= tracker.started_awake_ns)
+            if (tracker.last_output_awake_ns >= tracker.started_awake_ns) {
                 finished.awake_ns = tracker.last_output_awake_ns;
+            }
             tracker.finish(.{ .clock = finished, .exit_code = null, .status = .completed }, sink);
         }
-        if (tracker.phase == .awaiting_commit) return bytes.len;
+        if (tracker.phase == .awaiting_commit) {
+            return bytes.len;
+        }
 
-        if (tracker.phase == .idle) tracker.beginEdit(terminal);
+        if (tracker.phase == .idle) {
+            tracker.beginEdit(terminal);
+        }
         const event = tracker.input.feed(bytes);
         if (event.cancelled) {
             tracker.reset(.idle);
             return bytes.len;
         }
         if (event.submitted and tracker.phase == .editing) {
-            if (comptime builtin.mode == .Debug)
+            if (comptime builtin.mode == .Debug) {
                 tracker.submissions_armed += 1;
+            }
             tracker.phase = .awaiting_commit;
             tracker.started_at_ms = clock.real_ms;
             tracker.started_awake_ns = clock.awake_ns;
@@ -167,7 +178,9 @@ pub const Tracker = struct {
     /// const boundary = tracker.commitBoundary(output) orelse return;
     /// ```
     pub fn commitBoundary(tracker: *const Tracker, bytes: []const u8) ?usize {
-        if (tracker.phase != .awaiting_commit) return null;
+        if (tracker.phase != .awaiting_commit) {
+            return null;
+        }
         const newline = std.mem.indexOfScalar(u8, bytes, '\n') orelse return null;
         return newline + 1;
     }
@@ -186,15 +199,18 @@ pub const Tracker = struct {
     /// }
     /// ```
     pub fn captureSubmitted(tracker: *Tracker, terminal: *vt.Terminal) !bool {
-        if (tracker.phase != .awaiting_commit) return false;
+        if (tracker.phase != .awaiting_commit) {
+            return false;
+        }
         const screen = terminal.screens.active;
         const finish_pin = screen.cursor.page_pin.*;
         // A blank anchor row means the shell erased the echo and painted
         // elsewhere without the edit being re-anchored. Whatever follows the
         // anchor is prompt, not command.
         if (tracker.anchor.garbage or finish_pin.before(tracker.anchor.*) or tracker.anchor_erased or rowIsBlank(tracker.anchor.*)) {
-            if (comptime builtin.mode == .Debug)
+            if (comptime builtin.mode == .Debug) {
                 tracker.capture_failures += 1;
+            }
             tracker.reset(.idle);
             return false;
         }
@@ -202,7 +218,9 @@ pub const Tracker = struct {
         const cols: usize = @max(1, terminal.cols);
         const max_rows = max_command_bytes / cols + 2;
         const clamped_finish = if (tracker.anchor.down(max_rows)) |limit| finish: {
-            if (!limit.before(finish_pin)) break :finish finish_pin;
+            if (!limit.before(finish_pin)) {
+                break :finish finish_pin;
+            }
             var limited = limit;
             limited.x = @intCast(cols - 1);
             break :finish limited;
@@ -215,8 +233,9 @@ pub const Tracker = struct {
             .trim = true,
         });
         if (text.len == 0) {
-            if (comptime builtin.mode == .Debug)
+            if (comptime builtin.mode == .Debug) {
                 tracker.capture_failures += 1;
+            }
             tracker.gpa.free(text);
             tracker.reset(.idle);
             return false;
@@ -237,8 +256,9 @@ pub const Tracker = struct {
             tracker.command_truncated = false;
         }
         tracker.phase = .running;
-        if (comptime builtin.mode == .Debug)
+        if (comptime builtin.mode == .Debug) {
             tracker.submissions_captured += 1;
+        }
         return true;
     }
 
@@ -253,9 +273,15 @@ pub const Tracker = struct {
         const clock = observation.clock;
         const shell_foreground = observation.shell_foreground;
 
-        if (bytes.len != 0) tracker.last_output_awake_ns = clock.awake_ns;
-        if (tracker.phase == .editing and bytes.len != 0) tracker.rebaseMovedEdit(observation.terminal);
-        if (tracker.phase == .running) tracker.captureOutput(bytes);
+        if (bytes.len != 0) {
+            tracker.last_output_awake_ns = clock.awake_ns;
+        }
+        if (tracker.phase == .editing and bytes.len != 0) {
+            tracker.rebaseMovedEdit(observation.terminal);
+        }
+        if (tracker.phase == .running) {
+            tracker.captureOutput(bytes);
+        }
 
         const Relay = struct {
             tracker: *Tracker,
@@ -263,9 +289,12 @@ pub const Tracker = struct {
             sink: @TypeOf(sink),
 
             pub fn emit(relay: *@This(), value: osc.Command) void {
-                if (relay.tracker.phase != .running) return;
-                if (comptime builtin.mode == .Debug)
+                if (relay.tracker.phase != .running) {
+                    return;
+                }
+                if (comptime builtin.mode == .Debug) {
                     relay.tracker.auxiliary_completions += 1;
+                }
                 relay.tracker.finish(.{
                     .clock = relay.clock,
                     .exit_code = value.exit_code,
@@ -276,13 +305,16 @@ pub const Tracker = struct {
         var relay: Relay = .{ .tracker = tracker, .clock = clock, .sink = sink };
         tracker.aux.feed(.{ .bytes = bytes, .clock = clock }, &relay);
 
-        if (tracker.phase != .running) return;
+        if (tracker.phase != .running) {
+            return;
+        }
         if (shell_foreground) |is_shell| {
             if (!is_shell) {
                 tracker.saw_foreground_child = true;
             } else if (tracker.saw_foreground_child) {
-                if (comptime builtin.mode == .Debug)
+                if (comptime builtin.mode == .Debug) {
                     tracker.foreground_completions += 1;
+                }
                 tracker.finish(.{ .clock = clock, .exit_code = null, .status = .completed }, sink);
             }
         }
@@ -295,10 +327,11 @@ pub const Tracker = struct {
     /// tracker.shellExited(.{ .clock = clock, .exit_code = code }, &sink);
     /// ```
     pub fn shellExited(tracker: *Tracker, observation: ExitObservation, sink: anytype) void {
-        if (tracker.phase == .running)
-            tracker.finish(.{ .clock = observation.clock, .exit_code = observation.exit_code, .status = .completed }, sink)
-        else
+        if (tracker.phase == .running) {
+            tracker.finish(.{ .clock = observation.clock, .exit_code = observation.exit_code, .status = .completed }, sink);
+        } else {
             tracker.reset(.idle);
+        }
     }
 
     /// Completes a running command as interrupted, or clears an incomplete edit.
@@ -307,10 +340,11 @@ pub const Tracker = struct {
     /// tracker.interrupt(clock, &sink);
     /// ```
     pub fn interrupt(tracker: *Tracker, clock: Clock, sink: anytype) void {
-        if (tracker.phase == .running)
-            tracker.finish(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink)
-        else
+        if (tracker.phase == .running) {
+            tracker.finish(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
+        } else {
             tracker.reset(.idle);
+        }
     }
 
     pub fn currentCwd(tracker: *const Tracker) []const u8 {
@@ -363,18 +397,26 @@ pub const Tracker = struct {
     /// edit is re-anchored where the re-echo starts, so the prompt and the
     /// rows in between never enter the capture.
     fn rebaseMovedEdit(tracker: *Tracker, terminal: *vt.Terminal) void {
-        if (tracker.anchor.garbage) return;
-        if (!tracker.anchor_erased and rowIsBlank(tracker.anchor.*)) tracker.anchor_erased = true;
+        if (tracker.anchor.garbage) {
+            return;
+        }
+        if (!tracker.anchor_erased and rowIsBlank(tracker.anchor.*)) {
+            tracker.anchor_erased = true;
+        }
 
         // The new prompt has to be on screen first, or the anchor would land
         // before it and the prompt would be captured as command text.
         const cursor = terminal.screens.active.cursor.page_pin.*;
         const echo_start = tracker.echoStart(cursor);
-        if (echo_start == 0 or cellsBlank(cursor.cells(.left)[0..echo_start])) return;
+        if (echo_start == 0 or cellsBlank(cursor.cells(.left)[0..echo_start])) {
+            return;
+        }
 
         const same_row = cursor.node == tracker.anchor.node and cursor.y == tracker.anchor.y;
         const re_echoed = !same_row and echo_start < cursor.x;
-        if (!tracker.anchor_erased and !re_echoed) return;
+        if (!tracker.anchor_erased and !re_echoed) {
+            return;
+        }
 
         tracker.anchor.* = cursor;
         tracker.anchor.garbage = false;
@@ -388,23 +430,31 @@ pub const Tracker = struct {
     /// cannot be matched.
     fn echoStart(tracker: *const Tracker, cursor: vt.Pin) u16 {
         const typed = tracker.input.typedText() orelse return cursor.x;
-        if (typed.len == 0 or typed.len > cursor.x) return cursor.x;
+        if (typed.len == 0 or typed.len > cursor.x) {
+            return cursor.x;
+        }
 
         const cells = cursor.cells(.left);
         const start = cursor.x - typed.len;
         for (typed, cells[start..cursor.x]) |byte, cell| {
             if (cellBlank(cell)) {
-                if (byte != ' ') return cursor.x;
+                if (byte != ' ') {
+                    return cursor.x;
+                }
                 continue;
             }
-            if (cell.codepoint() != byte) return cursor.x;
+            if (cell.codepoint() != byte) {
+                return cursor.x;
+            }
         }
 
         return @intCast(start);
     }
 
     fn selectionFinish(tracker: *const Tracker, fallback: vt.Pin) vt.Pin {
-        if (!tracker.right_prompt_active or tracker.right_prompt.garbage) return fallback;
+        if (!tracker.right_prompt_active or tracker.right_prompt.garbage) {
+            return fallback;
+        }
         const right_prompt = tracker.right_prompt.*;
         if (right_prompt.x == 0 or
             !tracker.anchor.*.before(right_prompt) or
@@ -474,13 +524,17 @@ pub const Tracker = struct {
     }
 
     fn freeCommand(tracker: *Tracker) void {
-        if (tracker.command) |command| tracker.gpa.free(command);
+        if (tracker.command) |command| {
+            tracker.gpa.free(command);
+        }
         tracker.command = null;
     }
 };
 
 fn validPrefixLength(bytes: []const u8, limit: usize) usize {
-    if (bytes.len <= limit) return bytes.len;
+    if (bytes.len <= limit) {
+        return bytes.len;
+    }
     var len = limit;
     while (len > 0 and !std.unicode.utf8ValidateSlice(bytes[0..len])) : (len -= 1) {}
     return len;
@@ -492,7 +546,9 @@ fn rowIsBlank(pin: vt.Pin) bool {
 
 fn cellsBlank(cells: []const vt.Cell) bool {
     for (cells) |cell| {
-        if (!cellBlank(cell)) return false;
+        if (!cellBlank(cell)) {
+            return false;
+        }
     }
     return true;
 }

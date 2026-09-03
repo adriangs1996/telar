@@ -39,7 +39,9 @@ pub const Capture = struct {
     /// }
     /// ```
     pub fn feed(capture: *Capture, input: []const u8) bool {
-        if (capture.submitted) return false;
+        if (capture.submitted) {
+            return false;
+        }
         for (input) |byte| {
             if (capture.len < capture.bytes.len) {
                 capture.bytes[capture.len] = byte;
@@ -179,7 +181,9 @@ pub fn generate(io: std.Io, gpa: std.mem.Allocator, generation: Generation) Resu
         return result;
     }
     const term = child.wait(io) catch return result;
-    if (term != .exited or term.exited != 0) return result;
+    if (term != .exited or term.exited != 0) {
+        return result;
+    }
 
     const title = normalizeTitle(stdout_reader.buffered(), &result.title) catch {
         result.status = .invalid_output;
@@ -219,7 +223,9 @@ pub fn normalizeQuery(raw: []const u8, output: *[max_query_bytes]u8) ![]const u8
         switch (byte) {
             '\r', '\n' => {
                 index += 1;
-                if (!paste) break;
+                if (!paste) {
+                    break;
+                }
                 try appendSpace(output, &output_len);
             },
             '\t' => {
@@ -245,24 +251,29 @@ pub fn normalizeQuery(raw: []const u8, output: *[max_query_bytes]u8) ![]const u8
                 }
                 if (byte <= 0x7e) {
                     index += 1;
-                    if (byte == ' ')
-                        try appendSpace(output, &output_len)
-                    else
+                    if (byte == ' ') {
+                        try appendSpace(output, &output_len);
+                    } else {
                         try appendBytes(output, &output_len, &.{byte});
+                    }
                     continue;
                 }
                 const sequence_len = std.unicode.utf8ByteSequenceLength(byte) catch
                     return error.InvalidUtf8;
                 if (sequence_len > raw.len - index or
                     !std.unicode.utf8ValidateSlice(raw[index .. index + sequence_len]))
+                {
                     return error.InvalidUtf8;
+                }
                 try appendBytes(output, &output_len, raw[index .. index + sequence_len]);
                 index += sequence_len;
             },
         }
     }
     while (output_len != 0 and output[output_len - 1] == ' ') output_len -= 1;
-    if (output_len == 0) return error.EmptyQuery;
+    if (output_len == 0) {
+        return error.EmptyQuery;
+    }
     return output[0..output_len];
 }
 
@@ -278,39 +289,59 @@ pub fn normalizeTitle(raw: []const u8, output: *[schema.max_agent_session_title_
     if (trimmed.len >= 2 and
         ((trimmed[0] == '"' and trimmed[trimmed.len - 1] == '"') or
             (trimmed[0] == '\'' and trimmed[trimmed.len - 1] == '\'')))
+    {
         trimmed = std.mem.trim(u8, trimmed[1 .. trimmed.len - 1], " \t");
-    if (trimmed.len == 0 or trimmed.len > output.len) return error.InvalidTitleLength;
-    if (!std.unicode.utf8ValidateSlice(trimmed)) return error.InvalidUtf8;
+    }
+    if (trimmed.len == 0 or trimmed.len > output.len) {
+        return error.InvalidTitleLength;
+    }
+    if (!std.unicode.utf8ValidateSlice(trimmed)) {
+        return error.InvalidUtf8;
+    }
     for (trimmed) |byte| if (byte < 0x20 or byte == 0x7f) return error.InvalidTitleControl;
     @memcpy(output[0..trimmed.len], trimmed);
     return output[0..trimmed.len];
 }
 
 fn skipEscape(bytes: []const u8, start: usize) usize {
-    if (start + 1 >= bytes.len) return bytes.len;
-    if (bytes[start + 1] != '[') return start + 2;
+    if (start + 1 >= bytes.len) {
+        return bytes.len;
+    }
+    if (bytes[start + 1] != '[') {
+        return start + 2;
+    }
     var index = start + 2;
     while (index < bytes.len) : (index += 1) {
-        if (bytes[index] >= 0x40 and bytes[index] <= 0x7e) return index + 1;
+        if (bytes[index] >= 0x40 and bytes[index] <= 0x7e) {
+            return index + 1;
+        }
     }
     return bytes.len;
 }
 
 fn appendSpace(output: *[max_query_bytes]u8, output_len: *usize) !void {
-    if (output_len.* == 0 or output[output_len.* - 1] == ' ') return;
-    if (output_len.* == output.len) return error.QueryTooLong;
+    if (output_len.* == 0 or output[output_len.* - 1] == ' ') {
+        return;
+    }
+    if (output_len.* == output.len) {
+        return error.QueryTooLong;
+    }
     output[output_len.*] = ' ';
     output_len.* += 1;
 }
 
 fn appendBytes(output: *[max_query_bytes]u8, output_len: *usize, bytes: []const u8) !void {
-    if (bytes.len > output.len - output_len.*) return error.QueryTooLong;
+    if (bytes.len > output.len - output_len.*) {
+        return error.QueryTooLong;
+    }
     @memcpy(output[output_len.*..][0..bytes.len], bytes);
     output_len.* += bytes.len;
 }
 
 fn removeLastScalar(bytes: []const u8, len: *usize) void {
-    if (len.* == 0) return;
+    if (len.* == 0) {
+        return;
+    }
     len.* -= 1;
     while (len.* != 0 and bytes[len.*] & 0xc0 == 0x80) len.* -= 1;
 }

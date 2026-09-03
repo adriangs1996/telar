@@ -31,7 +31,9 @@ fn parse(args: []const [:0]const u8) !Options {
     var options: Options = .{};
     var index: usize = 1;
     while (index < args.len) : (index += 2) {
-        if (index + 1 == args.len) return error.MissingValue;
+        if (index + 1 == args.len) {
+            return error.MissingValue;
+        }
         const name = args[index];
         const value = args[index + 1];
         if (std.mem.eql(u8, name, "--width")) {
@@ -50,8 +52,9 @@ fn parse(args: []const [:0]const u8) !Options {
             return error.UnknownOption;
         }
     }
-    if (options.width == 0 or options.height == 0 or options.fps == 0 or options.image_id == 0)
+    if (options.width == 0 or options.height == 0 or options.fps == 0 or options.image_id == 0) {
         return error.InvalidOption;
+    }
     return options;
 }
 
@@ -64,7 +67,9 @@ fn nowNs() u64 {
 fn sleepUntil(deadline_ns: u64) void {
     while (true) {
         const now = nowNs();
-        if (now >= deadline_ns) return;
+        if (now >= deadline_ns) {
+            return;
+        }
         const remaining = deadline_ns - now;
         var ts: std.c.timespec = .{
             .sec = @intCast(remaining / std.time.ns_per_s),
@@ -83,9 +88,13 @@ fn publish(name: [:0]const u8, pixels: []const u8) !void {
         @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
         @as(u16, 0o600),
     );
-    if (std.posix.errno(fd) != .SUCCESS) return error.SharedMemoryUnavailable;
+    if (std.posix.errno(fd) != .SUCCESS) {
+        return error.SharedMemoryUnavailable;
+    }
     defer _ = std.c.close(fd);
-    if (std.c.ftruncate(fd, @intCast(pixels.len)) != 0) return error.SharedMemoryUnavailable;
+    if (std.c.ftruncate(fd, @intCast(pixels.len)) != 0) {
+        return error.SharedMemoryUnavailable;
+    }
     const map = try std.posix.mmap(
         null,
         pixels.len,
@@ -110,9 +119,13 @@ const FrameFile = struct {
         file.path_len = printed.len;
         _ = std.c.unlink(printed);
         const fd = std.c.open(printed, .{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true }, @as(std.c.mode_t, 0o600));
-        if (fd < 0) return error.FrameFileUnavailable;
+        if (fd < 0) {
+            return error.FrameFileUnavailable;
+        }
         defer _ = std.c.close(fd);
-        if (std.c.ftruncate(fd, @intCast(byte_len)) != 0) return error.FrameFileUnavailable;
+        if (std.c.ftruncate(fd, @intCast(byte_len)) != 0) {
+            return error.FrameFileUnavailable;
+        }
         file.map = try std.posix.mmap(
             null,
             byte_len,
@@ -128,8 +141,12 @@ const FrameFile = struct {
     }
 
     fn destroy(file: *FrameFile) void {
-        if (file.map.len != 0) std.posix.munmap(file.map);
-        if (file.path_len != 0) _ = std.c.unlink(file.name());
+        if (file.map.len != 0) {
+            std.posix.munmap(file.map);
+        }
+        if (file.path_len != 0) {
+            _ = std.c.unlink(file.name());
+        }
     }
 };
 
@@ -173,7 +190,9 @@ pub fn main(init: std.process.Init) !void {
     var envelope: [std.fs.max_path_bytes * 2 + 128]u8 = undefined;
     while (true) {
         const deadline = started + frame * interval_ns;
-        if (deadline >= end) break;
+        if (deadline >= end) {
+            break;
+        }
         sleepUntil(deadline);
 
         // A visibly changing frame: every byte is written, like a real one.

@@ -175,17 +175,20 @@ pub const Store = struct {
         var db: ?*c.sqlite3 = null;
         // One worker owns the connection for its whole active lifetime.
         const flags = c.SQLITE_OPEN_READWRITE | c.SQLITE_OPEN_CREATE | c.SQLITE_OPEN_NOMUTEX;
-        if (c.sqlite3_open_v2(path.ptr, &db, flags, null) != c.SQLITE_OK)
+        if (c.sqlite3_open_v2(path.ptr, &db, flags, null) != c.SQLITE_OK) {
             return error.HistoryOpenFailed;
+        }
         const opened = db orelse return error.HistoryOpenFailed;
         errdefer _ = c.sqlite3_close(opened);
         // Callers may select a custom path and bypass the managed-directory
         // bootstrap. Restrict the database at the persistence boundary too.
-        if (!std.mem.eql(u8, path, ":memory:") and std.c.chmod(path.ptr, 0o600) != 0)
+        if (!std.mem.eql(u8, path, ":memory:") and std.c.chmod(path.ptr, 0o600) != 0) {
             return error.HistoryPermissionsFailed;
+        }
         _ = c.sqlite3_extended_result_codes(opened, 1);
-        if (c.sqlite3_exec(opened, database_schema, null, null, null) != c.SQLITE_OK)
+        if (c.sqlite3_exec(opened, database_schema, null, null, null) != c.SQLITE_OK) {
             return error.HistorySchemaFailed;
+        }
         try ensureColumn(opened, .{ .table = "session", .column = "tab_id", .alter_sql = "ALTER TABLE session ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;" });
         try ensureColumn(opened, .{ .table = "command", .column = "tab_id", .alter_sql = "ALTER TABLE command ADD COLUMN tab_id INTEGER NOT NULL DEFAULT 0;" });
         try ensureColumn(opened, .{ .table = "session", .column = "title", .alter_sql = "ALTER TABLE session ADD COLUMN title TEXT;" });
@@ -435,7 +438,9 @@ pub const Store = struct {
         _ = c.sqlite3_bind_int(stmt, 3, @intFromEnum(value.source));
         _ = c.sqlite3_bind_int(stmt, 4, @intFromEnum(value.state));
         try stepDone(stmt);
-        if (c.sqlite3_changes(store.db) != 1) return error.HistorySessionNotFound;
+        if (c.sqlite3_changes(store.db) != 1) {
+            return error.HistorySessionNotFound;
+        }
     }
 
     pub fn insertCommand(store: *Store, value: *const model.CommandFinished) !bool {
@@ -514,10 +519,12 @@ pub const Store = struct {
             "SELECT id, pane_id, started_at_ms, duration_ns, exit_code, status, " ++
                 "command, cwd, workspace_path, author, origin, provider FROM command WHERE 1=1",
         );
-        if (request.failed_only)
+        if (request.failed_only) {
             try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
-        if (request.author != .all)
+        }
+        if (request.author != .all) {
             try sql.writeAll(" AND author = ?");
+        }
         switch (request.scope) {
             .global => {},
             .cwd => try sql.writeAll(" AND cwd = ?"),
@@ -561,11 +568,15 @@ pub const Store = struct {
         while (true) switch (c.sqlite3_step(stmt)) {
             c.SQLITE_ROW => {
                 const hash = commandHash(stmt);
-                if (seen.contains(hash)) continue;
+                if (seen.contains(hash)) {
+                    continue;
+                }
                 try seen.put(gpa, hash, {});
                 const command = columnSlice(stmt, 6);
                 const score = core_fuzzy.score(command, request.textSlice()) orelse continue;
-                if (count == request.limit and score <= best[count - 1].score) continue;
+                if (count == request.limit and score <= best[count - 1].score) {
+                    continue;
+                }
 
                 var entry = try readEntry(gpa, stmt);
                 var index: usize = count;
@@ -591,7 +602,9 @@ pub const Store = struct {
             const entry = &best[kept].entry;
             const entry_bytes = model.encoded_entry_overhead_bytes +
                 entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
-            if (entry_bytes > model.max_result_payload_bytes - encoded_bytes) break;
+            if (entry_bytes > model.max_result_payload_bytes - encoded_bytes) {
+                break;
+            }
             encoded_bytes += entry_bytes;
         }
         for (best[kept..count]) |*scored| scored.entry.deinit(gpa);
@@ -673,7 +686,9 @@ pub const Store = struct {
         var iterator = buckets.iterator();
         while (iterator.next()) |entry| {
             const count = entry.value_ptr.*;
-            if (best_len == best.len and count <= best[best_len - 1].count) continue;
+            if (best_len == best.len and count <= best[best_len - 1].count) {
+                continue;
+            }
             var index = if (best_len == best.len) best_len - 1 else blk: {
                 best_len += 1;
                 break :blk best_len - 1;
@@ -734,17 +749,20 @@ pub const Store = struct {
         var match_buffer: [2 * model.max_query_bytes + 2]u8 = undefined;
         const use_index = store.fts_available and queryCharacters(request.matchSlice()) >= 3;
         if (request.match_len != 0) {
-            if (use_index)
+            if (use_index) {
                 try sql.writeAll(
                     " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?)",
-                )
-            else
+                );
+            } else {
                 try sql.writeAll(" AND instr(lower(command), lower(?)) > 0");
+            }
         }
-        if (request.failed_only)
+        if (request.failed_only) {
             try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
-        if (request.before_ms != 0)
+        }
+        if (request.before_ms != 0) {
             try sql.writeAll(" AND started_at_ms < ?");
+        }
         switch (request.scope) {
             .global => {},
             .cwd => try sql.writeAll(" AND cwd = ?"),
@@ -809,17 +827,20 @@ pub const Store = struct {
         var match_buffer: [2 * model.max_query_bytes + 2]u8 = undefined;
         const use_index = store.fts_available and queryCharacters(request.textSlice()) >= 3;
         if (request.text_len != 0) {
-            if (use_index)
+            if (use_index) {
                 try sql.writeAll(
                     " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?)",
-                )
-            else
+                );
+            } else {
                 try sql.writeAll(" AND instr(lower(command), lower(?)) > 0");
+            }
         }
-        if (request.failed_only)
+        if (request.failed_only) {
             try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
-        if (request.author != .all)
+        }
+        if (request.author != .all) {
             try sql.writeAll(" AND author = ?");
+        }
         switch (request.scope) {
             .global => {},
             .cwd => try sql.writeAll(" AND cwd = ?"),
@@ -871,7 +892,9 @@ pub const Store = struct {
         while (true) switch (c.sqlite3_step(stmt)) {
             c.SQLITE_ROW => {
                 if (request.distinct) {
-                    if (seen.contains(commandHash(stmt))) continue;
+                    if (seen.contains(commandHash(stmt))) {
+                        continue;
+                    }
                     try seen.put(gpa, commandHash(stmt), {});
                 }
 
@@ -912,7 +935,9 @@ fn enableCommandSearchIndex(db: *c.sqlite3) bool {
             null,
             null,
             null,
-        ) != c.SQLITE_OK) return false;
+        ) != c.SQLITE_OK) {
+            return false;
+        }
         // Backfill so history written before this index existed is found too.
         if (c.sqlite3_exec(
             db,
@@ -1009,13 +1034,16 @@ fn ensureColumn(db: *c.sqlite3, migration: ColumnMigration) !void {
 
 fn prepare(db: *c.sqlite3, sql: []const u8) !*c.sqlite3_stmt {
     var stmt: ?*c.sqlite3_stmt = null;
-    if (c.sqlite3_prepare_v2(db, sql.ptr, @intCast(sql.len), &stmt, null) != c.SQLITE_OK)
+    if (c.sqlite3_prepare_v2(db, sql.ptr, @intCast(sql.len), &stmt, null) != c.SQLITE_OK) {
         return error.HistoryPrepareFailed;
+    }
     return stmt orelse error.HistoryPrepareFailed;
 }
 
 fn stepDone(stmt: *c.sqlite3_stmt) !void {
-    if (c.sqlite3_step(stmt) != c.SQLITE_DONE) return error.HistoryWriteFailed;
+    if (c.sqlite3_step(stmt) != c.SQLITE_DONE) {
+        return error.HistoryWriteFailed;
+    }
 }
 
 fn reset(stmt: *c.sqlite3_stmt) void {
@@ -1065,7 +1093,9 @@ fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !model.Entry {
     errdefer gpa.free(provider);
     const raw_history_id = c.sqlite3_column_int64(stmt, 0);
     const raw_pane = c.sqlite3_column_int64(stmt, 1);
-    if (raw_history_id <= 0 or raw_pane <= 0) return error.InvalidHistoryId;
+    if (raw_history_id <= 0 or raw_pane <= 0) {
+        return error.InvalidHistoryId;
+    }
     if (command.len > model.schema.max_history_command_bytes or
         cwd.len > model.schema.max_cwd_bytes or
         workspace_path.len > model.schema.max_cwd_bytes or
@@ -1120,8 +1150,9 @@ fn commandHash(stmt: *c.sqlite3_stmt) u64 {
 }
 
 fn appendStatsFilters(sql: *std.Io.Writer, request: *const model.StatsQuery) !void {
-    if (request.since_ms != 0)
+    if (request.since_ms != 0) {
         try sql.writeAll(" AND started_at_ms >= ?");
+    }
     switch (request.scope) {
         .global => {},
         .cwd => try sql.writeAll(" AND cwd = ?"),
@@ -1163,9 +1194,13 @@ fn statsGroupKey(command: []const u8) []const u8 {
     const first_end = std.mem.indexOfScalar(u8, rest, ' ') orelse return start;
     const first = rest[0..first_end];
     for (stats_subcommand_leaders) |leader| {
-        if (!std.mem.eql(u8, first, leader)) continue;
+        if (!std.mem.eql(u8, first, leader)) {
+            continue;
+        }
         const after = std.mem.trimStart(u8, rest[first_end..], " ");
-        if (after.len == 0 or after[0] == '-') break;
+        if (after.len == 0 or after[0] == '-') {
+            break;
+        }
         const second_end = std.mem.indexOfScalar(u8, after, ' ') orelse after.len;
         const total_len = (after.ptr + second_end) - start.ptr;
         return start[0..total_len];
@@ -1176,7 +1211,9 @@ fn statsGroupKey(command: []const u8) []const u8 {
 
 fn columnText(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt, column: c_int) ![]u8 {
     const len: usize = @intCast(c.sqlite3_column_bytes(stmt, column));
-    if (len == 0) return gpa.alloc(u8, 0);
+    if (len == 0) {
+        return gpa.alloc(u8, 0);
+    }
     const pointer = c.sqlite3_column_text(stmt, column) orelse return error.InvalidHistoryText;
     return gpa.dupe(u8, pointer[0..len]);
 }

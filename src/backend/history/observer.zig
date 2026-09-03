@@ -95,8 +95,9 @@ const Batch = struct {
     }
 
     fn pushBytes(batch: *Batch, bytes: []const u8) ?u32 {
-        if (batch.event_count == batch.events.len or bytes.len > batch.bytes.len - batch.len)
+        if (batch.event_count == batch.events.len or bytes.len > batch.bytes.len - batch.len) {
             return null;
+        }
         const offset = batch.len;
         @memcpy(batch.bytes[offset..][0..bytes.len], bytes);
         batch.len += bytes.len;
@@ -104,7 +105,9 @@ const Batch = struct {
     }
 
     fn pushEvent(batch: *Batch, event: Event) bool {
-        if (batch.event_count == batch.events.len) return false;
+        if (batch.event_count == batch.events.len) {
+            return false;
+        }
         batch.events[batch.event_count] = event;
         batch.event_count += 1;
         return true;
@@ -166,7 +169,9 @@ pub const Observer = struct {
     }
 
     pub fn deinit(observer: *Observer) void {
-        if (observer.worker) |index| observer.batches[index].reset();
+        if (observer.worker) |index| {
+            observer.batches[index].reset();
+        }
         observer.worker = null;
         if (observer.enabled) {
             observer.tracker.deinit(&observer.terminal);
@@ -224,12 +229,16 @@ pub const Observer = struct {
     }
 
     pub fn currentCwd(observer: *const Observer) []const u8 {
-        if (!observer.enabled) return "";
+        if (!observer.enabled) {
+            return "";
+        }
         return observer.tracker.currentCwd();
     }
 
     pub fn seal(observer: *Observer) bool {
-        if (!observer.hasPending()) return false;
+        if (!observer.hasPending()) {
+            return false;
+        }
         const sealed = observer.active;
         observer.active ^= 1;
         std.debug.assert(observer.batches[observer.active].event_count == 0);
@@ -329,10 +338,11 @@ pub const Observer = struct {
             const boundary = observer.tracker.commitBoundary(remaining);
             const slice = if (boundary) |len| remaining[0..len] else remaining;
             observer.stream.nextSlice(slice);
-            if (boundary != null)
+            if (boundary != null) {
                 _ = observer.tracker.captureSubmitted(&observer.terminal) catch {
                     observer.failures +|= 1;
                 };
+            }
             observer.tracker.observeOutput(.{
                 .terminal = &observer.terminal,
                 .bytes = slice,

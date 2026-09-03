@@ -31,13 +31,7 @@ pub const Capture = struct {
 
     /// Initialises in place. The stream holds a pointer to `terminal`, so a
     /// Capture must not be copied or moved after this returns.
-    pub fn init(
-        self: *Capture,
-        io: std.Io,
-        gpa: std.mem.Allocator,
-        rows: u16,
-        cols: u16,
-    ) !void {
+    pub fn init(self: *Capture, io: std.Io, gpa: std.mem.Allocator, rows: u16, cols: u16) !void {
         // A pty with no window size reports 0x0, and a terminal of zero rows
         // trips an assertion deep inside PageList. Fall back to a classic
         // 24x80 rather than crashing the proxy over a cosmetic detail.
@@ -79,7 +73,9 @@ pub const Capture = struct {
     /// Feeds output bytes. A no-op unless a command is being recorded, so the
     /// caller can hand it every chunk without checking.
     pub fn feed(self: *Capture, bytes: []const u8) void {
-        if (!self.recording or bytes.len == 0) return;
+        if (!self.recording or bytes.len == 0) {
+            return;
+        }
 
         if (self.fed >= max_bytes) {
             self.truncated = true;
@@ -103,7 +99,9 @@ pub const Capture = struct {
     /// OSC 133;D — resolve the capture. The caller owns `text` and must free it
     /// with the same allocator. Null when nothing was recorded.
     pub fn finish(self: *Capture) ?Result {
-        if (!self.recording) return null;
+        if (!self.recording) {
+            return null;
+        }
         self.recording = false;
 
         const raw = self.terminal.screens.active.dumpStringAlloc(

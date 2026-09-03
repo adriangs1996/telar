@@ -272,7 +272,9 @@ fn buildRows(state: *const State, out: []Row) u16 {
     for ([_]Section{ .needs_you, .ready, .running, .background }) |section| {
         var seen = false;
         for (state.tasks, 0..) |task, index| {
-            if (task.section != section) continue;
+            if (task.section != section) {
+                continue;
+            }
             if (!seen) {
                 push(out, &len, .{ .section = section });
                 seen = true;
@@ -305,8 +307,12 @@ fn view(state: *State, buf: *ui.Buffer) void {
     const sidebar, const pane = full.splitLeft(sidebar_width);
 
     drawSidebar(state, buf, sidebar);
-    if (pane.w > 4) drawPane(state, buf, pane);
-    if (state.dialog) |index| drawDialog(state, buf, full, index);
+    if (pane.w > 4) {
+        drawPane(state, buf, pane);
+    }
+    if (state.dialog) |index| {
+        drawDialog(state, buf, full, index);
+    }
 
     // Last of all, over whatever ended up on screen. A selection is about what
     // the user can see, so it follows the pixels rather than the model - and
@@ -315,8 +321,12 @@ fn view(state: *State, buf: *ui.Buffer) void {
     if (state.selection) |range| {
         const expanded = range.expanded(buf);
         for (0..buf.h) |y| for (0..buf.w) |x| {
-            if (!expanded.contains(@intCast(x), @intCast(y))) continue;
-            if (buf.at(@intCast(x), @intCast(y))) |cell| cell.style.flags.inverse = !cell.style.flags.inverse;
+            if (!expanded.contains(@intCast(x), @intCast(y))) {
+                continue;
+            }
+            if (buf.at(@intCast(x), @intCast(y))) |cell| {
+                cell.style.flags.inverse = !cell.style.flags.inverse;
+            }
         };
     }
     state.last_buffer = buf;
@@ -338,7 +348,9 @@ const dialog_choices = [_][]const u8{ "Approve", "Reject", "Open diff" };
 fn drawDialog(state: *State, buf: *ui.Buffer, full: ui.Rect, index: usize) void {
     const w: u16 = @min(52, full.w -| 4);
     const h: u16 = 9;
-    if (w < 24 or full.h < h + 2) return;
+    if (w < 24 or full.h < h + 2) {
+        return;
+    }
 
     const frame: ui.Rect = .{
         .x = full.x + (full.w - w) / 2,
@@ -385,7 +397,9 @@ fn drawDialog(state: *State, buf: *ui.Buffer, full: ui.Rect, index: usize) void 
     const y = frame.y + frame.h - 3;
     for (dialog_choices, 0..) |choice, choice_index| {
         const width = ui.measure(choice) + 4;
-        if (x + width > inside.x + inside.w) break;
+        if (x + width > inside.x + inside.w) {
+            break;
+        }
         const rect: ui.Rect = .{ .x = x, .y = y, .w = width, .h = 1 };
         const action: Action = .{ .dialog_choice = choice_index };
         state.focus.register(.{ .dialog_button = choice_index });
@@ -403,7 +417,9 @@ fn drawDialog(state: *State, buf: *ui.Buffer, full: ui.Rect, index: usize) void 
 }
 
 fn drawSidebar(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
-    if (area.w < 30 or area.h < 14) return;
+    if (area.w < 30 or area.h < 14) {
+        return;
+    }
     buf.fill(area, " ", .{ .bg = bg });
     buf.box(area, .{ .fg = faint, .bg = bg }, null);
 
@@ -480,13 +496,17 @@ fn drawSearch(state: *State, buf: *ui.Buffer, area: ui.Rect, y: u16) u16 {
         // against whatever the field's background happens to be.
         var column = x + range[0];
         while (column < x + range[1] and column < right) : (column += 1) {
-            if (buf.at(column, y)) |cell| cell.style.flags.inverse = true;
+            if (buf.at(column, y)) |cell| {
+                cell.style.flags.inverse = true;
+            }
         }
     }
 
     // Ellipses for text scrolled out of sight. Without them a value longer than
     // the field looks like a value that was truncated on the way in.
-    if (shown.clipped_left) _ = buf.writeText(row, x, y, "\u{2039}", .{ .fg = faint, .bg = field_bg });
+    if (shown.clipped_left) {
+        _ = buf.writeText(row, x, y, "\u{2039}", .{ .fg = faint, .bg = field_bg });
+    }
     if (shown.clipped_right and right > x) {
         _ = buf.writeText(row, right - 1, y, "\u{203a}", .{ .fg = faint, .bg = field_bg });
     }
@@ -494,24 +514,20 @@ fn drawSearch(state: *State, buf: *ui.Buffer, area: ui.Rect, y: u16) u16 {
     // The terminal's own cursor, not a painted block: it is what a screen
     // reader follows and what an input method composes against, and it blinks
     // without us doing anything.
-    if (focused) state.cursor = .{ .x = x + shown.cursor, .y = y };
+    if (focused) {
+        state.cursor = .{ .x = x + shown.cursor, .y = y };
+    }
 
     return y + 1;
 }
 
 /// A bordered chip whose right edge is at `right`. Returns the columns it and
 /// its trailing gap consumed.
-fn drawChipAt(
-    state: *State,
-    buf: *ui.Buffer,
-    area: ui.Rect,
-    right: u16,
-    label: []const u8,
-    color: ui.Color,
-    action: Action,
-) u16 {
+fn drawChipAt(state: *State, buf: *ui.Buffer, area: ui.Rect, right: u16, label: []const u8, color: ui.Color, action: Action) u16 {
     const width = ui.measure(label) + 2;
-    if (right < area.x + width) return 0;
+    if (right < area.x + width) {
+        return 0;
+    }
     const x = right - width;
 
     const hovered = isHovered(state, action);
@@ -599,7 +615,9 @@ fn drawList(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
     var line: u16 = 0;
     while (line < area.h) : (line += 1) {
         const index = state.scroll + line;
-        if (index >= total) break;
+        if (index >= total) {
+            break;
+        }
         const y = area.y + line;
         switch (rows[index]) {
             .blank => {},
@@ -620,7 +638,9 @@ fn drawSectionHeader(state: *State, buf: *ui.Buffer, area: ui.Rect, y: u16, sect
 
     var count: u16 = 0;
     for (state.tasks) |task| {
-        if (task.section == section) count += 1;
+        if (task.section == section) {
+            count += 1;
+        }
     }
     var count_buf: [8]u8 = undefined;
     const count_text = std.fmt.bufPrint(&count_buf, "{d}", .{count}) catch "";
@@ -665,7 +685,9 @@ fn drawTaskLine(state: *State, buf: *ui.Buffer, area: ui.Rect, y: u16, index: us
     }
 
     const body: ui.Rect = .{ .x = row.x + 2, .y = y, .w = row.w -| 3, .h = 1 };
-    if (body.w == 0) return;
+    if (body.w == 0) {
+        return;
+    }
 
     switch (line) {
         0 => {
@@ -711,7 +733,9 @@ fn drawTaskLine(state: *State, buf: *ui.Buffer, area: ui.Rect, y: u16, index: us
     state.hits.add(row, .{ .select_task = index });
     // Once per task, not once per line: a task occupies four rows and
     // registering each of them would make Tab visit the same task four times.
-    if (line == 0) state.focus.register(.{ .task = index });
+    if (line == 0) {
+        state.focus.register(.{ .task = index });
+    }
     // Registered after the row, so the chip drawn on line 0 wins the overlap.
     if (line == 0 and task.chip != .none) {
         const width = chipWidth(task.chip);
@@ -730,7 +754,9 @@ fn chipWidth(chip: Chip) u16 {
 
 fn drawTaskChip(state: *State, buf: *ui.Buffer, area: ui.Rect, index: usize, chip: Chip) u16 {
     const width = chipWidth(chip);
-    if (width > area.w) return 0;
+    if (width > area.w) {
+        return 0;
+    }
 
     const x = area.x + area.w - width;
     const hovered = isHovered(state, .{ .run_task_action = index });
@@ -771,10 +797,14 @@ fn drawStatus(buf: *ui.Buffer, area: ui.Rect, y: u16, task: Task, row_bg: ui.Col
     const prefix: u16 = if (task.status == .working) 2 else 0;
     const detail: u16 = if (task.status_detail.len == 0) 0 else ui.measure(task.status_detail) + 3;
     const width = prefix + ui.measure(word) + detail + 1;
-    if (width > area.w) return 0;
+    if (width > area.w) {
+        return 0;
+    }
 
     var x = area.x + area.w - width;
-    if (task.status == .working) x += buf.writeText(area, x, y, "\u{2237} ", .{ .fg = color, .bg = row_bg });
+    if (task.status == .working) {
+        x += buf.writeText(area, x, y, "\u{2237} ", .{ .fg = color, .bg = row_bg });
+    }
     x += buf.writeText(area, x, y, word, .{ .fg = color, .bg = row_bg, .flags = .{ .bold = true } });
     if (task.status_detail.len > 0) {
         x += buf.writeText(area, x, y, " \u{00b7} ", .{ .fg = faint, .bg = row_bg });
@@ -787,7 +817,9 @@ fn drawStatus(buf: *ui.Buffer, area: ui.Rect, y: u16, task: Task, row_bg: ui.Col
 }
 
 fn drawScrollbar(state: *State, buf: *ui.Buffer, area: ui.Rect, total: u16) void {
-    if (total <= area.h or area.h == 0) return;
+    if (total <= area.h or area.h == 0) {
+        return;
+    }
 
     // Thumb size is proportional to how much is visible, with a floor of one
     // row so a very long list still leaves something to grab.
@@ -843,7 +875,9 @@ fn drawFooter(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
 fn drawPane(state: *const State, buf: *ui.Buffer, area: ui.Rect) void {
     buf.fill(area, " ", .{ .bg = bg });
     const inner = area.inner(2);
-    if (inner.w == 0 or inner.h == 0) return;
+    if (inner.w == 0 or inner.h == 0) {
+        return;
+    }
 
     const task = state.tasks[state.selected_task];
     var y = inner.y;
@@ -861,7 +895,9 @@ fn drawPane(state: *const State, buf: *ui.Buffer, area: ui.Rect) void {
         "drew. Nothing works out a position twice.",
     };
     for (lines) |line| {
-        if (y >= inner.y + inner.h) break;
+        if (y >= inner.y + inner.h) {
+            break;
+        }
         _ = buf.writeTruncated(inner, inner.x, y, line, inner.w, .{ .fg = muted, .bg = bg });
         y += 1;
     }
@@ -938,7 +974,9 @@ fn update(state: *State, event: term.Event) void {
         .key => |key| handleKey(state, key),
         .mouse => |mouse| {
             state.hovered = state.hits.at(mouse.x, mouse.y);
-            if (handleSelection(state, mouse)) return;
+            if (handleSelection(state, mouse)) {
+                return;
+            }
             switch (mouse.kind) {
                 .press => if (state.hits.at(mouse.x, mouse.y)) |action| apply(state, action),
                 // Scrolling is aimed by the pointer, not by the keyboard, so
@@ -979,16 +1017,24 @@ fn handleSelection(state: *State, mouse: term.Event.Mouse) bool {
             state.selection = .{ .anchor = at, .head = at, .granularity = granularity };
             // A word or line selection is complete the moment it is made;
             // nobody drags before releasing a double click.
-            if (granularity != .character) copySelection(state);
+            if (granularity != .character) {
+                copySelection(state);
+            }
             return true;
         },
         .drag => {
-            if (!state.dragging) return false;
-            if (state.selection) |*range| range.head = at;
+            if (!state.dragging) {
+                return false;
+            }
+            if (state.selection) |*range| {
+                range.head = at;
+            }
             return true;
         },
         .release => {
-            if (!state.dragging) return false;
+            if (!state.dragging) {
+                return false;
+            }
             state.dragging = false;
             copySelection(state);
             return true;
@@ -1010,7 +1056,9 @@ fn copySelection(state: *State) void {
     const source = state.last_buffer orelse return;
     const copied = sel.text(source, range.expanded(source), &state.clipboard);
     state.clipboard_len = copied.len;
-    if (copied.len > 0) state.flash = "copied";
+    if (copied.len > 0) {
+        state.flash = "copied";
+    }
 }
 
 /// Routes a key by asking who has the keyboard.
@@ -1027,7 +1075,9 @@ fn handleKey(state: *State, key: term.Event.Key) void {
     // nothing else looks at it. This is the check that stops three pasted lines
     // becoming three commands.
     if (state.pasting) {
-        if (state.focus.has(.search)) pasteInto(state, key);
+        if (state.focus.has(.search)) {
+            pasteInto(state, key);
+        }
         return;
     }
 
@@ -1070,12 +1120,18 @@ fn searchKey(state: *State, key: term.Event.Key) void {
     const field = &state.search;
     const extend = key.mods.shift;
 
-    if (key.isCtrl('a')) return field.selectAll();
-    if (key.isCtrl('u')) return field.setText("");
+    if (key.isCtrl('a')) {
+        return field.selectAll();
+    }
+    if (key.isCtrl('u')) {
+        return field.setText("");
+    }
 
     switch (key.code) {
         .char => |c| {
-            if (key.mods.ctrl) return;
+            if (key.mods.ctrl) {
+                return;
+            }
             field.insert(c.slice());
         },
         .backspace => field.backspace(),
@@ -1178,10 +1234,14 @@ fn globalChar(state: *State, c: term.Event.Char) void {
         return;
     }
     for (state.tabs, 0..) |tab, index| {
-        if (c.len == 1 and c.bytes[0] == '0' + tab.key) state.selected_tab = index;
+        if (c.len == 1 and c.bytes[0] == '0' + tab.key) {
+            state.selected_tab = index;
+        }
     }
     for (state.hints, 0..) |hint, index| {
-        if (c.eql(hint.key)) apply(state, .{ .hint = index });
+        if (c.eql(hint.key)) {
+            apply(state, .{ .hint = index });
+        }
     }
 }
 
@@ -1195,7 +1255,9 @@ fn moveSelection(state: *State, delta: i8) void {
     // section, approximated rather than measured; the list is short and a
     // spike does not need to be exact about it.
     const approximate: u16 = @as(u16, @intCast(state.selected_task)) * 4;
-    if (approximate < state.scroll) state.scroll = approximate;
+    if (approximate < state.scroll) {
+        state.scroll = approximate;
+    }
     if (state.list_area.h > 0 and approximate + 4 > state.scroll + state.list_area.h) {
         state.scroll = approximate + 4 -| state.list_area.h;
     }
@@ -1264,7 +1326,9 @@ fn inputActor(io: Io, queue: *Io.Queue(Message)) Io.Cancelable!void {
             error.Canceled => |e| return e,
             else => return,
         };
-        if (n == 0) return;
+        if (n == 0) {
+            return;
+        }
 
         var offset: usize = 0;
         while (offset < n) {
@@ -1378,7 +1442,9 @@ pub fn main(init: std.process.Init) !void {
 
             // Checked before sleeping, not after: a user who pressed quit
             // should not wait out a frame budget to see the shell again.
-            if (state.quit) break;
+            if (state.quit) {
+                break;
+            }
 
             const deadline = pacer.waitUntil(monotonic(io)) orelse break;
             pacer.noteThrottled();
@@ -1389,9 +1455,13 @@ pub fn main(init: std.process.Init) !void {
             // Whatever arrived while we waited. `min` zero so this never
             // blocks - an empty queue after the wait means draw now.
             n = queue.get(io, &batch, 0) catch break;
-            if (n == 0) break;
+            if (n == 0) {
+                break;
+            }
         }
-        if (state.quit) break;
+        if (state.quit) {
+            break;
+        }
 
         state.pacing = pacer.stats;
         view(&state, screen.buffer());
@@ -1420,7 +1490,9 @@ pub fn main(init: std.process.Init) !void {
 /// and the sequence lands next to the frame it belongs to rather than
 /// interleaved with the diff.
 fn sendClipboard(state: *State, w: *Io.Writer) !void {
-    if (state.clipboard_len == 0) return;
+    if (state.clipboard_len == 0) {
+        return;
+    }
     const payload = state.clipboard[0..state.clipboard_len];
     state.clipboard_len = 0;
 
@@ -1543,7 +1615,9 @@ const testing = std.testing;
 /// Finds the first point whose registered action satisfies `match`.
 fn findHit(state: *const State, comptime match: fn (Action) bool) ?struct { x: u16, y: u16 } {
     for (state.hits.registered()) |hit| {
-        if (match(hit.action)) return .{ .x = hit.rect.x, .y = hit.rect.y };
+        if (match(hit.action)) {
+            return .{ .x = hit.rect.x, .y = hit.rect.y };
+        }
     }
     return null;
 }
@@ -1687,7 +1761,9 @@ test "the scrollbar only appears when the list overflows" {
 
         var found = false;
         for (state.hits.registered()) |hit| {
-            if (hit.action == .scroll_to_row) found = true;
+            if (hit.action == .scroll_to_row) {
+                found = true;
+            }
         }
         try testing.expectEqual(case.expect, found);
     }
@@ -1733,7 +1809,9 @@ test "narrow and short terminals draw without writing outside the buffer" {
 fn focusFirstTask(state: *State, buf: *ui.Buffer) usize {
     for (0..32) |_| {
         if (state.focus.focused()) |id| {
-            if (id == .task) return id.task;
+            if (id == .task) {
+                return id.task;
+            }
         }
         update(state, .{ .key = .plain(.tab) });
         view(state, buf);
@@ -1746,7 +1824,9 @@ fn openDialog(state: *State, buf: *ui.Buffer) ui.Rect {
     apply(state, .{ .run_task_action = 0 });
     view(state, buf);
     for (state.hits.registered()) |entry| {
-        if (entry.action == .dialog_body) return entry.rect;
+        if (entry.action == .dialog_body) {
+            return entry.rect;
+        }
     }
     return .{};
 }
@@ -1874,7 +1954,9 @@ test "nothing the dialog draws escapes its frame" {
     var y = frame.y;
     while (y < frame.y + frame.h) : (y += 1) {
         for ([_]u16{ frame.x - 2, frame.x - 1, frame.x + frame.w, frame.x + frame.w + 1 }) |x| {
-            if (x >= buf.w) continue;
+            if (x >= buf.w) {
+                continue;
+            }
             const without = (buf.at(x, y) orelse unreachable).*;
             try testing.expect(with[y][x].eqlPublic(&without));
             checked += 1;
@@ -2217,9 +2299,13 @@ fn inertPoint(state: *const State, buf: *const ui.Buffer) ?sel.Point {
     while (y < buf.h) : (y += 1) {
         var x: u16 = 0;
         while (x < buf.w) : (x += 1) {
-            if (state.hits.at(x, y) != null) continue;
+            if (state.hits.at(x, y) != null) {
+                continue;
+            }
             const cell = buf.cells[@as(usize, y) * @as(usize, buf.w) + @as(usize, x)];
-            if (cell.text().len > 0 and cell.text()[0] != ' ') return .{ .x = x, .y = y };
+            if (cell.text().len > 0 and cell.text()[0] != ' ') {
+                return .{ .x = x, .y = y };
+            }
         }
     }
     return null;
@@ -2351,7 +2437,9 @@ test "what is highlighted is what is copied" {
     var inverted: usize = 0;
     for (0..buf.h) |y| for (0..buf.w) |x| {
         const cell = buf.at(@intCast(x), @intCast(y)) orelse continue;
-        if (cell.style.flags.inverse) inverted += 1;
+        if (cell.style.flags.inverse) {
+            inverted += 1;
+        }
     };
     try testing.expectEqual(@as(usize, 9), inverted);
     try testing.expect(copied.len > 0);

@@ -156,7 +156,9 @@ pub fn build(b: *std.Build) void {
         "TELAR_DEVELOPMENT_CONFIG",
         b.pathFromRoot("dev/config.lua"),
     );
-    if (b.args) |args| run_exe.addArgs(args);
+    if (b.args) |args| {
+        run_exe.addArgs(args);
+    }
     b.step("run", "Run telar").dependOn(&run_exe.step);
 
     // Benchmarks use their own optimized module graph. Running a Debug core
@@ -220,12 +222,16 @@ pub fn build(b: *std.Build) void {
     benchmarks.root_module.addImport("telar-frontend", bench_frontend);
     benchmarks.root_module.addImport("ghostty-vt", ghostty_vt);
     const run_benchmarks = b.addRunArtifact(benchmarks);
-    if (b.args) |args| run_benchmarks.addArgs(args);
+    if (b.args) |args| {
+        run_benchmarks.addArgs(args);
+    }
     b.step("bench", "Run the interactive path benchmarks").dependOn(&run_benchmarks.step);
 
     const verify_terminal_browser = b.addSystemCommand(&.{"python3"});
     verify_terminal_browser.addFileArg(b.path("tools/verify_terminal_browser.py"));
-    if (b.args) |args| verify_terminal_browser.addArgs(args);
+    if (b.args) |args| {
+        verify_terminal_browser.addArgs(args);
+    }
     b.step(
         "verify-terminal-browser",
         "Build and exercise pinned terminal-browser inside Telar on Ghostty",
@@ -282,7 +288,9 @@ pub fn build(b: *std.Build) void {
 
     const run_terminal_browser_pane = b.addRunArtifact(terminal_browser_pane);
     run_terminal_browser_pane.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_terminal_browser_pane.addArgs(args);
+    if (b.args) |args| {
+        run_terminal_browser_pane.addArgs(args);
+    }
     b.step(
         "terminal-browser-pane",
         "Run terminal-browser inside a centered half-size pane",
@@ -431,11 +439,18 @@ pub fn build(b: *std.Build) void {
 
         const run_tests = b.addRunArtifact(tests);
         parallel_test_prerequisites.dependOn(&run_tests.step);
-        if (std.mem.eql(u8, suite.path, "src/backend/proxy_test.zig"))
+        if (std.mem.eql(u8, suite.path, "src/backend/proxy_test.zig")) {
             backend_proxy_test_step.dependOn(&run_tests.step);
-        if (suite.transport) transport_test_prerequisites.dependOn(&run_tests.step);
-        if (suite.schema) schema_test_prerequisites.dependOn(&run_tests.step);
-        if (suite.frontend) frontend_test_step.dependOn(&run_tests.step);
+        }
+        if (suite.transport) {
+            transport_test_prerequisites.dependOn(&run_tests.step);
+        }
+        if (suite.schema) {
+            schema_test_prerequisites.dependOn(&run_tests.step);
+        }
+        if (suite.frontend) {
+            frontend_test_step.dependOn(&run_tests.step);
+        }
     }
 
     // The same drawing code against a width table that answers nonsense, so
@@ -468,15 +483,7 @@ pub fn build(b: *std.Build) void {
     // the core builds anywhere with nothing but a Zig compiler. Someone who
     // wants the proxy asks for it.
     const proxyModule = struct {
-        fn make(
-            bb: *std.Build,
-            path: []const u8,
-            t: std.Build.ResolvedTarget,
-            o: std.builtin.OptimizeMode,
-            tls_mod: *std.Build.Module,
-            vt_mod: *std.Build.Module,
-            prefixes: ProxyPrefixes,
-        ) *std.Build.Module {
+        fn make(bb: *std.Build, path: []const u8, t: std.Build.ResolvedTarget, o: std.builtin.OptimizeMode, tls_mod: *std.Build.Module, vt_mod: *std.Build.Module, prefixes: ProxyPrefixes) *std.Build.Module {
             const mod = bb.createModule(.{
                 .root_source_file = bb.path(path),
                 .target = t,
@@ -587,8 +594,9 @@ pub fn build(b: *std.Build) void {
             }),
         });
         sound_check.root_module.addImport("telar-core", cross_core);
-        if (query.os_tag.? == .windows)
+        if (query.os_tag.? == .windows) {
             sound_check.root_module.linkSystemLibrary("user32", .{});
+        }
         cross_step.dependOn(&sound_check.step);
         if (query.os_tag.? == .linux) {
             const local_transport_check = b.addObject(.{
@@ -686,8 +694,9 @@ const Coverage = struct {
     fn init(b: *std.Build) Coverage {
         const enabled = b.option(bool, "coverage", "Enable zig-cov instrumentation") orelse false;
         const runtime_path = b.option([]const u8, "coverage-rt", "Path to zig-cov-rt.o");
-        if (enabled and runtime_path == null)
+        if (enabled and runtime_path == null) {
             std.debug.panic("-Dcoverage requires -Dcoverage-rt=<path>", .{});
+        }
         return .{
             .enabled = enabled,
             .runtime_path = runtime_path,
@@ -695,23 +704,25 @@ const Coverage = struct {
     }
 
     fn instrumentModule(coverage: Coverage, module: *std.Build.Module) void {
-        if (coverage.enabled) module.fuzz = true;
+        if (coverage.enabled) {
+            module.fuzz = true;
+        }
     }
 
     fn instrumentTest(coverage: Coverage, test_executable: *std.Build.Step.Compile) void {
-        if (!coverage.enabled) return;
+        if (!coverage.enabled) {
+            return;
+        }
         test_executable.use_llvm = true;
         test_executable.root_module.fuzz = true;
         test_executable.root_module.link_libc = true;
         test_executable.root_module.addObjectFile(.{ .cwd_relative = coverage.runtime_path.? });
     }
 
-    fn excludeCSourceCoverage(
-        coverage: Coverage,
-        b: *std.Build,
-        module: *std.Build.Module,
-    ) void {
-        if (!coverage.enabled) return;
+    fn excludeCSourceCoverage(coverage: Coverage, b: *std.Build, module: *std.Build.Module) void {
+        if (!coverage.enabled) {
+            return;
+        }
         for (module.link_objects.items) |link_object| switch (link_object) {
             .c_source_file => |source| source.flags = cFlags(b, source.flags, true),
             .c_source_files => |sources| sources.flags = cFlags(b, sources.flags, true),
@@ -725,12 +736,10 @@ const Coverage = struct {
 // dependencies outside the coverage graph.
 const no_c_coverage = "-fno-sanitize-coverage=trace-pc-guard,trace-cmp,inline-8bit-counters,pc-table";
 
-fn cFlags(
-    b: *std.Build,
-    base: []const []const u8,
-    disable_coverage: bool,
-) []const []const u8 {
-    if (!disable_coverage) return base;
+fn cFlags(b: *std.Build, base: []const []const u8, disable_coverage: bool) []const []const u8 {
+    if (!disable_coverage) {
+        return base;
+    }
     const flags = b.allocator.alloc([]const u8, base.len + 1) catch @panic("OOM");
     @memcpy(flags[0..base.len], base);
     flags[base.len] = no_c_coverage;
@@ -741,12 +750,7 @@ fn cFlags(
 /// faces and shaping. Telar leaves system zlib disabled, so FreeType's bundled
 /// gzip decoder remains self-contained and the frontend gains no runtime
 /// library dependency.
-fn addFreeType(
-    b: *std.Build,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    disable_coverage: bool,
-) *std.Build.Module {
+fn addFreeType(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, disable_coverage: bool) *std.Build.Module {
     const upstream = b.dependency("freetype", .{});
     const harfbuzz = b.dependency("harfbuzz", .{});
     const module = b.createModule(.{
@@ -865,12 +869,7 @@ const freetype_sources: []const []const u8 = &.{
     "src/winfonts/winfnt.c",
 };
 
-fn addLua(
-    b: *std.Build,
-    target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
-    name: []const u8,
-) *std.Build.Module {
+fn addLua(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, name: []const u8) *std.Build.Module {
     const source_root = b.path("vendor/lua-5.5.1/src");
     const lua = b.addLibrary(.{
         .name = name,
@@ -917,8 +916,9 @@ fn addLua(
         else
             &.{ "-std=c99", "-DLUA_USE_POSIX" },
     });
-    if (target.result.os.tag != .windows)
+    if (target.result.os.tag != .windows) {
         lua.root_module.linkSystemLibrary("m", .{});
+    }
 
     const api = b.createModule(.{
         .root_source_file = b.path("src/frontend/config/lua_api.zig"),

@@ -24,7 +24,9 @@ pub fn reservePort(first: u16, count: u16) ?u16 {
     var port = first;
     while (port < first + count) : (port += 1) {
         const fd = std.c.socket(std.c.AF.INET, std.c.SOCK.STREAM, 0);
-        if (fd < 0) return null;
+        if (fd < 0) {
+            return null;
+        }
         defer _ = std.c.close(fd);
 
         var addr: std.c.sockaddr.in = .{
@@ -34,7 +36,9 @@ pub fn reservePort(first: u16, count: u16) ?u16 {
             .zero = @splat(0),
         };
         const rc = std.c.bind(fd, @ptrCast(&addr), @sizeOf(std.c.sockaddr.in));
-        if (rc == 0) return port;
+        if (rc == 0) {
+            return port;
+        }
     }
     return null;
 }
@@ -71,15 +75,7 @@ pub fn serve(io: Io, port: u16, authority: ca.Authority, gpa: std.mem.Allocator,
     }
 }
 
-fn tunnel(
-    io: Io,
-    stream: net.Stream,
-    authority: ca.Authority,
-    roots: tls.Roots,
-    gpa: std.mem.Allocator,
-    queue: *event.Queue,
-    next_id: *std.atomic.Value(u64),
-) Io.Cancelable!void {
+fn tunnel(io: Io, stream: net.Stream, authority: ca.Authority, roots: tls.Roots, gpa: std.mem.Allocator, queue: *event.Queue, next_id: *std.atomic.Value(u64)) Io.Cancelable!void {
     defer stream.close(io);
 
     var head_buf: [8 * event.KB]u8 = undefined;
@@ -91,20 +87,26 @@ fn tunnel(
     const request_line = blk: {
         const raw = client_reader.interface.takeDelimiterInclusive('\n') catch return;
         const line = std.mem.trimEnd(u8, raw, "\r\n");
-        if (line.len > line_buf.len) return;
+        if (line.len > line_buf.len) {
+            return;
+        }
         @memcpy(line_buf[0..line.len], line);
         break :blk line_buf[0..line.len];
     };
 
     while (true) {
         const line = client_reader.interface.takeDelimiterInclusive('\n') catch return;
-        if (std.mem.eql(u8, line, "\r\n") or std.mem.eql(u8, line, "\n")) break;
+        if (std.mem.eql(u8, line, "\r\n") or std.mem.eql(u8, line, "\n")) {
+            break;
+        }
     }
 
     var parts = std.mem.tokenizeScalar(u8, request_line, ' ');
     const method = parts.next() orelse return;
     const target = parts.next() orelse return;
-    if (!std.mem.eql(u8, method, "CONNECT")) return;
+    if (!std.mem.eql(u8, method, "CONNECT")) {
+        return;
+    }
 
     const colon = std.mem.lastIndexOfScalar(u8, target, ':') orelse return;
     const host = target[0..colon];
@@ -129,7 +131,9 @@ fn tunnel(
     // The buffered reader must not have swallowed any of the ClientHello. In
     // practice clients wait for this 200 before sending it, so an assertion is
     // enough; a memory BIO would be the fix if that ever stopped holding.
-    if (client_reader.interface.buffered().len != 0) return;
+    if (client_reader.interface.buffered().len != 0) {
+        return;
+    }
 
     const id = next_id.fetchAdd(1, .monotonic);
     const opened_at = Io.Timestamp.now(io, .awake);
@@ -259,7 +263,9 @@ fn tunnel(
         } };
 
         queue.putOne(io, exchange) catch |err| {
-            if (detail) |owned| gpa.free(owned);
+            if (detail) |owned| {
+                gpa.free(owned);
+            }
             switch (err) {
                 error.Canceled => |e| return e,
                 else => return,
@@ -319,15 +325,7 @@ const H2Side = struct {
 
 /// Runs both directions of an h2 connection and records one exchange for the
 /// whole thing. Per-stream splitting is the next step; this is the connection.
-fn relayH2(
-    io: Io,
-    session: *tls.Session,
-    gpa: std.mem.Allocator,
-    id: u64,
-    opened: event.Upstream,
-    port: u16,
-    queue: *event.Queue,
-) Io.Cancelable!void {
+fn relayH2(io: Io, session: *tls.Session, gpa: std.mem.Allocator, id: u64, opened: event.Upstream, port: u16, queue: *event.Queue) Io.Cancelable!void {
     const started = Io.Timestamp.now(io, .awake);
 
     const req_body = gpa.alloc(u8, 64 * event.KB) catch return;
@@ -370,7 +368,9 @@ fn relayH2(
         .detail = detail,
         .truncated = out.seen.truncated or back.seen.truncated,
     } }) catch |err| {
-        if (detail) |owned| gpa.free(owned);
+        if (detail) |owned| {
+            gpa.free(owned);
+        }
         switch (err) {
             error.Canceled => |e| return e,
             else => return,
@@ -387,11 +387,15 @@ fn renderH2(gpa: std.mem.Allocator, out: *H2Side, back: *H2Side) ?[]const u8 {
     // Header names come from HPACK, so credentials arrive decoded and must be
     // dropped here exactly as in the HTTP/1.1 path.
     http.redactedHead(out.text.written(), &w.writer) catch return null;
-    if (out.body_len > 0) w.writer.print("\n{s}\n", .{out.body[0..out.body_len]}) catch return null;
+    if (out.body_len > 0) {
+        w.writer.print("\n{s}\n", .{out.body[0..out.body_len]}) catch return null;
+    }
 
     w.writer.writeAll("\n=== response ===\n") catch return null;
     http.redactedHead(back.text.written(), &w.writer) catch return null;
-    if (back.body_len > 0) w.writer.print("\n{s}\n", .{back.body[0..back.body_len]}) catch return null;
+    if (back.body_len > 0) {
+        w.writer.print("\n{s}\n", .{back.body[0..back.body_len]}) catch return null;
+    }
 
     return w.toOwnedSlice() catch null;
 }
@@ -412,7 +416,9 @@ fn clientOffersHttp11(fd: c_int) bool {
     const MSG_PEEK: c_int = 0x2;
     var buf: [4 * event.KB]u8 = undefined;
     const n = std.c.recv(fd, &buf, buf.len, MSG_PEEK);
-    if (n <= 0) return false;
+    if (n <= 0) {
+        return false;
+    }
     return std.mem.indexOf(u8, buf[0..@intCast(n)], "http/1.1") != null;
 }
 
@@ -422,11 +428,15 @@ fn pumpBlind(from: c_int, to: c_int, counter: *std.atomic.Value(u64)) void {
     var buf: [16 * event.KB]u8 = undefined;
     while (true) {
         const n = std.c.read(from, &buf, buf.len);
-        if (n <= 0) break;
+        if (n <= 0) {
+            break;
+        }
         var sent: usize = 0;
         while (sent < @as(usize, @intCast(n))) {
             const w = std.c.write(to, buf[sent..].ptr, @as(usize, @intCast(n)) - sent);
-            if (w <= 0) return;
+            if (w <= 0) {
+                return;
+            }
             sent += @intCast(w);
         }
         _ = counter.fetchAdd(@intCast(n), .monotonic);
@@ -436,16 +446,13 @@ fn pumpBlind(from: c_int, to: c_int, counter: *std.atomic.Value(u64)) void {
 /// Copies one direction opaquely until it stops. Each `SSL` object ends up with
 /// exactly one reading thread and one writing thread, which is the pairing
 /// OpenSSL supports on a single object.
-fn pumpDirection(
-    session: *tls.Session,
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    counter: *std.atomic.Value(u64),
-) void {
+fn pumpDirection(session: *tls.Session, from: tls.Session.Side, to: tls.Session.Side, counter: *std.atomic.Value(u64)) void {
     var buf: [16 * event.KB]u8 = undefined;
     while (true) {
         const n = session.read(from, &buf) orelse break;
-        if (!session.writeAll(to, buf[0..n])) break;
+        if (!session.writeAll(to, buf[0..n])) {
+            break;
+        }
         _ = counter.fetchAdd(n, .monotonic);
     }
 }
@@ -453,23 +460,19 @@ fn pumpDirection(
 /// Builds the storable rendering of one exchange. Bodies are deliberately not
 /// persisted: prompts, replies, and tool payloads may contain credentials for
 /// which no generic redactor can provide a safety guarantee.
-fn renderExchange(
-    gpa: std.mem.Allocator,
-    request_head: []const u8,
-    request_body: []const u8,
-    response_head: []const u8,
-    response_body: []const u8,
-) ?[]const u8 {
+fn renderExchange(gpa: std.mem.Allocator, request_head: []const u8, request_body: []const u8, response_head: []const u8, response_body: []const u8) ?[]const u8 {
     var out: std.Io.Writer.Allocating = .init(gpa);
     errdefer out.deinit();
 
     http.redactedHead(request_head, &out.writer) catch return null;
-    if (request_body.len > 0)
+    if (request_body.len > 0) {
         out.writer.print("\n<body omitted: {d} bytes>\n", .{request_body.len}) catch return null;
+    }
     out.writer.writeAll("\n--- response ---\n") catch return null;
     http.redactedHead(response_head, &out.writer) catch return null;
-    if (response_body.len > 0)
+    if (response_body.len > 0) {
         out.writer.print("\n<body omitted: {d} bytes>\n", .{response_body.len}) catch return null;
+    }
 
     return out.toOwnedSlice() catch null;
 }

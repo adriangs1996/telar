@@ -76,10 +76,13 @@ pub const Timeline = struct {
     pub fn open(path: [:0]const u8, session_id: []const u8) Error!Timeline {
         var timeline: Timeline = .{ .session_id = session_id };
 
-        if (c.sqlite3_open(path.ptr, &timeline.db) != c.SQLITE_OK) return error.OpenFailed;
-        errdefer _ = c.sqlite3_close(timeline.db);
-        if (!std.mem.eql(u8, path, ":memory:") and std.c.chmod(path.ptr, 0o600) != 0)
+        if (c.sqlite3_open(path.ptr, &timeline.db) != c.SQLITE_OK) {
             return error.OpenFailed;
+        }
+        errdefer _ = c.sqlite3_close(timeline.db);
+        if (!std.mem.eql(u8, path, ":memory:") and std.c.chmod(path.ptr, 0o600) != 0) {
+            return error.OpenFailed;
+        }
 
         if (c.sqlite3_exec(timeline.db, schema, null, null, null) != c.SQLITE_OK) {
             return error.SchemaFailed;
@@ -92,8 +95,12 @@ pub const Timeline = struct {
     }
 
     pub fn close(t: *Timeline) void {
-        if (t.insert) |stmt| _ = c.sqlite3_finalize(stmt);
-        if (t.db) |db| _ = c.sqlite3_close(db);
+        if (t.insert) |stmt| {
+            _ = c.sqlite3_finalize(stmt);
+        }
+        if (t.db) |db| {
+            _ = c.sqlite3_close(db);
+        }
         t.* = .{ .session_id = t.session_id };
     }
 
@@ -143,11 +150,15 @@ fn bindText(stmt: *c.sqlite3_stmt, index: c_int, text: []const u8) void {
 }
 
 fn bindOptText(stmt: *c.sqlite3_stmt, index: c_int, text: ?[]const u8) void {
-    if (text) |value| bindText(stmt, index, value);
+    if (text) |value| {
+        bindText(stmt, index, value);
+    }
 }
 
 fn bindInt(stmt: *c.sqlite3_stmt, index: c_int, value: ?i64) void {
-    if (value) |v| _ = c.sqlite3_bind_int64(stmt, index, v);
+    if (value) |v| {
+        _ = c.sqlite3_bind_int64(stmt, index, v);
+    }
 }
 
 test "timeline database is private" {

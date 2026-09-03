@@ -33,7 +33,9 @@ const scans = [_]Scan{
 /// ```
 pub fn scanReadyPrompt(terminal: *const vt.Terminal) ?Signal {
     for (scans) |scan| {
-        if (!scan.ready(terminal)) continue;
+        if (!scan.ready(terminal)) {
+            continue;
+        }
 
         return .{
             .provider = scan.provider,
@@ -66,9 +68,13 @@ fn promptBeforeTerminalCursor(cursor: vt.Pin) bool {
     while (index != 0 and distance < max_prompt_distance) : (distance += 1) {
         index -= 1;
         const cell = cells[index];
-        if (!cell.hasText()) continue;
+        if (!cell.hasText()) {
+            continue;
+        }
         const codepoint = cell.codepoint();
-        if (codepoint == ' ') continue;
+        if (codepoint == ' ') {
+            continue;
+        }
         return codepoint == 0x276f;
     }
     return false;
@@ -87,11 +93,16 @@ fn promptWithSoftwareCursor(screen: *const vt.Screen, rows: u16) bool {
                 prompt = x;
                 continue;
             }
-            if (prompt == null or x <= prompt.?) continue;
-            if (cell.content_tag == .bg_color_palette or cell.content_tag == .bg_color_rgb)
+            if (prompt == null or x <= prompt.?) {
+                continue;
+            }
+            if (cell.content_tag == .bg_color_palette or cell.content_tag == .bg_color_rgb) {
                 return true;
+            }
             const cell_style = pin.style(cell);
-            if (cell_style.flags.inverse or hasBackground(cell_style.bg_color)) return true;
+            if (cell_style.flags.inverse or hasBackground(cell_style.bg_color)) {
+                return true;
+            }
         }
     }
     return false;
@@ -99,7 +110,9 @@ fn promptWithSoftwareCursor(screen: *const vt.Screen, rows: u16) bool {
 
 fn rowPrefixIsBlank(cells: []const vt.Cell) bool {
     for (cells) |cell| {
-        if (cell.hasText() and cell.codepoint() != ' ') return false;
+        if (cell.hasText() and cell.codepoint() != ' ') {
+            return false;
+        }
     }
     return true;
 }

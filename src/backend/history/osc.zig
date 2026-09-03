@@ -87,7 +87,9 @@ pub const Tracker = struct {
         for (observation.bytes) |byte| switch (tracker.scanner.next(byte)) {
             .none => {},
             .start => {
-                if (comptime builtin.mode == .Debug) tracker.osc_started += 1;
+                if (comptime builtin.mode == .Debug) {
+                    tracker.osc_started += 1;
+                }
                 tracker.osc_len = 0;
                 tracker.osc_overflow = false;
             },
@@ -115,7 +117,9 @@ pub const Tracker = struct {
     /// tracker.interrupt(clock, &sink);
     /// ```
     pub fn interrupt(tracker: *Tracker, clock: Clock, sink: anytype) void {
-        if (!tracker.running) return;
+        if (!tracker.running) {
+            return;
+        }
         tracker.emit(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
     }
 
@@ -128,7 +132,9 @@ pub const Tracker = struct {
     }
 
     fn captureByte(tracker: *Tracker, byte: u8) void {
-        if (tracker.zone != .input) return;
+        if (tracker.zone != .input) {
+            return;
+        }
         if (tracker.command_len == tracker.command.len) {
             tracker.command_truncated = true;
             return;
@@ -147,12 +153,16 @@ pub const Tracker = struct {
     }
 
     fn finishOsc(tracker: *Tracker, clock: Clock, sink: anytype) void {
-        if (comptime builtin.mode == .Debug) tracker.osc_finished += 1;
+        if (comptime builtin.mode == .Debug) {
+            tracker.osc_finished += 1;
+        }
         defer {
             tracker.osc_len = 0;
             tracker.osc_overflow = false;
         }
-        if (tracker.osc_overflow) return;
+        if (tracker.osc_overflow) {
+            return;
+        }
         const payload = tracker.osc[0..tracker.osc_len];
         const separator = std.mem.indexOfScalar(u8, payload, ';') orelse payload.len;
         const code = payload[0..separator];
@@ -172,26 +182,36 @@ pub const Tracker = struct {
         const action = body[0..separator];
         const options = if (separator == body.len) "" else body[separator + 1 ..];
         if (std.mem.eql(u8, action, "A") or std.mem.eql(u8, action, "P")) {
-            if (comptime builtin.mode == .Debug) tracker.prompt_markers += 1;
-            if (tracker.running)
+            if (comptime builtin.mode == .Debug) {
+                tracker.prompt_markers += 1;
+            }
+            if (tracker.running) {
                 tracker.emit(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
+            }
             tracker.zone = .prompt;
             tracker.resetCommand();
         } else if (std.mem.eql(u8, action, "B")) {
-            if (comptime builtin.mode == .Debug) tracker.input_markers += 1;
+            if (comptime builtin.mode == .Debug) {
+                tracker.input_markers += 1;
+            }
             tracker.zone = .input;
             tracker.resetCommand();
         } else if (std.mem.eql(u8, action, "C")) {
-            if (comptime builtin.mode == .Debug) tracker.output_markers += 1;
+            if (comptime builtin.mode == .Debug) {
+                tracker.output_markers += 1;
+            }
             tracker.zone = .output;
             tracker.running = tracker.command_len != 0;
             tracker.started_at_ms = clock.real_ms;
             tracker.started_awake_ns = clock.awake_ns;
         } else if (std.mem.eql(u8, action, "D")) {
-            if (comptime builtin.mode == .Debug) tracker.finished_markers += 1;
+            if (comptime builtin.mode == .Debug) {
+                tracker.finished_markers += 1;
+            }
             tracker.zone = .prompt;
-            if (tracker.running)
+            if (tracker.running) {
                 tracker.emit(.{ .clock = clock, .exit_code = parseExitCode(options), .status = .completed }, sink);
+            }
         }
     }
 
@@ -219,7 +239,9 @@ pub const Tracker = struct {
         const prefixes = [_][]const u8{ "file://", "kitty-shell-cwd://" };
         var path: ?[]const u8 = null;
         for (prefixes) |prefix| {
-            if (!std.mem.startsWith(u8, body, prefix)) continue;
+            if (!std.mem.startsWith(u8, body, prefix)) {
+                continue;
+            }
             const authority_and_path = body[prefix.len..];
             const slash = std.mem.indexOfScalar(u8, authority_and_path, '/') orelse return;
             path = authority_and_path[slash..];
@@ -237,7 +259,9 @@ pub const Tracker = struct {
 
 fn parseExitCode(options: []const u8) ?i32 {
     const first = options[0 .. std.mem.indexOfScalar(u8, options, ';') orelse options.len];
-    if (first.len == 0) return null;
+    if (first.len == 0) {
+        return null;
+    }
     return std.fmt.parseInt(i32, first, 10) catch null;
 }
 
@@ -245,9 +269,13 @@ fn percentDecode(input: []const u8, output: []u8) ?usize {
     var source: usize = 0;
     var destination: usize = 0;
     while (source < input.len) {
-        if (destination == output.len) return null;
+        if (destination == output.len) {
+            return null;
+        }
         if (input[source] == '%') {
-            if (source + 2 >= input.len) return null;
+            if (source + 2 >= input.len) {
+                return null;
+            }
             const high = std.fmt.charToDigit(input[source + 1], 16) catch return null;
             const low = std.fmt.charToDigit(input[source + 2], 16) catch return null;
             output[destination] = @intCast(high * 16 + low);

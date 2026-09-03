@@ -52,7 +52,9 @@ pub const Detector = struct {
                 else => detector.state = .text,
             },
             .csi => {
-                if (byte >= 0x40 and byte <= 0x7e) detector.state = .text;
+                if (byte >= 0x40 and byte <= 0x7e) {
+                    detector.state = .text;
+                }
             },
             .osc => switch (byte) {
                 0x07 => detector.state = .text,
@@ -61,7 +63,9 @@ pub const Detector = struct {
             },
             .osc_escape => detector.state = if (byte == '\\') .text else .osc,
             .string => {
-                if (byte == 0x1b) detector.state = .string_escape;
+                if (byte == 0x1b) {
+                    detector.state = .string_escape;
+                }
             },
             .string_escape => detector.state = if (byte == '\\') .text else .string,
         }

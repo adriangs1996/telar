@@ -68,13 +68,10 @@ pub const Authority = struct {
 
     /// Loads the CA from `key_path`/`cert_path`, generating and persisting one
     /// on first run.
-    pub fn loadOrCreate(
-        io: Io,
-        gpa: std.mem.Allocator,
-        key_path: []const u8,
-        cert_path: []const u8,
-    ) Error!Authority {
-        if (load(io, gpa, key_path, cert_path)) |pair| return .{ .pair = pair } else |_| {}
+    pub fn loadOrCreate(io: Io, gpa: std.mem.Allocator, key_path: []const u8, cert_path: []const u8) Error!Authority {
+        if (load(io, gpa, key_path, cert_path)) |pair| {
+            return .{ .pair = pair };
+        } else |_| {}
 
         const pair = try generate(io);
         try persist(io, pair, key_path, cert_path);
@@ -88,12 +85,7 @@ pub const Authority = struct {
     /// not go through the proxy — and every tool that talks to something else —
     /// starts failing with "unable to get issuer cert". The child must trust the
     /// real world plus us.
-    pub fn writeBundle(
-        self: *const Authority,
-        io: Io,
-        gpa: std.mem.Allocator,
-        out_path: []const u8,
-    ) Error!void {
+    pub fn writeBundle(self: *const Authority, io: Io, gpa: std.mem.Allocator, out_path: []const u8) Error!void {
         const cwd: Io.Dir = .cwd();
 
         const roots = readSystemRoots(io, gpa) catch &[_]u8{};
@@ -165,7 +157,9 @@ fn load(io: Io, gpa: std.mem.Allocator, key_path: []const u8, cert_path: []const
     defer gpa.free(cert_pem);
 
     const parsed = tlsz.config.PrivateKey.parsePem(key_pem) catch return error.ReadFailed;
-    if (parsed.signature_scheme != .ecdsa_secp256r1_sha256) return error.ReadFailed;
+    if (parsed.signature_scheme != .ecdsa_secp256r1_sha256) {
+        return error.ReadFailed;
+    }
 
     const Ecdsa = std.crypto.sign.ecdsa.EcdsaP256Sha256;
     const secret = Ecdsa.SecretKey.fromBytes(
@@ -195,7 +189,9 @@ fn persist(io: Io, pair: Pair, key_path: []const u8, cert_path: []const u8) Erro
     // wear and a shipped version cannot.
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const key_path_z = std.fmt.bufPrintZ(&path_buf, "{s}", .{key_path}) catch return error.WriteFailed;
-    if (std.c.chmod(key_path_z.ptr, 0o600) != 0) return error.WriteFailed;
+    if (std.c.chmod(key_path_z.ptr, 0o600) != 0) {
+        return error.WriteFailed;
+    }
 }
 
 /// The roots the platform ships, as PEM.

@@ -75,9 +75,12 @@ pub const SessionTitle = struct {
         const source = definition.source;
         const state = definition.state;
 
-        if (title_value.len > schema.max_agent_session_title_bytes)
+        if (title_value.len > schema.max_agent_session_title_bytes) {
             return error.AgentTitleTooLong;
-        if (!std.unicode.utf8ValidateSlice(title_value)) return error.InvalidAgentTitle;
+        }
+        if (!std.unicode.utf8ValidateSlice(title_value)) {
+            return error.InvalidAgentTitle;
+        }
         for (title_value) |byte| if (byte < 0x20 or byte == 0x7f)
             return error.InvalidAgentTitle;
         switch (source) {

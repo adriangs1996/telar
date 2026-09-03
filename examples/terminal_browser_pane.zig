@@ -42,10 +42,14 @@ const FrameGeometry = struct {
 };
 
 fn centeredFrame(cols: u16, rows: u16) !FrameGeometry {
-    if (cols < 8 or rows < 8) return error.TerminalTooSmall;
+    if (cols < 8 or rows < 8) {
+        return error.TerminalTooSmall;
+    }
     const width = cols / 2;
     const height = rows / 2;
-    if (width < 3 or height < 3) return error.TerminalTooSmall;
+    if (width < 3 or height < 3) {
+        return error.TerminalTooSmall;
+    }
     const outer: ui.Rect = .{
         .x = (cols - width) / 2,
         .y = (rows - height) / 2,
@@ -55,10 +59,7 @@ fn centeredFrame(cols: u16, rows: u16) !FrameGeometry {
     return .{ .outer = outer, .content = outer.inner(1) };
 }
 
-fn paneTerminalSize(
-    frame: FrameGeometry,
-    capabilities: *const HostCapabilities,
-) schema.TerminalSize {
+fn paneTerminalSize(frame: FrameGeometry, capabilities: *const HostCapabilities) schema.TerminalSize {
     const cell = capabilities.cellSize(0, 0);
     return .{
         .cols = frame.content.w,
@@ -68,16 +69,19 @@ fn paneTerminalSize(
     };
 }
 
-fn observePlatformPixels(
-    capabilities: *HostCapabilities,
-    size: platform.Size,
-) void {
-    if (size.width_px != 0) capabilities.window_width_px = size.width_px;
-    if (size.height_px != 0) capabilities.window_height_px = size.height_px;
-    if (size.cols != 0 and size.width_px != 0)
+fn observePlatformPixels(capabilities: *HostCapabilities, size: platform.Size) void {
+    if (size.width_px != 0) {
+        capabilities.window_width_px = size.width_px;
+    }
+    if (size.height_px != 0) {
+        capabilities.window_height_px = size.height_px;
+    }
+    if (size.cols != 0 and size.width_px != 0) {
         capabilities.cell_width_px = size.width_px / size.cols;
-    if (size.rows != 0 and size.height_px != 0)
+    }
+    if (size.rows != 0 and size.height_px != 0) {
         capabilities.cell_height_px = size.height_px / size.rows;
+    }
 }
 
 const ResponseQueue = struct {
@@ -102,7 +106,9 @@ const ResponseQueue = struct {
     }
 
     fn peek(queue: *const ResponseQueue) ?[]const u8 {
-        if (queue.len == 0) return null;
+        if (queue.len == 0) {
+            return null;
+        }
         return queue.bytes[queue.head][0..queue.lengths[queue.head]];
     }
 
@@ -125,12 +131,7 @@ const Emulator = struct {
     render_state: vt.RenderState = .empty,
     responses: ResponseQueue = .{},
 
-    fn init(
-        emulator: *Emulator,
-        io: Io,
-        gpa: std.mem.Allocator,
-        size: schema.TerminalSize,
-    ) !void {
+    fn init(emulator: *Emulator, io: Io, gpa: std.mem.Allocator, size: schema.TerminalSize) !void {
         emulator.* = .{
             .gpa = gpa,
             .size = size,
@@ -177,12 +178,7 @@ const Emulator = struct {
         emulator.size = size;
     }
 
-    fn draw(
-        emulator: *Emulator,
-        buffer: *ui.Buffer,
-        area: ui.Rect,
-        force: bool,
-    ) !?term.Screen.Position {
+    fn draw(emulator: *Emulator, buffer: *ui.Buffer, area: ui.Rect, force: bool) !?term.Screen.Position {
         try emulator.render_state.update(emulator.gpa, &emulator.terminal);
         _ = blit.blit(.{
             .buffer = buffer,
@@ -194,7 +190,9 @@ const Emulator = struct {
         const cursor = emulator.render_state.cursor;
         if (!cursor.visible or cursor.viewport == null or
             cursor.viewport.?.x >= area.w or cursor.viewport.?.y >= area.h)
+        {
             return null;
+        }
         return .{
             .x = area.x + cursor.viewport.?.x,
             .y = area.y + cursor.viewport.?.y,
@@ -211,7 +209,9 @@ const Emulator = struct {
         const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
         const emulator: *Emulator = @fieldParentPtr("stream", stream);
         const size = emulator.size;
-        if (size.cell_width_px == 0 or size.cell_height_px == 0) return null;
+        if (size.cell_width_px == 0 or size.cell_height_px == 0) {
+            return null;
+        }
         return .{
             .rows = size.rows,
             .columns = size.cols,
@@ -235,15 +235,15 @@ const GraphicsMirror = struct {
         return storage.dirty and storage.loading == null;
     }
 
-    fn sync(
-        mirror: *GraphicsMirror,
-        emulator: *Emulator,
-        store: *kitty.Store,
-    ) !bool {
-        if (!mirror.ready(emulator)) return false;
+    fn sync(mirror: *GraphicsMirror, emulator: *Emulator, store: *kitty.Store) !bool {
+        if (!mirror.ready(emulator)) {
+            return false;
+        }
         const storage = &emulator.terminal.screens.active.kitty_images;
         mirror.revision +%= 1;
-        if (mirror.revision == 0) mirror.revision = 1;
+        if (mirror.revision == 0) {
+            mirror.revision = 1;
+        }
         const revision = mirror.revision;
         var next_image: ?struct {
             metadata: core.graphics.Image,
@@ -265,7 +265,9 @@ const GraphicsMirror = struct {
                 .height = image.height,
                 .byte_len = @intCast(pixels.len),
             };
-            if (next_image != null) return error.ExampleImageLimitExceeded;
+            if (next_image != null) {
+                return error.ExampleImageLimitExceeded;
+            }
             next_image = .{ .metadata = metadata, .pixels = pixels };
         }
 
@@ -295,14 +297,18 @@ const GraphicsMirror = struct {
         if (next_image) |next| {
             var placements = storage.placements.iterator();
             while (placements.next()) |entry| {
-                if (entry.key_ptr.image_id != next.metadata.key.image_id) continue;
+                if (entry.key_ptr.image_id != next.metadata.key.image_id) {
+                    continue;
+                }
                 const image = storage.imageById(entry.key_ptr.image_id) orelse continue;
                 const placement = media.placementValue(&emulator.terminal, .{
                     .key = entry.key_ptr.*,
                     .placement = entry.value_ptr.*,
                     .image = image,
                 }) orelse continue;
-                if (next_placement != null) return error.ExamplePlacementLimitExceeded;
+                if (next_placement != null) {
+                    return error.ExamplePlacementLimitExceeded;
+                }
                 next_placement = placement;
             }
         }
@@ -347,10 +353,7 @@ const GraphicsMirror = struct {
 const ExteriorGraphics = struct {
     writer: kitty.KittyGraphicsWriter,
 
-    fn writeOpaque(
-        context: *anyopaque,
-        writer: *Io.Writer,
-    ) Io.Writer.Error!usize {
+    fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
         const exterior: *ExteriorGraphics = @ptrCast(@alignCast(context));
         return exterior.writer.write(writer);
     }
@@ -365,21 +368,19 @@ const HostInput = struct {
         capabilities_changed: bool = false,
     };
 
-    fn feed(
-        input: *HostInput,
-        io: Io,
-        session: *pty.Session,
-        capabilities: *HostCapabilities,
-        bytes: []const u8,
-    ) !Result {
-        if (bytes.len > input.pending.len - input.len) return error.HostInputOverflow;
+    fn feed(input: *HostInput, io: Io, session: *pty.Session, capabilities: *HostCapabilities, bytes: []const u8) !Result {
+        if (bytes.len > input.pending.len - input.len) {
+            return error.HostInputOverflow;
+        }
         @memcpy(input.pending[input.len..][0..bytes.len], bytes);
         input.len += bytes.len;
 
         var result: Result = .{};
         while (input.len != 0) {
             const parsed = term.parse(input.pending[0..input.len]) orelse break;
-            if (parsed.len == 0) break;
+            if (parsed.len == 0) {
+                break;
+            }
             const raw = input.pending[0..parsed.len];
             switch (parsed.event) {
                 .terminal_response => |response| {
@@ -398,7 +399,9 @@ const HostInput = struct {
                 },
             }
             input.discard(parsed.len);
-            if (result.stop) break;
+            if (result.stop) {
+                break;
+            }
         }
         return result;
     }
@@ -459,7 +462,9 @@ fn inputActor(io: Io, file: File, queue: *Io.Queue(Message)) Io.Cancelable!void 
             error.Canceled => |cancelled| return cancelled,
             else => return,
         };
-        if (len == 0) return;
+        if (len == 0) {
+            return;
+        }
         chunk.len = @intCast(len);
         queue.putOne(io, .{ .input = chunk }) catch |err| switch (err) {
             error.Canceled => |cancelled| return cancelled,
@@ -490,11 +495,7 @@ fn outputActor(io: Io, session: *pty.Session, queue: *Io.Queue(Message)) Io.Canc
     }
 }
 
-fn resizeActor(
-    io: Io,
-    watcher: *platform.ResizeWatcher,
-    queue: *Io.Queue(Message),
-) Io.Cancelable!void {
+fn resizeActor(io: Io, watcher: *platform.ResizeWatcher, queue: *Io.Queue(Message)) Io.Cancelable!void {
     while (true) {
         try watcher.wait(io);
         queue.putOne(io, .resized) catch |err| switch (err) {
@@ -541,7 +542,7 @@ fn drawFrame(buffer: *ui.Buffer, frame: FrameGeometry) void {
         1,
         border,
     );
-    if (frame.outer.w > 22)
+    if (frame.outer.w > 22) {
         _ = buffer.writeText(
             frame.outer.row(0),
             frame.outer.x + 2,
@@ -549,37 +550,28 @@ fn drawFrame(buffer: *ui.Buffer, frame: FrameGeometry) void {
             " terminal-browser ",
             border,
         );
+    }
 }
 
 fn drainResponses(io: Io, session: *pty.Session, emulator: *Emulator) !void {
-    if (emulator.responses.overflowed) return error.PtyResponseOverflow;
+    if (emulator.responses.overflowed) {
+        return error.PtyResponseOverflow;
+    }
     while (emulator.responses.peek()) |response| {
         try session.writeAll(io, response);
         emulator.responses.pop();
     }
 }
 
-fn drawCells(
-    screen: *term.Screen,
-    emulator: *Emulator,
-    frame: FrameGeometry,
-    rebuild_frame: bool,
-) !void {
+fn drawCells(screen: *term.Screen, emulator: *Emulator, frame: FrameGeometry, rebuild_frame: bool) !void {
     const buffer = screen.buffer();
-    if (rebuild_frame) drawFrame(buffer, frame);
+    if (rebuild_frame) {
+        drawFrame(buffer, frame);
+    }
     screen.cursor = try emulator.draw(buffer, frame.content, rebuild_frame);
 }
 
-fn present(
-    screen: *term.Screen,
-    writer: *Io.Writer,
-    emulator: *Emulator,
-    mirror: *GraphicsMirror,
-    graphics_store: *kitty.Store,
-    model: *multiplexer.Model,
-    frame: FrameGeometry,
-    capabilities: *const HostCapabilities,
-) !void {
+fn present(screen: *term.Screen, writer: *Io.Writer, emulator: *Emulator, mirror: *GraphicsMirror, graphics_store: *kitty.Store, model: *multiplexer.Model, frame: FrameGeometry, capabilities: *const HostCapabilities) !void {
     _ = try mirror.sync(emulator, graphics_store);
     const cell = capabilities.cellSize(0, 0);
     var exterior: ExteriorGraphics = .{ .writer = .{
@@ -599,30 +591,20 @@ fn present(
     _ = try screen.flush(writer);
 }
 
-fn graphicsReady(
-    capabilities: *const HostCapabilities,
-    emulator: *const Emulator,
-    mirror: *const GraphicsMirror,
-    store: *const kitty.Store,
-) bool {
+fn graphicsReady(capabilities: *const HostCapabilities, emulator: *const Emulator, mirror: *const GraphicsMirror, store: *const kitty.Store) bool {
     const cell = capabilities.cellSize(0, 0);
-    if (capabilities.kitty_graphics != .supported or cell.width == 0 or cell.height == 0)
+    if (capabilities.kitty_graphics != .supported or cell.width == 0 or cell.height == 0) {
         return false;
+    }
     return store.damage or mirror.ready(emulator);
 }
 
-fn applyPaneGeometry(
-    io: Io,
-    session: *pty.Session,
-    emulator: *Emulator,
-    model: *multiplexer.Model,
-    graphics_store: *kitty.Store,
-    frame: FrameGeometry,
-    capabilities: *const HostCapabilities,
-) !bool {
+fn applyPaneGeometry(io: Io, session: *pty.Session, emulator: *Emulator, model: *multiplexer.Model, graphics_store: *kitty.Store, frame: FrameGeometry, capabilities: *const HostCapabilities) !bool {
     _ = io;
     const next = paneTerminalSize(frame, capabilities);
-    if (std.meta.eql(next, emulator.size)) return false;
+    if (std.meta.eql(next, emulator.size)) {
+        return false;
+    }
     try session.resize(.{
         .cols = next.cols,
         .rows = next.rows,
@@ -641,7 +623,9 @@ fn collectCommand(init: std.process.Init, storage: *[pty.max_args][*:0]const u8)
     var args = init.minimal.args.iterate();
     _ = args.next();
     while (args.next()) |arg| {
-        if (len == storage.len) return error.TooManyArguments;
+        if (len == storage.len) {
+            return error.TooManyArguments;
+        }
         storage[len] = arg.ptr;
         len += 1;
     }
@@ -689,8 +673,12 @@ pub fn main(init: std.process.Init) !void {
     }
 
     var host_size = tty.size();
-    if (host_size.cols == 0) host_size.cols = 80;
-    if (host_size.rows == 0) host_size.rows = 24;
+    if (host_size.cols == 0) {
+        host_size.cols = 80;
+    }
+    if (host_size.rows == 0) {
+        host_size.rows = 24;
+    }
     var capabilities: HostCapabilities = .{};
     observePlatformPixels(&capabilities, host_size);
     var frame = try centeredFrame(host_size.cols, host_size.rows);
@@ -804,7 +792,9 @@ pub fn main(init: std.process.Init) !void {
                         &graphics_store,
                         frame,
                         &capabilities,
-                    )) redraw_cells = true;
+                    )) {
+                        redraw_cells = true;
+                    }
                 }
             },
             .output => |chunk| {
@@ -814,8 +804,12 @@ pub fn main(init: std.process.Init) !void {
             },
             .resized => {
                 host_size = tty.size();
-                if (host_size.cols == 0) host_size.cols = 80;
-                if (host_size.rows == 0) host_size.rows = 24;
+                if (host_size.cols == 0) {
+                    host_size.cols = 80;
+                }
+                if (host_size.rows == 0) {
+                    host_size.rows = 24;
+                }
                 observePlatformPixels(&capabilities, host_size);
                 frame = try centeredFrame(host_size.cols, host_size.rows);
                 try screen.resize(host_size.cols, host_size.rows);
@@ -839,7 +833,9 @@ pub fn main(init: std.process.Init) !void {
             },
             .child_closed => child_closed = true,
         };
-        if (stop or child_closed) break;
+        if (stop or child_closed) {
+            break;
+        }
 
         if (redraw_cells or rebuild_frame) {
             try drawCells(&screen, &emulator, frame, rebuild_frame);
@@ -862,7 +858,9 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    if (child_closed) _ = session.wait() catch {};
+    if (child_closed) {
+        _ = session.wait() catch {};
+    }
 }
 
 test "the frame is centered and exactly half the host" {

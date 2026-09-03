@@ -35,7 +35,9 @@ const secret_headers = [_][]const u8{
 
 pub fn isSecretHeader(name: []const u8) bool {
     for (secret_headers) |secret| {
-        if (std.ascii.eqlIgnoreCase(name, secret)) return true;
+        if (std.ascii.eqlIgnoreCase(name, secret)) {
+            return true;
+        }
     }
     return false;
 }
@@ -45,7 +47,9 @@ pub fn isSecretHeader(name: []const u8) bool {
 pub fn redactedHead(head: []const u8, out: *std.Io.Writer) !void {
     var lines = std.mem.splitSequence(u8, head, "\r\n");
     while (lines.next()) |line| {
-        if (line.len == 0) continue;
+        if (line.len == 0) {
+            continue;
+        }
         if (std.mem.indexOfScalar(u8, line, ':')) |colon| {
             if (isSecretHeader(std.mem.trim(u8, line[0..colon], " "))) {
                 try out.print("{s}: <redacted>\n", .{line[0..colon]});
@@ -69,9 +73,13 @@ fn headerValue(head: []const u8, name: []const u8) ?[]const u8 {
 }
 
 pub fn framingOf(head: []const u8, is_response_to_head_or_204: bool) struct { Framing, usize } {
-    if (is_response_to_head_or_204) return .{ .none, 0 };
+    if (is_response_to_head_or_204) {
+        return .{ .none, 0 };
+    }
     if (headerValue(head, "transfer-encoding")) |te| {
-        if (std.ascii.indexOfIgnoreCase(te, "chunked") != null) return .{ .chunked, 0 };
+        if (std.ascii.indexOfIgnoreCase(te, "chunked") != null) {
+            return .{ .chunked, 0 };
+        }
     }
     if (headerValue(head, "content-length")) |cl| {
         const n = std.fmt.parseInt(usize, cl, 10) catch 0;
@@ -93,10 +101,14 @@ fn withoutCompression(head: []const u8, out: []u8) ?usize {
         const replacement = blk: {
             const colon = std.mem.indexOfScalar(u8, line, ':') orelse break :blk line;
             const name = std.mem.trim(u8, line[0..colon], " ");
-            if (!std.ascii.eqlIgnoreCase(name, "accept-encoding")) break :blk line;
+            if (!std.ascii.eqlIgnoreCase(name, "accept-encoding")) {
+                break :blk line;
+            }
             break :blk "accept-encoding: identity";
         };
-        if (len + replacement.len + 2 > out.len) return null;
+        if (len + replacement.len + 2 > out.len) {
+            return null;
+        }
         @memcpy(out[len..][0..replacement.len], replacement);
         len += replacement.len;
         @memcpy(out[len..][0..2], "\r\n");
@@ -110,38 +122,43 @@ fn withoutCompression(head: []const u8, out: []u8) ?usize {
 /// Reads one message from `from`, forwards it to `to`, and reports what it was.
 /// `scratch` holds the head; `capture` receives up to its own length of body.
 /// Returns null when the peer is done talking.
-pub fn relay(
-    session: *tls.Session,
-    from: tls.Session.Side,
-    to: tls.Session.Side,
-    scratch: []u8,
-    capture: []u8,
-    is_response: bool,
-) ?Summary {
+pub fn relay(session: *tls.Session, from: tls.Session.Side, to: tls.Session.Side, scratch: []u8, capture: []u8, is_response: bool) ?Summary {
     // ---- head: read until the blank line, one byte at a time. Slow, but it
     // guarantees not consuming a single byte of the body, which matters when
     // the body is framed by a header we have not parsed yet.
     var head_len: usize = 0;
     while (head_len < scratch.len) {
         const n = session.read(from, scratch[head_len .. head_len + 1]) orelse return null;
-        if (n == 0) return null;
+        if (n == 0) {
+            return null;
+        }
         head_len += 1;
-        if (head_len >= 4 and std.mem.eql(u8, scratch[head_len - 4 .. head_len], "\r\n\r\n")) break;
+        if (head_len >= 4 and std.mem.eql(u8, scratch[head_len - 4 .. head_len], "\r\n\r\n")) {
+            break;
+        }
     }
-    if (head_len == 0) return null;
+    if (head_len == 0) {
+        return null;
+    }
 
     const head = scratch[0..head_len];
 
     if (is_response) {
-        if (!session.writeAll(to, head)) return null;
+        if (!session.writeAll(to, head)) {
+            return null;
+        }
     } else {
         // Forward a request with compression turned off; the capture keeps the
         // original head so the record shows what the client actually asked for.
         var rewritten: [16 * 1024]u8 = undefined;
         if (withoutCompression(head, &rewritten)) |n| {
-            if (!session.writeAll(to, rewritten[0..n])) return null;
+            if (!session.writeAll(to, rewritten[0..n])) {
+                return null;
+            }
         } else {
-            if (!session.writeAll(to, head)) return null;
+            if (!session.writeAll(to, head)) {
+                return null;
+            }
         }
     }
 
@@ -168,7 +185,9 @@ pub fn relay(
             while (left > 0) {
                 const want = @min(left, buf.len);
                 const n = session.read(from, buf[0..want]) orelse break;
-                if (!session.writeAll(to, buf[0..n])) break;
+                if (!session.writeAll(to, buf[0..n])) {
+                    break;
+                }
                 body_bytes += n;
                 keep(capture, &kept, &truncated, buf[0..n]);
                 left -= n;
@@ -180,10 +199,14 @@ pub fn relay(
         .chunked, .until_close => {
             while (true) {
                 const n = session.read(from, &buf) orelse break;
-                if (!session.writeAll(to, buf[0..n])) break;
+                if (!session.writeAll(to, buf[0..n])) {
+                    break;
+                }
                 body_bytes += n;
                 keep(capture, &kept, &truncated, buf[0..n]);
-                if (framing == .chunked and std.mem.endsWith(u8, buf[0..n], "0\r\n\r\n")) break;
+                if (framing == .chunked and std.mem.endsWith(u8, buf[0..n], "0\r\n\r\n")) {
+                    break;
+                }
             }
         },
     }
@@ -206,7 +229,9 @@ fn keep(capture: []u8, kept: *usize, truncated: *bool, bytes: []const u8) void {
     const take = @min(room, bytes.len);
     @memcpy(capture[kept.* .. kept.* + take], bytes[0..take]);
     kept.* += take;
-    if (take < bytes.len) truncated.* = true;
+    if (take < bytes.len) {
+        truncated.* = true;
+    }
 }
 
 // ---------------------------------------------------------------------------

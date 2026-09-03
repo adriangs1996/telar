@@ -55,20 +55,28 @@ const Config = struct {
             const arg = args[index];
             if (std.mem.eql(u8, arg, "--filter")) {
                 index += 1;
-                if (index == args.len) return error.MissingFilter;
+                if (index == args.len) {
+                    return error.MissingFilter;
+                }
                 config.filter = args[index];
             } else if (std.mem.eql(u8, arg, "--samples")) {
                 index += 1;
-                if (index == args.len) return error.MissingSampleCount;
+                if (index == args.len) {
+                    return error.MissingSampleCount;
+                }
                 config.samples = try std.fmt.parseUnsigned(usize, args[index], 10);
-                if (config.samples == 0 or config.samples > max_samples)
+                if (config.samples == 0 or config.samples > max_samples) {
                     return error.InvalidSampleCount;
+                }
             } else if (std.mem.eql(u8, arg, "--sample-ms")) {
                 index += 1;
-                if (index == args.len) return error.MissingSampleDuration;
+                if (index == args.len) {
+                    return error.MissingSampleDuration;
+                }
                 const milliseconds = try std.fmt.parseUnsigned(u64, args[index], 10);
-                if (milliseconds == 0 or milliseconds > 5000)
+                if (milliseconds == 0 or milliseconds > 5000) {
                     return error.InvalidSampleDuration;
+                }
                 config.sample_ns = milliseconds * std.time.ns_per_ms;
             } else if (std.mem.eql(u8, arg, "--json")) {
                 config.json = true;
@@ -183,12 +191,7 @@ fn timestamp(io: Io) u64 {
     return @intCast(Io.Clock.awake.now(io).nanoseconds);
 }
 
-fn timed(
-    io: Io,
-    context: anytype,
-    iterations: usize,
-    comptime run: fn (@TypeOf(context), usize) anyerror!u64,
-) !u64 {
+fn timed(io: Io, context: anytype, iterations: usize, comptime run: fn (@TypeOf(context), usize) anyerror!u64) !u64 {
     const started = timestamp(io);
     const checksum = try run(context, iterations);
     const elapsed = timestamp(io) - started;
@@ -196,12 +199,7 @@ fn timed(
     return elapsed;
 }
 
-fn measure(
-    io: Io,
-    config: Config,
-    context: anytype,
-    comptime run: fn (@TypeOf(context), usize) anyerror!u64,
-) !Measurement {
+fn measure(io: Io, config: Config, context: anytype, comptime run: fn (@TypeOf(context), usize) anyerror!u64) !Measurement {
     var iterations: usize = 1;
     while (true) {
         const elapsed = try timed(io, context, iterations, run);
@@ -273,12 +271,14 @@ fn writeResult(writer: *Io.Writer, config: Config, case: Case, result: Measureme
             rate,
             case.work_unit,
         });
-        if (case.payload_bytes_per_op != 0)
+        if (case.payload_bytes_per_op != 0) {
             try writer.print(", payload {d} B/op", .{case.payload_bytes_per_op});
+        }
         try writer.writeByte('\n');
     }
-    if (config.enforce and result.p99_ns > case.p99_budget_ns)
+    if (config.enforce and result.p99_ns > case.p99_budget_ns) {
         return error.PerformanceBudgetExceeded;
+    }
 }
 
 const Fixture = struct {
@@ -674,7 +674,9 @@ const KeybindContext = struct {
 
     pub fn forward(context: *KeybindContext, bytes: []const u8) !void {
         context.checksum +%= bytes.len;
-        if (bytes.len != 0) context.checksum +%= bytes[0];
+        if (bytes.len != 0) {
+            context.checksum +%= bytes[0];
+        }
     }
 
     pub fn action(context: *KeybindContext, action_value: KeybindAction) !frontend.keybind.Control {
@@ -868,19 +870,16 @@ fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
     const directions = [_]frontend.layout.Direction{ .right, .down, .left, .up };
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
-        if (context.layout.focusDirection(directions[iteration & 3], context.area)) |pane_id|
+        if (context.layout.focusDirection(directions[iteration & 3], context.area)) |pane_id| {
             checksum +%= schema.id.raw(pane_id);
+        }
     }
     return checksum;
 }
 
 /// Composes one model over the whole host screen with the default palette,
 /// the way the presenter does for a client without chrome.
-fn composeFullScreen(
-    compositor: *frontend.multiplexer.Compositor,
-    model: *const frontend.multiplexer.Model,
-    screen: *frontend.term.Screen,
-) !frontend.multiplexer.CompositionResult {
+fn composeFullScreen(compositor: *frontend.multiplexer.Compositor, model: *const frontend.multiplexer.Model, screen: *frontend.term.Screen) !frontend.multiplexer.CompositionResult {
     return compositor.render(.{
         .model = model,
         .screen = screen,
@@ -936,10 +935,7 @@ const IncrementalComposeContext = struct {
     compositor: frontend.multiplexer.Compositor,
     payloads: [2][]const u8,
 
-    fn init(
-        gpa: std.mem.Allocator,
-        fixture: *const Fixture,
-    ) !IncrementalComposeContext {
+    fn init(gpa: std.mem.Allocator, fixture: *const Fixture) !IncrementalComposeContext {
         var model = frontend.multiplexer.Model.init(gpa);
         errdefer model.deinit();
         const location: schema.TabLocation = .{
@@ -1307,7 +1303,9 @@ const SharedFrameContext = struct {
     };
 
     fn init(io: Io, gpa: std.mem.Allocator) !SharedFrameContext {
-        if (comptime builtin.os.tag == .windows or !builtin.link_libc) return error.SharedMemoryUnavailable;
+        if (comptime builtin.os.tag == .windows or !builtin.link_libc) {
+            return error.SharedMemoryUnavailable;
+        }
         const pixels = try gpa.alloc(u8, raw_len);
         errdefer gpa.free(pixels);
         for (pixels, 0..) |*byte, index| byte.* = @truncate(index % 251);
@@ -1358,9 +1356,13 @@ const SharedFrameContext = struct {
             @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
             @as(u16, 0o600),
         );
-        if (std.posix.errno(fd) != .SUCCESS) return error.SharedMemoryUnavailable;
+        if (std.posix.errno(fd) != .SUCCESS) {
+            return error.SharedMemoryUnavailable;
+        }
         defer _ = std.c.close(fd);
-        if (std.c.ftruncate(fd, @intCast(raw_len)) != 0) return error.SharedMemoryUnavailable;
+        if (std.c.ftruncate(fd, @intCast(raw_len)) != 0) {
+            return error.SharedMemoryUnavailable;
+        }
         const map = try std.posix.mmap(
             null,
             raw_len,
@@ -1386,12 +1388,16 @@ const SharedFrameContext = struct {
     /// The runtime's media actor for one batch holding the published frame.
     fn ingest(context: *SharedFrameContext) !u64 {
         context.pipeline.queueOutput(context.envelope[0..context.envelope_len]);
-        if (!context.pipeline.seal()) return error.MediaBatchEmpty;
+        if (!context.pipeline.seal()) {
+            return error.MediaBatchEmpty;
+        }
         var stats: backend.media.Stats = .{};
         var sink: Sink = .{ .pipeline = context.pipeline };
         context.pipeline.processSealed(.{ .current_size = context.size, .stats = &stats }, &sink);
         context.pipeline.finishSealed();
-        if (stats.forwarded_frames != 1 or stats.failed) return error.SharedFrameNotForwarded;
+        if (stats.forwarded_frames != 1 or stats.failed) {
+            return error.SharedFrameNotForwarded;
+        }
         const image = context.pipeline.terminal.screens.active.kitty_images.imageById(7) orelse
             return error.KgpImageMissing;
         return image.generation + image.data.len();
@@ -1475,13 +1481,7 @@ fn runTextRaster(context: *TextRasterContext, iterations: usize) !u64 {
     return checksum +% context.pixels[context.pixels.len / 2];
 }
 
-fn execute(
-    writer: *Io.Writer,
-    io: Io,
-    gpa: std.mem.Allocator,
-    config: Config,
-    fixture: *Fixture,
-) !void {
+fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, fixture: *Fixture) !void {
     var case_index: usize = 0;
 
     inline for (workloads) |workload| {
@@ -1665,24 +1665,30 @@ fn execute(
     {
         var context = try SharedFrameContext.init(io, gpa);
         defer context.deinit();
-        if (config.includes(shared_publish_case.name)) try writeResult(
-            writer,
-            config,
-            shared_publish_case,
-            try measure(io, config, &context, runSharedFramePublish),
-        );
-        if (config.includes(shared_ingest_case.name)) try writeResult(
-            writer,
-            config,
-            shared_ingest_case,
-            try measure(io, config, &context, runSharedFrameIngest),
-        );
-        if (config.includes(shared_freeze_case.name)) try writeResult(
-            writer,
-            config,
-            shared_freeze_case,
-            try measure(io, config, &context, runSharedFrameFreeze),
-        );
+        if (config.includes(shared_publish_case.name)) {
+            try writeResult(
+                writer,
+                config,
+                shared_publish_case,
+                try measure(io, config, &context, runSharedFramePublish),
+            );
+        }
+        if (config.includes(shared_ingest_case.name)) {
+            try writeResult(
+                writer,
+                config,
+                shared_ingest_case,
+                try measure(io, config, &context, runSharedFrameIngest),
+            );
+        }
+        if (config.includes(shared_freeze_case.name)) {
+            try writeResult(
+                writer,
+                config,
+                shared_freeze_case,
+                try measure(io, config, &context, runSharedFrameFreeze),
+            );
+        }
     }
 
     var graphics_context = try GraphicsContext.init(gpa, fixture.terminal_output);
@@ -1702,12 +1708,14 @@ fn execute(
     }
     const graphics_idle_case = cases[case_index];
     case_index += 1;
-    if (config.includes(graphics_idle_case.name)) try writeResult(
-        writer,
-        config,
-        graphics_idle_case,
-        try measure(io, config, &graphics_context, runGraphicsIdle),
-    );
+    if (config.includes(graphics_idle_case.name)) {
+        try writeResult(
+            writer,
+            config,
+            graphics_idle_case,
+            try measure(io, config, &graphics_context, runGraphicsIdle),
+        );
+    }
 
     inline for ([_]bool{ false, true }) |zlib| {
         var transmit_case = cases[case_index];
@@ -1759,7 +1767,9 @@ pub fn main(init: std.process.Init) !void {
 
     if (config.list) {
         for (cases) |case| {
-            if (config.includes(case.name)) try writer.print("{s}\n", .{case.name});
+            if (config.includes(case.name)) {
+                try writer.print("{s}\n", .{case.name});
+            }
         }
         try writer.flush();
         return;

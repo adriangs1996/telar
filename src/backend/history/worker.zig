@@ -187,7 +187,9 @@ pub const Worker = struct {
         defer value.deinit(worker.gpa);
         const started = std.Io.Timestamp.now(context.io, .awake);
         const result = if (worker.database) |*database| write: {
-            if (value.origin != .pane) database.ensureCommandSession(value) catch |err| break :write err;
+            if (value.origin != .pane) {
+                database.ensureCommandSession(value) catch |err| break :write err;
+            }
             const updated = if (value.origin == .hook and value.status != .running)
                 database.finishAgentCommand(value) catch |err| break :write err
             else

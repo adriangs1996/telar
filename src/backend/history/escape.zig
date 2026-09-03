@@ -38,7 +38,9 @@ pub const OscScanner = struct {
     pub fn next(scanner: *OscScanner, input: u8) Event {
         switch (scanner.state) {
             .ground => {
-                if (input == esc) scanner.state = .escape;
+                if (input == esc) {
+                    scanner.state = .escape;
+                }
                 return .none;
             },
             .escape => {
@@ -166,7 +168,9 @@ pub const InputScanner = struct {
     /// const pending = scanner.typedText() orelse return;
     /// ```
     pub fn typedText(scanner: *const InputScanner) ?[]const u8 {
-        if (!scanner.typed_exact) return null;
+        if (!scanner.typed_exact) {
+            return null;
+        }
         return scanner.typed[0..scanner.typed_len];
     }
 
@@ -194,7 +198,9 @@ pub const InputScanner = struct {
             },
             .csi => scanner.csiByte(byte, false),
             .paste => {
-                if (byte == esc) scanner.state = .paste_escape;
+                if (byte == esc) {
+                    scanner.state = .paste_escape;
+                }
             },
             .paste_escape => if (byte == '[') {
                 scanner.startCsi(.paste_csi);
