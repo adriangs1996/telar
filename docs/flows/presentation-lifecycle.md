@@ -64,6 +64,16 @@ next cadence slot. One interaction is usually two or three frames, because the
 runtime folds output that arrives while a frame is unacknowledged into the
 next frame, and the credit exists so none of them wait an interval.
 
+Credit runs out while other panes flood. `Presenter.noteInput` therefore also
+opens `pace.default_input_grace` after every host read: inside that window up
+to `pace.default_input_frames` frames present immediately with no credit,
+even while a paced draw task is already armed; that task keeps its token and
+finds nothing pending when it fires. The keystroke's echo can sit behind one
+in-flight frame per busy pane, because the runtime serves attachments in
+turn, so the frame bound covers a full tab of panes while an Enter that starts
+a flood pays a handful of unthrottled frames instead of a whole window of
+them.
+
 The `presentation_projection` adapter captures one bounded immutable projection
 from the concrete client aggregate. It includes the model version, immutable
 semantic snapshots, active tab model and copy-mode value. It separately exposes

@@ -296,6 +296,40 @@ handoff per read, ingest and send, across two processes, where tmux runs one
 kqueue loop. Bare pty echo without any multiplexer measures about 15 us on the
 same machine, which is the floor for every row.
 
+#### Echo latency under load
+
+`tools/load_bench.sh <binary> <label>` runs `tools/load_latency.py`: it opens
+`FLOODS` extra panes (default `0 1 2 4 8`), each running `while :; do seq 1
+100000; done`, then measures single-byte echo latency in one idle pane. telar
+panes are opened by typing the default `ctrl+b %` and `ctrl+b "` bindings;
+tmux panes with `split-window -d` plus `select-layout tiled`. Each token is
+erased with backspace after it is seen, because a later repaint of the input
+line would otherwise match the next token early. A runtime whose panes are
+still flooding does not finish `telar server stop`; the script kills it by
+socket after five seconds.
+
+Results on 2026-09-03, same machine as above but with a browser and a
+build-on-save watcher active (load average 4-6), p50 / p99:
+
+| Flooding panes | telar before input grace | telar with input grace | tmux 3.7c |
+| --- | --- | --- | --- |
+| 0 | 0.41 ms / 27.9 ms | 0.87 ms / 1.62 ms | 0.49 ms / 1.07 ms |
+| 2 | 15.1 ms / 20.6 ms | 0.56 ms / 1.21 ms | 0.64 ms / 0.87 ms |
+| 4 | 14.6 ms / 21.1 ms | 1.02 ms / 2.36 ms | 1.11 ms / 1.45 ms |
+| 8 | 15.7 ms / 21.2 ms | 1.69 ms / 5.48 ms | 2.36 ms / 7.25 ms |
+
+Before the change telar sat on the 60 Hz pacer interval whatever the load:
+the flood spent the burst credit and the keystroke's echo waited for the next
+cadence slot. A control build with the interval forced to 1 ms measured
+2.1 ms / 9.7 ms at four panes, which bounded what any scheduling change could
+buy and ruled out a kqueue-based event loop as the next step. The input
+grace window recovers most of that bound: after every host read, up to
+`pace.default_input_frames` frames present immediately even while a paced
+draw task is armed. tmux's own behaviour under flood is bimodal; the same
+harness measured 48-50 ms medians at two and four panes in an earlier
+session. The 0-pane rows and every p99 in this table carry the noise of the
+busy host; idle rows measured 0.36-0.70 ms for both builds when alternated.
+
 Run-to-run noise on a quiet laptop is about 0.1 ms at p50 and 0.3 ms at p99;
 treat smaller differences as no verdict, as `docs/performance-gates.md`
 already requires for the microbenchmarks.

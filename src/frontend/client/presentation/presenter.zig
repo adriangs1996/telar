@@ -117,6 +117,9 @@ presented_presentation_ingress: PresentationIngress = .{
 window_title: presentation.window_title.State = .{},
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
+/// Whether the presentation being delivered waited for a pacer deadline.
+/// Immediate presentations spend burst or input-grace frames instead.
+draw_scheduled: bool = false,
 media_tick_pending: bool = false,
 /// A media tick found a cell frame pending and stepped aside. The frame's
 /// completion arms the bulk pass immediately instead of a pacer interval
@@ -157,6 +160,7 @@ pub fn resize(presenter: *Presenter, cols: u16, rows: u16) !void {
 /// ```
 pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
     presenter.last_input_ns = now_ns;
+    presenter.pacer.noteInput(now_ns);
 }
 
 /// Observes semantic and physical client revisions and schedules one frame.
@@ -201,15 +205,16 @@ pub fn requestDraw(presenter: *Presenter) !void {
             presenter.pending_updates,
         );
     }
-    if (presenter.draw_pending) {
-        return;
-    }
-
     const now_ns = monotonic(presenter.io);
-    presenter.draw_pending = true;
     if (presenter.pacer.waitUntil(now_ns)) |deadline_ns| {
+        if (presenter.draw_pending) {
+            return;
+        }
+
         presenter.pacer.noteThrottled();
+        presenter.draw_pending = true;
         presenter.draw_due_ns = deadline_ns;
+        presenter.draw_scheduled = true;
         presenter.scheduler.draw(presenter.scheduler.context, deadline_ns) catch |err| {
             presenter.draw_pending = false;
             return err;
@@ -217,11 +222,12 @@ pub fn requestDraw(presenter: *Presenter) !void {
         return;
     }
 
+    // Present now even while a paced draw task is armed: input grace must
+    // not wait behind a flood's cadence slot. The armed task keeps its token
+    // and finds nothing pending when it fires.
     presenter.draw_due_ns = now_ns;
-    presenter.scheduler.draw_now(presenter.scheduler.context) catch |err| {
-        presenter.draw_pending = false;
-        return err;
-    };
+    presenter.draw_scheduled = false;
+    try presenter.scheduler.draw_now(presenter.scheduler.context);
 }
 
 /// Arms one independently paced bulk media pass. Cell work always wins before
@@ -377,7 +383,11 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     presenter.presented_attachment_ingress = presenter.observed_attachment_ingress;
     presenter.presented_presentation_ingress = projection.presentation_ingress;
     presenter.observePresentation(presented.presented_ns);
-    presenter.pacer.record(presented.presented_ns, presenter.draw_due_ns, presenter.pending_updates);
+    presenter.pacer.record(
+        presented.presented_ns,
+        if (presenter.draw_scheduled) presenter.draw_due_ns else null,
+        presenter.pending_updates,
+    );
     presenter.pending_updates = 0;
 
     return .{

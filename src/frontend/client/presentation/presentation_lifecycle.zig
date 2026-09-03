@@ -29,6 +29,17 @@ pub fn observe(client: *Client) !void {
 /// ```
 pub fn handleDraw(client: *Client, result: anyerror!void) !void {
     try client.presenter.completeDraw(result);
+    try presentNow(client);
+}
+
+/// Presents whatever is pending on the caller's thread without touching the
+/// paced draw token, so both the `.draw` completion and an immediate
+/// presentation share one delivery path.
+///
+/// ```zig
+/// try presentation_lifecycle.presentNow(client);
+/// ```
+pub fn presentNow(client: *Client) !void {
     const delivery = try client.presenter.presentDue(
         presentation_projection.projection(client),
         presentation_projection.resources(client),

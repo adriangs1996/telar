@@ -280,7 +280,7 @@ fn scheduleDraw(context: *anyopaque, deadline_ns: u64) !void {
 
 fn drawNow(context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    try presentation_lifecycle.handleDraw(client, {});
+    try presentation_lifecycle.presentNow(client);
 }
 
 fn scheduleMedia(context: *anyopaque, deadline_ns: u64) !void {

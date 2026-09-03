@@ -39,6 +39,23 @@ pub const default_interval: u64 = std.time.ns_per_s / 60;
 /// a sustained flood still exhausts it and settles on the interval.
 pub const default_burst: u32 = 4;
 
+/// How long after host input a frame presents without waiting for credit.
+///
+/// Under a flood from other panes the burst credit is always spent, and the
+/// keystroke's echo would wait a whole interval behind the flood's frames.
+/// The echo needs at most two immediate presentations: the frame already in
+/// flight, whose acknowledgement releases the focused pane's frame, and that
+/// frame itself. A window of a few tens of milliseconds covers both and costs
+/// extra frames only while the user is actually typing.
+pub const default_input_grace: u64 = 30 * ns_per_ms;
+
+/// Frames one host input may present through the grace window when credit
+/// is spent. The runtime delivers one frame per pane in turn, so the echo can
+/// sit behind one frame per busy pane; this covers a full tab of panes while
+/// keeping an Enter that starts a flood from paying a window of unthrottled
+/// frames.
+pub const default_input_frames: u32 = 16;
+
 /// Bounds the frame rate without adding latency to an idle UI.
 ///
 /// A naive throttle waits out the interval before every frame, so a keypress
@@ -58,6 +75,13 @@ pub const Pacer = struct {
     /// The cadence slot of the last presented frame. Null until the first
     /// frame, so a program's opening frame is never delayed.
     anchor_ns: ?u64 = null,
+    input_grace: u64 = default_input_grace,
+    input_frames: u32 = default_input_frames,
+    /// When the host last delivered input; frames inside the grace window
+    /// after it never wait, up to `input_frames` of them.
+    last_input_ns: ?u64 = null,
+    /// Grace frames left for the current input.
+    input_frames_left: u32 = 0,
     stats: Stats = .{},
 
     pub const Stats = struct {
@@ -79,7 +103,7 @@ pub const Pacer = struct {
     /// hands the wait to another actor. A relative sleep starts when that actor
     /// gets CPU time and adds dispatch latency to every frame.
     pub fn waitUntil(p: *const Pacer, now: u64) ?u64 {
-        if (p.available(now) != 0) {
+        if (p.available(now) != 0 or p.inputRecent(now)) {
             return null;
         }
 
@@ -99,7 +123,11 @@ pub const Pacer = struct {
     /// ```
     pub fn record(p: *Pacer, now: u64, scheduled_deadline: ?u64, absorbed: usize) void {
         std.debug.assert(p.interval != 0);
-        p.credits = p.available(now) -| 1;
+        const usable = p.available(now);
+        if (usable == 0 and scheduled_deadline == null) {
+            p.input_frames_left -|= 1;
+        }
+        p.credits = usable -| 1;
         p.anchor_ns = if (scheduled_deadline) |deadline|
             latestCadenceSlot(deadline, now, p.interval)
         else
@@ -109,12 +137,27 @@ pub const Pacer = struct {
         p.stats.absorbed += absorbed -| 1;
     }
 
+    /// Records host input at `now`, opening the grace window.
+    ///
+    /// ```zig
+    /// pacer.noteInput(now_ns);
+    /// ```
+    pub fn noteInput(p: *Pacer, now: u64) void {
+        p.last_input_ns = now;
+        p.input_frames_left = p.input_frames;
+    }
+
     pub fn noteThrottled(p: *Pacer) void {
         p.stats.throttled += 1;
     }
 
     pub fn noteDropped(p: *Pacer, n: usize) void {
         p.stats.dropped += n;
+    }
+
+    fn inputRecent(p: *const Pacer, now: u64) bool {
+        const input = p.last_input_ns orelse return false;
+        return p.input_frames_left != 0 and now -| input < p.input_grace;
     }
 
     /// Credits usable at `now`: what was left at the anchor plus one per
@@ -266,6 +309,41 @@ test "credit refills one frame per interval of quiet" {
     p.record(1000 * ns_per_ms, null, 1);
     p.record(1000 * ns_per_ms, null, 1);
     try testing.expectEqual(@as(?u64, 1010 * ns_per_ms), p.waitUntil(1000 * ns_per_ms));
+}
+
+test "frames inside the input grace window never wait" {
+    var p: Pacer = .{ .interval = 16 * ns_per_ms, .burst = 0, .credits = 0 };
+    p.record(100 * ns_per_ms, null, 1);
+    try testing.expectEqual(@as(?u64, 116 * ns_per_ms), p.waitUntil(101 * ns_per_ms));
+
+    // A keystroke lands: the in-flight frame and the echo frame both present.
+    p.noteInput(101 * ns_per_ms);
+    try testing.expectEqual(@as(?u64, null), p.waitUntil(102 * ns_per_ms));
+    p.record(102 * ns_per_ms, null, 1);
+    try testing.expectEqual(@as(?u64, null), p.waitUntil(104 * ns_per_ms));
+    p.record(104 * ns_per_ms, null, 1);
+
+    // The window closes and the flood is back on cadence.
+    try testing.expectEqual(
+        @as(?u64, (104 + 16) * ns_per_ms),
+        p.waitUntil((101 + 30) * ns_per_ms),
+    );
+}
+
+test "input grace is bounded in frames so a flood after Enter is paced" {
+    var p: Pacer = .{ .interval = 16 * ns_per_ms, .burst = 0, .credits = 0, .input_frames = 2 };
+    p.noteInput(0);
+    try testing.expectEqual(@as(?u64, null), p.waitUntil(1 * ns_per_ms));
+    p.record(1 * ns_per_ms, null, 1);
+    try testing.expectEqual(@as(?u64, null), p.waitUntil(2 * ns_per_ms));
+    p.record(2 * ns_per_ms, null, 1);
+
+    // Two frames spent: the third waits even though the window is open.
+    try testing.expectEqual(@as(?u64, 18 * ns_per_ms), p.waitUntil(3 * ns_per_ms));
+
+    // New input refills the grace frames.
+    p.noteInput(4 * ns_per_ms);
+    try testing.expectEqual(@as(?u64, null), p.waitUntil(5 * ns_per_ms));
 }
 
 test "a zero burst schedules every frame" {
