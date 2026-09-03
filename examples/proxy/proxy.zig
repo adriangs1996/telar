@@ -601,15 +601,6 @@ fn connectUpstream(host_name: net.HostName, io: Io, port: u16) !net.Stream {
     }
 }
 
-fn pump(io: Io, r: *Io.Reader, w: *Io.Writer, dst: net.Stream, counter: *std.atomic.Value(u64)) void {
-    while (true) {
-        const n = r.stream(w, .unlimited) catch break;
-        _ = counter.fetchAdd(n, .monotonic);
-        w.flush() catch break;
-    }
-    dst.shutdown(io, .send) catch {};
-}
-
 fn reply(w: *Io.Writer, bytes: []const u8) void {
     w.writeAll(bytes) catch return;
     w.flush() catch {};
