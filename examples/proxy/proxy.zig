@@ -291,10 +291,12 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
 
         const detail = renderExchange(
             gpa,
-            request_head,
-            request_body,
-            response.head,
-            response.body,
+            .{
+                .request_head = request_head,
+                .request_body = request_body,
+                .response_head = response.head,
+                .response_body = response.body,
+            },
         );
 
         const exchange: event.Event = .{ .upstream_exchange = .{
@@ -529,18 +531,25 @@ fn pumpDirection(session: *tls.Session, route: h2.Route, counter: *std.atomic.Va
 /// Builds the storable rendering of one exchange. Bodies are deliberately not
 /// persisted: prompts, replies, and tool payloads may contain credentials for
 /// which no generic redactor can provide a safety guarantee.
-fn renderExchange(gpa: std.mem.Allocator, request_head: []const u8, request_body: []const u8, response_head: []const u8, response_body: []const u8) ?[]const u8 {
+const ExchangeContent = struct {
+    request_head: []const u8,
+    request_body: []const u8,
+    response_head: []const u8,
+    response_body: []const u8,
+};
+
+fn renderExchange(gpa: std.mem.Allocator, content: ExchangeContent) ?[]const u8 {
     var out: std.Io.Writer.Allocating = .init(gpa);
     errdefer out.deinit();
 
-    http.redactedHead(request_head, &out.writer) catch return null;
-    if (request_body.len > 0) {
-        out.writer.print("\n<body omitted: {d} bytes>\n", .{request_body.len}) catch return null;
+    http.redactedHead(content.request_head, &out.writer) catch return null;
+    if (content.request_body.len > 0) {
+        out.writer.print("\n<body omitted: {d} bytes>\n", .{content.request_body.len}) catch return null;
     }
     out.writer.writeAll("\n--- response ---\n") catch return null;
-    http.redactedHead(response_head, &out.writer) catch return null;
-    if (response_body.len > 0) {
-        out.writer.print("\n<body omitted: {d} bytes>\n", .{response_body.len}) catch return null;
+    http.redactedHead(content.response_head, &out.writer) catch return null;
+    if (content.response_body.len > 0) {
+        out.writer.print("\n<body omitted: {d} bytes>\n", .{content.response_body.len}) catch return null;
     }
 
     return out.toOwnedSlice() catch null;
@@ -549,10 +558,12 @@ fn renderExchange(gpa: std.mem.Allocator, request_head: []const u8, request_body
 test "storable exchanges omit request and response bodies" {
     const rendered = renderExchange(
         std.testing.allocator,
-        "POST / HTTP/1.1\r\nAuthorization: bearer secret\r\n\r\n",
-        "request-api-key",
-        "HTTP/1.1 200 OK\r\n\r\n",
-        "response-api-key",
+        .{
+            .request_head = "POST / HTTP/1.1\r\nAuthorization: bearer secret\r\n\r\n",
+            .request_body = "request-api-key",
+            .response_head = "HTTP/1.1 200 OK\r\n\r\n",
+            .response_body = "response-api-key",
+        },
     ).?;
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "bearer secret") == null);
