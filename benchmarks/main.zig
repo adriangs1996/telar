@@ -199,13 +199,13 @@ fn timed(input: anytype, iterations: usize, comptime run: fn (@TypeOf(input.cont
     return elapsed;
 }
 
-fn measure(io: Io, config: Config, context: anytype, comptime run: fn (@TypeOf(context), usize) anyerror!u64) !Measurement {
+fn measure(input: anytype, comptime run: fn (@TypeOf(input.context), usize) anyerror!u64) !Measurement {
     var iterations: usize = 1;
     while (true) {
-        const elapsed = try timed(.{ .io = io, .context = context }, iterations, run);
-        if (elapsed >= config.sample_ns / 4 or iterations >= 1 << 30) {
-            if (elapsed != 0 and elapsed < config.sample_ns) {
-                const scaled = @as(u128, iterations) * config.sample_ns / elapsed;
+        const elapsed = try timed(input, iterations, run);
+        if (elapsed >= input.config.sample_ns / 4 or iterations >= 1 << 30) {
+            if (elapsed != 0 and elapsed < input.config.sample_ns) {
+                const scaled = @as(u128, iterations) * input.config.sample_ns / elapsed;
                 iterations = @max(iterations, @as(usize, @intCast(@min(scaled, 1 << 30))));
             }
             break;
@@ -213,21 +213,21 @@ fn measure(io: Io, config: Config, context: anytype, comptime run: fn (@TypeOf(c
         iterations *= 4;
     }
 
-    _ = try timed(.{ .io = io, .context = context }, iterations, run);
+    _ = try timed(input, iterations, run);
 
     var samples: [max_samples]u64 = undefined;
-    for (samples[0..config.samples]) |*sample| {
-        const elapsed = try timed(.{ .io = io, .context = context }, iterations, run);
+    for (samples[0..input.config.samples]) |*sample| {
+        const elapsed = try timed(input, iterations, run);
         sample.* = elapsed / iterations;
     }
-    std.sort.heap(u64, samples[0..config.samples], {}, std.sort.asc(u64));
+    std.sort.heap(u64, samples[0..input.config.samples], {}, std.sort.asc(u64));
 
-    const p95_index = (config.samples * 95 + 99) / 100 - 1;
-    const p99_index = (config.samples * 99 + 99) / 100 - 1;
+    const p95_index = (input.config.samples * 95 + 99) / 100 - 1;
+    const p99_index = (input.config.samples * 99 + 99) / 100 - 1;
     return .{
         .iterations = iterations,
         .minimum_ns = samples[0],
-        .median_ns = samples[config.samples / 2],
+        .median_ns = samples[input.config.samples / 2],
         .p95_ns = samples[p95_index],
         .p99_ns = samples[p99_index],
     };
@@ -1490,7 +1490,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
         if (config.includes(case.name)) {
             var context = try DamageContext.init(gpa, fixture, workload);
             defer context.deinit();
-            try writeResult(writer, config, case, try measure(io, config, &context, runDamage));
+            try writeResult(writer, config, case, try measure(.{ .io = io, .config = config, .context = &context }, runDamage));
         }
     }
 
@@ -1500,7 +1500,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
         var context = try FrameContext.init(gpa, fixture);
         defer context.deinit();
         frame_case.payload_bytes_per_op = (try context.encode()).len;
-        try writeResult(writer, config, frame_case, try measure(io, config, &context, runFrame));
+        try writeResult(writer, config, frame_case, try measure(.{ .io = io, .config = config, .context = &context }, runFrame));
     }
 
     const history_input_case = cases[case_index];
@@ -1511,7 +1511,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             writer,
             config,
             history_input_case,
-            try measure(io, config, &context, runHistoryInput),
+            try measure(.{ .io = io, .config = config, .context = &context }, runHistoryInput),
         );
     }
 
@@ -1522,7 +1522,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             const payloads = fixture.payloads(workload);
             case.payload_bytes_per_op = (payloads[0].len + payloads[1].len) / 2;
             var context: EncodeContext = .{ .fixture = fixture, .workload = workload };
-            try writeResult(writer, config, case, try measure(io, config, &context, runEncode));
+            try writeResult(writer, config, case, try measure(.{ .io = io, .config = config, .context = &context }, runEncode));
         }
     }
 
@@ -1535,7 +1535,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             var context: DecodeContext = .{
                 .payloads = payloads,
             };
-            try writeResult(writer, config, case, try measure(io, config, &context, runDecode));
+            try writeResult(writer, config, case, try measure(.{ .io = io, .config = config, .context = &context }, runDecode));
         }
     }
 
@@ -1547,7 +1547,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             case.payload_bytes_per_op = (payloads[0].len + payloads[1].len) / 2;
             var context = try PipelineContext.init(gpa, fixture, workload);
             defer context.deinit();
-            try writeResult(writer, config, case, try measure(io, config, &context, runPipeline));
+            try writeResult(writer, config, case, try measure(.{ .io = io, .config = config, .context = &context }, runPipeline));
         }
     }
 
@@ -1556,14 +1556,14 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
     if (config.includes(outbox_case.name)) {
         var context = try OutboxContext.init(gpa);
         defer context.deinit(gpa);
-        try writeResult(writer, config, outbox_case, try measure(io, config, &context, runOutboxInput));
+        try writeResult(writer, config, outbox_case, try measure(.{ .io = io, .config = config, .context = &context }, runOutboxInput));
     }
 
     const keybind_case = cases[case_index];
     case_index += 1;
     if (config.includes(keybind_case.name)) {
         var context = try KeybindContext.init();
-        try writeResult(writer, config, keybind_case, try measure(io, config, &context, runKeybind));
+        try writeResult(writer, config, keybind_case, try measure(.{ .io = io, .config = config, .context = &context }, runKeybind));
     }
 
     const lua_callback_case = cases[case_index];
@@ -1575,7 +1575,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             writer,
             config,
             lua_callback_case,
-            try measure(io, config, &context, runLuaCallback),
+            try measure(.{ .io = io, .config = config, .context = &context }, runLuaCallback),
         );
     }
 
@@ -1583,7 +1583,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
     case_index += 1;
     if (config.includes(pacer_case.name)) {
         var context: PacerContext = .{};
-        try writeResult(writer, config, pacer_case, try measure(io, config, &context, runPacer));
+        try writeResult(writer, config, pacer_case, try measure(.{ .io = io, .config = config, .context = &context }, runPacer));
     }
 
     const cursor_case = cases[case_index];
@@ -1591,7 +1591,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
     if (config.includes(cursor_case.name)) {
         var context = try CursorContext.init(gpa, fixture.terminal_output);
         defer context.deinit();
-        try writeResult(writer, config, cursor_case, try measure(io, config, &context, runCursor));
+        try writeResult(writer, config, cursor_case, try measure(.{ .io = io, .config = config, .context = &context }, runCursor));
     }
 
     inline for (client_ui_tab_counts) |tab_count| {
@@ -1604,7 +1604,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
                 writer,
                 config,
                 client_ui_case,
-                try measure(io, config, &context, runClientUi),
+                try measure(.{ .io = io, .config = config, .context = &context }, runClientUi),
             );
         }
     }
@@ -1613,7 +1613,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
     case_index += 1;
     if (config.includes(layout_case.name)) {
         var context = try LayoutContext.init();
-        try writeResult(writer, config, layout_case, try measure(io, config, &context, runLayoutFocus));
+        try writeResult(writer, config, layout_case, try measure(.{ .io = io, .config = config, .context = &context }, runLayoutFocus));
     }
 
     const multiplexer_case = cases[case_index];
@@ -1625,7 +1625,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             writer,
             config,
             multiplexer_case,
-            try measure(io, config, &context, runMultiplexerCompose),
+            try measure(.{ .io = io, .config = config, .context = &context }, runMultiplexerCompose),
         );
     }
 
@@ -1638,7 +1638,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             writer,
             config,
             incremental_case,
-            try measure(io, config, &context, runIncrementalCompose),
+            try measure(.{ .io = io, .config = config, .context = &context }, runIncrementalCompose),
         );
     }
 
@@ -1652,7 +1652,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             writer,
             config,
             kgp_case,
-            try measure(io, config, &context, runKgpIngest),
+            try measure(.{ .io = io, .config = config, .context = &context }, runKgpIngest),
         );
     }
 
@@ -1670,7 +1670,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
                 writer,
                 config,
                 shared_publish_case,
-                try measure(io, config, &context, runSharedFramePublish),
+                try measure(.{ .io = io, .config = config, .context = &context }, runSharedFramePublish),
             );
         }
         if (config.includes(shared_ingest_case.name)) {
@@ -1678,7 +1678,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
                 writer,
                 config,
                 shared_ingest_case,
-                try measure(io, config, &context, runSharedFrameIngest),
+                try measure(.{ .io = io, .config = config, .context = &context }, runSharedFrameIngest),
             );
         }
         if (config.includes(shared_freeze_case.name)) {
@@ -1686,7 +1686,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
                 writer,
                 config,
                 shared_freeze_case,
-                try measure(io, config, &context, runSharedFrameFreeze),
+                try measure(.{ .io = io, .config = config, .context = &context }, runSharedFrameFreeze),
             );
         }
     }
@@ -1703,7 +1703,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             writer,
             config,
             graphics_transmit_case,
-            try measure(io, config, &graphics_context, runGraphicsTransmission),
+            try measure(.{ .io = io, .config = config, .context = &graphics_context }, runGraphicsTransmission),
         );
     }
     const graphics_idle_case = cases[case_index];
@@ -1713,7 +1713,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             writer,
             config,
             graphics_idle_case,
-            try measure(io, config, &graphics_context, runGraphicsIdle),
+            try measure(.{ .io = io, .config = config, .context = &graphics_context }, runGraphicsIdle),
         );
     }
 
@@ -1728,7 +1728,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
                 writer,
                 config,
                 transmit_case,
-                try measure(io, config, &context, runTransmitDelivery),
+                try measure(.{ .io = io, .config = config, .context = &context }, runTransmitDelivery),
             );
         }
     }
@@ -1742,7 +1742,7 @@ fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, f
             writer,
             config,
             text_raster_case,
-            try measure(io, config, &context, runTextRaster),
+            try measure(.{ .io = io, .config = config, .context = &context }, runTextRaster),
         );
     }
     std.debug.assert(case_index == cases.len);
