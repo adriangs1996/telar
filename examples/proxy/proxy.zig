@@ -353,8 +353,8 @@ const H2Side = struct {
     body_len: usize = 0,
     seen: h2.Observed = .{},
 
-    fn run(self: *H2Side, session: *tls.Session, from: tls.Session.Side, to: tls.Session.Side) void {
-        h2.relay(session, .{ .from = from, .to = to }, .{
+    fn run(self: *H2Side, session: *tls.Session, route: h2.Route) void {
+        h2.relay(session, route, .{
             .decoder = &self.decoder,
             .text = &self.text.writer,
             .body = self.body,
@@ -363,7 +363,7 @@ const H2Side = struct {
         });
         // One side stopping ends the conversation; release the other so the
         // exchange gets recorded instead of waiting on a keep-alive timeout.
-        session.halfClose(to);
+        session.halfClose(route.to);
     }
 };
 
@@ -393,12 +393,12 @@ fn relayH2(io: Io, session: *tls.Session, gpa: std.mem.Allocator, id: u64, opene
     defer back.decoder.deinit();
     defer back.text.deinit();
 
-    if (io.concurrent(H2Side.run, .{ &out, session, .child, .origin })) |future| {
+    if (io.concurrent(H2Side.run, .{ &out, session, h2.Route{ .from = .child, .to = .origin } })) |future| {
         var c2o = future;
-        back.run(session, .origin, .child);
+        back.run(session, .{ .from = .origin, .to = .child });
         c2o.await(io);
     } else |_| {
-        back.run(session, .origin, .child);
+        back.run(session, .{ .from = .origin, .to = .child });
     }
 
     const detail = renderH2(gpa, &out, &back);
