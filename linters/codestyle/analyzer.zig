@@ -43,6 +43,10 @@ const Analyzer = struct {
     fn lintIf(self: Analyzer, node: Ast.Node.Index) !void {
         const conditional = self.tree.fullIf(node).?;
 
+        if (!self.isStatementIf(conditional.ast.if_token)) {
+            return;
+        }
+
         if (!syntax.isBlock(self.tree.nodeTag(conditional.ast.then_expr))) {
             try self.append(conditional.ast.if_token, .{ .rule = .braced_if_branch });
         }
@@ -53,6 +57,17 @@ const Analyzer = struct {
                 try self.append(conditional.else_token, .{ .rule = .braced_if_branch });
             }
         }
+    }
+
+    fn isStatementIf(self: Analyzer, if_token: Ast.TokenIndex) bool {
+        if (if_token == 0) {
+            return false;
+        }
+
+        return switch (self.tree.tokenTag(if_token - 1)) {
+            .l_brace, .semicolon => true,
+            else => false,
+        };
     }
 
     fn append(self: Analyzer, token: Ast.TokenIndex, finding: Finding) !void {
@@ -188,6 +203,15 @@ test "rejects unbraced else branches" {
         \\    if (value) {
         \\        return true;
         \\    } else return false;
+        \\}
+    );
+}
+
+test "accepts unbraced if expression branches" {
+    try expectRules(&.{},
+        \\fn choose(value: bool) u8 {
+        \\    const result = if (value) 1 else 2;
+        \\    return result;
         \\}
     );
 }
