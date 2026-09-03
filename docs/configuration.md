@@ -549,13 +549,16 @@ capture are disabled by default. A
 relative `ca_dir` is also resolved beside `config.lua`; Telar creates it
 owner-only and stores its private CA and derived trust bundle there with
 owner-only file permissions. `intercept_hosts` accepts at most 256 exact DNS
-hostnames within a 64,768-byte budget. It defaults to `api.anthropic.com`,
+hostnames, leading wildcard rules such as `*.example.com`, or the global `*`
+rule within a 64,768-byte budget. It defaults to `api.anthropic.com`,
 `api.openai.com`, and `chatgpt.com`; an explicitly configured array replaces
 the defaults, including with an empty array. Telar canonicalizes case, sorts
-the set, and removes duplicates when the runtime starts. Wildcards are
-rejected. Every other connection still passes through Telar's authenticated
-CONNECT listener, but its TCP payload is forwarded opaquely and is not
-observed.
+the set, and removes duplicates when the runtime starts. A leading wildcard
+matches proper subdomains but not the bare suffix; `*` matches every hostname.
+Partial labels such as `*example.com` and embedded wildcards are rejected.
+Every connection still requires a live pane credential. A connection outside
+the configured scope passes through the authenticated CONNECT listener, but
+its TCP payload is forwarded opaquely and is not observed.
 
 `runtime.proxy.capture` accepts `enabled`, `max_part_bytes`,
 `max_exchange_bytes`, `max_total_bytes`, and `join_timeout_ms`. The byte limits

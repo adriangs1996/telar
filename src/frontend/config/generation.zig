@@ -3054,10 +3054,33 @@ test "runtime engine parses its command, deadline and idle interval" {
     }
 }
 
+test "runtime proxy accepts wildcard intercept hosts" {
+    var diagnostic: Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        "return { api_version = 2, runtime = { proxy = { intercept_hosts = { '*.Example.com', '*' } } } }",
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+
+    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
+    try std.testing.expectEqual(@as(usize, 2), hosts.len);
+    try std.testing.expectEqualStrings("*", hosts[0]);
+    try std.testing.expectEqualStrings("*.example.com", hosts[1]);
+}
+
 test "runtime proxy rejects unsafe intercept host patterns" {
     const cases = [_]struct { source: []const u8, message: []const u8 }{
         .{
-            .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = { '*.example.com' } } } }",
+            .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = { '*example.com' } } } }",
+            .message = "is not a valid hostname",
+        },
+        .{
+            .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = { 'api.*.example.com' } } } }",
             .message = "is not a valid hostname",
         },
         .{

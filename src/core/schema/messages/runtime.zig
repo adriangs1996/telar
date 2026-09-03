@@ -45,6 +45,7 @@ pub const RequestCompleted = struct {
 
 pub const ProxyStatus = struct {
     active: bool,
+    scope: types.ProxyScope,
 
     pub fn validateWire(message: ProxyStatus) !void {
         _ = message;

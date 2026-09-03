@@ -19,7 +19,7 @@ const schema = core.schema;
 pub fn apply(client: *Client, message: schema.ProxyStatus) !?client_model.ProxyStatusCommit {
     var use_case = handler(client);
 
-    return use_case.execute(message.active);
+    return use_case.execute(message);
 }
 
 fn handler(client: *Client) proxy_status.ApplyProxyStatusHandler {

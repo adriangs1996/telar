@@ -23,22 +23,23 @@ test "proxy status reconciliation commits only changed runtime state" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expect(model.reconcileProxyStatus(false) == null);
+    try std.testing.expect(model.reconcileProxyStatus(false, .exact) == null);
     try std.testing.expect(!model.proxyTlsActive());
     try std.testing.expectEqualDeep(client_model.Version{}, model.version());
 
-    const enabled = model.reconcileProxyStatus(true).?;
+    const enabled = model.reconcileProxyStatus(true, .wildcard).?;
 
     try std.testing.expect(!enabled.previous);
     try std.testing.expect(enabled.active);
+    try std.testing.expectEqual(schema.ProxyScope.wildcard, enabled.scope);
     try std.testing.expectEqual(@as(u64, 0), enabled.proxy_status_revision_before);
     try std.testing.expectEqual(@as(u64, 1), enabled.proxy_status_revision);
     try std.testing.expect(model.proxyTlsActive());
     try std.testing.expectEqual(client_model.Version{ .proxy_status = 1 }, model.version());
-    try std.testing.expect(model.reconcileProxyStatus(true) == null);
+    try std.testing.expect(model.reconcileProxyStatus(true, .wildcard) == null);
     try std.testing.expectEqual(client_model.Version{ .proxy_status = 1 }, model.version());
 
-    const disabled = model.reconcileProxyStatus(false).?;
+    const disabled = model.reconcileProxyStatus(false, .exact).?;
 
     try std.testing.expect(disabled.previous);
     try std.testing.expect(!disabled.active);

@@ -1,6 +1,7 @@
 //! Application use case for reconciling runtime TLS interception state.
 
 const std = @import("std");
+const core = @import("telar-core");
 const client_model = @import("../../model/root.zig");
 
 pub const ProxyStatusDelivery = struct {
@@ -16,10 +17,10 @@ pub const ApplyProxyStatusHandler = struct {
     /// Repeated values produce neither a commit nor a delivery.
     ///
     /// ```zig
-    /// const commit = try handler.execute(true) orelse return;
+    /// const commit = try handler.execute(.{ .active = true, .scope = .exact }) orelse return;
     /// ```
-    pub fn execute(handler: *ApplyProxyStatusHandler, active: bool) !?client_model.ProxyStatusCommit {
-        const commit = handler.model.reconcileProxyStatus(active) orelse return null;
+    pub fn execute(handler: *ApplyProxyStatusHandler, status: core.schema.ProxyStatus) !?client_model.ProxyStatusCommit {
+        const commit = handler.model.reconcileProxyStatus(status.active, status.scope) orelse return null;
 
         try handler.delivery.deliver(handler.delivery.context, commit);
         return commit;
@@ -42,6 +43,7 @@ const DeliveryCapture = struct {
         capture.calls += 1;
         capture.commit = commit;
         capture.observed_commit = capture.model.proxyTlsActive() == commit.active and
+            capture.model.proxyTlsScope() == commit.scope and
             capture.model.version().proxy_status == commit.proxy_status_revision and
             commit.proxy_status_revision_before +% 1 == commit.proxy_status_revision;
 
@@ -60,18 +62,18 @@ test "ApplyProxyStatusHandler commits before delivering each changed state" {
         .delivery = capture.port(),
     };
 
-    try std.testing.expect((try handler.execute(false)) == null);
+    try std.testing.expect((try handler.execute(.{ .active = false, .scope = .exact })) == null);
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
 
-    const enabled = (try handler.execute(true)).?;
+    const enabled = (try handler.execute(.{ .active = true, .scope = .wildcard })).?;
 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqualDeep(enabled, capture.commit.?);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expect((try handler.execute(true)) == null);
+    try std.testing.expect((try handler.execute(.{ .active = true, .scope = .wildcard })) == null);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
 
-    const disabled = (try handler.execute(false)).?;
+    const disabled = (try handler.execute(.{ .active = false, .scope = .exact })).?;
 
     try std.testing.expect(!disabled.active);
     try std.testing.expect(capture.observed_commit);
@@ -88,7 +90,7 @@ test "ApplyProxyStatusHandler preserves a commit after delivery failure" {
         .delivery = capture.port(),
     };
 
-    try std.testing.expectError(error.ProxyStatusDeliveryFailed, handler.execute(true));
+    try std.testing.expectError(error.ProxyStatusDeliveryFailed, handler.execute(.{ .active = true, .scope = .exact }));
 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expect(model.proxyTlsActive());

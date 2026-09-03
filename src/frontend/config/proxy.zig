@@ -201,6 +201,24 @@ fn validHostname(host: []const u8) bool {
         return false;
     }
 
+    if (std.mem.eql(u8, host, "*")) {
+        return true;
+    }
+    if (std.mem.startsWith(u8, host, "*.")) {
+        return validExactHostname(host[2..]);
+    }
+    if (std.mem.indexOfScalar(u8, host, '*') != null) {
+        return false;
+    }
+
+    return validExactHostname(host);
+}
+
+fn validExactHostname(host: []const u8) bool {
+    if (host.len == 0) {
+        return false;
+    }
+
     var label_len: usize = 0;
     for (host) |byte| switch (byte) {
         '.' => {
@@ -240,8 +258,10 @@ fn validHostname(host: []const u8) bool {
     return true;
 }
 
-test "host validation requires exact DNS labels" {
+test "host validation accepts exact and leading wildcard DNS labels" {
     try std.testing.expect(validHostname("api.anthropic.com"));
+    try std.testing.expect(validHostname("*.openai.com"));
+    try std.testing.expect(validHostname("*"));
     try std.testing.expect(!validHostname(""));
     try std.testing.expect(!validHostname(".api.openai.com"));
     try std.testing.expect(!validHostname("api..openai.com"));
@@ -249,7 +269,9 @@ test "host validation requires exact DNS labels" {
     try std.testing.expect(!validHostname("api-.openai.com"));
     try std.testing.expect(!validHostname("api_openai.com"));
     try std.testing.expect(!validHostname("api.openai.com/path"));
-    try std.testing.expect(!validHostname("*.openai.com"));
+    try std.testing.expect(!validHostname("*openai.com"));
+    try std.testing.expect(!validHostname("api.*.openai.com"));
+    try std.testing.expect(!validHostname("*."));
     try std.testing.expect(!validHostname("openai.com:443"));
     try std.testing.expect(!validHostname("a" ** 64 ++ ".com"));
     try std.testing.expectEqual(core.proxy.max_hostname_bytes, config_model.max_proxy_intercept_host_bytes);

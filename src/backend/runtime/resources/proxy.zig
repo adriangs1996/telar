@@ -1,9 +1,11 @@
 //! Optional proxy ownership and observation scheduling for one runtime.
 
 const std = @import("std");
+const core = @import("telar-core");
 const proxy_mod = @import("../../proxy/root.zig");
 
 const Io = std.Io;
+const schema = core.schema;
 
 pub const Config = proxy_mod.Config;
 
@@ -70,6 +72,7 @@ const ProxyOwner = Owner(proxy_mod.Proxy, destroyProxy);
 
 pub const Runtime = struct {
     owner: ProxyOwner,
+    scope: schema.ProxyScope,
     captures: proxy_mod.CaptureJoiner,
     capture_sink: ?CaptureSink = null,
 
@@ -89,6 +92,7 @@ pub const Runtime = struct {
 
         return .{
             .owner = .init(owned_proxy),
+            .scope = if (config) |value| configuredScope(value.intercept_hosts) else .exact,
             .captures = .init(timeout_ms),
             .capture_sink = null,
         };
@@ -110,6 +114,15 @@ pub const Runtime = struct {
     /// ```
     pub fn active(runtime: *const Runtime) bool {
         return runtime.owner.capability != null;
+    }
+
+    /// Reports whether active interception includes wildcard host rules.
+    ///
+    /// ```zig
+    /// if (proxy_runtime.interceptionScope() == .wildcard) warnExpandedScope();
+    /// ```
+    pub fn interceptionScope(runtime: *const Runtime) schema.ProxyScope {
+        return runtime.scope;
     }
 
     /// Schedules one observation receive when the proxy is active.
@@ -209,6 +222,22 @@ pub const Runtime = struct {
         runtime.owner.deinit();
     }
 };
+
+fn configuredScope(hosts: []const []const u8) schema.ProxyScope {
+    for (hosts) |host| {
+        if (std.mem.startsWith(u8, host, "*")) {
+            return .wildcard;
+        }
+    }
+
+    return .exact;
+}
+
+test "runtime scope distinguishes exact and wildcard policies" {
+    try std.testing.expectEqual(schema.ProxyScope.exact, configuredScope(&.{"api.openai.com"}));
+    try std.testing.expectEqual(schema.ProxyScope.wildcard, configuredScope(&.{"*.openai.com"}));
+    try std.testing.expectEqual(schema.ProxyScope.wildcard, configuredScope(&.{"*"}));
+}
 
 const FakeCapability = struct {
     destroy_count: usize = 0,

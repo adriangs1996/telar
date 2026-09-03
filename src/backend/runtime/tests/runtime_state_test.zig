@@ -96,7 +96,10 @@ test "runtime-state subscription emits current projections once and future revis
 
     const proxy = (try fixture.next()).?;
     switch (proxy) {
-        .proxy_status => |status| try std.testing.expect(status.active),
+        .proxy_status => |status| {
+            try std.testing.expect(status.active);
+            try std.testing.expectEqual(schema.ProxyScope.exact, status.scope);
+        },
         else => return error.ExpectedProxyStatus,
     }
 

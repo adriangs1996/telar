@@ -1,8 +1,9 @@
 # Proxy status
 
-The runtime owns whether its TLS interception service exists. Each disposable
-client stores one boolean replica so its top bar can keep interception visible.
-`View` owns neither that boolean nor its transition rules.
+The runtime owns whether its TLS interception service exists and whether its
+host policy is exact-only or contains a wildcard. Each disposable client
+stores that bounded replica so its top bar can keep interception visible.
+`View` owns neither the replica nor its transition rules.
 
 ## End-to-end path
 
@@ -29,13 +30,14 @@ post-commit notification
              |
 presentation_lifecycle.observe
              |
-Presenter -> View.render(proxy_tls_active)
+Presenter -> View.render(proxy_tls_active, proxy_tls_scope)
              |
 widgets.top_bar
 ```
 
 The proxy configuration does not change during one runtime process. After a
-client requests runtime state, `Delivery.prepare` sends the current boolean
+client requests runtime state, `Delivery.prepare` sends the current active bit
+and scope enum
 once and records delivery only after the send commits. The message needs no
 runtime revision because a connected runtime cannot publish a second source
 state.
@@ -44,7 +46,7 @@ state.
 
 `proxy_status.apply` maps the decoded message into
 `ApplyProxyStatusHandler`. The handler asks `ClientModel` to reconcile the
-boolean. An equal value is a no-op. A changed value advances
+pair. An equal value is a no-op. A changed value advances
 `Version.proxy_status` exactly once and returns the previous and current state
 plus the local revision before and after the change in a typed commit.
 
@@ -60,9 +62,10 @@ calls `Presenter`.
 
 After event dispatch, `presentation_lifecycle.observe` publishes the complete model
 version. `Presenter` compares `Version.proxy_status` with the version it last
-painted, invalidates chrome and passes `ClientModel.proxyTlsActive()` into the
-next paced frame. `View` uses that immutable input while composing the top bar
-and stores no proxy state.
+painted, invalidates chrome and passes `ClientModel.proxyTlsActive()` and
+`proxyTlsScope()` into the next paced frame. `View` uses those immutable inputs
+while composing the top bar and stores no proxy state. Exact-only interception
+uses the peach shield; a suffix or global wildcard uses red.
 
 The notification center advances its own model version because notifications
 are separate disposable UI state. `presentation_lifecycle.observe` folds that version
@@ -78,7 +81,7 @@ nothing.
 
 - `src/backend/runtime/delivery.zig` proves one committed status delivery per
   client connection.
-- `src/core/schema/root.zig` defines the bounded boolean wire value.
+- `src/core/schema/root.zig` defines the bounded active bit and scope enum.
 - `src/frontend/client/model.zig` proves idempotence and isolated versioning.
 - `src/frontend/client/application/proxy_status.zig` proves commit-before-
   delivery ordering, duplicate suppression and retained commits after delivery

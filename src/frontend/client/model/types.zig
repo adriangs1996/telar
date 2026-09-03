@@ -454,7 +454,9 @@ pub const WorkspaceListCommit = struct {
 
 pub const ProxyStatusCommit = struct {
     previous: bool,
+    previous_scope: schema.ProxyScope,
     active: bool,
+    scope: schema.ProxyScope,
     proxy_status_revision_before: u64,
     proxy_status_revision: u64,
 };

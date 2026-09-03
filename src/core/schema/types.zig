@@ -125,6 +125,11 @@ pub const ClientIdentity = enum(u64) {
     _,
 };
 
+pub const ProxyScope = enum(u8) {
+    exact = 0,
+    wildcard = 1,
+};
+
 pub const ClientLayoutAxis = enum(u8) {
     horizontal = 0,
     vertical = 1,

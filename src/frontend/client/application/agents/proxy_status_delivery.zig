@@ -38,8 +38,9 @@ pub const DeliverProxyStatusHandler = struct {
 
     fn validate(handler: *const DeliverProxyStatusHandler, commit: client_model.ProxyStatusCommit) !void {
         if (handler.model.proxyTlsActive() != commit.active or
+            handler.model.proxyTlsScope() != commit.scope or
             handler.model.version().proxy_status != commit.proxy_status_revision or
-            commit.previous == commit.active or
+            (commit.previous == commit.active and commit.previous_scope == commit.scope) or
             commit.proxy_status_revision_before +% 1 != commit.proxy_status_revision)
         {
             return error.StaleProxyStatusCommit;
@@ -63,6 +64,7 @@ const Capture = struct {
         const capture: *Capture = @ptrCast(@alignCast(context));
         capture.calls += 1;
         capture.observed_commit = capture.model.proxyTlsActive() == capture.expected.active and
+            capture.model.proxyTlsScope() == capture.expected.scope and
             capture.model.version().proxy_status == capture.expected.proxy_status_revision and
             capture.expected.proxy_status_revision_before +% 1 == capture.expected.proxy_status_revision;
         capture.notification_valid = expectedNotification(capture.expected.active, input);
@@ -96,7 +98,7 @@ fn deliveryHandler(model: *const client_model.Model, capture: *Capture) DeliverP
 test "DeliverProxyStatusHandler publishes exact enabled and disabled notifications" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const enabled = model.reconcileProxyStatus(true).?;
+    const enabled = model.reconcileProxyStatus(true, .exact).?;
     var capture: Capture = .{ .model = &model, .expected = enabled };
     var use_case = deliveryHandler(&model, &capture);
 
@@ -106,7 +108,7 @@ test "DeliverProxyStatusHandler publishes exact enabled and disabled notificatio
     try std.testing.expect(capture.observed_commit);
     try std.testing.expect(capture.notification_valid);
 
-    const disabled = model.reconcileProxyStatus(false).?;
+    const disabled = model.reconcileProxyStatus(false, .exact).?;
     capture.expected = disabled;
     capture.notification_valid = false;
     try use_case.execute(disabled);
@@ -119,7 +121,7 @@ test "DeliverProxyStatusHandler publishes exact enabled and disabled notificatio
 test "DeliverProxyStatusHandler rejects stale transitions before publication" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const commit = model.reconcileProxyStatus(true).?;
+    const commit = model.reconcileProxyStatus(true, .wildcard).?;
     var capture: Capture = .{ .model = &model, .expected = commit };
     var use_case = deliveryHandler(&model, &capture);
 
@@ -128,6 +130,10 @@ test "DeliverProxyStatusHandler rejects stale transitions before publication" {
     try std.testing.expectError(error.StaleProxyStatusCommit, use_case.execute(altered));
     altered = commit;
     altered.previous = true;
+    altered.previous_scope = .wildcard;
+    try std.testing.expectError(error.StaleProxyStatusCommit, use_case.execute(altered));
+    altered = commit;
+    altered.scope = .exact;
     try std.testing.expectError(error.StaleProxyStatusCommit, use_case.execute(altered));
     altered = commit;
     altered.proxy_status_revision_before -%= 1;
@@ -136,7 +142,7 @@ test "DeliverProxyStatusHandler rejects stale transitions before publication" {
     altered.proxy_status_revision -%= 1;
     try std.testing.expectError(error.StaleProxyStatusCommit, use_case.execute(altered));
 
-    _ = model.reconcileProxyStatus(false).?;
+    _ = model.reconcileProxyStatus(false, .exact).?;
     try std.testing.expectError(error.StaleProxyStatusCommit, use_case.execute(commit));
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
 }
@@ -144,7 +150,7 @@ test "DeliverProxyStatusHandler rejects stale transitions before publication" {
 test "DeliverProxyStatusHandler preserves the commit after publication failure" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const commit = model.reconcileProxyStatus(true).?;
+    const commit = model.reconcileProxyStatus(true, .exact).?;
     var capture: Capture = .{
         .model = &model,
         .expected = commit,

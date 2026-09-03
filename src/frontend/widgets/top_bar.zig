@@ -25,6 +25,7 @@ pub const Input = struct {
     workspaces: *const workspace_list.Snapshot,
     collapsed: bool,
     proxy_tls_active: bool,
+    proxy_tls_scope: schema.ProxyScope = .exact,
     right: *const bars.Slot = &empty_right,
     system_metrics: ?status_bar.Metrics = null,
 };
@@ -130,7 +131,7 @@ pub fn render(context: *widget.Context, input: Input) void {
             .h = 1,
         };
         const badge_style: ui.Style = .{
-            .fg = context.palette.peach,
+            .fg = if (input.proxy_tls_scope == .wildcard) context.palette.red else context.palette.peach,
             .bg = context.palette.panel_bg,
             .flags = .{ .bold = true },
         };
@@ -485,6 +486,34 @@ test "proxy badge reserves the right edge before workspace navigation" {
         buffer.cells[badge_x].text(),
     );
     try std.testing.expect(hits.at(@intCast(badge_x), 0) == null);
+}
+
+test "wildcard proxy scope renders a distinct warning badge" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 20, 1);
+    defer buffer.deinit();
+    var hits: widget.Hits = .{};
+    var context: widget.Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &ui.theme.default_theme.palette,
+        .hovered = null,
+    };
+    const workspaces: workspace_list.Snapshot = .{};
+
+    render(&context, .{
+        .area = buffer.area(),
+        .sidebar_visible = true,
+        .location = null,
+        .workspace_name = "telar",
+        .workspaces = &workspaces,
+        .collapsed = false,
+        .proxy_tls_active = true,
+        .proxy_tls_scope = .wildcard,
+    });
+
+    const badge = buffer.at(18, 0).?;
+    try std.testing.expectEqualStrings(ui.icons.Icon.proxy_active.unicodeGlyph(), badge.text());
+    try std.testing.expectEqualDeep(ui.theme.default_theme.palette.red, badge.style.fg);
 }
 
 test "configured right content stops before the permanent proxy badge" {

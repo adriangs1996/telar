@@ -48,14 +48,19 @@ certificate, and combined system root bundle are written atomically with mode
 0600. Existing corrupt or partial authority files are not overwritten. Telar
 never installs this CA in the system trust store.
 
-Telar passes TLS through by default and intercepts only an exact-host allowlist.
+Telar passes TLS through by default and intercepts only its host allowlist.
 The defaults cover the model APIs used by Claude Code and Codex:
 `api.anthropic.com`, `api.openai.com`, and `chatgpt.com`. Setting
 `intercept_hosts` replaces those defaults, so an empty array disables all TLS
-interception while retaining the authenticated proxy tunnel. Wildcards and
-suffix matches are rejected. The runtime accepts 256 entries, canonicalizes
-and deduplicates them at startup, then uses binary search for every CONNECT
-hostname.
+interception while retaining the authenticated proxy tunnel. `*.example.com`
+matches proper subdomains of `example.com`, but not the bare suffix; `*`
+matches every hostname. Partial-label and embedded wildcards are rejected. The
+runtime accepts 256 entries, canonicalizes and deduplicates them at startup,
+then binary-searches exact rules and a suffix list ordered by reversed DNS
+labels for every CONNECT hostname.
+
+The top-bar shield is peach for exact-only interception and red when any
+suffix or global wildcard expands the active scope.
 
 Every CONNECT request still requires a live pane capability. For a host outside
 the allowlist, Telar responds with `200` and forwards the TCP stream byte for

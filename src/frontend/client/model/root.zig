@@ -162,6 +162,7 @@ pub const Model = struct {
     sidebar_animation_frame: u8 = 0,
     sidebar_animation_revision: u64 = 0,
     proxy_tls_active: bool = false,
+    proxy_tls_scope: schema.ProxyScope = .exact,
     proxy_status_revision: u64 = 0,
     system_metrics: ?SystemMetrics = null,
     system_metrics_revision: u64 = 0,
@@ -920,21 +921,25 @@ pub const Model = struct {
     /// effect or presentation work.
     ///
     /// ```zig
-    /// const commit = model.reconcileProxyStatus(true) orelse return;
+    /// const commit = model.reconcileProxyStatus(true, .exact) orelse return;
     /// ```
-    pub fn reconcileProxyStatus(model: *Model, active: bool) ?ProxyStatusCommit {
-        if (model.proxy_tls_active == active) {
+    pub fn reconcileProxyStatus(model: *Model, active: bool, scope: schema.ProxyScope) ?ProxyStatusCommit {
+        if (model.proxy_tls_active == active and model.proxy_tls_scope == scope) {
             return null;
         }
 
         const previous = model.proxy_tls_active;
+        const previous_scope = model.proxy_tls_scope;
         const proxy_status_revision_before = model.proxy_status_revision;
         model.proxy_tls_active = active;
+        model.proxy_tls_scope = scope;
         model.proxy_status_revision +%= 1;
 
         return .{
             .previous = previous,
+            .previous_scope = previous_scope,
             .active = active,
+            .scope = scope,
             .proxy_status_revision_before = proxy_status_revision_before,
             .proxy_status_revision = model.proxy_status_revision,
         };
@@ -947,6 +952,15 @@ pub const Model = struct {
     /// ```
     pub fn proxyTlsActive(model: *const Model) bool {
         return model.proxy_tls_active;
+    }
+
+    /// Returns the configured interception scope reported by the runtime.
+    ///
+    /// ```zig
+    /// const expanded = model.proxyTlsScope() == .wildcard;
+    /// ```
+    pub fn proxyTlsScope(model: *const Model) schema.ProxyScope {
+        return model.proxy_tls_scope;
     }
 
     /// Commits one newer host-health replica. Invalid newer values preserve

@@ -120,6 +120,10 @@ pub fn decodeHistoryStatus(value: u8) error{InvalidHistoryStatus}!types.HistoryS
     return std.enums.fromInt(types.HistoryStatus, value) orelse error.InvalidHistoryStatus;
 }
 
+pub fn decodeProxyScope(value: u8) error{InvalidProxyScope}!types.ProxyScope {
+    return std.enums.fromInt(types.ProxyScope, value) orelse error.InvalidProxyScope;
+}
+
 pub fn decodeFailureCode(value: u16) error{UnknownFailureCode}!types.FailureCode {
     return std.enums.fromInt(types.FailureCode, value) orelse error.UnknownFailureCode;
 }
@@ -179,7 +183,7 @@ pub fn Derived(comptime T: type) type {
                 bool => try encoder.writeByte(@intFromBool(value)),
                 u8 => try encoder.writeByte(value),
                 u16, u32, u64, i32, i64 => try encoder.writeInt(F, value),
-                types.ExitKind, types.TabMoveDirection, types.PaneTextSource, types.PaneTextMode => {
+                types.ExitKind, types.TabMoveDirection, types.PaneTextSource, types.PaneTextMode, types.ProxyScope => {
                     try encoder.writeByte(@intFromEnum(value));
                 },
                 else => @compileError("underivable field type " ++ @typeName(F)),
@@ -213,6 +217,7 @@ pub fn Derived(comptime T: type) type {
                     return error.InvalidPaneTextSource,
                 types.PaneTextMode => std.enums.fromInt(types.PaneTextMode, try decoder.readByte()) orelse
                     return error.InvalidPaneTextMode,
+                types.ProxyScope => try decodeProxyScope(try decoder.readByte()),
                 else => @compileError("underivable field type " ++ @typeName(F)),
             };
         }

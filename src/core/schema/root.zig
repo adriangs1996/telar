@@ -105,6 +105,7 @@ pub const AgentSnapshotEntry = types.AgentSnapshotEntry;
 pub const NotificationLevel = types.NotificationLevel;
 pub const NotificationTarget = types.NotificationTarget;
 pub const ClientIdentity = types.ClientIdentity;
+pub const ProxyScope = types.ProxyScope;
 pub const ClientLayoutAxis = types.ClientLayoutAxis;
 pub const ClientLayoutSplit = types.ClientLayoutSplit;
 pub const ClientLayoutNode = types.ClientLayoutNode;
