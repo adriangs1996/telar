@@ -79,7 +79,7 @@ pub const Authority = struct {
     /// Loads the CA from `key_path`/`cert_path`, generating and persisting one
     /// on first run.
     pub fn loadOrCreate(resources: Resources, files: AuthorityFiles) Error!Authority {
-        if (load(resources.io, resources.allocator, files.key, files.certificate)) |pair| {
+        if (load(resources, files)) |pair| {
             return .{ .pair = pair };
         } else |_| {}
 
@@ -160,12 +160,14 @@ fn generate(io: Io) Error!Pair {
     return pair;
 }
 
-fn load(io: Io, gpa: std.mem.Allocator, key_path: []const u8, cert_path: []const u8) Error!Pair {
+fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
+    const io = resources.io;
+    const gpa = resources.allocator;
     const cwd: Io.Dir = .cwd();
 
-    const key_pem = cwd.readFileAlloc(io, key_path, gpa, .limited(max_pem_len)) catch return error.ReadFailed;
+    const key_pem = cwd.readFileAlloc(io, files.key, gpa, .limited(max_pem_len)) catch return error.ReadFailed;
     defer gpa.free(key_pem);
-    const cert_pem = cwd.readFileAlloc(io, cert_path, gpa, .limited(max_pem_len)) catch return error.ReadFailed;
+    const cert_pem = cwd.readFileAlloc(io, files.certificate, gpa, .limited(max_pem_len)) catch return error.ReadFailed;
     defer gpa.free(cert_pem);
 
     const parsed = tlsz.config.PrivateKey.parsePem(key_pem) catch return error.ReadFailed;
