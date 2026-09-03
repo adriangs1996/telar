@@ -654,7 +654,7 @@ fn drawList(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
         }
     }
 
-    drawScrollbar(state, buf, .{ .x = area.x + area.w - 1, .y = area.y, .w = 1, .h = area.h }, total);
+    drawScrollbar(.{ .state = state, .buffer = buf, .area = .{ .x = area.x + area.w - 1, .y = area.y, .w = 1, .h = area.h } }, total);
 }
 
 fn drawSectionHeader(context: DrawContext, y: u16, section: Section) void {
@@ -873,7 +873,10 @@ fn drawStatus(buf: *ui.Buffer, draw: StatusDraw) u16 {
     return width;
 }
 
-fn drawScrollbar(state: *State, buf: *ui.Buffer, area: ui.Rect, total: u16) void {
+fn drawScrollbar(context: DrawContext, total: u16) void {
+    const state = context.state;
+    const buf = context.buffer;
+    const area = context.area;
     if (total <= area.h or area.h == 0) {
         return;
     }
