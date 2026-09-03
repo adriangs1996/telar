@@ -712,7 +712,9 @@ fn sharedFrameAvailable(resource: FrameResource) bool {
 fn findSharedFrame(bytes: []const u8, from: usize) ?SharedFrame {
     var search_from = from;
     while (std.mem.indexOfPos(u8, bytes, search_from, atomic_shared_prefix)) |start| {
-        if (sharedFrameAt(bytes, start)) |frame| return frame;
+        if (sharedFrameAt(bytes, start)) |frame| {
+            return frame;
+        }
         search_from = start + atomic_shared_prefix.len;
     }
     return null;
