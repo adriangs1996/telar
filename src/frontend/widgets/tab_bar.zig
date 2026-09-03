@@ -11,6 +11,11 @@ const bars = @import("../bars/root.zig");
 
 const schema = core.schema;
 
+/// One empty cell keeps neighbouring tabs from reading as a single label.
+const tab_gap: u16 = 1;
+/// The fullscreen marker is one icon cell plus the trailing padding cell.
+const fullscreen_marker_width: u16 = 2;
+
 pub const Input = struct {
     area: ui.Rect,
     tabs: ?*const tabs_mod.Model,
@@ -18,95 +23,81 @@ pub const Input = struct {
     alignment: bars.Alignment = .right,
 };
 
+/// The text a tab shows: its display number, its name and, while one of its
+/// panes is fullscreen, a marker drawn after the name.
+const Label = struct {
+    buffer: [schema.max_tab_label_bytes + 16]u8 = undefined,
+    len: usize = 0,
+    fullscreen: bool,
+
+    fn init(tab: *const tabs_mod.Tab, index: usize) Label {
+        var label: Label = .{ .fullscreen = tab.model.layout.isFullscreen() };
+        const written = std.fmt.bufPrint(&label.buffer, " {d}:{s} ", .{
+            index + 1,
+            tab.labelSlice(),
+        }) catch fallback: {
+            const placeholder = " tab ";
+            @memcpy(label.buffer[0..placeholder.len], placeholder);
+            break :fallback label.buffer[0..placeholder.len];
+        };
+        label.len = written.len;
+        return label;
+    }
+
+    fn text(label: *const Label) []const u8 {
+        return label.buffer[0..label.len];
+    }
+
+    fn width(label: *const Label) u16 {
+        const marker: u16 = if (label.fullscreen) fullscreen_marker_width else 0;
+        return ui.measure(label.text()) + marker;
+    }
+
+    /// Draws the text, then the marker when the whole marker fits.
+    fn draw(label: *const Label, context: *widget.Context, placement: Placement) void {
+        const rect = placement.rect;
+        const text_width = @min(ui.measure(label.text()), rect.w);
+        _ = context.buffer.writeTruncated(rect, rect.x, rect.y, label.text(), text_width, placement.style);
+        if (!label.fullscreen or rect.w < text_width + fullscreen_marker_width) {
+            return;
+        }
+
+        const marker_x = rect.x + text_width;
+        _ = context.drawIcon(rect, marker_x, rect.y, .pane_fullscreen, placement.style);
+        _ = context.buffer.writeTruncated(rect, marker_x + 1, rect.y, " ", 1, placement.style);
+    }
+};
+
+const Placement = struct {
+    rect: ui.Rect,
+    style: ui.Style,
+};
+
 pub fn render(context: *widget.Context, input: Input) void {
     if (input.tabs) |collection| {
-        if (collection.count == 0) return;
-        var first_visible = collection.active_index;
-        var used = displayWidth(
-            collection.items[first_visible].?.labelSlice(),
-            first_visible,
-            input.area.w,
-        );
-        while (first_visible > 0) {
-            const candidate = first_visible - 1;
-            const width = displayWidth(
-                collection.items[candidate].?.labelSlice(),
-                candidate,
-                input.area.w,
-            );
-            if (width > input.area.w -| used) break;
-            first_visible = candidate;
-            used += width;
-        }
-        // The block anchors to the right edge: when the tabs do not fill the
-        // region the gap stays on the left, next to the status.
-        var total: u16 = 0;
-        for (collection.items[first_visible..collection.count], first_visible..) |slot, index| {
-            const width = displayWidth(slot.?.labelSlice(), index, input.area.w);
-            total += @min(width, input.area.w -| total);
-            if (total == input.area.w) break;
-        }
-        var x = switch (input.alignment) {
-            .left => input.area.x,
-            .center => input.area.x + (input.area.w - total) / 2,
-            .right => input.area.x + input.area.w - total,
-        };
-        for (collection.items[first_visible..collection.count], first_visible..) |slot, index| {
-            const tab = slot.?;
-            var tab_buffer: [schema.max_tab_label_bytes + 16]u8 = undefined;
-            const label = std.fmt.bufPrint(&tab_buffer, " {d}:{s} ", .{
-                index + 1,
-                tab.labelSlice(),
-            }) catch " tab ";
-            const remaining = input.area.x + input.area.w -| x;
-            if (remaining == 0) break;
-            const width = @min(ui.measure(label), remaining);
-            const rect: ui.Rect = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
-            const action: widget.Action = .{ .select_tab = tab.location.tab_id };
-            context.hits.add(rect, action);
-            const active = index == collection.active_index;
-            const style: ui.Style = if (active)
-                .{
-                    .fg = context.palette.surface_dim,
-                    .bg = context.palette.accent,
-                    .flags = .{ .bold = true },
-                }
-            else if (context.isHovered(action))
-                .{
-                    .fg = context.palette.text,
-                    .bg = context.palette.surface0,
-                    .flags = .{ .underline = .single },
-                }
-            else
-                barStyle(context);
-            _ = context.buffer.writeTruncated(rect, x, input.area.y, label, width, style);
-            x += width;
-        }
+        renderCollection(context, input, collection);
     } else if (input.model.location) |location| {
         var tab_buffer: [32]u8 = undefined;
         const label = std.fmt.bufPrint(&tab_buffer, " tab {d} ", .{
             schema.id.raw(location.tab_id),
         }) catch " tab ";
         const width = @min(ui.measure(label), input.area.w);
-        const x = switch (input.alignment) {
-            .left => input.area.x,
-            .center => input.area.x + (input.area.w - width) / 2,
-            .right => input.area.x + input.area.w - width,
-        };
+        const x = alignedStart(input, width);
         const rect: ui.Rect = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
-        _ = context.buffer.writeTruncated(rect, x, input.area.y, label, width, .{
-            .fg = context.palette.surface_dim,
-            .bg = context.palette.accent,
-            .flags = .{ .bold = true },
-        });
+        _ = context.buffer.writeTruncated(rect, x, input.area.y, label, width, activeStyle(context));
     }
 }
 
 pub fn desiredWidth(input: Input) u16 {
     if (input.tabs) |collection| {
         var total: u16 = 0;
-        for (collection.items[0..collection.count], 0..) |slot, index| {
-            total +|= displayWidth(slot.?.labelSlice(), index, std.math.maxInt(u16));
+        for (collection.items[0..collection.count], 0..) |*slot, index| {
+            const tab = if (slot.*) |*value| value else continue;
+            if (index != 0) {
+                total +|= tab_gap;
+            }
+
+            total +|= Label.init(tab, index).width();
         }
 
         return total;
@@ -122,13 +113,113 @@ pub fn barStyle(context: *const widget.Context) ui.Style {
     return .{ .fg = context.palette.subtext0, .bg = context.palette.panel_bg };
 }
 
-fn decimalDigits(value: usize) u16 {
-    var remaining = value;
-    var digits: u16 = 1;
-    while (remaining >= 10) : (digits += 1) remaining /= 10;
-    return digits;
+fn activeStyle(context: *const widget.Context) ui.Style {
+    return .{
+        .fg = context.palette.surface_dim,
+        .bg = context.palette.accent,
+        .flags = .{ .bold = true },
+    };
 }
 
-fn displayWidth(label: []const u8, index: usize, available: u16) u16 {
-    return @min(ui.measure(label) + decimalDigits(index + 1) + 3, available);
+/// Inactive tabs sit one surface above the bar so they read as buttons; the
+/// gap between them keeps the bar's own background.
+fn inactiveStyle(context: *const widget.Context) ui.Style {
+    return .{ .fg = context.palette.subtext0, .bg = context.palette.surface0 };
+}
+
+fn hoveredStyle(context: *const widget.Context) ui.Style {
+    return .{
+        .fg = context.palette.text,
+        .bg = context.palette.surface1,
+        .flags = .{ .underline = .single },
+    };
+}
+
+fn renderCollection(context: *widget.Context, input: Input, collection: *const tabs_mod.Model) void {
+    if (collection.count == 0) {
+        return;
+    }
+
+    const first_visible = firstVisibleIndex(collection, input.area.w);
+    const total = visibleWidth(collection, first_visible, input.area.w);
+    const end = input.area.x + input.area.w;
+    var x = alignedStart(input, total);
+    for (collection.items[first_visible..collection.count], first_visible..) |*slot, index| {
+        const tab = if (slot.*) |*value| value else continue;
+        if (index != first_visible) {
+            if (x >= end) {
+                break;
+            }
+
+            const gap: ui.Rect = .{ .x = x, .y = input.area.y, .w = tab_gap, .h = 1 };
+            _ = context.buffer.writeTruncated(gap, x, input.area.y, " ", tab_gap, barStyle(context));
+            x += tab_gap;
+        }
+
+        const remaining = end -| x;
+        if (remaining == 0) {
+            break;
+        }
+
+        const label = Label.init(tab, index);
+        const width = @min(label.width(), remaining);
+        const rect: ui.Rect = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
+        const action: widget.Action = .{ .select_tab = tab.location.tab_id };
+        context.hits.add(rect, action);
+        const style: ui.Style = if (index == collection.active_index)
+            activeStyle(context)
+        else if (context.isHovered(action))
+            hoveredStyle(context)
+        else
+            inactiveStyle(context);
+        label.draw(context, .{ .rect = rect, .style = style });
+        x += width;
+    }
+}
+
+/// The active tab is always visible; earlier tabs are added while they fit.
+fn firstVisibleIndex(collection: *const tabs_mod.Model, available: u16) usize {
+    var first_visible = collection.active_index;
+    var used = tabWidth(collection, first_visible, available);
+    while (first_visible > 0) {
+        const candidate = first_visible - 1;
+        const width = tabWidth(collection, candidate, available) +| tab_gap;
+        if (width > available -| used) {
+            break;
+        }
+
+        first_visible = candidate;
+        used += width;
+    }
+
+    return first_visible;
+}
+
+/// The block anchors to its alignment edge: when the tabs do not fill the
+/// region the unused cells stay on the other side.
+fn visibleWidth(collection: *const tabs_mod.Model, first_visible: usize, available: u16) u16 {
+    var total: u16 = 0;
+    for (first_visible..collection.count) |index| {
+        const gap: u16 = if (index != first_visible) tab_gap else 0;
+        const width = tabWidth(collection, index, available) +| gap;
+        total += @min(width, available -| total);
+        if (total == available) {
+            break;
+        }
+    }
+
+    return total;
+}
+
+fn tabWidth(collection: *const tabs_mod.Model, index: usize, available: u16) u16 {
+    const tab = if (collection.items[index]) |*value| value else return 0;
+    return @min(Label.init(tab, index).width(), available);
+}
+
+fn alignedStart(input: Input, width: u16) u16 {
+    return switch (input.alignment) {
+        .left => input.area.x,
+        .center => input.area.x + (input.area.w - width) / 2,
+        .right => input.area.x + input.area.w - width,
+    };
 }

@@ -36,6 +36,7 @@ pub fn run(init: std.process.Init, options: RunOptions) !u8 {
             .path = options.config,
             .disabled = options.no_config,
             .profile = options.profile,
+            .fresh = options.fresh,
         });
     defer connection.deinit(init.io);
 

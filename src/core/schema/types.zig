@@ -24,6 +24,8 @@ pub const max_agent_snapshot_entries = max_panes_per_tab;
 pub const max_agent_workspace_label_bytes = 48;
 pub const max_agent_session_title_bytes = 96;
 pub const max_agent_cwd_label_bytes = 48;
+/// Path of the file an agent records its session in, as its hooks report it.
+pub const max_agent_session_file_bytes = 1024;
 pub const max_foreground_name_bytes = 48;
 pub const max_pane_title_bytes = 256;
 pub const max_workspace_list_entries = 64;
@@ -402,9 +404,22 @@ pub const AgentTitleSource = enum(u8) {
     telar = 0,
     generated = 1,
     manual = 2,
-    /// The child's own OSC 0/2 window title, shown until a generated or
-    /// manual title exists.
+    /// The child's own OSC 0/2 window title, shown until a generated,
+    /// manual or agent title exists.
     terminal = 3,
+    /// The name the agent's own session carries (`/rename`, `/name`),
+    /// reported by its hooks. Durable like a manual title; unlike one, the
+    /// agent may clear it again.
+    agent = 4,
+};
+
+/// The file an agent records its session in, so the runtime can read the
+/// name the user gave the session when no hook carries it.
+pub const AgentSessionFileKind = enum(u8) {
+    /// Claude Code's JSONL transcript; `/rename` appends a `custom-title` line.
+    claude_transcript = 0,
+    /// Codex's state database; `/rename` updates `threads.name`.
+    codex_state = 1,
 };
 
 pub const AgentTitleState = enum(u8) {

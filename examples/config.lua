@@ -27,6 +27,20 @@ return telar.config({
       },
       timeout_ms = 15000,
     },
+    -- Explicit opt-in: one headless Pi kept alive in RPC mode between
+    -- prompts. It serves the command suggestion palette (prefix+? or
+    -- telar.action.suggest_command()), which sends the focused pane's
+    -- working directory, its last visible rows and your request. Session
+    -- titles keep using agent_descriptions. The child starts from "/" on
+    -- the first prompt and is killed after idle_timeout_ms without work.
+    engine = {
+      command = {
+        "pi", "--mode", "rpc", "--no-session", "--no-tools",
+        "--no-extensions", "--no-skills", "--no-context-files",
+      },
+      timeout_ms = 20000,
+      idle_timeout_ms = 300000,
+    },
     -- Agent manifests: recognize, label and draw an agent without a rebuild.
     -- Naming a built-in ("claude", "codex", "pi") extends or overrides it.
     agents = {

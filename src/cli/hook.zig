@@ -18,6 +18,9 @@ pub const max_input_bytes = 64 * 1024;
 pub const Report = struct {
     state: schema.AgentReportState,
     session: []const u8 = "",
+    /// Where the agent records its session, when the hook knows it.
+    session_file: []const u8 = "",
+    session_file_kind: schema.AgentSessionFileKind = .claude_transcript,
 };
 
 /// The subset of Claude Code hook input telar reads.
@@ -25,6 +28,9 @@ pub const ClaudeHookInput = struct {
     hook_event_name: []const u8 = "",
     session_id: []const u8 = "",
     agent_id: ?[]const u8 = null,
+    transcript_path: []const u8 = "",
+    /// Present on `SessionStart` when the session already has a name.
+    session_title: []const u8 = "",
     notification_type: []const u8 = "",
     tool_name: []const u8 = "",
     tool_use_id: []const u8 = "",
@@ -42,6 +48,9 @@ pub const CodexHookInput = struct {
     tool_use_id: []const u8 = "",
     tool_input: std.json.Value = .null,
     cwd: []const u8 = "",
+    /// Not part of Codex's payload: the state database `run` resolves from
+    /// `CODEX_HOME`, where `/rename` lands as `threads.name`.
+    state_database: []const u8 = "",
 };
 
 /// The payload the Telar extension for Pi sends. Pi has no hook files: the
@@ -57,6 +66,18 @@ pub const PiHookInput = struct {
     tool_input: std.json.Value = .null,
     cwd: []const u8 = "",
     exit_code: ?i32 = null,
+    /// The session name on `session_start` and `session_info_changed`.
+    /// Absent on `session_info_changed` means the name was cleared.
+    name: ?[]const u8 = null,
+};
+
+/// Everything one hook invocation may send: at most one lifecycle report,
+/// one command report and one title report.
+const Reports = struct {
+    lifecycle: ?Report = null,
+    command: ?CommandReport = null,
+    /// Empty clears an earlier agent title.
+    title: ?[]const u8 = null,
 };
 
 const CommandReport = struct {
@@ -153,6 +174,25 @@ pub fn mapPiHook(input: PiHookInput) ?Report {
     return null;
 }
 
+/// Maps the session name Pi carries to a title report. `session_start`
+/// reports a name only when the session has one, so a resumed named session
+/// is titled at once; `session_info_changed` reports every change, and a
+/// cleared name as an empty title. Long names are cut on a UTF-8 boundary.
+///
+/// ```zig
+/// const title = mapPiTitle(&buffer, input) orelse return;
+/// ```
+pub fn mapPiTitle(buffer: *[schema.max_agent_session_title_bytes]u8, input: PiHookInput) ?[]const u8 {
+    const name = if (std.mem.eql(u8, input.event, "session_info_changed"))
+        input.name orelse ""
+    else if (std.mem.eql(u8, input.event, "session_start"))
+        input.name orelse return null
+    else
+        return null;
+
+    return schema.truncateSessionTitle(buffer, name);
+}
+
 /// Maps one Claude Code hook event to a report. Subagent events and
 /// notifications that do not change what the user must do are ignored.
 ///
@@ -160,6 +200,7 @@ pub fn mapPiHook(input: PiHookInput) ?Report {
 /// const report = mapClaudeHook(input) orelse return;
 /// ```
 pub fn mapClaudeHook(input: ClaudeHookInput) ?Report {
+    const session_file = if (input.transcript_path.len <= schema.max_agent_session_file_bytes) input.transcript_path else "";
     if (input.agent_id != null and input.agent_id.?.len != 0) {
         return null;
     }
@@ -168,34 +209,98 @@ pub fn mapClaudeHook(input: ClaudeHookInput) ?Report {
     const session = if (schema.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
 
     if (std.mem.eql(u8, event, "SessionStart")) {
-        return .{ .state = .ready, .session = session };
+        return .{ .state = .ready, .session = session, .session_file = session_file };
     }
     if (std.mem.eql(u8, event, "UserPromptSubmit")) {
-        return .{ .state = .working, .session = session };
+        return .{ .state = .working, .session = session, .session_file = session_file };
     }
     if (std.mem.eql(u8, event, "PreToolUse") or std.mem.eql(u8, event, "PostToolUse")) {
-        return .{ .state = .working, .session = session };
+        return .{ .state = .working, .session = session, .session_file = session_file };
     }
     if (std.mem.eql(u8, event, "Stop")) {
-        return .{ .state = .ready, .session = session };
+        return .{ .state = .ready, .session = session, .session_file = session_file };
     }
     if (std.mem.eql(u8, event, "SessionEnd")) {
-        return .{ .state = .exited };
+        return .{ .state = .exited, .session_file = session_file };
     }
     if (std.mem.eql(u8, event, "Notification")) {
         for ([_][]const u8{ "permission_prompt", "elicitation_dialog", "elicitation_url_dialog", "agent_needs_input" }) |blocked| {
             if (std.mem.eql(u8, input.notification_type, blocked)) {
-                return .{ .state = .blocked, .session = session };
+                return .{ .state = .blocked, .session = session, .session_file = session_file };
             }
         }
         if (std.mem.eql(u8, input.notification_type, "idle_prompt")) {
-            return .{ .state = .ready, .session = session };
+            return .{ .state = .ready, .session = session, .session_file = session_file };
         }
 
         return null;
     }
 
     return null;
+}
+
+/// Maps the name Claude Code hands its `SessionStart` hook to a title
+/// report, so a session started or resumed with a name is titled at once.
+/// Later renames reach the runtime through the transcript watch.
+///
+/// ```zig
+/// const title = mapClaudeTitle(&buffer, input) orelse return;
+/// ```
+pub fn mapClaudeTitle(buffer: *[schema.max_agent_session_title_bytes]u8, input: ClaudeHookInput) ?[]const u8 {
+    if (!std.mem.eql(u8, input.hook_event_name, "SessionStart") or input.session_title.len == 0 or input.agent_id != null) {
+        return null;
+    }
+
+    return schema.truncateSessionTitle(buffer, input.session_title);
+}
+
+/// Codex's state directory: `CODEX_HOME`, else `~/.codex`.
+fn codexHome(environ: std.process.Environ, buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
+    if (std.process.Environ.getPosix(environ, "CODEX_HOME")) |home| {
+        if (home.len != 0) {
+            return std.fmt.bufPrint(buffer, "{s}", .{home}) catch null;
+        }
+    }
+
+    const home = std.process.Environ.getPosix(environ, "HOME") orelse return null;
+    return std.fmt.bufPrint(buffer, "{s}/.codex", .{home}) catch null;
+}
+
+/// Finds the current Codex state database, `state_<n>.sqlite` with the
+/// highest schema number, where `/rename` stores the thread name.
+///
+/// ```zig
+/// const database = codexStateDatabase(io, "/home/me/.codex", &buffer) orelse return;
+/// ```
+pub fn codexStateDatabase(io: Io, home: []const u8, buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
+    var directory = Io.Dir.cwd().openDir(io, home, .{ .iterate = true }) catch return null;
+    defer directory.close(io);
+    var iterator = directory.iterate();
+    var best: ?u32 = null;
+
+    while (iterator.next(io) catch null) |entry| {
+        if (entry.kind != .file) {
+            continue;
+        }
+
+        const version = stateVersion(entry.name) orelse continue;
+        if (best == null or version > best.?) {
+            best = version;
+        }
+    }
+
+    const version = best orelse return null;
+    return std.fmt.bufPrint(buffer, "{s}/state_{d}.sqlite", .{ home, version }) catch null;
+}
+
+fn stateVersion(name: []const u8) ?u32 {
+    const prefix = "state_";
+    const suffix = ".sqlite";
+    if (!std.mem.startsWith(u8, name, prefix) or !std.mem.endsWith(u8, name, suffix) or name.len <= prefix.len + suffix.len) {
+        return null;
+    }
+
+    return std.fmt.parseUnsigned(u32, name[prefix.len .. name.len - suffix.len], 10) catch null;
 }
 
 /// Maps one Codex hook event to a report. Subagent events are ignored. A
@@ -212,26 +317,27 @@ pub fn mapCodexHook(input: CodexHookInput) ?Report {
 
     const event = input.hook_event_name;
     const session = if (schema.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
+    const file = if (input.state_database.len <= schema.max_agent_session_file_bytes) input.state_database else "";
 
     if (std.mem.eql(u8, event, "SessionStart")) {
         const state: schema.AgentReportState = if (std.mem.eql(u8, input.source, "compact")) .working else .ready;
-        return .{ .state = state, .session = session };
+        return .{ .state = state, .session = session, .session_file = file, .session_file_kind = .codex_state };
     }
     if (std.mem.eql(u8, event, "UserPromptSubmit") or std.mem.eql(u8, event, "PreToolUse") or std.mem.eql(u8, event, "PostToolUse")) {
-        return .{ .state = .working, .session = session };
+        return .{ .state = .working, .session = session, .session_file = file, .session_file_kind = .codex_state };
     }
     if (std.mem.eql(u8, event, "PermissionRequest")) {
-        return .{ .state = .blocked, .session = session };
+        return .{ .state = .blocked, .session = session, .session_file = file, .session_file_kind = .codex_state };
     }
     if (std.mem.eql(u8, event, "Stop")) {
-        return .{ .state = .working, .session = session };
+        return .{ .state = .working, .session = session, .session_file = file, .session_file_kind = .codex_state };
     }
 
     if (std.mem.eql(u8, event, "Interrupt")) {
-        return .{ .state = .ready, .session = session };
+        return .{ .state = .ready, .session = session, .session_file = file, .session_file_kind = .codex_state };
     }
     if (std.mem.eql(u8, event, "SessionEnd")) {
-        return .{ .state = .exited };
+        return .{ .state = .exited, .session_file = file, .session_file_kind = .codex_state };
     }
 
     return null;
@@ -252,7 +358,10 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
     defer init.gpa.free(input);
     var stdin_reader = File.stdin().readerStreaming(init.io, &.{});
     const len = stdin_reader.interface.readSliceShort(input) catch return;
-    const pane: control.Session.PaneRef = .{ .pane_id = pane_id, .pane_generation = pane_generation };
+    const target: Target = .{
+        .socket = options.socket,
+        .pane = .{ .pane_id = pane_id, .pane_generation = pane_generation },
+    };
     switch (options.agent) {
         .claude => {
             const parsed = std.json.parseFromSlice(ClaudeHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
@@ -267,11 +376,21 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
                 .session = parsed.value.session_id,
                 .exit_code = if (std.mem.eql(u8, parsed.value.hook_event_name, "PostToolUse")) 0 else null,
             });
-            sendReports(init, options.socket, pane, mapClaudeHook(parsed.value), command);
+            var title_buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+            sendReports(init, target, .{
+                .lifecycle = mapClaudeHook(parsed.value),
+                .command = command,
+                .title = mapClaudeTitle(&title_buffer, parsed.value),
+            });
         },
         .codex => {
-            const parsed = std.json.parseFromSlice(CodexHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
+            var parsed = std.json.parseFromSlice(CodexHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
             defer parsed.deinit();
+            var home_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            var database_buffer: [std.fs.max_path_bytes]u8 = undefined;
+            if (codexHome(environ, &home_buffer)) |home| {
+                parsed.value.state_database = codexStateDatabase(init.io, home, &database_buffer) orelse "";
+            }
             const command = mapToolCommand(.codex, .{
                 .event = parsed.value.hook_event_name,
                 .agent_id = parsed.value.agent_id,
@@ -282,7 +401,7 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
                 .session = parsed.value.session_id,
                 .exit_code = null,
             });
-            sendReports(init, options.socket, pane, mapCodexHook(parsed.value), command);
+            sendReports(init, target, .{ .lifecycle = mapCodexHook(parsed.value), .command = command });
         },
         .pi => {
             const parsed = std.json.parseFromSlice(PiHookInput, init.gpa, input[0..len], .{ .ignore_unknown_fields = true }) catch return;
@@ -296,22 +415,44 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
                 .session = parsed.value.session_id,
                 .exit_code = parsed.value.exit_code,
             });
-            sendReports(init, options.socket, pane, mapPiHook(parsed.value), command);
+            var title_buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+            sendReports(init, target, .{
+                .lifecycle = mapPiHook(parsed.value),
+                .command = command,
+                .title = mapPiTitle(&title_buffer, parsed.value),
+            });
         },
     }
 }
 
-fn sendReports(init: std.process.Init, socket: ?[*:0]const u8, pane: control.Session.PaneRef, report: ?Report, command: ?CommandReport) void {
-    if (report == null and command == null) {
+/// The runtime socket and the pane generation a hook reports for.
+const Target = struct {
+    socket: ?[*:0]const u8,
+    pane: control.Session.PaneRef,
+};
+
+fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
+    if (reports.lifecycle == null and reports.command == null and reports.title == null) {
         return;
     }
 
-    var session = control.Session.open(init, socket) catch return;
+    // Attach only. The pane environment survives a stopped runtime, and a
+    // hook that started one would resurrect it from every orphaned agent.
+    var session = control.Session.attach(init, target.socket) catch return;
     defer session.close();
-    if (report) |lifecycle| {
-        session.reportAgent(pane, lifecycle.state, lifecycle.session) catch return;
+    const pane = target.pane;
+    if (reports.lifecycle) |lifecycle| {
+        session.reportAgent(pane, .{
+            .state = lifecycle.state,
+            .session = lifecycle.session,
+            .session_file = lifecycle.session_file,
+            .session_file_kind = lifecycle.session_file_kind,
+        }) catch return;
     }
-    if (command) |tool| {
+    if (reports.title) |title| {
+        session.reportAgentTitle(pane, title) catch return;
+    }
+    if (reports.command) |tool| {
         session.reportAgentCommand(pane, .{
             .phase = tool.phase,
             .provider = tool.provider,
@@ -340,6 +481,21 @@ test "Pi extension events map to reports and prompts close into the right state"
     try std.testing.expectEqualStrings("", mapPiHook(.{ .event = "agent_start", .session_id = "../etc" }).?.session);
 }
 
+test "Pi session names map to title reports and a cleared name to an empty title" {
+    var buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+    try std.testing.expectEqualStrings("Fix proxy", mapPiTitle(&buffer, .{ .event = "session_info_changed", .name = "Fix proxy" }).?);
+    try std.testing.expectEqualStrings("", mapPiTitle(&buffer, .{ .event = "session_info_changed" }).?);
+    try std.testing.expectEqualStrings("Fix proxy", mapPiTitle(&buffer, .{ .event = "session_start", .name = "Fix proxy" }).?);
+    try std.testing.expect(mapPiTitle(&buffer, .{ .event = "session_start" }) == null);
+    try std.testing.expect(mapPiTitle(&buffer, .{ .event = "agent_start", .name = "Fix proxy" }) == null);
+    try std.testing.expect(mapPiHook(.{ .event = "session_info_changed", .name = "Fix proxy" }) == null);
+
+    const long = "é" ** 60;
+    const cut = mapPiTitle(&buffer, .{ .event = "session_info_changed", .name = long }).?;
+    try std.testing.expectEqual(@as(usize, 96), cut.len);
+    try std.testing.expect(std.unicode.utf8ValidateSlice(cut));
+}
+
 test "Pi hook JSON accepts the extension payload" {
     const parsed = try std.json.parseFromSlice(PiHookInput, std.testing.allocator, "{\"event\":\"session_start\",\"session_id\":\"01a061a3-a2e7-7574-9e07-997b8d59340d\",\"idle\":true}", .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
@@ -347,6 +503,47 @@ test "Pi hook JSON accepts the extension payload" {
     try std.testing.expectEqual(schema.AgentReportState.ready, report.state);
     try std.testing.expectEqualStrings("01a061a3-a2e7-7574-9e07-997b8d59340d", report.session);
     try std.testing.expectError(error.SyntaxError, std.json.parseFromSlice(PiHookInput, std.testing.allocator, "not json", .{ .ignore_unknown_fields = true }));
+}
+
+test "Claude session titles and transcripts ride along with the hook reports" {
+    var buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+    try std.testing.expectEqualStrings("Fix proxy", mapClaudeTitle(&buffer, .{ .hook_event_name = "SessionStart", .session_title = "Fix proxy" }).?);
+    try std.testing.expect(mapClaudeTitle(&buffer, .{ .hook_event_name = "SessionStart" }) == null);
+    try std.testing.expect(mapClaudeTitle(&buffer, .{ .hook_event_name = "Stop", .session_title = "Fix proxy" }) == null);
+    try std.testing.expect(mapClaudeTitle(&buffer, .{ .hook_event_name = "SessionStart", .session_title = "Fix proxy", .agent_id = "sub-1" }) == null);
+
+    const report = mapClaudeHook(.{ .hook_event_name = "Stop", .transcript_path = "/home/me/.claude/projects/p/s.jsonl" }).?;
+    try std.testing.expectEqualStrings("/home/me/.claude/projects/p/s.jsonl", report.session_file);
+    try std.testing.expectEqual(schema.AgentSessionFileKind.claude_transcript, report.session_file_kind);
+    const long = "/" ** (schema.max_agent_session_file_bytes + 1);
+    try std.testing.expectEqualStrings("", mapClaudeHook(.{ .hook_event_name = "Stop", .transcript_path = long }).?.session_file);
+    try std.testing.expectEqualStrings("", mapCodexHook(.{ .hook_event_name = "Stop" }).?.session_file);
+}
+
+test "Codex reports carry the resolved state database and find the newest schema" {
+    const report = mapCodexHook(.{ .hook_event_name = "Stop", .state_database = "/home/me/.codex/state_5.sqlite" }).?;
+    try std.testing.expectEqualStrings("/home/me/.codex/state_5.sqlite", report.session_file);
+    try std.testing.expectEqual(schema.AgentSessionFileKind.codex_state, report.session_file_kind);
+    try std.testing.expectEqual(schema.AgentSessionFileKind.codex_state, mapCodexHook(.{ .hook_event_name = "SessionEnd", .state_database = "/x" }).?.session_file_kind);
+
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    try std.testing.expect(codexStateDatabase(io, directory, &buffer) == null);
+
+    try temp.dir.writeFile(io, .{ .sub_path = "state_5.sqlite", .data = "" });
+    try temp.dir.writeFile(io, .{ .sub_path = "state_12.sqlite", .data = "" });
+    try temp.dir.writeFile(io, .{ .sub_path = "state_12.sqlite-wal", .data = "" });
+    try temp.dir.writeFile(io, .{ .sub_path = "logs_2.sqlite", .data = "" });
+    const found = codexStateDatabase(io, directory, &buffer).?;
+    try std.testing.expect(std.mem.endsWith(u8, found, "/state_12.sqlite"));
+    try std.testing.expect(std.mem.startsWith(u8, found, directory));
+
+    var missing_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    try std.testing.expect(codexStateDatabase(io, "/nonexistent/telar", &missing_buffer) == null);
 }
 
 test "Claude hook events map to reports and subagents are ignored" {

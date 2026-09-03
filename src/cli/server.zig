@@ -132,6 +132,11 @@ const Launch = struct {
 
         if (launch.options.mode != .background_launcher) {
             try launch.prepareRuntimeStorage();
+            if (launch.options.fresh) {
+                if (launch.session_path) |path| {
+                    _ = try setSessionAside(launch.process.io, path);
+                }
+            }
             if (launch.config_generation) |generation| {
                 try launch.prepareTapPlugins(generation);
             }
@@ -314,7 +319,7 @@ const Launch = struct {
         const pane_mib = try std.fmt.bufPrint(&pane_mib_buffer, "{d}", .{launch.options.graphics.pane_bytes / (1024 * 1024)});
         var global_mib_buffer: [32]u8 = undefined;
         const global_mib = try std.fmt.bufPrint(&global_mib_buffer, "{d}", .{launch.options.graphics.global_bytes / (1024 * 1024)});
-        var argv: [13][]const u8 = undefined;
+        var argv: [14][]const u8 = undefined;
         var argc: usize = 0;
         for ([_][]const u8{
             executable,
@@ -328,6 +333,10 @@ const Launch = struct {
             global_mib,
         }) |arg| {
             argv[argc] = arg;
+            argc += 1;
+        }
+        if (launch.options.fresh) {
+            argv[argc] = "--fresh";
             argc += 1;
         }
         if (launch.options.config) |path| {
@@ -406,6 +415,25 @@ fn stop(init: std.process.Init, connector: *const RuntimeConnector) !void {
         },
         else => return error.UnexpectedRuntimeResponse,
     }
+}
+
+/// Renames the session checkpoint at `path` to `<path>.previous` so a fresh
+/// runtime starts empty without destroying the session it replaces. The
+/// runtime persists to `path` again, so the previous session survives exactly
+/// one fresh start. Returns false when there was nothing to set aside.
+///
+/// ```zig
+/// const kept = try setSessionAside(io, "/home/me/.local/share/telar/session.ckpt");
+/// ```
+pub fn setSessionAside(io: Io, path: []const u8) !bool {
+    var previous_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const previous = try std.fmt.bufPrint(&previous_buffer, "{s}.previous", .{path});
+    Io.Dir.renameAbsolute(path, previous, io) catch |err| switch (err) {
+        error.FileNotFound => return false,
+        else => return err,
+    };
+
+    return true;
 }
 
 fn resolveConfigPath(gpa: std.mem.Allocator, config_directory: []const u8, configured_path: []const u8) ![]u8 {
@@ -617,6 +645,26 @@ test "runtime storage creates private history and proxy paths" {
     try std.testing.expectEqual(@as(u32, 0o700), history_directory_stat.permissions.toMode() & 0o777);
     try std.testing.expectEqual(@as(u32, 0o600), history_stat.permissions.toMode() & 0o777);
     try std.testing.expectEqual(@as(u32, 0o700), proxy_stat.permissions.toMode() & 0o777);
+}
+
+test "a fresh start sets the previous session aside once" {
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = try temporaryDirectory(&temp, &root_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/session.ckpt", .{root});
+    var previous_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const previous = try std.fmt.bufPrint(&previous_buffer, "{s}/session.ckpt.previous", .{root});
+    try temp.dir.writeFile(std.testing.io, .{ .sub_path = "session.ckpt", .data = "session" });
+
+    try std.testing.expect(try setSessionAside(std.testing.io, path));
+
+    try std.testing.expectError(error.FileNotFound, Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false }));
+    const moved = try Io.Dir.cwd().readFileAlloc(std.testing.io, previous, std.testing.allocator, .limited(64));
+    defer std.testing.allocator.free(moved);
+    try std.testing.expectEqualStrings("session", moved);
+    try std.testing.expect(!try setSessionAside(std.testing.io, path));
 }
 
 test "runtime storage rejects directories owned by another user" {

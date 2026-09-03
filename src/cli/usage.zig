@@ -3,8 +3,8 @@
 const std = @import("std");
 
 pub const text =
-    \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [command [args...]]
-    \\       telar server
+    \\Usage: telar [--config PATH | --no-config] [--profile NAME] [--theme NAME] [--sidebar-renderer MODE] [--fresh] [command [args...]]
+    \\       telar server [--fresh]
     \\       telar server stop
     \\       telar server endpoint
     \\       telar config check [PATH] [--profile NAME]
@@ -99,6 +99,9 @@ pub const text =
     \\  --config PATH     Load a specific Lua configuration
     \\  --no-config       Do not load Lua configuration
     \\  --profile NAME    Overlay a named Lua profile before CLI options
+    \\  --fresh           Start a runtime that sets the previous session
+    \\                    aside (session.ckpt.previous) instead of restoring
+    \\                    it; refused while a runtime is already running
     \\  --theme NAME      UI theme: vesper, catppuccin, tokyo-night, terminal
     \\  --sidebar-renderer MODE  automatic, cells, kitty-hybrid, kitty-full
     \\Server options:

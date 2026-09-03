@@ -26,6 +26,8 @@ SIGWINCH or Windows size poll
               |
    pane_resize for each attached active pane
               |
+   open_pane for each detached active pane that gained content
+              |
  pixel queries and ResizeWatcher rearm
               |
       presentation_lifecycle.observe
@@ -105,6 +107,9 @@ but schedules no frame.
   ports shared by resize and capability delivery.
 - `src/frontend/client/pane_geometry.zig` owns translation and bounded delivery
   of visible attached pane sizes.
+- `src/frontend/client/application/panes/pane_attachment_requests.zig` proves
+  that a resize attaches only detached panes with content, once each, after a
+  crowded layout left them detached.
 - `src/frontend/client/client_test.zig` proves exact pane geometry,
   backpressure policy, capability-response consistency and presenter-owned
   frame scheduling.

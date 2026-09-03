@@ -27,7 +27,10 @@ ClientModel.confirmPaneAttachment
 ```
 
 `tab_snapshots.applyReconciliation` sends at most one attachment request per
-pane. The request tracker stores the pane ID and exact tab location.
+pane, and `tab_snapshots.attachActive` repeats the selection after a host
+resize for detached panes that gained visible content. Both use
+`RequestPaneAttachmentsHandler`. The request tracker stores the pane ID and
+exact tab location.
 `pane_openings.apply` consumes that correlation once, rejects unrelated
 continuations and removes the request identity from the translated value.
 `DeliverPaneOpenHandler` selects the attachment confirmation port. A matching

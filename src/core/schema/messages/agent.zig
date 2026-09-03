@@ -22,6 +22,7 @@ const AgentSource = types.AgentSource;
 const AgentAuthority = types.AgentAuthority;
 const AgentTitleSource = types.AgentTitleSource;
 const AgentTitleState = types.AgentTitleState;
+const AgentSessionFileKind = types.AgentSessionFileKind;
 const AgentSnapshotEntry = types.AgentSnapshotEntry;
 const encodeDerived = codec.encodeDerived;
 const validateRequestId = codec.validateRequestId;
@@ -54,14 +55,16 @@ pub const ReportAgentSession = struct {
 };
 
 /// An official lifecycle report from an agent's hooks: its state and,
-/// optionally, its own session reference. Only the exact pane generation
-/// that hosts the agent accepts it.
+/// optionally, its own session reference and the file it records the session
+/// in. Only the exact pane generation that hosts the agent accepts it.
 pub const ReportAgent = struct {
     request_id: RequestId,
     pane_id: PaneId,
     pane_generation: u64,
     state: AgentReportState,
     session: []const u8 = "",
+    session_file: []const u8 = "",
+    session_file_kind: AgentSessionFileKind = .claude_transcript,
 };
 
 pub const AgentCommandPhase = enum(u8) {
@@ -83,6 +86,16 @@ pub const ReportAgentCommand = struct {
     cwd: []const u8 = "",
     session: []const u8 = "",
     exit_code: ?i32 = null,
+};
+
+/// The name an agent's own session carries, reported by its hooks when the
+/// user renames it inside the agent. An empty title clears an earlier agent
+/// title. Only the exact pane generation that hosts the agent accepts it.
+pub const ReportAgentTitle = struct {
+    request_id: RequestId,
+    pane_id: PaneId,
+    pane_generation: u64,
+    title: []const u8 = "",
 };
 
 pub const AgentSnapshot = struct {
@@ -147,6 +160,22 @@ pub fn validateSessionTitle(title: []const u8) !void {
     }
 }
 
+/// Cuts a candidate title to the wire bound on a UTF-8 boundary. The result
+/// still needs `validateSessionTitle`, which rejects control bytes.
+///
+/// ```zig
+/// const title = truncateSessionTitle(&buffer, name);
+/// ```
+pub fn truncateSessionTitle(buffer: *[types.max_agent_session_title_bytes]u8, value: []const u8) []const u8 {
+    var len = @min(value.len, buffer.len);
+    while (len > 0 and len < value.len and (value[len] & 0xc0) == 0x80) {
+        len -= 1;
+    }
+
+    @memcpy(buffer[0..len], value[0..len]);
+    return buffer[0..len];
+}
+
 pub fn encodeAcknowledgeAgent(buffer: []u8, message: AcknowledgeAgent) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ClientTag.acknowledge_agent),
@@ -196,8 +225,11 @@ pub fn encodeReportAgent(buffer: []u8, message: ReportAgent) ![]const u8 {
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeInt(u64, message.pane_generation);
+    try validateBytes(message.session_file, types.max_agent_session_file_bytes, true);
     try encoder.writeByte(@intFromEnum(message.state));
     try encoder.writeSized16(message.session);
+    try encoder.writeSized16(message.session_file);
+    try encoder.writeByte(@intFromEnum(message.session_file_kind));
     return encoder.finish();
 }
 
@@ -209,12 +241,18 @@ pub fn decodeReportAgent(decoder: *wire.Decoder) !ReportAgent {
         return error.InvalidAgentReportState;
     const session = try decoder.readSized16();
     if (session.len != 0) try validateSessionReference(session);
+    const session_file = try decoder.readSized16();
+    try validateBytes(session_file, types.max_agent_session_file_bytes, true);
+    const session_file_kind = std.enums.fromInt(AgentSessionFileKind, try decoder.readByte()) orelse
+        return error.InvalidAgentSessionFileKind;
     return .{
         .request_id = request_id,
         .pane_id = pane_id,
         .pane_generation = pane_generation,
         .state = state,
         .session = session,
+        .session_file = session_file,
+        .session_file_kind = session_file_kind,
     };
 }
 
@@ -283,6 +321,39 @@ pub fn decodeReportAgentCommand(decoder: *wire.Decoder) !ReportAgentCommand {
         .cwd = cwd,
         .session = session,
         .exit_code = exit_code,
+    };
+}
+
+pub fn encodeReportAgentTitle(buffer: []u8, message: ReportAgentTitle) ![]const u8 {
+    try validateRequestId(message.request_id);
+    try validatePaneId(message.pane_id);
+    if (message.title.len != 0) {
+        try validateSessionTitle(message.title);
+    }
+
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.report_agent_title));
+    try encoder.writeInt(u64, id.raw(message.request_id));
+    try encoder.writeInt(u64, id.raw(message.pane_id));
+    try encoder.writeInt(u64, message.pane_generation);
+    try encoder.writeSized16(message.title);
+    return encoder.finish();
+}
+
+pub fn decodeReportAgentTitle(decoder: *wire.Decoder) !ReportAgentTitle {
+    const request_id = try id.request(try decoder.readInt(u64));
+    const pane_id = try id.pane(try decoder.readInt(u64));
+    const pane_generation = try decoder.readInt(u64);
+    const title = try decoder.readSized16();
+    if (title.len != 0) {
+        try validateSessionTitle(title);
+    }
+
+    return .{
+        .request_id = request_id,
+        .pane_id = pane_id,
+        .pane_generation = pane_generation,
+        .title = title,
     };
 }
 
@@ -458,7 +529,7 @@ fn validateAgentDisplayText(bytes: []const u8, maximum: usize, empty_allowed: bo
 fn validateAgentTitle(entry: AgentSnapshotEntry) !void {
     switch (entry.title_source) {
         .telar => if (entry.title_state == .ready) return error.InvalidAgentTitle,
-        .generated, .manual => if (entry.title_state != .ready or entry.session_title.len == 0)
+        .generated, .manual, .agent => if (entry.title_state != .ready or entry.session_title.len == 0)
             return error.InvalidAgentTitle,
         .terminal => if (entry.session_title.len == 0) return error.InvalidAgentTitle,
     }

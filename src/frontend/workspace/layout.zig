@@ -54,6 +54,10 @@ pub const View = struct {
     outer: ui.Rect,
     content: ui.Rect,
     focused: bool,
+    /// One-based tiled position, the same number `Layout.displayIndex`
+    /// returns. Fullscreen keeps the pane's tiled number instead of restarting
+    /// at one.
+    display_index: u16,
 };
 
 pub const PaneBottomReservation = struct {
@@ -344,13 +348,17 @@ pub const Layout = struct {
         layout.changed();
     }
 
-    /// Rebuilds a disposable layout in the supplied display order and restores
-    /// focus only after every pane has its canonical position.
-    pub fn restoreDisplayOrder(
-        layout: *Layout,
-        pane_ids: []const schema.PaneId,
-        focused_pane: schema.PaneId,
-    ) !void {
+    /// Rebuilds a disposable layout in the supplied display order, left to
+    /// right with equal widths, and restores focus only after every pane has
+    /// its canonical position. Each split leaves its left pane one share of
+    /// the panes still to place, so the last pair halves what remains. Past
+    /// ten panes the leading shares clamp at the minimum ratio, and a crowded
+    /// tab degrades to empty content instead of failing.
+    ///
+    /// ```zig
+    /// try layout.restoreDisplayOrder(&.{ first, second, third }, second);
+    /// ```
+    pub fn restoreDisplayOrder(layout: *Layout, pane_ids: []const schema.PaneId, focused_pane: schema.PaneId) !void {
         if (pane_ids.len == 0) return error.LayoutEmpty;
         var restored: Layout = .{
             .pane_gaps = layout.pane_gaps,
@@ -358,12 +366,19 @@ pub const Layout = struct {
         };
         try restored.addRoot(pane_ids[0]);
         var previous = pane_ids[0];
-        for (pane_ids[1..]) |pane_id| {
+        for (pane_ids[1..], 1..) |pane_id, index| {
             try restored.split(previous, pane_id, .horizontal);
+            restored.setParentRatio(pane_id, equalShareRatio(pane_ids.len - index + 1));
             previous = pane_id;
         }
         if (!restored.focusPane(focused_pane)) return error.PaneNotFound;
         layout.* = restored;
+    }
+
+    fn setParentRatio(layout: *Layout, pane_id: schema.PaneId, ratio: u16) void {
+        const leaf = layout.findLeaf(pane_id) orelse return;
+        const parent = layout.nodes[leaf].parent orelse return;
+        layout.nodes[parent].node.split.ratio = ratio;
     }
 
     /// Restores an earlier client-owned split tree when it still describes
@@ -544,6 +559,8 @@ pub const Layout = struct {
         return geometry.prospectiveSplit(pane_id, axis, layout.pane_count);
     }
 
+    /// A fullscreen pane keeps its border: fullscreen requires two panes, and
+    /// the border is what tells the user the tab still has more than one.
     pub fn snapshot(layout: *const Layout, area: ui.Rect, output: *Snapshot) void {
         if (!layout.fullscreen) return layout.snapshotTiled(area, output);
         output.reset(area, layout.revision, layout.pane_gaps);
@@ -551,8 +568,9 @@ pub const Layout = struct {
         output.append(.{
             .pane_id = pane_id,
             .outer = area,
-            .content = area,
+            .content = borderedContent(area),
             .focused = true,
+            .display_index = layout.displayIndex(pane_id) orelse 1,
         });
     }
 
@@ -562,21 +580,26 @@ pub const Layout = struct {
         const Pending = struct { node: NodeIndex, area: ui.Rect };
         var stack: [max_nodes]Pending = undefined;
         var stack_len: usize = 1;
+        var display_index: u16 = 0;
         stack[0] = .{ .node = root, .area = area };
         while (stack_len != 0) {
             stack_len -= 1;
             const pending = stack[stack_len];
             switch (layout.nodes[pending.node].node) {
                 .empty => unreachable,
-                .leaf => |pane_id| output.append(.{
-                    .pane_id = pane_id,
-                    .outer = pending.area,
-                    .content = if (layout.pane_count > 1)
-                        borderedContent(pending.area)
-                    else
-                        pending.area,
-                    .focused = pane_id == layout.focused_pane,
-                }),
+                .leaf => |pane_id| {
+                    display_index += 1;
+                    output.append(.{
+                        .pane_id = pane_id,
+                        .outer = pending.area,
+                        .content = if (layout.pane_count > 1)
+                            borderedContent(pending.area)
+                        else
+                            pending.area,
+                        .focused = pane_id == layout.focused_pane,
+                        .display_index = display_index,
+                    });
+                },
                 .split => |branch| {
                     const first, const second = splitArea(
                         pending.area,
@@ -790,6 +813,13 @@ fn splitArea(area: ui.Rect, axis: Axis, ratio: u16, pane_gaps: bool) [2]ui.Rect 
     };
 }
 
+/// The ratio that gives the first of `remaining` panes an equal share of a
+/// region, bounded by the ratios a client layout may carry.
+fn equalShareRatio(remaining: usize) u16 {
+    const share: u16 = @intCast(ratio_scale / remaining);
+    return std.math.clamp(share, minimum_split_ratio, maximum_split_ratio);
+}
+
 fn extent(area: ui.Rect, axis: Axis) u16 {
     return switch (axis) {
         .horizontal => area.w,
@@ -807,6 +837,32 @@ fn center(origin: u16, length: u16) u32 {
 
 fn distance(a: u32, b: u32) u32 {
     return if (a > b) a - b else b - a;
+}
+
+test "display order shares the width equally and clamps a crowded tab" {
+    var layout: Layout = .{ .pane_gaps = false };
+    const panes = [_]schema.PaneId{ @enumFromInt(1), @enumFromInt(2), @enumFromInt(3), @enumFromInt(4), @enumFromInt(5) };
+    try layout.restoreDisplayOrder(&panes, @enumFromInt(3));
+
+    var geometry: Snapshot = .{};
+    layout.snapshot(.{ .w = 100, .h = 10 }, &geometry);
+    var total: u16 = 0;
+    for (panes) |pane_id| {
+        const width = geometry.find(pane_id).?.outer.w;
+        try std.testing.expect(width >= 19 and width <= 21);
+        total += width;
+    }
+    try std.testing.expectEqual(@as(u16, 100), total);
+    try std.testing.expectEqual(@as(?schema.PaneId, @enumFromInt(3)), layout.focused());
+
+    var crowded: [12]schema.PaneId = undefined;
+    for (&crowded, 1..) |*pane_id, raw| {
+        pane_id.* = @enumFromInt(raw);
+    }
+    try layout.restoreDisplayOrder(&crowded, crowded[0]);
+    layout.snapshot(.{ .w = 100, .h = 10 }, &geometry);
+    try std.testing.expectEqual(@as(u16, 10), geometry.find(crowded[0]).?.outer.w);
+    try std.testing.expectEqual(@as(usize, 12), geometry.views().len);
 }
 
 test "splits produce non-overlapping bordered content rectangles" {
@@ -986,7 +1042,8 @@ test "fullscreen toggles one pane without destroying the tiled layout" {
     try std.testing.expectEqual(@as(usize, 1), geometry.views().len);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), geometry.views()[0].pane_id);
     try std.testing.expectEqual(area, geometry.views()[0].outer);
-    try std.testing.expectEqual(area, geometry.views()[0].content);
+    try std.testing.expectEqual(borderedContent(area), geometry.views()[0].content);
+    try std.testing.expectEqual(@as(u16, 1), geometry.views()[0].display_index);
 
     try std.testing.expectEqual(
         @as(schema.PaneId, @enumFromInt(2)),
@@ -994,6 +1051,7 @@ test "fullscreen toggles one pane without destroying the tiled layout" {
     );
     layout.snapshot(area, &geometry);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), geometry.views()[0].pane_id);
+    try std.testing.expectEqual(@as(u16, 2), geometry.views()[0].display_index);
 
     try std.testing.expect(layout.toggleFullscreen());
     try std.testing.expect(!layout.isFullscreen());

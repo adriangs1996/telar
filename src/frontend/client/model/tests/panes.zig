@@ -148,7 +148,7 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
     try std.testing.expectEqual(model.version().panes, entered.panes_revision);
     try std.testing.expectEqualDeep(area, entered.area);
     try std.testing.expect(entered.fullscreen);
-    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w, .rows = area.h }, active.contentSize(first, area).?);
+    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, active.contentSize(first, area).?);
     try std.testing.expect(active.contentSize(second, area) == null);
     try std.testing.expectEqual(client_model.Version{ .panes = 1 }, model.version());
 

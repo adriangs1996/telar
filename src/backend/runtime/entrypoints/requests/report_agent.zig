@@ -37,6 +37,7 @@ pub fn Controller(comptime Executor: type) type {
                 .pane = .{ .id = request.pane_id, .generation = request.pane_generation },
                 .state = request.state,
                 .session = request.session,
+                .session_file = .{ .kind = request.session_file_kind, .path = request.session_file },
                 .now_ms = now_ms,
             });
 

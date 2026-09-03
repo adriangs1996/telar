@@ -458,7 +458,8 @@ and exit hints until copy mode ends. Pressing the configured prefix temporarily
 replaces them with the prefix-mode hints.
 
 `telar.action.toggle_pane_fullscreen()` makes the focused pane occupy the whole
-tab. The client retains the tiled layout and its split ratios, so invoking the
+tab inside its own border, and the tab bar marks the tab with a fullscreen
+icon. The client retains the tiled layout and its split ratios, so invoking the
 action again restores the previous geometry. Directional focus still selects
 another pane while fullscreen is active. The default binding is `prefix`, then
 `z`. A tab with one pane ignores the action.

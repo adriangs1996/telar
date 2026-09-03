@@ -266,17 +266,92 @@ test "runtime composition keeps every borrowed capability at a stable address" {
 }
 
 fn sleepLaunch(buffer: []u8) !core.schema.LaunchView {
+    return sleepLaunchIn(buffer, "/");
+}
+
+fn sleepLaunchIn(buffer: []u8, cwd: []const u8) !core.schema.LaunchView {
     var encoder = core.schema.wire.Encoder.init(buffer);
     try encoder.writeSized16("/bin/sleep");
     try encoder.writeSized16("600");
     return .{
-        .cwd = "/",
+        .cwd = cwd,
         .argument_count = 2,
         .encoded_arguments = encoder.finish(),
         .environment_mode = .inherit_runtime,
         .environment_count = 0,
         .encoded_environment = "",
     };
+}
+
+test "a restart drops tabs and workspaces whose panes did not come back" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory = directory_buffer[0..try temp.dir.realPath(io, &directory_buffer)];
+    var endpoint_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const endpoint = try std.fmt.bufPrint(&endpoint_buffer, "{s}/drop.sock", .{directory});
+    var session_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const session_path = try std.fmt.bufPrint(&session_buffer, "{s}/session.ckpt", .{directory});
+    var gone_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const gone = try std.fmt.bufPrint(&gone_buffer, "{s}/gone", .{directory});
+    var other_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const other_directory = try std.fmt.bufPrint(&other_buffer, "{s}/other", .{directory});
+    try temp.dir.createDir(io, "gone", .default_dir);
+    try temp.dir.createDir(io, "other", .default_dir);
+    const initialization: Initialization = .{
+        .dependencies = .{ .io = io, .allocator = std.testing.allocator },
+        .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = session_path },
+    };
+
+    var first: Runtime = undefined;
+    try first.init(initialization);
+    var repository = first.application.workspaceRepository();
+    const kept = try repository.ensure(directory);
+    var kept_buffer: [64]u8 = undefined;
+    _ = try first.application.launchPane(.{
+        .location = kept.location,
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try sleepLaunch(&kept_buffer),
+        .launch_cwd = directory,
+        .workspace_path = directory,
+    });
+    const logs_tab = try repository.nextTabId();
+    _ = try repository.find(kept.location.workspace).?.createTab(logs_tab, "logs");
+    repository.recordTabCreated(logs_tab);
+    const logs_location: core.schema.TabLocation = .{ .workspace = kept.location.workspace, .tab_id = logs_tab };
+    var logs_buffer: [64]u8 = undefined;
+    _ = try first.application.launchPane(.{
+        .location = logs_location,
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try sleepLaunchIn(&logs_buffer, gone),
+        .launch_cwd = gone,
+        .workspace_path = directory,
+    });
+    const dropped = try repository.ensure(other_directory);
+    var dropped_buffer: [64]u8 = undefined;
+    _ = try first.application.launchPane(.{
+        .location = dropped.location,
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try sleepLaunchIn(&dropped_buffer, gone),
+        .launch_cwd = gone,
+        .workspace_path = other_directory,
+    });
+    first.deinit();
+    try temp.dir.deleteDir(io, "gone");
+
+    var second: Runtime = undefined;
+    try second.init(initialization);
+    defer second.deinit();
+    const reader = second.application.workspaceReader();
+
+    try std.testing.expect(!second.application.session.restore_failed);
+    try std.testing.expectEqual(@as(u16, 1), second.application.session.restored_panes);
+    try std.testing.expectEqual(@as(u16, 2), second.application.session.dropped_tabs);
+    try std.testing.expect(reader.contains(kept.location));
+    try std.testing.expect(!reader.contains(logs_location));
+    try std.testing.expect(!reader.containsWorkspace(dropped.location.workspace));
+    try std.testing.expectEqual(@as(usize, 1), reader.count());
 }
 
 test "a restart restores workspaces, tabs and panes from the session checkpoint" {
@@ -298,6 +373,14 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     try first.init(initialization);
     var repository = first.application.workspaceRepository();
     const ensured = try repository.ensure(directory);
+    var main_buffer: [64]u8 = undefined;
+    _ = try first.application.launchPane(.{
+        .location = ensured.location,
+        .size = .{ .cols = 20, .rows = 5 },
+        .launch = try sleepLaunch(&main_buffer),
+        .launch_cwd = directory,
+        .workspace_path = directory,
+    });
     _ = try workspace_mod.renameWorkspace(&repository, ensured.location.workspace, "core");
     const logs_tab = try repository.nextTabId();
     _ = try repository.find(ensured.location.workspace).?.createTab(logs_tab, "logs");
@@ -334,7 +417,8 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
 
     try std.testing.expect(!second.application.session.restore_failed);
     try std.testing.expectEqual(@as(u16, 1), second.application.session.restored_workspaces);
-    try std.testing.expectEqual(@as(u16, 1), second.application.session.restored_panes);
+    try std.testing.expectEqual(@as(u16, 2), second.application.session.restored_panes);
+    try std.testing.expectEqual(@as(u16, 0), second.application.session.dropped_tabs);
     try std.testing.expectEqualStrings("core", reader.workspaceName(ensured.location.workspace).?);
     try std.testing.expectEqualStrings("main", reader.tabLabel(ensured.location).?);
     try std.testing.expectEqualStrings("logs", reader.tabLabel(.{ .workspace = ensured.location.workspace, .tab_id = logs_tab }).?);

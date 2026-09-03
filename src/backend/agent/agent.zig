@@ -580,6 +580,36 @@ pub fn setManualTitle(agent: *Agent, value: []const u8) !void {
     agent.applyReadyTitle(value, .manual);
 }
 
+/// Applies the name the agent's own session carries, as reported by its
+/// hooks. An empty value clears an earlier agent title back to the
+/// placeholder; the agent never clears a manual or generated title. Returns
+/// whether the title changed.
+///
+/// ```zig
+/// if (try agent.reportTitle("Fix proxy")) publish();
+/// ```
+pub fn reportTitle(agent: *Agent, value: []const u8) !bool {
+    if (value.len == 0) {
+        if (agent.title.source != .agent) {
+            return false;
+        }
+
+        agent.title = .{ .phase = .finished };
+        return true;
+    }
+
+    if (!validTitle(value)) {
+        return error.InvalidAgentTitle;
+    }
+
+    if (agent.title.source == .agent and std.mem.eql(u8, agent.title.slice(), value)) {
+        return false;
+    }
+
+    agent.applyReadyTitle(value, .agent);
+    return true;
+}
+
 /// Hands a checkpointed title back to the agent that resumed the session. The
 /// title is final: no description job is queued for the first prompt.
 ///
@@ -590,7 +620,8 @@ pub fn restoreTitle(agent: *Agent, title: types.SessionTitle) void {
     agent.applyReadyTitle(title.slice(), title.source);
 }
 
-/// Returns the title worth checkpointing: a ready generated or manual one.
+/// Returns the title worth checkpointing: a ready generated, manual or agent
+/// one.
 ///
 /// ```zig
 /// const title = agent.durableTitle() orelse return;

@@ -22,6 +22,11 @@ pub const pi_marker = "// telar-integration: pi";
 pub const pi_extension_template = @embedFile("integration/pi.ts");
 const pi_executable_placeholder = "\"__TELAR_EXECUTABLE__\"";
 
+/// Shell prefix of every installed hook command. The agent runs the command
+/// through `sh -c`, so outside a telar pane the guard exits before the telar
+/// executable is spawned at all, mirroring the Pi extension's early return.
+pub const pane_guard = "[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; exec ";
+
 const Integration = struct {
     name: []const u8,
     settings_environment: ?[]const u8,
@@ -57,8 +62,8 @@ pub fn run(init: std.process.Init, options: parser.IntegrationOptions) !u8 {
         try defaultSettingsPath(init.minimal.environ, integration, &path_buffer);
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const executable = executable_buffer[0..try std.process.executablePath(init.io, &executable_buffer)];
-    var command_buffer: [std.fs.max_path_bytes + 32]u8 = undefined;
-    const command = try std.fmt.bufPrint(&command_buffer, "{s}{s}", .{ executable, integration.marker });
+    var command_buffer: [std.fs.max_path_bytes + pane_guard.len + 32]u8 = undefined;
+    const command = try renderHookCommand(&command_buffer, executable, integration.marker);
     const hook_set = hookSetFor(integration, command);
     var output_buffer: [4096]u8 = undefined;
     var output = File.stdout().writerStreaming(init.io, &output_buffer);
@@ -248,6 +253,21 @@ pub fn installPiExtension(io: Io, path: []const u8, source: []const u8) !void {
     try temp.commit();
 }
 
+/// Renders the guarded shell command an agent runs on each hook event. The
+/// command still ends with the marker so `hasHook` and uninstall find it.
+///
+/// ```zig
+/// const command = try renderHookCommand(&buffer, "/opt/telar", claude_marker);
+/// // [ -n "$TELAR_PANE_ID" ] && [ -n "$TELAR_PANE_GENERATION" ] || exit 0; exec '/opt/telar' hook claude
+/// ```
+pub fn renderHookCommand(buffer: []u8, executable: []const u8, marker: []const u8) ![]const u8 {
+    if (std.mem.indexOfScalar(u8, executable, '\'') != null) {
+        return error.UnsupportedExecutablePath;
+    }
+
+    return std.fmt.bufPrint(buffer, pane_guard ++ "'{s}'{s}", .{ executable, marker });
+}
+
 fn hookSetFor(integration: Integration, command: []const u8) HookSet {
     return .{
         .events = integration.events,
@@ -293,7 +313,9 @@ pub fn hasHook(settings: std.json.Value, event: []const u8, marker: []const u8) 
     return false;
 }
 
-/// Adds telar's command hook to every configured event that lacks it.
+/// Adds telar's command hook to every configured event that lacks it and
+/// rewrites an already installed telar hook whose command went stale, such
+/// as one written before the pane guard or by a binary at another path.
 ///
 /// ```zig
 /// const hooks = HookSet{ .events = &claude_events, .marker = claude_marker, .command = command };
@@ -305,9 +327,12 @@ pub fn installHooks(arena: std.mem.Allocator, settings: *std.json.Value, hook_se
     for (hook_set.events) |event| {
         const entries = try ensureArray(arena, &hooks.object, event);
         var present = false;
-        for (entries.array.items) |entry| {
-            if (entryHasCommand(entry, hook_set.marker)) {
-                present = true;
+        for (entries.array.items) |*entry| {
+            const hook = findHook(entry, hook_set.marker) orelse continue;
+            present = true;
+            if (!std.mem.eql(u8, hook.object.get("command").?.string, hook_set.command)) {
+                try hook.object.put(arena, "command", .{ .string = try arena.dupe(u8, hook_set.command) });
+                changed = true;
             }
         }
         if (present) {
@@ -365,18 +390,27 @@ pub fn uninstallHooks(settings: *std.json.Value, hook_set: HookSet) bool {
 }
 
 fn entryHasCommand(entry: std.json.Value, marker: []const u8) bool {
-    const hooks = objectField(entry, "hooks") orelse return false;
-    if (hooks != .array) {
-        return false;
+    var owned = entry;
+    return findHook(&owned, marker) != null;
+}
+
+/// Returns the first hook object in `entry` whose command ends with `marker`.
+fn findHook(entry: *std.json.Value, marker: []const u8) ?*std.json.Value {
+    if (entry.* != .object) {
+        return null;
+    }
+    const hooks = entry.object.getPtr("hooks") orelse return null;
+    if (hooks.* != .array) {
+        return null;
     }
 
-    for (hooks.array.items) |hook| {
-        const command = objectField(hook, "command") orelse continue;
+    for (hooks.array.items) |*hook| {
+        const command = objectField(hook.*, "command") orelse continue;
         if (command == .string and std.mem.endsWith(u8, command.string, marker)) {
-            return true;
+            return hook;
         }
     }
-    return false;
+    return null;
 }
 
 fn objectField(value: std.json.Value, name: []const u8) ?std.json.Value {
@@ -484,6 +518,32 @@ test "Claude install adds telar hooks once and uninstall removes only them" {
     const stop = parsed.value.object.get("hooks").?.object.get("Stop").?.array;
     try std.testing.expectEqual(@as(usize, 1), stop.items.len);
     try std.testing.expect(parsed.value.object.get("hooks").?.object.get("SessionStart") == null);
+}
+
+test "hook commands are guarded by the pane environment and keep the marker" {
+    var buffer: [256]u8 = undefined;
+    const command = try renderHookCommand(&buffer, "/opt/tel ar/telar", claude_marker);
+    try std.testing.expectEqualStrings("[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; exec '/opt/tel ar/telar' hook claude", command);
+    try std.testing.expect(std.mem.endsWith(u8, command, claude_marker));
+    try std.testing.expectError(error.UnsupportedExecutablePath, renderHookCommand(&buffer, "/opt/it's/telar", claude_marker));
+}
+
+test "install rewrites a stale telar hook command in place" {
+    const source =
+        \\{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/old/telar hook claude","timeout":5}]}]}}
+    ;
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, source, .{});
+    defer parsed.deinit();
+    const arena = parsed.arena.allocator();
+    var buffer: [256]u8 = undefined;
+    const command = try renderHookCommand(&buffer, "/opt/telar", claude_marker);
+    const hook_set = hookSetFor(integrationFor(.claude), command);
+
+    try std.testing.expect(try installHooks(arena, &parsed.value, hook_set));
+    const stop = parsed.value.object.get("hooks").?.object.get("Stop").?.array;
+    try std.testing.expectEqual(@as(usize, 1), stop.items.len);
+    try std.testing.expectEqualStrings(command, stop.items[0].object.get("hooks").?.array.items[0].object.get("command").?.string);
+    try std.testing.expect(!try installHooks(arena, &parsed.value, hook_set));
 }
 
 test "Codex install owns only its lifecycle events" {

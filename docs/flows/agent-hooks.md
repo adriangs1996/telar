@@ -12,9 +12,12 @@ other evidence so a silent hook hands control back.
 telar integration install claude|codex
         |
 ~/.claude/settings.json or ~/.codex/hooks.json
-        hooks.<owned event> += { type = command, command = "<telar> hook <agent>", timeout = bounded }
+        hooks.<owned event> += { type = command, command = "<pane guard>; exec '<telar>' hook <agent>", timeout = bounded }
 
-Claude Code or Codex fires a hook inside the pane
+Claude Code or Codex fires a hook (sh -c)
+        |
+[ -n "$TELAR_PANE_ID" ] && [ -n "$TELAR_PANE_GENERATION" ] || exit 0
+        |   outside a telar pane the telar executable never runs
         |
 telar hook <agent>   (stdin JSON; TELAR_PANE_ID + TELAR_PANE_GENERATION from the env)
         |
@@ -24,6 +27,10 @@ parse the harness payload once
         |                         -> routeReportAgent -> ReportAgentHandler
         |                         -> Tracker.observeReport -> Agent.applyReport
         |
+        +-> session name mapping -> schema.report_agent_title
+        |                         -> routeReportAgentTitle -> ReportAgentTitleHandler
+        |                         -> Tracker.reportTitle -> Agent.reportTitle
+        |
         +-> manifest command_tools mapping -> schema.report_agent_command
                                           -> ReportAgentCommandHandler
                                           -> history.Service.recordAgentCommand
@@ -31,9 +38,18 @@ parse the harness payload once
 reproject lifecycle state; persist a running or completed agent command
 ```
 
+The hook attaches to a runtime that is already listening and never starts
+one (`control.Session.attach`). The pane environment outlives the runtime
+that injected it, so an orphaned agent must not resurrect a stopped runtime
+from its hooks. Without a runtime the hook exits 0 and reports nothing.
+
 The hook keeps the parsed JSON arena alive until both requests have been sent.
 A lifecycle request updates the agent projection and session reference. A
-command request runs only for a configured shell-tool mapping. `PreToolUse`
+title request carries the name the user gave the session inside the agent
+(`/name`, `/rename`); it becomes the sidebar title with source `agent`,
+outranks a generated title, is checkpointed like a manual one, and an empty
+title clears it back to the placeholder. The agent never clears a manual
+title. A command request runs only for a configured shell-tool mapping. `PreToolUse`
 opens a `running` history row keyed by the tool call id; `PostToolUse` updates
 that row in place. A finish without an open row inserts a completed row.
 
@@ -41,7 +57,8 @@ that row in place. A finish without an open row inserts a completed row.
 
 | Claude Code event | Report |
 | --- | --- |
-| `SessionStart` | `ready` + session reference |
+| `SessionStart` | `ready` + session reference; `session_title`, when present, as title |
+| any event | `transcript_path` rides along as the session file so the runtime can watch it for `/rename` |
 | `UserPromptSubmit` | `working` |
 | `PreToolUse`, `PostToolUse` | `working`; a mapped `Bash` call is also recorded |
 | `Stop` | `ready` (projected as `done` until seen) |
@@ -52,6 +69,7 @@ that row in place. A finish without an open row inserts a completed row.
 
 | Codex event | Report |
 | --- | --- |
+| any event | the newest `state_<n>.sqlite` under `CODEX_HOME` rides along so the runtime can watch `threads.name` for `/rename` |
 | `SessionStart` | `ready` + session reference |
 | `SessionStart` with source `compact` | `working` + session reference |
 | `UserPromptSubmit` | `working` |
@@ -82,7 +100,8 @@ schema.report_agent or schema.report_agent_command
 
 | Pi event | Report |
 | --- | --- |
-| `session_start` | `ready` + session reference |
+| `session_start` | `ready` + session reference; the session name, when set, as title |
+| `session_info_changed` | the new session name as title; a cleared name as an empty title |
 | `agent_start` | `working` |
 | `agent_settled` | `ready` (projected as `done` until seen) |
 | `ui_prompt_start` | `blocked` |
@@ -90,6 +109,11 @@ schema.report_agent or schema.report_agent_command
 | `tool_execution_start` | mapped shell tool opens a running command row |
 | `tool_execution_end` | matching command row is completed |
 | `session_shutdown` | `exited` |
+
+Pi is the only agent whose rename reaches its hooks: `/name` fires
+`session_info_changed`. Claude Code's `/rename` fires no hook and Codex has no
+hook for its `/rename` either; their hooks report the file the session lives
+in and [agent rename](agent-rename.md) covers how the runtime reads it.
 
 Pi renders no permission prompts of its own, so `blocked` only comes from
 extension dialogs, which is exactly what `ui_prompt_start` reports. The
@@ -129,8 +153,10 @@ reliable process exit code, so its completed row keeps that field empty. Pi
 reports `isError`; its extension maps that boolean to zero or one.
 
 `telar integration` edits only the event arrays owned by the selected agent,
-adds an entry once per event, removes only entries whose command ends in
-` hook claude` or ` hook codex`, and rewrites the file atomically with
+adds an entry once per event, rewrites a telar entry whose command is stale
+(an older unguarded form or another executable path), removes only entries
+whose command ends in ` hook claude` or ` hook codex`, and rewrites the file
+atomically with
 two-space indentation. Other settings and hooks are untouched. Codex uses
 `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set and `~/.codex/hooks.json`
 otherwise. Codex asks the user to trust the new hook definitions; telar does
@@ -142,8 +168,11 @@ for `SessionEnd` and `Interrupt`.
 
 - `src/backend/agent/tracker.zig` proves precedence over screen evidence,
   `exited` withdrawal and expiry.
-- `src/backend/runtime/entrypoints/requests/report_agent.zig` proves the
-  reply contract.
+- `src/backend/runtime/entrypoints/requests/report_agent.zig` and
+  `report_agent_title.zig` prove the reply contracts.
+- `src/backend/agent/tracker.zig` proves that an agent title outranks a
+  generated one, never clears a manual one, clears on an empty report and is
+  durable.
 - `src/cli/hook.zig` proves the event mapping and subagent filtering for
   Claude Code, Codex and Pi; installed payload shapes; manifest-based shell
   extraction; and the parsed arena lifetime that backs both requests.
@@ -153,5 +182,5 @@ for `SessionEnd` and `Interrupt`.
 - `src/backend/history/persistence/sqlite.zig` proves that native start/finish
   updates one row and a later plugin observation with the same tool call id is
   deduplicated.
-- `src/core/schema_contract_test.zig` pins the `report_agent` and
-  `report_agent_command` bytes.
+- `src/core/schema_contract_test.zig` pins the `report_agent`,
+  `report_agent_command` and `report_agent_title` bytes.

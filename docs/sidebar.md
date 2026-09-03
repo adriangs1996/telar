@@ -56,6 +56,14 @@ invalid output, stale pane generations, and stale session IDs retain the
 placeholder with a deterministic failure state. There are no automatic
 retries. A manual title has higher authority than a generated completion.
 
+A name the user gives the session inside the agent (`/name` in Pi, `/rename`
+in Claude Code and Codex) reaches the runtime through the agent's hooks or the
+file it records its session in ([agent rename](flows/agent-rename.md)) as a
+title with source `agent`. It
+replaces a generated or manual title, is checkpointed like a manual one, and
+clearing the name inside the agent returns the row to its placeholder unless a
+manual title was set afterwards.
+
 Only the validated title, source, and state are persisted by `session_id` in
 the history database. Prompt bytes are cleared when the job starts or is
 discarded.

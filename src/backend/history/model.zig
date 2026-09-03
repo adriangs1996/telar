@@ -85,7 +85,7 @@ pub const SessionTitle = struct {
             return error.InvalidAgentTitle;
         switch (source) {
             .telar => if (state == .ready) return error.InvalidAgentTitle,
-            .generated, .manual => if (state != .ready or title_value.len == 0)
+            .generated, .manual, .agent => if (state != .ready or title_value.len == 0)
                 return error.InvalidAgentTitle,
             // A child's own window title is never persisted as a session title.
             .terminal => return error.InvalidAgentTitle,

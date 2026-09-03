@@ -20,6 +20,9 @@ pub const RunOptions = struct {
     profile: ?[*:0]const u8 = null,
     /// SSH destination whose runtime this client attaches to.
     remote: ?[*:0]const u8 = null,
+    /// Start a runtime that sets the previous session aside instead of
+    /// restoring it. Refused when a runtime is already running.
+    fresh: bool = false,
 };
 
 pub const ConfigCheckOptions = struct {
@@ -477,6 +480,15 @@ pub const Cli = union(enum) {
                 command_start += 1;
                 continue;
             }
+            if (std.mem.eql(u8, arg, "--fresh")) {
+                if (options.fresh) {
+                    return error.DuplicateFreshOption;
+                }
+
+                options.fresh = true;
+                command_start += 1;
+                continue;
+            }
             if (std.mem.eql(u8, arg, "--profile")) {
                 if (options.profile != null) {
                     return error.DuplicateProfileOption;
@@ -515,6 +527,9 @@ pub const Cli = union(enum) {
 
         if (options.no_config and options.profile != null) {
             return error.ProfileWithoutConfig;
+        }
+        if (options.fresh and options.remote != null) {
+            return error.FreshWithRemote;
         }
 
         return .{ .run = options };
@@ -1415,6 +1430,8 @@ pub const ServerOptions = struct {
     config: ?[*:0]const u8 = null,
     no_config: bool = false,
     profile: ?[*:0]const u8 = null,
+    /// Set the previous session checkpoint aside instead of restoring it.
+    fresh: bool = false,
 
     fn parse(args: []const [*:0]const u8) !ServerOptions {
         var options: ServerOptions = .{};
@@ -1505,12 +1522,22 @@ pub const ServerOptions = struct {
 
                 options.profile = args[index + 1];
                 index += 2;
+            } else if (std.mem.eql(u8, arg, "--fresh")) {
+                if (options.fresh) {
+                    return error.DuplicateFreshOption;
+                }
+
+                options.fresh = true;
+                index += 1;
             } else {
                 return error.UnknownServerOption;
             }
         }
         if (options.action == .stop and options.mode != .foreground) {
             return error.ConflictingServerAction;
+        }
+        if (options.fresh and options.action != .run) {
+            return error.FreshRequiresRun;
         }
         if (options.no_config and options.profile != null) {
             return error.ProfileWithoutConfig;
@@ -1613,6 +1640,27 @@ test "CLI parses config profiles and rejects profile without config" {
     const parsed_check = try Cli.parse(&check, .empty);
     try std.testing.expectEqualStrings("config.lua", std.mem.span(parsed_check.config_check.path.?));
     try std.testing.expectEqualStrings("remote", std.mem.span(parsed_check.config_check.profile.?));
+}
+
+test "CLI parses --fresh for the client and the server and rejects it elsewhere" {
+    const client = [_][*:0]const u8{ "telar", "--fresh", "--no-config" };
+    const parsed_client = try Cli.parse(&client, .empty);
+    try std.testing.expect(parsed_client.run.fresh);
+    try std.testing.expect(parsed_client.run.no_config);
+
+    const twice = [_][*:0]const u8{ "telar", "--fresh", "--fresh" };
+    try std.testing.expectError(error.DuplicateFreshOption, Cli.parse(&twice, .empty));
+
+    const remote = [_][*:0]const u8{ "telar", "--remote=host", "--fresh" };
+    try std.testing.expectError(error.FreshWithRemote, Cli.parse(&remote, .empty));
+
+    const server = [_][*:0]const u8{ "telar", "server", "--background", "--fresh" };
+    const parsed_server = try Cli.parse(&server, .empty);
+    try std.testing.expect(parsed_server.server.fresh);
+    try std.testing.expectEqual(ServerMode.background_launcher, parsed_server.server.mode);
+
+    const stop = [_][*:0]const u8{ "telar", "server", "stop", "--fresh" };
+    try std.testing.expectError(error.FreshRequiresRun, Cli.parse(&stop, .empty));
 }
 
 test "CLI keeps plugin inspection installation and trust separate" {

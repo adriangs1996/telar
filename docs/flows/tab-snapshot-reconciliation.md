@@ -67,19 +67,28 @@ inactive tab can change membership without advancing the visible pane version.
 Delivery rejects a stale commit in O(1) before touching disposable resources.
 
 Initial reconciliation restores runtime display order or a saved client split
-tree. If the previously focused pane vanished, the layout selects a surviving
-pane before restoration. This avoids committing the removal and then failing
-on a stale focus identity.
+tree. Display order places panes left to right with equal widths; past ten
+panes the leading shares clamp at the minimum split ratio. If the previously
+focused pane vanished, the layout selects a surviving pane before restoration.
+This avoids committing the removal and then failing on a stale focus identity.
+
+Membership never depends on geometry. A discovered pane the workbench cannot
+fit still joins the layout, detached and with a placeholder buffer, because
+the runtime owns which panes exist. Its content stays empty until the layout
+or the workbench gives it room.
 
 The reconciliation result contains at most 64 removed pane IDs. After the
 model commit, `DeliverTabSnapshotHandler` marks their pending operations as
 ignored and gives each exact identity to `ReleasePaneResourcesHandler`.
 Authoritative retirement sends no focus-out. For an active tab, the handler
 synchronizes attachment geometry and focus reporting, delegates exact attached
-pane sizes to `OfferPaneGeometryHandler`, then plans one attachment request for
-each detached pane. A pane with an attachment request already pending does not
-receive a duplicate request. The adapter owns request identities, registration
-and protocol encoding, not attachment selection policy.
+pane sizes to `OfferPaneGeometryHandler`, then delegates attachment selection
+to `RequestPaneAttachmentsHandler`: one request for each detached pane with
+visible content. A pane with an attachment request already pending does not
+receive a duplicate request, and a pane without content is skipped rather than
+failed, since it cannot carry a terminal size. The adapter owns request
+identities, registration and protocol encoding, not attachment selection
+policy.
 
 Resource effects still run for an identical snapshot. This lets a resync
 repair sizes or attachments without inventing a model change. The presenter

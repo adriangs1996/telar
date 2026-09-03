@@ -886,7 +886,11 @@ pub fn placementValue(terminal: *vt.Terminal, source_value: PlacementSource) ?co
         .pin => |value| value,
         .virtual => return null,
     };
-    if (pin.garbage) return null;
+
+    if (pin.garbage) {
+        return null;
+    }
+
     const pages = &terminal.screens.active.pages;
     const screen_point = pages.pointFromPin(.screen, pin.*) orelse return null;
     const viewport = pages.pointFromPin(.screen, pages.getTopLeft(.viewport)) orelse return null;

@@ -5,17 +5,15 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace_capability = @import("../../../workspace/root.zig");
 const client_model = @import("../../model/root.zig");
+const pane_attachment_requests = @import("../panes/pane_attachment_requests.zig");
 const pane_geometry_delivery = @import("../panes/pane_geometry_delivery.zig");
 const pane_resource_release = @import("../panes/pane_resource_release.zig");
 
 const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;
+const ui = core.ui;
 
-pub const PaneAttachmentRequest = struct {
-    pane_id: schema.PaneId,
-    location: schema.TabLocation,
-    size: schema.TerminalSize,
-};
+pub const PaneAttachmentRequest = pane_attachment_requests.PaneAttachmentRequest;
 
 pub const Effects = struct {
     context: *anyopaque,
@@ -33,6 +31,9 @@ pub const DeliverTabSnapshotHandler = struct {
 
     /// Validates one exact tab reconciliation before releasing retired panes,
     /// repairing active geometry and requesting each missing attachment once.
+    /// A detached pane the layout leaves without content is skipped, not
+    /// failed: the runtime owns membership and a later geometry change offers
+    /// the pane again.
     ///
     /// ```zig
     /// try handler.execute(&reconciliation);
@@ -64,19 +65,14 @@ pub const DeliverTabSnapshotHandler = struct {
         };
         _ = try offer_geometry.execute(&tab.model, reconciliation.area);
 
-        var panes = tab.model.paneIterator();
-        while (panes.next()) |pane| {
-            if (pane.attached or handler.effects.attachment_pending(handler.effects.context, pane.id)) {
-                continue;
-            }
-
-            const size = tab.model.contentSize(pane.id, reconciliation.area) orelse return error.PaneTooSmall;
-            try handler.effects.request_attachment(handler.effects.context, .{
-                .pane_id = pane.id,
-                .location = reconciliation.location,
-                .size = size,
-            });
-        }
+        var request_attachments: pane_attachment_requests.RequestPaneAttachmentsHandler = .{
+            .effects = .{
+                .context = handler.effects.context,
+                .attachment_pending = handler.effects.attachment_pending,
+                .request_attachment = handler.effects.request_attachment,
+            },
+        };
+        _ = try request_attachments.execute(tab, reconciliation.area);
     }
 
     fn validate(handler: *const DeliverTabSnapshotHandler, reconciliation: *const client_model.TabReconciliation) !void {
@@ -183,10 +179,14 @@ const TestingModel = struct {
     }
 
     fn reconcile(testing: *TestingModel, panes: []const schema.PaneId) !client_model.TabReconciliation {
+        return testing.reconcileIn(panes, .{ .w = 40, .h = 10 });
+    }
+
+    fn reconcileIn(testing: *TestingModel, panes: []const schema.PaneId, area: ui.Rect) !client_model.TabReconciliation {
         return testing.model.reconcileTab(.{
             .location = testing.target,
             .panes = panes,
-        }, .{ .w = 40, .h = 10 });
+        }, area);
     }
 };
 
@@ -383,6 +383,26 @@ test "DeliverTabSnapshotHandler preserves a pending attachment" {
         .{ .attachment_pending = testing.discovered },
     }, capture.eventSlice());
     try std.testing.expectEqual(@as(?PaneAttachmentRequest, null), capture.attachment);
+}
+
+test "DeliverTabSnapshotHandler skips a detached pane without visible content" {
+    var testing = try TestingModel.init(true);
+    defer testing.deinit();
+    const reconciliation = try testing.reconcileIn(&testing.many, .{ .w = 4, .h = 3 });
+    var capture: EffectsCapture = .{
+        .model = testing.model,
+        .reconciliation = &reconciliation,
+    };
+    var use_case = deliveryHandler(&capture);
+
+    try use_case.execute(&reconciliation);
+
+    try std.testing.expectEqualDeep(&[_]Event{
+        .synchronize_active_resources,
+        .{ .attachment_pending = testing.discovered },
+    }, capture.eventSlice());
+    try std.testing.expectEqual(@as(?PaneAttachmentRequest, null), capture.attachment);
+    try std.testing.expect(!testing.model.workspace.find(testing.target.tab_id).?.model.find(testing.discovered).?.attached);
 }
 
 test "DeliverTabSnapshotHandler leaves inactive tab resources untouched" {

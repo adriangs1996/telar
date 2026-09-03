@@ -41,7 +41,7 @@ receives a `pane_title` only for a title a child actually set; a cleared title
 is delivered as an empty string so clients forget it.
 
 Agent snapshot enrichment substitutes the pane title for the placeholder
-session title while no generated or manual title exists and marks the source
+session title while no generated, manual or agent title exists and marks the source
 `terminal`. The history store never persists that source.
 
 ## Client

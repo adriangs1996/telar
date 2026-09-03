@@ -9,6 +9,7 @@ const Agent = @import("agent.zig");
 const pane_mod = @import("../pane/root.zig");
 const repository_mod = @import("repository.zig");
 const restored_titles_mod = @import("restored_titles.zig");
+const session_file = @import("session_file.zig");
 const types = @import("types.zig");
 const description = @import("description.zig");
 
@@ -36,6 +37,7 @@ pub const AcknowledgeResult = enum {
 pub const Tracker = struct {
     repository: Repository = .{},
     restored_titles: RestoredTitles = .{},
+    watches: session_file.Watches = .{},
     revision: u64 = 1,
     sequence: u64 = 0,
 
@@ -50,6 +52,17 @@ pub const Tracker = struct {
         var changed = false;
         if (observation.session) |session| {
             changed = agent.applySessionReference(session);
+        }
+
+        if (observation.session_file.path.len != 0) {
+            if (agent.session_reference) |reference| {
+                _ = tracker.watches.put(.{
+                    .key = agent.key,
+                    .session = reference,
+                    .kind = observation.session_file.kind,
+                    .path = observation.session_file.path,
+                });
+            }
         }
 
         if (!agent.applyReport(observation)) {
@@ -391,6 +404,71 @@ pub const Tracker = struct {
         return true;
     }
 
+    /// Applies the title an agent's hooks reported for one exact pane
+    /// generation. Like a session reference, the report may precede every
+    /// other evidence, so the aggregate is created when missing.
+    ///
+    /// ```zig
+    /// if (try tracker.reportTitle(identity, "Fix proxy")) noteSessionChange();
+    /// ```
+    pub fn reportTitle(tracker: *Tracker, identity: Identity, value: []const u8) !bool {
+        const agent = tracker.ensure(identity) orelse return false;
+        if (!try agent.reportTitle(value)) {
+            return false;
+        }
+
+        tracker.bumpRevision();
+        return true;
+    }
+
+    /// Claims the session file whose probe is most overdue and returns a
+    /// copy for the worker. A watch whose agent is gone is dropped instead.
+    ///
+    /// ```zig
+    /// const watch = tracker.nextSessionFileProbe(now_ms, 1_000) orelse return;
+    /// ```
+    pub fn nextSessionFileProbe(tracker: *Tracker, now_ms: i64, interval_ms: i64) ?session_file.Watch {
+        while (tracker.watches.stalest(now_ms, interval_ms)) |watch| {
+            if (tracker.repository.find(watch.key) == null) {
+                _ = tracker.watches.remove(watch.key);
+                continue;
+            }
+
+            watch.pending = true;
+            return watch.*;
+        }
+
+        return null;
+    }
+
+    /// Applies one probe result: records progress and hands a name that
+    /// differs from the last one to the agent like a hook-reported title.
+    /// Returns whether the title changed.
+    ///
+    /// ```zig
+    /// if (tracker.finishSessionFileProbe(completion, now_ms)) noteSessionChange();
+    /// ```
+    pub fn finishSessionFileProbe(tracker: *Tracker, completion: session_file.Completion, now_ms: i64) bool {
+        const watch = tracker.watches.find(completion.key) orelse return false;
+        watch.pending = false;
+        watch.checked_at_ms = now_ms;
+        watch.offset = completion.offset;
+        if (!completion.has_title or !watch.remember(completion.titleSlice())) {
+            return false;
+        }
+
+        const agent = tracker.repository.find(completion.key) orelse {
+            _ = tracker.watches.remove(completion.key);
+            return false;
+        };
+        const changed = agent.reportTitle(completion.titleSlice()) catch return false;
+        if (changed) {
+            tracker.bumpRevision();
+        }
+
+        return changed;
+    }
+
     /// Publishes pane-topology changes that alter the display position of
     /// otherwise unchanged agents.
     ///
@@ -422,6 +500,7 @@ pub const Tracker = struct {
     }
 
     fn removeStored(tracker: *Tracker, key: PaneKey) bool {
+        _ = tracker.watches.remove(key);
         if (!tracker.repository.remove(key)) {
             return false;
         }
@@ -1441,6 +1520,69 @@ test "a restored title waits for the resumed agent and skips title generation" {
     try std.testing.expect(!tracker.observeInput(identity.key, "fix the tests\r"));
     try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 200 }));
     try std.testing.expect(tracker.nextDescriptionJob() == null);
+}
+
+test "an agent title outranks generated titles, never clears a manual one and is durable" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+
+    try std.testing.expect(try tracker.reportTitle(identity, "Fix proxy"));
+    try std.testing.expect(!try tracker.reportTitle(identity, "Fix proxy"));
+    try std.testing.expectEqual(schema.AgentTitleSource.agent, tracker.durableTitle(identity.key).?.source);
+    try std.testing.expectEqualStrings("Fix proxy", tracker.durableTitle(identity.key).?.slice());
+    try std.testing.expectError(error.InvalidAgentTitle, tracker.reportTitle(identity, "bad\x1btitle"));
+
+    try std.testing.expect(try tracker.reportTitle(identity, ""));
+    try std.testing.expect(tracker.durableTitle(identity.key) == null);
+    try std.testing.expect(!try tracker.reportTitle(identity, ""));
+
+    try std.testing.expect(try tracker.setManualTitle(identity.key, "Release audit"));
+    try std.testing.expect(!try tracker.reportTitle(identity, ""));
+    try std.testing.expectEqualStrings("Release audit", tracker.durableTitle(identity.key).?.slice());
+    try std.testing.expect(try tracker.reportTitle(identity, "Fix proxy again"));
+    try std.testing.expectEqual(schema.AgentTitleSource.agent, tracker.durableTitle(identity.key).?.source);
+}
+
+test "a reported session file is watched, probed once at a time and its names become agent titles" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    const reference = try types.SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100);
+    const file: types.SessionFile = .{ .kind = .codex_state, .path = "/state_5.sqlite" };
+
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .ready, .observed_at_ms = 100, .session_file = file }));
+    try std.testing.expect(tracker.nextSessionFileProbe(2_000, 1_000) == null);
+    try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 200, .session = reference, .session_file = file }));
+
+    const first = tracker.nextSessionFileProbe(2_000, 1_000).?;
+    try std.testing.expectEqualStrings("/state_5.sqlite", first.pathSlice());
+    try std.testing.expectEqual(session_file.Kind.codex_state, first.kind);
+    try std.testing.expect(first.offset == null);
+    try std.testing.expect(tracker.nextSessionFileProbe(9_000, 1_000) == null);
+
+    try std.testing.expect(!tracker.finishSessionFileProbe(.{ .key = identity.key, .offset = 300 }, 2_100));
+    try std.testing.expect(tracker.nextSessionFileProbe(2_500, 1_000) == null);
+    try std.testing.expectEqual(@as(?u64, 300), tracker.nextSessionFileProbe(3_200, 1_000).?.offset);
+
+    var named: session_file.Completion = .{ .key = identity.key, .offset = 420 };
+    named.setTitle("Fix proxy");
+    try std.testing.expect(tracker.finishSessionFileProbe(named, 3_300));
+    try std.testing.expectEqualStrings("Fix proxy", tracker.durableTitle(identity.key).?.slice());
+    try std.testing.expectEqual(schema.AgentTitleSource.agent, tracker.durableTitle(identity.key).?.source);
+    try std.testing.expect(!tracker.finishSessionFileProbe(named, 3_400));
+
+    // The same name read again after a manual rename does not undo it.
+    try std.testing.expect(try tracker.setManualTitle(identity.key, "Release audit"));
+    try std.testing.expect(!tracker.finishSessionFileProbe(named, 3_500));
+    try std.testing.expectEqualStrings("Release audit", tracker.durableTitle(identity.key).?.slice());
+
+    var cleared: session_file.Completion = .{ .key = identity.key, .offset = 420 };
+    cleared.setTitle("");
+    try std.testing.expect(!tracker.finishSessionFileProbe(cleared, 3_600));
+    try std.testing.expectEqualStrings("Release audit", tracker.durableTitle(identity.key).?.slice());
+
+    try std.testing.expect(tracker.remove(identity.key));
+    try std.testing.expect(tracker.nextSessionFileProbe(9_000, 1_000) == null);
+    try std.testing.expectEqual(@as(usize, 0), tracker.watches.count());
 }
 
 test "a restored title is dropped with its pane and never reaches another generation" {

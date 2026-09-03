@@ -15,6 +15,7 @@ const runtime_event = @import("../event.zig");
 const pane_launcher = @import("pane_launcher.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const git_status = @import("git_status.zig");
+const session_name = @import("session_name.zig");
 const agent_mod = @import("../../agent/root.zig");
 const pane_mod = @import("../../pane/root.zig");
 const model = @import("model.zig");
@@ -34,6 +35,7 @@ const Pane = pane_mod.Pane;
 const PaneLauncher = pane_launcher.PaneLauncher;
 const SessionCheckpoint = session_checkpoint.Checkpointer(Application);
 const GitObserver = git_status.Observer(Application);
+const SessionNameObserver = session_name.Observer(Application);
 const WorkspaceRepository = workspace_mod.Repository;
 const RuntimeModel = model.RuntimeModel;
 const ClientAdmissionState = client_mod.admission.State(core.transport.SocketChannel);
@@ -120,6 +122,7 @@ pub const Application = struct {
     session: session_checkpoint.State = .{},
     session_write_buffer: ?[]u8 = null,
     git_probe_in_flight: bool = false,
+    session_name_probe_in_flight: bool = false,
     input_sequence: u64 = 0,
 
     /// Composes application state from stable, runtime-owned capabilities.
@@ -347,6 +350,24 @@ pub const Application = struct {
     /// ```
     pub fn gitStatusCompleted(application: *Application, completion: git_status.Completion) void {
         GitObserver.handleCompletion(application, completion);
+    }
+
+    /// Starts one session-file probe for the stalest due agent.
+    ///
+    /// ```zig
+    /// application.tickSessionNames();
+    /// ```
+    pub fn tickSessionNames(application: *Application) void {
+        SessionNameObserver.tick(application);
+    }
+
+    /// Applies one session-file probe result.
+    ///
+    /// ```zig
+    /// application.sessionNameCompleted(completion);
+    /// ```
+    pub fn sessionNameCompleted(application: *Application, completion: session_name.Completion) void {
+        SessionNameObserver.handleCompletion(application, completion);
     }
 
     /// Completes the in-flight checkpoint write.

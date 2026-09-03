@@ -14,6 +14,7 @@ pub const ReportAgent = struct {
     pane: pane_mod.PaneKey,
     state: schema.AgentReportState,
     session: []const u8,
+    session_file: agent_mod.SessionFile = .{},
     now_ms: i64,
 };
 
@@ -51,6 +52,7 @@ pub const ReportAgentHandler = struct {
             .state = command.state,
             .observed_at_ms = command.now_ms,
             .session = session,
+            .session_file = command.session_file,
         });
         const current = handler.agents.projectedStatus(identity.key);
 

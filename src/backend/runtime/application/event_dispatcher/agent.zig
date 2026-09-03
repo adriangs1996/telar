@@ -62,6 +62,7 @@ pub fn Dispatcher(comptime Application: type) type {
             try coordinator.handle(result);
             try application.flushSessionCheckpoint();
             application.tickGitStatus();
+            application.tickSessionNames();
             checkEngineIdle(application);
             application.proxy_runtime.expireCaptures(runtimeWallClockMs(application));
         }

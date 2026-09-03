@@ -5,6 +5,7 @@ const host_application = @import("../../application/host/root.zig");
 const client_model = @import("../../model/root.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const pane_graphics = @import("../panes/pane_graphics.zig");
+const tab_snapshots = @import("../tabs/tab_snapshots.zig");
 
 const Client = @import("../../client.zig");
 const host_resource_delivery = host_application.host_resource_delivery;
@@ -88,4 +89,5 @@ fn syncPaneGeometry(raw_context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try pane_geometry.offerActive(client, client.view.workbench());
+    try tab_snapshots.attachActive(client, client.view.workbench());
 }

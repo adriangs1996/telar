@@ -3,15 +3,18 @@
 const std = @import("std");
 const core = @import("telar-core");
 const tabs_application = @import("../../application/tabs/root.zig");
+const panes_application = @import("../../application/panes/root.zig");
 const client_model = @import("../../model/root.zig");
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
 const Client = @import("../../client.zig");
+const pane_attachment_requests = panes_application.pane_attachment_requests;
 const schema = core.schema;
 const tab_snapshot = tabs_application.tab_snapshot;
 const tab_snapshot_delivery = tabs_application.tab_snapshot_delivery;
+const ui = core.ui;
 
 pub const Outcome = enum {
     applied,
@@ -61,6 +64,26 @@ pub fn apply(client: *Client, snapshot: schema.TabSnapshotView) !Outcome {
     client.saved_layouts.forget(snapshot.location);
 
     return .applied;
+}
+
+/// Requests an attachment for every detached active pane that has visible
+/// content in `area`, so a pane skipped by a crowded layout attaches once the
+/// geometry gives it room.
+///
+/// ```zig
+/// try attachActive(client, client.view.workbench());
+/// ```
+pub fn attachActive(client: *Client, area: ui.Rect) !void {
+    var use_case: pane_attachment_requests.RequestActivePaneAttachmentsHandler = .{
+        .model = &client.model,
+        .effects = .{
+            .context = client,
+            .attachment_pending = attachmentPending,
+            .request_attachment = requestAttachment,
+        },
+    };
+
+    _ = try use_case.execute(area);
 }
 
 fn reconciliationHandler(client: *Client) tab_snapshot.ApplyTabSnapshotHandler {

@@ -54,6 +54,7 @@ pub const Icon = enum {
     agent_done,
     agent_failed,
     close,
+    pane_fullscreen,
 
     /// The shipped artwork for a built-in agent. Configured agents have no
     /// artwork here; their manifest glyph or the generic mark is drawn instead.
@@ -97,6 +98,7 @@ pub const Icon = enum {
             .agent_done => "\u{2714}",
             .agent_failed => "\u{00d7}",
             .close => "\u{00d7}",
+            .pane_fullscreen => "\u{26f6}",
         };
     }
 
@@ -126,6 +128,7 @@ pub const Icon = enum {
             .agent_done => "\u{eba4}", // cod-pass
             .agent_failed => "\u{ea87}", // cod-error
             .close => "\u{ea76}", // cod-close
+            .pane_fullscreen => "\u{eb4c}", // cod-screen-full
         };
     }
 
@@ -159,6 +162,7 @@ pub const Icon = enum {
             .agent_done => "*",
             .agent_failed => "x",
             .close => "x",
+            .pane_fullscreen => "F",
         };
     }
 };

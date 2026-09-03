@@ -11,7 +11,9 @@ discipline in `src/core/schema/handshake.zig`: corpus entries + version bump.
 
 Explicit non-goals: dotfiles/alias sync, KV store, Atuin-AI-style command
 generation, runbooks. telar feeds the agents the user already runs; it does
-not compete with them.
+not compete with them. [`atuin-ai-adoption.md`](atuin-ai-adoption.md) narrows
+the command-generation non-goal: no model server, but read-only history tools
+for models and a structured, danger-scored suggestion.
 
 ---
 

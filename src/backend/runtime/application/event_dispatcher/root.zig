@@ -125,6 +125,9 @@ pub fn Dispatcher(comptime Application: type) type {
                 .git_status => |completion| {
                     application.gitStatusCompleted(completion);
                 },
+                .session_name => |completion| {
+                    application.sessionNameCompleted(completion);
+                },
             }
 
             return false;

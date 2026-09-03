@@ -13,6 +13,10 @@ pub const RuntimeConfigSelection = struct {
     path: ?[*:0]const u8 = null,
     disabled: bool = false,
     profile: ?[*:0]const u8 = null,
+    /// Start the runtime with `--fresh`, and refuse to adopt a running one:
+    /// a fresh start that silently attaches to the old session is worse than
+    /// none.
+    fresh: bool = false,
 };
 
 pub const RuntimeConnector = struct {
@@ -102,6 +106,13 @@ pub const RuntimeConnector = struct {
             else => null,
         };
         if (first) |connection| {
+            if (config.fresh) {
+                var running = connection;
+                running.deinit(connector.process.io);
+                std.debug.print("telar: a runtime is already running; stop it first (telar server stop) or drop --fresh\n", .{});
+                return error.RuntimeAlreadyRunning;
+            }
+
             return connector.finishHandshake(connection);
         }
 
@@ -121,10 +132,14 @@ pub const RuntimeConnector = struct {
     fn startRuntime(connector: *const RuntimeConnector, config: RuntimeConfigSelection) !void {
         var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const executable = executable_buffer[0..try std.process.executablePath(connector.process.io, &executable_buffer)];
-        var argv: [9][]const u8 = undefined;
+        var argv: [10][]const u8 = undefined;
         var argc: usize = 0;
         for ([_][]const u8{ executable, "server", "--background", "--socket", connector.endpoint.path() }) |arg| {
             argv[argc] = arg;
+            argc += 1;
+        }
+        if (config.fresh) {
+            argv[argc] = "--fresh";
             argc += 1;
         }
         if (config.path) |path| {

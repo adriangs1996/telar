@@ -1,8 +1,8 @@
 // telar-integration: pi
 //
-// Reports Pi's own lifecycle to the Telar runtime that owns this pane, so the
-// sidebar shows working, blocked and ready from official events instead of
-// screen heuristics. `telar integration install pi` writes this file to
+// Reports Pi's own lifecycle and session name to the Telar runtime that owns
+// this pane, so the sidebar shows working, blocked, ready and the `/name`
+// title from official events instead of screen heuristics. `telar integration install pi` writes this file to
 // ~/.pi/agent/extensions/telar.ts with the Telar executable path filled in.
 // Outside a Telar pane the extension does nothing.
 import { spawn } from "node:child_process";
@@ -27,25 +27,36 @@ export default function (pi: ExtensionAPI) {
 
   // One short-lived `telar hook pi` per event; it exits 0 whatever happens
   // so Pi is never affected by a missing or unreachable runtime.
-  const report = (event: Event, ctx: ExtensionContext, idle?: boolean) => {
-    const payload = JSON.stringify({
-      event,
-      session_id: ctx.sessionManager.getSessionId(),
-      idle: idle ?? ctx.isIdle(),
-    });
+  const send = (payload: Record<string, unknown>) => {
     try {
       const child = spawn(TELAR, ["hook", "pi"], { stdio: ["pipe", "ignore", "ignore"] });
       child.on("error", () => {});
       child.stdin.on("error", () => {});
-      child.stdin.end(payload);
+      child.stdin.end(JSON.stringify(payload));
     } catch {
       // Telar is absent; nothing to report to.
     }
   };
 
+  const report = (event: Event, ctx: ExtensionContext, idle?: boolean) =>
+    send({
+      event,
+      session_id: ctx.sessionManager.getSessionId(),
+      idle: idle ?? ctx.isIdle(),
+      name: ctx.sessionManager.getSessionName() || undefined,
+    });
+
+  // The name the user gave the session with `/name`; `undefined` once cleared.
+  const reportName = (name: string | undefined, ctx: ExtensionContext) =>
+    send({
+      event: "session_info_changed",
+      session_id: ctx.sessionManager.getSessionId(),
+      name,
+    });
+
   const pendingTools = new Map<string, { toolName: string; args: unknown }>();
-  const reportTool = (event: ToolEvent, ctx: ExtensionContext, toolCallId: string, toolName: string, args: unknown, exitCode?: number) => {
-    const payload = JSON.stringify({
+  const reportTool = (event: ToolEvent, ctx: ExtensionContext, toolCallId: string, toolName: string, args: unknown, exitCode?: number) =>
+    send({
       event,
       session_id: ctx.sessionManager.getSessionId(),
       tool_name: toolName,
@@ -54,15 +65,6 @@ export default function (pi: ExtensionAPI) {
       cwd: ctx.cwd,
       exit_code: exitCode,
     });
-    try {
-      const child = spawn(TELAR, ["hook", "pi"], { stdio: ["pipe", "ignore", "ignore"] });
-      child.on("error", () => {});
-      child.stdin.on("error", () => {});
-      child.stdin.end(payload);
-    } catch {
-      // Telar is absent; nothing to report to.
-    }
-  };
 
   pi.on("session_start", async (_event, ctx) => report("session_start", ctx, true));
   pi.on("agent_start", async (_event, ctx) => report("agent_start", ctx, false));
@@ -70,6 +72,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("ui_prompt_start", async (_event, ctx) => report("ui_prompt_start", ctx));
   pi.on("ui_prompt_end", async (_event, ctx) => report("ui_prompt_end", ctx));
   pi.on("session_shutdown", async (_event, ctx) => report("session_shutdown", ctx));
+  pi.on("session_info_changed", async (event, ctx) => reportName(event.name, ctx));
   pi.on("tool_execution_start", async (event, ctx) => {
     pendingTools.set(event.toolCallId, { toolName: event.toolName, args: event.args });
     reportTool("tool_execution_start", ctx, event.toolCallId, event.toolName, event.args);

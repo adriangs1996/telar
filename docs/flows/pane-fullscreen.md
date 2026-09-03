@@ -42,6 +42,12 @@ The layout retains every split ratio while fullscreen is active. Directional
 focus and resize may still alter that hidden tiled tree. Exiting fullscreen
 reveals the retained geometry.
 
+The fullscreen pane keeps its border. Fullscreen needs at least two panes, so
+the border, titled with the pane's tiled display index, is what tells the user
+the tab still holds more. The tab bar draws the `pane_fullscreen` icon after
+the label of every tab whose layout is fullscreen, so a hidden pane in another
+tab stays visible from the bar.
+
 ## Geometry effects and presentation
 
 Fullscreen and edge resizing share `DeliverPaneGeometryHandler` because both
@@ -51,8 +57,8 @@ host graphics placements. `OfferPaneGeometryHandler` selects attached panes
 with visible content from one layout snapshot; the adapter only publishes the
 resulting commands.
 
-Entering fullscreen gives the entire workbench to the focused pane, so the
-client sends one `pane_resize`. Exiting restores the tiled snapshot and sends
+Entering fullscreen gives the focused pane the workbench minus its one-cell
+border, so the client sends one `pane_resize`. Exiting restores the tiled snapshot and sends
 one resize for each attached pane. The runtime accepts those messages only
 from the workspace geometry owner and processes them through
 `pane_resize.Controller` and `PaneResizeHandler`.

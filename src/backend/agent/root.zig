@@ -8,6 +8,8 @@ const tracker = @import("tracker.zig");
 const types = @import("types.zig");
 
 pub const description = @import("description.zig");
+pub const session_file = @import("session_file.zig");
+pub const transcript = @import("transcript.zig");
 pub const providers = @import("providers/root.zig");
 pub const Tracker = tracker.Tracker;
 pub const AcknowledgeResult = tracker.AcknowledgeResult;
@@ -27,6 +29,7 @@ pub const DescriptionFinished = types.DescriptionFinished;
 pub const SessionReference = types.SessionReference;
 pub const SessionTitle = types.SessionTitle;
 pub const ReportObservation = types.ReportObservation;
+pub const SessionFile = types.SessionFile;
 
 test {
     _ = @import("agent.zig");
@@ -36,4 +39,6 @@ test {
     _ = @import("repository.zig");
     _ = @import("restored_titles.zig");
     _ = @import("tracker.zig");
+    _ = @import("session_file.zig");
+    _ = @import("transcript.zig");
 }

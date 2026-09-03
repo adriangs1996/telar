@@ -33,6 +33,8 @@ pub const State = struct {
     restored_workspaces: u16 = 0,
     restored_panes: u16 = 0,
     resumed_agents: u16 = 0,
+    /// Restored tabs dropped because none of their panes came back.
+    dropped_tabs: u16 = 0,
     restore_failed: bool = false,
 
     pub fn enabled(state: *const State) bool {
@@ -268,6 +270,40 @@ pub fn Checkpointer(comptime Application: type) type {
             panes.advanceCounters(reader.counters.next_pane_id, reader.counters.next_pane_generation);
             application.model.workspaces.next_workspace_id = @max(application.model.workspaces.next_workspace_id, reader.counters.next_workspace_id);
             application.model.workspaces.next_tab_id = @max(application.model.workspaces.next_tab_id, reader.counters.next_tab_id);
+            dropEmptyTabs(application);
+        }
+
+        /// Retires every restored tab that came back without a pane, through
+        /// the same operation the final pane exit uses, so a workspace left
+        /// without tabs goes with it. A tab exists for clients only together
+        /// with a running pane: the tab snapshot query answers `tab_not_found`
+        /// for an empty one, and a client that selects it treats that reply
+        /// as fatal. Tabs stay empty when a pane record fails to relaunch,
+        /// for example because its working directory is gone.
+        fn dropEmptyTabs(application: *Application) void {
+            var repository = application.workspaceRepository();
+            while (findEmptyTab(repository.reader(), &application.model.panes)) |location| {
+                _ = workspace_mod.removeTab(&repository, location) orelse break;
+                application.session.dropped_tabs +|= 1;
+                application.noteSessionChange();
+            }
+        }
+
+        fn findEmptyTab(reader: workspace_mod.Reader, panes: *const pane_mod.PaneStore) ?schema.TabLocation {
+            var entries: [workspace_mod.max_workspaces]schema.WorkspaceListEntry = undefined;
+            var tabs: [workspace_mod.max_tabs_per_workspace]schema.TabDescriptor = undefined;
+            for (reader.listEntries(&entries)) |entry| {
+                const workspace: schema.WorkspaceLocation = .{ .workspace = entry.workspace };
+                const snapshot = reader.descriptors(workspace, &tabs) orelse continue;
+                for (snapshot.tabs) |tab| {
+                    const location: schema.TabLocation = .{ .workspace = workspace, .tab_id = tab.tab_id };
+                    if (!panes.hasAt(location)) {
+                        return location;
+                    }
+                }
+            }
+
+            return null;
         }
 
         fn restorePane(application: *Application, counters: checkpoint.Counters, record: checkpoint.PaneRecord) !void {

@@ -1842,13 +1842,18 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         .force = true,
     });
 
-    // Tabs anchor to the right edge: " 1:main " and " 2:logs " occupy the
-    // last sixteen columns of the bottom row.
+    // Tabs anchor to the right edge: " 1:main ", one empty cell and
+    // " 2:logs " occupy the last seventeen columns of the bottom row.
     const click = term.Event.Mouse{ .x = 65, .y = 23, .kind = .press };
     const interaction = state.handleMouse(click);
     try std.testing.expectEqualDeep(
         InteractionIntent{ .select_tab = @enumFromInt(4) },
         interaction.intent,
+    );
+    try std.testing.expect(state.hits.at(71, 23) == null);
+    try std.testing.expectEqualDeep(
+        InteractionIntent{ .select_tab = @enumFromInt(9) },
+        state.handleMouse(.{ .x = 72, .y = 23, .kind = .press }).intent,
     );
 
     // A right click only reports the intent: entering the rename prompt is
@@ -1863,6 +1868,62 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         InteractionIntent{ .rename_tab = @enumFromInt(4) },
         rename.intent,
     );
+}
+
+test "tab bar marks the tab whose pane is fullscreen" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 100, 30);
+    defer state.deinit();
+    var tabs = tabs_mod.Model.init(gpa);
+    defer tabs.deinit();
+    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const logs: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(9) };
+    try tabs.bootstrap(@enumFromInt(1), .{
+        .workspace = workspace,
+        .tab_id = @enumFromInt(4),
+    }, .{ .cols = 50, .rows = 22 });
+    _ = try tabs.addCreated(.{
+        .location = logs,
+        .position = 1,
+        .label = "logs",
+        .root_pane_id = @enumFromInt(2),
+    }, .{ .cols = 50, .rows = 22 });
+    // Creating "logs" made it the active tab; its root pane is pane 2.
+    const model = &tabs.active().?.model;
+    try model.split(@enumFromInt(2), @enumFromInt(3), logs, .horizontal, state.workbench());
+    try std.testing.expect(model.toggleFullscreen());
+    var screen = try term.Screen.init(gpa, 100, 30);
+    defer screen.deinit();
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{
+        .model = model,
+        .screen = &screen,
+        .area = state.workbench(),
+    });
+    _ = try state.render(&screen, .{
+        .tabs = &tabs,
+        .model = model,
+        .compositor = &compositor,
+        .force = true,
+    });
+
+    // " 1:main ", one empty cell and " 2:logs ⛶ " fill the last nineteen
+    // columns; the marker sits inside the second tab's click target.
+    const bottom_row: usize = 29 * 100;
+    try std.testing.expectEqualStrings(" ", screen.back.cells[bottom_row + 89].text());
+    try std.testing.expectEqualStrings("\u{26f6}", screen.back.cells[bottom_row + 98].text());
+    try std.testing.expect(state.hits.at(89, 29) == null);
+    try std.testing.expectEqualDeep(
+        InteractionIntent{ .select_tab = @enumFromInt(9) },
+        state.handleMouse(.{ .x = 98, .y = 29, .kind = .press }).intent,
+    );
+
+    // The inactive tab sits one surface above the bar; the gap keeps the bar.
+    const palette = &state.theme.palette;
+    try std.testing.expectEqualDeep(palette.surface0, screen.back.cells[bottom_row + 81].style.bg);
+    try std.testing.expectEqualDeep(palette.panel_bg, screen.back.cells[bottom_row + 89].style.bg);
+    try std.testing.expectEqualDeep(palette.accent, screen.back.cells[bottom_row + 98].style.bg);
 }
 
 test "the top bar lists open workspaces and clicking one requests a switch" {

@@ -302,7 +302,7 @@ fn validateTitle(title: []const u8, source: u8) !void {
 
     schema.validateSessionTitle(title) catch return error.InvalidCheckpoint;
     switch (std.enums.fromInt(schema.AgentTitleSource, source) orelse return error.InvalidCheckpoint) {
-        .generated, .manual => {},
+        .generated, .manual, .agent => {},
         .telar, .terminal => return error.InvalidCheckpoint,
     }
 }
@@ -386,6 +386,12 @@ test "pane titles must be printable and come from a durable source" {
     placeholder.agent_title_source = @intFromEnum(schema.AgentTitleSource.telar);
     var encoder = try Encoder.init(&buffer, counters);
     try std.testing.expectError(error.InvalidCheckpoint, encoder.pane(placeholder));
+
+    var agent_named = base;
+    agent_named.agent_title = "Fix proxy";
+    agent_named.agent_title_source = @intFromEnum(schema.AgentTitleSource.agent);
+    encoder = try Encoder.init(&buffer, counters);
+    try encoder.pane(agent_named);
 
     var control = base;
     control.agent_title = "a\x1bb";

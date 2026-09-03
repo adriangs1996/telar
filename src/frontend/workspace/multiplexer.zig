@@ -383,14 +383,13 @@ pub const Compositor = struct {
             target.clear(.{});
             screen.cursor = null;
             var full_stats: RenderStats = .{ .full = true };
-            for (compositor.layout_snapshot.views(), 0..) |view, index| {
+            for (compositor.layout_snapshot.views()) |view| {
                 const pane = model.findConst(view.pane_id) orelse continue;
                 full_stats.panes += 1;
-                if (model.layout.count() > 1 and !model.layout.isFullscreen()) {
+                if (model.layout.count() > 1) {
                     drawBorder(target, .{
                         .view = view,
                         .foreground_name = pane.foregroundName(),
-                        .pane_index = index + 1,
                         .palette = options.palette,
                     });
                 }
@@ -852,7 +851,13 @@ pub const Model = struct {
 
     /// Adds panes discovered in a location snapshot. Reconstructed layouts are
     /// intentionally local and deterministic: each additional pane splits the
-    /// currently focused leaf left-to-right.
+    /// currently focused leaf left-to-right. The runtime owns membership, so a
+    /// pane the area cannot fit still joins the layout, detached and without
+    /// visible content until the geometry changes.
+    ///
+    /// ```zig
+    /// try model.addDiscovered(pane_id, location, area);
+    /// ```
     pub fn addDiscovered(
         model: *Model,
         pane_id: schema.PaneId,
@@ -861,16 +866,18 @@ pub const Model = struct {
     ) !void {
         if (model.find(pane_id) != null) return;
         const focused = model.layout.focused() orelse {
-            const size = rectSize(area) orelse return error.PaneTooSmall;
+            const size = rectSize(area) orelse placeholder_size;
             try model.insertPane(pane_id, location, size, false);
             errdefer _ = model.removePane(pane_id);
             try model.layout.addRoot(pane_id);
             model.location = location;
             return;
         };
-        const prospective = model.prospectiveSplit(focused, .horizontal, area) orelse
-            return error.PaneTooSmall;
-        const size = rectSize(prospective.new_content) orelse return error.PaneTooSmall;
+
+        const size = if (model.prospectiveSplit(focused, .horizontal, area)) |prospective|
+            rectSize(prospective.new_content) orelse placeholder_size
+        else
+            placeholder_size;
         try model.insertPane(pane_id, location, size, false);
         errdefer _ = model.removePane(pane_id);
         try model.layout.split(focused, pane_id, .horizontal);
@@ -1237,6 +1244,9 @@ fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
     return damaged;
 }
 
+/// The buffer a discovered pane keeps while the layout gives it no content.
+const placeholder_size: schema.TerminalSize = .{ .cols = 1, .rows = 1 };
+
 pub fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
     if (rect.w == 0 or rect.h == 0) return null;
     return .{ .cols = rect.w, .rows = rect.h };
@@ -1245,7 +1255,6 @@ pub fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
 const BorderInput = struct {
     view: layout_mod.View,
     foreground_name: []const u8,
-    pane_index: usize,
     palette: *const theme.Palette,
 };
 
@@ -1258,7 +1267,7 @@ fn drawBorder(buffer: *ui.Buffer, input: BorderInput) void {
     const text = std.fmt.bufPrint(
         &title_buffer,
         " {d} {s} ",
-        .{ input.pane_index, if (input.foreground_name.len == 0) "shell" else input.foreground_name },
+        .{ input.view.display_index, if (input.foreground_name.len == 0) "shell" else input.foreground_name },
     ) catch " pane ";
     buffer.box(input.view.outer, style, text);
 }
@@ -1522,7 +1531,7 @@ test "fullscreen composes only the focused pane across the whole tab" {
     try std.testing.expect(model.toggleFullscreen());
 
     try std.testing.expectEqual(
-        schema.TerminalSize{ .cols = 40, .rows = 7 },
+        schema.TerminalSize{ .cols = 38, .rows = 5 },
         model.contentSize(@enumFromInt(1), area).?,
     );
     try std.testing.expectEqual(@as(?schema.TerminalSize, null), model.contentSize(@enumFromInt(2), area));
@@ -1536,10 +1545,41 @@ test "fullscreen composes only the focused pane across the whole tab" {
         .area = area,
     });
     try std.testing.expectEqual(@as(usize, 1), stats.panes);
-    try std.testing.expectEqualStrings("x", screen.back.cells[0].text());
+    try std.testing.expectEqualStrings("╭", screen.back.cells[0].text());
+    try std.testing.expectEqualStrings("x", screen.back.cells[area.w + 1].text());
 
     try std.testing.expect(model.toggleFullscreen());
     try std.testing.expect(model.contentSize(@enumFromInt(2), area) != null);
+}
+
+test "fullscreen border keeps the pane's tiled display index" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const area: ui.Rect = .{ .w = 40, .h = 7 };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 20, .rows = 6 });
+    try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
+    try std.testing.expect(model.focusPane(@enumFromInt(2)));
+    try std.testing.expect(model.toggleFullscreen());
+    var screen = try term.Screen.init(gpa, area.w, area.h);
+    defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    _ = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = area,
+    });
+
+    // The title starts two cells in: " 2 shell ".
+    try std.testing.expectEqualStrings(" ", screen.back.cells[2].text());
+    try std.testing.expectEqualStrings("2", screen.back.cells[3].text());
+    try std.testing.expectEqualStrings("│", screen.back.cells[area.w].text());
+    try std.testing.expectEqualStrings("│", screen.back.cells[2 * area.w - 1].text());
 }
 
 test "pane borders use the selected theme without coloring pane contents" {
@@ -1767,6 +1807,25 @@ test "snapshot discovery does not imply a runtime attachment" {
     try std.testing.expect(!model.find(@enumFromInt(2)).?.attached);
     try model.markAttached(@enumFromInt(2));
     try std.testing.expect(model.find(@enumFromInt(2)).?.attached);
+}
+
+test "snapshot discovery keeps a pane the area cannot fit" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const area: ui.Rect = .{ .w = 4, .h = 3 };
+    try model.addRoot(@enumFromInt(1), location, .{ .cols = 4, .rows = 3 });
+
+    try model.addDiscovered(@enumFromInt(2), location, area);
+
+    try std.testing.expectEqual(@as(usize, 2), model.pane_count);
+    try std.testing.expect(model.layout.contains(@enumFromInt(2)));
+    try std.testing.expect(!model.find(@enumFromInt(2)).?.attached);
+    try std.testing.expectEqual(@as(?schema.TerminalSize, null), model.contentSize(@enumFromInt(2), area));
 }
 
 test "unchanged composition produces no terminal damage" {

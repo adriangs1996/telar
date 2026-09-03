@@ -178,14 +178,32 @@ pub const Session = struct {
     /// ```
     pub fn open(init: std.process.Init, socket: ?[*:0]const u8) !Session {
         const connector = try RuntimeConnector.init(init, socket);
-        var connection = try connector.connectOrStart(.{});
-        errdefer connection.deinit(init.io);
+        return Session.adopt(init, try connector.connectOrStart(.{}));
+    }
+
+    /// Connects to a runtime that is already listening and never starts one.
+    /// Reporters running inside a pane use it: the pane environment outlives
+    /// the runtime that injected it, so a report must not resurrect a stopped
+    /// runtime.
+    ///
+    /// ```zig
+    /// var session = try Session.attach(init, options.socket);
+    /// defer session.close();
+    /// ```
+    pub fn attach(init: std.process.Init, socket: ?[*:0]const u8) !Session {
+        const connector = try RuntimeConnector.init(init, socket);
+        return Session.adopt(init, try connector.connect());
+    }
+
+    fn adopt(init: std.process.Init, connection: core.transport.SocketChannel) !Session {
+        var owned = connection;
+        errdefer owned.deinit(init.io);
         const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
 
         return .{
             .io = init.io,
             .gpa = init.gpa,
-            .connection = connection,
+            .connection = owned,
             .receive_buffer = receive_buffer,
         };
     }
@@ -334,19 +352,28 @@ pub const Session = struct {
         }
     }
 
+    pub const AgentReport = struct {
+        state: schema.AgentReportState,
+        session: []const u8 = "",
+        session_file: []const u8 = "",
+        session_file_kind: schema.AgentSessionFileKind = .claude_transcript,
+    };
+
     /// Sends one official lifecycle report for the pane's agent.
     ///
     /// ```zig
-    /// try session.reportAgent(pane, .working, "");
+    /// try session.reportAgent(pane, .{ .state = .working });
     /// ```
-    pub fn reportAgent(session: *Session, pane: PaneRef, state: schema.AgentReportState, reference: []const u8) !void {
-        var send_buffer: [schema.max_agent_session_reference_bytes + 64]u8 = undefined;
+    pub fn reportAgent(session: *Session, pane: PaneRef, report: AgentReport) !void {
+        var send_buffer: [schema.max_agent_session_reference_bytes + schema.max_agent_session_file_bytes + 64]u8 = undefined;
         try session.connection.send(session.io, try schema.encodeReportAgent(&send_buffer, .{
             .request_id = session.requestId(),
             .pane_id = try schema.id.pane(pane.pane_id),
             .pane_generation = pane.pane_generation,
-            .state = state,
-            .session = reference,
+            .state = report.state,
+            .session = report.session,
+            .session_file = report.session_file,
+            .session_file_kind = report.session_file_kind,
         }));
 
         const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
@@ -375,6 +402,28 @@ pub const Session = struct {
             .cwd = command.cwd,
             .session = command.session,
             .exit_code = command.exit_code,
+        }));
+
+        const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+        switch (response) {
+            .request_completed => {},
+            .request_failed => |failure| return failureError(failure),
+            else => return error.UnexpectedRuntimeResponse,
+        }
+    }
+
+    /// Sends the name the agent's own session carries; empty clears it.
+    ///
+    /// ```zig
+    /// try session.reportAgentTitle(pane, "Fix proxy");
+    /// ```
+    pub fn reportAgentTitle(session: *Session, pane: PaneRef, title: []const u8) !void {
+        var send_buffer: [schema.max_agent_session_title_bytes + 64]u8 = undefined;
+        try session.connection.send(session.io, try schema.encodeReportAgentTitle(&send_buffer, .{
+            .request_id = session.requestId(),
+            .pane_id = try schema.id.pane(pane.pane_id),
+            .pane_generation = pane.pane_generation,
+            .title = title,
         }));
 
         const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));

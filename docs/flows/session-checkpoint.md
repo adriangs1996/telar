@@ -72,6 +72,26 @@ tab whose workspace is missing, a pane whose launch fails) are skipped, and
 the id counters still advance past every recorded identity so reconnecting
 clients never see an id reused for a different pane.
 
+After the last record, every tab left without a pane is retired through the
+same `workspace.removeTab` the final pane exit uses, and a workspace left
+without tabs goes with it (`State.dropped_tabs` counts them). A tab exists for
+clients only together with a running pane: the tab snapshot query answers
+`tab_not_found` for an empty one, and a client that selects such a tab treats
+that reply as fatal. `src/backend/runtime/instance.zig` proves the sweep with
+a pane whose working directory disappeared between runs.
+
+## Fresh start
+
+`telar --fresh` and `telar server --fresh` start a runtime without the
+previous session. Before restore, `server.setSessionAside` renames
+`session.ckpt` to `session.ckpt.previous`; the runtime then starts empty and
+persists to the normal path again, so the replaced session survives exactly
+one fresh start and comes back with a rename. The client refuses `--fresh`
+when a runtime is already listening (`RuntimeAlreadyRunning`) instead of
+attaching to the old session, and rejects it together with `--remote`.
+`--fresh` is not a repair: a checkpoint the runtime cannot apply is
+quarantined as `.corrupt` on its own.
+
 ## Agent resume
 
 An agent reports its own session identifier with `telar agent report-session`
@@ -87,7 +107,8 @@ references. Claude Code hooks receive `session_id` in their
 input and are the intended reporter.
 
 The session title rides along with the reference. The checkpoint records a
-pane's title only when it is ready and generated or manual (`Tracker.durableTitle`);
+pane's title only when it is ready and generated, manual or agent-reported
+(`Tracker.durableTitle`);
 placeholders and a child's own window title are never written, and a ready
 title marks the checkpoint dirty like any other semantic change. On restore
 the title is handed over only together with a resume command, so a pane that

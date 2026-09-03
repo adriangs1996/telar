@@ -88,14 +88,14 @@ pub const SessionTitle = struct {
         return title.bytes[0..title.len];
     }
 
-    /// Copies a validated title. Only generated and manual titles are durable;
-    /// placeholders and a child's own window title are never stored.
+    /// Copies a validated title. Only generated, manual and agent titles are
+    /// durable; placeholders and a child's own window title are never stored.
     ///
     /// ```zig
     /// const title = try SessionTitle.init("Investigate proxy lifecycle", .generated);
     /// ```
     pub fn init(value: []const u8, source: schema.AgentTitleSource) !SessionTitle {
-        if (source != .generated and source != .manual) {
+        if (source != .generated and source != .manual and source != .agent) {
             return error.InvalidSessionTitle;
         }
 
@@ -108,11 +108,19 @@ pub const SessionTitle = struct {
 };
 
 /// One official lifecycle report from the agent's own hooks.
+/// The file an agent records its session in, as reported by its hooks.
+pub const SessionFile = struct {
+    kind: schema.AgentSessionFileKind = .claude_transcript,
+    path: []const u8 = "",
+};
+
 pub const ReportObservation = struct {
     identity: Identity,
     state: schema.AgentReportState,
     observed_at_ms: i64,
     session: ?SessionReference = null,
+    /// Present when the hook knows where the agent records its session.
+    session_file: SessionFile = .{},
 };
 
 pub const ProxyPhase = enum {

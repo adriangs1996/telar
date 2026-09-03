@@ -429,7 +429,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     try std.testing.expect(model.layout.isFullscreen());
     try std.testing.expect(model.contentSize(first, area) == null);
     const fullscreen_size = model.contentSize(second, area).?;
-    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w, .rows = area.h }, fullscreen_size);
+    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, fullscreen_size);
     try std.testing.expectEqual(version_before_enter.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_enter, client.presenter.pending_updates);
     try std.testing.expect(!client.view.dirty);
