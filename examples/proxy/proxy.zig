@@ -327,12 +327,12 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
             var ws_up: std.atomic.Value(u64) = .init(0);
             var ws_down: std.atomic.Value(u64) = .init(0);
 
-            if (io.concurrent(pumpDirection, .{ session, .child, .origin, &ws_up })) |future| {
+            if (io.concurrent(pumpDirection, .{ session, h2.Route{ .from = .child, .to = .origin }, &ws_up })) |future| {
                 var c2o = future;
-                pumpDirection(session, .origin, .child, &ws_down);
+                pumpDirection(session, .{ .from = .origin, .to = .child }, &ws_down);
                 c2o.await(io);
             } else |_| {
-                pumpDirection(session, .origin, .child, &ws_down);
+                pumpDirection(session, .{ .from = .origin, .to = .child }, &ws_down);
             }
 
             total_up += ws_up.load(.monotonic);
@@ -515,11 +515,11 @@ fn pumpBlind(from: c_int, to: c_int, counter: *std.atomic.Value(u64)) void {
 /// Copies one direction opaquely until it stops. Each `SSL` object ends up with
 /// exactly one reading thread and one writing thread, which is the pairing
 /// OpenSSL supports on a single object.
-fn pumpDirection(session: *tls.Session, from: tls.Session.Side, to: tls.Session.Side, counter: *std.atomic.Value(u64)) void {
+fn pumpDirection(session: *tls.Session, route: h2.Route, counter: *std.atomic.Value(u64)) void {
     var buf: [16 * event.KB]u8 = undefined;
     while (true) {
-        const n = session.read(from, &buf) orelse break;
-        if (!session.writeAll(to, buf[0..n])) {
+        const n = session.read(route.from, &buf) orelse break;
+        if (!session.writeAll(route.to, buf[0..n])) {
             break;
         }
         _ = counter.fetchAdd(n, .monotonic);
