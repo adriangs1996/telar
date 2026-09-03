@@ -795,7 +795,9 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
             'i' => image_id = parseUniqueU32(image_id, value) orelse return null,
             'p' => placement_id = parseUniqueU32(placement_id, value) orelse return null,
             'f' => {
-                if (format != null) return null;
+                if (format != null) {
+                    return null;
+                }
                 const parsed = std.fmt.parseUnsigned(u8, value, 10) catch return null;
                 if (parsed != 24 and parsed != 32) return null;
                 format = parsed;
