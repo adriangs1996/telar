@@ -484,8 +484,8 @@ fn drawSearch(context: DrawContext, y: u16) u16 {
     // Chips first, so the field knows how much room is left rather than
     // guessing. They are laid out from the right edge inwards.
     var right = row.x + row.w - 1;
-    right -= drawChipAt(state, buf, row, right, "+", fg, .new_task);
-    right -= drawChipAt(state, buf, row, right, "ctrl+k", muted, .command_palette);
+    right -= drawChipAt(.{ .state = state, .buffer = buf, .area = row }, .{ .right = right, .label = "+", .color = fg, .action = .new_task });
+    right -= drawChipAt(.{ .state = state, .buffer = buf, .area = row }, .{ .right = right, .label = "ctrl+k", .color = muted, .action = .command_palette });
 
     // Registered before the early return below: the placeholder branch is the
     // common case, and skipping it there made the search box unclickable
@@ -535,21 +535,31 @@ fn drawSearch(context: DrawContext, y: u16) u16 {
 
 /// A bordered chip whose right edge is at `right`. Returns the columns it and
 /// its trailing gap consumed.
-fn drawChipAt(state: *State, buf: *ui.Buffer, area: ui.Rect, right: u16, label: []const u8, color: ui.Color, action: Action) u16 {
-    const width = ui.measure(label) + 2;
-    if (right < area.x + width) {
+const ChipDraw = struct {
+    right: u16,
+    label: []const u8,
+    color: ui.Color,
+    action: Action,
+};
+
+fn drawChipAt(context: DrawContext, chip: ChipDraw) u16 {
+    const state = context.state;
+    const buf = context.buffer;
+    const area = context.area;
+    const width = ui.measure(chip.label) + 2;
+    if (chip.right < area.x + width) {
         return 0;
     }
-    const x = right - width;
+    const x = chip.right - width;
 
-    const hovered = isHovered(state, action);
+    const hovered = isHovered(state, chip.action);
     const fill: ui.Color = if (hovered) chip_bg else bg;
 
     _ = buf.writeText(area, x, area.y, "[", .{ .fg = faint, .bg = fill });
-    _ = buf.writeText(area, x + 1, area.y, label, .{ .fg = color, .bg = fill });
+    _ = buf.writeText(area, x + 1, area.y, chip.label, .{ .fg = chip.color, .bg = fill });
     _ = buf.writeText(area, x + width - 1, area.y, "]", .{ .fg = faint, .bg = fill });
 
-    state.hits.add(.{ .x = x, .y = area.y, .w = width, .h = 1 }, action);
+    state.hits.add(.{ .x = x, .y = area.y, .w = width, .h = 1 }, chip.action);
     return width + 1;
 }
 
