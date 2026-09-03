@@ -1486,8 +1486,15 @@ fn runTextRaster(context: *TextRasterContext, iterations: usize) !u64 {
     return checksum +% context.pixels[context.pixels.len / 2];
 }
 
-fn execute(writer: *Io.Writer, io: Io, gpa: std.mem.Allocator, config: Config, fixture: *Fixture) !void {
-    const result_writer: ResultWriter = .{ .writer = writer, .config = config };
+const ExecutionResources = struct {
+    io: Io,
+    gpa: std.mem.Allocator,
+};
+
+fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: *Fixture) !void {
+    const io = resources.io;
+    const gpa = resources.gpa;
+    const config = result_writer.config;
     var case_index: usize = 0;
 
     inline for (workloads) |workload| {
@@ -1795,6 +1802,6 @@ pub fn main(init: std.process.Init) !void {
     var fixture = try Fixture.init(gpa.allocator());
     defer fixture.deinit();
 
-    try execute(writer, init.io, gpa.allocator(), config, &fixture);
+    try execute(.{ .writer = writer, .config = config }, .{ .io = init.io, .gpa = gpa.allocator() }, &fixture);
     try writer.flush();
 }
