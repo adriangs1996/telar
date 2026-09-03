@@ -165,7 +165,9 @@ const Batch = struct {
     }
 
     fn pushOutput(batch: *Batch, bytes: []const u8) bool {
-        if (bytes.len > batch.bytes.len - batch.len) return false;
+        if (bytes.len > batch.bytes.len - batch.len) {
+            return false;
+        }
         const offset = batch.len;
         @memcpy(batch.bytes[offset..][0..bytes.len], bytes);
         batch.len += bytes.len;
