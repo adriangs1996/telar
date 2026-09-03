@@ -787,7 +787,9 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
                 transmit = true;
             },
             't' => {
-                if (medium != null) return null;
+                if (medium != null) {
+                    return null;
+                }
                 medium = if (std.mem.eql(u8, value, "s")) .shared else if (std.mem.eql(u8, value, "f")) .file else return null;
             },
             'i' => image_id = parseUniqueU32(image_id, value) orelse return null,
