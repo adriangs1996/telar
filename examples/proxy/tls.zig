@@ -160,7 +160,27 @@ pub const Session = struct {
 /// Handshakes both ends. `host` is the CONNECT target, used both to mint the
 /// certificate the child will check and to verify the real server. `cause`
 /// receives the underlying failure, which the returned `Error` only categorises.
-pub fn intercept(io: Io, gpa: std.mem.Allocator, authority: ca.Authority, roots: Roots, host: []const u8, child: net.Stream, origin: net.Stream, cause: *anyerror) Error!*Session {
+pub const InterceptResources = struct {
+    io: Io,
+    allocator: std.mem.Allocator,
+    authority: ca.Authority,
+    roots: Roots,
+};
+
+pub const InterceptConnection = struct {
+    host: []const u8,
+    child: net.Stream,
+    origin: net.Stream,
+};
+
+pub fn intercept(resources: InterceptResources, connection: InterceptConnection, cause: *anyerror) Error!*Session {
+    const io = resources.io;
+    const gpa = resources.allocator;
+    const authority = resources.authority;
+    const roots = resources.roots;
+    const host = connection.host;
+    const child = connection.child;
+    const origin = connection.origin;
     cause.* = error.Unknown;
 
     const self = gpa.create(Session) catch return error.ContextFailed;

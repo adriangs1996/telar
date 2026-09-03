@@ -213,13 +213,8 @@ fn tunnel(context: TunnelContext) Io.Cancelable!void {
     // ---- terminate both ends and sit in the middle
     var cause: anyerror = error.Unknown;
     const session = tls.intercept(
-        io,
-        gpa,
-        authority,
-        roots,
-        host,
-        stream,
-        upstream,
+        .{ .io = io, .allocator = gpa, .authority = authority, .roots = roots },
+        .{ .host = host, .child = stream, .origin = upstream },
         &cause,
     ) catch |err| {
         // A failed handshake is the interesting failure, and which end refused
