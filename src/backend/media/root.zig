@@ -521,7 +521,9 @@ fn parseFileQueryControl(control: []const u8) ?FileQueryControl {
             },
             'i' => image_id = parseUniqueU32(image_id, value) orelse return null,
             'f' => {
-                if (format != null) return null;
+                if (format != null) {
+                    return null;
+                }
                 const parsed = std.fmt.parseUnsigned(u8, value, 10) catch return null;
                 if (parsed != 24 and parsed != 32) return null;
                 format = parsed;
