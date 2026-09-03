@@ -443,7 +443,7 @@ fn drawSidebar(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
     y = rule(buf, area, y);
     y = drawTabs(.{ .state = state, .buffer = buf, .area = inside }, y);
     y = rule(buf, area, y);
-    y = drawScope(state, buf, inside, y);
+    y = drawScope(.{ .state = state, .buffer = buf, .area = inside }, y);
     y = rule(buf, area, y);
 
     const footer_y = area.y + area.h - 2;
@@ -606,7 +606,10 @@ fn drawTabs(context: DrawContext, y: u16) u16 {
     return y + 2;
 }
 
-fn drawScope(state: *State, buf: *ui.Buffer, area: ui.Rect, y: u16) u16 {
+fn drawScope(context: DrawContext, y: u16) u16 {
+    const state = context.state;
+    const buf = context.buffer;
+    const area = context.area;
     const row: ui.Rect = .{ .x = area.x, .y = y, .w = area.w, .h = 1 };
     const hovered = isHovered(state, .toggle_scope);
     const row_bg: ui.Color = if (hovered) raised else bg;
