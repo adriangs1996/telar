@@ -19,6 +19,12 @@ const FreeTypeConfig = struct {
     disable_coverage: bool,
 };
 
+const LuaConfig = struct {
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    name: []const u8,
+};
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -39,7 +45,7 @@ pub fn build(b: *std.Build) void {
     }).module("ghostty-vt");
     coverage.excludeCSourceCoverage(b, ghostty_vt);
 
-    const lua_api = addLua(b, target, optimize, "lua");
+    const lua_api = addLua(b, .{ .target = target, .optimize = optimize, .name = "lua" });
     coverage.instrumentModule(lua_api);
     const telar_lua = b.addModule("telar-lua", .{
         .root_source_file = b.path("src/lua/root.zig"),
@@ -182,7 +188,7 @@ pub fn build(b: *std.Build) void {
         .ReleaseFast
     else
         optimize;
-    const bench_lua_api = addLua(b, target, bench_optimize, "lua-bench");
+    const bench_lua_api = addLua(b, .{ .target = target, .optimize = bench_optimize, .name = "lua-bench" });
     const bench_unicode = b.createModule(.{
         .root_source_file = b.path("src/core/unicode.zig"),
         .target = target,
@@ -897,13 +903,14 @@ const freetype_sources: []const []const u8 = &.{
     "src/winfonts/winfnt.c",
 };
 
-fn addLua(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, name: []const u8) *std.Build.Module {
+fn addLua(b: *std.Build, config: LuaConfig) *std.Build.Module {
+    const target = config.target;
     const source_root = b.path("vendor/lua-5.5.1/src");
     const lua = b.addLibrary(.{
-        .name = name,
+        .name = config.name,
         .root_module = b.createModule(.{
             .target = target,
-            .optimize = optimize,
+            .optimize = config.optimize,
             .link_libc = true,
         }),
     });
@@ -951,7 +958,7 @@ fn addLua(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin
     const api = b.createModule(.{
         .root_source_file = b.path("src/frontend/config/lua_api.zig"),
         .target = target,
-        .optimize = optimize,
+        .optimize = config.optimize,
         .link_libc = true,
     });
     api.addIncludePath(source_root);
