@@ -19,14 +19,25 @@ run *args:
 
 # Format the project Zig sources.
 fmt:
-    zig fmt build.zig build.zig.zon src examples benchmarks test/fuzz/build.zig test/fuzz/build.zig.zon test/fuzz/src test/fuzz/afl/build.zig test/fuzz/afl/build.zig.zon
+    zig fmt build.zig build.zig.zon src examples benchmarks linters test/fuzz/build.zig test/fuzz/build.zig.zon test/fuzz/src test/fuzz/afl/build.zig test/fuzz/afl/build.zig.zon
 
 # Check formatting without changing files.
 fmt-check:
-    zig fmt --check build.zig build.zig.zon src examples benchmarks test/fuzz/build.zig test/fuzz/build.zig.zon test/fuzz/src test/fuzz/afl/build.zig test/fuzz/afl/build.zig.zon
+    zig fmt --check build.zig build.zig.zon src examples benchmarks linters test/fuzz/build.zig test/fuzz/build.zig.zon test/fuzz/src test/fuzz/afl/build.zig test/fuzz/afl/build.zig.zon
 
-# Run formatting checks and the complete test suite.
-check: fmt-check test
+# Check code style. Extra arguments are passed to codestyle.
+codestyle *args:
+    zig build codestyle -- {{ args }}
+
+# Apply safe code style fixes. Extra arguments are passed to codestyle.
+codestyle-fix *args:
+    zig build codestyle -- --fix {{ args }}
+
+# Apply safe fixes, then run formatting checks and the complete test suite.
+check:
+    just codestyle-fix
+    just fmt-check
+    just test
 
 # Run the complete test suite. Extra arguments are forwarded to `zig build`.
 test *args:

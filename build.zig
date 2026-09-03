@@ -298,6 +298,39 @@ pub fn build(b: *std.Build) void {
     // instances of the test suites that nothing installs or runs, so Zig stops
     // after semantic analysis and a save never pays for codegen or linking.
     const check_step = b.step("check", "Semantic-analyze the test suites without running them");
+    const codestyle_exe = b.addExecutable(.{
+        .name = "codestyle",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("linters/codestyle/main.zig"),
+            .target = b.graph.host,
+            .optimize = optimize,
+        }),
+    });
+    const run_codestyle = b.addRunArtifact(codestyle_exe);
+    if (b.args) |args| {
+        run_codestyle.addArgs(args);
+    } else {
+        run_codestyle.addArgs(&.{
+            "build.zig",
+            "src",
+            "examples",
+            "benchmarks",
+            "test/fuzz/build.zig",
+            "test/fuzz/src",
+            "linters",
+        });
+    }
+    b.step("codestyle", "Check or fix deterministic Zig code style rules").dependOn(&run_codestyle.step);
+
+    const codestyle_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("linters/codestyle/test.zig"),
+            .target = b.graph.host,
+            .optimize = optimize,
+        }),
+    });
+    check_step.dependOn(&codestyle_tests.step);
+    test_step.dependOn(&b.addRunArtifact(codestyle_tests).step);
     const parallel_test_prerequisites = testBarrier(b, "run parallel test prerequisites");
     const transport_test_prerequisites = testBarrier(b, "run transport test prerequisites");
     const schema_test_prerequisites = testBarrier(b, "run schema test prerequisites");
