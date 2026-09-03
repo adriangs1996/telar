@@ -5,10 +5,7 @@ const builtin = @import("builtin");
 /// executable.
 ///
 /// Returns a `LazyPath` to the resulting fuzzing executable.
-pub fn addInstrumentedExe(
-    b: *std.Build,
-    obj: *std.Build.Step.Compile,
-) std.Build.LazyPath {
+pub fn addInstrumentedExe(b: *std.Build, obj: *std.Build.Step.Compile) std.Build.LazyPath {
     // Force the build system to produce the binary artifact even though we
     // only consume the LLVM bitcode below. Without this, the dependency
     // tracking does not wire up correctly.
@@ -37,16 +34,23 @@ pub fn addInstrumentedExe(
     return fuzz_exe;
 }
 
+/// Inputs `afl-fuzz` needs: the instrumented executable, the seed corpus it
+/// reads and the directory where it stores findings.
+pub const FuzzerRun = struct {
+    exe: std.Build.LazyPath,
+    corpus_dir: std.Build.LazyPath,
+    output_dir: std.Build.LazyPath,
+};
+
 /// Creates a run step that invokes `afl-fuzz` with the given instrumented
 /// executable, input corpus directory, and output directory.
 ///
 /// Returns the `Run` step so callers can wire it into a build step.
-pub fn addFuzzerRun(
-    b: *std.Build,
-    exe: std.Build.LazyPath,
-    corpus_dir: std.Build.LazyPath,
-    output_dir: std.Build.LazyPath,
-) *std.Build.Step.Run {
+///
+/// ```zig
+/// const run = addFuzzerRun(b, .{ .exe = exe, .corpus_dir = corpus, .output_dir = b.path("afl-out") });
+/// ```
+pub fn addFuzzerRun(b: *std.Build, fuzzer: FuzzerRun) *std.Build.Step.Run {
     const run = b.addSystemCommand(&.{
         b.findProgram(&.{"afl-fuzz"}, &.{}) catch
             @panic("Could not find 'afl-fuzz', which is required to run"),
@@ -60,11 +64,11 @@ pub fn addFuzzerRun(
             "1",
         );
     }
-    run.addDirectoryArg(corpus_dir);
+    run.addDirectoryArg(fuzzer.corpus_dir);
     run.addArgs(&.{"-o"});
-    run.addDirectoryArg(output_dir);
+    run.addDirectoryArg(fuzzer.output_dir);
     run.addArgs(&.{"--"});
-    run.addFileArg(exe);
+    run.addFileArg(fuzzer.exe);
     return run;
 }
 

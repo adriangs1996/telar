@@ -9,7 +9,9 @@ const probe =
 pub export fn zig_fuzz_init() callconv(.c) void {}
 
 pub export fn zig_fuzz_test(buf: [*]const u8, len: usize) callconv(.c) void {
-    if (len == 0) return;
+    if (len == 0) {
+        return;
+    }
 
     const input = buf[1..len];
     const chunk_size = @as(usize, buf[0] % 32) + 1;
@@ -94,5 +96,7 @@ fn mergeInput(a: escape.InputScanner.Event, b: escape.InputScanner.Event) escape
 }
 
 fn expectEqual(actual: anytype, expected: @TypeOf(actual), message: []const u8) void {
-    if (!std.meta.eql(actual, expected)) std.debug.panic("{s}", .{message});
+    if (!std.meta.eql(actual, expected)) {
+        std.debug.panic("{s}", .{message});
+    }
 }

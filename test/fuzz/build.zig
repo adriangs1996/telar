@@ -121,12 +121,11 @@ pub fn build(b: *std.Build) void {
         b.getInstallStep().dependOn(&install.step);
 
         const corpus_dir = addSeedCorpus(b, fuzzer);
-        const run = afl.addFuzzerRun(
-            b,
-            exe,
-            corpus_dir,
-            b.path(b.fmt("afl-out/{s}", .{fuzzer.name})),
-        );
+        const run = afl.addFuzzerRun(b, .{
+            .exe = exe,
+            .corpus_dir = corpus_dir,
+            .output_dir = b.path(b.fmt("afl-out/{s}", .{fuzzer.name})),
+        });
         run.setEnvironmentVariable("AFL_AUTORESUME", "1");
         b.step(
             b.fmt("run-{s}", .{fuzzer.name}),
