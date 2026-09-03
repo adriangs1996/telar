@@ -117,6 +117,9 @@ def measure(cmd, env, samples, gap, rows, cols, warmup, tokens):
             if token in visible(buf):
                 latencies.append((time.perf_counter_ns() - t0) / 1e3)
                 break
+        # Erase the token so a later repaint of this line cannot be mistaken
+        # for the next echo.
+        os.write(master, b"\x7f" * len(token))
         drain(master, gap)
 
     terminate(proc)
