@@ -492,7 +492,7 @@ pub fn main(init: std.process.Init) !void {
     // inherit HTTPS_PROXY and no `Io` worker thread is alive across the fork.
     // The CA has to exist before the fork too: the child inherits the env vars
     // that point its runtimes at it.
-    const authority: ?ca.Authority = ca.Authority.loadOrCreate(io, init.gpa, ca_key_path, ca_cert_path) catch null;
+    const authority: ?ca.Authority = ca.Authority.loadOrCreate(.{ .io = io, .allocator = init.gpa }, .{ .key = ca_key_path, .certificate = ca_cert_path }) catch null;
 
     const proxy_port = if (authority != null) proxy.reservePort(8099, 20) else null;
     if (proxy_port) |port| {

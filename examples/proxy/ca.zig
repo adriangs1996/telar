@@ -37,6 +37,16 @@ const backdate_seconds: i64 = 3600;
 const max_cert_len = 1024;
 const max_pem_len = 2 * max_cert_len;
 
+pub const Resources = struct {
+    io: Io,
+    allocator: std.mem.Allocator,
+};
+
+pub const AuthorityFiles = struct {
+    key: []const u8,
+    certificate: []const u8,
+};
+
 pub const Pair = struct {
     key_pair: x509.KeyPair,
     cert_buf: [max_cert_len]u8 = undefined,
@@ -68,13 +78,13 @@ pub const Authority = struct {
 
     /// Loads the CA from `key_path`/`cert_path`, generating and persisting one
     /// on first run.
-    pub fn loadOrCreate(io: Io, gpa: std.mem.Allocator, key_path: []const u8, cert_path: []const u8) Error!Authority {
-        if (load(io, gpa, key_path, cert_path)) |pair| {
+    pub fn loadOrCreate(resources: Resources, files: AuthorityFiles) Error!Authority {
+        if (load(resources.io, resources.allocator, files.key, files.certificate)) |pair| {
             return .{ .pair = pair };
         } else |_| {}
 
-        const pair = try generate(io);
-        try persist(io, pair, key_path, cert_path);
+        const pair = try generate(resources.io);
+        try persist(resources.io, pair, files.key, files.certificate);
         return .{ .pair = pair };
     }
 
