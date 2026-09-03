@@ -84,7 +84,7 @@ pub const Authority = struct {
         } else |_| {}
 
         const pair = try generate(resources.io);
-        try persist(resources.io, pair, files.key, files.certificate);
+        try persist(resources.io, pair, files);
         return .{ .pair = pair };
     }
 
@@ -188,21 +188,21 @@ fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
     return pair;
 }
 
-fn persist(io: Io, pair: Pair, key_path: []const u8, cert_path: []const u8) Error!void {
+fn persist(io: Io, pair: Pair, files: AuthorityFiles) Error!void {
     const cwd: Io.Dir = .cwd();
 
     var buf: [max_pem_len]u8 = undefined;
     const cert_pem = try pair.certPem(&buf);
-    cwd.writeFile(io, .{ .sub_path = cert_path, .data = cert_pem }) catch return error.WriteFailed;
+    cwd.writeFile(io, .{ .sub_path = files.certificate, .data = cert_pem }) catch return error.WriteFailed;
 
     const key_pem = try pair.keyPem(&buf);
-    cwd.writeFile(io, .{ .sub_path = key_path, .data = key_pem }) catch return error.WriteFailed;
+    cwd.writeFile(io, .{ .sub_path = files.key, .data = key_pem }) catch return error.WriteFailed;
 
     // Narrowed after the fact, because `std.Io.Dir.CreateFileOptions` has no
     // mode. That leaves a window where the key is readable, which a PoC can
     // wear and a shipped version cannot.
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const key_path_z = std.fmt.bufPrintZ(&path_buf, "{s}", .{key_path}) catch return error.WriteFailed;
+    const key_path_z = std.fmt.bufPrintZ(&path_buf, "{s}", .{files.key}) catch return error.WriteFailed;
     if (std.c.chmod(key_path_z.ptr, 0o600) != 0) {
         return error.WriteFailed;
     }
