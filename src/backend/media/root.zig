@@ -702,7 +702,9 @@ fn sharedFrameAvailable(resource: FrameResource) bool {
         @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
         @as(u16, 0),
     );
-    if (std.posix.errno(fd) != .SUCCESS) return false;
+    if (std.posix.errno(fd) != .SUCCESS) {
+        return false;
+    }
     _ = std.c.close(fd);
     return true;
 }
