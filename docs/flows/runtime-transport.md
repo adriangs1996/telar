@@ -12,6 +12,10 @@ terminal state.
 - one borrowed `SocketChannel` for the client's lifetime;
 - one receive buffer and one send buffer, each exactly
   `core.transport.max_frame_size` bytes;
+- one `core.transport.read_buffer_size` read-ahead buffer bound to the
+  channel, so a burst of small runtime messages costs one `read` instead of
+  two per message and the length prefix never costs its own syscall. The
+  runtime binds the same kind of buffer to each client session;
 - one allocation-free `Outbox` with fixed message and copied-byte storage;
 - one receive token, while `Outbox` owns the single send token.
 

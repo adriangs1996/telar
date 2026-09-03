@@ -1922,6 +1922,9 @@ test "an identical pane resize does not emit another snapshot" {
             },
             .pane_frame => return error.RedundantFrameAfterIdenticalResize,
             .request_failed => return error.RuntimeRequestFailed,
+            // Cells are delivered ahead of pane metadata, so the shell's cwd,
+            // foreground and title may still be in flight behind the snapshot.
+            .pane_cwd, .pane_foreground, .pane_title => {},
             else => return error.UnexpectedRuntimeMessage,
         }
     }

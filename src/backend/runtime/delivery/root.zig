@@ -306,6 +306,13 @@ pub const Delivery = struct {
                 .proxy_status,
             );
 
+        // Cells win over every periodic or metadata lane. With one message in
+        // flight per client, anything sent ahead of a dirty pane costs the
+        // keystroke echo a whole round trip.
+        if (try delivery.prepareAttachment(preparation, .cells)) |prepared| {
+            return prepared;
+        }
+
         if (delivery.agent_snapshot_requested or (delivery.runtime_state_requested and
             delivery.agent_revision_sent < sources.agents.revision))
         {
@@ -404,10 +411,6 @@ pub const Delivery = struct {
         }
 
         if (try delivery.prepareAttachment(preparation, .title)) |prepared| {
-            return prepared;
-        }
-
-        if (try delivery.prepareAttachment(preparation, .cells)) |prepared| {
             return prepared;
         }
 

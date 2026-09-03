@@ -22,6 +22,7 @@ pub const Session = struct {
     key: Key,
     connection: core.transport.SocketChannel,
     receive_buffer: []u8,
+    read_buffer: []u8,
     attachments: attachment_mod.AttachmentStore = .{},
     delivery: delivery_mod.Delivery,
     role: Role = .undecided,
@@ -42,6 +43,8 @@ pub const Session = struct {
     pub fn create(gpa: std.mem.Allocator, key: Key, connection: core.transport.SocketChannel) !*Session {
         const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
         errdefer gpa.free(receive_buffer);
+        const read_buffer = try gpa.alloc(u8, core.transport.read_buffer_size);
+        errdefer gpa.free(read_buffer);
 
         var delivery = try delivery_mod.Delivery.init(gpa);
         errdefer delivery.deinit(gpa);
@@ -51,8 +54,10 @@ pub const Session = struct {
             .key = key,
             .connection = connection,
             .receive_buffer = receive_buffer,
+            .read_buffer = read_buffer,
             .delivery = delivery,
         };
+        session.connection.bindReadBuffer(read_buffer);
         return session;
     }
 
@@ -78,6 +83,7 @@ pub const Session = struct {
         session.attachments.deinit();
         session.delivery.deinit(gpa);
         gpa.free(session.receive_buffer);
+        gpa.free(session.read_buffer);
     }
 };
 
@@ -104,6 +110,7 @@ test "Session keeps its bounded buffers outside client store storage" {
     defer {
         session.delivery.deinit(std.testing.allocator);
         std.testing.allocator.free(session.receive_buffer);
+        std.testing.allocator.free(session.read_buffer);
         std.testing.allocator.destroy(session);
     }
 

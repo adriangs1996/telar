@@ -353,7 +353,7 @@ test "client event dispatch skips observation after terminal input" {
 
     const outcome = try client_events.handle(
         client,
-        .{ .input = .{} },
+        .{ .input = 0 },
         clientEventResourcesForTest(&heap),
     );
 

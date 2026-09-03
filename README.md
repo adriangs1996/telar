@@ -229,6 +229,77 @@ python3 tools/perf_gate.py \
 CI cadence and release-candidate requirements are recorded in
 [`docs/performance-gates.md`](docs/performance-gates.md).
 
+### End-to-end latency against tmux and herdr
+
+The microbenchmarks above time telar's own code. The numbers a user feels are
+end to end: from a byte written to the host terminal until the echo is
+visible, through both processes. `tools/latency_bench.sh` measures that for
+one telar binary against an isolated runtime:
+
+```sh
+zig build -Doptimize=ReleaseFast --prefix /tmp/telar-candidate
+tools/latency_bench.sh /tmp/telar-candidate/bin/telar candidate
+```
+
+How the measurement works:
+
+- `tools/echo_latency.py` opens a pty of 160x40 columns, makes the
+  multiplexer its session leader with a controlling terminal, and gives it
+  `SHELL` pointing at a script that execs `/bin/cat`. The kernel line
+  discipline of the pane's pty echoes every byte immediately, so what is timed
+  is only the multiplexer: pty read, emulation, IPC, render, host write.
+- Each sample writes one token to the pty master and waits until that token
+  is visible in the multiplexer's output. Escape sequences (CSI, OSC, DCS) are
+  stripped before matching, so a cursor move between two painted frames does
+  not hide the token. Tokens are letters that never appear as final bytes of a
+  control sequence.
+- Two token sizes matter. One byte measures the single-frame path. Two bytes
+  usually reach the child as two writes, which the runtime turns into two
+  frames: the second frame waits for the first frame's acknowledgement, which
+  the client only sends after painting. Any real keystroke in a shell that
+  redraws its prompt behaves like the two-byte case.
+- Samples: 200 per case, 50 ms apart, after a warm-up. The script reports
+  p50, p95, p99, min, max and mean in microseconds.
+- `tools/flood.py` runs `/bin/sh` in the same pty, types
+  `seq 1 300000; echo <marker>` and times until the marker is visible. The
+  marker is unique per repetition because the previous one is still on screen
+  and the diff repaints it when rows scroll. `host_bytes` is what reached the
+  host terminal: a multiplexer that folds intermediate frames writes far less.
+- Isolation is mandatory. A telar runtime reads and writes the session
+  checkpoint and `history.db` under `XDG_DATA_HOME`, and connects to the
+  socket under `TELAR_SOCKET_PATH`. The script sets all three to fresh
+  directories per pass, and unsets every inherited `TELAR_*` variable, so a
+  shell running inside telar can measure without touching the live runtime,
+  and a restored session cannot steal focus from the launched pane. The unix
+  socket path must stay under 104 bytes.
+- Comparators run through the same two scripts. tmux:
+  `tmux -L bench -f /dev/null new-session`, herdr: `herdr --session bench`
+  with `HOME` and `XDG_CONFIG_HOME` pointing at a short empty directory.
+
+Results on 2026-09-03, Apple Silicon macOS 26.6, Zig 0.16.0, ReleaseFast,
+one client, no config, everything else idle. Latencies are p50 / p99:
+
+| Multiplexer | 1 byte | 2 bytes | Flood, 300k lines |
+| --- | --- | --- | --- |
+| telar, before the pacer change | 0.49 ms / 1.01 ms | 22.3 ms / 26.0 ms | 233 ms |
+| telar, after (pacer burst credit, inline draw, socket read-ahead) | 0.51 ms / 0.91 ms | 0.64 ms / 1.38 ms | 242 - 261 ms |
+| tmux 3.7c | 0.24 ms / 0.48 ms | 0.25 ms / 0.38 ms | 220 - 226 ms |
+| herdr 0.8.2, default config | 2.91 ms / 5.29 ms | 2.91 ms / 5.41 ms | 234 - 252 ms |
+| herdr 0.7.5, a real user config | 3.11 ms / 10.9 ms | 3.16 ms / 15.9 ms | marker not shown within 60 s |
+
+Reading the table: the two-byte column is where telar used to lose two orders
+of magnitude, because the second frame of an interaction waited a whole 60 Hz
+pacer interval plus a late timer wakeup. With burst credit and inline
+presentation it sits within the run-to-run noise of the one-byte case. The
+remaining gap to tmux is structural: `std.Io.Threaded` pays one thread
+handoff per read, ingest and send, across two processes, where tmux runs one
+kqueue loop. Bare pty echo without any multiplexer measures about 15 us on the
+same machine, which is the floor for every row.
+
+Run-to-run noise on a quiet laptop is about 0.1 ms at p50 and 0.3 ms at p99;
+treat smaller differences as no verdict, as `docs/performance-gates.md`
+already requires for the microbenchmarks.
+
 The runtime observation proxy and the independent historical example use
 separate gates:
 

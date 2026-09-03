@@ -46,6 +46,25 @@ pub const GraphemeIterator = struct {
     pub fn next(it: *GraphemeIterator) ?Cluster {
         if (it.index >= it.bytes.len) return null;
 
+        // Almost every chrome string is ASCII. A printable ASCII byte that is
+        // not followed by a multi-byte sequence cannot join a cluster (only a
+        // combining mark, joiner or selector could, and those start above
+        // 0x7f), so its cluster is known without decoding a window. The width
+        // still comes from the table: the drawing core never assumes one.
+        const first = it.bytes[it.index];
+        if (first >= 0x20 and first < 0x7f and
+            (it.index + 1 == it.bytes.len or it.bytes[it.index + 1] < 0x80))
+        {
+            const start = it.index;
+            it.index += 1;
+            const single = [_]u21{first};
+            const measured = unicode.graphemeWidth(&single);
+            return .{
+                .bytes = it.bytes[start..it.index],
+                .width = if (measured.width == 0) 1 else @intCast(measured.width),
+            };
+        }
+
         // Decode a window, remembering where each codepoint began so the
         // cluster's byte length can be recovered from its codepoint length.
         var codepoints: [window]u21 = undefined;
@@ -103,6 +122,21 @@ fn isControl(codepoint: u21) bool {
 // ---------------------------------------------------------------------------
 
 const testing = std.testing;
+
+test "printable ascii measures one column with or without the fast path" {
+    var it: GraphemeIterator = .{ .bytes = "ab\u{0301}c" };
+    // 'a' takes the fast path; 'b' is followed by a combining acute and must
+    // go through the table so the mark stays attached.
+    const a = it.next().?;
+    try testing.expectEqualStrings("a", a.bytes);
+    try testing.expectEqual(@as(u8, 1), a.width);
+    const b = it.next().?;
+    try testing.expectEqualStrings("b\u{0301}", b.bytes);
+    try testing.expectEqual(@as(u8, 1), b.width);
+    const c = it.next().?;
+    try testing.expectEqualStrings("c", c.bytes);
+    try testing.expect(it.next() == null);
+}
 
 test "a control character becomes a blank cell rather than its own byte" {
     // The diff emits cell text unchanged. A newline stored in a cell would

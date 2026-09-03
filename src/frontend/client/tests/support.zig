@@ -228,6 +228,9 @@ pub const TestHarness = struct {
             .host_size = .{ .cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0 },
             .options = .{ .arguments = &.{}, .cwd = "/", .endpoint = "" },
         });
+        // Every frame goes through the scheduled draw task, so tests observe
+        // pending state deterministically. The inline path has its own test.
+        harness.client.presenter.pacer = .{ .burst = 0, .credits = 0 };
     }
 
     pub fn deinit(harness: *TestHarness) void {

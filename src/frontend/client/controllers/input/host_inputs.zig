@@ -65,6 +65,10 @@ pub fn buildRouter(config: Config) !Router {
 pub const State = struct {
     file: File,
     router: Router,
+    /// The one in-flight TTY read lands here. The read task owns it until
+    /// its `.input` completion, and routing finishes before the next read is
+    /// armed, so the event carries a length instead of 4 KiB of bytes.
+    chunk: Chunk = .{},
     read_pending: bool = false,
     presentation_revision: u64 = 0,
     input_timeout: deadline_timer.Scheduler = .{},
@@ -160,22 +164,41 @@ pub fn scheduleRead(client: *Client) !void {
     }
 
     state.read_pending = true;
-    client.select.concurrent(.input, read, .{ client.io, state.file }) catch |err| {
+    client.select.concurrent(.input, read, .{ client.io, state.file, &state.chunk }) catch |err| {
         state.read_pending = false;
 
         return err;
     };
 }
 
-/// Releases one TTY read, routes its bytes and rearms input work.
+/// Releases one TTY read that completed into the state-owned chunk, routes
+/// its bytes and rearms input work.
 ///
 /// ```zig
-/// if (try host_inputs.handleRead(client, result)) return 0;
+/// if (try host_inputs.handleOwnedRead(client, result)) return 0;
+/// ```
+pub fn handleOwnedRead(client: *Client, result: anyerror!u16) !bool {
+    const state = &client.host_input;
+    state.read_pending = false;
+    state.chunk.len = try result;
+    return routeChunk(client);
+}
+
+/// Routes one caller-provided chunk as if the TTY read had produced it.
+///
+/// ```zig
+/// if (try host_inputs.handleRead(client, chunk)) return 0;
 /// ```
 pub fn handleRead(client: *Client, result: anyerror!Chunk) !bool {
     const state = &client.host_input;
     state.read_pending = false;
-    const chunk = try result;
+    state.chunk = try result;
+    return routeChunk(client);
+}
+
+fn routeChunk(client: *Client) !bool {
+    const state = &client.host_input;
+    const chunk = &state.chunk;
     if (chunk.len == 0) {
         return true;
     }
@@ -283,11 +306,8 @@ fn synchronizeBindingTimeout(client: *Client) !void {
     }
 }
 
-fn read(io: Io, file: File) anyerror!Chunk {
-    var chunk: Chunk = .{};
-    chunk.len = @intCast(try file.readStreaming(io, &.{&chunk.bytes}));
-
-    return chunk;
+fn read(io: Io, file: File, chunk: *Chunk) anyerror!u16 {
+    return @intCast(try file.readStreaming(io, &.{&chunk.bytes}));
 }
 
 test "host input configuration owns router timeouts" {

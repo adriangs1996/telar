@@ -61,7 +61,7 @@ pub fn handle(client: *Client, event: Event, resources: Resources) !Outcome {
 fn route(client: *Client, event: Event, resources: Resources) !Outcome {
     switch (event) {
         .input => |result| {
-            if (try host_inputs.handleRead(client, result)) {
+            if (try host_inputs.handleOwnedRead(client, result)) {
                 return .{ .exit = 0 };
             }
         },

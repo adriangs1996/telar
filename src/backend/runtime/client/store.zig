@@ -138,6 +138,7 @@ test "Store resolves only the retained client generation" {
     defer {
         session.delivery.deinit(std.testing.allocator);
         std.testing.allocator.free(session.receive_buffer);
+        std.testing.allocator.free(session.read_buffer);
         std.testing.allocator.destroy(session);
     }
 

@@ -27,6 +27,7 @@ pub const State = struct {
     connection: *core.transport.SocketChannel,
     send_buffer: []u8,
     receive_buffer: []u8,
+    read_buffer: []u8,
     outbox: client_outbox.Outbox = .{},
     receive_pending: bool = false,
 
@@ -38,12 +39,16 @@ pub const State = struct {
     pub fn init(gpa: std.mem.Allocator, connection: *core.transport.SocketChannel) !State {
         const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
         errdefer gpa.free(receive_buffer);
+        const read_buffer = try gpa.alloc(u8, core.transport.read_buffer_size);
+        errdefer gpa.free(read_buffer);
         const send_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+        connection.bindReadBuffer(read_buffer);
 
         return .{
             .connection = connection,
             .send_buffer = send_buffer,
             .receive_buffer = receive_buffer,
+            .read_buffer = read_buffer,
         };
     }
 
@@ -54,8 +59,10 @@ pub const State = struct {
     /// state.deinit(gpa);
     /// ```
     pub fn deinit(state: *State, gpa: std.mem.Allocator) void {
+        state.connection.bindReadBuffer(&.{});
         gpa.free(state.send_buffer);
         gpa.free(state.receive_buffer);
+        gpa.free(state.read_buffer);
     }
 
     /// Sends the ordered synchronous frames required before the event loop

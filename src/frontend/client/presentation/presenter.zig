@@ -86,7 +86,11 @@ pub const Resources = struct {
 
 pub const Scheduler = struct {
     context: *anyopaque,
+    /// Arms one draw at an absolute deadline; the owner delivers `.draw`.
     draw: *const fn (*anyopaque, u64) anyerror!void,
+    /// Presents synchronously, on the caller's thread, before returning. A
+    /// frame the pacer lets through does not pay a timer task and a wakeup.
+    draw_now: *const fn (*anyopaque) anyerror!void,
     media: *const fn (*anyopaque, u64) anyerror!void,
 };
 
@@ -202,14 +206,19 @@ pub fn requestDraw(presenter: *Presenter) !void {
     }
 
     const now_ns = monotonic(presenter.io);
-    const deadline_ns = presenter.pacer.waitUntil(now_ns) orelse now_ns;
-    if (deadline_ns != now_ns) {
+    presenter.draw_pending = true;
+    if (presenter.pacer.waitUntil(now_ns)) |deadline_ns| {
         presenter.pacer.noteThrottled();
+        presenter.draw_due_ns = deadline_ns;
+        presenter.scheduler.draw(presenter.scheduler.context, deadline_ns) catch |err| {
+            presenter.draw_pending = false;
+            return err;
+        };
+        return;
     }
 
-    presenter.draw_pending = true;
-    presenter.draw_due_ns = deadline_ns;
-    presenter.scheduler.draw(presenter.scheduler.context, deadline_ns) catch |err| {
+    presenter.draw_due_ns = now_ns;
+    presenter.scheduler.draw_now(presenter.scheduler.context) catch |err| {
         presenter.draw_pending = false;
         return err;
     };

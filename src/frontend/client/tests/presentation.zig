@@ -118,6 +118,25 @@ test "presentation folds repeated observations into one draw task" {
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 }
 
+test "an observation with pacer credit presents inline without a draw task" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    // The harness pacer schedules every frame; a real client holds burst credit.
+    client.presenter.pacer = .{};
+    const drawn_before = client.presenter.pacer.stats.drawn;
+
+    _ = try client.model.setDiagnostic("inline revision", .{});
+    try presentation_lifecycle.observe(client);
+
+    try std.testing.expect(!client.presenter.draw_pending);
+    try std.testing.expectEqual(@as(usize, 0), client.presenter.pending_updates);
+    try std.testing.expectEqual(drawn_before + 1, client.presenter.pacer.stats.drawn);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+}
+
 test "host input presentation state schedules only through observation" {
     var harness: TestHarness = undefined;
     try harness.init();

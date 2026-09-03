@@ -53,8 +53,16 @@ and the last successful presentation.
 An identical observation does nothing while a draw is pending. A newer
 observation increments the saturating `pending_updates` count but retains the
 same draw task. Once no draw task is pending, an observation newer than the
-last successful presentation schedules one task. The pacer emits an idle frame
-immediately and limits burst presentation to one frame per `1 / 60` second.
+last successful presentation either presents inline or schedules one task.
+
+The pacer holds burst credit: `pace.default_burst` frames accrue while the UI
+is quiet, one per `1 / 60` second. A frame that finds credit presents
+synchronously through the scheduler's `draw_now` port, on the event-loop
+thread, before the dispatcher returns; it never pays a timer task or a
+wakeup. Only a frame that finds no credit arms the paced `.draw` task for the
+next cadence slot. One interaction is usually two or three frames, because the
+runtime folds output that arrives while a frame is unacknowledged into the
+next frame, and the credit exists so none of them wait an interval.
 
 The `presentation_projection` adapter captures one bounded immutable projection
 from the concrete client aggregate. It includes the model version, immutable
@@ -133,7 +141,10 @@ one draw task, one media task and the latest revisions.
   presentation commits preserve newer pane work` and `fullscreen presentation
   commits include hidden panes` prove bounded commit semantics.
 - `presentation folds repeated observations into one draw task` proves that an
-  identical observation adds no work and newer revisions share one task.
+  identical observation adds no work and newer revisions share one task. The
+  client test harness zeroes pacer burst so every frame takes the scheduled
+  path; `an observation with pacer credit presents inline without a draw task`
+  proves the synchronous path.
 - `host input presentation state schedules only through observation` proves
   that prefix state cannot schedule a frame before the presenter observes it.
 - `attachment modal captures semantic keys until escape closes it` proves that

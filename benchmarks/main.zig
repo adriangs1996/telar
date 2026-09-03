@@ -845,7 +845,7 @@ fn runPacer(context: *PacerContext, iterations: usize) !u64 {
         } else {
             context.pacer.record(context.now_ns, null, 1);
         }
-        checksum +%= context.pacer.next_deadline.?;
+        checksum +%= context.pacer.anchor_ns.?;
     }
     return checksum;
 }

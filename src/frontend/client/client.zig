@@ -73,6 +73,7 @@ const config_reload = @import("resources/config_reload.zig");
 const host_inputs = @import("controllers/input/host_inputs.zig");
 const notification_timers = @import("resources/notification_timers.zig");
 const plugin_actions = @import("controllers/configuration/plugin_actions.zig");
+const presentation_lifecycle = @import("presentation/presentation_lifecycle.zig");
 const presenter_mod = @import("presentation/presenter.zig");
 const request_lifecycle_mod = @import("connection/request_lifecycle.zig");
 const runtime_transport_mod = @import("connection/runtime_transport.zig");
@@ -84,7 +85,8 @@ pub const AppearanceThemes = struct {
 };
 
 pub const ClientEvent = union(enum) {
-    input: anyerror!InputChunk,
+    /// Bytes read into `host_input.chunk`; zero is EOF.
+    input: anyerror!u16,
     input_timeout: anyerror!void,
     binding_timeout: anyerror!void,
     capability_timeout: anyerror!void,
@@ -261,6 +263,7 @@ pub fn init(params: Params) !*Client {
         .scheduler = .{
             .context = client,
             .draw = scheduleDraw,
+            .draw_now = drawNow,
             .media = scheduleMedia,
         },
         .metrics = &client.telemetry.metrics,
@@ -273,6 +276,11 @@ pub fn init(params: Params) !*Client {
 fn scheduleDraw(context: *anyopaque, deadline_ns: u64) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     try client.select.concurrent(.draw, waitForPresentation, .{ client.io, deadline_ns });
+}
+
+fn drawNow(context: *anyopaque) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    try presentation_lifecycle.handleDraw(client, {});
 }
 
 fn scheduleMedia(context: *anyopaque, deadline_ns: u64) !void {
