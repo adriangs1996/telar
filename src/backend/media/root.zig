@@ -775,7 +775,9 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
     var fields = std.mem.splitScalar(u8, control, ',');
     while (fields.next()) |field| {
         const equals = std.mem.indexOfScalar(u8, field, '=') orelse return null;
-        if (equals != 1 or equals + 1 == field.len) return null;
+        if (equals != 1 or equals + 1 == field.len) {
+            return null;
+        }
         const value = field[equals + 1 ..];
         switch (field[0]) {
             'a' => {
