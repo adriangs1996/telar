@@ -199,7 +199,9 @@ const Batch = struct {
     }
 
     fn pushResize(batch: *Batch, size: schema.TerminalSize) bool {
-        if (batch.event_count == batch.events.len) return false;
+        if (batch.event_count == batch.events.len) {
+            return false;
+        }
         batch.events[batch.event_count] = .{ .resize = size };
         batch.event_count += 1;
         return true;
