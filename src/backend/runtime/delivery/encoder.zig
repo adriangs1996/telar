@@ -171,6 +171,8 @@ fn encodeHistoryResult(buffer: []u8, result: *const history.model.QueryResult, s
                 .interrupted => .interrupted,
             },
             .author = entry.author,
+            .origin = entry.origin,
+            .provider = entry.provider,
             .command = entry.command,
             .cwd = entry.cwd,
             .workspace_path = entry.workspace_path,

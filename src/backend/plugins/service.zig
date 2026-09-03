@@ -59,6 +59,8 @@ pub const Package = struct {
 const Frame = struct {
     gpa: std.mem.Allocator,
     event_id: u64,
+    pane: core.schema.PaneId,
+    pane_generation: u64,
     storage: []u8,
     len: usize,
 
@@ -143,7 +145,12 @@ const Worker = struct {
                 .plugin_id = worker.spec.plugin_id,
                 .digest = worker.spec.digest,
                 .generation = worker.spec.generation,
-            }, .{ .event_id = frame.event_id, .bytes = frame.bytes() }) catch |err| {
+            }, .{
+                .event_id = frame.event_id,
+                .bytes = frame.bytes(),
+                .pane = frame.pane,
+                .pane_generation = frame.pane_generation,
+            }) catch |err| {
                 if (err != error.WorkerEventFailed) {
                     worker.closeSession(io);
                     worker.recordRestart(io);
@@ -281,8 +288,16 @@ pub const Service = struct {
         const bytes = try service.gpa.alloc(u8, size);
         errdefer service.gpa.free(bytes);
         const payload = try protocol.encodeExchange(bytes, event_id, generation, captured);
+        const representative = captured.request orelse captured.response orelse return error.EmptyCapture;
         const frame = try service.gpa.create(Frame);
-        frame.* = .{ .gpa = service.gpa, .event_id = event_id, .storage = bytes, .len = payload.len };
+        frame.* = .{
+            .gpa = service.gpa,
+            .event_id = event_id,
+            .pane = representative.pane.id,
+            .pane_generation = representative.pane.generation,
+            .storage = bytes,
+            .len = payload.len,
+        };
         return frame;
     }
 };
@@ -331,6 +346,8 @@ test "effect authorization checks exact identity, declaration and grant" {
         .digest = digest,
         .generation = 7,
         .event_id = 1,
+        .pane = @enumFromInt(3),
+        .pane_generation = 4,
         .storage = &storage,
         .batch = .{ .len = 1 },
     };
@@ -367,6 +384,8 @@ test "worker queue drops the oldest frame when full" {
         frame.* = .{
             .gpa = std.testing.allocator,
             .event_id = index,
+            .pane = @enumFromInt(1),
+            .pane_generation = 1,
             .storage = try std.testing.allocator.alloc(u8, 1),
             .len = 1,
         };

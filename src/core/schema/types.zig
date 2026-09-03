@@ -35,6 +35,8 @@ pub const max_pane_text_bytes = 64 * 1024;
 pub const max_pane_text_input_bytes = 16 * 1024;
 pub const max_notification_title_bytes = 48;
 pub const max_notification_message_bytes = 192;
+pub const max_history_provider_bytes = 64;
+pub const max_history_tool_call_id_bytes = 256;
 pub const max_client_layout_clients = 8;
 pub const max_client_layout_tabs = max_panes_per_tab;
 pub const max_client_layout_nodes = max_panes_per_tab * 2 - 1;
@@ -257,6 +259,12 @@ pub const HistoryAuthor = enum(u8) {
     agent = 1,
 };
 
+pub const HistoryOrigin = enum(u8) {
+    pane = 0,
+    hook = 1,
+    plugin = 2,
+};
+
 pub const HistoryAuthorFilter = enum(u8) {
     all = 0,
     human = 1,
@@ -287,6 +295,8 @@ pub const HistoryEntry = struct {
     exit_code: ?i32,
     status: HistoryStatus,
     author: HistoryAuthor = .human,
+    origin: HistoryOrigin = .pane,
+    provider: []const u8 = "",
     command: []const u8,
     cwd: []const u8,
     workspace_path: []const u8,

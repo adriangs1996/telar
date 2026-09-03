@@ -187,8 +187,9 @@ pub const Worker = struct {
         defer value.deinit(worker.gpa);
         const started = std.Io.Timestamp.now(context.io, .awake);
         const result = if (worker.database) |*database| write: {
-            database.insertCommand(value) catch |err| break :write err;
-            if (value.output_observed > 0) {
+            if (value.origin != .pane) database.ensureCommandSession(value) catch |err| break :write err;
+            const inserted = database.insertCommand(value) catch |err| break :write err;
+            if (inserted and value.output_observed > 0) {
                 database.insertCommandOutput(value) catch |err| break :write err;
             }
 

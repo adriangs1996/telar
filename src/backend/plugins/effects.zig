@@ -54,6 +54,8 @@ pub const Result = struct {
     digest: core.plugin.Digest,
     generation: u64,
     event_id: u64,
+    pane: core.schema.PaneId,
+    pane_generation: u64,
     storage: []u8,
     batch: Batch,
 

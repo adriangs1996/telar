@@ -9,7 +9,7 @@ pub const max_query_bytes = schema.max_history_query_bytes;
 pub const max_results = schema.max_history_results;
 pub const max_result_payload_bytes = core.transport.max_frame_size;
 pub const encoded_result_header_bytes = 11;
-pub const encoded_entry_overhead_bytes = 46;
+pub const encoded_entry_overhead_bytes = 49;
 
 pub const SessionId = [16]u8;
 
@@ -148,11 +148,14 @@ pub const CommandFinished = struct {
     exit_code: ?i32,
     status: CommandStatus,
     author: schema.HistoryAuthor,
+    origin: schema.HistoryOrigin = .pane,
     cols: u16,
     rows: u16,
     command: []u8,
     cwd: []u8,
     workspace_path: []u8,
+    provider: []u8 = &.{},
+    tool_call_id: []u8 = &.{},
     command_truncated: bool,
     output: []u8,
     output_truncated: bool,
@@ -160,7 +163,8 @@ pub const CommandFinished = struct {
 
     pub fn deinit(value: *CommandFinished, gpa: std.mem.Allocator) void {
         const allocation_len = @sizeOf(CommandFinished) + value.command.len +
-            value.cwd.len + value.workspace_path.len + value.output.len;
+            value.cwd.len + value.workspace_path.len + value.provider.len +
+            value.tool_call_id.len + value.output.len;
         const allocation: [*]align(@alignOf(CommandFinished)) u8 = @ptrCast(value);
         gpa.free(allocation[0..allocation_len]);
     }
@@ -578,14 +582,17 @@ pub const Entry = struct {
     exit_code: ?i32,
     status: CommandStatus,
     author: schema.HistoryAuthor,
+    origin: schema.HistoryOrigin = .pane,
     command: []u8,
     cwd: []u8,
     workspace_path: []u8,
+    provider: []u8 = &.{},
 
     pub fn deinit(entry: *Entry, gpa: std.mem.Allocator) void {
         gpa.free(entry.command);
         gpa.free(entry.cwd);
         gpa.free(entry.workspace_path);
+        gpa.free(entry.provider);
     }
 };
 

@@ -103,6 +103,11 @@ fn print(io: Io, results: core.schema.HistoryResultsView) !void {
         try writer.print("{d}ms  ", .{duration_ms});
         try writeField(writer, entry.cwd);
         try writer.writeAll("  ");
+        if (entry.author == .agent and entry.provider.len != 0) {
+            try writer.writeAll("\x1b[2m[");
+            try writeField(writer, entry.provider);
+            try writer.writeAll("]\x1b[22m ");
+        }
         try writeField(writer, entry.command);
         try writer.writeByte('\n');
     }

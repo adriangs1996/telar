@@ -115,6 +115,8 @@ pub const Session = struct {
             .digest = spec.digest,
             .generation = spec.generation,
             .event_id = decoded.event_id,
+            .pane = request.pane,
+            .pane_generation = request.pane_generation,
             .storage = storage,
             .batch = decoded.batch,
         };
@@ -153,4 +155,6 @@ pub const Spec = struct {
 pub const Request = struct {
     event_id: u64,
     bytes: []u8,
+    pane: @import("telar-core").schema.PaneId,
+    pane_generation: u64,
 };

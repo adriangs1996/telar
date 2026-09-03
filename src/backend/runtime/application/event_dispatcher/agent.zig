@@ -261,6 +261,7 @@ pub fn Dispatcher(comptime Application: type) type {
                 .panes = &application.model.panes,
                 .agents = &application.model.agents,
                 .service = application.plugin_service,
+                .history_service = application.history_service,
             });
         }
 

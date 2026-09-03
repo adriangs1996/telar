@@ -1,6 +1,6 @@
 # ProxyTLS tap and agent command persistence — handoff
 
-Status: P1-P2 complete on 2026-09-03; P3-P7 not started. This document is the
+Status: P1-P3 complete on 2026-09-03; P4-P7 not started. This document is the
 handoff for the remaining implementation. Every file:line below was verified
 against commit `46db649` (`main`) on that date; symbols outlive line numbers,
 so search for the symbol when a line has moved.
@@ -440,6 +440,10 @@ bounded effect batch.
   the exchange finished; relay never waits on a listener."
 
 ### P3. History effect and schema
+
+Status: complete on 2026-09-03. `zig fmt src`, `zig build check`, and
+`zig build test` pass. Agent-origin persistence is documented in
+`docs/flows/agent-command-history.md`.
 
 - Schema v5: `command.origin INTEGER NOT NULL DEFAULT 0` (0 pane, 1 hook,
   2 plugin), `command.provider TEXT NULL`, `command.tool_call_id TEXT NULL`

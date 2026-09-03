@@ -5,6 +5,7 @@ const core = @import("telar-core");
 const agent_mod = @import("../../../agent/root.zig");
 const pane_mod = @import("../../../pane/root.zig");
 const plugins = @import("../../../plugins/root.zig");
+const history = @import("../../../history/root.zig");
 
 const schema = core.schema;
 
@@ -12,6 +13,7 @@ pub const Resources = struct {
     panes: *pane_mod.PaneStore,
     agents: *agent_mod.Tracker,
     service: *plugins.Service,
+    history_service: *history.Service,
 };
 
 /// Defines runtime operations supplied by application composition.
@@ -62,7 +64,7 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
 
             var changed = false;
             for (result.batch.slice()) |effect| switch (effect) {
-                .record_command => {},
+                .record_command => |record| adapter.recordCommand(result, record),
                 .agent_evidence => |evidence| changed = adapter.applyAgentEvidence(evidence) or changed,
                 .notification => |notification| {
                     if (adapter.publishNotification(notification)) changed = true;
@@ -70,6 +72,39 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
             };
 
             if (changed) port.pump_clients(adapter.context);
+        }
+
+        fn recordCommand(adapter: *Self, result: *const plugins.EffectResult, record: plugins.effects.RecordCommand) void {
+            const pane = adapter.resources.panes.resolve(.{ .id = result.pane, .generation = result.pane_generation }) orelse return;
+            if (pane.exit != null) {
+                return;
+            }
+
+            pane.history_sequence += 1;
+            const duration = std.math.cast(i64, record.duration_ms) orelse std.math.maxInt(i64);
+            _ = adapter.resources.history_service.recordAgentCommand(pane.io, .{
+                .context = .{
+                    .session_id = pane.history_session_id,
+                    .pane_id = pane.id,
+                    .location = pane.location,
+                    .sequence = pane.history_sequence,
+                    .workspace_path = pane.workspace_path,
+                    .cols = pane.history_observer.terminal.cols,
+                    .rows = pane.history_observer.terminal.rows,
+                },
+                .command = .{
+                    .bytes = record.command,
+                    .cwd = record.cwd,
+                    .started_at_ms = record.started_at_ms,
+                    .duration_ns = duration *| std.time.ns_per_ms,
+                    .exit_code = record.exit_code,
+                    .status = .completed,
+                    .truncated = false,
+                },
+                .provider = record.provider,
+                .origin = .plugin,
+                .redact = record.redact,
+            });
         }
 
         fn applyAgentEvidence(adapter: *Self, evidence: plugins.effects.AgentEvidence) bool {
