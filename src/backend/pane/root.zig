@@ -88,7 +88,9 @@ pub const GraphicsLimits = struct {
             limits.placements_per_pane < 2 or limits.placements_per_pane > core.graphics.max_placements_per_pane or
             limits.payload_bytes == 0 or limits.payload_bytes > core.graphics.max_encoded_chunk_bytes or
             limits.chunks_per_image == 0 or limits.chunks_per_image > core.graphics.max_chunks_per_image)
+        {
             return error.InvalidGraphicsLimits;
+        }
     }
 };
 
@@ -124,7 +126,9 @@ pub const GraphicsBudget = struct {
         defer budget.mutex.unlock();
         const pane_next = std.math.add(usize, pane.used, bytes) catch return false;
         const global_next = std.math.add(usize, budget.used, bytes) catch return false;
-        if (pane_next > pane.limit or global_next > budget.limit) return false;
+        if (pane_next > pane.limit or global_next > budget.limit) {
+            return false;
+        }
         pane.used = pane_next;
         budget.used = global_next;
         return true;
@@ -182,7 +186,9 @@ pub const PaneMediaAllocator = struct {
     /// ```
     pub fn adoptMapping(media: *PaneMediaAllocator, placeholder: []const u8, pixels: []align(std.heap.page_size_min) u8) bool {
         for (&media.mappings) |*slot| {
-            if (slot.* != null) continue;
+            if (slot.* != null) {
+                continue;
+            }
             slot.* = .{ .placeholder = placeholder.ptr, .pixels = pixels };
             return true;
         }
@@ -199,7 +205,9 @@ pub const PaneMediaAllocator = struct {
         const bytes = data orelse return null;
         for (media.mappings) |slot| {
             const mapping = slot orelse continue;
-            if (mapping.placeholder == bytes.ptr) return mapping.pixels;
+            if (mapping.placeholder == bytes.ptr) {
+                return mapping.pixels;
+            }
         }
         return bytes;
     }
@@ -207,7 +215,9 @@ pub const PaneMediaAllocator = struct {
     fn releaseMapping(media: *PaneMediaAllocator, memory: []u8) void {
         for (&media.mappings) |*slot| {
             const mapping = slot.* orelse continue;
-            if (mapping.placeholder != memory.ptr) continue;
+            if (mapping.placeholder != memory.ptr) {
+                continue;
+            }
             std.posix.munmap(mapping.pixels);
             media.releaseManual(mapping.pixels.len);
             slot.* = null;
@@ -218,7 +228,9 @@ pub const PaneMediaAllocator = struct {
     fn isMapped(media: *const PaneMediaAllocator, memory: []u8) bool {
         for (media.mappings) |slot| {
             const mapping = slot orelse continue;
-            if (mapping.placeholder == memory.ptr) return true;
+            if (mapping.placeholder == memory.ptr) {
+                return true;
+            }
         }
         return false;
     }
@@ -247,7 +259,9 @@ pub const PaneMediaAllocator = struct {
 
     fn alloc(context: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
-        if (!media.reserveManual(len)) return null;
+        if (!media.reserveManual(len)) {
+            return null;
+        }
         return media.child.rawAlloc(len, alignment, ret_addr) orelse {
             media.releaseManual(len);
             return null;
@@ -256,25 +270,41 @@ pub const PaneMediaAllocator = struct {
 
     fn resize(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
-        if (media.isMapped(memory)) return false;
-        if (new_len > memory.len and !media.reserveManual(new_len - memory.len)) return false;
-        if (!media.child.rawResize(memory, alignment, new_len, ret_addr)) {
-            if (new_len > memory.len) media.releaseManual(new_len - memory.len);
+        if (media.isMapped(memory)) {
             return false;
         }
-        if (new_len < memory.len) media.releaseManual(memory.len - new_len);
+        if (new_len > memory.len and !media.reserveManual(new_len - memory.len)) {
+            return false;
+        }
+        if (!media.child.rawResize(memory, alignment, new_len, ret_addr)) {
+            if (new_len > memory.len) {
+                media.releaseManual(new_len - memory.len);
+            }
+            return false;
+        }
+        if (new_len < memory.len) {
+            media.releaseManual(memory.len - new_len);
+        }
         return true;
     }
 
     fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
-        if (media.isMapped(memory)) return null;
-        if (new_len > memory.len and !media.reserveManual(new_len - memory.len)) return null;
+        if (media.isMapped(memory)) {
+            return null;
+        }
+        if (new_len > memory.len and !media.reserveManual(new_len - memory.len)) {
+            return null;
+        }
         const result = media.child.rawRemap(memory, alignment, new_len, ret_addr) orelse {
-            if (new_len > memory.len) media.releaseManual(new_len - memory.len);
+            if (new_len > memory.len) {
+                media.releaseManual(new_len - memory.len);
+            }
             return null;
         };
-        if (new_len < memory.len) media.releaseManual(memory.len - new_len);
+        if (new_len < memory.len) {
+            media.releaseManual(memory.len - new_len);
+        }
         return result;
     }
 
@@ -331,7 +361,9 @@ pub const PtyResponseQueue = struct {
         const queue: *PtyResponseQueue = @constCast(queue_const);
         queue.mutex.lock();
         defer queue.mutex.unlock();
-        if (queue.len == 0) return null;
+        if (queue.len == 0) {
+            return null;
+        }
         return queue.bytes[queue.head][0..queue.lengths[queue.head]];
     }
 
@@ -400,7 +432,9 @@ pub const PaneInputQueue = struct {
     /// const chunk = queue.nextChunk() orelse return;
     /// ```
     pub fn nextChunk(queue: *const PaneInputQueue) ?[]const u8 {
-        if (queue.len == 0) return null;
+        if (queue.len == 0) {
+            return null;
+        }
         const run = @min(queue.len, queue.bytes.len - queue.head);
         return queue.bytes[queue.head..][0..run];
     }
@@ -436,7 +470,9 @@ pub const CwdState = struct {
 
     pub fn init(path: []const u8) !CwdState {
         var state: CwdState = .{};
-        if (!state.set(path)) return error.InvalidCwd;
+        if (!state.set(path)) {
+            return error.InvalidCwd;
+        }
         return state;
     }
 
@@ -453,16 +489,22 @@ pub const CwdState = struct {
     /// }
     /// ```
     pub fn update(state: *CwdState, path: []const u8) bool {
-        if (!validCwd(path) or std.mem.eql(u8, state.slice(), path)) return false;
+        if (!validCwd(path) or std.mem.eql(u8, state.slice(), path)) {
+            return false;
+        }
         @memcpy(state.bytes[0..path.len], path);
         state.len = @intCast(path.len);
         state.revision +%= 1;
-        if (state.revision == 0) state.revision = 1;
+        if (state.revision == 0) {
+            state.revision = 1;
+        }
         return true;
     }
 
     fn set(state: *CwdState, path: []const u8) bool {
-        if (!validCwd(path)) return false;
+        if (!validCwd(path)) {
+            return false;
+        }
         @memcpy(state.bytes[0..path.len], path);
         state.len = @intCast(path.len);
         return true;
@@ -511,9 +553,15 @@ pub const TitleState = struct {
 
 fn matchesAt(row: []const u21, needle: []const u21, fold: bool) bool {
     for (row, needle) |have, want| {
-        if (have == want) continue;
-        if (!fold or have >= 0x80 or want >= 0x80) return false;
-        if (std.ascii.toLower(@intCast(have)) != std.ascii.toLower(@intCast(want))) return false;
+        if (have == want) {
+            continue;
+        }
+        if (!fold or have >= 0x80 or want >= 0x80) {
+            return false;
+        }
+        if (std.ascii.toLower(@intCast(have)) != std.ascii.toLower(@intCast(want))) {
+            return false;
+        }
     }
     return true;
 }
@@ -943,12 +991,18 @@ pub const Pane = struct {
         var view = std.unicode.Utf8View.initUnchecked(needle);
         var iterator = view.iterator();
         while (iterator.nextCodepoint()) |codepoint| {
-            if (needle_len == needle_codepoints.len) break;
-            if (codepoint < 0x80 and std.ascii.isUpper(@intCast(codepoint))) fold = false;
+            if (needle_len == needle_codepoints.len) {
+                break;
+            }
+            if (codepoint < 0x80 and std.ascii.isUpper(@intCast(codepoint))) {
+                fold = false;
+            }
             needle_codepoints[needle_len] = codepoint;
             needle_len += 1;
         }
-        if (needle_len == 0) return .{ .count = 0, .truncated = false };
+        if (needle_len == 0) {
+            return .{ .count = 0, .truncated = false };
+        }
 
         const screen: *const vt.Screen = pane.terminal.screens.active;
         const pages = &screen.pages;
@@ -969,7 +1023,9 @@ pub const Pane = struct {
                     truncated = true;
                     break;
                 }
-                if (cell.wide == .spacer_tail or cell.wide == .spacer_head) continue;
+                if (cell.wide == .spacer_tail or cell.wide == .spacer_head) {
+                    continue;
+                }
                 row_codepoints[row_len] = if (cell.hasText()) cell.codepoint() else ' ';
                 row_columns[row_len] = @intCast(x);
                 row_len += 1;
@@ -977,7 +1033,9 @@ pub const Pane = struct {
 
             var start: usize = 0;
             while (start + needle_len <= row_len) : (start += 1) {
-                if (!matchesAt(row_codepoints[start .. start + needle_len], needle_codepoints[0..needle_len], fold)) continue;
+                if (!matchesAt(row_codepoints[start .. start + needle_len], needle_codepoints[0..needle_len], fold)) {
+                    continue;
+                }
                 if (count == storage.len) {
                     return .{ .count = count, .truncated = true };
                 }
@@ -1242,7 +1300,9 @@ pub const Pane = struct {
             const image = entry.value_ptr;
             const pixels = pane.media_allocator.imagePixels(image.data.bytes()) orelse continue;
             const image_key: core.graphics.ImageKey = .{ .image_id = image.id, .generation = image.generation };
-            if (pane.prepared_transfers.covers(image_key)) continue;
+            if (pane.prepared_transfers.covers(image_key)) {
+                continue;
+            }
             const format: core.graphics.Format = switch (image.format) {
                 .rgb => .rgb,
                 .rgba => .rgba,
@@ -1256,7 +1316,9 @@ pub const Pane = struct {
                 .byte_len = pixels.len,
             };
             _ = metadata.validate(pane.graphics_storage_limit) catch continue;
-            if (!pane.media_allocator.reserveManual(pixels.len)) continue;
+            if (!pane.media_allocator.reserveManual(pixels.len)) {
+                continue;
+            }
             const name = shared_transfer.freezeSharedPixels(pixels) orelse {
                 pane.media_allocator.releaseManual(pixels.len);
                 continue;
@@ -1287,8 +1349,12 @@ pub const Pane = struct {
     /// if (!pane.ingestSharedFrame(frame)) pane.ingestMediaOutput(frame.bytes);
     /// ```
     fn ingestSharedFrame(pane: *Pane, frame: media_mod.SharedFrameView) bool {
-        if (comptime !shared_transfer.shared_memory_supported) return false;
-        if (frame.byte_len > pane.graphics_storage_limit) return false;
+        if (comptime !shared_transfer.shared_memory_supported) {
+            return false;
+        }
+        if (frame.byte_len > pane.graphics_storage_limit) {
+            return false;
+        }
         // The emulator stamps the generation on store; validate everything
         // else now with a placeholder that passes the identity check.
         const metadata: core.graphics.Image = .{
@@ -1707,10 +1773,11 @@ pub const Pane = struct {
         const completed_commands = observation.completed_commands;
 
         const storage = &pane.media.terminal.screens.active.kitty_images;
-        if (previous_loading_id != null or storage.loading != null)
-            pane.kitty_loading_chunks +|= completed_commands
-        else
+        if (previous_loading_id != null or storage.loading != null) {
+            pane.kitty_loading_chunks +|= completed_commands;
+        } else {
             pane.kitty_loading_chunks = 0;
+        }
 
         const chunk_limit_exceeded = pane.kitty_loading_chunks > pane.graphics_limits.chunks_per_image;
         const loading = storage.loading orelse {
@@ -1725,7 +1792,10 @@ pub const Pane = struct {
             return;
         };
         if (!chunk_limit_exceeded and
-            loading.data.items.len <= pane.graphics_storage_limit) return;
+            loading.data.items.len <= pane.graphics_storage_limit)
+        {
+            return;
+        }
 
         const image_id = loading.image.id;
         loading.destroy(pane.media_allocator.allocator());
@@ -1746,9 +1816,13 @@ pub const Pane = struct {
 
     pub fn observeGraphicsDamage(pane: *Pane) void {
         const storage = &pane.media.terminal.screens.active.kitty_images;
-        if (!storage.dirty) return;
+        if (!storage.dirty) {
+            return;
+        }
         pane.graphics_revision +%= 1;
-        if (pane.graphics_revision == 0) pane.graphics_revision = 1;
+        if (pane.graphics_revision == 0) {
+            pane.graphics_revision = 1;
+        }
         storage.dirty = false;
     }
 
@@ -1759,7 +1833,9 @@ pub const Pane = struct {
     }
 
     pub fn writeMediaPty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) void {
-        if (!std.mem.startsWith(u8, response, "\x1b_G")) return;
+        if (!std.mem.startsWith(u8, response, "\x1b_G")) {
+            return;
+        }
         const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
         const media: *media_mod.Pipeline = @fieldParentPtr("stream", stream);
         const pane: *Pane = @fieldParentPtr("media", media);
@@ -1769,7 +1845,9 @@ pub const Pane = struct {
     pub fn reportSize(handler: *vt.TerminalStream.Handler) ?vt.size_report.Size {
         const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
         const pane: *Pane = @fieldParentPtr("stream", stream);
-        if (pane.size.cell_width_px == 0 or pane.size.cell_height_px == 0) return null;
+        if (pane.size.cell_width_px == 0 or pane.size.cell_height_px == 0) {
+            return null;
+        }
         return .{
             .rows = pane.size.rows,
             .columns = pane.size.cols,
@@ -1784,7 +1862,9 @@ pub const Pane = struct {
 
         pub fn emit(context: *CaptureContext, command: history.Command) void {
             const pane = context.pane;
-            if (!pane.history_session_started) return;
+            if (!pane.history_session_started) {
+                return;
+            }
             pane.history_sequence += 1;
             var author: core.schema.HistoryAuthor = .human;
             if (pane.injected_submissions.load(.monotonic) > 0) {
@@ -1806,7 +1886,11 @@ pub const Pane = struct {
                 .command = command,
             });
             if (context.observation_stats) |stats| {
-                if (submitted) stats.captured += 1 else stats.dropped += 1;
+                if (submitted) {
+                    stats.captured += 1;
+                } else {
+                    stats.dropped += 1;
+                }
             }
         }
     };
@@ -1822,10 +1906,13 @@ pub const Pane = struct {
     }
 
     pub fn finishHistory(pane: *Pane) void {
-        if (pane.history_session_finished) return;
+        if (pane.history_session_finished) {
+            return;
+        }
         var capture_context: CaptureContext = .{ .pane = pane };
-        if (pane.history_observer.enabled)
+        if (pane.history_observer.enabled) {
             pane.history_observer.tracker.interrupt(historyClock(pane.io), &capture_context);
+        }
         if (pane.history_session_started) {
             _ = pane.history_service.finishSession(pane.io, .{
                 .id = pane.history_session_id,
@@ -1836,7 +1923,9 @@ pub const Pane = struct {
     }
 
     pub fn queueExitedHistory(pane: *Pane, exit: pty.Exit) void {
-        if (pane.history_exit_queued) return;
+        if (pane.history_exit_queued) {
+            return;
+        }
         pane.history_observer.queueShellExit(historyClock(pane.io), exit.code());
         pane.history_exit_queued = true;
     }
@@ -1867,7 +1956,9 @@ pub const Pane = struct {
     }
 
     pub fn requestResize(pane: *Pane, size: schema.TerminalSize) !void {
-        if (std.meta.eql(pane.pending_size orelse pane.size, size)) return;
+        if (std.meta.eql(pane.pending_size orelse pane.size, size)) {
+            return;
+        }
         try pane.session.resize(.{
             .cols = size.cols,
             .rows = size.rows,
@@ -1951,7 +2042,9 @@ pub const Pane = struct {
         pane.semantic_colors_dirty = false;
         pane.render_pending = false;
         pane.cell_revision +%= 1;
-        if (pane.cell_revision == 0) pane.cell_revision = 1;
+        if (pane.cell_revision == 0) {
+            pane.cell_revision = 1;
+        }
         const cursor = pane.render_state.cursor;
         pane.cursor = if (cursor.visible and cursor.viewport != null and
             cursor.viewport.?.x < pane.screen.w and cursor.viewport.?.y < pane.screen.h)
@@ -2039,7 +2132,9 @@ pub const PaneStore = struct {
 
     pub fn resolve(store: *PaneStore, key: PaneKey) ?*Pane {
         const pane = store.find(key.id) orelse return null;
-        if (pane.generation != key.generation) return null;
+        if (pane.generation != key.generation) {
+            return null;
+        }
         return pane;
     }
 
@@ -2062,7 +2157,9 @@ pub const PaneStore = struct {
         const slot = store.index.get(schema.id.raw(key.id)) orelse return null;
         const pane = store.items[slot].?;
         std.debug.assert(pane.id == key.id);
-        if (pane.generation != key.generation) return null;
+        if (pane.generation != key.generation) {
+            return null;
+        }
         return pane;
     }
 
@@ -2076,7 +2173,9 @@ pub const PaneStore = struct {
         const slot = store.index.get(schema.id.raw(key.id)) orelse return null;
         const pane = store.items[slot].?;
         std.debug.assert(pane.id == key.id);
-        if (key.generation != 0 and pane.generation != key.generation) return null;
+        if (key.generation != 0 and pane.generation != key.generation) {
+            return null;
+        }
         return pane;
     }
 
@@ -2103,7 +2202,10 @@ pub const PaneStore = struct {
             const pane = slot orelse continue;
             if (pane.launch_state.discoverable() and
                 !pane.close_requested and pane.exit == null and
-                std.meta.eql(pane.location, location)) return pane;
+                std.meta.eql(pane.location, location))
+            {
+                return pane;
+            }
         }
         return null;
     }
@@ -2118,7 +2220,10 @@ pub const PaneStore = struct {
         for (store.items) |slot| {
             const pane = slot orelse continue;
             if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null or
-                !std.meta.eql(pane.location, location)) continue;
+                !std.meta.eql(pane.location, location))
+            {
+                continue;
+            }
             output[len] = .{
                 .pane_id = pane.id,
                 .lifecycle = .running,
@@ -2133,9 +2238,14 @@ pub const PaneStore = struct {
         for (store.items) |slot| {
             const pane = slot orelse continue;
             if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null or
-                !std.meta.eql(pane.location, wanted.location)) continue;
+                !std.meta.eql(pane.location, wanted.location))
+            {
+                continue;
+            }
             position += 1;
-            if (pane == wanted) return position;
+            if (pane == wanted) {
+                return position;
+            }
         }
         return null;
     }
@@ -2146,7 +2256,10 @@ pub const PaneStore = struct {
             const pane = slot orelse continue;
             if (pane.launch_state.discoverable() and
                 !pane.close_requested and pane.exit == null and
-                std.meta.eql(pane.location, location)) count += 1;
+                std.meta.eql(pane.location, location))
+            {
+                count += 1;
+            }
         }
         return count;
     }
@@ -2163,7 +2276,9 @@ pub const PaneStore = struct {
     pub fn hasAt(store: *const PaneStore, location: schema.TabLocation) bool {
         for (store.items) |slot| {
             const pane = slot orelse continue;
-            if (std.meta.eql(pane.location, location)) return true;
+            if (std.meta.eql(pane.location, location)) {
+                return true;
+            }
         }
         return false;
     }
@@ -2187,7 +2302,9 @@ pub const PaneStore = struct {
     /// try store.reserveRestoredKey(pane_id, generation);
     /// ```
     pub fn reserveRestoredKey(store: *PaneStore, pane_id: u64, generation: u64) !void {
-        if (pane_id == 0 or generation == 0 or pane_id < store.next_id) return error.InvalidCheckpointIdentity;
+        if (pane_id == 0 or generation == 0 or pane_id < store.next_id) {
+            return error.InvalidCheckpointIdentity;
+        }
         store.next_id = pane_id;
         store.next_generation = @max(store.next_generation, generation);
     }
@@ -2203,10 +2320,13 @@ pub const PaneStore = struct {
     }
 
     pub fn allocateKey(store: *PaneStore) !PaneKey {
-        if (store.count == max_panes) return error.PaneLimitReached;
+        if (store.count == max_panes) {
+            return error.PaneLimitReached;
+        }
         const pane_id = try schema.id.pane(store.next_id);
-        if (store.next_generation == 0 or store.next_generation == std.math.maxInt(u64))
+        if (store.next_generation == 0 or store.next_generation == std.math.maxInt(u64)) {
             return error.PaneGenerationExhausted;
+        }
         const generation = store.next_generation;
         store.next_id += 1;
         store.next_generation += 1;
@@ -2229,7 +2349,9 @@ pub const PaneStore = struct {
         for (&store.items) |*slot| {
             if (slot.* == pane) {
                 store.index.remove(schema.id.raw(pane.id));
-                if (pane.exit != null) store.exited_count -= 1;
+                if (pane.exit != null) {
+                    store.exited_count -= 1;
+                }
                 slot.* = null;
                 store.count -= 1;
                 pane.destroy();
@@ -2245,7 +2367,9 @@ pub const PaneStore = struct {
 
     pub fn deinit(store: *PaneStore) void {
         for (&store.items) |*slot| {
-            if (slot.*) |pane| pane.destroy();
+            if (slot.*) |pane| {
+                pane.destroy();
+            }
             slot.* = null;
         }
         store.index.reset();

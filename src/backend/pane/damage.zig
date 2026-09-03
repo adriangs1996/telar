@@ -44,7 +44,9 @@ pub fn collectSpans(input: Input, storage: []schema.frame.Span) Diff {
 
     var result: Diff = .{};
     for (damaged_rows, 0..) |damaged, y| {
-        if (!damaged) continue;
+        if (!damaged) {
+            continue;
+        }
         result.damaged_rows += 1;
         result.scanned_cells += cols;
 

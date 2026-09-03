@@ -48,7 +48,9 @@ pub fn initSharedFreezeNonce(io: Io) void {
 /// const name = freezeSharedPixels(pixels) orelse return error.SharedMemoryUnavailable;
 /// ```
 pub fn freezeSharedPixels(pixels: []const u8) ?core.graphics.ShmName {
-    if (comptime !shm_supported) return null;
+    if (comptime !shm_supported) {
+        return null;
+    }
     var nonce = shared_freeze_nonce.load(.monotonic);
     if (nonce == 0) {
         nonce = @as(u32, @bitCast(std.c.getpid())) | 1;
@@ -64,7 +66,9 @@ pub fn freezeSharedPixels(pixels: []const u8) ?core.graphics.ShmName {
         @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
         @as(u16, 0o600),
     );
-    if (std.posix.errno(fd) != .SUCCESS) return null;
+    if (std.posix.errno(fd) != .SUCCESS) {
+        return null;
+    }
     defer _ = std.c.close(fd);
     if (std.c.ftruncate(fd, @intCast(pixels.len)) != 0) {
         _ = std.c.shm_unlink(name.sliceZ());
@@ -106,21 +110,33 @@ pub const ChildObject = struct {
 /// defer child.close();
 /// ```
 pub fn mapChildObject(encoded_name: []const u8, byte_len: usize) ?ChildObject {
-    if (comptime !shm_supported) return null;
+    if (comptime !shm_supported) {
+        return null;
+    }
     const Decoder = std.base64.standard.Decoder;
     const name_len = Decoder.calcSizeForSlice(encoded_name) catch return null;
-    if (name_len == 0 or name_len > std.fs.max_path_bytes) return null;
+    if (name_len == 0 or name_len > std.fs.max_path_bytes) {
+        return null;
+    }
     var name_buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
     Decoder.decode(name_buffer[0..name_len], encoded_name) catch return null;
-    if (std.mem.indexOfScalar(u8, name_buffer[0..name_len], 0) != null) return null;
+    if (std.mem.indexOfScalar(u8, name_buffer[0..name_len], 0) != null) {
+        return null;
+    }
     name_buffer[name_len] = 0;
     const name: [:0]const u8 = name_buffer[0..name_len :0];
     const fd = std.c.shm_open(name, @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
-    if (std.posix.errno(fd) != .SUCCESS) return null;
+    if (std.posix.errno(fd) != .SUCCESS) {
+        return null;
+    }
     defer _ = std.c.close(fd);
     var stat: std.c.Stat = undefined;
-    if (std.c.fstat(fd, &stat) != 0) return null;
-    if (stat.size < 0 or @as(u64, @intCast(stat.size)) < byte_len) return null;
+    if (std.c.fstat(fd, &stat) != 0) {
+        return null;
+    }
+    if (stat.size < 0 or @as(u64, @intCast(stat.size)) < byte_len) {
+        return null;
+    }
     const pixels = std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch
         return null;
     _ = std.c.shm_unlink(name);
@@ -130,10 +146,16 @@ pub fn mapChildObject(encoded_name: []const u8, byte_len: usize) ?ChildObject {
 fn decodeChildPath(encoded_path: []const u8, buffer: *[std.fs.max_path_bytes + 1]u8) ?[:0]const u8 {
     const Decoder = std.base64.standard.Decoder;
     const path_len = Decoder.calcSizeForSlice(encoded_path) catch return null;
-    if (path_len == 0 or path_len > std.fs.max_path_bytes) return null;
+    if (path_len == 0 or path_len > std.fs.max_path_bytes) {
+        return null;
+    }
     Decoder.decode(buffer[0..path_len], encoded_path) catch return null;
-    if (std.mem.indexOfScalar(u8, buffer[0..path_len], 0) != null) return null;
-    if (buffer[0] != '/') return null;
+    if (std.mem.indexOfScalar(u8, buffer[0..path_len], 0) != null) {
+        return null;
+    }
+    if (buffer[0] != '/') {
+        return null;
+    }
     buffer[path_len] = 0;
     return buffer[0..path_len :0];
 }
@@ -145,7 +167,9 @@ fn openChildFile(encoded_path: []const u8, byte_len: usize) ?std.c.fd_t {
     var buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
     const path = decodeChildPath(encoded_path, &buffer) orelse return null;
     const fd = std.c.open(path, .{ .ACCMODE = .RDONLY, .NOFOLLOW = true, .CLOEXEC = true });
-    if (fd < 0) return null;
+    if (fd < 0) {
+        return null;
+    }
     var stat: std.c.Stat = undefined;
     const acceptable = std.c.fstat(fd, &stat) == 0 and
         std.c.S.ISREG(@intCast(stat.mode)) and
@@ -164,7 +188,9 @@ fn openChildFile(encoded_path: []const u8, byte_len: usize) ?std.c.fd_t {
 /// const accepted = validateChildFile(encoded_path, 4);
 /// ```
 pub fn validateChildFile(encoded_path: []const u8, byte_len: usize) bool {
-    if (comptime !shm_supported) return false;
+    if (comptime !shm_supported) {
+        return false;
+    }
     const fd = openChildFile(encoded_path, byte_len) orelse return false;
     _ = std.c.close(fd);
     return true;
@@ -178,7 +204,9 @@ pub fn validateChildFile(encoded_path: []const u8, byte_len: usize) bool {
 /// defer child.close();
 /// ```
 pub fn mapChildFile(encoded_path: []const u8, byte_len: usize) ?ChildObject {
-    if (comptime !shm_supported) return null;
+    if (comptime !shm_supported) {
+        return null;
+    }
     const fd = openChildFile(encoded_path, byte_len) orelse return null;
     defer _ = std.c.close(fd);
     const pixels = std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch
@@ -192,9 +220,13 @@ pub fn mapChildFile(encoded_path: []const u8, byte_len: usize) ?ChildObject {
 /// const storage = mapOwnObject(name, byte_len) orelse return false;
 /// ```
 pub fn mapOwnObject(name: core.graphics.ShmName, byte_len: usize) ?[]align(std.heap.page_size_min) u8 {
-    if (comptime !shm_supported) return null;
+    if (comptime !shm_supported) {
+        return null;
+    }
     const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
-    if (std.posix.errno(fd) != .SUCCESS) return null;
+    if (std.posix.errno(fd) != .SUCCESS) {
+        return null;
+    }
     defer _ = std.c.close(fd);
     return std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch null;
 }
@@ -236,7 +268,9 @@ pub const PreparedTransfers = struct {
     pub fn covers(prepared: *const PreparedTransfers, key: core.graphics.ImageKey) bool {
         for (prepared.frozen) |slot| {
             const frozen = slot orelse continue;
-            if (frozen.image_id == key.image_id) return frozen.generation >= key.generation;
+            if (frozen.image_id == key.image_id) {
+                return frozen.generation >= key.generation;
+            }
         }
         return false;
     }
@@ -253,7 +287,9 @@ pub const PreparedTransfers = struct {
         var free_slot: ?usize = null;
         for (&prepared.items, 0..) |*slot, index| {
             if (slot.*) |existing| {
-                if (existing.metadata.key.image_id != image_id) continue;
+                if (existing.metadata.key.image_id != image_id) {
+                    continue;
+                }
                 existing.discard(media);
                 slot.* = null;
                 free_slot = index;
@@ -277,7 +313,9 @@ pub const PreparedTransfers = struct {
     pub fn take(prepared: *PreparedTransfers, key: core.graphics.ImageKey) ?PreparedTransfer {
         for (&prepared.items) |*slot| {
             const existing = slot.* orelse continue;
-            if (!std.meta.eql(existing.metadata.key, key)) continue;
+            if (!std.meta.eql(existing.metadata.key, key)) {
+                continue;
+            }
             slot.* = null;
             return existing;
         }
@@ -288,7 +326,9 @@ pub const PreparedTransfers = struct {
     pub fn holds(prepared: *const PreparedTransfers, key: core.graphics.ImageKey) bool {
         for (prepared.items) |slot| {
             const existing = slot orelse continue;
-            if (std.meta.eql(existing.metadata.key, key)) return true;
+            if (std.meta.eql(existing.metadata.key, key)) {
+                return true;
+            }
         }
         return false;
     }
@@ -313,7 +353,9 @@ pub const PreparedTransfers = struct {
     /// prepared.discard(key, media);
     /// ```
     pub fn discard(prepared: *PreparedTransfers, key: core.graphics.ImageKey, media: *PaneMediaAllocator) void {
-        if (prepared.take(key)) |existing| existing.discard(media);
+        if (prepared.take(key)) |existing| {
+            existing.discard(media);
+        }
     }
 
     /// Forgets images the emulator no longer holds, releasing any parked
@@ -325,13 +367,17 @@ pub const PreparedTransfers = struct {
     pub fn retain(prepared: *PreparedTransfers, alive: anytype, media: *PaneMediaAllocator) void {
         for (&prepared.items) |*slot| {
             const existing = slot.* orelse continue;
-            if (alive.holds(existing.metadata.key)) continue;
+            if (alive.holds(existing.metadata.key)) {
+                continue;
+            }
             existing.discard(media);
             slot.* = null;
         }
         for (&prepared.frozen) |*slot| {
             const frozen = slot.* orelse continue;
-            if (alive.holdsImage(frozen.image_id)) continue;
+            if (alive.holdsImage(frozen.image_id)) {
+                continue;
+            }
             slot.* = null;
         }
     }
@@ -340,7 +386,9 @@ pub const PreparedTransfers = struct {
         var free_slot: ?usize = null;
         for (&prepared.frozen, 0..) |*slot, index| {
             if (slot.*) |frozen| {
-                if (frozen.image_id != key.image_id) continue;
+                if (frozen.image_id != key.image_id) {
+                    continue;
+                }
                 slot.* = .{ .image_id = key.image_id, .generation = key.generation };
                 return;
             } else if (free_slot == null) {
@@ -383,13 +431,17 @@ fn testTransfer(image_id: u32, generation: u64, pixels: []const u8) !PreparedTra
 
 fn objectExists(name: core.graphics.ShmName) bool {
     const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
-    if (std.posix.errno(fd) != .SUCCESS) return false;
+    if (std.posix.errno(fd) != .SUCCESS) {
+        return false;
+    }
     _ = std.c.close(fd);
     return true;
 }
 
 test "a newer generation replaces the parked object of its image" {
-    if (comptime !shm_supported) return error.SkipZigTest;
+    if (comptime !shm_supported) {
+        return error.SkipZigTest;
+    }
     var budget = pane_mod.GraphicsBudget.init(1024);
     var media = PaneMediaAllocator.init(std.testing.allocator, &budget, 1024);
     var prepared: PreparedTransfers = .{};
@@ -418,7 +470,9 @@ test "a newer generation replaces the parked object of its image" {
 }
 
 test "parking is bounded and releases what the emulator dropped" {
-    if (comptime !shm_supported) return error.SkipZigTest;
+    if (comptime !shm_supported) {
+        return error.SkipZigTest;
+    }
     var budget = pane_mod.GraphicsBudget.init(1024);
     var media = PaneMediaAllocator.init(std.testing.allocator, &budget, 1024);
     var prepared: PreparedTransfers = .{};

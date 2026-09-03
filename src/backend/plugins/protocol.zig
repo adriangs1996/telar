@@ -70,7 +70,9 @@ pub fn encodeExchange(buffer: []u8, id: u64, generation: u64, captured: *const p
 /// ```
 pub fn decodeExchange(bytes: []const u8) !Exchange {
     var cursor: Cursor = .{ .bytes = bytes };
-    if (try cursor.byte() != 1) return error.UnknownFrame;
+    if (try cursor.byte() != 1) {
+        return error.UnknownFrame;
+    }
     const id = try cursor.int(u64);
     const generation = try cursor.int(u64);
     const pane = core.schema.id.pane(try cursor.int(u64)) catch return error.InvalidExchange;
@@ -85,7 +87,9 @@ pub fn decodeExchange(bytes: []const u8) !Exchange {
     const started_at_ms = try cursor.int(i64);
     const request = try readHalf(&cursor);
     const response = try readHalf(&cursor);
-    if (cursor.offset != bytes.len) return error.TrailingFrame;
+    if (cursor.offset != bytes.len) {
+        return error.TrailingFrame;
+    }
 
     return .{
         .id = id,
@@ -111,7 +115,9 @@ pub fn decodeExchange(bytes: []const u8) !Exchange {
 /// const payload = try encodeEffects(buffer, event_id, &batch);
 /// ```
 pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const effects.Batch) ![]const u8 {
-    if (batch.len > effects.max_effects) return error.TooManyEffects;
+    if (batch.len > effects.max_effects) {
+        return error.TooManyEffects;
+    }
     var writer: std.Io.Writer = .fixed(buffer);
     try writer.writeByte(2);
     try writeInt(&writer, u64, event_id);
@@ -125,7 +131,9 @@ pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const effects.Batch) !
             try writeSized(&writer, record.provider);
             try writeSized(&writer, record.tool_call_id);
             try writer.writeByte(@intFromBool(record.session != null));
-            if (record.session) |session| try writeSized(&writer, session);
+            if (record.session) |session| {
+                try writeSized(&writer, session);
+            }
             try writeInt(&writer, i32, record.exit_code);
             try writeInt(&writer, i64, record.started_at_ms);
             try writeInt(&writer, u64, record.duration_ms);
@@ -156,10 +164,14 @@ pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const effects.Batch) !
 /// ```
 pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: effects.Batch } {
     var cursor: Cursor = .{ .bytes = bytes };
-    if (try cursor.byte() != 2) return error.UnknownFrame;
+    if (try cursor.byte() != 2) {
+        return error.UnknownFrame;
+    }
     const event_id = try cursor.int(u64);
     const count = try cursor.byte();
-    if (count > effects.max_effects) return error.TooManyEffects;
+    if (count > effects.max_effects) {
+        return error.TooManyEffects;
+    }
     var batch: effects.Batch = .{ .len = count };
 
     for (0..count) |index| {
@@ -189,7 +201,9 @@ pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: effects.
             else => return error.UnknownEffect,
         };
     }
-    if (cursor.offset != bytes.len) return error.TrailingFrame;
+    if (cursor.offset != bytes.len) {
+        return error.TrailingFrame;
+    }
     return .{ .event_id = event_id, .batch = batch };
 }
 
@@ -213,10 +227,14 @@ pub fn encodeError(buffer: []u8, event_id: u64, message: []const u8) ![]const u8
 /// ```
 pub fn decodeError(bytes: []const u8) !struct { event_id: u64, message: []const u8 } {
     var cursor: Cursor = .{ .bytes = bytes };
-    if (try cursor.byte() != 3) return error.UnknownFrame;
+    if (try cursor.byte() != 3) {
+        return error.UnknownFrame;
+    }
     const event_id = try cursor.int(u64);
     const message = try cursor.sized();
-    if (cursor.offset != bytes.len) return error.TrailingFrame;
+    if (cursor.offset != bytes.len) {
+        return error.TrailingFrame;
+    }
     return .{ .event_id = event_id, .message = message };
 }
 
@@ -235,7 +253,9 @@ fn writeHalf(writer: *std.Io.Writer, optional: ?*proxy.CaptureHalf) !void {
 }
 
 fn readHalf(cursor: *Cursor) !?Half {
-    if (!try cursor.boolean()) return null;
+    if (!try cursor.boolean()) {
+        return null;
+    }
     return .{
         .head = try cursor.sized(),
         .body = try cursor.sized(),
@@ -250,7 +270,9 @@ fn readHalf(cursor: *Cursor) !?Half {
 }
 
 fn writeSized(writer: *std.Io.Writer, bytes: []const u8) !void {
-    if (bytes.len > std.math.maxInt(u32)) return error.FrameTooLarge;
+    if (bytes.len > std.math.maxInt(u32)) {
+        return error.FrameTooLarge;
+    }
     try writeInt(writer, u32, @intCast(bytes.len));
     try writer.writeAll(bytes);
 }
@@ -266,7 +288,9 @@ const Cursor = struct {
     offset: usize = 0,
 
     fn byte(cursor: *Cursor) !u8 {
-        if (cursor.offset == cursor.bytes.len) return error.TruncatedFrame;
+        if (cursor.offset == cursor.bytes.len) {
+            return error.TruncatedFrame;
+        }
         defer cursor.offset += 1;
         return cursor.bytes[cursor.offset];
     }
@@ -280,14 +304,18 @@ const Cursor = struct {
     }
 
     fn int(cursor: *Cursor, comptime T: type) !T {
-        if (cursor.bytes.len -| cursor.offset < @sizeOf(T)) return error.TruncatedFrame;
+        if (cursor.bytes.len -| cursor.offset < @sizeOf(T)) {
+            return error.TruncatedFrame;
+        }
         defer cursor.offset += @sizeOf(T);
         return std.mem.readInt(T, cursor.bytes[cursor.offset..][0..@sizeOf(T)], .little);
     }
 
     fn sized(cursor: *Cursor) ![]const u8 {
         const len = try cursor.int(u32);
-        if (cursor.bytes.len -| cursor.offset < len) return error.TruncatedFrame;
+        if (cursor.bytes.len -| cursor.offset < len) {
+            return error.TruncatedFrame;
+        }
         defer cursor.offset += len;
         return cursor.bytes[cursor.offset..][0..len];
     }

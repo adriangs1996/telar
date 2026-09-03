@@ -52,7 +52,9 @@ const Host = struct {
     fn installTelar(host: *Host) !void {
         try host.vm.evaluate(@embedFile("bootstrap.lua"), "@telar-tap-bootstrap.lua");
         const state = host.vm.state;
-        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) return error.InvalidBootstrap;
+        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+            return error.InvalidBootstrap;
+        }
         lua.lua_pushvalue(state, -1);
         lua.lua_setglobal(state, "telar");
 
@@ -84,9 +86,13 @@ const Host = struct {
         host.vm.resetBudget(5_000_000, 200 * std.time.ns_per_ms);
         try host.vm.evaluate(source, "@tap-plugin.lua");
         const state = host.vm.state;
-        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) return error.InvalidTapPlugin;
+        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+            return error.InvalidTapPlugin;
+        }
         _ = lua.lua_getfield(state, -1, "on_exchange");
-        if (lua.lua_type(state, -1) != lua.LUA_TFUNCTION) return error.MissingExchangeHandler;
+        if (lua.lua_type(state, -1) != lua.LUA_TFUNCTION) {
+            return error.MissingExchangeHandler;
+        }
         host.callback_ref = lua.luaL_ref(state, lua.LUA_REGISTRYINDEX);
         lua.lua_settop(state, 0);
     }
@@ -98,7 +104,9 @@ const Host = struct {
         host.vm.resetBudget(5_000_000, 200 * std.time.ns_per_ms);
         _ = lua.lua_rawgeti(state, lua.LUA_REGISTRYINDEX, host.callback_ref);
         pushExchange(state, exchange);
-        if (lua.lua_pcallk(state, 1, 1, 0, 0, null) != lua.LUA_OK) return error.TapCallbackFailed;
+        if (lua.lua_pcallk(state, 1, 1, 0, 0, null) != lua.LUA_OK) {
+            return error.TapCallbackFailed;
+        }
         return parseEffects(state, -1);
     }
 };
@@ -123,7 +131,9 @@ pub fn run(init_process: std.process.Init, entry_path: []const u8) !void {
             else => |other| return other,
         };
         const frame_len = std.mem.readInt(u32, &prefix, .little);
-        if (frame_len == 0 or frame_len > max_frame_bytes) return error.InvalidTapFrame;
+        if (frame_len == 0 or frame_len > max_frame_bytes) {
+            return error.InvalidTapFrame;
+        }
         const frame = try init_process.gpa.alloc(u8, frame_len);
         defer {
             std.crypto.secureZero(u8, frame);
@@ -212,17 +222,25 @@ fn pushHead(state: *lua.lua_State, raw: []const u8) void {
 }
 
 fn parseEffects(state: *lua.lua_State, index: c_int) !effects.Batch {
-    if (lua.lua_type(state, index) == lua.LUA_TNIL) return .{};
-    if (lua.lua_type(state, index) != lua.LUA_TTABLE) return error.InvalidEffectBatch;
+    if (lua.lua_type(state, index) == lua.LUA_TNIL) {
+        return .{};
+    }
+    if (lua.lua_type(state, index) != lua.LUA_TTABLE) {
+        return error.InvalidEffectBatch;
+    }
     const absolute = lua.lua_absindex(state, index);
     const count = lua.lua_rawlen(state, absolute);
-    if (count > effects.max_effects) return error.TooManyEffects;
+    if (count > effects.max_effects) {
+        return error.TooManyEffects;
+    }
     var batch: effects.Batch = .{ .len = @intCast(count) };
 
     for (0..count) |effect_index| {
         _ = lua.lua_geti(state, absolute, @intCast(effect_index + 1));
         defer pop(state, 1);
-        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) return error.InvalidEffect;
+        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+            return error.InvalidEffect;
+        }
         const effect_table = lua.lua_absindex(state, -1);
         const kind = try stringField(state, effect_table, "__telar_kind", true);
         batch.items[effect_index] = if (std.mem.eql(u8, kind, "record_command"))
@@ -259,21 +277,27 @@ fn parseEffects(state: *lua.lua_State, index: c_int) !effects.Batch {
 fn stringField(state: *lua.lua_State, table: c_int, name: [*:0]const u8, required: bool) ![]const u8 {
     _ = lua.lua_getfield(state, table, name);
     defer pop(state, 1);
-    if (!required and lua.lua_type(state, -1) == lua.LUA_TNIL) return "";
+    if (!required and lua.lua_type(state, -1) == lua.LUA_TNIL) {
+        return "";
+    }
     return luaString(state, -1) orelse error.InvalidEffect;
 }
 
 fn optionalStringField(state: *lua.lua_State, table: c_int, name: [*:0]const u8) !?[]const u8 {
     _ = lua.lua_getfield(state, table, name);
     defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) return null;
+    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+        return null;
+    }
     return luaString(state, -1) orelse error.InvalidEffect;
 }
 
 fn integerField(state: *lua.lua_State, table: c_int, name: [*:0]const u8, default: i64) !i64 {
     _ = lua.lua_getfield(state, table, name);
     defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) return default;
+    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+        return default;
+    }
     var valid: c_int = 0;
     const value = lua.lua_tointegerx(state, -1, &valid);
     return if (valid != 0) value else error.InvalidEffect;
@@ -282,29 +306,51 @@ fn integerField(state: *lua.lua_State, table: c_int, name: [*:0]const u8, defaul
 fn booleanField(state: *lua.lua_State, table: c_int, name: [*:0]const u8, default: bool) !bool {
     _ = lua.lua_getfield(state, table, name);
     defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) return default;
-    if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) return error.InvalidEffect;
+    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+        return default;
+    }
+    if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+        return error.InvalidEffect;
+    }
     return lua.lua_toboolean(state, -1) != 0;
 }
 
 fn agentState(value: []const u8) !core.schema.AgentReportState {
-    if (std.mem.eql(u8, value, "working")) return .working;
-    if (std.mem.eql(u8, value, "ready")) return .ready;
-    if (std.mem.eql(u8, value, "blocked")) return .blocked;
+    if (std.mem.eql(u8, value, "working")) {
+        return .working;
+    }
+    if (std.mem.eql(u8, value, "ready")) {
+        return .ready;
+    }
+    if (std.mem.eql(u8, value, "blocked")) {
+        return .blocked;
+    }
     return error.InvalidEffect;
 }
 
 fn confidence(value: []const u8) !effects.Confidence {
-    if (std.mem.eql(u8, value, "low")) return .low;
-    if (std.mem.eql(u8, value, "medium")) return .medium;
+    if (std.mem.eql(u8, value, "low")) {
+        return .low;
+    }
+    if (std.mem.eql(u8, value, "medium")) {
+        return .medium;
+    }
     return error.InvalidEffect;
 }
 
 fn notificationLevel(value: []const u8) !core.schema.NotificationLevel {
-    if (value.len == 0 or std.mem.eql(u8, value, "info")) return .info;
-    if (std.mem.eql(u8, value, "success")) return .success;
-    if (std.mem.eql(u8, value, "warning")) return .warning;
-    if (std.mem.eql(u8, value, "failure")) return .failure;
+    if (value.len == 0 or std.mem.eql(u8, value, "info")) {
+        return .info;
+    }
+    if (std.mem.eql(u8, value, "success")) {
+        return .success;
+    }
+    if (std.mem.eql(u8, value, "warning")) {
+        return .warning;
+    }
+    if (std.mem.eql(u8, value, "failure")) {
+        return .failure;
+    }
     return error.InvalidEffect;
 }
 
@@ -316,7 +362,9 @@ fn requireLocal(state_optional: ?*lua.lua_State) callconv(.c) c_int {
         _ = lua.lua_getglobal(state, "telar");
         return 1;
     }
-    if (!validModuleName(name)) return raise(state, "invalid local module name");
+    if (!validModuleName(name)) {
+        return raise(state, "invalid local module name");
+    }
 
     _ = lua.lua_rawgeti(state, lua.LUA_REGISTRYINDEX, host.module_cache_ref);
     _ = lua.lua_pushlstring(state, name.ptr, name.len);
@@ -330,11 +378,15 @@ fn requireLocal(state_optional: ?*lua.lua_State) callconv(.c) c_int {
     var relative: [std.fs.max_path_bytes]u8 = undefined;
     var cursor: usize = 0;
     for (name) |byte| {
-        if (cursor == relative.len) return raise(state, "module path too long");
+        if (cursor == relative.len) {
+            return raise(state, "module path too long");
+        }
         relative[cursor] = if (byte == '.') std.fs.path.sep else byte;
         cursor += 1;
     }
-    if (relative.len - cursor < 4) return raise(state, "module path too long");
+    if (relative.len - cursor < 4) {
+        return raise(state, "module path too long");
+    }
     @memcpy(relative[cursor..][0..4], ".lua");
     cursor += 4;
     var candidate: [std.fs.max_path_bytes]u8 = undefined;
@@ -342,11 +394,17 @@ fn requireLocal(state_optional: ?*lua.lua_State) callconv(.c) c_int {
     var resolved_storage: [std.fs.max_path_bytes]u8 = undefined;
     const resolved_len = Io.Dir.cwd().realPathFile(host.io, joined, &resolved_storage) catch return raise(state, "cannot resolve local module");
     const resolved = resolved_storage[0..resolved_len];
-    if (!pathInside(host.package_root, resolved) or resolved_len == resolved_storage.len) return raise(state, "module escapes package");
+    if (!pathInside(host.package_root, resolved) or resolved_len == resolved_storage.len) {
+        return raise(state, "module escapes package");
+    }
     resolved_storage[resolved_len] = 0;
     const path_z: [*:0]const u8 = @ptrCast(resolved_storage[0..resolved_len :0]);
-    if (lua.luaL_loadfilex(state, path_z, "t") != lua.LUA_OK) return lua.lua_error(state);
-    if (lua.lua_pcallk(state, 0, 1, 0, 0, null) != lua.LUA_OK) return lua.lua_error(state);
+    if (lua.luaL_loadfilex(state, path_z, "t") != lua.LUA_OK) {
+        return lua.lua_error(state);
+    }
+    if (lua.lua_pcallk(state, 0, 1, 0, 0, null) != lua.LUA_OK) {
+        return lua.lua_error(state);
+    }
     if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
         pop(state, 1);
         lua.lua_pushboolean(state, 1);
@@ -369,7 +427,9 @@ fn redactSecrets(state_optional: ?*lua.lua_State) callconv(.c) c_int {
 fn decodeJson(state_optional: ?*lua.lua_State) callconv(.c) c_int {
     const state = state_optional.?;
     const input = luaString(state, 1) orelse return raise(state, "json.decode expects a string");
-    if (input.len > max_json_bytes) return raise(state, "JSON input is too large");
+    if (input.len > max_json_bytes) {
+        return raise(state, "JSON input is too large");
+    }
     const parsed = std.json.parseFromSlice(std.json.Value, std.heap.c_allocator, input, .{ .max_value_len = max_json_bytes }) catch return raise(state, "invalid JSON");
     defer parsed.deinit();
     pushJson(state, parsed.value, 0) catch return raise(state, "JSON exceeds depth limit");
@@ -377,7 +437,9 @@ fn decodeJson(state_optional: ?*lua.lua_State) callconv(.c) c_int {
 }
 
 fn pushJson(state: *lua.lua_State, value: std.json.Value, depth: u8) !void {
-    if (depth == 64) return error.JsonDepth;
+    if (depth == 64) {
+        return error.JsonDepth;
+    }
     switch (value) {
         .null => lua.lua_pushnil(state),
         .bool => |boolean| lua.lua_pushboolean(state, @intFromBool(boolean)),
@@ -463,15 +525,21 @@ fn pop(state: *lua.lua_State, count: c_int) void {
 }
 
 fn validModuleName(name: []const u8) bool {
-    if (name.len == 0 or name[0] == '.' or name[name.len - 1] == '.') return false;
+    if (name.len == 0 or name[0] == '.' or name[name.len - 1] == '.') {
+        return false;
+    }
     var previous_dot = false;
     for (name) |byte| {
         if (byte == '.') {
-            if (previous_dot) return false;
+            if (previous_dot) {
+                return false;
+            }
             previous_dot = true;
         } else {
             previous_dot = false;
-            if (!std.ascii.isAlphanumeric(byte) and byte != '_' and byte != '-') return false;
+            if (!std.ascii.isAlphanumeric(byte) and byte != '_' and byte != '-') {
+                return false;
+            }
         }
     }
     return true;

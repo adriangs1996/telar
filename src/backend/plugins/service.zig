@@ -25,7 +25,9 @@ pub const Spec = struct {
     granted: core.plugin.CapabilitySet,
 
     pub fn init(package_index: u8, generation: u64, package: Package) !Spec {
-        if (package.entry.len > std.fs.max_path_bytes) return error.PluginPathTooLong;
+        if (package.entry.len > std.fs.max_path_bytes) {
+            return error.PluginPathTooLong;
+        }
         var spec: Spec = .{
             .package_index = package_index,
             .plugin_id = core.plugin.stableId(package.id),
@@ -108,7 +110,9 @@ const Worker = struct {
         while (true) {
             var pending: [1]*Frame = undefined;
             const count = worker.requests.getUncancelable(io, &pending, 0) catch break;
-            if (count == 0) break;
+            if (count == 0) {
+                break;
+            }
             pending[0].deinit();
         }
     }
@@ -119,7 +123,9 @@ const Worker = struct {
             return;
         }
 
-        if ((worker.requests.put(io, &.{frame}, 0) catch 0) == 1) return;
+        if ((worker.requests.put(io, &.{frame}, 0) catch 0) == 1) {
+            return;
+        }
         var oldest: [1]*Frame = undefined;
         if ((worker.requests.getUncancelable(io, &oldest, 0) catch 0) == 1) {
             oldest[0].deinit();
@@ -135,7 +141,9 @@ const Worker = struct {
         while (true) {
             const frame = worker.requests.getOne(io) catch return;
             defer frame.deinit();
-            if (worker.disabled) continue;
+            if (worker.disabled) {
+                continue;
+            }
             const session = worker.ensureSession(io) catch {
                 worker.recordRestart(io);
                 continue;
@@ -157,12 +165,16 @@ const Worker = struct {
                 }
                 continue;
             };
-            if ((worker.results.put(io, &.{result}, 0) catch 0) != 1) result.deinit();
+            if ((worker.results.put(io, &.{result}, 0) catch 0) != 1) {
+                result.deinit();
+            }
         }
     }
 
     fn ensureSession(worker: *Worker, io: Io) !*Session {
-        if (worker.session) |session| return session;
+        if (worker.session) |session| {
+            return session;
+        }
         worker.session = try Session.open(io, worker.gpa, worker.spec.entry(), 200);
         return worker.session.?;
     }
@@ -208,7 +220,9 @@ pub const Service = struct {
     /// try service.init(.{ .io = io, .gpa = gpa, .specs = specs });
     /// ```
     pub fn init(service: *Service, options: InitOptions) !void {
-        if (options.specs.len > max_workers) return error.TooManyTapPlugins;
+        if (options.specs.len > max_workers) {
+            return error.TooManyTapPlugins;
+        }
         service.* = .{ .gpa = options.gpa, .io = options.io };
         service.results = .init(&service.result_storage);
         errdefer {
@@ -232,7 +246,9 @@ pub const Service = struct {
         while (true) {
             var pending: [1]*effects.Result = undefined;
             const count = service.results.getUncancelable(service.io, &pending, 0) catch break;
-            if (count == 0) break;
+            if (count == 0) {
+                break;
+            }
             pending[0].deinit();
         }
     }
@@ -244,7 +260,9 @@ pub const Service = struct {
     /// ```
     pub fn submit(service: *Service, captured: *proxy.CaptureExchange) void {
         defer captured.deinit();
-        if (service.worker_count == 0) return;
+        if (service.worker_count == 0) {
+            return;
+        }
         const event_id = service.next_event_id.fetchAdd(1, .monotonic);
         for (service.workers[0..service.worker_count]) |*worker| {
             const frame = service.encodeFrame(captured, event_id, worker.spec.generation) catch continue;
@@ -267,7 +285,9 @@ pub const Service = struct {
     /// try service.authorize(result);
     /// ```
     pub fn authorize(service: *const Service, result: *const effects.Result) !void {
-        if (result.package_index >= service.worker_count) return error.PluginNotConfigured;
+        if (result.package_index >= service.worker_count) {
+            return error.PluginNotConfigured;
+        }
         const spec = &service.workers[result.package_index].spec;
         if (spec.generation != result.generation or spec.plugin_id != result.plugin_id or !std.mem.eql(u8, &spec.digest, &result.digest)) {
             return error.StaleTapWorker;
@@ -303,8 +323,12 @@ pub const Service = struct {
 };
 
 fn requireCapability(spec: *const Spec, capability: core.plugin.Capability) !void {
-    if (!spec.declared.contains(capability)) return error.CapabilityNotDeclared;
-    if (!spec.granted.contains(capability)) return error.CapabilityNotGranted;
+    if (!spec.declared.contains(capability)) {
+        return error.CapabilityNotDeclared;
+    }
+    if (!spec.granted.contains(capability)) {
+        return error.CapabilityNotGranted;
+    }
 }
 
 pub const InitOptions = struct {
@@ -316,7 +340,9 @@ pub const InitOptions = struct {
 fn capturedBytes(captured: *const proxy.CaptureExchange) usize {
     var total: usize = 0;
     inline for (.{ captured.request, captured.response }) |optional| {
-        if (optional) |half| total +|= half.head.len +| half.body.len;
+        if (optional) |half| {
+            total +|= half.head.len +| half.body.len;
+        }
     }
     return total;
 }

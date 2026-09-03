@@ -108,8 +108,9 @@ fn probeWith(input: ProbeInput, comptime identify: fn (*const Table, u32) Identi
     const shell = std.math.cast(u32, shell_pid) orelse 0;
 
     if (pgid == shell) {
-        if (previous.process_group_id == pgid and previous.foreground_name_len != 0)
+        if (previous.process_group_id == pgid and previous.foreground_name_len != 0) {
             return .{ .cache = previous };
+        }
         const identification = identify(input.manifests, pgid);
         var next: Cache = .{ .process_group_id = pgid };
         next.setName(identification.slice());
@@ -117,7 +118,9 @@ fn probeWith(input: ProbeInput, comptime identify: fn (*const Table, u32) Identi
     }
     if (previous.process_group_id == pgid and
         (previous.provider != .unknown or previous.attempts >= max_acquisition_attempts))
+    {
         return .{ .cache = previous };
+    }
 
     const identification = identify(input.manifests, pgid);
     var next: Cache = .{
@@ -160,8 +163,12 @@ fn identifyProcessGroup(table: *const Table, process_group_id: u32) Identificati
 }
 
 fn identifyMacosProcessGroup(table: *const Table, process_group_id: u32) Identification {
-    if (comptime builtin.os.tag != .macos) return .{};
-    if (process_group_id > std.math.maxInt(c_int)) return .{};
+    if (comptime builtin.os.tag != .macos) {
+        return .{};
+    }
+    if (process_group_id > std.math.maxInt(c_int)) {
+        return .{};
+    }
 
     var pids: [max_group_processes]std.c.pid_t = @splat(0);
     const byte_count = Native.c.proc_listpids(
@@ -170,7 +177,9 @@ fn identifyMacosProcessGroup(table: *const Table, process_group_id: u32) Identif
         &pids,
         @intCast(@sizeOf(@TypeOf(pids))),
     );
-    if (byte_count <= 0) return identifyMacosProcess(table, process_group_id);
+    if (byte_count <= 0) {
+        return identifyMacosProcess(table, process_group_id);
+    }
 
     const count = @min(
         pids.len,
@@ -179,21 +188,33 @@ fn identifyMacosProcessGroup(table: *const Table, process_group_id: u32) Identif
     // The group leader is the most useful candidate and avoids depending on
     // libproc's enumeration order.
     const leader = identifyMacosProcess(table, process_group_id);
-    if (leader.provider != .unknown) return leader;
+    if (leader.provider != .unknown) {
+        return leader;
+    }
     var fallback = leader;
     for (pids[0..count]) |pid| {
         const candidate = std.math.cast(u32, pid) orelse continue;
-        if (candidate == process_group_id) continue;
+        if (candidate == process_group_id) {
+            continue;
+        }
         const identified = identifyMacosProcess(table, candidate);
-        if (identified.provider != .unknown) return identified;
-        if (fallback.name_len == 0 and identified.name_len != 0) fallback = identified;
+        if (identified.provider != .unknown) {
+            return identified;
+        }
+        if (fallback.name_len == 0 and identified.name_len != 0) {
+            fallback = identified;
+        }
     }
     return fallback;
 }
 
 fn identifyMacosProcess(table: *const Table, pid: u32) Identification {
-    if (comptime builtin.os.tag != .macos) return .{};
-    if (pid > std.math.maxInt(c_int)) return .{};
+    if (comptime builtin.os.tag != .macos) {
+        return .{};
+    }
+    if (pid > std.math.maxInt(c_int)) {
+        return .{};
+    }
 
     var info: Native.c.proc_bsdinfo = std.mem.zeroes(Native.c.proc_bsdinfo);
     const expected: c_int = @intCast(@sizeOf(Native.c.proc_bsdinfo));
@@ -203,7 +224,9 @@ fn identifyMacosProcess(table: *const Table, pid: u32) Identification {
         0,
         &info,
         expected,
-    ) != expected) return .{};
+    ) != expected) {
+        return .{};
+    }
 
     const comm_bytes = std.mem.sliceAsBytes(info.pbi_comm[0..]);
     const comm_end = std.mem.indexOfScalar(u8, comm_bytes, 0) orelse comm_bytes.len;
@@ -214,25 +237,38 @@ fn identifyMacosProcess(table: *const Table, pid: u32) Identification {
 }
 
 fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
-    if (comptime builtin.os.tag != .macos) return null;
-    if (pid > std.math.maxInt(c_int)) return null;
+    if (comptime builtin.os.tag != .macos) {
+        return null;
+    }
+    if (pid > std.math.maxInt(c_int)) {
+        return null;
+    }
     var mib = [_]c_int{ Native.c.CTL_KERN, Native.c.KERN_PROCARGS2, @intCast(pid) };
     var size = buffer.len;
     if (Native.c.sysctl(&mib, mib.len, buffer.ptr, &size, null, 0) != 0 or
-        size < @sizeOf(c_int) or size > buffer.len) return null;
+        size < @sizeOf(c_int) or size > buffer.len)
+    {
+        return null;
+    }
 
     const argc = std.mem.readInt(c_int, buffer[0..@sizeOf(c_int)], .native);
-    if (argc < 1) return null;
+    if (argc < 1) {
+        return null;
+    }
     const rest = buffer[@sizeOf(c_int)..size];
     const executable_end = std.mem.indexOfScalar(u8, rest, 0) orelse return null;
     var offset = executable_end;
     while (offset < rest.len and rest[offset] == 0) : (offset += 1) {}
-    if (offset == rest.len) return null;
+    if (offset == rest.len) {
+        return null;
+    }
     return rest[offset..];
 }
 
 fn identifyLinuxProcessGroup(table: *const Table, process_group_id: u32) Identification {
-    if (comptime builtin.os.tag != .linux) return .{};
+    if (comptime builtin.os.tag != .linux) {
+        return .{};
+    }
     var pending: [max_group_processes]u32 = @splat(0);
     var count: usize = 1;
     var index: usize = 0;
@@ -241,17 +277,25 @@ fn identifyLinuxProcessGroup(table: *const Table, process_group_id: u32) Identif
     var fallback: Identification = .{};
     while (index < count) : (index += 1) {
         const pid = pending[index];
-        if (linuxProcessGroup(pid) != process_group_id) continue;
+        if (linuxProcessGroup(pid) != process_group_id) {
+            continue;
+        }
         const identified = identifyLinuxProcess(table, pid);
-        if (identified.provider != .unknown) return identified;
-        if (fallback.name_len == 0 and identified.name_len != 0) fallback = identified;
+        if (identified.provider != .unknown) {
+            return identified;
+        }
+        if (fallback.name_len == 0 and identified.name_len != 0) {
+            fallback = identified;
+        }
         appendLinuxChildren(pid, &pending, &count);
     }
     return fallback;
 }
 
 fn identifyLinuxProcess(table: *const Table, pid: u32) Identification {
-    if (comptime builtin.os.tag != .linux) return .{};
+    if (comptime builtin.os.tag != .linux) {
+        return .{};
+    }
     var path_buffer: [64]u8 = undefined;
     var comm_buffer: [256]u8 = undefined;
     var args_buffer: [max_process_args_bytes]u8 = undefined;
@@ -264,7 +308,9 @@ fn identifyLinuxProcess(table: *const Table, pid: u32) Identification {
 }
 
 fn linuxProcessGroup(pid: u32) ?u32 {
-    if (comptime builtin.os.tag != .linux) return null;
+    if (comptime builtin.os.tag != .linux) {
+        return null;
+    }
     var path_buffer: [64]u8 = undefined;
     var stat_buffer: [1024]u8 = undefined;
     const path = std.fmt.bufPrint(&path_buffer, "/proc/{d}/stat", .{pid}) catch return null;
@@ -277,7 +323,9 @@ fn linuxProcessGroup(pid: u32) ?u32 {
 }
 
 fn appendLinuxChildren(pid: u32, pending: *[max_group_processes]u32, count: *usize) void {
-    if (comptime builtin.os.tag != .linux) return;
+    if (comptime builtin.os.tag != .linux) {
+        return;
+    }
     var path_buffer: [96]u8 = undefined;
     var children_buffer: [4096]u8 = undefined;
     const path = std.fmt.bufPrint(
@@ -288,7 +336,9 @@ fn appendLinuxChildren(pid: u32, pending: *[max_group_processes]u32, count: *usi
     const children = readSmallFile(path, &children_buffer) orelse return;
     var tokens = std.mem.tokenizeScalar(u8, children, ' ');
     while (tokens.next()) |token| {
-        if (count.* == pending.len) return;
+        if (count.* == pending.len) {
+            return;
+        }
         const child = std.fmt.parseInt(u32, token, 10) catch continue;
         var duplicate = false;
         for (pending[0..count.*]) |known| {
@@ -297,7 +347,9 @@ fn appendLinuxChildren(pid: u32, pending: *[max_group_processes]u32, count: *usi
                 break;
             }
         }
-        if (duplicate) continue;
+        if (duplicate) {
+            continue;
+        }
         pending[count.*] = child;
         count.* += 1;
     }
@@ -311,16 +363,26 @@ fn readSmallFile(path: []const u8, buffer: []u8) ?[]const u8 {
 }
 
 fn identifyCommand(table: *const Table, comm: []const u8, argv: []const u8) schema.AgentProvider {
-    if (providerFromToken(table, comm)) |provider| return provider;
+    if (providerFromToken(table, comm)) |provider| {
+        return provider;
+    }
 
     var args = std.mem.tokenizeScalar(u8, argv, 0);
     const argv0 = args.next() orelse return .unknown;
-    if (providerFromToken(table, argv0)) |provider| return provider;
-    if (!genericRuntime(argv0)) return .unknown;
+    if (providerFromToken(table, argv0)) |provider| {
+        return provider;
+    }
+    if (!genericRuntime(argv0)) {
+        return .unknown;
+    }
 
     while (args.next()) |arg| {
-        if (arg.len == 0 or arg[0] == '-') continue;
-        if (providerFromExecutablePath(table, arg)) |provider| return provider;
+        if (arg.len == 0 or arg[0] == '-') {
+            continue;
+        }
+        if (providerFromExecutablePath(table, arg)) |provider| {
+            return provider;
+        }
         return .unknown;
     }
     return .unknown;
@@ -340,7 +402,9 @@ fn boundedCommandName(command: []const u8) []const u8 {
     const basename = pathBasename(command);
     const len = @min(basename.len, schema.max_foreground_name_bytes);
     const candidate = basename[0..len];
-    if (candidate.len == 0 or !std.unicode.utf8ValidateSlice(candidate)) return "";
+    if (candidate.len == 0 or !std.unicode.utf8ValidateSlice(candidate)) {
+        return "";
+    }
     for (candidate) |byte| if (byte < 0x20 or byte == 0x7f) return "";
     return candidate;
 }
@@ -350,7 +414,9 @@ fn providerFromToken(table: *const Table, token: []const u8) ?schema.AgentProvid
 }
 
 fn providerFromExecutablePath(table: *const Table, path: []const u8) ?schema.AgentProvider {
-    if (providerFromToken(table, path)) |provider| return provider;
+    if (providerFromToken(table, path)) |provider| {
+        return provider;
+    }
     return table.providerFromPath(path);
 }
 
@@ -375,21 +441,29 @@ fn equalExecutableName(actual: []const u8, expected: []const u8) bool {
 fn pathBasename(path: []const u8) []const u8 {
     var start: usize = 0;
     for (path, 0..) |byte, index| {
-        if (byte == '/' or byte == '\\') start = index + 1;
+        if (byte == '/' or byte == '\\') {
+            start = index + 1;
+        }
     }
     return path[start..];
 }
 
 fn containsAsciiInsensitive(haystack: []const u8, needle: []const u8) bool {
-    if (needle.len == 0 or haystack.len < needle.len) return false;
+    if (needle.len == 0 or haystack.len < needle.len) {
+        return false;
+    }
     for (0..haystack.len - needle.len + 1) |offset| {
-        if (std.ascii.eqlIgnoreCase(haystack[offset..][0..needle.len], needle)) return true;
+        if (std.ascii.eqlIgnoreCase(haystack[offset..][0..needle.len], needle)) {
+            return true;
+        }
     }
     return false;
 }
 
 fn endsWithAsciiInsensitive(value: []const u8, suffix: []const u8) bool {
-    if (value.len < suffix.len) return false;
+    if (value.len < suffix.len) {
+        return false;
+    }
     return std.ascii.eqlIgnoreCase(value[value.len - suffix.len ..], suffix);
 }
 

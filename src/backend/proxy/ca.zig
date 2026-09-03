@@ -152,7 +152,9 @@ pub const Authority = struct {
 
         const key_exists = pathExists(io, key_path) catch return error.ReadFailed;
         const cert_exists = pathExists(io, cert_path) catch return error.ReadFailed;
-        if (key_exists != cert_exists) return error.IncompleteAuthority;
+        if (key_exists != cert_exists) {
+            return error.IncompleteAuthority;
+        }
         if (key_exists) {
             try validateStoredFile(io, key_path);
             try validateStoredFile(io, cert_path);
@@ -245,7 +247,9 @@ fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
     defer gpa.free(cert_pem);
 
     const parsed = tlsz.config.PrivateKey.parsePem(key_pem) catch return error.ReadFailed;
-    if (parsed.signature_scheme != .ecdsa_secp256r1_sha256) return error.ReadFailed;
+    if (parsed.signature_scheme != .ecdsa_secp256r1_sha256) {
+        return error.ReadFailed;
+    }
     const Ecdsa = std.crypto.sign.ecdsa.EcdsaP256Sha256;
     var secret = Ecdsa.SecretKey.fromBytes(
         parsed.key.ecdsa[0..Ecdsa.SecretKey.encoded_length].*,
@@ -289,7 +293,9 @@ fn persist(io: Io, pair: *const Pair, files: AuthorityFiles) Error!void {
 fn writeSecure(io: Io, write: SecureWrite) Error!void {
     const path = write.path;
 
-    if (!std.fs.path.isAbsolute(path)) return error.WriteFailed;
+    if (!std.fs.path.isAbsolute(path)) {
+        return error.WriteFailed;
+    }
     var temp_buffer: [std.fs.max_path_bytes]u8 = undefined;
     for (0..8) |_| {
         const temp_path = std.fmt.bufPrint(
@@ -345,8 +351,9 @@ fn pathExists(io: Io, path: []const u8) !bool {
 fn validateStoredFile(io: Io, path: []const u8) Error!void {
     const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch
         return error.ReadFailed;
-    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0)
+    if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0) {
         return error.ReadFailed;
+    }
 }
 
 fn readSystemRoots(io: Io, gpa: std.mem.Allocator) ![]u8 {

@@ -109,8 +109,9 @@ pub const Encoder = struct {
     pub fn workspace(encoder: *Encoder, record: WorkspaceRecord) !void {
         try validatePath(record.path);
         try encoder.inner.writeByte(@intFromEnum(Kind.workspace));
-        if (record.first_tab_label.len == 0 or record.first_tab_label.len > schema.max_tab_label_bytes or record.name.len > schema.max_tab_label_bytes)
+        if (record.first_tab_label.len == 0 or record.first_tab_label.len > schema.max_tab_label_bytes or record.name.len > schema.max_tab_label_bytes) {
             return error.InvalidCheckpoint;
+        }
         try encoder.inner.writeInt(u64, record.id);
         try encoder.inner.writeSized16(record.path);
         try encoder.inner.writeSized16(record.name);
@@ -127,8 +128,9 @@ pub const Encoder = struct {
 
     pub fn pane(encoder: *Encoder, record: PaneRecord) !void {
         try validatePath(record.cwd);
-        if (record.argument_count == 0 or record.argument_count > max_launch_arguments or record.arguments.len > max_launch_bytes)
+        if (record.argument_count == 0 or record.argument_count > max_launch_arguments or record.arguments.len > max_launch_bytes) {
             return error.InvalidLaunchRecord;
+        }
         try encoder.inner.writeByte(@intFromEnum(Kind.pane));
         try encoder.inner.writeInt(u64, record.pane_id);
         try encoder.inner.writeInt(u64, record.workspace_id);
@@ -138,7 +140,9 @@ pub const Encoder = struct {
         try encoder.inner.writeInt(u16, record.rows);
         try encoder.inner.writeInt(u16, record.argument_count);
         try encoder.inner.writeSized16(record.arguments);
-        if (record.agent_session.len > schema.max_agent_session_reference_bytes) return error.InvalidCheckpoint;
+        if (record.agent_session.len > schema.max_agent_session_reference_bytes) {
+            return error.InvalidCheckpoint;
+        }
         try encoder.inner.writeByte(record.agent_provider);
         try encoder.inner.writeSized16(record.agent_session);
         try validateTitle(record.agent_title, record.agent_title_source);
@@ -174,9 +178,13 @@ pub const Reader = struct {
     pub fn init(bytes: []const u8) !Reader {
         var decoder = wire.Decoder.init(bytes);
         const header = try decoder.readBytes(magic.len);
-        if (!std.mem.eql(u8, header, magic)) return error.InvalidCheckpoint;
+        if (!std.mem.eql(u8, header, magic)) {
+            return error.InvalidCheckpoint;
+        }
         const file_version = try decoder.readInt(u16);
-        if (file_version < oldest_readable_version or file_version > version) return error.UnsupportedCheckpointVersion;
+        if (file_version < oldest_readable_version or file_version > version) {
+            return error.UnsupportedCheckpointVersion;
+        }
         const counters: Counters = .{
             .next_workspace_id = try decoder.readInt(u64),
             .next_tab_id = try decoder.readInt(u64),
@@ -185,12 +193,16 @@ pub const Reader = struct {
         };
         if (counters.next_workspace_id == 0 or counters.next_tab_id == 0 or
             counters.next_pane_id == 0 or counters.next_pane_generation == 0)
+        {
             return error.InvalidCheckpoint;
+        }
         return .{ .inner = decoder, .counters = counters, .version = file_version };
     }
 
     pub fn next(reader: *Reader) !?Record {
-        if (reader.finished) return null;
+        if (reader.finished) {
+            return null;
+        }
         const kind = std.enums.fromInt(Kind, try reader.inner.readByte()) orelse return error.InvalidCheckpoint;
         switch (kind) {
             .end => {
@@ -203,10 +215,14 @@ pub const Reader = struct {
                 const path = try reader.inner.readSized16();
                 try validatePath(path);
                 const name = try reader.inner.readSized16();
-                if (name.len > schema.max_tab_label_bytes) return error.InvalidCheckpoint;
+                if (name.len > schema.max_tab_label_bytes) {
+                    return error.InvalidCheckpoint;
+                }
                 const first_tab_id = try reader.inner.readInt(u64);
                 const first_tab_label = try reader.inner.readSized16();
-                if (first_tab_label.len == 0 or first_tab_label.len > schema.max_tab_label_bytes) return error.InvalidCheckpoint;
+                if (first_tab_label.len == 0 or first_tab_label.len > schema.max_tab_label_bytes) {
+                    return error.InvalidCheckpoint;
+                }
                 return .{ .workspace = .{
                     .id = id,
                     .path = path,
@@ -219,7 +235,9 @@ pub const Reader = struct {
                 const workspace_id = try reader.inner.readInt(u64);
                 const tab_id = try reader.inner.readInt(u64);
                 const label = try reader.inner.readSized16();
-                if (label.len == 0 or label.len > schema.max_tab_label_bytes) return error.InvalidCheckpoint;
+                if (label.len == 0 or label.len > schema.max_tab_label_bytes) {
+                    return error.InvalidCheckpoint;
+                }
                 return .{ .tab = .{ .workspace_id = workspace_id, .tab_id = tab_id, .label = label } };
             },
             .pane => {
@@ -232,12 +250,17 @@ pub const Reader = struct {
                 const rows = try reader.inner.readInt(u16);
                 const argument_count = try reader.inner.readInt(u16);
                 const arguments = try reader.inner.readSized16();
-                if (argument_count == 0 or argument_count > max_launch_arguments or arguments.len > max_launch_bytes)
+                if (argument_count == 0 or argument_count > max_launch_arguments or arguments.len > max_launch_bytes) {
                     return error.InvalidCheckpoint;
-                if (std.mem.count(u8, arguments, "\x00") != argument_count) return error.InvalidCheckpoint;
+                }
+                if (std.mem.count(u8, arguments, "\x00") != argument_count) {
+                    return error.InvalidCheckpoint;
+                }
                 const agent_provider = try reader.inner.readByte();
                 const agent_session = try reader.inner.readSized16();
-                if (agent_session.len != 0) schema.validateSessionReference(agent_session) catch return error.InvalidCheckpoint;
+                if (agent_session.len != 0) {
+                    schema.validateSessionReference(agent_session) catch return error.InvalidCheckpoint;
+                }
                 const agent_title = if (reader.version >= 2) try reader.inner.readSized16() else "";
                 const agent_title_source = if (reader.version >= 2) try reader.inner.readByte() else 0;
                 try validateTitle(agent_title, agent_title_source);
@@ -260,7 +283,9 @@ pub const Reader = struct {
                 const identity = try reader.inner.readInt(u64);
                 const last_used = try reader.inner.readInt(u64);
                 const payload = try reader.inner.readSized32();
-                if (payload.len == 0 or payload.len > schema.max_client_layout_wire_bytes) return error.InvalidCheckpoint;
+                if (payload.len == 0 or payload.len > schema.max_client_layout_wire_bytes) {
+                    return error.InvalidCheckpoint;
+                }
                 return .{ .layout = .{ .identity = identity, .last_used = last_used, .payload = payload } };
             },
         }
@@ -281,7 +306,9 @@ pub const ArgumentIterator = struct {
     }
 
     pub fn next(iterator: *ArgumentIterator) ?[]const u8 {
-        if (iterator.remaining.len == 0) return null;
+        if (iterator.remaining.len == 0) {
+            return null;
+        }
         const end = std.mem.indexOfScalar(u8, iterator.remaining, 0) orelse iterator.remaining.len;
         const argument = iterator.remaining[0..end];
         iterator.remaining = if (end < iterator.remaining.len) iterator.remaining[end + 1 ..] else iterator.remaining[end..];
@@ -308,8 +335,9 @@ fn validateTitle(title: []const u8, source: u8) !void {
 }
 
 fn validatePath(path: []const u8) !void {
-    if (path.len == 0 or path.len > schema.max_cwd_bytes or std.mem.indexOfScalar(u8, path, 0) != null)
+    if (path.len == 0 or path.len > schema.max_cwd_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
         return error.InvalidCheckpoint;
+    }
 }
 
 test "checkpoint records round trip through the file encoding" {

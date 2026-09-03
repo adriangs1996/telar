@@ -108,7 +108,9 @@ pub fn blit(operation: Operation) Stats {
     const color_source: ColorSource = .{ .terminal = terminal, .colors = state.colors };
 
     var stats: Stats = .{};
-    if (opts.damaged_rows) |damaged| std.debug.assert(damaged.len >= b.h);
+    if (opts.damaged_rows) |damaged| {
+        std.debug.assert(damaged.len >= b.h);
+    }
 
     // `full` means global state moved - the palette, the default colours, the
     // dimensions - and the per-row flags say nothing useful about that.
@@ -138,7 +140,9 @@ pub fn blit(operation: Operation) Stats {
             highlightRow(target, range);
         }
         dirty[y] = false;
-        if (opts.damaged_rows) |damaged| damaged[area.y + y] = true;
+        if (opts.damaged_rows) |damaged| {
+            damaged[area.y + y] = true;
+        }
         stats.copied += 1;
     }
 
@@ -147,7 +151,9 @@ pub fn blit(operation: Operation) Stats {
     // a rendering bug.
     while (y < area.h) : (y += 1) {
         b.fill(area.row(y), " ", .{ .bg = defaultBackground(color_source) });
-        if (opts.damaged_rows) |damaged| damaged[area.y + y] = true;
+        if (opts.damaged_rows) |damaged| {
+            damaged[area.y + y] = true;
+        }
     }
 
     // Applied after the rows, and to *every* row rather than only the dirty
@@ -162,7 +168,9 @@ pub fn blit(operation: Operation) Stats {
         }
     }
 
-    if (opts.cursor) drawCursor(b, area, state);
+    if (opts.cursor) {
+        drawCursor(b, area, state);
+    }
     return stats;
 }
 
@@ -173,11 +181,15 @@ fn highlightRow(target: RowTarget, range: sel.Range) void {
 
     var x: u16 = 0;
     while (x < area.w) : (x += 1) {
-        if (!range.contains(x, y)) continue;
+        if (!range.contains(x, y)) {
+            continue;
+        }
         // Reversed rather than a fixed colour: a pane paints its own
         // background, and a highlight that picks one loses the contrast the
         // moment an agent changes theme.
-        if (b.at(area.x + x, area.y + y)) |cell| cell.style.flags.inverse = !cell.style.flags.inverse;
+        if (b.at(area.x + x, area.y + y)) |cell| {
+            cell.style.flags.inverse = !cell.style.flags.inverse;
+        }
     }
 }
 
@@ -289,12 +301,16 @@ fn blitRow(projection: RowProjection) void {
 fn encode(out: *[ui.Cell.max_bytes]u8, base: u21, extra: []const u21) []const u8 {
     // A cell the emulator never wrote holds codepoint zero, which is not a
     // character. Blanking it here keeps NUL out of the output stream.
-    if (base == 0) return " ";
+    if (base == 0) {
+        return " ";
+    }
 
     var len: usize = std.unicode.utf8Encode(base, out) catch return "\u{FFFD}";
     for (extra) |cp| {
         const remaining = out[len..];
-        if (remaining.len < 4) break;
+        if (remaining.len < 4) {
+            break;
+        }
         len += std.unicode.utf8Encode(cp, remaining) catch break;
     }
     return out[0..len];
@@ -370,9 +386,13 @@ fn rgb(c: vt.color.RGB) ui.Color {
 /// Reversing rather than painting a block keeps whatever character is under it
 /// legible, and costs no knowledge of the pane's theme.
 fn drawCursor(b: *ui.Buffer, area: ui.Rect, state: *const vt.RenderState) void {
-    if (!state.cursor.visible) return;
+    if (!state.cursor.visible) {
+        return;
+    }
     const viewport = state.cursor.viewport orelse return;
-    if (viewport.x >= area.w or viewport.y >= area.h) return;
+    if (viewport.x >= area.w or viewport.y >= area.h) {
+        return;
+    }
 
     const cell = b.at(area.x + viewport.x, area.y + viewport.y) orelse return;
     cell.style.flags.inverse = !cell.style.flags.inverse;

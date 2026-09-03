@@ -70,7 +70,9 @@ pub const Session = struct {
         var buffer: [1024]u8 = undefined;
         while (true) {
             const count = stderr.readStreaming(io, &.{&buffer}) catch return;
-            if (count == 0) return;
+            if (count == 0) {
+                return;
+            }
             const keep = @min(count, session.stderr_bytes.len - session.stderr_len);
             if (keep != 0) {
                 @memcpy(session.stderr_bytes[session.stderr_len..][0..keep], buffer[0..keep]);
@@ -96,17 +98,23 @@ pub const Session = struct {
         }) };
         try session.readExact(&prefix, timeout);
         const response_len = std.mem.readInt(u32, &prefix, .little);
-        if (response_len == 0 or response_len > effects.max_effect_bytes) return error.InvalidWorkerFrame;
+        if (response_len == 0 or response_len > effects.max_effect_bytes) {
+            return error.InvalidWorkerFrame;
+        }
         const storage = try session.gpa.alloc(u8, response_len);
         errdefer session.gpa.free(storage);
         try session.readExact(storage, timeout);
         if (storage[0] == 3) {
             const failure = try protocol.decodeError(storage);
-            if (failure.event_id != request.event_id) return error.StaleWorkerReply;
+            if (failure.event_id != request.event_id) {
+                return error.StaleWorkerReply;
+            }
             return error.WorkerEventFailed;
         }
         const decoded = try protocol.decodeEffects(storage);
-        if (decoded.event_id != request.event_id) return error.StaleWorkerReply;
+        if (decoded.event_id != request.event_id) {
+            return error.StaleWorkerReply;
+        }
         const result = try session.gpa.create(effects.Result);
         result.* = .{
             .gpa = session.gpa,

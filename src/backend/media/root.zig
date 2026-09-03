@@ -481,7 +481,9 @@ fn stripFileQueries(bytes: []const u8, scratch: []u8, sink: anytype) []const u8 
         copied_until = end;
         stripped = true;
     }
-    if (!stripped) return bytes;
+    if (!stripped) {
+        return bytes;
+    }
     const tail = bytes[copied_until..];
     @memcpy(scratch[kept..][0..tail.len], tail);
     return scratch[0 .. kept + tail.len];
@@ -536,7 +538,9 @@ fn parseFileQueryControl(control: []const u8) ?FileQueryControl {
             else => return null,
         }
     }
-    if (!query or !file) return null;
+    if (!query or !file) {
+        return null;
+    }
     const bpp: usize = if ((format orelse 32) == 24) 3 else 4;
     const pixels = std.math.mul(
         usize,
@@ -663,7 +667,9 @@ fn recordSharedFrame(selected: []SelectedSharedFrame, selected_count: *usize, fr
         entry.recent_count += 1;
         return true;
     }
-    if (selected_count.* == selected.len) return false;
+    if (selected_count.* == selected.len) {
+        return false;
+    }
     selected[selected_count.*] = .{
         .key = frame.key,
         .recent_count = 1,
@@ -682,8 +688,9 @@ fn sharedFrameAvailable(resource: FrameResource) bool {
     if (resource.byte_len > resource.limit) {
         return false;
     }
-    if (comptime builtin.os.tag == .windows or builtin.abi.isAndroid() or !builtin.link_libc)
+    if (comptime builtin.os.tag == .windows or builtin.abi.isAndroid() or !builtin.link_libc) {
         return false;
+    }
 
     const Decoder = std.base64.standard.Decoder;
     const name_len = Decoder.calcSizeForSlice(resource.encoded_name) catch return false;
@@ -825,7 +832,9 @@ fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
             else => return null,
         }
     }
-    if (!transmit or !cursor_static or !quiet) return null;
+    if (!transmit or !cursor_static or !quiet) {
+        return null;
+    }
     const image = image_id orelse return null;
     const placement = placement_id orelse return null;
     const depth = format orelse return null;
@@ -944,14 +953,18 @@ const TestOutput = struct {
     }
 
     pub fn observeSharedFrame(output: *TestOutput, frame: SharedFrameView) bool {
-        if (!output.direct) return false;
+        if (!output.direct) {
+            return false;
+        }
         output.direct_frames += 1;
         output.last_direct = frame;
         return true;
     }
 
     pub fn observeFileQuery(output: *TestOutput, query: FileQueryView) bool {
-        if (!output.direct) return false;
+        if (!output.direct) {
+            return false;
+        }
         output.queries += 1;
         output.last_query_id = query.image_id;
         output.last_query_len = query.byte_len;
@@ -1148,8 +1161,9 @@ test "media terminal preserves cursor-relative KGP placement" {
 }
 
 test "media terminal loads KGP pixels from POSIX shared memory" {
-    if (comptime builtin.os.tag == .windows or builtin.abi.isAndroid())
+    if (comptime builtin.os.tag == .windows or builtin.abi.isAndroid()) {
         return error.SkipZigTest;
+    }
 
     const pixels = [_]u8{ 1, 2, 3, 255 };
     var name_buffer: [128]u8 = undefined;
