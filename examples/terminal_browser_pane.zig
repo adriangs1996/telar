@@ -383,7 +383,13 @@ const HostInput = struct {
         capabilities_changed: bool = false,
     };
 
-    fn feed(input: *HostInput, io: Io, session: *pty.Session, capabilities: *HostCapabilities, bytes: []const u8) !Result {
+    const FeedContext = struct {
+        io: Io,
+        session: *pty.Session,
+        capabilities: *HostCapabilities,
+    };
+
+    fn feed(input: *HostInput, context: FeedContext, bytes: []const u8) !Result {
         if (bytes.len > input.pending.len - input.len) {
             return error.HostInputOverflow;
         }
@@ -399,7 +405,7 @@ const HostInput = struct {
             const raw = input.pending[0..parsed.len];
             switch (parsed.event) {
                 .terminal_response => |response| {
-                    result.capabilities_changed = observeHostCapability(capabilities, response) or
+                    result.capabilities_changed = observeHostCapability(context.capabilities, response) or
                         result.capabilities_changed;
                 },
                 // Unknown host responses are not child input.
@@ -409,7 +415,7 @@ const HostInput = struct {
                     if (raw.len == 1 and raw[0] == 0x1d) {
                         result.stop = true;
                     } else {
-                        try session.writeAll(io, raw);
+                        try context.session.writeAll(context.io, raw);
                     }
                 },
             }
@@ -792,9 +798,7 @@ pub fn main(init: std.process.Init) !void {
         for (batch[0..count]) |message| switch (message) {
             .input => |chunk| {
                 const result = try host_input.feed(
-                    io,
-                    &session,
-                    &capabilities,
+                    .{ .io = io, .session = &session, .capabilities = &capabilities },
                     chunk.bytes[0..chunk.len],
                 );
                 stop = stop or result.stop;
