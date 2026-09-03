@@ -728,7 +728,9 @@ fn sharedFrameAt(bytes: []const u8, start: usize) ?SharedFrame {
     }
     const command_start = start + atomic_shared_prefix.len;
     const terminator = std.mem.indexOfPos(u8, bytes, command_start, "\x1b\\") orelse return null;
-    if (!std.mem.startsWith(u8, bytes[terminator..], atomic_shared_suffix)) return null;
+    if (!std.mem.startsWith(u8, bytes[terminator..], atomic_shared_suffix)) {
+        return null;
+    }
     const command = bytes[command_start..terminator];
     const separator = std.mem.indexOfScalar(u8, command, ';') orelse return null;
     const parsed = parseSharedFrameControl(command[0..separator]) orelse return null;
