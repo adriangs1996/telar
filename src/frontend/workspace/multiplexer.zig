@@ -924,7 +924,7 @@ pub const Model = struct {
             return error.ModelNotEmpty;
         }
 
-        try model.insertPane(spec.pane_id, spec.location, spec.size, true);
+        try model.insertPane(spec, true);
         errdefer _ = model.removePane(spec.pane_id);
         try model.layout.addRoot(spec.pane_id);
         model.location = spec.location;
@@ -943,7 +943,11 @@ pub const Model = struct {
             return error.PaneTooSmall;
         const size = rectSize(prospective.new_content) orelse return error.PaneTooSmall;
 
-        try model.insertPane(request.new_pane, request.location, size, true);
+        try model.insertPane(.{
+            .pane_id = request.new_pane,
+            .location = request.location,
+            .size = size,
+        }, true);
         errdefer _ = model.removePane(request.new_pane);
         try model.layout.split(.{
             .existing_pane = request.existing_pane,
@@ -968,7 +972,11 @@ pub const Model = struct {
 
         const focused = model.layout.focused() orelse {
             const size = rectSize(discovered.area) orelse placeholder_size;
-            try model.insertPane(discovered.pane_id, discovered.location, size, false);
+            try model.insertPane(.{
+                .pane_id = discovered.pane_id,
+                .location = discovered.location,
+                .size = size,
+            }, false);
             errdefer _ = model.removePane(discovered.pane_id);
             try model.layout.addRoot(discovered.pane_id);
             model.location = discovered.location;
@@ -981,7 +989,11 @@ pub const Model = struct {
         else
             placeholder_size;
 
-        try model.insertPane(discovered.pane_id, discovered.location, size, false);
+        try model.insertPane(.{
+            .pane_id = discovered.pane_id,
+            .location = discovered.location,
+            .size = size,
+        }, false);
         errdefer _ = model.removePane(discovered.pane_id);
         try model.layout.split(.{
             .existing_pane = focused,
@@ -1213,28 +1225,28 @@ pub const Model = struct {
         }
     }
 
-    fn insertPane(model: *Model, pane_id: schema.PaneId, location: schema.TabLocation, size: schema.TerminalSize, attached: bool) !void {
-        if (pane_id == .invalid) {
+    fn insertPane(model: *Model, spec: PaneSpec, attached: bool) !void {
+        if (spec.pane_id == .invalid) {
             return error.InvalidPaneId;
         }
-        if (model.find(pane_id) != null) {
+
+        if (model.find(spec.pane_id) != null) {
             return error.DuplicatePane;
         }
+
         if (model.pane_count == max_panes) {
             return error.PaneLimitReached;
         }
+
         for (&model.panes, 0..) |*slot, slot_index| {
             if (slot.* == null) {
                 slot.* = try Pane.init(model.gpa, .{
-                    .spec = .{
-                        .pane_id = pane_id,
-                        .location = location,
-                        .size = size,
-                    },
+                    .spec = spec,
                     .attached = attached,
                 });
                 model.pane_count += 1;
-                model.indexPane(pane_id, @intCast(slot_index));
+                model.indexPane(spec.pane_id, @intCast(slot_index));
+
                 return;
             }
         }
