@@ -73,35 +73,46 @@ pub const Segment = struct {
     style: Style = .{},
 };
 
+pub const SegmentInput = struct {
+    text: []const u8,
+    icon: ?ui_icons.Icon = null,
+    style: Style = .{},
+};
+
 pub const Content = struct {
     text_bytes: [max_text_bytes]u8 = @splat(0),
     text_len: u16 = 0,
     segments: [max_segments]Segment = @splat(.{}),
     segment_count: u8 = 0,
 
-    pub fn append(content: *Content, segment_text: []const u8, icon: ?ui_icons.Icon, style: Style) !void {
+    /// Appends one logical segment after validating and compacting its text.
+    ///
+    /// ```zig
+    /// try content.append(.{ .text = " CPU", .icon = .cpu });
+    /// ```
+    pub fn append(content: *Content, input: SegmentInput) !void {
         if (content.segment_count == max_segments) {
             return error.TooManyBarSegments;
         }
-        if (segment_text.len == 0 and icon == null) {
+        if (input.text.len == 0 and input.icon == null) {
             return error.EmptyBarSegment;
         }
-        if (!validText(segment_text)) {
+        if (!validText(input.text)) {
             return error.InvalidBarText;
         }
 
-        const end = @as(usize, content.text_len) + segment_text.len;
+        const end = @as(usize, content.text_len) + input.text.len;
         if (end > content.text_bytes.len) {
             return error.BarTextTooLong;
         }
 
         const offset = content.text_len;
-        @memcpy(content.text_bytes[offset..end], segment_text);
+        @memcpy(content.text_bytes[offset..end], input.text);
         content.segments[content.segment_count] = .{
             .text_offset = offset,
-            .text_len = @intCast(segment_text.len),
-            .icon = icon,
-            .style = style,
+            .text_len = @intCast(input.text.len),
+            .icon = input.icon,
+            .style = input.style,
         };
         content.text_len = @intCast(end);
         content.segment_count += 1;
@@ -394,9 +405,10 @@ fn validText(text: []const u8) bool {
 
 test "bar content keeps bounded segment text and exact style" {
     var content: Content = .{};
-    try content.append(" CPU 20%", .cpu, .{
-        .foreground = .{ .palette = .teal },
-        .bold = true,
+    try content.append(.{
+        .text = " CPU 20%",
+        .icon = .cpu,
+        .style = .{ .foreground = .{ .palette = .teal }, .bold = true },
     });
 
     try std.testing.expectEqual(@as(u8, 1), content.segment_count);
@@ -407,7 +419,7 @@ test "bar content keeps bounded segment text and exact style" {
 
 test "bar content reserves the rendered width of wide Unicode icons" {
     var content: Content = .{};
-    try content.append("", .battery_full, .{});
+    try content.append(.{ .text = "", .icon = .battery_full });
 
     try std.testing.expectEqual(
         @max(@as(u16, 1), ui.measure(ui_icons.Icon.battery_full.unicodeGlyph())),
@@ -425,7 +437,7 @@ test "bar state rejects stale dynamic updates and folds equal content" {
     };
     var state = State.init(configuration.presentation());
     var content: Content = .{};
-    try content.append("ready", null, .{});
+    try content.append(.{ .text = "ready" });
 
     try std.testing.expectError(error.StaleBarUpdate, state.update(.{ .generation = 6, .position = .bottom_left, .content = content }));
     try std.testing.expectEqual(Change.changed, try state.update(.{ .generation = 7, .position = .bottom_left, .content = content }));
@@ -435,6 +447,6 @@ test "bar state rejects stale dynamic updates and folds equal content" {
 test "bar text rejects terminal controls before it reaches the renderer" {
     var content: Content = .{};
 
-    try std.testing.expectError(error.InvalidBarText, content.append("line\n", null, .{}));
-    try std.testing.expectError(error.InvalidBarText, content.append("\x1b[31m", null, .{}));
+    try std.testing.expectError(error.InvalidBarText, content.append(.{ .text = "line\n" }));
+    try std.testing.expectError(error.InvalidBarText, content.append(.{ .text = "\x1b[31m" }));
 }

@@ -1824,7 +1824,7 @@ fn parseBarContent(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic)
         return content;
     }
     if (string(state, absolute)) |value| {
-        content.append(value, null, .{}) catch |err| {
+        content.append(.{ .text = value }) catch |err| {
             diagnostic.set("invalid bar text: {s}", .{@errorName(err)});
             return error.InvalidBarContent;
         };
@@ -1843,7 +1843,7 @@ fn parseBarContent(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic)
     pop(state, 1);
     if (has_text or has_icon) {
         const segment = try parseBarSegment(state, absolute, diagnostic);
-        content.append(segment.text, segment.icon, segment.style) catch |err| {
+        content.append(.{ .text = segment.text, .icon = segment.icon, .style = segment.style }) catch |err| {
             diagnostic.set("invalid bar segment: {s}", .{@errorName(err)});
             return error.InvalidBarContent;
         };
@@ -1862,7 +1862,7 @@ fn parseBarContent(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic)
             pop(state, 1);
             return err;
         };
-        content.append(segment.text, segment.icon, segment.style) catch |err| {
+        content.append(.{ .text = segment.text, .icon = segment.icon, .style = segment.style }) catch |err| {
             pop(state, 1);
             diagnostic.set("invalid bar segment {d}: {s}", .{ segment_index + 1, @errorName(err) });
             return error.InvalidBarContent;

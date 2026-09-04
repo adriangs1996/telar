@@ -80,7 +80,7 @@ pub const ApplyBarUpdateHandler = struct {
 
 fn contentWith(text: []const u8) bars.Content {
     var content: bars.Content = .{};
-    content.append(text, null, .{}) catch unreachable;
+    content.append(.{ .text = text }) catch unreachable;
 
     return content;
 }

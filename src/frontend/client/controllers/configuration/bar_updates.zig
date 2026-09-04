@@ -266,7 +266,7 @@ fn applyCommandOutput(client: *Client, completed: CommandOutput) !void {
 
     var content: bars.Content = .{};
     if (completed.output.len != 0) {
-        try content.append(completed.output.slice(), null, .{});
+        try content.append(.{ .text = completed.output.slice() });
     }
     _ = try publishEvaluation(client, .{
         .generation = completed.execution.generation,

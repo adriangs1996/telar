@@ -550,7 +550,7 @@ test "configured right content stops before the permanent proxy badge" {
     };
     const workspaces: workspace_list.Snapshot = .{};
     var content: bars.Content = .{};
-    try content.append("quota", null, .{ .foreground = .{ .palette = .accent } });
+    try content.append(.{ .text = "quota", .style = .{ .foreground = .{ .palette = .accent } } });
     const right: bars.Slot = .{ .content = content };
 
     render(&context, .{
