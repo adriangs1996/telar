@@ -7,6 +7,12 @@ const protocol = @import("protocol.zig");
 const Io = std.Io;
 
 pub const Session = struct {
+    pub const OpenOptions = struct {
+        entry: []const u8,
+        timeout_ms: u32,
+    };
+
+    io: Io,
     gpa: std.mem.Allocator,
     child: std.process.Child,
     reader_storage: Io.File.MultiReader.Buffer(1) = undefined,
@@ -19,17 +25,18 @@ pub const Session = struct {
     /// Starts one isolated `tap-worker` with empty environment and root cwd.
     ///
     /// ```zig
-    /// const session = try Session.open(io, gpa, entry, 200);
+    /// const session = try Session.open(io, gpa, .{ .entry = entry, .timeout_ms = 200 });
     /// ```
-    pub fn open(io: Io, gpa: std.mem.Allocator, entry: []const u8, timeout_ms: u32) !*Session {
+    pub fn open(io: Io, gpa: std.mem.Allocator, options: OpenOptions) !*Session {
         const session = try gpa.create(Session);
         errdefer gpa.destroy(session);
         var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const executable = executable_buffer[0..try std.process.executablePath(io, &executable_buffer)];
-        const argv = [_][]const u8{ executable, "tap-worker", entry };
+        const argv = [_][]const u8{ executable, "tap-worker", options.entry };
         var empty_environment = std.process.Environ.Map.init(gpa);
         defer empty_environment.deinit();
         session.* = .{
+            .io = io,
             .gpa = gpa,
             .child = try std.process.spawn(io, .{
                 .argv = &argv,
@@ -39,24 +46,24 @@ pub const Session = struct {
                 .stdout = .pipe,
                 .stderr = .pipe,
             }),
-            .timeout_ms = timeout_ms,
+            .timeout_ms = options.timeout_ms,
         };
         errdefer session.child.kill(io);
         session.reader.init(gpa, io, session.reader_storage.toStreams(), &.{session.child.stdout.?});
         errdefer session.reader.deinit();
-        session.stderr_future = try io.concurrent(drainStderr, .{ session, io });
+        session.stderr_future = try io.concurrent(drainStderr, .{session});
         return session;
     }
 
     /// Kills the worker and releases its bounded stdout reader.
     ///
     /// ```zig
-    /// session.close(io);
+    /// session.close();
     /// ```
-    pub fn close(session: *Session, io: Io) void {
-        session.child.kill(io);
+    pub fn close(session: *Session) void {
+        session.child.kill(session.io);
         if (session.stderr_future) |*future| {
-            _ = future.await(io) catch {};
+            _ = future.await(session.io) catch {};
         }
         if (session.stderr_len != 0) {
             std.log.warn("tap worker stderr: {s}", .{session.stderr_bytes[0..session.stderr_len]});
@@ -65,11 +72,11 @@ pub const Session = struct {
         session.gpa.destroy(session);
     }
 
-    fn drainStderr(session: *Session, io: Io) anyerror!void {
+    fn drainStderr(session: *Session) anyerror!void {
         const stderr = session.child.stderr orelse return;
         var buffer: [1024]u8 = undefined;
         while (true) {
-            const count = stderr.readStreaming(io, &.{&buffer}) catch return;
+            const count = stderr.readStreaming(session.io, &.{&buffer}) catch return;
             if (count == 0) {
                 return;
             }
@@ -84,15 +91,15 @@ pub const Session = struct {
     /// Sends one exchange and returns a heap-owned effect result.
     ///
     /// ```zig
-    /// const result = try session.exchange(io, spec, request);
+    /// const result = try session.exchange(spec, request);
     /// ```
-    pub fn exchange(session: *Session, io: Io, spec: Spec, request: Request) !*effects.Result {
+    pub fn exchange(session: *Session, spec: Spec, request: Request) !*effects.Result {
         var prefix: [protocol.prefix_bytes]u8 = undefined;
         std.mem.writeInt(u32, &prefix, @intCast(request.bytes.len), .little);
         const stdin = session.child.stdin orelse return error.WorkerClosed;
-        stdin.writeStreamingAll(io, &prefix) catch return error.WorkerWriteFailed;
-        stdin.writeStreamingAll(io, request.bytes) catch return error.WorkerWriteFailed;
-        const timeout: Io.Timeout = .{ .deadline = .fromNow(io, .{
+        stdin.writeStreamingAll(session.io, &prefix) catch return error.WorkerWriteFailed;
+        stdin.writeStreamingAll(session.io, request.bytes) catch return error.WorkerWriteFailed;
+        const timeout: Io.Timeout = .{ .deadline = .fromNow(session.io, .{
             .clock = .awake,
             .raw = .fromMilliseconds(session.timeout_ms),
         }) };

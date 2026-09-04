@@ -112,7 +112,7 @@ const Worker = struct {
             _ = future.await(io) catch {};
             worker.future = null;
         }
-        worker.closeSession(io);
+        worker.closeSession();
         while (true) {
             var pending: [1]*Frame = undefined;
             const count = worker.requests.getUncancelable(io, &pending, 0) catch break;
@@ -154,7 +154,7 @@ const Worker = struct {
                 worker.recordRestart(io);
                 continue;
             };
-            const result = session.exchange(io, .{
+            const result = session.exchange(.{
                 .package_index = worker.spec.package_index,
                 .plugin_id = worker.spec.plugin_id,
                 .digest = worker.spec.digest,
@@ -166,7 +166,7 @@ const Worker = struct {
                 .pane_generation = frame.pane_generation,
             }) catch |err| {
                 if (err != error.WorkerEventFailed) {
-                    worker.closeSession(io);
+                    worker.closeSession();
                     worker.recordRestart(io);
                 }
                 continue;
@@ -181,14 +181,14 @@ const Worker = struct {
         if (worker.session) |session| {
             return session;
         }
-        worker.session = try Session.open(io, worker.gpa, worker.spec.entry(), 200);
+        worker.session = try Session.open(io, worker.gpa, .{ .entry = worker.spec.entry(), .timeout_ms = 200 });
         return worker.session.?;
     }
 
-    fn closeSession(worker: *Worker, io: Io) void {
+    fn closeSession(worker: *Worker) void {
         const session = worker.session orelse return;
         worker.session = null;
-        session.close(io);
+        session.close();
     }
 
     fn recordRestart(worker: *Worker, io: Io) void {
