@@ -155,12 +155,11 @@ pub const Renderer = struct {
             const next_atlas = try renderer.gpa.alloc(u8, atlas_len);
             errdefer renderer.gpa.free(next_atlas);
             const text = if (renderer.text) |*value| value else unreachable;
-            try renderAtlas(
-                text,
-                next_atlas,
-                raster_size,
-                next_slots[0..next_slot_count],
-            );
+            try renderAtlas(text, .{
+                .pixels = next_atlas,
+                .raster_size = raster_size,
+                .slots = next_slots[0..next_slot_count],
+            });
             if (renderer.atlas.len != 0) {
                 renderer.gpa.free(renderer.atlas);
             }
@@ -380,21 +379,27 @@ fn scaledDimension(value: u16, longest: u16) u16 {
     return @intCast(@max(1, numerator / longest));
 }
 
-fn renderAtlas(text: *raster.Rasterizer, pixels: []u8, raster_size: RasterSize, slots: []const Slot) !void {
-    const icon_size = @min(raster_size.width, raster_size.height);
+const AtlasInput = struct {
+    pixels: []u8,
+    raster_size: RasterSize,
+    slots: []const Slot,
+};
+
+fn renderAtlas(text: *raster.Rasterizer, atlas: AtlasInput) !void {
+    const icon_size = @min(atlas.raster_size.width, atlas.raster_size.height);
     try text.setPixelHeight(icon_size);
     const metrics = text.metrics();
     const line_top = @divTrunc(
-        @as(i32, raster_size.height) - @as(i32, @intCast(metrics.line_height)),
+        @as(i32, atlas.raster_size.height) - @as(i32, @intCast(metrics.line_height)),
         2,
     );
     const baseline = line_top + metrics.ascender;
-    const slot_bytes = @as(usize, raster_size.width) * raster_size.height * 4;
-    for (slots, 0..) |slot, index| {
+    const slot_bytes = @as(usize, atlas.raster_size.width) * atlas.raster_size.height * 4;
+    for (atlas.slots, 0..) |slot, index| {
         const surface: raster.Surface = .{
-            .pixels = pixels[index * slot_bytes ..][0..slot_bytes],
-            .width = raster_size.width,
-            .height = raster_size.height,
+            .pixels = atlas.pixels[index * slot_bytes ..][0..slot_bytes],
+            .width = atlas.raster_size.width,
+            .height = atlas.raster_size.height,
         };
         fill(surface, slot.background);
         const advance = try text.drawText(
@@ -407,7 +412,7 @@ fn renderAtlas(text: *raster.Rasterizer, pixels: []u8, raster_size: RasterSize, 
                 .green = slot.foreground[1],
                 .blue = slot.foreground[2],
             },
-            raster_size.width,
+            atlas.raster_size.width,
         );
         if (advance == 0) {
             return error.EmptyIconGlyph;
