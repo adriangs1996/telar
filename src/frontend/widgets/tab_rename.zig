@@ -12,8 +12,18 @@ pub const Kind = enum { rename_tab, create_workspace, rename_workspace, copy_sea
 
 pub const Output = widget.Cursor;
 
-pub fn render(context: *widget.Context, area: ui.Rect, field: *Field, kind: Kind) Output {
-    const prefix = switch (kind) {
+pub const Input = struct {
+    area: ui.Rect,
+    field: *Field,
+    kind: Kind,
+};
+
+/// Renders one tab or workspace name prompt and returns its cursor.
+/// For example: `const cursor = render(context, .{ .area = area, .field = field, .kind = .rename_tab });`.
+pub fn render(context: *widget.Context, input: Input) Output {
+    const area = input.area;
+    const field = input.field;
+    const prefix = switch (input.kind) {
         .rename_tab => " rename tab: ",
         .create_workspace => " new workspace: ",
         .rename_workspace => " rename workspace: ",
