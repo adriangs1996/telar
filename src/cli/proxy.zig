@@ -125,7 +125,7 @@ pub fn run(init: std.process.Init, options: parser.ProxyOptions) !u8 {
     defer writer.flush() catch {};
 
     const paths = try AuthorityPaths.init(directory);
-    const current = inspect(init.io, init.gpa, init.minimal.environ, &paths);
+    const current = inspect(.fromProcess(init), &paths);
     switch (options.action) {
         .status => {
             try writer.print("telar proxy trust: {s} ({s})\n", .{ @tagName(current.status), directory });
@@ -176,6 +176,16 @@ const Inspection = struct {
     record: ?Record,
 };
 
+const InspectionContext = struct {
+    io: Io,
+    gpa: std.mem.Allocator,
+    environ: std.process.Environ,
+
+    fn fromProcess(init: std.process.Init) InspectionContext {
+        return .{ .io = init.io, .gpa = init.gpa, .environ = init.minimal.environ };
+    }
+};
+
 /// Reports whether the record, files, fingerprint, and lifetime prove that
 /// Telar's system authority is installed.
 ///
@@ -184,14 +194,14 @@ const Inspection = struct {
 /// ```
 pub fn trusted(init: std.process.Init, directory: []const u8) bool {
     const paths = AuthorityPaths.init(directory) catch return false;
-    return inspect(init.io, init.gpa, init.minimal.environ, &paths).status == .installed;
+    return inspect(.fromProcess(init), &paths).status == .installed;
 }
 
 /// Rotates an installed CA during server startup when less than one day of
 /// its 30-day validity remains. An absent trust record is a no-op.
 pub fn rotateIfNeeded(init: std.process.Init, directory: []const u8) !bool {
     const paths = try AuthorityPaths.init(directory);
-    const current = inspect(init.io, init.gpa, init.minimal.environ, &paths);
+    const current = inspect(.fromProcess(init), &paths);
     if (current.status != .stale or current.record == null) {
         return false;
     }
@@ -205,14 +215,14 @@ pub fn rotateIfNeeded(init: std.process.Init, directory: []const u8) !bool {
     return true;
 }
 
-fn inspect(io: Io, gpa: std.mem.Allocator, environ: std.process.Environ, paths: *const AuthorityPaths) Inspection {
-    const record = readRecord(io, gpa, paths.recordPath()) catch return .{ .status = .stale, .record = null };
+fn inspect(context: InspectionContext, paths: *const AuthorityPaths) Inspection {
+    const record = readRecord(context.io, context.gpa, paths.recordPath()) catch return .{ .status = .stale, .record = null };
     const stored = record orelse return .{ .status = .absent, .record = null };
-    validateRecordTarget(environ, stored, paths.files().certificate) catch
+    validateRecordTarget(context.environ, stored, paths.files().certificate) catch
         return .{ .status = .stale, .record = stored };
-    validateDirectory(io, std.fs.path.dirname(paths.recordPath()) orelse return .{ .status = .stale, .record = stored }) catch
+    validateDirectory(context.io, std.fs.path.dirname(paths.recordPath()) orelse return .{ .status = .stale, .record = stored }) catch
         return .{ .status = .stale, .record = stored };
-    const authority = ca.Authority.loadExisting(.{ .io = io, .allocator = gpa }, paths.files()) catch
+    const authority = ca.Authority.loadExisting(.{ .io = context.io, .allocator = context.gpa }, paths.files()) catch
         return .{ .status = .stale, .record = stored };
     if (!std.mem.eql(u8, &authority.fingerprint(), &stored.fingerprint)) {
         return .{ .status = .stale, .record = stored };
@@ -220,7 +230,7 @@ fn inspect(io: Io, gpa: std.mem.Allocator, environ: std.process.Environ, paths: 
     if (!(authority.hasSystemLifetime() catch false)) {
         return .{ .status = .stale, .record = stored };
     }
-    if (authority.expiresWithin(io, rotation_window_seconds) catch true) {
+    if (authority.expiresWithin(context.io, rotation_window_seconds) catch true) {
         return .{ .status = .stale, .record = stored };
     }
 
@@ -626,13 +636,14 @@ test "inspection accepts only the recorded short-lived authority" {
     const record = try makeRecord(selected, authority.fingerprint(), store);
     try writeRecord(io, paths.recordPath(), record);
 
-    const installed = inspect(io, std.testing.allocator, environ, &paths);
+    const context: InspectionContext = .{ .io = io, .gpa = std.testing.allocator, .environ = environ };
+    const installed = inspect(context, &paths);
     try std.testing.expectEqual(Status.installed, installed.status);
 
     var changed = record;
     changed.fingerprint[0] = if (changed.fingerprint[0] == 'A') 'B' else 'A';
     try writeRecord(io, paths.recordPath(), changed);
-    try std.testing.expectEqual(Status.stale, inspect(io, std.testing.allocator, environ, &paths).status);
+    try std.testing.expectEqual(Status.stale, inspect(context, &paths).status);
 }
 
 test "update-ca-certificates rotation keeps the replacement at its fixed path" {
