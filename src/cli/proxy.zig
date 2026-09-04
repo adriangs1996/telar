@@ -198,6 +198,11 @@ const AuthorityTarget = struct {
     certificate: []const u8,
 };
 
+const AuthorityCommand = struct {
+    init: std.process.Init,
+    writer: *Io.Writer,
+};
+
 /// Reports whether the record, files, fingerprint, and lifetime prove that
 /// Telar's system authority is installed.
 ///
@@ -265,7 +270,10 @@ fn install(init: std.process.Init, options: InstallOptions) !void {
         .certificate = options.paths.files().certificate,
     }, &store_path_buffer);
 
-    try installAuthority(init, options.backend, prepared_files.certificate, store_path, options.writer);
+    try installAuthority(.{ .init = init, .writer = options.writer }, .{
+        .backend = options.backend,
+        .certificate = prepared_files.certificate,
+    }, store_path);
     errdefer uninstallAuthority(init, options.backend, &fingerprint, rollback_certificate, store_path, options.writer) catch {};
     if (options.previous) |old| {
         if (removePreviousSeparately(old.backend, options.backend)) {
@@ -397,14 +405,14 @@ fn validateRecordTarget(environ: std.process.Environ, record: Record, certificat
     }
 }
 
-fn installAuthority(init: std.process.Init, selected: TrustBackend, certificate: []const u8, destination: []const u8, writer: *Io.Writer) !void {
-    switch (selected) {
-        .macos => try runCommand(init, &.{ "/usr/bin/security", "add-trusted-cert", "-r", "trustRoot", "-k", destination, certificate }, writer),
+fn installAuthority(command: AuthorityCommand, target: AuthorityTarget, destination: []const u8) !void {
+    switch (target.backend) {
+        .macos => try runCommand(command.init, &.{ "/usr/bin/security", "add-trusted-cert", "-r", "trustRoot", "-k", destination, target.certificate }, command.writer),
         .update_ca_certificates => {
-            try runCommand(init, &.{ "sudo", "--", "install", "-m", "0644", certificate, destination }, writer);
-            try runCommand(init, &.{ "sudo", "--", "update-ca-certificates" }, writer);
+            try runCommand(command.init, &.{ "sudo", "--", "install", "-m", "0644", target.certificate, destination }, command.writer);
+            try runCommand(command.init, &.{ "sudo", "--", "update-ca-certificates" }, command.writer);
         },
-        .trust => try runCommand(init, &.{ "sudo", "--", "trust", "anchor", certificate }, writer),
+        .trust => try runCommand(command.init, &.{ "sudo", "--", "trust", "anchor", target.certificate }, command.writer),
     }
 }
 
