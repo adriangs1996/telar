@@ -71,7 +71,7 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
     if (input.graphical_frame) {
         context.buffer.fillWithoutCorners(area, style);
     } else {
-        context.buffer.fill(area, " ", style);
+        context.buffer.fill(area, .{ .glyph = " ", .style = style });
         context.buffer.box(area, .{
             .fg = context.palette.accent,
             .bg = background,
@@ -104,7 +104,7 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
 
         const line: ui.Rect = .{ .x = inner.x, .y = row_y, .w = inner.w, .h = 1 };
         const row_background = if (row.selected) context.palette.surface1 else background;
-        context.buffer.fill(line, " ", .{ .fg = context.palette.text, .bg = row_background });
+        context.buffer.fill(line, .{ .glyph = " ", .style = .{ .fg = context.palette.text, .bg = row_background } });
         _ = context.buffer.writeTruncated(line, line.x + 1, line.y, row.slice(), line.w -| 2, .{
             .fg = if (row.selected) context.palette.accent else context.palette.text,
             .bg = row_background,
@@ -144,7 +144,7 @@ test "cell fallback connects every border edge and graphical frame keeps corners
     var buffer = try ui.Buffer.init(std.testing.allocator, 40, 12);
     defer buffer.deinit();
     const outside: ui.Style = .{ .bg = .{ .rgb = .{ 1, 2, 3 } } };
-    buffer.fill(buffer.area(), "#", outside);
+    buffer.fill(buffer.area(), .{ .glyph = "#", .style = outside });
     var hits: widget.Hits = .{};
     var context: widget.Context = .{
         .buffer = &buffer,
@@ -173,7 +173,7 @@ test "cell fallback connects every border edge and graphical frame keeps corners
     try std.testing.expectEqualStrings("─", buffer.at(cell_area.x + 1, cell_area.y + cell_area.h - 1).?.text());
     try std.testing.expectEqualDeep(context.palette.panel_bg, buffer.at(cell_area.x + 1, cell_area.y).?.style.bg);
 
-    buffer.fill(buffer.area(), "#", outside);
+    buffer.fill(buffer.area(), .{ .glyph = "#", .style = outside });
     var graphical = input;
     graphical.graphical_frame = true;
     const area = render(&context, buffer.area(), graphical).area;

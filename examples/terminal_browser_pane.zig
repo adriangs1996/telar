@@ -544,15 +544,15 @@ fn drawFrame(buffer: *ui.Buffer, frame: FrameGeometry) void {
         .bg = .{ .rgb = .{ 0x10, 0x10, 0x10 } },
     };
     buffer.clear(background);
-    buffer.fill(frame.outer.row(0), "─", border);
-    buffer.fill(frame.outer.row(frame.outer.h - 1), "─", border);
-    buffer.fill(.{ .x = frame.outer.x, .y = frame.outer.y, .w = 1, .h = frame.outer.h }, "│", border);
+    buffer.fill(frame.outer.row(0), .{ .glyph = "─", .style = border });
+    buffer.fill(frame.outer.row(frame.outer.h - 1), .{ .glyph = "─", .style = border });
+    buffer.fill(.{ .x = frame.outer.x, .y = frame.outer.y, .w = 1, .h = frame.outer.h }, .{ .glyph = "│", .style = border });
     buffer.fill(.{
         .x = frame.outer.x + frame.outer.w - 1,
         .y = frame.outer.y,
         .w = 1,
         .h = frame.outer.h,
-    }, "│", border);
+    }, .{ .glyph = "│", .style = border });
     buffer.setCell(frame.outer.x, frame.outer.y, "┌", 1, border);
     buffer.setCell(frame.outer.x + frame.outer.w - 1, frame.outer.y, "┐", 1, border);
     buffer.setCell(frame.outer.x, frame.outer.y + frame.outer.h - 1, "└", 1, border);

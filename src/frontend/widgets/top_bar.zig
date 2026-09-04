@@ -42,7 +42,7 @@ pub fn render(context: *widget.Context, input: Input) void {
         .fg = context.palette.text,
         .bg = context.palette.panel_bg,
     };
-    context.buffer.fill(area, " ", bar_style);
+    context.buffer.fill(area, .{ .glyph = " ", .style = bar_style });
 
     const toggle: ui.Rect = .{
         .x = area.x,
@@ -69,7 +69,7 @@ pub fn render(context: *widget.Context, input: Input) void {
                 },
             };
 
-    context.buffer.fill(toggle, " ", toggle_style);
+    context.buffer.fill(toggle, .{ .glyph = " ", .style = toggle_style });
 
     if (toggle.w != 0) {
         _ = context.drawIcon(
@@ -102,7 +102,7 @@ pub fn render(context: *widget.Context, input: Input) void {
             context.palette.overlay0,
         .bg = context.palette.panel_bg,
     };
-    context.buffer.fill(marker_rect, " ", marker_style);
+    context.buffer.fill(marker_rect, .{ .glyph = " ", .style = marker_style });
     if (marker_width >= 2) {
         _ = context.drawIcon(
             marker_rect,
@@ -144,7 +144,7 @@ pub fn render(context: *widget.Context, input: Input) void {
             .bg = context.palette.panel_bg,
             .flags = .{ .bold = true },
         };
-        context.buffer.fill(badge, " ", badge_style);
+        context.buffer.fill(badge, .{ .glyph = " ", .style = badge_style });
         if (badge_width >= 2) {
             _ = context.drawIcon(
                 badge,

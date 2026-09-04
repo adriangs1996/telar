@@ -91,7 +91,7 @@ fn drawCard(context: *widget.Context, card: ui.Rect, item: *const notifications.
         .bg = background,
         .flags = .{ .bold = true },
     };
-    context.buffer.fill(card, " ", body_style);
+    context.buffer.fill(card, .{ .glyph = " ", .style = body_style });
     context.buffer.box(card, border_style, if (card.w >= 12) item.title() else null);
 
     if (card.w < 8) {

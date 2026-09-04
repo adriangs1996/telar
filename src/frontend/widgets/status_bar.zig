@@ -120,7 +120,7 @@ pub fn renderMode(context: *widget.Context, area: ui.Rect, mode: Mode) void {
     if (area.isEmpty() or mode == .normal) {
         return;
     }
-    context.buffer.fill(area, " ", .{ .bg = context.palette.panel_bg });
+    context.buffer.fill(area, .{ .glyph = " ", .style = .{ .bg = context.palette.panel_bg } });
     switch (mode) {
         .normal => {},
         .prefix => |hints| renderPrefix(context, area, &hints),

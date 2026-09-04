@@ -19,7 +19,7 @@ pub fn renderShelf(context: *widget.Context, area: ui.Rect, snapshot: *const att
     }
     const style: ui.Style = .{ .fg = context.palette.text, .bg = context.palette.surface0 };
     context.hits.add(area, .attachment_shelf_hold);
-    context.buffer.fill(area, " ", style);
+    context.buffer.fill(area, .{ .glyph = " ", .style = style });
     const inner = area.inner(1);
     if (inner.isEmpty()) {
         return plan;
@@ -41,7 +41,7 @@ pub fn renderShelf(context: *widget.Context, area: ui.Rect, snapshot: *const att
         const hovered = context.isHovered(open);
         const background = if (hovered) context.palette.surface1 else context.palette.surface0;
         const card_style: ui.Style = .{ .fg = context.palette.accent, .bg = background };
-        context.buffer.fill(card, " ", .{ .fg = context.palette.text, .bg = background });
+        context.buffer.fill(card, .{ .glyph = " ", .style = .{ .fg = context.palette.text, .bg = background } });
         context.buffer.box(card, card_style, null);
         context.hits.add(card, open);
         if (card.w >= 4) {
@@ -122,7 +122,7 @@ pub fn renderModal(context: *widget.Context, input: ModalInput) ui.Rect {
     if (input.graphical_frame) {
         context.buffer.fillWithoutCorners(area, style);
     } else {
-        context.buffer.fill(area, " ", style);
+        context.buffer.fill(area, .{ .glyph = " ", .style = style });
         context.buffer.box(area, border_style, null);
     }
     const title: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 6, .h = 1 };
@@ -213,7 +213,7 @@ test "cell modal draws a connected border" {
 test "graphical modal leaves corner cells to its rounded frame" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 40, 10);
     defer buffer.deinit();
-    buffer.fill(buffer.area(), ".", .{});
+    buffer.fill(buffer.area(), .{ .glyph = ".", .style = .{} });
     var hits: widget.Hits = .{};
     const palette = &@import("../ui/theme.zig").default_theme.palette;
     var context: widget.Context = .{

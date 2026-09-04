@@ -273,7 +273,7 @@ fn screen(gpa: std.mem.Allocator, rows: []const []const u8) !ui.Buffer {
     var width: u16 = 0;
     for (rows) |row| width = @max(width, ui.measure(row));
     var b = try ui.Buffer.init(gpa, width, @intCast(rows.len));
-    b.fill(b.area(), " ", .{});
+    b.fill(b.area(), .{ .glyph = " ", .style = .{} });
     for (rows, 0..) |row, y| _ = b.writeText(b.area(), 0, @intCast(y), row, .{});
     return b;
 }

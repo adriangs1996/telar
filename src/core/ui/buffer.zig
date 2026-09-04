@@ -15,6 +15,11 @@ const measure = text_mod.measure;
 const GraphemeIterator = text_mod.GraphemeIterator;
 
 pub const Buffer = struct {
+    pub const Fill = struct {
+        glyph: []const u8 = " ",
+        style: Style = .{},
+    };
+
     cells: []Cell,
     w: u16,
     h: u16,
@@ -102,7 +107,7 @@ pub const Buffer = struct {
         @memset(b.cells, .{ .style = style });
     }
 
-    pub fn fill(b: *Buffer, r: Rect, glyph: []const u8, style: Style) void {
+    pub fn fill(b: *Buffer, r: Rect, fill_value: Fill) void {
         // Edge sums in u32: `x + w` may exceed maxInt(u16), and positions past
         // it are unaddressable anyway.
         const x_end = @min(@as(u32, r.x) + r.w, @as(u32, std.math.maxInt(u16)) + 1);
@@ -111,7 +116,7 @@ pub const Buffer = struct {
         while (y < y_end) : (y += 1) {
             var x: u32 = r.x;
             while (x < x_end) : (x += 1) {
-                b.setCell(@intCast(x), @intCast(y), glyph, 1, style);
+                b.setCell(@intCast(x), @intCast(y), fill_value.glyph, 1, fill_value.style);
             }
         }
     }
@@ -333,9 +338,9 @@ pub const Buffer = struct {
             return;
         }
 
-        b.fill(.{ .x = r.x + 1, .y = r.y, .w = r.w - 2, .h = 1 }, " ", style);
-        b.fill(.{ .x = r.x, .y = r.y + 1, .w = r.w, .h = r.h - 2 }, " ", style);
-        b.fill(.{ .x = r.x + 1, .y = r.y + r.h - 1, .w = r.w - 2, .h = 1 }, " ", style);
+        b.fill(.{ .x = r.x + 1, .y = r.y, .w = r.w - 2, .h = 1 }, .{ .glyph = " ", .style = style });
+        b.fill(.{ .x = r.x, .y = r.y + 1, .w = r.w, .h = r.h - 2 }, .{ .glyph = " ", .style = style });
+        b.fill(.{ .x = r.x + 1, .y = r.y + r.h - 1, .w = r.w - 2, .h = 1 }, .{ .glyph = " ", .style = style });
     }
 };
 
@@ -485,7 +490,7 @@ test "a clip stops a widget damaging its neighbours" {
     const gpa = testing.allocator;
     var buf = try Buffer.init(gpa, 20, 3);
     defer buf.deinit();
-    buf.fill(buf.area(), ".", .{});
+    buf.fill(buf.area(), .{ .glyph = ".", .style = .{} });
 
     // A label longer than the box it was given. Without a clip the overflow
     // lands on whatever is drawn to the right, and the symptom is a neighbour
@@ -507,11 +512,11 @@ test "a nested clip cannot be wider than its parent" {
     const gpa = testing.allocator;
     var buf = try Buffer.init(gpa, 20, 1);
     defer buf.deinit();
-    buf.fill(buf.area(), ".", .{});
+    buf.fill(buf.area(), .{ .glyph = ".", .style = .{} });
 
     buf.pushClip(.{ .x = 5, .y = 0, .w = 4, .h = 1 });
     buf.pushClip(buf.area()); // asks for everything
-    buf.fill(buf.area(), "#", .{});
+    buf.fill(buf.area(), .{ .glyph = "#", .style = .{} });
     buf.popClip();
     buf.popClip();
 
@@ -539,7 +544,7 @@ test "a wide glyph cut by the clip becomes a blank, not half a character" {
     const gpa = testing.allocator;
     var buf = try Buffer.init(gpa, 10, 1);
     defer buf.deinit();
-    buf.fill(buf.area(), ".", .{});
+    buf.fill(buf.area(), .{ .glyph = ".", .style = .{} });
 
     buf.pushClip(.{ .x = 0, .y = 0, .w = 3, .h = 1 });
     buf.setCell(2, 0, "漢", 2, .{});

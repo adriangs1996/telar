@@ -673,7 +673,7 @@ test "copy mode plans the textual link under its cursor without mutation" {
     const pane_id: schema.PaneId = @enumFromInt(1);
     try model.workspace.bootstrap(pane_id, location, .{ .cols = 40, .rows = 5 });
     const pane = model.workspace.findPane(pane_id).?;
-    pane.buffer.fill(pane.buffer.area(), " ", .{});
+    pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), 0, 2, "file:///tmp/a%20b.txt", .{});
     pane.cursor = .{ .visible = true, .x = 12, .y = 2 };
     try std.testing.expect(model.enterCopyMode());
@@ -685,7 +685,7 @@ test "copy mode plans the textual link under its cursor without mutation" {
     try std.testing.expectEqualDeep(version, model.version());
     try std.testing.expect(model.planCopyMode(.{ .key = try keybind.parseKey("o") }) != null);
 
-    pane.buffer.fill(pane.buffer.area(), " ", .{});
+    pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     try std.testing.expect(model.planCopyMode(.{ .key = try keybind.parseKey("o") }) == null);
 }
 

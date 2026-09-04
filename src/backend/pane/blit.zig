@@ -150,7 +150,7 @@ pub fn blit(operation: Operation) Stats {
     // during a resize, and leaving the previous tenant's pixels there reads as
     // a rendering bug.
     while (y < area.h) : (y += 1) {
-        b.fill(area.row(y), " ", .{ .bg = defaultBackground(color_source) });
+        b.fill(area.row(y), .{ .glyph = " ", .style = .{ .bg = defaultBackground(color_source) } });
         if (opts.damaged_rows) |damaged| {
             damaged[area.y + y] = true;
         }
@@ -657,7 +657,7 @@ test "a pane smaller than its rectangle leaves nothing stale behind" {
     // Whatever was on screen before the pane shrank. During a resize the
     // emulator and the layout disagree for a frame or two, and the leftovers
     // read as a rendering bug.
-    buf.fill(buf.area(), "#", .{});
+    buf.fill(buf.area(), .{ .glyph = "#", .style = .{} });
     try pane.write("ab");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
 

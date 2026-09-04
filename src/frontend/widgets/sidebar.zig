@@ -85,7 +85,7 @@ fn renderCells(context: *widget.Context, input: Input, semantic: *Semantic) void
         return;
     }
     const background = cellBackground(context, input.transparent);
-    context.buffer.fill(area, " ", .{ .fg = context.palette.text, .bg = background });
+    context.buffer.fill(area, .{ .glyph = " ", .style = .{ .fg = context.palette.text, .bg = background } });
     drawRightSeparator(context, area, background);
     if (area.w > 10) {
         drawHeader(context, area, background);
@@ -112,7 +112,7 @@ fn renderCells(context: *widget.Context, input: Input, semantic: *Semantic) void
 
 fn drawHeader(context: *widget.Context, area: ui.Rect, background: ui.Color) void {
     const row: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 3, .h = 1 };
-    context.buffer.fill(row, " ", .{ .bg = background });
+    context.buffer.fill(row, .{ .glyph = " ", .style = .{ .bg = background } });
     _ = context.buffer.writeText(row, row.x, row.y, minions_icon, .{
         .fg = context.palette.accent,
         .bg = background,
@@ -127,7 +127,7 @@ fn drawHeader(context: *widget.Context, area: ui.Rect, background: ui.Color) voi
 fn drawAgents(context: *widget.Context, input: Input, semantic: *Semantic) void {
     const area = semantic.list_area;
     const background = cellBackground(context, input.transparent);
-    context.buffer.fill(area, " ", .{ .bg = background });
+    context.buffer.fill(area, .{ .glyph = " ", .style = .{ .bg = background } });
 
     const total: u16 = if (input.snapshot.count == 0)
         0
@@ -189,21 +189,21 @@ fn drawAgentLine(context: *widget.Context, input: Input, semantic: *Semantic, y:
             .h = @min(agent_card_rows, semantic.list_area.y + semantic.list_area.h - y),
         };
     }
-    context.buffer.fill(row, " ", .{ .bg = row_bg });
+    context.buffer.fill(row, .{ .glyph = " ", .style = .{ .bg = row_bg } });
     if (focused) {
         const corner_row = if (semantic.focused_card) |card|
             input.rounded_focus and (y == card.y or y + 1 == card.y + card.h)
         else
             false;
         if (corner_row and row.w != 0) {
-            context.buffer.fill(.{ .x = row.x, .y = y, .w = 1, .h = 1 }, " ", .{});
+            context.buffer.fill(.{ .x = row.x, .y = y, .w = 1, .h = 1 }, .{ .glyph = " ", .style = .{} });
             if (row.w > 1) {
                 context.buffer.fill(.{
                     .x = row.x + row.w - 1,
                     .y = y,
                     .w = 1,
                     .h = 1,
-                }, " ", .{});
+                }, .{ .glyph = " ", .style = .{} });
             }
         }
         _ = context.buffer.writeText(row, row.x, y, "┃", .{

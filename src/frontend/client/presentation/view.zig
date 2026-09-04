@@ -615,7 +615,7 @@ pub const State = struct {
             .bg = colors.red,
             .flags = .{ .bold = true },
         };
-        screen.back.fill(banner, " ", style);
+        screen.back.fill(banner, .{ .glyph = " ", .style = style });
         const prefix_width = screen.back.writeText(banner, banner.x, banner.y, "TELAR CONFIG  ", style);
         _ = screen.back.writeText(banner, banner.x + prefix_width, banner.y, message, style);
     }

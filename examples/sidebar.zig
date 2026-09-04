@@ -387,7 +387,7 @@ fn drawDialog(context: DrawContext, index: usize) void {
     buf.pushClip(frame);
     defer buf.popClip();
 
-    buf.fill(frame, " ", .{ .bg = raised });
+    buf.fill(frame, .{ .glyph = " ", .style = .{ .bg = raised } });
     buf.box(frame, .{ .fg = apricot, .bg = raised }, null);
     _ = buf.writeText(frame, frame.x + 2, frame.y, " action ", .{ .fg = apricot, .bg = raised });
 
@@ -415,7 +415,7 @@ fn drawDialog(context: DrawContext, index: usize) void {
         const hot = isHovered(state, action) or state.focus.has(.{ .dialog_button = choice_index });
         state.hits.add(rect, action);
 
-        buf.fill(rect, " ", .{ .bg = if (hot) apricot else chip_bg });
+        buf.fill(rect, .{ .glyph = " ", .style = .{ .bg = if (hot) apricot else chip_bg } });
         _ = buf.writeText(rect, x + 2, y, choice, .{
             .fg = if (hot) bg else white,
             .bg = if (hot) apricot else chip_bg,
@@ -429,7 +429,7 @@ fn drawSidebar(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
     if (area.w < 30 or area.h < 14) {
         return;
     }
-    buf.fill(area, " ", .{ .bg = bg });
+    buf.fill(area, .{ .glyph = " ", .style = .{ .bg = bg } });
     buf.box(area, .{ .fg = faint, .bg = bg }, null);
 
     // The title sits inside the top border, which is why it is drawn after the
@@ -475,7 +475,7 @@ fn drawSearch(context: DrawContext, y: u16) u16 {
     // state the user is looking at right now.
     state.focus.register(.search);
     const focused = state.focus.has(.search);
-    buf.fill(row, " ", .{ .bg = if (focused) raised else bg });
+    buf.fill(row, .{ .glyph = " ", .style = .{ .bg = if (focused) raised else bg } });
 
     const field_bg: ui.Color = if (focused) raised else bg;
     var x = row.x + 1;
@@ -569,8 +569,8 @@ fn drawTabs(context: DrawContext, y: u16) u16 {
     const area = context.area;
     const row: ui.Rect = .{ .x = area.x, .y = y, .w = area.w, .h = 1 };
     const underline: ui.Rect = .{ .x = area.x, .y = y + 1, .w = area.w, .h = 1 };
-    buf.fill(row, " ", .{ .bg = bg });
-    buf.fill(underline, " ", .{ .bg = bg });
+    buf.fill(row, .{ .glyph = " ", .style = .{ .bg = bg } });
+    buf.fill(underline, .{ .glyph = " ", .style = .{ .bg = bg } });
 
     var x = row.x + 1;
     for (state.tabs, 0..) |tab, index| {
@@ -613,7 +613,7 @@ fn drawScope(context: DrawContext, y: u16) u16 {
     const row: ui.Rect = .{ .x = area.x, .y = y, .w = area.w, .h = 1 };
     const hovered = isHovered(state, .toggle_scope);
     const row_bg: ui.Color = if (hovered) raised else bg;
-    buf.fill(row, " ", .{ .bg = row_bg });
+    buf.fill(row, .{ .glyph = " ", .style = .{ .bg = row_bg } });
 
     var x = row.x + 1;
     x += buf.writeText(row, x, y, if (state.scope_open) "\u{25b4}" else "\u{25be}", .{ .fg = muted, .bg = row_bg });
@@ -630,7 +630,7 @@ fn drawScope(context: DrawContext, y: u16) u16 {
 }
 
 fn drawList(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
-    buf.fill(area, " ", .{ .bg = bg });
+    buf.fill(area, .{ .glyph = " ", .style = .{ .bg = bg } });
     state.list_area = area;
 
     var rows: [256]Row = undefined;
@@ -710,7 +710,7 @@ fn drawTaskLine(context: DrawContext, position: TaskLine) void {
         bg;
 
     const row: ui.Rect = .{ .x = area.x, .y = y, .w = area.w, .h = 1 };
-    buf.fill(row, " ", .{ .bg = row_bg });
+    buf.fill(row, .{ .glyph = " ", .style = .{ .bg = row_bg } });
 
     // The selection marker is a bar in the gutter rather than a reversed row:
     // reversing would fight every colour the row is trying to use.
@@ -809,7 +809,7 @@ fn drawTaskChip(context: DrawContext, index: usize, chip: Chip) u16 {
     const fill: ui.Color = if (chip.filled() or hovered) chip_bg else bg;
 
     const rect: ui.Rect = .{ .x = x, .y = area.y, .w = width, .h = 1 };
-    buf.fill(rect, " ", .{ .bg = fill });
+    buf.fill(rect, .{ .glyph = " ", .style = .{ .bg = fill } });
 
     var cursor = x + 1;
     cursor += buf.writeText(rect, cursor, area.y, chip.glyph(), .{
@@ -903,7 +903,7 @@ fn drawScrollbar(context: DrawContext, total: u16) void {
 }
 
 fn drawFooter(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
-    buf.fill(area, " ", .{ .bg = bg });
+    buf.fill(area, .{ .glyph = " ", .style = .{ .bg = bg } });
 
     if (state.flash.len > 0) {
         _ = buf.writeTruncated(area, area.x + 1, area.y, state.flash, area.w -| 4, .{
@@ -933,7 +933,7 @@ fn drawFooter(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
 }
 
 fn drawPane(state: *const State, buf: *ui.Buffer, area: ui.Rect) void {
-    buf.fill(area, " ", .{ .bg = bg });
+    buf.fill(area, .{ .glyph = " ", .style = .{ .bg = bg } });
     const inner = area.inner(2);
     if (inner.w == 0 or inner.h == 0) {
         return;

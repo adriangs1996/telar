@@ -91,7 +91,7 @@ pub fn render(context: *context_mod.Context, input: Input) Output {
         }, .resize_sidebar);
     }
 
-    context.buffer.fill(input.regions.bottom, " ", bottomStyle(context));
+    context.buffer.fill(input.regions.bottom, .{ .glyph = " ", .style = bottomStyle(context) });
     const cursor: ?context_mod.Cursor = if (input.rename_field) |field|
         tab_rename.render(context, input.regions.bottom, field, input.rename_kind)
     else switch (input.status_mode) {
