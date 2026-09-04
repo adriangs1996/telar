@@ -612,10 +612,16 @@ pub const Layout = struct {
         return true;
     }
 
-    pub fn canSplit(layout: *const Layout, pane_id: schema.PaneId, axis: Axis, area: ui.Rect) bool {
+    /// Reports whether the target pane can be split inside the available area.
+    ///
+    /// ```zig
+    /// const allowed = layout.canSplit(.{ .pane_id = pane_id, .axis = .horizontal }, area);
+    /// ```
+    pub fn canSplit(layout: *const Layout, target: SplitTarget, area: ui.Rect) bool {
         var geometry: Snapshot = .{};
         layout.snapshot(area, &geometry);
-        return geometry.prospectiveSplit(.{ .pane_id = pane_id, .axis = axis }, layout.pane_count) != null;
+
+        return geometry.prospectiveSplit(target, layout.pane_count) != null;
     }
 
     pub fn prospectiveSplit(layout: *const Layout, pane_id: schema.PaneId, axis: Axis, area: ui.Rect) ?ProspectiveSplit {
@@ -961,9 +967,9 @@ test "disabled pane gaps permit the smallest pair of bordered panes" {
     var layout: Layout = .{};
     try layout.addRoot(@enumFromInt(1));
     const area: ui.Rect = .{ .w = 6, .h = 3 };
-    try std.testing.expect(!layout.canSplit(@enumFromInt(1), .horizontal, area));
+    try std.testing.expect(!layout.canSplit(.{ .pane_id = @enumFromInt(1), .axis = .horizontal }, area));
     _ = layout.setPaneGaps(false);
-    try std.testing.expect(layout.canSplit(@enumFromInt(1), .horizontal, area));
+    try std.testing.expect(layout.canSplit(.{ .pane_id = @enumFromInt(1), .axis = .horizontal }, area));
 }
 
 test "directional focus follows pane geometry" {
@@ -1149,8 +1155,8 @@ test "removing a leaf compacts its parent and preserves the sibling" {
 test "tiny panes reject splits that would create a zero-row PTY" {
     var layout: Layout = .{};
     try layout.addRoot(@enumFromInt(1));
-    try std.testing.expect(!layout.canSplit(@enumFromInt(1), .vertical, .{ .w = 8, .h = 3 }));
-    try std.testing.expect(layout.canSplit(@enumFromInt(1), .horizontal, .{ .w = 8, .h = 3 }));
+    try std.testing.expect(!layout.canSplit(.{ .pane_id = @enumFromInt(1), .axis = .vertical }, .{ .w = 8, .h = 3 }));
+    try std.testing.expect(layout.canSplit(.{ .pane_id = @enumFromInt(1), .axis = .horizontal }, .{ .w = 8, .h = 3 }));
 }
 
 test "snapshot indexes colliding pane ids and records its source revision" {
