@@ -14,6 +14,12 @@ const RenderMode = struct {
     paint: bool,
 };
 
+const CardInput = struct {
+    area: ui.Rect,
+    item: *const notifications.Item,
+    paint: bool,
+};
+
 pub fn overlayArea(workbench: ui.Rect) ui.Rect {
     if (workbench.w < 12 or workbench.h < card_height) {
         return .{};
@@ -70,11 +76,14 @@ fn renderMode(context: *widget.Context, mode: RenderMode) void {
             .w = visible_width,
             .h = card_height,
         };
-        drawCard(context, card, item, mode.paint);
+        drawCard(context, .{ .area = card, .item = item, .paint = mode.paint });
     }
 }
 
-fn drawCard(context: *widget.Context, card: ui.Rect, item: *const notifications.Item, paint: bool) void {
+fn drawCard(context: *widget.Context, input: CardInput) void {
+    const card = input.area;
+    const item = input.item;
+
     if (card.isEmpty()) {
         return;
     }
@@ -90,7 +99,7 @@ fn drawCard(context: *widget.Context, card: ui.Rect, item: *const notifications.
             .h = 1,
         }, dismiss);
     }
-    if (!paint) {
+    if (!input.paint) {
         return;
     }
 
