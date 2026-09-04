@@ -698,7 +698,7 @@ const KeybindContext = struct {
 fn runKeybind(context: *KeybindContext, iterations: usize) !u64 {
     const input = "cargo test\x02d";
     for (0..iterations) |iteration| {
-        _ = try context.router.feed(input, iteration, context);
+        _ = try context.router.feed(.{ .bytes = input, .now_ns = iteration }, context);
     }
     return context.checksum;
 }

@@ -397,6 +397,11 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
     const LeaseOwner = enum { binding, application };
     const Leases = key_lease.Table(LeaseOwner, max_physical_leases);
     return struct {
+        pub const Feed = struct {
+            bytes: []const u8,
+            now_ns: u64,
+        };
+
         map: Map,
         prefix: ?Key = null,
         candidates: Map.Range = .{ .start = 0, .end = 0 },
@@ -482,7 +487,10 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
         /// `handler.forward(bytes)` must finish using `bytes` before returning.
         /// `handler.action(action)` returns `.stop` when the action ends input
         /// processing, for example after detaching the client.
-        pub fn feed(router: *Self, bytes: []const u8, now_ns: u64, handler: anytype) !Control {
+        /// For example: `const control = try router.feed(.{ .bytes = input, .now_ns = now }, handler);`.
+        pub fn feed(router: *Self, input: Feed, handler: anytype) !Control {
+            const bytes = input.bytes;
+            const now_ns = input.now_ns;
             var offset: usize = 0;
             while (offset < bytes.len) {
                 router.compactInput();
@@ -1106,7 +1114,7 @@ test "an active editor receives keys before configured bindings" {
     var router = try TestRouter.init(&bindings);
     var capture: GreedyCapture = .{};
 
-    _ = try router.feed("a", 0, &capture);
+    _ = try router.feed(.{ .bytes = "a", .now_ns = 0 }, &capture);
 
     try testing.expectEqual(@as(usize, 1), capture.key_count);
     try testing.expectEqual(@as(usize, 0), capture.action_count);
@@ -1146,7 +1154,7 @@ test "keymap accepts sibling sequences with one shared prefix" {
     };
     var router = try TestRouter.init(&siblings);
     var capture: Capture = .{};
-    _ = try router.feed("\x02d\x02p", 0, &capture);
+    _ = try router.feed(.{ .bytes = "\x02d\x02p", .now_ns = 0 }, &capture);
     try testing.expectEqualSlices(
         TestAction,
         &.{ .detach, .palette },
@@ -1171,7 +1179,7 @@ test "unbound input is byte-for-byte transparent" {
     var capture: Capture = .{};
 
     const input = "hello ñ\x1b[A\x1b[999~";
-    try testing.expectEqual(Control.continue_routing, try router.feed(input, 0, &capture));
+    try testing.expectEqual(Control.continue_routing, try router.feed(.{ .bytes = input, .now_ns = 0 }, &capture));
     try testing.expectEqualStrings(input, capture.slice());
     try testing.expectEqual(@as(usize, 0), capture.action_len);
 }
@@ -1181,7 +1189,7 @@ test "a configured sequence runs once and does not reach the pane" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed("before\x02dafter", 100, &capture);
+    _ = try router.feed(.{ .bytes = "before\x02dafter", .now_ns = 100 }, &capture);
     try testing.expectEqualStrings("beforeafter", capture.slice());
     try testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
 }
@@ -1196,11 +1204,7 @@ test "CSI-u Ctrl bindings route without colliding with Backspace or Enter" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed(
-        "\x1b[104;5u\x1b[106;5u\x1b[107;5u\x1b[108;5u",
-        100,
-        &capture,
-    );
+    _ = try router.feed(.{ .bytes = "\x1b[104;5u\x1b[106;5u\x1b[107;5u\x1b[108;5u", .now_ns = 100 }, &capture);
     try testing.expectEqualSlices(
         TestAction,
         &.{ .detach, .palette, .next, .detach },
@@ -1219,9 +1223,9 @@ test "modified Enter reaches the semantic handler at every chunk boundary" {
         for (1..sequence.len) |split| {
             var router = try TestRouter.init(&.{});
             var capture: GreedyCapture = .{};
-            _ = try router.feed(sequence[0..split], 0, &capture);
+            _ = try router.feed(.{ .bytes = sequence[0..split], .now_ns = 0 }, &capture);
             try testing.expectEqual(@as(usize, 0), capture.key_count);
-            _ = try router.feed(sequence[split..], 1, &capture);
+            _ = try router.feed(.{ .bytes = sequence[split..], .now_ns = 1 }, &capture);
             try testing.expectEqual(@as(usize, 1), capture.key_count);
             try testing.expectEqual(Key.Code.enter, capture.keys[0].code);
             try testing.expect(capture.keys[0].mods.shift);
@@ -1236,9 +1240,9 @@ test "an orphan Kitty release fails closed at every chunk boundary" {
     for (1..sequence.len) |split| {
         var router = try TestRouter.init(&.{});
         var capture: GreedyCapture = .{};
-        _ = try router.feed(sequence[0..split], 0, &capture);
+        _ = try router.feed(.{ .bytes = sequence[0..split], .now_ns = 0 }, &capture);
         try testing.expectEqual(@as(usize, 0), capture.key_count);
-        _ = try router.feed(sequence[split..], 1, &capture);
+        _ = try router.feed(.{ .bytes = sequence[split..], .now_ns = 1 }, &capture);
         try testing.expectEqual(@as(usize, 0), capture.key_count);
         try testing.expectEqual(@as(usize, 0), capture.action_count);
     }
@@ -1252,7 +1256,7 @@ test "an application-owned key keeps repeats and release" {
     var router = try TestRouter.init(&.{});
     var capture: SemanticCapture = .{};
 
-    _ = try router.feed(lifecycle, 0, &capture);
+    _ = try router.feed(.{ .bytes = lifecycle, .now_ns = 0 }, &capture);
 
     try testing.expectEqual(@as(usize, 3), capture.key_count);
     try testing.expectEqual(Key.Phase.press, capture.keys[0].phase);
@@ -1270,7 +1274,7 @@ test "a binding-owned key consumes repeats and release" {
     var router = try TestRouter.init(&bindings);
     var capture: SemanticCapture = .{};
 
-    _ = try router.feed(lifecycle, 0, &capture);
+    _ = try router.feed(.{ .bytes = lifecycle, .now_ns = 0 }, &capture);
 
     try testing.expectEqual(@as(usize, 1), capture.action_count);
     try testing.expectEqual(@as(usize, 0), capture.key_count);
@@ -1282,16 +1286,12 @@ test "releasing a physical prefix does not cancel its logical state" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
 
-    _ = try router.feed(
-        "\x1b[115::115;5:1u" ++
-            "\x1b[115::115;1:3u",
-        0,
-        &capture,
-    );
+    _ = try router.feed(.{ .bytes = "\x1b[115::115;5:1u" ++
+        "\x1b[115::115;1:3u", .now_ns = 0 }, &capture);
 
     try testing.expect(router.prefixPending());
     try testing.expectEqual(@as(usize, 0), capture.action_len);
-    _ = try router.feed("d", 1, &capture);
+    _ = try router.feed(.{ .bytes = "d", .now_ns = 1 }, &capture);
     try testing.expect(!router.prefixPending());
     try testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
     try testing.expectEqualStrings("", capture.slice());
@@ -1303,10 +1303,10 @@ test "router replacement preserves a held application's owner" {
     var current = try TestRouter.init(&.{});
     var capture: SemanticCapture = .{};
 
-    _ = try current.feed(press, 0, &capture);
+    _ = try current.feed(.{ .bytes = press, .now_ns = 0 }, &capture);
     var replacement = try TestRouter.init(&.{});
     replacement.inheritPhysicalLeases(&current);
-    _ = try replacement.feed(release, 1, &capture);
+    _ = try replacement.feed(.{ .bytes = release, .now_ns = 1 }, &capture);
 
     try testing.expectEqual(@as(usize, 2), capture.key_count);
     try testing.expectEqual(Key.Phase.release, capture.keys[1].phase);
@@ -1354,7 +1354,7 @@ test "a semantic mouse handler consumes reports before they reach the pane" {
     var router = try TestRouter.init(&bindings);
     var capture: MouseCapture = .{};
 
-    _ = try router.feed("\x1b[<0;8;4M", 100, &capture);
+    _ = try router.feed(.{ .bytes = "\x1b[<0;8;4M", .now_ns = 100 }, &capture);
     try testing.expectEqual(@as(usize, 1), capture.mouse_events);
     try testing.expectEqual(@as(usize, 0), capture.forwarded);
 }
@@ -1365,8 +1365,8 @@ test "a fragmented KGP capability reply is consumed at every split" {
     for (1..reply.len) |split| {
         var router = try TestRouter.init(&bindings);
         var capture: TerminalResponseCapture = .{};
-        _ = try router.feed(reply[0..split], 0, &capture);
-        _ = try router.feed(reply[split..], 1, &capture);
+        _ = try router.feed(.{ .bytes = reply[0..split], .now_ns = 0 }, &capture);
+        _ = try router.feed(.{ .bytes = reply[split..], .now_ns = 1 }, &capture);
         try testing.expectEqual(@as(usize, 0), capture.forwarded);
         try testing.expectEqual(@as(usize, 1), capture.responses);
         try testing.expect(capture.supported);
@@ -1379,10 +1379,10 @@ test "an asynchronous terminal response does not cancel prefix mode" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: TerminalResponseCapture = .{};
 
-    _ = try router.feed("\x02\x1b_Gi=31;OK\x1b\\", 100, &capture);
+    _ = try router.feed(.{ .bytes = "\x02\x1b_Gi=31;OK\x1b\\", .now_ns = 100 }, &capture);
     try testing.expect(router.prefixPending());
     try testing.expectEqual(@as(usize, 1), capture.responses);
-    _ = try router.feed("d", 101, &capture);
+    _ = try router.feed(.{ .bytes = "d", .now_ns = 101 }, &capture);
     try testing.expect(!router.prefixPending());
     try testing.expectEqual(@as(usize, 1), capture.actions);
     try testing.expectEqual(@as(usize, 0), capture.forwarded);
@@ -1393,7 +1393,7 @@ test "a failed sequence replays its bytes in order" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed("\x02x", 100, &capture);
+    _ = try router.feed(.{ .bytes = "\x02x", .now_ns = 100 }, &capture);
     try testing.expectEqualStrings("\x02x", capture.slice());
     try testing.expectEqual(@as(usize, 0), capture.action_len);
 }
@@ -1404,14 +1404,14 @@ test "a configured prefix waits without a binding deadline" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
 
-    _ = try router.feed("\x02", 20, &capture);
+    _ = try router.feed(.{ .bytes = "\x02", .now_ns = 20 }, &capture);
     try testing.expect(router.prefixPending());
     try testing.expectEqual(@as(?u64, null), router.bindingDeadline());
     _ = try router.expireBinding(20 + 100 * default_sequence_timeout_ns, &capture);
     try testing.expect(router.prefixPending());
     try testing.expectEqualStrings("", capture.slice());
 
-    _ = try router.feed("d", 21, &capture);
+    _ = try router.feed(.{ .bytes = "d", .now_ns = 21 }, &capture);
     try testing.expect(!router.prefixPending());
     try testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
 }
@@ -1422,12 +1422,12 @@ test "an invalid prefix suffix is consumed" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
 
-    _ = try router.feed("\x02x", 100, &capture);
+    _ = try router.feed(.{ .bytes = "\x02x", .now_ns = 100 }, &capture);
     try testing.expect(!router.prefixPending());
     try testing.expectEqualStrings("", capture.slice());
     try testing.expectEqual(@as(usize, 0), capture.action_len);
 
-    _ = try router.feed("a", 101, &capture);
+    _ = try router.feed(.{ .bytes = "a", .now_ns = 101 }, &capture);
     try testing.expectEqualStrings("a", capture.slice());
 }
 
@@ -1437,7 +1437,7 @@ test "escape cancels a pending prefix" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
 
-    _ = try router.feed("\x02\x1b", 100, &capture);
+    _ = try router.feed(.{ .bytes = "\x02\x1b", .now_ns = 100 }, &capture);
     try testing.expect(router.prefixPending());
     _ = try router.expireInput(100 + default_escape_timeout_ns, &capture);
     try testing.expect(!router.prefixPending());
@@ -1454,7 +1454,7 @@ test "a global partial binding keeps its timeout beside a persistent prefix" {
     var router = try TestRouter.initWithPrefix(&bindings, prefix);
     var capture: Capture = .{};
 
-    _ = try router.feed("\x18", 40, &capture);
+    _ = try router.feed(.{ .bytes = "\x18", .now_ns = 40 }, &capture);
     try testing.expect(!router.prefixPending());
     try testing.expectEqual(@as(?u64, 40 + default_sequence_timeout_ns), router.bindingDeadline());
     _ = try router.expireBinding(40 + default_sequence_timeout_ns, &capture);
@@ -1478,11 +1478,11 @@ test "a split terminal sequence waits and still matches" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed("\x1b", 100, &capture);
+    _ = try router.feed(.{ .bytes = "\x1b", .now_ns = 100 }, &capture);
     try testing.expectEqualStrings("", capture.slice());
     try testing.expectEqual(@as(?u64, 100 + default_escape_timeout_ns), router.inputDeadline());
 
-    _ = try router.feed("[A", 101, &capture);
+    _ = try router.feed(.{ .bytes = "[A", .now_ns = 101 }, &capture);
     try testing.expectEqualStrings("", capture.slice());
     try testing.expectEqualSlices(TestAction, &.{.next}, capture.actions[0..capture.action_len]);
     try testing.expectEqual(@as(?u64, null), router.inputDeadline());
@@ -1496,8 +1496,8 @@ test "terminal sequences are transparent at every chunk boundary" {
     while (split < input.len) : (split += 1) {
         var router = try TestRouter.init(&bindings);
         var capture: Capture = .{};
-        _ = try router.feed(input[0..split], 0, &capture);
-        _ = try router.feed(input[split..], 1, &capture);
+        _ = try router.feed(.{ .bytes = input[0..split], .now_ns = 0 }, &capture);
+        _ = try router.feed(.{ .bytes = input[split..], .now_ns = 1 }, &capture);
         try testing.expectEqualStrings(input, capture.slice());
     }
 }
@@ -1507,7 +1507,7 @@ test "a lone escape becomes a key after its timeout" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed("\x1b", 5, &capture);
+    _ = try router.feed(.{ .bytes = "\x1b", .now_ns = 5 }, &capture);
     _ = try router.expireInput(5 + default_escape_timeout_ns - 1, &capture);
     try testing.expectEqual(@as(usize, 0), capture.action_len);
 
@@ -1520,7 +1520,7 @@ test "an incomplete unknown sequence is forwarded after its timeout" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed("\x1b[123", 9, &capture);
+    _ = try router.feed(.{ .bytes = "\x1b[123", .now_ns = 9 }, &capture);
     _ = try router.expireInput(9 + default_escape_timeout_ns, &capture);
     try testing.expectEqualStrings("\x1b[123", capture.slice());
 }
@@ -1530,7 +1530,7 @@ test "a partial binding replays after its timeout" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{};
 
-    _ = try router.feed("\x02", 20, &capture);
+    _ = try router.feed(.{ .bytes = "\x02", .now_ns = 20 }, &capture);
     try testing.expectEqual(@as(?u64, 20 + default_sequence_timeout_ns), router.bindingDeadline());
     _ = try router.expireBinding(20 + default_sequence_timeout_ns, &capture);
     try testing.expectEqualStrings("\x02", capture.slice());
@@ -1541,7 +1541,7 @@ test "an action may stop routing the rest of its input chunk" {
     var router = try TestRouter.init(&bindings);
     var capture: Capture = .{ .stop_on_action = true };
 
-    try testing.expectEqual(Control.stop, try router.feed("a\x02db", 0, &capture));
+    try testing.expectEqual(Control.stop, try router.feed(.{ .bytes = "a\x02db", .now_ns = 0 }, &capture));
     try testing.expectEqualStrings("a", capture.slice());
     try testing.expectEqualSlices(TestAction, &.{.detach}, capture.actions[0..capture.action_len]);
 }

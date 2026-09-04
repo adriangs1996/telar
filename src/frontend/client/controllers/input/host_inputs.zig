@@ -209,7 +209,10 @@ fn routeChunk(client: *Client) !bool {
     var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
     const lease_overflows_before = state.router.leaseOverflowCount();
-    const control = try state.router.feed(chunk.slice(), client_clock.monotonic(client.io), &handler);
+    const control = try state.router.feed(.{
+        .bytes = chunk.slice(),
+        .now_ns = client_clock.monotonic(client.io),
+    }, &handler);
     client.telemetry.metrics.key_lease_overflows +%= state.router.leaseOverflowCount() -% lease_overflows_before;
     if (control == .stop) {
         return true;
