@@ -18,6 +18,12 @@ pub const max_packages = lua_config.max_plugins;
 pub const max_package_files = 256;
 pub const max_package_bytes = 16 * 1024 * 1024;
 
+pub const LoadContext = struct {
+    gpa: std.mem.Allocator,
+    io: Io,
+    config_dir: []const u8,
+};
+
 pub const Package = struct {
     manifest: plugin.Manifest,
     digest: plugin.Digest,
@@ -41,12 +47,16 @@ pub const Registry = struct {
     grants: [plugin.max_grants]plugin.Grant = undefined,
     grant_count: u8 = 0,
 
-    pub fn load(gpa: std.mem.Allocator, io: Io, config_dir: []const u8, specs: []const lua_config.PluginSpec) !Registry {
+    /// Loads enabled plugin packages without persisted capability grants.
+    /// For example: `const registry = try Registry.load(context, specs);`.
+    pub fn load(context: LoadContext, specs: []const lua_config.PluginSpec) !Registry {
         const empty: plugin.TrustStore = .{};
-        return loadWithTrust(gpa, io, config_dir, specs, &empty);
+        return loadWithTrust(context, specs, &empty);
     }
 
-    pub fn loadWithTrust(gpa: std.mem.Allocator, io: Io, config_dir: []const u8, specs: []const lua_config.PluginSpec, trust: *const plugin.TrustStore) !Registry {
+    /// Loads enabled plugin packages and their persisted capability grants.
+    /// For example: `const registry = try Registry.loadWithTrust(context, specs, trust);`.
+    pub fn loadWithTrust(context: LoadContext, specs: []const lua_config.PluginSpec, trust: *const plugin.TrustStore) !Registry {
         var registry: Registry = .{};
         registry.grant_count = trust.count;
         for (trust.entries[0..trust.count], 0..) |entry, index|
@@ -58,7 +68,7 @@ pub const Registry = struct {
             if (registry.count == max_packages) {
                 return error.TooManyPlugins;
             }
-            const package = try loadPackage(gpa, io, config_dir, spec.path());
+            const package = try loadPackage(context.gpa, context.io, context.config_dir, spec.path());
             for (registry.packages[0..registry.count]) |*existing| {
                 if (std.mem.eql(u8, existing.manifest.id(), package.manifest.id())) {
                     return error.DuplicatePluginId;

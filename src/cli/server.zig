@@ -242,9 +242,11 @@ const Launch = struct {
         const trust_path = try plugin_cli.trustPath(launch.process.minimal.environ, &launch.trust_path_buffer);
         const trust = try plugin_cli.loadTrustStore(launch.process, trust_path);
         const registry = try frontend.plugins.Registry.loadWithTrust(
-            launch.process.gpa,
-            launch.process.io,
-            generation.configDir(),
+            .{
+                .gpa = launch.process.gpa,
+                .io = launch.process.io,
+                .config_dir = generation.configDir(),
+            },
             generation.pluginSlice(),
             &trust,
         );

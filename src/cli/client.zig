@@ -119,9 +119,11 @@ const Launch = struct {
         launch.trust_store.?.* = loaded_trust;
 
         const registry_value = try frontend.plugins.Registry.loadWithTrust(
-            launch.process.gpa,
-            launch.process.io,
-            generation.configDir(),
+            .{
+                .gpa = launch.process.gpa,
+                .io = launch.process.io,
+                .config_dir = generation.configDir(),
+            },
             generation.pluginSlice(),
             launch.trust_store.?,
         );

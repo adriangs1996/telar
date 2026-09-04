@@ -279,9 +279,11 @@ fn waitConfigReload(args: WaitArgs) anyerror!ConfigReload {
     };
     partial.registry = registry;
     registry.* = plugin_broker.Registry.loadWithTrust(
-        args.gpa,
-        args.io,
-        generation.configDir(),
+        .{
+            .gpa = args.gpa,
+            .io = args.io,
+            .config_dir = generation.configDir(),
+        },
         generation.pluginSlice(),
         trust,
     ) catch |err| {

@@ -78,7 +78,11 @@ pub fn runCheck(init: std.process.Init, options: parser.ConfigCheckOptions) !voi
     };
     defer generation.deinit();
 
-    const registry = try frontend.plugins.Registry.load(init.gpa, init.io, generation.configDir(), generation.pluginSlice());
+    const registry = try frontend.plugins.Registry.load(.{
+        .gpa = init.gpa,
+        .io = init.io,
+        .config_dir = generation.configDir(),
+    }, generation.pluginSlice());
     try registry.validateConfiguredActions(generation.snapshot.bindingSlice());
     frontend.config.validateKeymap(generation.snapshot.prefix, generation.snapshot.bindingSlice()) catch |err| {
         std.debug.print("telar config: keybindings do not compile: {s}\n", .{@errorName(err)});
