@@ -257,6 +257,7 @@ pub const PaneMediaAllocator = struct {
         media.budget.releaseAll(media);
     }
 
+    // codestyle: allow(maximum-parameter-count)
     fn alloc(context: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
         if (!media.reserveManual(len)) {
@@ -268,6 +269,7 @@ pub const PaneMediaAllocator = struct {
         };
     }
 
+    // codestyle: allow(maximum-parameter-count)
     fn resize(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
         if (media.isMapped(memory)) {
@@ -288,6 +290,7 @@ pub const PaneMediaAllocator = struct {
         return true;
     }
 
+    // codestyle: allow(maximum-parameter-count)
     fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
         if (media.isMapped(memory)) {
@@ -308,6 +311,7 @@ pub const PaneMediaAllocator = struct {
         return result;
     }
 
+    // codestyle: allow(maximum-parameter-count)
     fn free(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
         const media: *PaneMediaAllocator = @ptrCast(@alignCast(context));
         media.releaseMapping(memory);

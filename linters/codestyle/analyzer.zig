@@ -32,7 +32,7 @@ const Analyzer = struct {
             parameter_count += 1;
         }
 
-        if (parameter_count > 3) {
+        if (parameter_count > 3 and !allowsExcessParameters(self.tree, function.firstToken())) {
             try self.append(function_token, .{ .rule = .maximum_parameter_count, .detail = parameter_count });
         }
 
@@ -72,6 +72,24 @@ const Analyzer = struct {
         });
     }
 };
+
+fn allowsExcessParameters(tree: *const Ast, declaration_token: Ast.TokenIndex) bool {
+    const declaration_start = tree.tokenStart(declaration_token);
+    const prefix = std.mem.trimEnd(u8, tree.source[0..declaration_start], " \t");
+    if (prefix.len == 0 or prefix[prefix.len - 1] != '\n') {
+        return false;
+    }
+
+    var previous_line_end = prefix.len - 1;
+    if (previous_line_end != 0 and prefix[previous_line_end - 1] == '\r') {
+        previous_line_end -= 1;
+    }
+
+    const previous_line_start = if (std.mem.lastIndexOfScalar(u8, prefix[0..previous_line_end], '\n')) |newline| newline + 1 else 0;
+    const previous_line = std.mem.trim(u8, prefix[previous_line_start..previous_line_end], " \t");
+
+    return std.mem.eql(u8, previous_line, "// codestyle: allow(maximum-parameter-count)");
+}
 
 /// Checks one Zig source file and returns every deterministic style violation.
 ///
@@ -169,6 +187,25 @@ test "counts anytype parameters" {
 test "accepts extern functions with more than three parameters" {
     try expectRules(&.{},
         \\extern "c" fn open(first: u8, second: u8, third: u8, fourth: u8) void;
+    );
+}
+
+test "accepts an explicit maximum parameter count exception" {
+    try expectRules(&.{},
+        \\// codestyle: allow(maximum-parameter-count)
+        \\fn callback(first: u8, second: u8, third: u8, fourth: u8) void {
+        \\    _ = .{ first, second, third, fourth };
+        \\}
+    );
+}
+
+test "requires the maximum parameter count exception beside the declaration" {
+    try expectRules(&.{.maximum_parameter_count},
+        \\// codestyle: allow(maximum-parameter-count)
+        \\
+        \\fn callback(first: u8, second: u8, third: u8, fourth: u8) void {
+        \\    _ = .{ first, second, third, fourth };
+        \\}
     );
 }
 
