@@ -32,6 +32,13 @@ const BorderTheme = struct {
     unfocused: ui.Color,
 };
 
+const PaneInit = struct {
+    pane_id: schema.PaneId,
+    location: schema.TabLocation,
+    size: schema.TerminalSize,
+    attached: bool,
+};
+
 pub const Pane = struct {
     gpa: std.mem.Allocator,
     id: schema.PaneId,
@@ -55,19 +62,21 @@ pub const Pane = struct {
     /// reports one. Allocated on change so idle panes cost nothing.
     title: []u8 = &.{},
 
-    fn init(gpa: std.mem.Allocator, pane_id: schema.PaneId, location: schema.TabLocation, size: schema.TerminalSize, attached: bool) !Pane {
-        var buffer = try ui.Buffer.init(gpa, size.cols, size.rows);
+    fn init(gpa: std.mem.Allocator, input: PaneInit) !Pane {
+        var buffer = try ui.Buffer.init(gpa, input.size.cols, input.size.rows);
         errdefer buffer.deinit();
-        const damage_rows = try gpa.alloc(DamageRow, size.rows);
+
+        const damage_rows = try gpa.alloc(DamageRow, input.size.rows);
         @memset(damage_rows, .{});
+
         return .{
             .gpa = gpa,
-            .id = pane_id,
-            .location = location,
+            .id = input.pane_id,
+            .location = input.location,
             .buffer = buffer,
             .damage_rows = damage_rows,
-            .attached = attached,
-            .scroll = .{ .total_rows = size.rows, .offset = 0 },
+            .attached = input.attached,
+            .scroll = .{ .total_rows = input.size.rows, .offset = 0 },
         };
     }
 
@@ -1170,7 +1179,12 @@ pub const Model = struct {
         }
         for (&model.panes, 0..) |*slot, slot_index| {
             if (slot.* == null) {
-                slot.* = try Pane.init(model.gpa, pane_id, location, size, attached);
+                slot.* = try Pane.init(model.gpa, .{
+                    .pane_id = pane_id,
+                    .location = location,
+                    .size = size,
+                    .attached = attached,
+                });
                 model.pane_count += 1;
                 model.indexPane(pane_id, @intCast(slot_index));
                 return;
