@@ -280,9 +280,9 @@ pub fn applyKey(state: *State, pressed: keybind.Key, screen: Screen) Effect {
         } else if (char.eql("$")) {
             lastNonBlank(state, buffer, scroll);
         } else if (char.eql("w")) {
-            wordForward(state, buffer, scroll, false);
+            wordForward(state, screen, false);
         } else if (char.eql("e")) {
-            wordForward(state, buffer, scroll, true);
+            wordForward(state, screen, true);
         } else if (char.eql("b")) {
             wordBackward(state, buffer, scroll);
         } else if (char.eql("{")) {
@@ -434,7 +434,9 @@ fn previousPoint(point: Point, cols: u16) Point {
     return point;
 }
 
-fn wordForward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll, end: bool) void {
+fn wordForward(state: *State, screen: Screen, end: bool) void {
+    const buffer = screen.buffer;
+    const scroll = screen.scroll;
     const initial = wordClass(buffer, scroll, state.cursor) orelse {
         state.vertical(1, .{ .scroll = scroll, .rows = buffer.h });
         state.lineStart();
