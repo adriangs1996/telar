@@ -45,6 +45,11 @@ pub const Action = widgets.Action;
 
 const Hits = widgets.Hits;
 
+pub const Dimensions = struct {
+    width: u16,
+    height: u16,
+};
+
 pub const InteractionIntent = view_interaction.Intent;
 pub const Interaction = view_interaction.Command;
 
@@ -114,11 +119,16 @@ pub const State = struct {
     modal_overlay_area: ui.Rect = .{},
 
     pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
-        return initWithTheme(gpa, width, height, theme_mod.default_theme);
+        return initWithTheme(gpa, .{ .width = width, .height = height }, theme_mod.default_theme);
     }
 
-    pub fn initWithTheme(gpa: std.mem.Allocator, width: u16, height: u16, selected_theme: theme_mod.Theme) !State {
-        return initWithAppearance(gpa, width, height, selected_theme, .unicode);
+    /// Initializes view state with a selected color theme.
+    ///
+    /// ```zig
+    /// var view = try State.initWithTheme(gpa, .{ .width = 80, .height = 24 }, theme);
+    /// ```
+    pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_theme: theme_mod.Theme) !State {
+        return initWithAppearance(gpa, dimensions.width, dimensions.height, selected_theme, .unicode);
     }
 
     pub fn initWithAppearance(gpa: std.mem.Allocator, width: u16, height: u16, selected_theme: theme_mod.Theme, selected_icons: ui.icons.Theme) !State {
@@ -1706,7 +1716,7 @@ test "configuration diagnostics stay inside the bottom bar" {
 
 test "terminal theme leaves client chrome backgrounds to the host terminal" {
     const gpa = std.testing.allocator;
-    var state = try State.initWithTheme(gpa, 80, 24, theme_mod.builtin(.terminal));
+    var state = try State.initWithTheme(gpa, .{ .width = 80, .height = 24 }, theme_mod.builtin(.terminal));
     defer state.deinit();
     var model = multiplexer.Model.init(gpa);
     defer model.deinit();
