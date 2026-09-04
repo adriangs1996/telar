@@ -298,7 +298,7 @@ pub const Generation = struct {
             diagnostic.set("Lua expression failed: {s}", .{generation.vm.errorMessage()});
             return error.LuaCallbackFailed;
         }
-        return parseInputDecision(state, -1, callback, diagnostic);
+        return parseInputDecision(state, .{ .index = -1, .callback = callback }, diagnostic);
     }
 
     pub fn invokeBar(generation: *Generation, invocation: BarInvocation, diagnostic: *Diagnostic) !bars.Content {
@@ -1952,8 +1952,13 @@ fn readonlyNewIndex(state: ?*lua.lua_State) callconv(.c) c_int {
     return lua.lua_error(state.?);
 }
 
-fn parseInputDecision(state: *lua.lua_State, index: c_int, callback: *const Callback, diagnostic: *Diagnostic) !InputDecision {
-    const absolute = lua.lua_absindex(state, index);
+const DecisionInput = struct {
+    index: c_int,
+    callback: *const Callback,
+};
+
+fn parseInputDecision(state: *lua.lua_State, input_decision: DecisionInput, diagnostic: *Diagnostic) !InputDecision {
+    const absolute = lua.lua_absindex(state, input_decision.index);
     if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
         diagnostic.set("Lua expression must return a telar.input value", .{});
         return error.InvalidExpressionResult;
@@ -1966,8 +1971,8 @@ fn parseInputDecision(state: *lua.lua_State, index: c_int, callback: *const Call
     if (std.mem.eql(u8, kind, "forward")) {
         try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"input_kind"}, .path = "input decision" }, diagnostic);
         var keys: InputKeys = .{};
-        @memcpy(keys.items[0..callback.trigger_len], callback.trigger[0..callback.trigger_len]);
-        keys.len = callback.trigger_len;
+        @memcpy(keys.items[0..input_decision.callback.trigger_len], input_decision.callback.trigger[0..input_decision.callback.trigger_len]);
+        keys.len = input_decision.callback.trigger_len;
         return .{ .forward_binding = keys };
     }
     if (std.mem.eql(u8, kind, "keys")) {
