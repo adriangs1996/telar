@@ -109,6 +109,17 @@ pub const FrameView = struct {
     }
 };
 
+const Header = struct {
+    pane_id: id.PaneId,
+    frame_id: u64,
+    base_frame_id: u64,
+    cols: u16,
+    rows: u16,
+    cursor: Cursor,
+    scroll: Scroll,
+    span_count: usize,
+};
+
 pub const SpanView = struct {
     start: u32,
     cell_count: u32,
@@ -249,16 +260,16 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
     };
     const span_count = try decoder.readInt(u16);
 
-    try validateHeader(
-        pane_id,
-        frame_id,
-        base_frame_id,
-        cols,
-        rows,
-        .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y },
-        scroll,
-        span_count,
-    );
+    try validateHeader(.{
+        .pane_id = pane_id,
+        .frame_id = frame_id,
+        .base_frame_id = base_frame_id,
+        .cols = cols,
+        .rows = rows,
+        .cursor = .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y },
+        .scroll = scroll,
+        .span_count = span_count,
+    });
 
     // Structural validation only: span ordering, grid coverage, and sizes.
     // Cell payloads are validated by `CellIterator` as the consumer decodes
@@ -316,16 +327,16 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
 /// Cell payloads are validated by `encodeCells` as they are written, so a
 /// frame's cells are only walked once on the encode side.
 fn validateFrameStructure(frame: Frame) !void {
-    try validateHeader(
-        frame.pane_id,
-        frame.frame_id,
-        frame.base_frame_id,
-        frame.cols,
-        frame.rows,
-        frame.cursor,
-        frame.scroll,
-        frame.spans.len,
-    );
+    try validateHeader(.{
+        .pane_id = frame.pane_id,
+        .frame_id = frame.frame_id,
+        .base_frame_id = frame.base_frame_id,
+        .cols = frame.cols,
+        .rows = frame.rows,
+        .cursor = frame.cursor,
+        .scroll = frame.scroll,
+        .span_count = frame.spans.len,
+    });
     const total_cells = try gridCellCount(frame.cols, frame.rows);
     var previous_end: u32 = 0;
     for (frame.spans) |span| {
@@ -348,24 +359,24 @@ fn validateFrameStructure(frame: Frame) !void {
     }
 }
 
-fn validateHeader(pane_id: id.PaneId, frame_id: u64, base_frame_id: u64, cols: u16, rows: u16, cursor: Cursor, scroll: Scroll, span_count: usize) !void {
-    if (pane_id == .invalid) {
+fn validateHeader(header: Header) !void {
+    if (header.pane_id == .invalid) {
         return error.InvalidPaneId;
     }
-    if (frame_id == 0 or base_frame_id >= frame_id) {
+    if (header.frame_id == 0 or header.base_frame_id >= header.frame_id) {
         return error.InvalidFrameId;
     }
-    _ = try gridCellCount(cols, rows);
-    if (span_count > max_span_count) {
+    _ = try gridCellCount(header.cols, header.rows);
+    if (header.span_count > max_span_count) {
         return error.TooManySpans;
     }
-    if (cursor.visible and (cursor.x >= cols or cursor.y >= rows)) {
+    if (header.cursor.visible and (header.cursor.x >= header.cols or header.cursor.y >= header.rows)) {
         return error.InvalidCursor;
     }
-    if (!cursor.visible and (cursor.x != 0 or cursor.y != 0)) {
+    if (!header.cursor.visible and (header.cursor.x != 0 or header.cursor.y != 0)) {
         return error.InvalidCursor;
     }
-    if (scroll.total_rows < rows or scroll.offset > scroll.maxOffset(rows)) {
+    if (header.scroll.total_rows < header.rows or header.scroll.offset > header.scroll.maxOffset(header.rows)) {
         return error.InvalidScroll;
     }
 }
