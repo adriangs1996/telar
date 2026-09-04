@@ -141,12 +141,12 @@ fn authorize(raw_context: *anyopaque, result: plugin_action.PluginResult) !void 
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const registry = client.plugin_registry orelse return error.PluginRegistryUnavailable;
 
-    try registry.authorizeBatch(
-        result.package_index,
-        result.plugin_id,
-        result.digest,
-        result.batch,
-    );
+    try registry.authorizeBatch(.{
+        .package_index = result.package_index,
+        .plugin_id = result.plugin_id,
+        .digest = result.digest,
+        .batch = result.batch,
+    });
 }
 
 fn applyBatch(raw_context: *anyopaque, batch: *const config.EffectBatch) !plugin_action.BatchDisposition {

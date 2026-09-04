@@ -24,6 +24,13 @@ pub const LoadContext = struct {
     config_dir: []const u8,
 };
 
+pub const BatchAuthorization = struct {
+    package_index: u8,
+    plugin_id: u64,
+    digest: plugin.Digest,
+    batch: *const lua_config.EffectBatch,
+};
+
 pub const Package = struct {
     manifest: plugin.Manifest,
     digest: plugin.Digest,
@@ -148,17 +155,19 @@ pub const Registry = struct {
         return error.CapabilityNotGranted;
     }
 
-    pub fn authorizeBatch(registry: *const Registry, package_index: u8, plugin_id: u64, digest: plugin.Digest, batch: *const lua_config.EffectBatch) !void {
-        if (package_index >= registry.count) {
+    /// Authorizes a worker batch against its immutable package identity.
+    /// For example: `try registry.authorizeBatch(.{ .package_index = index, .plugin_id = id, .digest = digest, .batch = batch });`.
+    pub fn authorizeBatch(registry: *const Registry, authorization: BatchAuthorization) !void {
+        if (authorization.package_index >= registry.count) {
             return error.PluginNotConfigured;
         }
-        const package = &registry.packages[package_index];
-        if (plugin.stableId(package.manifest.id()) != plugin_id or
-            !std.mem.eql(u8, &package.digest, &digest))
+        const package = &registry.packages[authorization.package_index];
+        if (plugin.stableId(package.manifest.id()) != authorization.plugin_id or
+            !std.mem.eql(u8, &package.digest, &authorization.digest))
         {
             return error.StalePluginWorker;
         }
-        for (batch.slice()) |effect| {
+        for (authorization.batch.slice()) |effect| {
             const capability: ?plugin.Capability = switch (effect) {
                 .split_pane, .close_pane, .new_workspace, .rename_workspace, .new_tab, .rename_tab, .close_tab, .move_tab, .detach => .runtime_control,
                 .focus_pane,
@@ -181,7 +190,7 @@ pub const Registry = struct {
                 .lua_callback, .lua_expr, .plugin => return error.InvalidPluginEffect,
             };
             if (capability) |required| {
-                try registry.authorize(package_index, required);
+                try registry.authorize(authorization.package_index, required);
             }
         }
     }
@@ -596,7 +605,12 @@ test "privileged plugin effects require a digest-bound capability grant" {
 
     try std.testing.expectError(
         error.CapabilityNotGranted,
-        registry.authorizeBatch(0, plugin.stableId(manifest.id()), digest, &batch),
+        registry.authorizeBatch(.{
+            .package_index = 0,
+            .plugin_id = plugin.stableId(manifest.id()),
+            .digest = digest,
+            .batch = &batch,
+        }),
     );
     registry.grants[0] = .{
         .plugin_hash = plugin.stableId(manifest.id()),
@@ -604,12 +618,22 @@ test "privileged plugin effects require a digest-bound capability grant" {
         .capabilities = plugin.CapabilitySet.initOne(.runtime_control),
     };
     registry.grant_count = 1;
-    try registry.authorizeBatch(0, plugin.stableId(manifest.id()), digest, &batch);
+    try registry.authorizeBatch(.{
+        .package_index = 0,
+        .plugin_id = plugin.stableId(manifest.id()),
+        .digest = digest,
+        .batch = &batch,
+    });
 
     const stale_digest: plugin.Digest = @splat(8);
     try std.testing.expectError(
         error.StalePluginWorker,
-        registry.authorizeBatch(0, plugin.stableId(manifest.id()), stale_digest, &batch),
+        registry.authorizeBatch(.{
+            .package_index = 0,
+            .plugin_id = plugin.stableId(manifest.id()),
+            .digest = stale_digest,
+            .batch = &batch,
+        }),
     );
 }
 
@@ -639,7 +663,12 @@ test "plugin notification effects require the notifications capability" {
 
     try std.testing.expectError(
         error.CapabilityNotGranted,
-        registry.authorizeBatch(0, plugin.stableId(manifest.id()), digest, &batch),
+        registry.authorizeBatch(.{
+            .package_index = 0,
+            .plugin_id = plugin.stableId(manifest.id()),
+            .digest = digest,
+            .batch = &batch,
+        }),
     );
     registry.grants[0] = .{
         .plugin_hash = plugin.stableId(manifest.id()),
@@ -647,7 +676,12 @@ test "plugin notification effects require the notifications capability" {
         .capabilities = plugin.CapabilitySet.initOne(.notifications),
     };
     registry.grant_count = 1;
-    try registry.authorizeBatch(0, plugin.stableId(manifest.id()), digest, &batch);
+    try registry.authorizeBatch(.{
+        .package_index = 0,
+        .plugin_id = plugin.stableId(manifest.id()),
+        .digest = digest,
+        .batch = &batch,
+    });
 }
 
 test "configured plugin actions resolve before the keymap becomes active" {
