@@ -2104,13 +2104,11 @@ pub const KittySidebarRenderer = struct {
             @as(u32, 1),
             (@as(u64, target_radius) * raster_size.width + target_width / 2) / target_width,
         );
-        renderRoundedRectangle(
-            next_pixels,
-            raster_size.width,
-            raster_size.height,
-            @intCast(raster_radius),
-            value.color,
-        );
+        renderRoundedRectangle(.{
+            .pixels = next_pixels,
+            .shape = .{ .size = raster_size, .radius = @intCast(raster_radius) },
+            .color = value.color,
+        });
         if (renderer.focused_card_pixels.len != 0) {
             renderer.gpa.free(renderer.focused_card_pixels);
         }
@@ -2290,56 +2288,74 @@ fn scaledPixelDimension(value: u32, fitted_longest: u32, original_longest: u32) 
     )));
 }
 
-fn renderRoundedRectangle(pixels: []u8, width: u32, height: u32, requested_radius: u32, color: [3]u8) void {
-    const radius = @min(requested_radius, @min(width, height) / 2);
+const PixelPoint = struct {
+    x: u32,
+    y: u32,
+};
+
+const RoundedRectangle = struct {
+    size: PixelSize,
+    radius: u32,
+};
+
+const RoundedRectangleInput = struct {
+    pixels: []u8,
+    shape: RoundedRectangle,
+    color: [3]u8,
+};
+
+fn renderRoundedRectangle(input: RoundedRectangleInput) void {
+    const width = input.shape.size.width;
+    const height = input.shape.size.height;
+    const shape: RoundedRectangle = .{ .size = input.shape.size, .radius = @min(input.shape.radius, @min(width, height) / 2) };
     var y: u32 = 0;
     while (y < height) : (y += 1) {
         var x: u32 = 0;
         while (x < width) : (x += 1) {
             const index = (@as(usize, y) * width + x) * 4;
-            pixels[index] = color[0];
-            pixels[index + 1] = color[1];
-            pixels[index + 2] = color[2];
-            pixels[index + 3] = roundedCoverage(x, y, width, height, radius);
+            input.pixels[index] = input.color[0];
+            input.pixels[index + 1] = input.color[1];
+            input.pixels[index + 2] = input.color[2];
+            input.pixels[index + 3] = roundedCoverage(.{ .x = x, .y = y }, shape);
         }
     }
 }
 
-fn roundedCoverage(x: u32, y: u32, width: u32, height: u32, radius: u32) u8 {
-    if (radius == 0) {
+fn roundedCoverage(point: PixelPoint, shape: RoundedRectangle) u8 {
+    if (shape.radius == 0) {
         return 255;
     }
     const supersample: u32 = 4;
     const units_per_pixel: u32 = supersample * 2;
+    const sampled_shape: RoundedRectangle = .{
+        .size = .{ .width = shape.size.width * units_per_pixel, .height = shape.size.height * units_per_pixel },
+        .radius = shape.radius * units_per_pixel,
+    };
     var inside: u32 = 0;
     for (0..supersample) |sample_y| {
         for (0..supersample) |sample_x| {
-            const point_x = x * units_per_pixel + @as(u32, @intCast(sample_x * 2 + 1));
-            const point_y = y * units_per_pixel + @as(u32, @intCast(sample_y * 2 + 1));
-            inside += @intFromBool(insideRoundedRectangle(
-                point_x,
-                point_y,
-                width * units_per_pixel,
-                height * units_per_pixel,
-                radius * units_per_pixel,
-            ));
+            const sampled: PixelPoint = .{
+                .x = point.x * units_per_pixel + @as(u32, @intCast(sample_x * 2 + 1)),
+                .y = point.y * units_per_pixel + @as(u32, @intCast(sample_y * 2 + 1)),
+            };
+            inside += @intFromBool(insideRoundedRectangle(sampled, sampled_shape));
         }
     }
     return @intCast((inside * 255 + supersample * supersample / 2) /
         (supersample * supersample));
 }
 
-fn insideRoundedRectangle(x: u32, y: u32, width: u32, height: u32, radius: u32) bool {
-    if ((x >= radius and x <= width - radius) or
-        (y >= radius and y <= height - radius))
+fn insideRoundedRectangle(point: PixelPoint, shape: RoundedRectangle) bool {
+    if ((point.x >= shape.radius and point.x <= shape.size.width - shape.radius) or
+        (point.y >= shape.radius and point.y <= shape.size.height - shape.radius))
     {
         return true;
     }
-    const center_x = if (x < radius) radius else width - radius;
-    const center_y = if (y < radius) radius else height - radius;
-    const delta_x = @as(i64, x) - center_x;
-    const delta_y = @as(i64, y) - center_y;
-    return delta_x * delta_x + delta_y * delta_y <= @as(i64, radius) * radius;
+    const center_x = if (point.x < shape.radius) shape.radius else shape.size.width - shape.radius;
+    const center_y = if (point.y < shape.radius) shape.radius else shape.size.height - shape.radius;
+    const delta_x = @as(i64, point.x) - center_x;
+    const delta_y = @as(i64, point.y) - center_y;
+    return delta_x * delta_x + delta_y * delta_y <= @as(i64, shape.radius) * shape.radius;
 }
 
 fn clearRgba(pixels: []u8) void {
