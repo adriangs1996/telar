@@ -78,16 +78,18 @@ pub const Renderer = struct {
         return renderer.supported and !renderer.failed;
     }
 
-    pub fn configure(renderer: *Renderer, support: kitty.Support, cell_width: u16, cell_height: u16) bool {
-        const supported = support == .supported and renderer.text != null;
-        if (renderer.supported == supported and renderer.cell_width == cell_width and
-            renderer.cell_height == cell_height)
+    /// Applies host graphics support and cell geometry to the icon atlas.
+    /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
+    pub fn configure(renderer: *Renderer, configuration: kitty.Configuration) bool {
+        const supported = configuration.support == .supported and renderer.text != null;
+        if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
+            renderer.cell_height == configuration.cell_height)
         {
             return false;
         }
         renderer.supported = supported;
-        renderer.cell_width = cell_width;
-        renderer.cell_height = cell_height;
+        renderer.cell_width = configuration.cell_width;
+        renderer.cell_height = configuration.cell_height;
         renderer.failed = false;
         return true;
     }
@@ -427,7 +429,7 @@ test "embedded subset rasterizes every configured Nerd Font icon" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
     try std.testing.expect(renderer.text != null);
-    _ = renderer.configure(.supported, 10, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var marks: [std.meta.fields(ui_icons.Icon).len]ui_icons.Mark = undefined;
     inline for (std.meta.fields(ui_icons.Icon), 0..) |field, index| {
         marks[index] = .{
@@ -463,7 +465,7 @@ test "icon slots preserve the terminal cell aspect ratio" {
 test "round Nerd Font icons remain square inside a tall cell" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.supported, 20, 40);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 20, .cell_height = 40 });
     try renderer.prepare(&.{.{
         .area = .{ .w = 1, .h = 1 },
         .icon = .agent_ready,
@@ -498,7 +500,7 @@ test "round Nerd Font icons remain square inside a tall cell" {
 test "icon atlas is transmitted before its placements" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.supported, 10, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     try renderer.prepare(&.{.{
         .area = .{ .x = 2, .y = 3, .w = 1, .h = 1 },
         .icon = .cpu,
@@ -517,7 +519,7 @@ test "icon atlas is transmitted before its placements" {
 test "working animation changes placements without retransmitting the atlas" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.supported, 10, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     const style = ui_icons.Mark{
         .area = .{ .x = 2, .y = 3, .w = 1, .h = 1 },
         .icon = .agent_working_0,
@@ -540,7 +542,7 @@ test "working animation changes placements without retransmitting the atlas" {
 test "unsupported terminals keep the renderer empty" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.unsupported, 10, 20);
+    _ = renderer.configure(.{ .support = .unsupported, .cell_width = 10, .cell_height = 20 });
     try renderer.prepare(&.{.{
         .area = .{ .w = 1, .h = 1 },
         .icon = .cpu,
