@@ -24,6 +24,11 @@ pub const Viewport = struct {
     rows: u16,
 };
 
+pub const Screen = struct {
+    buffer: *const ui.Buffer,
+    scroll: schema.frame.Scroll,
+};
+
 pub const View = struct {
     cursor: Point,
     anchor: ?Point,
@@ -231,7 +236,9 @@ pub const Effect = struct {
 
 /// Interprets one key over the pane's visible cells. Pure: the only mutation
 /// is the copy-mode state itself.
-pub fn applyKey(state: *State, pressed: keybind.Key, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) Effect {
+pub fn applyKey(state: *State, pressed: keybind.Key, screen: Screen) Effect {
+    const buffer = screen.buffer;
+    const scroll = screen.scroll;
     const page: i32 = @intCast(@max(@as(u16, 1), buffer.h -| 1));
     const viewport: Viewport = .{ .scroll = scroll, .rows = buffer.h };
 
@@ -543,15 +550,15 @@ test "word motions travel by class over the visible cells" {
     const scroll: schema.frame.Scroll = .{ .total_rows = 2, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
-    _ = applyKey(&state, try keybind.parseKey("w"), &buffer, scroll);
+    _ = applyKey(&state, try keybind.parseKey("w"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 4), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("w"), &buffer, scroll);
+    _ = applyKey(&state, try keybind.parseKey("w"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 7), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("b"), &buffer, scroll);
+    _ = applyKey(&state, try keybind.parseKey("b"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 4), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("$"), &buffer, scroll);
+    _ = applyKey(&state, try keybind.parseKey("$"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 10), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("0"), &buffer, scroll);
+    _ = applyKey(&state, try keybind.parseKey("0"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 0), state.cursor.x);
 }
 
@@ -562,16 +569,16 @@ test "escape clears the selection before it exits" {
     const scroll: schema.frame.Scroll = .{ .total_rows = 1, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
-    _ = applyKey(&state, try keybind.parseKey("v"), &buffer, scroll);
+    _ = applyKey(&state, try keybind.parseKey("v"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(state.anchor != null);
-    const cleared = applyKey(&state, try keybind.parseKey("escape"), &buffer, scroll);
+    const cleared = applyKey(&state, try keybind.parseKey("escape"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(!cleared.exit);
     try std.testing.expect(state.anchor == null);
-    const exited = applyKey(&state, try keybind.parseKey("escape"), &buffer, scroll);
+    const exited = applyKey(&state, try keybind.parseKey("escape"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(exited.exit and !exited.copy);
-    const copied = applyKey(&state, try keybind.parseKey("y"), &buffer, scroll);
+    const copied = applyKey(&state, try keybind.parseKey("y"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(copied.exit and copied.copy);
-    const ignored = applyKey(&state, try keybind.parseKey("z"), &buffer, scroll);
+    const ignored = applyKey(&state, try keybind.parseKey("z"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(!ignored.handled);
 }
 
@@ -627,9 +634,9 @@ test "slash and question mark ask for the search input" {
     const scroll: schema.frame.Scroll = .{ .total_rows = 5, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
-    const forward = applyKey(&state, .{ .code = .{ .char = .init("/") } }, &buffer, scroll);
+    const forward = applyKey(&state, .{ .code = .{ .char = .init("/") } }, .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(Direction.forward, forward.search.?);
-    const backward = applyKey(&state, .{ .code = .{ .char = .init("?") } }, &buffer, scroll);
+    const backward = applyKey(&state, .{ .code = .{ .char = .init("?") } }, .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(Direction.backward, backward.search.?);
     try std.testing.expectEqual(Direction.backward, state.search_direction);
 }
@@ -640,7 +647,7 @@ test "o asks the client to open the link under the cursor" {
     const scroll: schema.frame.Scroll = .{ .total_rows = 5, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
-    const effect = applyKey(&state, .{ .code = .{ .char = .init("o") } }, &buffer, scroll);
+    const effect = applyKey(&state, .{ .code = .{ .char = .init("o") } }, .{ .buffer = &buffer, .scroll = scroll });
 
     try std.testing.expect(effect.open_link);
     try std.testing.expect(!effect.exit);

@@ -1796,7 +1796,7 @@ pub const Model = struct {
 
         switch (command) {
             .key => |pressed| {
-                const effect = copy_mode.applyKey(&next, pressed, &pane.buffer, pane.scroll);
+                const effect = copy_mode.applyKey(&next, pressed, .{ .buffer = &pane.buffer, .scroll = pane.scroll });
                 if (!effect.handled) {
                     return null;
                 }
