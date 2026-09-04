@@ -200,7 +200,11 @@ fn renderList(context: *widget.Context, input: Input, list: ListInput) void {
     const row_end = list.area.x + list.area.w;
     const active_index = if (list.active_id) |id| snapshot.indexOf(id) else null;
     const collapsed = input.collapsed or
-        !listFits(snapshot, active_index, input.workspace_name, list.area.w);
+        !listFits(.{
+            .snapshot = snapshot,
+            .active_index = active_index,
+            .active_name = input.workspace_name,
+        }, list.area.w);
     var x = list.area.x;
 
     if (collapsed) {
@@ -311,8 +315,8 @@ fn renderFallback(context: *widget.Context, input: Input, area: ui.Rect) void {
     _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = area.x, .y = area.y }, .text = workspace, .max_width = width, .style = style });
 }
 
-fn listFits(snapshot: *const workspace_list.Snapshot, active_index: ?usize, active_name: []const u8, available: u16) bool {
-    return listWidth(snapshot, active_index, active_name) <= available;
+fn listFits(names: WorkspaceNames, available: u16) bool {
+    return listWidth(names.snapshot, names.active_index, names.active_name) <= available;
 }
 
 fn listWidth(snapshot: *const workspace_list.Snapshot, active_index: ?usize, active_name: []const u8) u16 {
@@ -395,8 +399,9 @@ test "the list collapses when the row cannot fit every workspace" {
     };
     _ = try snapshot.replace(.{ .revision = 1, .entries = &entries });
     // " telar " + " api " = 12 columns.
-    try std.testing.expect(listFits(&snapshot, null, "", 12));
-    try std.testing.expect(!listFits(&snapshot, null, "", 11));
+    const names: WorkspaceNames = .{ .snapshot = &snapshot, .active_index = null, .active_name = "" };
+    try std.testing.expect(listFits(names, 12));
+    try std.testing.expect(!listFits(names, 11));
 }
 
 test "the workspace label ignores git branch and dirty state" {
@@ -432,8 +437,9 @@ test "the workspace label ignores git branch and dirty state" {
     }
     try std.testing.expectEqualStrings(" telar ", text[0..len]);
     // " telar " + " api " = 12 columns regardless of git state.
-    try std.testing.expect(listFits(&snapshot, null, "", 12));
-    try std.testing.expect(!listFits(&snapshot, null, "", 11));
+    const names: WorkspaceNames = .{ .snapshot = &snapshot, .active_index = null, .active_name = "" };
+    try std.testing.expect(listFits(names, 12));
+    try std.testing.expect(!listFits(names, 11));
 }
 
 test "the active name replaces only the active workspace snapshot name" {
@@ -452,8 +458,8 @@ test "the active name replaces only the active workspace snapshot name" {
     try std.testing.expectEqualStrings("agents", workspaceNameAt(names, 0));
     try std.testing.expectEqualStrings("api", workspaceNameAt(names, 1));
     // " agents " + " api " = 13 columns.
-    try std.testing.expect(listFits(&snapshot, 0, "agents", 13));
-    try std.testing.expect(!listFits(&snapshot, 0, "agents", 12));
+    try std.testing.expect(listFits(names, 13));
+    try std.testing.expect(!listFits(names, 12));
 }
 
 test "sidebar toggle publishes the matching Nerd Font action icon" {
