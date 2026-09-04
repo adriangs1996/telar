@@ -163,7 +163,7 @@ pub fn run(init: std.process.Init, options: parser.ProxyOptions) !u8 {
                 try writer.print("telar proxy trust: not installed ({s})\n", .{directory});
                 return 0;
             };
-            try uninstallRecord(init, record, paths.files().certificate, writer);
+            try uninstallRecord(.{ .init = init, .writer = writer }, record, paths.files().certificate);
             try Io.Dir.deleteFileAbsolute(init.io, paths.recordPath());
             try writer.print("telar proxy trust: removed {s}\n", .{&record.fingerprint});
             return 0;
@@ -416,10 +416,10 @@ fn installAuthority(command: AuthorityCommand, target: AuthorityTarget, destinat
     }
 }
 
-fn uninstallRecord(init: std.process.Init, record: Record, certificate: []const u8, writer: *Io.Writer) !void {
-    try validateRecordTarget(init.minimal.environ, record, certificate);
+fn uninstallRecord(command: AuthorityCommand, record: Record, certificate: []const u8) !void {
+    try validateRecordTarget(command.init.minimal.environ, record, certificate);
 
-    return uninstallAuthority(init, record.backend, &record.fingerprint, certificate, record.storePath(), writer);
+    return uninstallAuthority(command.init, record.backend, &record.fingerprint, certificate, record.storePath(), command.writer);
 }
 
 fn uninstallAuthority(init: std.process.Init, selected: TrustBackend, fingerprint: []const u8, certificate: []const u8, destination: []const u8, writer: *Io.Writer) !void {
