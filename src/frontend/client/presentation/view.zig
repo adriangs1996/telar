@@ -459,12 +459,12 @@ pub const State = struct {
             return false;
         }
         state.kitty_toasts.setMediaIdle(media_idle);
-        state.kitty_toasts.prepareThemed(
-            state.graphics_plan.toast_area,
-            snapshot,
-            state.palette(),
-            state.icon_theme,
-        );
+        state.kitty_toasts.prepare(.{
+            .area = state.graphics_plan.toast_area,
+            .center = snapshot,
+            .palette = state.palette(),
+            .icon_theme = state.icon_theme,
+        });
         state.attachment_store.prepare(state.graphics_plan.attachments);
         state.kitty_modal.prepare(state.graphics_plan.modal_area, state.palette());
         try state.kitty_sidebar.prepare(.{
