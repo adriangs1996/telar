@@ -47,7 +47,7 @@ fn execute(session: *control.Session, options: PaneOptions, writer: *Io.Writer, 
         .read => {
             const text = try session.readPane(pane, options.lines, options.source);
             if (options.json) {
-                try writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ pane.pane_id, text.truncated });
+                try writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ text.pane_id, text.truncated });
                 try control.writeJsonString(writer, text.text);
                 try writer.writeAll("}\n");
             } else {

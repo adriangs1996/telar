@@ -77,7 +77,7 @@ fn execute(session: *control.Session, options: AgentOptions, output: Output) !u8
                 .pane_id = agent.pane_id,
                 .pane_generation = agent.pane_generation,
             }, options.lines, options.source);
-            try writeText(output.writer, agent.pane_id, text, options.json);
+            try writeText(output.writer, text, options.json);
             return exit_ok;
         },
     }
@@ -183,9 +183,9 @@ fn writeOne(writer: *Io.Writer, agent: *const control.Agent, json: bool) !void {
     try control.writeAgentRow(writer, agent);
 }
 
-fn writeText(writer: *Io.Writer, pane_id: u64, text: control.Session.Text, json: bool) !void {
+fn writeText(writer: *Io.Writer, text: control.Session.Text, json: bool) !void {
     if (json) {
-        try writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ pane_id, text.truncated });
+        try writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ text.pane_id, text.truncated });
         try control.writeJsonString(writer, text.text);
         try writer.writeAll("}\n");
         return;

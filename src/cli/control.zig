@@ -257,6 +257,7 @@ pub const Session = struct {
     };
 
     pub const Text = struct {
+        pane_id: u64,
         truncated: bool,
         text: []const u8,
     };
@@ -279,7 +280,7 @@ pub const Session = struct {
 
         const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
         return switch (response) {
-            .pane_text => |text| .{ .truncated = text.truncated, .text = text.text },
+            .pane_text => |text| .{ .pane_id = pane.pane_id, .truncated = text.truncated, .text = text.text },
             .request_failed => |failure| failureError(failure),
             else => error.UnexpectedRuntimeResponse,
         };
