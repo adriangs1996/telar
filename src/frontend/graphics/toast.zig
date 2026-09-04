@@ -501,52 +501,47 @@ pub const Renderer = struct {
         const left = @as(i32, renderer.cell_width) * 2;
         const right_padding = @as(u32, renderer.cell_width) * 4;
         const max_text_width = width -| @as(u32, @intCast(left)) -| right_padding;
-        _ = try text.drawText(
-            surface,
-            left,
-            baseline(metrics, 0, renderer.cell_height),
-            item.title(),
-            accent,
-            max_text_width,
-        );
-        _ = try text.drawText(
-            surface,
-            left,
-            baseline(metrics, renderer.cell_height, renderer.cell_height),
-            item.message(),
-            rasterColor(key.text),
-            width -| @as(u32, @intCast(left)) -| @as(u32, renderer.cell_width) * 2,
-        );
+        _ = try text.drawText(.{
+            .surface = surface,
+            .origin = .{ .x = left, .y = baseline(metrics, 0, renderer.cell_height) },
+            .text = item.title(),
+            .color = accent,
+            .max_width = max_text_width,
+        });
+        _ = try text.drawText(.{
+            .surface = surface,
+            .origin = .{ .x = left, .y = baseline(metrics, renderer.cell_height, renderer.cell_height) },
+            .text = item.message(),
+            .color = rasterColor(key.text),
+            .max_width = width -| @as(u32, @intCast(left)) -| @as(u32, renderer.cell_width) * 2,
+        });
         const hint = if (item.clickable()) "click to open" else "click to dismiss";
-        _ = try text.drawText(
-            surface,
-            left,
-            baseline(metrics, @as(u32, renderer.cell_height) * 2, renderer.cell_height),
-            hint,
-            rasterColor(key.subtext),
-            width -| @as(u32, @intCast(left)) -| @as(u32, renderer.cell_width) * 2,
-        );
+        _ = try text.drawText(.{
+            .surface = surface,
+            .origin = .{ .x = left, .y = baseline(metrics, @as(u32, renderer.cell_height) * 2, renderer.cell_height) },
+            .text = hint,
+            .color = rasterColor(key.subtext),
+            .max_width = width -| @as(u32, @intCast(left)) -| @as(u32, renderer.cell_width) * 2,
+        });
         const close_x: i32 = @intCast(width -| @as(u32, renderer.cell_width) * 3);
         if (key.icon_theme == .nerd_font) {
             const icons = &renderer.icons.?;
             try icons.setPixelHeight(font_height);
-            _ = try icons.drawText(
-                surface,
-                close_x,
-                baseline(icons.metrics(), 0, renderer.cell_height),
-                ui_icons.Icon.close.nerdGlyph(),
-                accent,
-                @as(u32, renderer.cell_width) * 2,
-            );
+            _ = try icons.drawText(.{
+                .surface = surface,
+                .origin = .{ .x = close_x, .y = baseline(icons.metrics(), 0, renderer.cell_height) },
+                .text = ui_icons.Icon.close.nerdGlyph(),
+                .color = accent,
+                .max_width = @as(u32, renderer.cell_width) * 2,
+            });
         } else {
-            _ = try text.drawText(
-                surface,
-                close_x,
-                baseline(metrics, 0, renderer.cell_height),
-                ui_icons.Icon.close.unicodeGlyph(),
-                accent,
-                @as(u32, renderer.cell_width) * 2,
-            );
+            _ = try text.drawText(.{
+                .surface = surface,
+                .origin = .{ .x = close_x, .y = baseline(metrics, 0, renderer.cell_height) },
+                .text = ui_icons.Icon.close.unicodeGlyph(),
+                .color = accent,
+                .max_width = @as(u32, renderer.cell_width) * 2,
+            });
         }
         slot.key = key;
         slot.failed_key = null;

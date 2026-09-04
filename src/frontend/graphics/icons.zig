@@ -400,18 +400,17 @@ fn renderAtlas(text: *raster.Rasterizer, atlas: AtlasInput) !void {
             .height = atlas.raster_size.height,
         };
         fill(surface, slot.background);
-        const advance = try text.drawText(
-            surface,
-            0,
-            baseline,
-            slot.icon.nerdGlyph(),
-            .{
+        const advance = try text.drawText(.{
+            .surface = surface,
+            .origin = .{ .x = 0, .y = baseline },
+            .text = slot.icon.nerdGlyph(),
+            .color = .{
                 .red = slot.foreground[0],
                 .green = slot.foreground[1],
                 .blue = slot.foreground[2],
             },
-            atlas.raster_size.width,
-        );
+            .max_width = atlas.raster_size.width,
+        });
         if (advance == 0) {
             return error.EmptyIconGlyph;
         }

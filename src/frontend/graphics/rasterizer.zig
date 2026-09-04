@@ -32,6 +32,32 @@ pub const Surface = struct {
     }
 };
 
+pub const Point = struct {
+    x: i32,
+    y: i32,
+};
+
+pub const TextDraw = struct {
+    surface: Surface,
+    origin: Point,
+    text: []const u8,
+    color: Color,
+    max_width: u32,
+};
+
+const BitmapBlend = struct {
+    surface: Surface,
+    bitmap: ft.FT_Bitmap,
+    destination: Point,
+    color: Color,
+};
+
+const PixelBlend = struct {
+    point: struct { x: u32, y: u32 },
+    color: Color,
+    alpha: u8,
+};
+
 pub const Metrics = struct {
     ascender: i32,
     descender: i32,
@@ -126,24 +152,25 @@ pub const Rasterizer = struct {
 
     /// Draws one UTF-8 line and returns its pixel advance. The baseline and
     /// origin are signed so bearings may safely extend outside the surface.
-    pub fn drawText(rasterizer: *Rasterizer, surface: Surface, origin_x: i32, baseline_y: i32, text: []const u8, color: Color, max_width: u32) !u32 {
-        try surface.validate();
+    /// For example: `try rasterizer.drawText(.{ .surface = surface, .origin = .{ .x = 0, .y = 16 }, .text = "Telar", .color = color, .max_width = 80 })`.
+    pub fn drawText(rasterizer: *Rasterizer, draw: TextDraw) !u32 {
+        try draw.surface.validate();
         if (rasterizer.pixel_height == 0) {
             return error.FontSizeNotSet;
         }
-        if (text.len == 0) {
+        if (draw.text.len == 0) {
             return 0;
         }
-        const shaped = try rasterizer.shapeText(text);
+        const shaped = try rasterizer.shapeText(draw.text);
 
-        var pen_x = origin_x * 64;
+        var pen_x = draw.origin.x * 64;
         const origin_fixed = pen_x;
         for (shaped.glyphs, shaped.positions) |glyph, position| {
             if (glyph.codepoint == 0) {
                 return error.MissingGlyph;
             }
             const next_x = pen_x + position.x_advance;
-            if (fixed26_6Round(next_x - origin_fixed) > max_width) {
+            if (fixed26_6Round(next_x - origin_fixed) > draw.max_width) {
                 break;
             }
             if (ft.FT_Load_Glyph(rasterizer.face, glyph.codepoint, ft.FT_LOAD_DEFAULT) != 0) {
@@ -154,13 +181,15 @@ pub const Rasterizer = struct {
                 return error.GlyphRenderFailed;
             }
 
-            try blendBitmap(
-                surface,
-                slot.*.bitmap,
-                fixed26_6Round(pen_x + position.x_offset) + slot.*.bitmap_left,
-                baseline_y - fixed26_6Round(position.y_offset) - slot.*.bitmap_top,
-                color,
-            );
+            try blendBitmap(.{
+                .surface = draw.surface,
+                .bitmap = slot.*.bitmap,
+                .destination = .{
+                    .x = fixed26_6Round(pen_x + position.x_offset) + slot.*.bitmap_left,
+                    .y = draw.origin.y - fixed26_6Round(position.y_offset) - slot.*.bitmap_top,
+                },
+                .color = draw.color,
+            });
             pen_x = next_x;
         }
         return @intCast(@max(0, fixed26_6Round(pen_x - origin_fixed)));
@@ -208,34 +237,34 @@ fn fixed26_6Round(value: anytype) i32 {
     return @intCast(if (signed >= 0) (signed + 32) >> 6 else -(((-signed) + 32) >> 6));
 }
 
-fn blendBitmap(surface: Surface, bitmap: ft.FT_Bitmap, destination_x: i32, destination_y: i32, color: Color) !void {
-    if (bitmap.pixel_mode != ft.FT_PIXEL_MODE_GRAY and
-        bitmap.pixel_mode != ft.FT_PIXEL_MODE_MONO)
+fn blendBitmap(blend: BitmapBlend) !void {
+    if (blend.bitmap.pixel_mode != ft.FT_PIXEL_MODE_GRAY and
+        blend.bitmap.pixel_mode != ft.FT_PIXEL_MODE_MONO)
     {
         return error.UnsupportedPixelMode;
     }
-    if (bitmap.buffer == null) {
+    if (blend.bitmap.buffer == null) {
         return;
     }
-    const rows: usize = @intCast(bitmap.rows);
-    const columns: usize = @intCast(bitmap.width);
-    const pitch: i32 = bitmap.pitch;
+    const rows: usize = @intCast(blend.bitmap.rows);
+    const columns: usize = @intCast(blend.bitmap.width);
+    const pitch: i32 = blend.bitmap.pitch;
     const absolute_pitch: usize = @intCast(@abs(pitch));
-    const source = bitmap.buffer[0 .. absolute_pitch * rows];
+    const source = blend.bitmap.buffer[0 .. absolute_pitch * rows];
 
     for (0..rows) |source_y| {
-        const target_y = destination_y + @as(i32, @intCast(source_y));
-        if (target_y < 0 or target_y >= surface.height) {
+        const target_y = blend.destination.y + @as(i32, @intCast(source_y));
+        if (target_y < 0 or target_y >= blend.surface.height) {
             continue;
         }
         const physical_y = if (pitch >= 0) source_y else rows - 1 - source_y;
         const source_row = source[physical_y * absolute_pitch ..][0..absolute_pitch];
         for (0..columns) |source_x| {
-            const target_x = destination_x + @as(i32, @intCast(source_x));
-            if (target_x < 0 or target_x >= surface.width) {
+            const target_x = blend.destination.x + @as(i32, @intCast(source_x));
+            if (target_x < 0 or target_x >= blend.surface.width) {
                 continue;
             }
-            const coverage: u8 = if (bitmap.pixel_mode == ft.FT_PIXEL_MODE_GRAY)
+            const coverage: u8 = if (blend.bitmap.pixel_mode == ft.FT_PIXEL_MODE_GRAY)
                 source_row[source_x]
             else if (source_row[source_x / 8] & (@as(u8, 0x80) >> @intCast(source_x % 8)) != 0)
                 255
@@ -244,26 +273,31 @@ fn blendBitmap(surface: Surface, bitmap: ft.FT_Bitmap, destination_x: i32, desti
             if (coverage == 0) {
                 continue;
             }
-            const alpha: u8 = @intCast((@as(u16, coverage) * color.alpha + 127) / 255);
-            blendPixel(surface, @intCast(target_x), @intCast(target_y), color, alpha);
+            const alpha: u8 = @intCast((@as(u16, coverage) * blend.color.alpha + 127) / 255);
+            blendPixel(blend.surface, .{
+                .point = .{ .x = @intCast(target_x), .y = @intCast(target_y) },
+                .color = blend.color,
+                .alpha = alpha,
+            });
         }
     }
 }
 
-fn blendPixel(surface: Surface, x: u32, y: u32, color: Color, alpha: u8) void {
-    const index = (@as(usize, y) * surface.width + x) * 4;
-    const inverse: u16 = 255 - alpha;
+fn blendPixel(surface: Surface, blend: PixelBlend) void {
+    const index = (@as(usize, blend.point.y) * surface.width + blend.point.x) * 4;
+    const inverse: u16 = 255 - blend.alpha;
     const previous_alpha = surface.pixels[index + 3];
-    surface.pixels[index] = compositeChannel(surface.pixels[index], color.red, alpha, inverse);
-    surface.pixels[index + 1] = compositeChannel(surface.pixels[index + 1], color.green, alpha, inverse);
-    surface.pixels[index + 2] = compositeChannel(surface.pixels[index + 2], color.blue, alpha, inverse);
+    surface.pixels[index] = compositeChannel(surface.pixels[index], blend.color.red, blend.alpha);
+    surface.pixels[index + 1] = compositeChannel(surface.pixels[index + 1], blend.color.green, blend.alpha);
+    surface.pixels[index + 2] = compositeChannel(surface.pixels[index + 2], blend.color.blue, blend.alpha);
     surface.pixels[index + 3] = @intCast(@min(
         255,
-        @as(u16, alpha) + (@as(u16, previous_alpha) * inverse + 127) / 255,
+        @as(u16, blend.alpha) + (@as(u16, previous_alpha) * inverse + 127) / 255,
     ));
 }
 
-fn compositeChannel(previous: u8, next: u8, alpha: u8, inverse: u16) u8 {
+fn compositeChannel(previous: u8, next: u8, alpha: u8) u8 {
+    const inverse: u16 = 255 - alpha;
     return @intCast((@as(u16, next) * alpha + @as(u16, previous) * inverse + 127) / 255);
 }
 
@@ -274,14 +308,13 @@ test "embedded JetBrains Mono rasterizes UTF-8 into RGBA" {
 
     var pixels: [256 * 32 * 4]u8 = @splat(0);
     const surface: Surface = .{ .pixels = &pixels, .width = 256, .height = 32 };
-    const advance = try rasterizer.drawText(
-        surface,
-        4,
-        22,
-        "Telar ✓",
-        .{ .red = 220, .green = 230, .blue = 240 },
-        248,
-    );
+    const advance = try rasterizer.drawText(.{
+        .surface = surface,
+        .origin = .{ .x = 4, .y = 22 },
+        .text = "Telar ✓",
+        .color = .{ .red = 220, .green = 230, .blue = 240 },
+        .max_width = 248,
+    });
     try std.testing.expect(advance > 0);
     try std.testing.expect(std.mem.indexOfNone(u8, &pixels, &.{0}) != null);
 }
@@ -299,14 +332,13 @@ test "empty notification lines are valid" {
     defer rasterizer.deinit();
     try rasterizer.setPixelHeight(16);
     var pixels: [4]u8 = @splat(0);
-    try std.testing.expectEqual(@as(u32, 0), try rasterizer.drawText(
-        .{ .pixels = &pixels, .width = 1, .height = 1 },
-        0,
-        0,
-        "",
-        .{ .red = 255, .green = 255, .blue = 255 },
-        1,
-    ));
+    try std.testing.expectEqual(@as(u32, 0), try rasterizer.drawText(.{
+        .surface = .{ .pixels = &pixels, .width = 1, .height = 1 },
+        .origin = .{ .x = 0, .y = 0 },
+        .text = "",
+        .color = .{ .red = 255, .green = 255, .blue = 255 },
+        .max_width = 1,
+    }));
 }
 
 test "surface length is checked before rasterization" {
@@ -314,12 +346,11 @@ test "surface length is checked before rasterization" {
     defer rasterizer.deinit();
     try rasterizer.setPixelHeight(12);
     var pixels: [3]u8 = @splat(0);
-    try std.testing.expectError(error.InvalidSurface, rasterizer.drawText(
-        .{ .pixels = &pixels, .width = 1, .height = 1 },
-        0,
-        0,
-        "x",
-        .{ .red = 255, .green = 255, .blue = 255 },
-        1,
-    ));
+    try std.testing.expectError(error.InvalidSurface, rasterizer.drawText(.{
+        .surface = .{ .pixels = &pixels, .width = 1, .height = 1 },
+        .origin = .{ .x = 0, .y = 0 },
+        .text = "x",
+        .color = .{ .red = 255, .green = 255, .blue = 255 },
+        .max_width = 1,
+    }));
 }
