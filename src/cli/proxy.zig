@@ -193,6 +193,11 @@ const InstallOptions = struct {
     writer: *Io.Writer,
 };
 
+const AuthorityTarget = struct {
+    backend: TrustBackend,
+    certificate: []const u8,
+};
+
 /// Reports whether the record, files, fingerprint, and lifetime prove that
 /// Telar's system authority is installed.
 ///
@@ -255,7 +260,10 @@ fn install(init: std.process.Init, options: InstallOptions) !void {
     const prepared_files = prepared.files(&options.paths);
     var rollback_certificate = prepared_files.certificate;
     var store_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const store_path = try storePath(init.minimal.environ, options.backend, options.paths.files().certificate, &store_path_buffer);
+    const store_path = try storePath(init.minimal.environ, .{
+        .backend = options.backend,
+        .certificate = options.paths.files().certificate,
+    }, &store_path_buffer);
 
     try installAuthority(init, options.backend, prepared_files.certificate, store_path, options.writer);
     errdefer uninstallAuthority(init, options.backend, &fingerprint, rollback_certificate, store_path, options.writer) catch {};
@@ -364,14 +372,14 @@ fn validateBackend(selected: TrustBackend) !void {
     }
 }
 
-fn storePath(environ: std.process.Environ, selected: TrustBackend, certificate: []const u8, buffer: []u8) ![]const u8 {
-    return switch (selected) {
+fn storePath(environ: std.process.Environ, target: AuthorityTarget, buffer: []u8) ![]const u8 {
+    return switch (target.backend) {
         .macos => block: {
             const home = environ.getPosix("HOME") orelse return error.HomeUnavailable;
             break :block try std.fmt.bufPrint(buffer, "{s}/Library/Keychains/login.keychain-db", .{home});
         },
         .update_ca_certificates => linux_certificate_path,
-        .trust => certificate,
+        .trust => target.certificate,
     };
 }
 
@@ -383,7 +391,7 @@ fn validateRecordTarget(environ: std.process.Environ, record: Record, certificat
     try validateBackend(record.backend);
 
     var expected_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const expected = try storePath(environ, record.backend, certificate, &expected_buffer);
+    const expected = try storePath(environ, .{ .backend = record.backend, .certificate = certificate }, &expected_buffer);
     if (!std.mem.eql(u8, expected, record.storePath())) {
         return error.InvalidTrustRecord;
     }
@@ -639,7 +647,7 @@ test "inspection accepts only the recorded short-lived authority" {
     const environ: std.process.Environ = .{ .block = block };
     const selected: TrustBackend = if (@import("builtin").os.tag == .macos) .macos else .trust;
     var store_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const store = try storePath(environ, selected, paths.files().certificate, &store_buffer);
+    const store = try storePath(environ, .{ .backend = selected, .certificate = paths.files().certificate }, &store_buffer);
     const record = try makeRecord(selected, authority.fingerprint(), store);
     try writeRecord(io, paths.recordPath(), record);
 
