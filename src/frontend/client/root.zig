@@ -91,19 +91,36 @@ test "pane mouse reports preserve SGR buttons and pane-relative coordinates" {
     var buffer: [64]u8 = undefined;
     try std.testing.expectEqualStrings(
         "\x1b[<0;3;5M",
-        try encodeSgrMouse(&buffer, .{ .x = 20, .y = 30, .kind = .press, .button = 0 }, 2, 4, false, 0, 0, null, null),
+        try encodeSgrMouse(&buffer, .{
+            .event = .{ .x = 20, .y = 30, .kind = .press, .button = 0 },
+            .pane_position = .{ .x = 2, .y = 4 },
+        }),
     );
     try std.testing.expectEqualStrings(
         "\x1b[<0;3;5m",
-        try encodeSgrMouse(&buffer, .{ .x = 20, .y = 30, .kind = .release, .button = 0 }, 2, 4, false, 0, 0, null, null),
+        try encodeSgrMouse(&buffer, .{
+            .event = .{ .x = 20, .y = 30, .kind = .release, .button = 0 },
+            .pane_position = .{ .x = 2, .y = 4 },
+        }),
     );
     try std.testing.expectEqualStrings(
         "\x1b[<0;26;91M",
-        try encodeSgrMouse(&buffer, .{ .x = 20, .y = 30, .kind = .press, .button = 0 }, 2, 4, true, 10, 20, null, null),
+        try encodeSgrMouse(&buffer, .{
+            .event = .{ .x = 20, .y = 30, .kind = .press, .button = 0 },
+            .pane_position = .{ .x = 2, .y = 4 },
+            .pixels = .{ .cell = .{ .width = 10, .height = 20 } },
+        }),
     );
     try std.testing.expectEqualStrings(
         "\x1b[<0;8;10M",
-        try encodeSgrMouse(&buffer, .{ .x = 20, .y = 30, .kind = .press, .button = 0 }, 2, 4, true, 10, 20, 7, 9),
+        try encodeSgrMouse(&buffer, .{
+            .event = .{ .x = 20, .y = 30, .kind = .press, .button = 0 },
+            .pane_position = .{ .x = 2, .y = 4 },
+            .pixels = .{
+                .cell = .{ .width = 10, .height = 20 },
+                .exact = .{ .x = 7, .y = 9 },
+            },
+        }),
     );
     try std.testing.expect(mouseTracked(.any, .move));
     try std.testing.expect(!mouseTracked(.button, .move));

@@ -107,17 +107,19 @@ fn encodeReport(buffer: []u8, report: pane_mouse.ReportEffect) ![]const u8 {
         break :exact command.event.raw_y - origin;
     } else null;
 
-    return mouse_protocol.encodeSgr(
-        buffer,
-        command.event,
-        command.event.x - plan.content.x,
-        command.event.y - plan.content.y,
-        plan.protocol.pixels,
-        command.cell_width_px,
-        command.cell_height_px,
-        exact_x,
-        exact_y,
-    );
+    const pixels: ?mouse_protocol.PixelProjection = if (plan.protocol.pixels) .{
+        .cell = .{ .width = command.cell_width_px, .height = command.cell_height_px },
+        .exact = if (exact_x != null and exact_y != null) .{ .x = exact_x.?, .y = exact_y.? } else null,
+    } else null;
+
+    return mouse_protocol.encodeSgr(buffer, .{
+        .event = command.event,
+        .pane_position = .{
+            .x = command.event.x - plan.content.x,
+            .y = command.event.y - plan.content.y,
+        },
+        .pixels = pixels,
+    });
 }
 
 test "pane mouse reports preserve exact host pixels relative to pane content" {
