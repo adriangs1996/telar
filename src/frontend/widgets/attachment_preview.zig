@@ -48,10 +48,10 @@ pub fn renderShelf(context: *widget.Context, area: ui.Rect, snapshot: *const att
             const close: ui.Rect = .{ .x = card.x + card.w - 2, .y = card.y, .w = 1, .h = 1 };
             const dismiss: widget.Action = .{ .attachment_dismiss = item.id };
             context.hits.add(close, dismiss);
-            _ = context.buffer.writeText(close, close.x, close.y, "×", .{
+            _ = context.buffer.writeText(close, .{ .point = .{ .x = close.x, .y = close.y }, .text = "×", .style = .{
                 .fg = if (context.isHovered(dismiss)) context.palette.red else context.palette.subtext0,
                 .bg = background,
-            });
+            } });
         }
         const image_area = card.inner(1);
         if (!image_area.isEmpty()) {
@@ -139,10 +139,10 @@ pub fn renderModal(context: *widget.Context, input: ModalInput) ui.Rect {
     );
     const close: ui.Rect = .{ .x = area.x + area.w - 3, .y = area.y, .w = 2, .h = 1 };
     context.hits.add(close, .attachment_modal_close);
-    _ = context.buffer.writeText(close, close.x, close.y, "× ", .{
+    _ = context.buffer.writeText(close, .{ .point = .{ .x = close.x, .y = close.y }, .text = "× ", .style = .{
         .fg = context.palette.subtext0,
         .bg = background,
-    });
+    } });
     const image_area = area.inner(2);
     if (!image_area.isEmpty()) {
         _ = context.buffer.writeTruncated(

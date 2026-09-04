@@ -113,15 +113,15 @@ fn renderCells(context: *widget.Context, input: Input, semantic: *Semantic) void
 fn drawHeader(context: *widget.Context, area: ui.Rect, background: ui.Color) void {
     const row: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 3, .h = 1 };
     context.buffer.fill(row, .{ .glyph = " ", .style = .{ .bg = background } });
-    _ = context.buffer.writeText(row, row.x, row.y, minions_icon, .{
+    _ = context.buffer.writeText(row, .{ .point = .{ .x = row.x, .y = row.y }, .text = minions_icon, .style = .{
         .fg = context.palette.accent,
         .bg = background,
-    });
-    _ = context.buffer.writeText(row, row.x + 2, row.y, "minions", .{
+    } });
+    _ = context.buffer.writeText(row, .{ .point = .{ .x = row.x + 2, .y = row.y }, .text = "minions", .style = .{
         .fg = context.palette.text,
         .bg = background,
         .flags = .{ .bold = true },
-    });
+    } });
 }
 
 fn drawAgents(context: *widget.Context, input: Input, semantic: *Semantic) void {
@@ -206,10 +206,10 @@ fn drawAgentLine(context: *widget.Context, input: Input, semantic: *Semantic, y:
                 }, .{ .glyph = " ", .style = .{} });
             }
         }
-        _ = context.buffer.writeText(row, row.x, y, "┃", .{
+        _ = context.buffer.writeText(row, .{ .point = .{ .x = row.x, .y = y }, .text = "┃", .style = .{
             .fg = context.palette.accent,
             .bg = if (corner_row) .default else row_bg,
-        });
+        } });
     }
 
     const body: ui.Rect = .{ .x = row.x + 2, .y = y, .w = row.w -| 3, .h = 1 };
@@ -318,14 +318,14 @@ fn drawAgentMeta(context: *widget.Context, area: ui.Rect, agent: *const agents.A
         _ = context.buffer.writeTruncated(area, x, area.y, provider, remaining, style);
         return;
     }
-    x += context.buffer.writeText(area, x, area.y, provider, style);
+    x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = provider, .style = style });
     remaining -|= provider_width;
     const separator = " · ";
     const separator_width = ui.measure(separator);
     if (remaining <= separator_width + 1) {
         return;
     }
-    x += context.buffer.writeText(area, x, area.y, separator, style);
+    x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = separator, .style = style });
     remaining -= separator_width;
     _ = context.buffer.writeLeftTruncated(
         area,
@@ -347,12 +347,12 @@ fn drawStatus(context: *widget.Context, area: ui.Rect, status: schema.AgentStatu
         .fg = statusColor(context, status),
         .bg = background,
     });
-    x += context.buffer.writeText(area, x, area.y, " ", .{ .bg = background });
-    _ = context.buffer.writeText(area, x, area.y, statusLabel(status), .{
+    x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = " ", .style = .{ .bg = background } });
+    _ = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = statusLabel(status), .style = .{
         .fg = statusColor(context, status),
         .bg = background,
         .flags = .{ .bold = status == .blocked or status == .failed or status == .done },
-    });
+    } });
 }
 
 fn statusWidth(status: schema.AgentStatus) u16 {
@@ -425,10 +425,10 @@ fn drawScrollbar(context: *widget.Context, state: *State, list: ui.Rect, total: 
     var line: u16 = 0;
     while (line < area.h) : (line += 1) {
         const on_thumb = line >= offset and line < offset + thumb;
-        _ = context.buffer.writeText(area, area.x, area.y + line, if (on_thumb) "█" else "│", .{
+        _ = context.buffer.writeText(area, .{ .point = .{ .x = area.x, .y = area.y + line }, .text = if (on_thumb) "█" else "│", .style = .{
             .fg = if (on_thumb) context.palette.overlay1 else context.palette.surface1,
             .bg = background,
-        });
+        } });
         const target: u16 = @intCast(@as(u32, line) * max_scroll / area.h);
         context.hits.add(.{ .x = area.x, .y = area.y + line, .w = 1, .h = 1 }, .{ .sidebar_scroll_to = target });
     }
@@ -438,7 +438,7 @@ fn drawRule(context: *widget.Context, area: ui.Rect, y: u16, background: ui.Colo
     const style: ui.Style = .{ .fg = context.palette.surface1, .bg = background };
     var x = area.x + 1;
     while (x < area.x + area.w - 1) : (x += 1)
-        _ = context.buffer.writeText(area, x, y, "─", style);
+        _ = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = "─", .style = style });
     return y + 1;
 }
 
@@ -449,10 +449,10 @@ fn drawRightSeparator(context: *widget.Context, area: ui.Rect, background: ui.Co
     const x = area.x + area.w - 1;
     var y = area.y;
     while (y < area.y + area.h) : (y += 1) {
-        _ = context.buffer.writeText(area, x, y, "│", .{
+        _ = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = "│", .style = .{
             .fg = context.palette.surface1,
             .bg = background,
-        });
+        } });
     }
 }
 

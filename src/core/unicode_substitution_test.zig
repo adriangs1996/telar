@@ -17,7 +17,7 @@ test "layout follows the injected table, not the bytes" {
     // Plain ASCII, which every real table calls one column wide.
     try testing.expectEqual(@as(u16, 6), ui.measure("abc"));
 
-    const advanced = buf.writeText(buf.area(), 0, 0, "abc", .{});
+    const advanced = buf.writeText(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "abc", .style = .{} });
     try testing.expectEqual(@as(u16, 6), advanced);
 
     // Two columns each means the second character starts at column two, and

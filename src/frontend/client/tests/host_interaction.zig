@@ -599,7 +599,7 @@ test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
     client.options.editor = "nvim";
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
-    _ = pane.buffer.writeText(pane.buffer.area(), 0, 0, "file:///tmp/a%20b.txt", .{});
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "file:///tmp/a%20b.txt", .style = .{} });
     pane.cursor = .{ .visible = true, .x = 12, .y = 0 };
 
     var handler: InputHandler = .{ .client = client };
@@ -629,7 +629,7 @@ test "a left click opens a file URI and owns the complete mouse gesture" {
     client.options.editor = "nvim";
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
-    _ = pane.buffer.writeText(pane.buffer.area(), 0, 0, "file:///tmp/click.txt", .{});
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "file:///tmp/click.txt", .style = .{} });
     const pane_view = client.model.workspace.active().?.model.viewForPane(
         pane.id,
         client.view.workbench(),

@@ -1392,7 +1392,7 @@ test "the diff sends only what changed" {
     { // First frame: everything is new.
         var w = Io.Writer.fixed(&out);
         screen.buffer().clear(.{});
-        _ = screen.buffer().writeText(screen.buffer().area(), 0, 0, "hello", .{});
+        _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "hello", .style = .{} });
         const stats = try screen.flush(&w);
         try testing.expectEqual(@as(usize, 40 * 10), stats.cells);
         try testing.expectEqual(@as(usize, 40 * 10), stats.scanned);
@@ -1401,7 +1401,7 @@ test "the diff sends only what changed" {
     { // Redrawing the same thing costs nothing at all.
         var w = Io.Writer.fixed(&out);
         screen.buffer().clear(.{});
-        _ = screen.buffer().writeText(screen.buffer().area(), 0, 0, "hello", .{});
+        _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "hello", .style = .{} });
         const stats = try screen.flush(&w);
         try testing.expectEqual(@as(usize, 0), stats.cells);
         try testing.expectEqual(@as(usize, 40 * 10), stats.scanned);
@@ -1410,7 +1410,7 @@ test "the diff sends only what changed" {
     { // One changed word costs one word.
         var w = Io.Writer.fixed(&out);
         screen.buffer().clear(.{});
-        _ = screen.buffer().writeText(screen.buffer().area(), 0, 0, "world", .{});
+        _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "world", .style = .{} });
         const stats = try screen.flush(&w);
         try testing.expectEqual(@as(usize, 4), stats.cells); // h,e,l,l -> w,o,r,l
     }
@@ -1973,7 +1973,7 @@ test "a failed flush forgets nothing the terminal did not receive" {
     _ = try screen.flush(&initial);
 
     screen.buffer().clear(.{});
-    _ = screen.buffer().writeText(screen.buffer().area(), 0, 0, "hola", .{});
+    _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "hola", .style = .{} });
     var tiny: [24]u8 = undefined;
     var failing = Io.Writer.fixed(&tiny);
     try testing.expectError(error.WriteFailed, screen.flush(&failing));

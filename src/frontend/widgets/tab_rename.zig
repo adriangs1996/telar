@@ -20,11 +20,11 @@ pub fn render(context: *widget.Context, area: ui.Rect, field: *Field, kind: Kind
         .copy_search_forward => " /",
         .copy_search_backward => " ?",
     };
-    _ = context.buffer.writeText(area, area.x, area.y, prefix, .{
+    _ = context.buffer.writeText(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = prefix, .style = .{
         .fg = context.palette.accent,
         .bg = context.palette.panel_bg,
         .flags = .{ .bold = true },
-    });
+    } });
     const field_x = area.x + ui.measure(prefix);
     const field_area: ui.Rect = .{
         .x = field_x,

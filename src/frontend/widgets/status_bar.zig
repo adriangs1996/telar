@@ -64,8 +64,8 @@ pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
     x += context.drawIcon(area, x, area.y, .cpu, cpu_style);
     var cpu_buffer: [10]u8 = undefined;
     const cpu = std.fmt.bufPrint(&cpu_buffer, " {d}%", .{values.cpu_percent}) catch return;
-    x += context.buffer.writeText(area, x, area.y, cpu, cpu_style);
-    x += context.buffer.writeText(area, x, area.y, "  ", .{ .bg = background });
+    x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = cpu, .style = cpu_style });
+    x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "  ", .style = .{ .bg = background } });
 
     const memory_style: ui.Style = .{
         .fg = context.palette.mauve,
@@ -77,11 +77,11 @@ pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
         values.memory_used_decigib / 10,
         values.memory_used_decigib % 10,
     }) catch return;
-    x += context.buffer.writeText(area, x, area.y, memory, memory_style);
+    x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = memory, .style = memory_style });
 
     // Machines without a battery show nothing rather than a fake 0%.
     if (values.battery_percent) |battery| {
-        x += context.buffer.writeText(area, x, area.y, "  ", .{ .bg = background });
+        x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "  ", .style = .{ .bg = background } });
         const battery_style: ui.Style = .{
             .fg = if (battery < 20) context.palette.red else context.palette.green,
             .bg = background,
@@ -89,7 +89,7 @@ pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
         x += context.drawIcon(area, x, area.y, ui.icons.battery(battery), battery_style);
         var battery_buffer: [10]u8 = undefined;
         const text = std.fmt.bufPrint(&battery_buffer, "{d}%", .{battery}) catch return;
-        _ = context.buffer.writeText(area, x, area.y, text, battery_style);
+        _ = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = text, .style = battery_style });
     }
 }
 

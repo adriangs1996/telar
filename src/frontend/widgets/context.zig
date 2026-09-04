@@ -71,7 +71,7 @@ pub const Context = struct {
         };
         const graphical = requested != null and foreground != null and background != null;
         const fallback = if (graphical) icon.cellFallbackGlyph() else icon.unicodeGlyph();
-        const written = context.buffer.writeText(area, x, y, fallback, style);
+        const written = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = fallback, .style = style });
         if (written != 1 or !graphical) {
             return written;
         }

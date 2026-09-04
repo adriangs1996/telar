@@ -222,7 +222,7 @@ test "CopyModeHandler opens a link without committing or leaving copy mode" {
     const pane = testing.model.workspace.findPane(testing.pane_id).?;
     try pane.buffer.resize(40, 5);
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
-    _ = pane.buffer.writeText(pane.buffer.area(), 0, 4, "https://example.com/path", .{});
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 4 }, .text = "https://example.com/path", .style = .{} });
     pane.cursor = .{ .visible = true, .x = 10, .y = 4 };
 
     var capture: EffectsCapture = .{ .model = testing.model };

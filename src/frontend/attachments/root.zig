@@ -1579,7 +1579,7 @@ test "marker removal keeps preview order aligned with atomic child placeholders"
     var buffer = try ui.Buffer.init(std.testing.allocator, 64, 2);
     defer buffer.deinit();
     const prompt = "> [Image #1]xx[Image #2]tail";
-    const cursor_x = buffer.writeText(buffer.area(), 0, 0, prompt, .{});
+    const cursor_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = prompt, .style = .{} });
     const screen: MarkerScreen = .{
         .buffer = &buffer,
         .cursor = .{ .visible = true, .x = cursor_x, .y = 0 },
@@ -1608,7 +1608,7 @@ test "marker removal keeps preview order aligned with atomic child placeholders"
     );
 
     buffer.clear(.{});
-    const pending_cursor = buffer.writeText(buffer.area(), 0, 0, "> [Image #1][Image #2][Image #3]", .{});
+    const pending_cursor = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> [Image #1][Image #2][Image #3]", .style = .{} });
     try std.testing.expect(store.pendingMarkerAtDeletion(.{
         .buffer = &buffer,
         .cursor = .{ .visible = true, .x = pending_cursor, .y = 0 },
@@ -1628,7 +1628,7 @@ test "Claude previews retain stable marker numbers across attachment deletion" {
     try store.adopt(second);
     var buffer = try ui.Buffer.init(std.testing.allocator, 64, 2);
     defer buffer.deinit();
-    var cursor_x = buffer.writeText(buffer.area(), 0, 0, "> [Image #7][Image #12]", .{});
+    var cursor_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> [Image #7][Image #12]", .style = .{} });
 
     try std.testing.expectEqual(@as(u8, 0), store.reconcileMarkers(target, .{
         .buffer = &buffer,
@@ -1641,7 +1641,7 @@ test "Claude previews retain stable marker numbers across attachment deletion" {
     try std.testing.expectEqual(@as(u8, 1), removal.steps);
 
     buffer.clear(.{});
-    cursor_x = buffer.writeText(buffer.area(), 0, 0, "> [Image #12]", .{});
+    cursor_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> [Image #12]", .style = .{} });
     store.expectMarkerDeletion(target);
     try std.testing.expectEqual(@as(u8, 1), store.reconcileMarkers(target, .{
         .buffer = &buffer,
@@ -1678,7 +1678,7 @@ test "Pi previews pair with pasted paths and are closed by deleting the whole pa
     var buffer = try ui.Buffer.init(std.testing.allocator, 200, 2);
     defer buffer.deinit();
     const prompt = "see " ++ pi_path ++ " and " ++ pi_second_path;
-    const cursor_x = buffer.writeText(buffer.area(), 0, 0, prompt, .{});
+    const cursor_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = prompt, .style = .{} });
     writePiCursor(&buffer, cursor_x, 0);
     const hidden: schema.frame.Cursor = .{ .visible = false, .x = 0, .y = 0 };
 
@@ -1745,7 +1745,7 @@ test "a deletion watch expires after the bounded frame count" {
     try adoptPiCapture(&store, 1, target);
     var buffer = try ui.Buffer.init(std.testing.allocator, 120, 1);
     defer buffer.deinit();
-    _ = buffer.writeText(buffer.area(), 0, 0, pi_path, .{});
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = pi_path, .style = .{} });
     const screen: MarkerScreen = .{ .buffer = &buffer, .cursor = .{ .visible = false, .x = 0, .y = 0 } };
     _ = store.reconcileMarkers(target, screen);
 
@@ -1767,7 +1767,7 @@ test "deleting a Pi path whose capture is still in flight is reported" {
     _ = store.setTarget(target);
     var buffer = try ui.Buffer.init(std.testing.allocator, 120, 1);
     defer buffer.deinit();
-    const cursor_x = buffer.writeText(buffer.area(), 0, 0, pi_path, .{});
+    const cursor_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = pi_path, .style = .{} });
     writePiCursor(&buffer, cursor_x, 0);
     const screen: MarkerScreen = .{ .buffer = &buffer, .cursor = .{ .visible = false, .x = 0, .y = 0 } };
 

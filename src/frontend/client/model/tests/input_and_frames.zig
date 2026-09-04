@@ -674,7 +674,7 @@ test "copy mode plans the textual link under its cursor without mutation" {
     try model.workspace.bootstrap(pane_id, location, .{ .cols = 40, .rows = 5 });
     const pane = model.workspace.findPane(pane_id).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
-    _ = pane.buffer.writeText(pane.buffer.area(), 0, 2, "file:///tmp/a%20b.txt", .{});
+    _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 2 }, .text = "file:///tmp/a%20b.txt", .style = .{} });
     pane.cursor = .{ .visible = true, .x = 12, .y = 2 };
     try std.testing.expect(model.enterCopyMode());
     const version = model.version();

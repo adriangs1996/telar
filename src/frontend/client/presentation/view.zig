@@ -616,8 +616,8 @@ pub const State = struct {
             .flags = .{ .bold = true },
         };
         screen.back.fill(banner, .{ .glyph = " ", .style = style });
-        const prefix_width = screen.back.writeText(banner, banner.x, banner.y, "TELAR CONFIG  ", style);
-        _ = screen.back.writeText(banner, banner.x + prefix_width, banner.y, message, style);
+        const prefix_width = screen.back.writeText(banner, .{ .point = .{ .x = banner.x, .y = banner.y }, .text = "TELAR CONFIG  ", .style = style });
+        _ = screen.back.writeText(banner, .{ .point = .{ .x = banner.x + prefix_width, .y = banner.y }, .text = message, .style = style });
     }
 
     pub fn render(state: *State, screen: *term.Screen, input: RenderInput) !RenderStats {

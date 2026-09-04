@@ -525,7 +525,7 @@ fn testScreen(gpa: std.mem.Allocator, rows: []const []const u8) !ui.Buffer {
     for (rows) |row| width = @max(width, @as(u16, @intCast(row.len)));
     var buffer = try ui.Buffer.init(gpa, width, @intCast(rows.len));
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
-    for (rows, 0..) |row, y| _ = buffer.writeText(buffer.area(), 0, @intCast(y), row, .{});
+    for (rows, 0..) |row, y| _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = @intCast(y) }, .text = row, .style = .{} });
     return buffer;
 }
 

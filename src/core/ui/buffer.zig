@@ -28,6 +28,12 @@ pub const Buffer = struct {
         style: Style = .{},
     };
 
+    pub const TextWrite = struct {
+        point: Point,
+        text: []const u8,
+        style: Style = .{},
+    };
+
     cells: []Cell,
     w: u16,
     h: u16,
@@ -180,14 +186,18 @@ pub const Buffer = struct {
     /// codepoints, guessing at emoji - drifts from what the terminal actually
     /// does, and a UI whose idea of a column disagrees with the terminal's
     /// smears on the first accented character.
-    pub fn writeText(b: *Buffer, r: Rect, x: u16, y: u16, text: []const u8, style: Style) u16 {
-        if (y < r.y or y >= @as(u32, r.y) + r.h) {
+    ///
+    /// ```zig
+    /// const width = buffer.writeText(area, .{ .point = .{ .x = 2, .y = 1 }, .text = "ready" });
+    /// ```
+    pub fn writeText(b: *Buffer, r: Rect, write: TextWrite) u16 {
+        if (write.point.y < r.y or write.point.y >= @as(u32, r.y) + r.h) {
             return 0;
         }
 
-        var column: u32 = x;
+        var column: u32 = write.point.x;
         const limit = @min(@as(u32, r.x) + r.w, @as(u32, std.math.maxInt(u16)) + 1);
-        var it: GraphemeIterator = .{ .bytes = text };
+        var it: GraphemeIterator = .{ .bytes = write.text };
 
         while (it.next()) |cluster| {
             if (column >= limit) {
@@ -199,11 +209,11 @@ pub const Buffer = struct {
                 break;
             }
             if (column >= r.x) {
-                b.setCell(.{ .x = @intCast(column), .y = y }, .{ .text = cluster.bytes, .width = cluster.width, .style = style });
+                b.setCell(.{ .x = @intCast(column), .y = write.point.y }, .{ .text = cluster.bytes, .width = cluster.width, .style = write.style });
             }
             column += cluster.width;
         }
-        return @intCast(@min(column - x, std.math.maxInt(u16)));
+        return @intCast(@min(column - write.point.x, std.math.maxInt(u16)));
     }
 
     /// Draws `text`, appending an ellipsis if it does not fit in `max_width`.
@@ -216,7 +226,7 @@ pub const Buffer = struct {
             return 0;
         }
         if (measure(text) <= max_width) {
-            return b.writeText(r, x, y, text, style);
+            return b.writeText(r, .{ .point = .{ .x = x, .y = y }, .text = text, .style = style });
         }
 
         // Measured, not assumed to be one column. It is one in every real
@@ -241,12 +251,12 @@ pub const Buffer = struct {
             used += cluster.width;
             cut = it.index;
         }
-        const written = b.writeText(r, x, y, text[0..cut], style);
+        const written = b.writeText(r, .{ .point = .{ .x = x, .y = y }, .text = text[0..cut], .style = style });
         const ellipsis_x = @as(u32, x) + written;
         if (ellipsis_x > std.math.maxInt(u16)) {
             return written;
         }
-        return written + b.writeText(r, @intCast(ellipsis_x), y, ellipsis, style);
+        return written + b.writeText(r, .{ .point = .{ .x = @intCast(ellipsis_x), .y = y }, .text = ellipsis, .style = style });
     }
 
     /// Draws the end of `text`, prepending an ellipsis when it does not fit.
@@ -258,7 +268,7 @@ pub const Buffer = struct {
         }
         const total = measure(text);
         if (total <= max_width) {
-            return b.writeText(r, x, y, text, style);
+            return b.writeText(r, .{ .point = .{ .x = x, .y = y }, .text = text, .style = style });
         }
 
         const ellipsis = "\u{2026}";
@@ -279,12 +289,12 @@ pub const Buffer = struct {
             }
             prefix_width += cluster.width;
         }
-        const written = b.writeText(r, x, y, ellipsis, style);
+        const written = b.writeText(r, .{ .point = .{ .x = x, .y = y }, .text = ellipsis, .style = style });
         const text_x = @as(u32, x) + written;
         if (text_x > std.math.maxInt(u16)) {
             return written;
         }
-        return written + b.writeText(r, @intCast(text_x), y, text[cut..], style);
+        return written + b.writeText(r, .{ .point = .{ .x = @intCast(text_x), .y = y }, .text = text[cut..], .style = style });
     }
 
     /// Draws `text` so that it ends at the right edge of `r`.
@@ -297,7 +307,7 @@ pub const Buffer = struct {
         if (start > std.math.maxInt(u16)) {
             return 0;
         }
-        return b.writeText(r, @intCast(start), y, text, style);
+        return b.writeText(r, .{ .point = .{ .x = @intCast(start), .y = y }, .text = text, .style = style });
     }
 
     /// Draws a box, with an optional title in the top edge.
@@ -332,7 +342,7 @@ pub const Buffer = struct {
 
         if (title) |t| {
             const inside: Rect = .{ .x = r.x + 2, .y = r.y, .w = r.w -| 4, .h = 1 };
-            _ = b.writeText(inside, r.x + 2, r.y, t, style);
+            _ = b.writeText(inside, .{ .point = .{ .x = r.x + 2, .y = r.y }, .text = t, .style = style });
         }
     }
 
@@ -368,7 +378,7 @@ test "text is written by grapheme, not by byte" {
     defer buf.deinit();
 
     // Six bytes, three codepoints, three columns.
-    const advanced = buf.writeText(buf.area(), 0, 0, "áéí", .{});
+    const advanced = buf.writeText(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "áéí", .style = .{} });
     try testing.expectEqual(@as(u16, 3), advanced);
     try testing.expectEqualStrings("á", buf.at(0, 0).?.text());
     try testing.expectEqualStrings("í", buf.at(2, 0).?.text());
@@ -379,7 +389,7 @@ test "a wide glyph claims the column after it" {
     var buf = try Buffer.init(gpa, 20, 1);
     defer buf.deinit();
 
-    const advanced = buf.writeText(buf.area(), 0, 0, "漢字", .{});
+    const advanced = buf.writeText(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "漢字", .style = .{} });
     try testing.expectEqual(@as(u16, 4), advanced);
     try testing.expectEqual(@as(u8, 2), buf.at(0, 0).?.width);
     // The trailing half is addressable but draws nothing.
@@ -394,7 +404,7 @@ test "a wide glyph is dropped rather than cut in half at the edge" {
 
     // Two columns fit; the second wide glyph does not, and half of one is
     // worse than none of it.
-    const advanced = buf.writeText(buf.area(), 0, 0, "漢字", .{});
+    const advanced = buf.writeText(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "漢字", .style = .{} });
     try testing.expectEqual(@as(u16, 2), advanced);
     try testing.expectEqualStrings(" ", buf.at(2, 0).?.text());
 }
@@ -405,7 +415,7 @@ test "writing is clipped to the area, not to the buffer" {
     defer buf.deinit();
 
     const area: Rect = .{ .x = 2, .y = 0, .w = 4, .h = 1 };
-    _ = buf.writeText(area, 2, 0, "abcdefgh", .{});
+    _ = buf.writeText(area, .{ .point = .{ .x = 2, .y = 0 }, .text = "abcdefgh", .style = .{} });
 
     try testing.expectEqualStrings("a", buf.at(2, 0).?.text());
     try testing.expectEqualStrings("d", buf.at(5, 0).?.text());
@@ -419,7 +429,7 @@ test "invalid utf-8 becomes one cell instead of failing" {
     defer buf.deinit();
 
     // Agents print partial writes; the UI has to survive them.
-    const advanced = buf.writeText(buf.area(), 0, 0, "a\xffb", .{});
+    const advanced = buf.writeText(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "a\xffb", .style = .{} });
     try testing.expectEqual(@as(u16, 3), advanced);
     try testing.expectEqualStrings("a", buf.at(0, 0).?.text());
     try testing.expectEqualStrings("b", buf.at(2, 0).?.text());
@@ -508,7 +518,7 @@ test "a clip stops a widget damaging its neighbours" {
     // lands on whatever is drawn to the right, and the symptom is a neighbour
     // that flickers only when this one has a long name.
     buf.pushClip(.{ .x = 2, .y = 1, .w = 4, .h = 1 });
-    _ = buf.writeText(buf.area(), 2, 1, "abcdefghij", .{});
+    _ = buf.writeText(buf.area(), .{ .point = .{ .x = 2, .y = 1 }, .text = "abcdefghij", .style = .{} });
     buf.popClip();
 
     try testing.expectEqualStrings("a", buf.at(2, 1).?.text());
@@ -545,7 +555,7 @@ test "popping restores the parent clip" {
 
     buf.pushClip(.{ .x = 0, .y = 0, .w = 2, .h = 1 });
     buf.popClip();
-    _ = buf.writeText(buf.area(), 0, 0, "abcdef", .{});
+    _ = buf.writeText(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "abcdef", .style = .{} });
     try testing.expectEqualStrings("f", buf.at(5, 0).?.text());
 }
 
@@ -576,6 +586,6 @@ test "resizing forgets a clip that described the old buffer" {
     try buf.resize(10, 1);
     // A stale clip here silently drops everything past column two, and the
     // symptom is a window that only half redraws after being made bigger.
-    _ = buf.writeText(buf.area(), 0, 0, "abcdefgh", .{});
+    _ = buf.writeText(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "abcdefgh", .style = .{} });
     try testing.expectEqualStrings("h", buf.at(7, 0).?.text());
 }

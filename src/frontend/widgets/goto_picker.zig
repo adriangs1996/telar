@@ -87,11 +87,11 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
 
     const inner = area.inner(1);
     const query: ui.Rect = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = 1 };
-    const prefix_width = context.buffer.writeText(query, query.x, query.y, "> ", .{
+    const prefix_width = context.buffer.writeText(query, .{ .point = .{ .x = query.x, .y = query.y }, .text = "> ", .style = .{
         .fg = context.palette.accent,
         .bg = background,
         .flags = .{ .bold = true },
-    });
+    } });
     const field_width = query.w -| prefix_width;
     const view = input.field.view(field_width);
     _ = context.buffer.writeTruncated(query, query.x + prefix_width, query.y, view.text, field_width, style);

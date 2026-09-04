@@ -419,7 +419,7 @@ fn writeWrapped(buffer: *ui.Buffer, origin: Position, text: []const u8) Position
 test "a pasted path on one row is one marker with its full extent" {
     var buffer = try ui.Buffer.init(testing.allocator, 120, 2);
     defer buffer.deinit();
-    _ = buffer.writeText(buffer.area(), 0, 0, "see " ++ test_path ++ " now", .{});
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "see " ++ test_path ++ " now", .style = .{} });
 
     const marker = find(&buffer, test_uuid.*).?;
 
@@ -446,7 +446,7 @@ test "a word soft-wrapped before the path is not part of its extent" {
     // "image" fills the last content column of row 0 exactly, then the path
     // starts on row 1 like Pi lays out a wrap opportunity.
     const lead = "x" ** 33 ++ " image";
-    _ = buffer.writeText(buffer.area(), 0, 0, lead, .{});
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = lead, .style = .{} });
     const end = writeWrapped(&buffer, .{ .x = 0, .y = 1 }, test_path);
 
     const marker = find(&buffer, test_uuid.*).?;
@@ -459,12 +459,12 @@ test "a word soft-wrapped before the path is not part of its extent" {
 test "a file name glued to following text is no longer a marker" {
     var buffer = try ui.Buffer.init(testing.allocator, 120, 1);
     defer buffer.deinit();
-    _ = buffer.writeText(buffer.area(), 0, 0, test_path ++ "x", .{});
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = test_path ++ "x", .style = .{} });
 
     try testing.expect(find(&buffer, test_uuid.*) == null);
 
     buffer.clear(.{});
-    _ = buffer.writeText(buffer.area(), 0, 0, test_path ++ ",", .{});
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = test_path ++ ",", .style = .{} });
     try testing.expect(find(&buffer, test_uuid.*) != null);
 }
 
@@ -477,7 +477,7 @@ test "markers collect in screen order and keep the newest when full" {
         "33333333-3333-4333-8333-333333333333",
     };
     for (uuids, 0..) |uuid, row| {
-        _ = buffer.writeText(buffer.area(), 0, @intCast(row), "/tmp/pi-clipboard-" ++ uuid.* ++ ".jpg", .{});
+        _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = @intCast(row) }, .text = "/tmp/pi-clipboard-" ++ uuid.* ++ ".jpg", .style = .{} });
     }
 
     var found: [2]Marker = undefined;
@@ -491,9 +491,9 @@ test "markers collect in screen order and keep the newest when full" {
 test "the cursor is the hardware cursor or Pi's isolated inverse cell" {
     var buffer = try ui.Buffer.init(testing.allocator, 20, 2);
     defer buffer.deinit();
-    _ = buffer.writeText(buffer.area(), 0, 0, "abc", .{});
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "abc", .style = .{} });
     buffer.setCell(.{ .x = 3, .y = 0 }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
-    _ = buffer.writeText(buffer.area(), 0, 1, "sel", .{ .flags = .{ .inverse = true } });
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "sel", .style = .{ .flags = .{ .inverse = true } } });
 
     const hidden: Screen = .{ .buffer = &buffer, .cursor = .{ .visible = false, .x = 0, .y = 0 } };
     try testing.expect(cursorAt(hidden, .{ .x = 3, .y = 0 }));
@@ -510,7 +510,7 @@ test "the cursor is the hardware cursor or Pi's isolated inverse cell" {
 test "row steps count graphemes rather than cells" {
     var buffer = try ui.Buffer.init(testing.allocator, 20, 1);
     defer buffer.deinit();
-    _ = buffer.writeText(buffer.area(), 0, 0, "a日b", .{});
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "a日b", .style = .{} });
 
     try testing.expectEqual(@as(?u8, 3), stepsOnRow(&buffer, 0, .{ .from = 0, .to = 4 }));
     try testing.expect(stepsOnRow(&buffer, 0, .{ .from = 4, .to = 0 }) == null);

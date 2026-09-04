@@ -80,7 +80,7 @@ fn testBuffer(rows: []const []const u8) !ui.Buffer {
     var buffer = try ui.Buffer.init(std.testing.allocator, width, @intCast(rows.len));
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
     for (rows, 0..) |row, y| {
-        _ = buffer.writeText(buffer.area(), 0, @intCast(y), row, .{});
+        _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = @intCast(y) }, .text = row, .style = .{} });
     }
 
     return buffer;

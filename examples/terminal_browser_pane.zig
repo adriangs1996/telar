@@ -561,13 +561,7 @@ fn drawFrame(buffer: *ui.Buffer, frame: FrameGeometry) void {
         .{ .text = "┘", .style = border },
     );
     if (frame.outer.w > 22) {
-        _ = buffer.writeText(
-            frame.outer.row(0),
-            frame.outer.x + 2,
-            frame.outer.y,
-            " terminal-browser ",
-            border,
-        );
+        _ = buffer.writeText(frame.outer.row(0), .{ .point = .{ .x = frame.outer.x + 2, .y = frame.outer.y }, .text = " terminal-browser ", .style = border });
     }
 }
 

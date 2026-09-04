@@ -389,7 +389,7 @@ fn drawDialog(context: DrawContext, index: usize) void {
 
     buf.fill(frame, .{ .glyph = " ", .style = .{ .bg = raised } });
     buf.box(frame, .{ .fg = apricot, .bg = raised }, null);
-    _ = buf.writeText(frame, frame.x + 2, frame.y, " action ", .{ .fg = apricot, .bg = raised });
+    _ = buf.writeText(frame, .{ .point = .{ .x = frame.x + 2, .y = frame.y }, .text = " action ", .style = .{ .fg = apricot, .bg = raised } });
 
     const inside: ui.Rect = .{ .x = frame.x + 2, .y = frame.y + 2, .w = frame.w - 4, .h = frame.h - 4 };
     const task = state.tasks[index];
@@ -416,11 +416,11 @@ fn drawDialog(context: DrawContext, index: usize) void {
         state.hits.add(rect, action);
 
         buf.fill(rect, .{ .glyph = " ", .style = .{ .bg = if (hot) apricot else chip_bg } });
-        _ = buf.writeText(rect, x + 2, y, choice, .{
+        _ = buf.writeText(rect, .{ .point = .{ .x = x + 2, .y = y }, .text = choice, .style = .{
             .fg = if (hot) bg else white,
             .bg = if (hot) apricot else chip_bg,
             .flags = .{ .bold = hot },
-        });
+        } });
         x += width + 1;
     }
 }
@@ -434,7 +434,7 @@ fn drawSidebar(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
 
     // The title sits inside the top border, which is why it is drawn after the
     // box rather than by it.
-    _ = buf.writeText(area, area.x + 2, area.y, " herdr ", .{ .fg = muted, .bg = bg });
+    _ = buf.writeText(area, .{ .point = .{ .x = area.x + 2, .y = area.y }, .text = " herdr ", .style = .{ .fg = muted, .bg = bg } });
 
     const inside: ui.Rect = .{ .x = area.x + 1, .y = area.y + 1, .w = area.w - 2, .h = area.h - 2 };
 
@@ -459,9 +459,9 @@ fn drawSidebar(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
 fn rule(buf: *ui.Buffer, area: ui.Rect, y: u16) u16 {
     const style: ui.Style = .{ .fg = faint, .bg = bg };
     var x = area.x + 1;
-    while (x < area.x + area.w - 1) : (x += 1) _ = buf.writeText(area, x, y, "\u{2500}", style);
-    _ = buf.writeText(area, area.x, y, "\u{251c}", style);
-    _ = buf.writeText(area, area.x + area.w - 1, y, "\u{2524}", style);
+    while (x < area.x + area.w - 1) : (x += 1) _ = buf.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = "\u{2500}", .style = style });
+    _ = buf.writeText(area, .{ .point = .{ .x = area.x, .y = y }, .text = "\u{251c}", .style = style });
+    _ = buf.writeText(area, .{ .point = .{ .x = area.x + area.w - 1, .y = y }, .text = "\u{2524}", .style = style });
     return y + 1;
 }
 
@@ -479,8 +479,8 @@ fn drawSearch(context: DrawContext, y: u16) u16 {
 
     const field_bg: ui.Color = if (focused) raised else bg;
     var x = row.x + 1;
-    x += buf.writeText(row, x, y, "/", .{ .fg = apricot, .bg = field_bg, .flags = .{ .bold = true } });
-    x += buf.writeText(row, x, y, " ", .{ .bg = field_bg });
+    x += buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = "/", .style = .{ .fg = apricot, .bg = field_bg, .flags = .{ .bold = true } } });
+    x += buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = " ", .style = .{ .bg = field_bg } });
     // Chips first, so the field knows how much room is left rather than
     // guessing. They are laid out from the right edge inwards.
     var right = row.x + row.w - 1;
@@ -501,7 +501,7 @@ fn drawSearch(context: DrawContext, y: u16) u16 {
     // The field decides what is visible and where the cursor lands; this only
     // paints it. Every column here comes from `view`, never from a byte count.
     const shown = state.search.view(width);
-    _ = buf.writeText(row, x, y, shown.text, .{ .fg = white, .bg = field_bg });
+    _ = buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = shown.text, .style = .{ .fg = white, .bg = field_bg } });
 
     if (shown.selection) |range| {
         // Reversed rather than a fixed colour, so the selection reads the same
@@ -517,10 +517,10 @@ fn drawSearch(context: DrawContext, y: u16) u16 {
     // Ellipses for text scrolled out of sight. Without them a value longer than
     // the field looks like a value that was truncated on the way in.
     if (shown.clipped_left) {
-        _ = buf.writeText(row, x, y, "\u{2039}", .{ .fg = faint, .bg = field_bg });
+        _ = buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = "\u{2039}", .style = .{ .fg = faint, .bg = field_bg } });
     }
     if (shown.clipped_right and right > x) {
-        _ = buf.writeText(row, right - 1, y, "\u{203a}", .{ .fg = faint, .bg = field_bg });
+        _ = buf.writeText(row, .{ .point = .{ .x = right - 1, .y = y }, .text = "\u{203a}", .style = .{ .fg = faint, .bg = field_bg } });
     }
 
     // The terminal's own cursor, not a painted block: it is what a screen
@@ -555,9 +555,9 @@ fn drawChipAt(context: DrawContext, chip: ChipDraw) u16 {
     const hovered = isHovered(state, chip.action);
     const fill: ui.Color = if (hovered) chip_bg else bg;
 
-    _ = buf.writeText(area, x, area.y, "[", .{ .fg = faint, .bg = fill });
-    _ = buf.writeText(area, x + 1, area.y, chip.label, .{ .fg = chip.color, .bg = fill });
-    _ = buf.writeText(area, x + width - 1, area.y, "]", .{ .fg = faint, .bg = fill });
+    _ = buf.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "[", .style = .{ .fg = faint, .bg = fill } });
+    _ = buf.writeText(area, .{ .point = .{ .x = x + 1, .y = area.y }, .text = chip.label, .style = .{ .fg = chip.color, .bg = fill } });
+    _ = buf.writeText(area, .{ .point = .{ .x = x + width - 1, .y = area.y }, .text = "]", .style = .{ .fg = faint, .bg = fill } });
 
     state.hits.add(.{ .x = x, .y = area.y, .w = width, .h = 1 }, chip.action);
     return width + 1;
@@ -581,21 +581,21 @@ fn drawTabs(context: DrawContext, y: u16) u16 {
 
         var key_buf: [8]u8 = undefined;
         const key_text = std.fmt.bufPrint(&key_buf, "[{d}]", .{tab.key}) catch "[?]";
-        x += buf.writeText(row, x, y, key_text, .{ .fg = color, .bg = bg, .flags = .{ .bold = active } });
-        x += buf.writeText(row, x, y, " ", .{ .bg = bg });
-        x += buf.writeText(row, x, y, tab.name, .{ .fg = color, .bg = bg, .flags = .{ .bold = active } });
-        x += buf.writeText(row, x, y, " ", .{ .bg = bg });
+        x += buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = key_text, .style = .{ .fg = color, .bg = bg, .flags = .{ .bold = active } } });
+        x += buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = " ", .style = .{ .bg = bg } });
+        x += buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = tab.name, .style = .{ .fg = color, .bg = bg, .flags = .{ .bold = active } } });
+        x += buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = " ", .style = .{ .bg = bg } });
 
         var count_buf: [8]u8 = undefined;
         const count_text = std.fmt.bufPrint(&count_buf, "{d}", .{tab.count}) catch "";
-        x += buf.writeText(row, x, y, count_text, .{
+        x += buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = count_text, .style = .{
             .fg = if (active) apricot else faint,
             .bg = bg,
-        });
+        } });
 
         if (active) {
             var u = start;
-            while (u < x) : (u += 1) _ = buf.writeText(underline, u, y + 1, "\u{2501}", .{ .fg = apricot, .bg = bg });
+            while (u < x) : (u += 1) _ = buf.writeText(underline, .{ .point = .{ .x = u, .y = y + 1 }, .text = "\u{2501}", .style = .{ .fg = apricot, .bg = bg } });
         }
 
         // Two rows tall, so the underline is part of the target.
@@ -616,9 +616,9 @@ fn drawScope(context: DrawContext, y: u16) u16 {
     buf.fill(row, .{ .glyph = " ", .style = .{ .bg = row_bg } });
 
     var x = row.x + 1;
-    x += buf.writeText(row, x, y, if (state.scope_open) "\u{25b4}" else "\u{25be}", .{ .fg = muted, .bg = row_bg });
-    x += buf.writeText(row, x, y, " ", .{ .bg = row_bg });
-    _ = buf.writeText(row, x, y, "all scopes", .{ .fg = fg, .bg = row_bg });
+    x += buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = if (state.scope_open) "\u{25b4}" else "\u{25be}", .style = .{ .fg = muted, .bg = row_bg } });
+    x += buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = " ", .style = .{ .bg = row_bg } });
+    _ = buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = "all scopes", .style = .{ .fg = fg, .bg = row_bg } });
 
     var count_buf: [24]u8 = undefined;
     const text = std.fmt.bufPrint(&count_buf, "{d} tasks ", .{state.tasks.len}) catch "";
@@ -664,7 +664,7 @@ fn drawSectionHeader(context: DrawContext, y: u16, section: Section) void {
     const row: ui.Rect = .{ .x = area.x, .y = y, .w = area.w, .h = 1 };
 
     var x = row.x + 1;
-    x += buf.writeText(row, x, y, section.label(), .{ .fg = section.color(), .bg = bg, .flags = .{ .bold = true } });
+    x += buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = section.label(), .style = .{ .fg = section.color(), .bg = bg, .flags = .{ .bold = true } } });
     x += 1;
 
     var count: u16 = 0;
@@ -678,7 +678,7 @@ fn drawSectionHeader(context: DrawContext, y: u16, section: Section) void {
 
     // The rule runs from the end of the label to just before the count.
     const rule_end = row.x + row.w -| ui.measure(count_text) -| 2;
-    while (x < rule_end) : (x += 1) _ = buf.writeText(row, x, y, "\u{2500}", .{ .fg = faint, .bg = bg });
+    while (x < rule_end) : (x += 1) _ = buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = "\u{2500}", .style = .{ .fg = faint, .bg = bg } });
 
     _ = buf.writeRight(.{ .x = row.x, .y = y, .w = row.w -| 1, .h = 1 }, y, count_text, .{
         .fg = muted,
@@ -721,10 +721,10 @@ fn drawTaskLine(context: DrawContext, position: TaskLine) void {
     // will not.
     if (selected) {
         const has_keys = state.focus.has(.{ .task = index });
-        _ = buf.writeText(row, row.x, y, if (has_keys) "\u{2503}" else "\u{2502}", .{
+        _ = buf.writeText(row, .{ .point = .{ .x = row.x, .y = y }, .text = if (has_keys) "\u{2503}" else "\u{2502}", .style = .{
             .fg = if (has_keys) apricot else faint,
             .bg = row_bg,
-        });
+        } });
     }
 
     const body: ui.Rect = .{ .x = row.x + 2, .y = y, .w = row.w -| 3, .h = 1 };
@@ -745,10 +745,10 @@ fn drawTaskLine(context: DrawContext, position: TaskLine) void {
         1 => {
             const icon: []const u8 = if (task.origin == .host) "\u{2302}" else "\u{2387}";
             var x = body.x;
-            x += buf.writeText(body, x, y, icon, .{ .fg = faint, .bg = row_bg });
-            x += buf.writeText(body, x, y, " ", .{ .bg = row_bg });
-            x += buf.writeText(body, x, y, task.place, .{ .fg = muted, .bg = row_bg });
-            x += buf.writeText(body, x, y, " \u{00b7} ", .{ .fg = faint, .bg = row_bg });
+            x += buf.writeText(body, .{ .point = .{ .x = x, .y = y }, .text = icon, .style = .{ .fg = faint, .bg = row_bg } });
+            x += buf.writeText(body, .{ .point = .{ .x = x, .y = y }, .text = " ", .style = .{ .bg = row_bg } });
+            x += buf.writeText(body, .{ .point = .{ .x = x, .y = y }, .text = task.place, .style = .{ .fg = muted, .bg = row_bg } });
+            x += buf.writeText(body, .{ .point = .{ .x = x, .y = y }, .text = " \u{00b7} ", .style = .{ .fg = faint, .bg = row_bg } });
 
             const status_width = drawStatus(buf, .{ .area = body, .y = y, .task = task, .background = row_bg });
             _ = buf.writeTruncated(body, x, y, task.place_detail, body.x + body.w -| x -| status_width -| 1, .{
@@ -759,16 +759,16 @@ fn drawTaskLine(context: DrawContext, position: TaskLine) void {
         else => {
             const agent = task.origin == .agent;
             var x = body.x;
-            x += buf.writeText(body, x, y, if (agent) "\u{2733}" else "$", .{
+            x += buf.writeText(body, .{ .point = .{ .x = x, .y = y }, .text = if (agent) "\u{2733}" else "$", .style = .{
                 .fg = if (agent) apricot else muted,
                 .bg = row_bg,
-            });
-            x += buf.writeText(body, x, y, " ", .{ .bg = row_bg });
-            x += buf.writeText(body, x, y, task.tool, .{
+            } });
+            x += buf.writeText(body, .{ .point = .{ .x = x, .y = y }, .text = " ", .style = .{ .bg = row_bg } });
+            x += buf.writeText(body, .{ .point = .{ .x = x, .y = y }, .text = task.tool, .style = .{
                 .fg = if (agent) apricot else fg,
                 .bg = row_bg,
-            });
-            x += buf.writeText(body, x, y, " \u{00b7} ", .{ .fg = faint, .bg = row_bg });
+            } });
+            x += buf.writeText(body, .{ .point = .{ .x = x, .y = y }, .text = " \u{00b7} ", .style = .{ .fg = faint, .bg = row_bg } });
             _ = buf.writeTruncated(body, x, y, task.note, body.x + body.w -| x, .{ .fg = faint, .bg = row_bg });
         },
     }
@@ -812,16 +812,16 @@ fn drawTaskChip(context: DrawContext, index: usize, chip: Chip) u16 {
     buf.fill(rect, .{ .glyph = " ", .style = .{ .bg = fill } });
 
     var cursor = x + 1;
-    cursor += buf.writeText(rect, cursor, area.y, chip.glyph(), .{
+    cursor += buf.writeText(rect, .{ .point = .{ .x = cursor, .y = area.y }, .text = chip.glyph(), .style = .{
         .fg = if (chip.filled()) apricot else chip.color(),
         .bg = fill,
-    });
-    cursor += buf.writeText(rect, cursor, area.y, " ", .{ .bg = fill });
-    _ = buf.writeText(rect, cursor, area.y, chip.label(), .{
+    } });
+    cursor += buf.writeText(rect, .{ .point = .{ .x = cursor, .y = area.y }, .text = " ", .style = .{ .bg = fill } });
+    _ = buf.writeText(rect, .{ .point = .{ .x = cursor, .y = area.y }, .text = chip.label(), .style = .{
         .fg = chip.color(),
         .bg = fill,
         .flags = .{ .bold = hovered },
-    });
+    } });
     return width;
 }
 
@@ -860,15 +860,15 @@ fn drawStatus(buf: *ui.Buffer, draw: StatusDraw) u16 {
 
     var x = area.x + area.w - width;
     if (task.status == .working) {
-        x += buf.writeText(area, x, y, "\u{2237} ", .{ .fg = color, .bg = row_bg });
+        x += buf.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = "\u{2237} ", .style = .{ .fg = color, .bg = row_bg } });
     }
-    x += buf.writeText(area, x, y, word, .{ .fg = color, .bg = row_bg, .flags = .{ .bold = true } });
+    x += buf.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = word, .style = .{ .fg = color, .bg = row_bg, .flags = .{ .bold = true } } });
     if (task.status_detail.len > 0) {
-        x += buf.writeText(area, x, y, " \u{00b7} ", .{ .fg = faint, .bg = row_bg });
-        _ = buf.writeText(area, x, y, task.status_detail, .{
+        x += buf.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = " \u{00b7} ", .style = .{ .fg = faint, .bg = row_bg } });
+        _ = buf.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = task.status_detail, .style = .{
             .fg = if (task.status == .failed) red else muted,
             .bg = row_bg,
-        });
+        } });
     }
     return width;
 }
@@ -891,10 +891,10 @@ fn drawScrollbar(context: DrawContext, total: u16) void {
     var line: u16 = 0;
     while (line < area.h) : (line += 1) {
         const on_thumb = line >= offset and line < offset + thumb;
-        _ = buf.writeText(area, area.x, area.y + line, if (on_thumb) "\u{2588}" else "\u{2502}", .{
+        _ = buf.writeText(area, .{ .point = .{ .x = area.x, .y = area.y + line }, .text = if (on_thumb) "\u{2588}" else "\u{2502}", .style = .{
             .fg = if (on_thumb) muted else faint,
             .bg = bg,
-        });
+        } });
         // Clicking anywhere on the track jumps there, which is what a mouse
         // user expects and costs one registration per row.
         const target: u16 = @intCast(@as(u32, line) * max_scroll / area.h);
@@ -916,12 +916,12 @@ fn drawFooter(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
         for (state.hints, 0..) |hint, index| {
             const hovered = isHovered(state, .{ .hint = index });
             const start = x;
-            x += buf.writeText(area, x, area.y, hint.key, .{ .fg = apricot, .bg = bg, .flags = .{ .bold = true } });
-            x += buf.writeText(area, x, area.y, " ", .{ .bg = bg });
-            x += buf.writeText(area, x, area.y, hint.label, .{
+            x += buf.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = hint.key, .style = .{ .fg = apricot, .bg = bg, .flags = .{ .bold = true } } });
+            x += buf.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = " ", .style = .{ .bg = bg } });
+            x += buf.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = hint.label, .style = .{
                 .fg = if (hovered) white else muted,
                 .bg = bg,
-            });
+            } });
             state.hits.add(.{ .x = start, .y = area.y, .w = x - start, .h = 1 }, .{ .hint = index });
             x += 2;
         }

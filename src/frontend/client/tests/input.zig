@@ -111,7 +111,7 @@ test "closing a preview deletes its matching atomic image marker" {
     const prompt = "> [Image #1]xx[Image #2]tail";
     pane.cursor = .{
         .visible = true,
-        .x = pane.buffer.writeText(pane.buffer.area(), 0, 0, prompt, .{}),
+        .x = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = prompt, .style = .{} }),
         .y = 0,
     };
     const first = client.view.kittyAttachments().snapshot().items[0].id;
@@ -154,7 +154,7 @@ test "child marker deletion and prompt submission retire paired previews" {
     pane.buffer.clear(.{});
     pane.cursor = .{
         .visible = true,
-        .x = pane.buffer.writeText(pane.buffer.area(), 0, 0, "> [Image #1]", .{}),
+        .x = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> [Image #1]", .style = .{} }),
         .y = 0,
     };
     var handler: InputHandler = .{ .client = client };
@@ -190,7 +190,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
     _ = try client.view.adoptAttachment(capture);
     var pane_buffer = try core.ui.Buffer.init(std.testing.allocator, 40, 3);
     defer pane_buffer.deinit();
-    _ = pane_buffer.writeText(pane_buffer.area(), 0, 1, "> [Image #7]", .{});
+    _ = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "> [Image #7]", .style = .{} });
     var payload: [16 * 1024]u8 = undefined;
     const marker_frame = try schema.encodePaneFrame(&payload, .{
         .pane_id = target.pane_id,
@@ -210,7 +210,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
     try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
 
     pane_buffer.clear(.{});
-    const empty_cursor = pane_buffer.writeText(pane_buffer.area(), 0, 1, "> ", .{});
+    const empty_cursor = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "> ", .style = .{} });
     const empty_frame = try schema.encodePaneFrame(&payload, .{
         .pane_id = target.pane_id,
         .frame_id = 2,
@@ -244,7 +244,7 @@ fn adoptPiPreview(client: *Client, target: attachments.Target) !void {
 fn commitPiFrame(client: *Client, target: attachments.Target, prompt: []const u8, frame_id: u64) !void {
     var pane_buffer = try core.ui.Buffer.init(std.testing.allocator, 120, 3);
     defer pane_buffer.deinit();
-    const cursor_x = pane_buffer.writeText(pane_buffer.area(), 0, 1, prompt, .{});
+    const cursor_x = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = prompt, .style = .{} });
     pane_buffer.setCell(.{ .x = cursor_x, .y = 1 }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
     var payload: [16 * 1024]u8 = undefined;
     const frame = try schema.encodePaneFrame(&payload, .{
