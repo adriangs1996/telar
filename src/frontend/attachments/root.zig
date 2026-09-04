@@ -219,7 +219,12 @@ const PlacementState = struct {
         }
 
         if (placement.desired) |desired| {
-            written += try kitty.writeUiPlacement(writer, image_id, placement.id, desired, placement.z);
+            written += try kitty.writeUiPlacement(writer, .{
+                .image_id = image_id,
+                .placement_id = placement.id,
+                .value = desired,
+                .z = placement.z,
+            });
         }
 
         placement.emitted = placement.desired;

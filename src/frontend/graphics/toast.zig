@@ -404,13 +404,12 @@ pub const Renderer = struct {
                 );
             }
             if (desired) |placement| {
-                written += try kitty.writePlacement(
-                    writer,
-                    imageId(index),
-                    placementId(index),
-                    placement,
-                    toast_z_index,
-                );
+                written += try kitty.writePlacement(writer, .{
+                    .image_id = imageId(index),
+                    .placement_id = placementId(index),
+                    .value = placement,
+                    .z = toast_z_index,
+                });
             }
             slot.emitted_placement = desired;
         }

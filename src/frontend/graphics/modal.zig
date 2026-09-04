@@ -361,11 +361,10 @@ pub const Renderer = struct {
             .{ right, bottom },
         };
         for (corner_positions, 0..) |position, index| {
-            written += try kitty.writeUiPlacement(
-                writer,
-                imageId(@intFromEnum(AssetKind.corners)),
-                placementId(index),
-                .{
+            written += try kitty.writeUiPlacement(writer, .{
+                .image_id = imageId(@intFromEnum(AssetKind.corners)),
+                .placement_id = placementId(index),
+                .value = .{
                     .column = position[0],
                     .row = position[1],
                     .offset_x = 0,
@@ -377,57 +376,77 @@ pub const Renderer = struct {
                     .columns = 0,
                     .rows = 0,
                 },
-                z_index,
-            );
+                .z = z_index,
+            });
         }
-        written += try kitty.writeUiPlacement(writer, imageId(@intFromEnum(AssetKind.horizontal)), placementId(4), .{
-            .column = area.x + 1,
-            .row = area.y,
-            .offset_x = 0,
-            .offset_y = 0,
-            .source_x = 0,
-            .source_y = 0,
-            .source_width = horizontal.width,
-            .source_height = horizontal.height,
-            .columns = 0,
-            .rows = 0,
-        }, z_index);
-        written += try kitty.writeUiPlacement(writer, imageId(@intFromEnum(AssetKind.horizontal)), placementId(5), .{
-            .column = area.x + 1,
-            .row = bottom,
-            .offset_x = 0,
-            .offset_y = key.cell_height - key.border_width,
-            .source_x = 0,
-            .source_y = 0,
-            .source_width = horizontal.width,
-            .source_height = horizontal.height,
-            .columns = 0,
-            .rows = 0,
-        }, z_index);
-        written += try kitty.writeUiPlacement(writer, imageId(@intFromEnum(AssetKind.vertical)), placementId(6), .{
-            .column = area.x,
-            .row = area.y + 1,
-            .offset_x = 0,
-            .offset_y = 0,
-            .source_x = 0,
-            .source_y = 0,
-            .source_width = vertical.width,
-            .source_height = vertical.height,
-            .columns = 0,
-            .rows = 0,
-        }, z_index);
-        written += try kitty.writeUiPlacement(writer, imageId(@intFromEnum(AssetKind.vertical)), placementId(7), .{
-            .column = right,
-            .row = area.y + 1,
-            .offset_x = key.cell_width - key.border_width,
-            .offset_y = 0,
-            .source_x = 0,
-            .source_y = 0,
-            .source_width = vertical.width,
-            .source_height = vertical.height,
-            .columns = 0,
-            .rows = 0,
-        }, z_index);
+        written += try kitty.writeUiPlacement(writer, .{
+            .image_id = imageId(@intFromEnum(AssetKind.horizontal)),
+            .placement_id = placementId(4),
+            .value = .{
+                .column = area.x + 1,
+                .row = area.y,
+                .offset_x = 0,
+                .offset_y = 0,
+                .source_x = 0,
+                .source_y = 0,
+                .source_width = horizontal.width,
+                .source_height = horizontal.height,
+                .columns = 0,
+                .rows = 0,
+            },
+            .z = z_index,
+        });
+        written += try kitty.writeUiPlacement(writer, .{
+            .image_id = imageId(@intFromEnum(AssetKind.horizontal)),
+            .placement_id = placementId(5),
+            .value = .{
+                .column = area.x + 1,
+                .row = bottom,
+                .offset_x = 0,
+                .offset_y = key.cell_height - key.border_width,
+                .source_x = 0,
+                .source_y = 0,
+                .source_width = horizontal.width,
+                .source_height = horizontal.height,
+                .columns = 0,
+                .rows = 0,
+            },
+            .z = z_index,
+        });
+        written += try kitty.writeUiPlacement(writer, .{
+            .image_id = imageId(@intFromEnum(AssetKind.vertical)),
+            .placement_id = placementId(6),
+            .value = .{
+                .column = area.x,
+                .row = area.y + 1,
+                .offset_x = 0,
+                .offset_y = 0,
+                .source_x = 0,
+                .source_y = 0,
+                .source_width = vertical.width,
+                .source_height = vertical.height,
+                .columns = 0,
+                .rows = 0,
+            },
+            .z = z_index,
+        });
+        written += try kitty.writeUiPlacement(writer, .{
+            .image_id = imageId(@intFromEnum(AssetKind.vertical)),
+            .placement_id = placementId(7),
+            .value = .{
+                .column = right,
+                .row = area.y + 1,
+                .offset_x = key.cell_width - key.border_width,
+                .offset_y = 0,
+                .source_x = 0,
+                .source_y = 0,
+                .source_width = vertical.width,
+                .source_height = vertical.height,
+                .columns = 0,
+                .rows = 0,
+            },
+            .z = z_index,
+        });
         return written;
     }
 };

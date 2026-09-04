@@ -1529,13 +1529,12 @@ pub const KittyGraphicsWriter = struct {
                 );
                 continue;
             };
-            written += try writePlacement(
-                writer,
-                image.external_id,
-                placement.external_id,
-                output,
-                placement.placement.z_index,
-            );
+            written += try writePlacement(writer, .{
+                .image_id = image.external_id,
+                .placement_id = placement.external_id,
+                .value = output,
+                .z = placement.placement.z_index,
+            });
             if (placement.emitted_image_id) |previous_image_id| {
                 if (previous_image_id != image.external_id) {
                     written += try writeDeletePlacement(
@@ -1582,13 +1581,12 @@ pub const KittyGraphicsWriter = struct {
                 .placement = fallback.placement,
                 .image = frame.image.metadata,
             }) orelse continue;
-            written += try writePlacement(
-                writer,
-                frame.image.external_id,
-                placement.external_id,
-                output,
-                fallback.placement.z_index,
-            );
+            written += try writePlacement(writer, .{
+                .image_id = frame.image.external_id,
+                .placement_id = placement.external_id,
+                .value = output,
+                .z = fallback.placement.z_index,
+            });
             if (placement.emitted_image_id) |previous_image_id| {
                 if (previous_image_id != frame.image.external_id) {
                     written += try writeDeletePlacement(
@@ -1843,29 +1841,36 @@ pub fn writeTransmissionAbort(writer: *Io.Writer) Io.Writer.Error!usize {
     return closing.len;
 }
 
-pub fn writePlacement(writer: *Io.Writer, image_id: u32, placement_id: u32, value: OutputPlacement, child_z: i32) Io.Writer.Error!usize {
-    return writePlacementAtZ(
-        writer,
-        image_id,
-        placement_id,
-        value,
-        std.math.clamp(child_z, -1000, 1000),
-    );
+pub const PlacementCommand = struct {
+    image_id: u32,
+    placement_id: u32,
+    value: OutputPlacement,
+    z: i32,
+};
+
+/// Places a child image within the z-index range available to applications.
+/// For example: `try writePlacement(writer, command)`.
+pub fn writePlacement(writer: *Io.Writer, command: PlacementCommand) Io.Writer.Error!usize {
+    var clamped = command;
+    clamped.z = std.math.clamp(command.z, -1000, 1000);
+    return writePlacementAtZ(writer, clamped);
 }
 
 /// Places client chrome above the z-index range available to child
 /// applications. Callers must use a fixed client-owned z value.
-pub fn writeUiPlacement(writer: *Io.Writer, image_id: u32, placement_id: u32, value: OutputPlacement, z: i32) Io.Writer.Error!usize {
-    std.debug.assert(z > 1000);
-    return writePlacementAtZ(writer, image_id, placement_id, value, z);
+/// For example: `try writeUiPlacement(writer, command)`.
+pub fn writeUiPlacement(writer: *Io.Writer, command: PlacementCommand) Io.Writer.Error!usize {
+    std.debug.assert(command.z > 1000);
+    return writePlacementAtZ(writer, command);
 }
 
-fn writePlacementAtZ(writer: *Io.Writer, image_id: u32, placement_id: u32, value: OutputPlacement, z: i32) Io.Writer.Error!usize {
+fn writePlacementAtZ(writer: *Io.Writer, command: PlacementCommand) Io.Writer.Error!usize {
+    const value = command.value;
     var written = try printCounted(writer, "\x1b[{d};{d}H", .{ value.row + 1, value.column + 1 });
     written += try printCounted(
         writer,
         "\x1b_Ga=p,i={d},p={d},x={d},y={d},w={d},h={d},c={d},r={d},X={d},Y={d},z={d},C=1,q=2\x1b\\",
-        .{ image_id, placement_id, value.source_x, value.source_y, value.source_width, value.source_height, value.columns, value.rows, value.offset_x, value.offset_y, z },
+        .{ command.image_id, command.placement_id, value.source_x, value.source_y, value.source_width, value.source_height, value.columns, value.rows, value.offset_x, value.offset_y, command.z },
     );
     return written;
 }
@@ -2171,11 +2176,10 @@ pub const KittySidebarRenderer = struct {
             }
             if (renderer.focused_card) |card| {
                 if (renderer.focused_card_emitted) {
-                    written += try writePlacement(
-                        writer,
-                        focused_card_id,
-                        focused_card_placement_id,
-                        .{
+                    written += try writePlacement(writer, .{
+                        .image_id = focused_card_id,
+                        .placement_id = focused_card_placement_id,
+                        .value = .{
                             .column = card.x,
                             .row = card.y,
                             .offset_x = 0,
@@ -2187,8 +2191,8 @@ pub const KittySidebarRenderer = struct {
                             .columns = card.w,
                             .rows = card.h,
                         },
-                        -9,
-                    );
+                        .z = -9,
+                    });
                 }
             }
             renderer.emitted_focused_card = renderer.focused_card;
@@ -2198,11 +2202,10 @@ pub const KittySidebarRenderer = struct {
                 first_provider_placement_id + @as(u32, @intCast(index)),
             );
             for (renderer.provider_marks[0..renderer.provider_mark_count], 0..) |mark, index| {
-                written += try writePlacement(
-                    writer,
-                    provider_atlas_id,
-                    first_provider_placement_id + @as(u32, @intCast(index)),
-                    .{
+                written += try writePlacement(writer, .{
+                    .image_id = provider_atlas_id,
+                    .placement_id = first_provider_placement_id + @as(u32, @intCast(index)),
+                    .value = .{
                         .column = mark.area.x,
                         .row = mark.area.y,
                         .offset_x = 0,
@@ -2214,8 +2217,8 @@ pub const KittySidebarRenderer = struct {
                         .columns = mark.area.w,
                         .rows = mark.area.h,
                     },
-                    -8,
-                );
+                    .z = -8,
+                });
             }
             renderer.emitted_provider_mark_count = renderer.provider_mark_count;
         }

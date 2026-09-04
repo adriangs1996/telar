@@ -265,11 +265,10 @@ pub const Renderer = struct {
                 );
             }
             for (renderer.placements[0..renderer.placement_count], 0..) |placement, index| {
-                written += try kitty.writePlacement(
-                    writer,
-                    image_id,
-                    first_placement_id + @as(u32, @intCast(index)),
-                    .{
+                written += try kitty.writePlacement(writer, .{
+                    .image_id = image_id,
+                    .placement_id = first_placement_id + @as(u32, @intCast(index)),
+                    .value = .{
                         .column = placement.area.x,
                         .row = placement.area.y,
                         .offset_x = 0,
@@ -281,8 +280,8 @@ pub const Renderer = struct {
                         .columns = 1,
                         .rows = 1,
                     },
-                    z_index,
-                );
+                    .z = z_index,
+                });
             }
             renderer.emitted_placement_count = renderer.placement_count;
             renderer.placements_dirty = false;
