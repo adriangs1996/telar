@@ -267,6 +267,11 @@ pub const Session = struct {
         source: schema.PaneTextSource,
     };
 
+    pub const TextInput = struct {
+        mode: schema.PaneTextMode,
+        text: []const u8,
+    };
+
     /// Reads bounded plain text from one exact pane generation. The returned
     /// slice borrows the session's receive buffer until the next request.
     ///
@@ -294,16 +299,16 @@ pub const Session = struct {
     /// Sends raw bytes or one prompt to an exact pane generation.
     ///
     /// ```zig
-    /// try session.sendText(pane, .prompt, "run the tests");
+    /// try session.sendText(pane, .{ .mode = .prompt, .text = "run the tests" });
     /// ```
-    pub fn sendText(session: *Session, pane: PaneRef, mode: schema.PaneTextMode, text: []const u8) !void {
+    pub fn sendText(session: *Session, pane: PaneRef, input: TextInput) !void {
         var send_buffer: [schema.max_pane_text_input_bytes + 64]u8 = undefined;
         try session.connection.send(session.io, try schema.encodeSendPaneText(&send_buffer, .{
             .request_id = session.requestId(),
             .pane_id = try schema.id.pane(pane.pane_id),
             .pane_generation = pane.pane_generation,
-            .mode = mode,
-            .text = text,
+            .mode = input.mode,
+            .text = input.text,
         }));
 
         const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));

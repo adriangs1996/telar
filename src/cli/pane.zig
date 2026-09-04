@@ -70,7 +70,7 @@ fn execute(session: *control.Session, options: PaneOptions, writer: *Io.Writer, 
                 len += 1;
             }
 
-            try session.sendText(pane, .raw, storage[0..len]);
+            try session.sendText(pane, .{ .mode = .raw, .text = storage[0..len] });
         },
         .focus => {
             const result = try session.focusPane(pane, options.direction.?);

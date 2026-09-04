@@ -115,7 +115,7 @@ fn prompt(session: *control.Session, options: AgentOptions, output: Output) !u8 
         .pane_id = target.pane_id,
         .pane_generation = target.pane_generation,
     };
-    try session.sendText(pane, .prompt, std.mem.span(options.text.?));
+    try session.sendText(pane, .{ .mode = .prompt, .text = std.mem.span(options.text.?) });
 
     if (!options.wait_after_prompt) {
         return exit_ok;
