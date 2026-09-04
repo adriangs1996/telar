@@ -36,6 +36,11 @@ pub const Installation = struct {
     destination: []const u8,
 };
 
+const FingerprintUpdate = struct {
+    hasher: *std.hash.Wyhash,
+    root: []const u8,
+};
+
 pub const Package = struct {
     manifest: plugin.Manifest,
     digest: plugin.Digest,
@@ -200,10 +205,12 @@ pub const Registry = struct {
         }
     }
 
+    /// Hashes every configured package path and readable file for reload detection.
+    /// For example: `const fingerprint = registry.watchFingerprint(gpa, io);`.
     pub fn watchFingerprint(registry: *const Registry, gpa: std.mem.Allocator, io: Io) u64 {
         var hasher = std.hash.Wyhash.init(0x74656c61722d706c);
         for (registry.packages[0..registry.count]) |*package|
-            updatePackageFingerprint(&hasher, gpa, io, package.root());
+            updatePackageFingerprint(gpa, io, .{ .hasher = &hasher, .root = package.root() });
         return hasher.final();
     }
 };
@@ -528,7 +535,10 @@ fn pathInside(root: []const u8, candidate: []const u8) bool {
         (candidate.len > root.len and candidate[root.len] == std.fs.path.sep);
 }
 
-fn updatePackageFingerprint(hasher: *std.hash.Wyhash, gpa: std.mem.Allocator, io: Io, root: []const u8) void {
+fn updatePackageFingerprint(gpa: std.mem.Allocator, io: Io, update: FingerprintUpdate) void {
+    const hasher = update.hasher;
+    const root = update.root;
+
     hasher.update(root);
     var directory = Io.Dir.cwd().openDir(io, root, .{ .iterate = true }) catch {
         hasher.update("\x00unreadable");
