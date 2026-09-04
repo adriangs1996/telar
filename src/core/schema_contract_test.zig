@@ -28,6 +28,12 @@ const Entry = struct {
     golden_hex: []const u8,
 };
 
+const EntryMetadata = struct {
+    name: []const u8,
+    direction: Direction,
+    golden_hex: []const u8,
+};
+
 const corpus_len = 88;
 const corpus_storage_size = 8 * 1024;
 
@@ -65,15 +71,19 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         used: *usize,
         index: *usize,
 
-        fn add(h: @This(), name: []const u8, direction: Direction, tail_tolerant: bool, golden_hex: []const u8, payload: []const u8) void {
+        fn add(h: @This(), metadata: EntryMetadata, payload: []const u8) void {
             h.entries[h.index.*] = .{
-                .name = name,
-                .direction = direction,
-                .tail_tolerant = tail_tolerant,
+                .name = metadata.name,
+                .direction = metadata.direction,
                 .bytes = payload,
-                .golden_hex = golden_hex,
+                .golden_hex = metadata.golden_hex,
             };
             h.index.* += 1;
+        }
+
+        fn addTailTolerant(h: @This(), metadata: EntryMetadata, payload: []const u8) void {
+            h.add(metadata, payload);
+            h.entries[h.index.* - 1].tail_tolerant = true;
         }
 
         fn space(h: @This()) []u8 {
@@ -87,7 +97,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     }{ .entries = &entries, .storage = storage, .used = &used, .index = &index };
 
     // -- client ------------------------------------------------------------
-    helper.add("open_pane_default", .client, false, golden.open_pane_default, helper.commit(
+    helper.add(.{ .name = "open_pane_default", .direction = .client, .golden_hex = golden.open_pane_default }, helper.commit(
         try schema.encodeOpenPane(helper.space(), .{
             .request_id = @enumFromInt(9),
             .size = .{ .cols = 120, .rows = 40, .cell_width_px = 8, .cell_height_px = 16 },
@@ -99,7 +109,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             },
         }),
     ));
-    helper.add("open_pane_attach", .client, false, golden.open_pane_attach, helper.commit(
+    helper.add(.{ .name = "open_pane_attach", .direction = .client, .golden_hex = golden.open_pane_attach }, helper.commit(
         try schema.encodeOpenPane(helper.space(), .{
             .request_id = @enumFromInt(2),
             .target = .{ .pane = @enumFromInt(41) },
@@ -107,7 +117,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .launch = null,
         }),
     ));
-    helper.add("open_workspace", .client, false, golden.open_workspace, helper.commit(
+    helper.add(.{ .name = "open_workspace", .direction = .client, .golden_hex = golden.open_workspace }, helper.commit(
         try schema.encodeOpenPane(helper.space(), .{
             .request_id = @enumFromInt(3),
             .target = .{ .workspace = @enumFromInt(7) },
@@ -115,7 +125,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .launch = null,
         }),
     ));
-    helper.add("create_workspace", .client, false, golden.create_workspace, helper.commit(
+    helper.add(.{ .name = "create_workspace", .direction = .client, .golden_hex = golden.create_workspace }, helper.commit(
         try schema.encodeCreateWorkspace(helper.space(), .{
             .request_id = @enumFromInt(4),
             .size = .{ .cols = 80, .rows = 24 },
@@ -129,50 +139,50 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             },
         }),
     ));
-    helper.add("rename_workspace", .client, false, golden.rename_workspace, helper.commit(
+    helper.add(.{ .name = "rename_workspace", .direction = .client, .golden_hex = golden.rename_workspace }, helper.commit(
         try schema.encodeRenameWorkspace(helper.space(), .{
             .request_id = @enumFromInt(5),
             .workspace = .{ .workspace = @enumFromInt(7) },
             .name = "agents",
         }),
     ));
-    helper.add("pane_input", .client, true, golden.pane_input, helper.commit(
+    helper.addTailTolerant(.{ .name = "pane_input", .direction = .client, .golden_hex = golden.pane_input }, helper.commit(
         try schema.encodePaneInput(helper.space(), .{
             .pane_id = @enumFromInt(3),
             .bytes = "abc",
         }),
     ));
-    helper.add("pane_resize", .client, false, golden.pane_resize, helper.commit(
+    helper.add(.{ .name = "pane_resize", .direction = .client, .golden_hex = golden.pane_resize }, helper.commit(
         try schema.encodePaneResize(helper.space(), .{
             .pane_id = @enumFromInt(3),
             .size = .{ .cols = 90, .rows = 30 },
         }),
     ));
-    helper.add("frame_ack", .client, false, golden.frame_ack, helper.commit(
+    helper.add(.{ .name = "frame_ack", .direction = .client, .golden_hex = golden.frame_ack }, helper.commit(
         try schema.encodeFrameAck(helper.space(), .{
             .pane_id = @enumFromInt(3),
             .frame_id = 8,
         }),
     ));
-    helper.add("request_snapshot", .client, false, golden.request_snapshot, helper.commit(
+    helper.add(.{ .name = "request_snapshot", .direction = .client, .golden_hex = golden.request_snapshot }, helper.commit(
         try schema.encodeRequestSnapshot(helper.space(), .{
             .pane_id = @enumFromInt(3),
             .known_frame_id = 7,
         }),
     ));
-    helper.add("detach_pane", .client, false, golden.detach_pane, helper.commit(
+    helper.add(.{ .name = "detach_pane", .direction = .client, .golden_hex = golden.detach_pane }, helper.commit(
         try schema.encodeDetachPane(helper.space(), .{ .pane_id = @enumFromInt(3) }),
     ));
-    helper.add("runtime_stop", .client, false, golden.runtime_stop, helper.commit(
+    helper.add(.{ .name = "runtime_stop", .direction = .client, .golden_hex = golden.runtime_stop }, helper.commit(
         try schema.encodeRuntimeStop(helper.space()),
     ));
-    helper.add("request_tab_snapshot", .client, false, golden.request_tab_snapshot, helper.commit(
+    helper.add(.{ .name = "request_tab_snapshot", .direction = .client, .golden_hex = golden.request_tab_snapshot }, helper.commit(
         try schema.encodeRequestTabSnapshot(helper.space(), .{
             .request_id = @enumFromInt(20),
             .location = location,
         }),
     ));
-    helper.add("create_pane", .client, false, golden.create_pane, helper.commit(
+    helper.add(.{ .name = "create_pane", .direction = .client, .golden_hex = golden.create_pane }, helper.commit(
         try schema.encodeCreatePane(helper.space(), .{
             .request_id = @enumFromInt(21),
             .location = location,
@@ -184,13 +194,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             },
         }),
     ));
-    helper.add("close_pane", .client, false, golden.close_pane, helper.commit(
+    helper.add(.{ .name = "close_pane", .direction = .client, .golden_hex = golden.close_pane }, helper.commit(
         try schema.encodeClosePane(helper.space(), .{
             .request_id = @enumFromInt(22),
             .pane_id = @enumFromInt(8),
         }),
     ));
-    helper.add("query_history_cwd", .client, false, golden.query_history_cwd, helper.commit(
+    helper.add(.{ .name = "query_history_cwd", .direction = .client, .golden_hex = golden.query_history_cwd }, helper.commit(
         try schema.encodeQueryHistory(helper.space(), .{
             .request_id = @enumFromInt(31),
             .query = "zig build",
@@ -206,7 +216,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .{ .started_at_ms = 1700000002000, .command = "git status" },
         .{ .started_at_ms = 1700000003000, .command = "make -j4" },
     };
-    helper.add("import_history", .client, false, golden.import_history, helper.commit(
+    helper.add(.{ .name = "import_history", .direction = .client, .golden_hex = golden.import_history }, helper.commit(
         try schema.encodeImportHistory(helper.space(), .{
             .request_id = @enumFromInt(34),
             .source = "zsh:/home/u/.zsh_history",
@@ -214,13 +224,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .entries = &import_entries,
         }),
     ));
-    helper.add("delete_history", .client, false, golden.delete_history, helper.commit(
+    helper.add(.{ .name = "delete_history", .direction = .client, .golden_hex = golden.delete_history }, helper.commit(
         try schema.encodeDeleteHistory(helper.space(), .{
             .request_id = @enumFromInt(35),
             .id = 11,
         }),
     ));
-    helper.add("prune_history", .client, false, golden.prune_history, helper.commit(
+    helper.add(.{ .name = "prune_history", .direction = .client, .golden_hex = golden.prune_history }, helper.commit(
         try schema.encodePruneHistory(helper.space(), .{
             .request_id = @enumFromInt(36),
             .scope = .workspace,
@@ -230,13 +240,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .match = "zig",
         }),
     ));
-    helper.add("read_history_output", .client, false, golden.read_history_output, helper.commit(
+    helper.add(.{ .name = "read_history_output", .direction = .client, .golden_hex = golden.read_history_output }, helper.commit(
         try schema.encodeReadHistoryOutput(helper.space(), .{
             .request_id = @enumFromInt(37),
             .id = 11,
         }),
     ));
-    helper.add("history_stats", .client, false, golden.history_stats, helper.commit(
+    helper.add(.{ .name = "history_stats", .direction = .client, .golden_hex = golden.history_stats }, helper.commit(
         try schema.encodeHistoryStatsQuery(helper.space(), .{
             .request_id = @enumFromInt(38),
             .scope = .workspace,
@@ -244,20 +254,20 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .since_ms = 1700000000000,
         }),
     ));
-    helper.add("query_history_pane", .client, false, golden.query_history_pane, helper.commit(
+    helper.add(.{ .name = "query_history_pane", .direction = .client, .golden_hex = golden.query_history_pane }, helper.commit(
         try schema.encodeQueryHistory(helper.space(), .{
             .request_id = @enumFromInt(32),
             .scope = .pane,
             .pane_id = @enumFromInt(9),
         }),
     ));
-    helper.add("request_workspace_snapshot", .client, false, golden.request_workspace_snapshot, helper.commit(
+    helper.add(.{ .name = "request_workspace_snapshot", .direction = .client, .golden_hex = golden.request_workspace_snapshot }, helper.commit(
         try schema.encodeRequestWorkspaceSnapshot(helper.space(), .{
             .request_id = @enumFromInt(40),
             .workspace = .{ .workspace = @enumFromInt(7) },
         }),
     ));
-    helper.add("create_tab", .client, false, golden.create_tab, helper.commit(
+    helper.add(.{ .name = "create_tab", .direction = .client, .golden_hex = golden.create_tab }, helper.commit(
         try schema.encodeCreateTab(helper.space(), .{
             .request_id = @enumFromInt(41),
             .workspace = .{ .workspace = @enumFromInt(7) },
@@ -270,54 +280,54 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             },
         }),
     ));
-    helper.add("rename_tab", .client, false, golden.rename_tab, helper.commit(
+    helper.add(.{ .name = "rename_tab", .direction = .client, .golden_hex = golden.rename_tab }, helper.commit(
         try schema.encodeRenameTab(helper.space(), .{
             .request_id = @enumFromInt(42),
             .location = location,
             .label = "server",
         }),
     ));
-    helper.add("close_tab", .client, false, golden.close_tab, helper.commit(
+    helper.add(.{ .name = "close_tab", .direction = .client, .golden_hex = golden.close_tab }, helper.commit(
         try schema.encodeCloseTab(helper.space(), .{
             .request_id = @enumFromInt(43),
             .location = location,
         }),
     ));
-    helper.add("move_tab", .client, false, golden.move_tab, helper.commit(
+    helper.add(.{ .name = "move_tab", .direction = .client, .golden_hex = golden.move_tab }, helper.commit(
         try schema.encodeMoveTab(helper.space(), .{
             .request_id = @enumFromInt(44),
             .location = location,
             .direction = .previous,
         }),
     ));
-    helper.add("request_graphics_snapshot", .client, false, golden.request_graphics_snapshot, helper.commit(
+    helper.add(.{ .name = "request_graphics_snapshot", .direction = .client, .golden_hex = golden.request_graphics_snapshot }, helper.commit(
         try schema.encodeRequestGraphicsSnapshot(helper.space(), .{
             .pane_id = @enumFromInt(5),
         }),
     ));
-    helper.add("graphics_credit", .client, false, golden.graphics_credit, helper.commit(
+    helper.add(.{ .name = "graphics_credit", .direction = .client, .golden_hex = golden.graphics_credit }, helper.commit(
         try schema.encodeGraphicsCredit(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .bytes = 4096,
         }),
     ));
-    helper.add("configure_graphics", .client, false, golden.configure_graphics, helper.commit(
+    helper.add(.{ .name = "configure_graphics", .direction = .client, .golden_hex = golden.configure_graphics }, helper.commit(
         try schema.encodeConfigureGraphics(helper.space(), .{
             .shared = true,
         }),
     ));
-    helper.add("request_runtime_state", .client, false, golden.request_runtime_state, helper.commit(
+    helper.add(.{ .name = "request_runtime_state", .direction = .client, .golden_hex = golden.request_runtime_state }, helper.commit(
         try schema.encodeRequestRuntimeState(helper.space(), .{
             .client_identity = @enumFromInt(9),
         }),
     ));
-    helper.add("set_pane_viewport", .client, false, golden.set_pane_viewport, helper.commit(
+    helper.add(.{ .name = "set_pane_viewport", .direction = .client, .golden_hex = golden.set_pane_viewport }, helper.commit(
         try schema.encodeSetPaneViewport(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .offset = 42,
         }),
     ));
-    helper.add("copy_selection", .client, false, golden.copy_selection, helper.commit(
+    helper.add(.{ .name = "copy_selection", .direction = .client, .golden_hex = golden.copy_selection }, helper.commit(
         try schema.encodeCopySelection(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .start_x = 1,
@@ -327,7 +337,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .linewise = true,
         }),
     ));
-    helper.add("show_notification", .client, false, golden.show_notification, helper.commit(
+    helper.add(.{ .name = "show_notification", .direction = .client, .golden_hex = golden.show_notification }, helper.commit(
         try schema.encodeShowNotification(helper.space(), .{
             .request_id = @enumFromInt(45),
             .notification = .{
@@ -339,7 +349,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             },
         }),
     ));
-    helper.add("update_client_layout", .client, false, golden.update_client_layout, helper.commit(
+    helper.add(.{ .name = "update_client_layout", .direction = .client, .golden_hex = golden.update_client_layout }, helper.commit(
         try schema.encodeClientLayoutUpdate(helper.space(), .{
             .sidebar_visible = true,
             .sidebar_width = 73,
@@ -348,16 +358,16 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .tabs = &client_layout_tabs,
         }),
     ));
-    helper.add("acknowledge_agent", .client, false, golden.acknowledge_agent, helper.commit(
+    helper.add(.{ .name = "acknowledge_agent", .direction = .client, .golden_hex = golden.acknowledge_agent }, helper.commit(
         try schema.encodeAcknowledgeAgent(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .pane_generation = 3,
         }),
     ));
-    helper.add("query_agents", .client, false, golden.query_agents, helper.commit(
+    helper.add(.{ .name = "query_agents", .direction = .client, .golden_hex = golden.query_agents }, helper.commit(
         try schema.encodeQueryAgents(helper.space(), .{ .request_id = @enumFromInt(5) }),
     ));
-    helper.add("read_pane", .client, false, golden.read_pane, helper.commit(
+    helper.add(.{ .name = "read_pane", .direction = .client, .golden_hex = golden.read_pane }, helper.commit(
         try schema.encodeReadPane(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -366,7 +376,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .source = .recent,
         }),
     ));
-    helper.add("send_pane_text", .client, false, golden.send_pane_text, helper.commit(
+    helper.add(.{ .name = "send_pane_text", .direction = .client, .golden_hex = golden.send_pane_text }, helper.commit(
         try schema.encodeSendPaneText(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -375,7 +385,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .text = "ls",
         }),
     ));
-    helper.add("report_agent_session", .client, false, golden.report_agent_session, helper.commit(
+    helper.add(.{ .name = "report_agent_session", .direction = .client, .golden_hex = golden.report_agent_session }, helper.commit(
         try schema.encodeReportAgentSession(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -383,7 +393,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .session = "abc",
         }),
     ));
-    helper.add("report_agent", .client, false, golden.report_agent, helper.commit(
+    helper.add(.{ .name = "report_agent", .direction = .client, .golden_hex = golden.report_agent }, helper.commit(
         try schema.encodeReportAgent(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -392,7 +402,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .session = "abc",
         }),
     ));
-    helper.add("report_agent_command", .client, false, golden.report_agent_command, helper.commit(
+    helper.add(.{ .name = "report_agent_command", .direction = .client, .golden_hex = golden.report_agent_command }, helper.commit(
         try schema.encodeReportAgentCommand(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -406,7 +416,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .exit_code = 7,
         }),
     ));
-    helper.add("report_agent_title", .client, false, golden.report_agent_title, helper.commit(
+    helper.add(.{ .name = "report_agent_title", .direction = .client, .golden_hex = golden.report_agent_title }, helper.commit(
         try schema.encodeReportAgentTitle(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -414,14 +424,14 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .title = "Fix proxy",
         }),
     ));
-    helper.add("search_pane", .client, false, golden.search_pane, helper.commit(
+    helper.add(.{ .name = "search_pane", .direction = .client, .golden_hex = golden.search_pane }, helper.commit(
         try schema.encodeSearchPane(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
             .needle = "err",
         }),
     ));
-    helper.add("request_pane_focus", .client, false, golden.request_pane_focus, helper.commit(
+    helper.add(.{ .name = "request_pane_focus", .direction = .client, .golden_hex = golden.request_pane_focus }, helper.commit(
         try schema.encodeRequestPaneFocus(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -429,7 +439,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .direction = .left,
         }),
     ));
-    helper.add("complete_pane_focus", .client, false, golden.complete_pane_focus, helper.commit(
+    helper.add(.{ .name = "complete_pane_focus", .direction = .client, .golden_hex = golden.complete_pane_focus }, helper.commit(
         try schema.encodeCompletePaneFocus(helper.space(), .{
             .requester = .{ .id = 9, .generation = 10 },
             .request_id = @enumFromInt(5),
@@ -441,7 +451,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     ));
 
     // -- server ------------------------------------------------------------
-    helper.add("pane_opened", .server, false, golden.pane_opened, helper.commit(
+    helper.add(.{ .name = "pane_opened", .direction = .server, .golden_hex = golden.pane_opened }, helper.commit(
         try schema.encodePaneOpened(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(12),
@@ -466,7 +476,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         },
     };
     const frame_spans = [_]frame.Span{.{ .start = 0, .cells = &frame_cells }};
-    helper.add("pane_frame", .server, false, golden.pane_frame, helper.commit(
+    helper.add(.{ .name = "pane_frame", .direction = .server, .golden_hex = golden.pane_frame }, helper.commit(
         try schema.encodePaneFrame(helper.space(), .{
             .pane_id = @enumFromInt(4),
             .frame_id = 1,
@@ -483,28 +493,28 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .spans = &frame_spans,
         }),
     ));
-    helper.add("pane_exited", .server, false, golden.pane_exited, helper.commit(
+    helper.add(.{ .name = "pane_exited", .direction = .server, .golden_hex = golden.pane_exited }, helper.commit(
         try schema.encodePaneExited(helper.space(), .{
             .pane_id = @enumFromInt(12),
             .kind = .exited,
             .value = 7,
         }),
     ));
-    helper.add("request_failed", .server, true, golden.request_failed, helper.commit(
+    helper.addTailTolerant(.{ .name = "request_failed", .direction = .server, .golden_hex = golden.request_failed }, helper.commit(
         try schema.encodeRequestFailed(helper.space(), .{
             .request_id = @enumFromInt(5),
             .code = .pane_not_found,
             .message = "pane 12 does not exist",
         }),
     ));
-    helper.add("runtime_stopping", .server, false, golden.runtime_stopping, helper.commit(
+    helper.add(.{ .name = "runtime_stopping", .direction = .server, .golden_hex = golden.runtime_stopping }, helper.commit(
         try schema.encodeRuntimeStopping(helper.space()),
     ));
     const panes = [_]schema.PaneDescriptor{
         .{ .pane_id = @enumFromInt(3), .lifecycle = .running },
         .{ .pane_id = @enumFromInt(9), .lifecycle = .exited },
     };
-    helper.add("tab_snapshot", .server, false, golden.tab_snapshot, helper.commit(
+    helper.add(.{ .name = "tab_snapshot", .direction = .server, .golden_hex = golden.tab_snapshot }, helper.commit(
         try schema.encodeTabSnapshot(helper.space(), .{
             .request_id = @enumFromInt(4),
             .location = .{
@@ -539,7 +549,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .workspace_path = "/work/telar",
         },
     };
-    helper.add("history_output", .server, false, golden.history_output, helper.commit(
+    helper.add(.{ .name = "history_output", .direction = .server, .golden_hex = golden.history_output }, helper.commit(
         try schema.encodeHistoryOutput(helper.space(), .{
             .request_id = @enumFromInt(37),
             .id = 11,
@@ -552,7 +562,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .{ .count = 30, .command = "git status" },
         .{ .count = 12, .command = "zig build" },
     };
-    helper.add("history_stats_result", .server, false, golden.history_stats_result, helper.commit(
+    helper.add(.{ .name = "history_stats_result", .direction = .server, .golden_hex = golden.history_stats_result }, helper.commit(
         try schema.encodeHistoryStats(helper.space(), .{
             .request_id = @enumFromInt(38),
             .total = 120,
@@ -560,26 +570,26 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .top = &stats_top,
         }),
     ));
-    helper.add("history_pruned", .server, false, golden.history_pruned, helper.commit(
+    helper.add(.{ .name = "history_pruned", .direction = .server, .golden_hex = golden.history_pruned }, helper.commit(
         try schema.encodeHistoryPruned(helper.space(), .{
             .request_id = @enumFromInt(36),
             .removed = 3,
         }),
     ));
-    helper.add("history_results", .server, false, golden.history_results, helper.commit(
+    helper.add(.{ .name = "history_results", .direction = .server, .golden_hex = golden.history_results }, helper.commit(
         try schema.encodeHistoryResults(helper.space(), .{
             .request_id = @enumFromInt(33),
             .entries = &history_entries,
         }),
     ));
-    helper.add("suggest_command", .client, false, golden.suggest_command, helper.commit(
+    helper.add(.{ .name = "suggest_command", .direction = .client, .golden_hex = golden.suggest_command }, helper.commit(
         try schema.encodeSuggestCommand(helper.space(), .{
             .request_id = @enumFromInt(41),
             .pane_id = @enumFromInt(9),
             .text = "list files by size",
         }),
     ));
-    helper.add("command_suggestion", .server, false, golden.command_suggestion, helper.commit(
+    helper.add(.{ .name = "command_suggestion", .direction = .server, .golden_hex = golden.command_suggestion }, helper.commit(
         try schema.encodeCommandSuggestion(helper.space(), .{
             .request_id = @enumFromInt(41),
             .status = .ready,
@@ -590,7 +600,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "main" },
         .{ .tab_id = @enumFromInt(4), .position = 1, .pane_count = 1, .label = "logs" },
     };
-    helper.add("workspace_snapshot", .server, false, golden.workspace_snapshot, helper.commit(
+    helper.add(.{ .name = "workspace_snapshot", .direction = .server, .golden_hex = golden.workspace_snapshot }, helper.commit(
         try schema.encodeWorkspaceSnapshot(helper.space(), .{
             .request_id = @enumFromInt(50),
             .workspace = .{ .workspace = @enumFromInt(7) },
@@ -598,7 +608,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .tabs = &descriptors,
         }),
     ));
-    helper.add("tab_created", .server, false, golden.tab_created, helper.commit(
+    helper.add(.{ .name = "tab_created", .direction = .server, .golden_hex = golden.tab_created }, helper.commit(
         try schema.encodeTabCreated(helper.space(), .{
             .request_id = @enumFromInt(51),
             .location = location,
@@ -607,14 +617,14 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .root_pane_id = @enumFromInt(9),
         }),
     ));
-    helper.add("tab_renamed", .server, false, golden.tab_renamed, helper.commit(
+    helper.add(.{ .name = "tab_renamed", .direction = .server, .golden_hex = golden.tab_renamed }, helper.commit(
         try schema.encodeTabRenamed(helper.space(), .{
             .request_id = @enumFromInt(52),
             .location = location,
             .label = "server",
         }),
     ));
-    helper.add("tab_closed", .server, false, golden.tab_closed, helper.commit(
+    helper.add(.{ .name = "tab_closed", .direction = .server, .golden_hex = golden.tab_closed }, helper.commit(
         try schema.encodeTabClosed(helper.space(), .{
             .request_id = .none,
             .location = location,
@@ -622,28 +632,28 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .previous_workspace = @enumFromInt(6),
         }),
     ));
-    helper.add("tab_moved", .server, false, golden.tab_moved, helper.commit(
+    helper.add(.{ .name = "tab_moved", .direction = .server, .golden_hex = golden.tab_moved }, helper.commit(
         try schema.encodeTabMoved(helper.space(), .{
             .request_id = @enumFromInt(54),
             .location = location,
             .position = 0,
         }),
     ));
-    helper.add("resync_required", .server, false, golden.resync_required, helper.commit(
+    helper.add(.{ .name = "resync_required", .direction = .server, .golden_hex = golden.resync_required }, helper.commit(
         try schema.encodeResyncRequired(helper.space(), .{
             .workspace = .{ .workspace = @enumFromInt(7) },
             .workspace_closed = true,
             .previous_workspace = @enumFromInt(6),
         }),
     ));
-    helper.add("graphics_snapshot", .server, false, golden.graphics_snapshot, helper.commit(
+    helper.add(.{ .name = "graphics_snapshot", .direction = .server, .golden_hex = golden.graphics_snapshot }, helper.commit(
         try schema.encodeGraphicsSnapshot(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
             .phase = .begin,
         }),
     ));
-    helper.add("graphics_image", .server, false, golden.graphics_image, helper.commit(
+    helper.add(.{ .name = "graphics_image", .direction = .server, .golden_hex = golden.graphics_image }, helper.commit(
         try schema.encodeGraphicsImage(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
@@ -656,7 +666,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             },
         }),
     ));
-    helper.add("graphics_image_chunk", .server, false, golden.graphics_image_chunk, helper.commit(
+    helper.add(.{ .name = "graphics_image_chunk", .direction = .server, .golden_hex = golden.graphics_image_chunk }, helper.commit(
         try schema.encodeGraphicsImageChunk(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
@@ -665,7 +675,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .bytes = &.{ 1, 2, 3, 4 },
         }),
     ));
-    helper.add("graphics_shared_image", .server, false, golden.graphics_shared_image, helper.commit(
+    helper.add(.{ .name = "graphics_shared_image", .direction = .server, .golden_hex = golden.graphics_shared_image }, helper.commit(
         try schema.encodeGraphicsSharedImage(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
@@ -679,7 +689,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .name = try graphics.ShmName.init("/tlr0000002a-7"),
         }),
     ));
-    helper.add("graphics_placement", .server, false, golden.graphics_placement, helper.commit(
+    helper.add(.{ .name = "graphics_placement", .direction = .server, .golden_hex = golden.graphics_placement }, helper.commit(
         try schema.encodeGraphicsPlacement(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 3,
@@ -696,14 +706,14 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             },
         }),
     ));
-    helper.add("graphics_delete_image", .server, false, golden.graphics_delete_image, helper.commit(
+    helper.add(.{ .name = "graphics_delete_image", .direction = .server, .golden_hex = golden.graphics_delete_image }, helper.commit(
         try schema.encodeGraphicsDeleteImage(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 4,
             .key = .{ .image_id = 7, .generation = 8 },
         }),
     ));
-    helper.add("graphics_delete_placement", .server, false, golden.graphics_delete_placement, helper.commit(
+    helper.add(.{ .name = "graphics_delete_placement", .direction = .server, .golden_hex = golden.graphics_delete_placement }, helper.commit(
         try schema.encodeGraphicsDeletePlacement(helper.space(), .{
             .pane_id = @enumFromInt(1),
             .revision = 5,
@@ -712,7 +722,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .placement_id = 1,
         }),
     ));
-    helper.add("proxy_status", .server, false, golden.proxy_status, helper.commit(
+    helper.add(.{ .name = "proxy_status", .direction = .server, .golden_hex = golden.proxy_status }, helper.commit(
         try schema.encodeProxyStatus(helper.space(), .{ .active = true, .scope = .wildcard, .system_trusted = true }),
     ));
     const agent_entries = [_]schema.AgentSnapshotEntry{.{
@@ -744,13 +754,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .observed_at_ms = 1000,
         .expires_at_ms = 2000,
     }};
-    helper.add("agent_snapshot", .server, false, golden.agent_snapshot, helper.commit(
+    helper.add(.{ .name = "agent_snapshot", .direction = .server, .golden_hex = golden.agent_snapshot }, helper.commit(
         try schema.encodeAgentSnapshot(helper.space(), .{
             .revision = 9,
             .entries = &agent_entries,
         }),
     ));
-    helper.add("system_metrics", .server, false, golden.system_metrics, helper.commit(
+    helper.add(.{ .name = "system_metrics", .direction = .server, .golden_hex = golden.system_metrics }, helper.commit(
         try schema.encodeSystemMetrics(helper.space(), .{
             .revision = 5,
             .cpu_percent = 42,
@@ -775,31 +785,31 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .tab_count = 1,
         },
     };
-    helper.add("workspace_list", .server, false, golden.workspace_list, helper.commit(
+    helper.add(.{ .name = "workspace_list", .direction = .server, .golden_hex = golden.workspace_list }, helper.commit(
         try schema.encodeWorkspaceList(helper.space(), .{
             .revision = 3,
             .entries = &workspace_list_entries,
         }),
     ));
-    helper.add("pane_cwd", .server, false, golden.pane_cwd, helper.commit(
+    helper.add(.{ .name = "pane_cwd", .direction = .server, .golden_hex = golden.pane_cwd }, helper.commit(
         try schema.encodePaneCwd(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .cwd = "/work/telar",
         }),
     ));
-    helper.add("pane_foreground", .server, false, golden.pane_foreground, helper.commit(
+    helper.add(.{ .name = "pane_foreground", .direction = .server, .golden_hex = golden.pane_foreground }, helper.commit(
         try schema.encodePaneForeground(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .name = "zsh",
         }),
     ));
-    helper.add("pane_clipboard", .server, false, golden.pane_clipboard, helper.commit(
+    helper.add(.{ .name = "pane_clipboard", .direction = .server, .golden_hex = golden.pane_clipboard }, helper.commit(
         try schema.encodePaneClipboard(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .bytes = "abc",
         }),
     ));
-    helper.add("notification", .server, false, golden.notification, helper.commit(
+    helper.add(.{ .name = "notification", .direction = .server, .golden_hex = golden.notification }, helper.commit(
         try schema.encodeNotification(helper.space(), .{
             .level = .warning,
             .duration_ms = 3000,
@@ -808,20 +818,20 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .message = "Review its question",
         }),
     ));
-    helper.add("notification_shown", .server, false, golden.notification_shown, helper.commit(
+    helper.add(.{ .name = "notification_shown", .direction = .server, .golden_hex = golden.notification_shown }, helper.commit(
         try schema.encodeNotificationShown(helper.space(), .{
             .request_id = @enumFromInt(46),
             .delivered_clients = 2,
         }),
     ));
-    helper.add("agent_sound", .server, false, golden.agent_sound, helper.commit(
+    helper.add(.{ .name = "agent_sound", .direction = .server, .golden_hex = golden.agent_sound }, helper.commit(
         try schema.encodeAgentSound(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .pane_generation = 7,
             .sound = .needs_input,
         }),
     ));
-    helper.add("client_layout_snapshot", .server, false, golden.client_layout_snapshot, helper.commit(
+    helper.add(.{ .name = "client_layout_snapshot", .direction = .server, .golden_hex = golden.client_layout_snapshot }, helper.commit(
         try schema.encodeClientLayoutSnapshot(helper.space(), .{
             .restored = true,
             .sidebar_visible = true,
@@ -831,7 +841,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .tabs = &client_layout_tabs,
         }),
     ));
-    helper.add("pane_text", .server, false, golden.pane_text, helper.commit(
+    helper.add(.{ .name = "pane_text", .direction = .server, .golden_hex = golden.pane_text }, helper.commit(
         try schema.encodePaneText(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -839,23 +849,23 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .text = "hi",
         }),
     ));
-    helper.add("request_completed", .server, false, golden.request_completed, helper.commit(
+    helper.add(.{ .name = "request_completed", .direction = .server, .golden_hex = golden.request_completed }, helper.commit(
         try schema.encodeRequestCompleted(helper.space(), .{ .request_id = @enumFromInt(5) }),
     ));
-    helper.add("pane_title", .server, false, golden.pane_title, helper.commit(
+    helper.add(.{ .name = "pane_title", .direction = .server, .golden_hex = golden.pane_title }, helper.commit(
         try schema.encodePaneTitle(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .title = "vim",
         }),
     ));
-    helper.add("pane_progress", .server, false, golden.pane_progress, helper.commit(
+    helper.add(.{ .name = "pane_progress", .direction = .server, .golden_hex = golden.pane_progress }, helper.commit(
         try schema.encodePaneProgress(helper.space(), .{
             .pane_id = @enumFromInt(5),
             .state = .set,
             .percent = 42,
         }),
     ));
-    helper.add("pane_matches", .server, false, golden.pane_matches, helper.commit(
+    helper.add(.{ .name = "pane_matches", .direction = .server, .golden_hex = golden.pane_matches }, helper.commit(
         try schema.encodePaneMatches(helper.space(), .{
             .request_id = @enumFromInt(5),
             .pane_id = @enumFromInt(5),
@@ -863,7 +873,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .matches = &.{.{ .x = 2, .y = 7, .len = 3 }},
         }),
     ));
-    helper.add("pane_focus_command", .server, false, golden.pane_focus_command, helper.commit(
+    helper.add(.{ .name = "pane_focus_command", .direction = .server, .golden_hex = golden.pane_focus_command }, helper.commit(
         try schema.encodePaneFocusCommand(helper.space(), .{
             .requester = .{ .id = 9, .generation = 10 },
             .request_id = @enumFromInt(5),
@@ -872,7 +882,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .direction = .left,
         }),
     ));
-    helper.add("pane_focus_result", .server, false, golden.pane_focus_result, helper.commit(
+    helper.add(.{ .name = "pane_focus_result", .direction = .server, .golden_hex = golden.pane_focus_result }, helper.commit(
         try schema.encodePaneFocusResult(helper.space(), .{
             .request_id = @enumFromInt(5),
             .outcome = .focused,
