@@ -194,6 +194,40 @@ pub const Plan = struct {
     }
 };
 
+const PlacementState = struct {
+    id: u32,
+    z: i32,
+    desired: ?kitty.OutputPlacement = null,
+    emitted: ?kitty.OutputPlacement = null,
+
+    fn wanted(placement: *const PlacementState) bool {
+        return placement.desired != null;
+    }
+
+    fn damaged(placement: *const PlacementState) bool {
+        return !optionalPlacementEql(placement.desired, placement.emitted);
+    }
+
+    fn write(placement: *PlacementState, writer: *Io.Writer, image_id: u32) Io.Writer.Error!usize {
+        if (!placement.damaged()) {
+            return 0;
+        }
+
+        var written: usize = 0;
+        if (placement.emitted != null) {
+            written += try kitty.writeDeletePlacement(writer, image_id, placement.id);
+        }
+
+        if (placement.desired) |desired| {
+            written += try kitty.writeUiPlacement(writer, image_id, placement.id, desired, placement.z);
+        }
+
+        placement.emitted = placement.desired;
+
+        return written;
+    }
+};
+
 const Slot = struct {
     id: Id,
     target: Target,
@@ -201,15 +235,11 @@ const Slot = struct {
     width: u32,
     height: u32,
     image_id: u32,
-    thumbnail_placement_id: u32,
-    modal_placement_id: u32,
+    thumbnail: PlacementState,
+    modal: PlacementState,
     image_emitted: bool = false,
     image_dirty: bool = true,
     transfer_offset: usize = 0,
-    desired_thumbnail: ?kitty.OutputPlacement = null,
-    emitted_thumbnail: ?kitty.OutputPlacement = null,
-    desired_modal: ?kitty.OutputPlacement = null,
-    emitted_modal: ?kitty.OutputPlacement = null,
     marker_policy: MarkerPolicy,
     marker: ?MarkerIdentity = null,
     retire_pending: bool = false,
@@ -455,8 +485,8 @@ pub const Store = struct {
             .width = width,
             .height = height,
             .image_id = first_image_id + host_id,
-            .thumbnail_placement_id = first_thumbnail_placement_id + host_id,
-            .modal_placement_id = first_modal_placement_id + host_id,
+            .thumbnail = .{ .id = first_thumbnail_placement_id + host_id, .z = thumbnail_z },
+            .modal = .{ .id = first_modal_placement_id + host_id, .z = modal_z },
             .marker_policy = request.marker_policy,
         };
         store.total_bytes += png.len;
@@ -714,21 +744,21 @@ pub const Store = struct {
 
     pub fn prepare(store: *Store, plan: Plan) void {
         for (&store.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
-            slot.desired_thumbnail = null;
-            slot.desired_modal = null;
+            slot.thumbnail.desired = null;
+            slot.modal.desired = null;
         };
         if (!store.supported or store.cell_width == 0 or store.cell_height == 0) {
             return;
         }
         for (plan.thumbnailSlice()) |item| if (store.find(item.id)) |slot| {
             if (store.slotVisible(slot)) {
-                slot.desired_thumbnail = store.fitPlacement(slot, item.area);
+                slot.thumbnail.desired = store.fitPlacement(slot, item.area);
             }
         };
         if (plan.modal) |item| {
             if (store.find(item.id)) |slot| {
                 if (store.slotVisible(slot)) {
-                    slot.desired_modal = store.fitPlacement(slot, item.area);
+                    slot.modal.desired = store.fitPlacement(slot, item.area);
                 }
             }
         }
@@ -744,10 +774,9 @@ pub const Store = struct {
             return true;
         }
         for (store.slots) |maybe_slot| if (maybe_slot) |slot| {
-            const wanted = slot.desired_thumbnail != null or slot.desired_modal != null;
+            const wanted = slot.thumbnail.wanted() or slot.modal.wanted();
             if ((wanted and slot.image_dirty) or
-                !optionalPlacementEql(slot.desired_thumbnail, slot.emitted_thumbnail) or
-                !optionalPlacementEql(slot.desired_modal, slot.emitted_modal))
+                slot.thumbnail.damaged() or slot.modal.damaged())
             {
                 return true;
             }
@@ -799,8 +828,8 @@ pub const Store = struct {
             for (&store.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
                 slot.image_emitted = false;
                 slot.image_dirty = true;
-                slot.emitted_thumbnail = null;
-                slot.emitted_modal = null;
+                slot.thumbnail.emitted = null;
+                slot.modal.emitted = null;
             };
         } else {
             for (store.delete_ids[0..store.delete_count]) |image_id|
@@ -810,7 +839,7 @@ pub const Store = struct {
 
         for (&store.slots, 0..) |*maybe_slot, index| {
             const slot = if (maybe_slot.*) |*value| value else continue;
-            const wanted = slot.desired_thumbnail != null or slot.desired_modal != null;
+            const wanted = slot.thumbnail.wanted() or slot.modal.wanted();
             if (!wanted or !slot.image_dirty) {
                 continue;
             }
@@ -838,39 +867,9 @@ pub const Store = struct {
             if (!slot.image_emitted) {
                 continue;
             }
-            written += try store.writePlacementChange(
-                writer,
-                slot,
-                slot.desired_thumbnail,
-                &slot.emitted_thumbnail,
-                slot.thumbnail_placement_id,
-                thumbnail_z,
-            );
-            written += try store.writePlacementChange(
-                writer,
-                slot,
-                slot.desired_modal,
-                &slot.emitted_modal,
-                slot.modal_placement_id,
-                modal_z,
-            );
+            written += try slot.thumbnail.write(writer, slot.image_id);
+            written += try slot.modal.write(writer, slot.image_id);
         }
-        return written;
-    }
-
-    fn writePlacementChange(store: *Store, writer: *Io.Writer, slot: *Slot, desired: ?kitty.OutputPlacement, emitted: *?kitty.OutputPlacement, placement_id: u32, z: i32) Io.Writer.Error!usize {
-        _ = store;
-        if (optionalPlacementEql(desired, emitted.*)) {
-            return 0;
-        }
-        var written: usize = 0;
-        if (emitted.* != null) {
-            written += try kitty.writeDeletePlacement(writer, slot.image_id, placement_id);
-        }
-        if (desired) |placement| {
-            written += try kitty.writeUiPlacement(writer, slot.image_id, placement_id, placement, z);
-        }
-        emitted.* = desired;
         return written;
     }
 
@@ -993,8 +992,8 @@ pub const Store = struct {
         if (slot.image_emitted or slot.transfer_offset != 0) {
             store.queueDelete(slot.image_id);
         }
-        slot.desired_thumbnail = null;
-        slot.desired_modal = null;
+        slot.thumbnail.desired = null;
+        slot.modal.desired = null;
         slot.retire_pending = true;
     }
 
