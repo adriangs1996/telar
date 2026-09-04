@@ -69,7 +69,7 @@ const TestingModel = struct {
             .tab_id = @enumFromInt(1),
         };
         const discovered: schema.PaneId = @enumFromInt(2);
-        try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+        try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
         try model.workspace.active().?.model.addDiscovered(.{ .pane_id = discovered, .location = location, .area = .{ .w = 40, .h = 10 } });
 
         return .{ .model = model, .location = location, .discovered = discovered };

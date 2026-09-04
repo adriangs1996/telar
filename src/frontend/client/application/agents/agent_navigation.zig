@@ -150,7 +150,7 @@ const TestingModel = struct {
             .pane_id = @enumFromInt(9),
             .pane_generation = 3,
         };
-        try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+        try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
         _ = try model.workspace.addCreated(.{
             .location = second,
             .position = 1,

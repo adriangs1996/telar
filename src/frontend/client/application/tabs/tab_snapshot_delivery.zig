@@ -144,7 +144,7 @@ const TestingModel = struct {
         const root: schema.PaneId = @enumFromInt(1);
         const discovered: schema.PaneId = @enumFromInt(2);
         const other_pane: schema.PaneId = @enumFromInt(3);
-        try model.workspace.bootstrap(root, target, .{ .cols = 20, .rows = 5 });
+        try model.workspace.bootstrap(.{ .pane_id = root, .location = target, .size = .{ .cols = 20, .rows = 5 } });
         if (!target_active) {
             _ = try model.workspace.addCreated(.{
                 .location = other,

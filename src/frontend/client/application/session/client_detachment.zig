@@ -79,7 +79,7 @@ const TestingModel = struct {
         };
 
         if (tab_count > 0) {
-            try model.workspace.bootstrap(@enumFromInt(1), locations[0], .{ .cols = 20, .rows = 5 });
+            try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = locations[0], .size = .{ .cols = 20, .rows = 5 } });
         }
         var index: usize = 1;
         while (index < tab_count) : (index += 1) {

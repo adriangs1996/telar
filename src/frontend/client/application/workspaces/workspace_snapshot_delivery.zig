@@ -144,7 +144,7 @@ const TestingModel = struct {
         };
         const first_pane: schema.PaneId = @enumFromInt(1);
         const second_pane: schema.PaneId = @enumFromInt(2);
-        try model.workspace.bootstrap(first_pane, first, .{ .cols = 20, .rows = 5 });
+        try model.workspace.bootstrap(.{ .pane_id = first_pane, .location = first, .size = .{ .cols = 20, .rows = 5 } });
         if (two_tabs) {
             _ = try model.workspace.addCreated(.{
                 .location = second,

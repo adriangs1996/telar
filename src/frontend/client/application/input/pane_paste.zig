@@ -118,10 +118,10 @@ const TestingModel = struct {
         errdefer model.deinit();
 
         const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(pane_id, .{
+        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
             .tab_id = @enumFromInt(1),
-        }, .{ .cols = 20, .rows = 5 });
+        }, .size = .{ .cols = 20, .rows = 5 } });
         model.workspace.findPane(pane_id).?.input_modes.bracketed_paste = bracketed_paste;
 
         return .{ .model = model, .pane_id = pane_id };

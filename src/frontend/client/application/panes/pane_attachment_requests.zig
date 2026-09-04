@@ -95,7 +95,7 @@ const TestingModel = struct {
             .tab_id = @enumFromInt(1),
         };
         const root: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(root, location, .{ .cols = 20, .rows = 5 });
+        try model.workspace.bootstrap(.{ .pane_id = root, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
         return .{ .model = model, .location = location, .root = root, .discovered = @enumFromInt(2) };
     }

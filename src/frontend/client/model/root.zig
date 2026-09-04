@@ -2059,7 +2059,7 @@ pub const Model = struct {
         }
 
         const version_before = model.version();
-        try model.workspace.bootstrap(arrival.pane_id, arrival.location, arrival.size);
+        try model.workspace.bootstrap(.{ .pane_id = arrival.pane_id, .location = arrival.location, .size = arrival.size });
         if (arrival.saved_layout) |saved| {
             std.debug.assert(model.workspace.restoreLayoutOnNextSnapshot(arrival.location, saved));
         }
@@ -2988,7 +2988,7 @@ test "copy mode frame reconciliation and pane release are exact" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.scroll = .{ .total_rows = 15, .offset = 10 };
     pane.cursor = .{ .visible = true, .x = 2, .y = 4 };

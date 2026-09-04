@@ -81,7 +81,7 @@ const TestingModel = struct {
         const root: schema.PaneId = @enumFromInt(1);
         const sibling: schema.PaneId = @enumFromInt(2);
         const inactive_pane: schema.PaneId = @enumFromInt(3);
-        try model.workspace.bootstrap(root, active, .{ .cols = 40, .rows = 10 });
+        try model.workspace.bootstrap(.{ .pane_id = root, .location = active, .size = .{ .cols = 40, .rows = 10 } });
         try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = active, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
         _ = try model.workspace.addCreated(.{
             .location = inactive,

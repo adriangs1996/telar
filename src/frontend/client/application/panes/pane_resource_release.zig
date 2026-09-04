@@ -71,7 +71,7 @@ test "ReleasePaneResourcesHandler retires exact pane authorities before graphics
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     _ = model.beginPanePaste().?;
     _ = model.syncReportedPaneFocus().?;
     var capture: EffectCapture = .{ .model = &model };

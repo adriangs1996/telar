@@ -258,7 +258,7 @@ fn prepareActivation(model: *client_model.Model) !client_model.WorkspaceActivati
 test "ReleaseWorkspaceResourcesHandler remembers before releasing pane resources" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.workspace.bootstrap(testing_pane_id, testing_location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = testing_pane_id, .location = testing_location, .size = .{ .cols = 20, .rows = 5 } });
     _ = model.beginPanePaste().?;
     _ = model.syncReportedPaneFocus().?;
     const departure = model.departWorkspace();

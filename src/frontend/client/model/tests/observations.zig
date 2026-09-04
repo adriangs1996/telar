@@ -318,7 +318,7 @@ test "agent navigation and focused attachments derive from committed client stat
         .pane_id = @enumFromInt(9),
         .pane_generation = 3,
     };
-    try model.workspace.bootstrap(local_key.pane_id, first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = local_key.pane_id, .location = first, .size = .{ .cols = 20, .rows = 5 } });
     const agent_entries = [_]agents.AgentInput{
         .{
             .key = local_key,
@@ -386,7 +386,7 @@ test "focused done agent is acknowledged once per completion without a version c
         .pane_id = @enumFromInt(1),
         .pane_generation = 4,
     };
-    try model.workspace.bootstrap(key.pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = key.pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     var entry: agents.AgentInput = .{
         .key = key,
         .location = location,
@@ -425,7 +425,7 @@ test "an unfocused done agent is never acknowledged" {
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
     const area: ui.Rect = .{ .w = 80, .h = 24 };
-    try model.workspace.bootstrap(first, location, .{ .cols = 80, .rows = 24 });
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     const done_key: agents.AgentKey = .{ .pane_id = first, .pane_generation = 2 };
     const entry: agents.AgentInput = .{
@@ -453,7 +453,7 @@ test "pane titles are stored per pane and exposed for the focused pane" {
         .tab_id = @enumFromInt(1),
     };
     const pane: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     try std.testing.expectEqualStrings("", model.focusedPaneTitle());
 
     const commit = (try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "vim" } })).?;

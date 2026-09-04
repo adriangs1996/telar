@@ -1824,10 +1824,10 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     var tabs = tabs_mod.Model.init(gpa);
     defer tabs.deinit();
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try tabs.bootstrap(@enumFromInt(1), .{
+    try tabs.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(4),
-    }, .{ .cols = 50, .rows = 22 });
+    }, .size = .{ .cols = 50, .rows = 22 } });
     _ = try tabs.addCreated(.{
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(9) },
         .position = 1,
@@ -1887,10 +1887,10 @@ test "tab bar marks the tab whose pane is fullscreen" {
     defer tabs.deinit();
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const logs: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(9) };
-    try tabs.bootstrap(@enumFromInt(1), .{
+    try tabs.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(4),
-    }, .{ .cols = 50, .rows = 22 });
+    }, .size = .{ .cols = 50, .rows = 22 } });
     _ = try tabs.addCreated(.{
         .location = logs,
         .position = 1,

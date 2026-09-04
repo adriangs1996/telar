@@ -161,7 +161,7 @@ fn presentationCommit(frame_id: u64) multiplexer.PresentationCommit {
 }
 
 fn prepareModel(model: *client_model.Model, frame_id: u64) !void {
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     model.workspace.findPane(pane_id).?.pending_frame_id = frame_id;
 }
 

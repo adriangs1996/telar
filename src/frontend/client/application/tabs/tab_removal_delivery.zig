@@ -220,7 +220,7 @@ const TestingModel = struct {
         const removed_root: schema.PaneId = @enumFromInt(1);
         const removed_sibling: schema.PaneId = @enumFromInt(2);
         const successor_root: schema.PaneId = @enumFromInt(3);
-        try model.workspace.bootstrap(removed_root, removed, .{ .cols = 40, .rows = 10 });
+        try model.workspace.bootstrap(.{ .pane_id = removed_root, .location = removed, .size = .{ .cols = 40, .rows = 10 } });
         try model.workspace.active().?.model.split(.{ .existing_pane = removed_root, .new_pane = removed_sibling, .location = removed, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
         if (!model.workspace.active().?.model.focusPane(removed_root)) {
             return error.RemovedFocusNotRestored;
@@ -686,7 +686,7 @@ test "DeliverTabRemovalHandler rejects stale absence contradicted by current sta
         .workspace_removed = true,
     });
     _ = workspace_testing.model.departWorkspace();
-    try workspace_testing.model.workspace.bootstrap(@enumFromInt(7), foreign, .{ .cols = 20, .rows = 5 });
+    try workspace_testing.model.workspace.bootstrap(.{ .pane_id = @enumFromInt(7), .location = foreign, .size = .{ .cols = 20, .rows = 5 } });
     var workspace_capture = captureFor(&workspace_testing, workspace_commit);
     const version = workspace_testing.model.version();
     workspace_capture.commit.stale.workspace_revision = version.workspace;

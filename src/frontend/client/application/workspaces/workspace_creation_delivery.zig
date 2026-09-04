@@ -123,7 +123,7 @@ const TestingModel = struct {
         const previous_root: schema.PaneId = @enumFromInt(1);
         const previous_sibling: schema.PaneId = @enumFromInt(2);
         const created_root: schema.PaneId = @enumFromInt(3);
-        try model.workspace.bootstrap(previous_root, previous, .{ .cols = 40, .rows = 10 });
+        try model.workspace.bootstrap(.{ .pane_id = previous_root, .location = previous, .size = .{ .cols = 40, .rows = 10 } });
         try model.workspace.active().?.model.split(.{ .existing_pane = previous_root, .new_pane = previous_sibling, .location = previous, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
         if (!model.workspace.active().?.model.focusPane(previous_root)) {
             return error.PreviousFocusNotRestored;

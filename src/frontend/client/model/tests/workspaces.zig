@@ -29,7 +29,7 @@ test "workspace creation planning requires the attached focused pane" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectEqual(pane_id, model.planWorkspaceCreation().?);
     model.workspace.findPane(pane_id).?.attached = false;
@@ -47,7 +47,7 @@ test "tab creation planning captures the workspace and attached focused pane" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectEqualDeep(client_model.TabCreationPlan{
         .workspace = location.workspace,
@@ -69,7 +69,7 @@ test "workspace departure commits one empty version and captures bounded client 
     const focused: schema.PaneId = @enumFromInt(2);
     const third: schema.PaneId = @enumFromInt(3);
     const area: ui.Rect = .{ .w = 40, .h = 10 };
-    try model.workspace.bootstrap(first, active, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = active, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = focused, .location = active, .axis = .horizontal, .area = area });
     _ = try model.workspace.addCreated(.{
         .location = inactive,
@@ -186,7 +186,7 @@ test "rejected workspace arrival preserves its previous model and version" {
 
     var occupied = client_model.Model.init(std.testing.allocator, true);
     defer occupied.deinit();
-    try occupied.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 30, .rows = 8 });
+    try occupied.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 30, .rows = 8 } });
 
     try std.testing.expectError(error.ModelNotEmpty, occupied.arriveWorkspace(.{
         .pane_id = @enumFromInt(2),
@@ -220,7 +220,7 @@ test "workspace replacement commits the confirmed root and captures retired stat
     const focused: schema.PaneId = @enumFromInt(2);
     const inactive_pane: schema.PaneId = @enumFromInt(3);
     const replacement_pane: schema.PaneId = @enumFromInt(4);
-    try model.workspace.bootstrap(first, previous, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = previous, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = focused, .location = previous, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     _ = try model.workspace.addCreated(.{
         .location = inactive,
@@ -278,7 +278,7 @@ test "workspace replacement captures invalid copy-mode release" {
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), previous, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = previous, .size = .{ .cols = 20, .rows = 5 } });
     try std.testing.expect(model.enterCopyMode());
     const version_before = model.version();
 
@@ -302,7 +302,7 @@ test "rejected workspace replacement preserves the occupied projection" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectError(error.WorkspaceAlreadyActive, model.replaceWorkspace(.{
         .pane_id = @enumFromInt(2),
@@ -360,7 +360,7 @@ test "workspace reconciliation versions semantic dimensions independently" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,
@@ -439,7 +439,7 @@ test "rejected workspace snapshots preserve state and revisions" {
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const empty: client_model.WorkspaceSnapshot = .{
         .workspace = workspace,
         .name = "project",
@@ -490,7 +490,7 @@ test "active tab reconciliation versions pane changes and reports retired panes"
     };
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
-    try model.workspace.bootstrap(first, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const discovered: client_model.TabSnapshot = .{
         .location = location,
         .panes = &.{ first, second },
@@ -537,7 +537,7 @@ test "tab reconciliation rejects excessive pane membership atomically" {
         .tab_id = @enumFromInt(1),
     };
     const root_pane: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(root_pane, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = root_pane, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     var pane_ids: [schema.max_panes_per_tab + 1]schema.PaneId = undefined;
     for (&pane_ids, 0..) |*pane_id, index| {
         pane_id.* = @enumFromInt(@as(u64, @intCast(index + 1)));
@@ -567,7 +567,7 @@ test "inactive tab reconciliation does not advance the visible pane revision" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), active, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = active, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = inactive,
         .position = 1,
@@ -604,7 +604,7 @@ test "tab reconciliation rejects pane identities owned by another tab" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,
@@ -632,7 +632,7 @@ test "pane attachment confirmation changes only active operational state" {
         .tab_id = @enumFromInt(1),
     };
     const discovered: schema.PaneId = @enumFromInt(2);
-    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.addDiscovered(.{ .pane_id = discovered, .location = location, .area = .{ .w = 40, .h = 10 } });
     const attachment: client_model.PaneAttachment = .{ .pane_id = discovered, .location = location };
 
@@ -654,7 +654,7 @@ test "pane attachment confirmation ignores inactive missing and wrong-location p
     const first: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
     const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     const discovered: schema.PaneId = @enumFromInt(3);
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.addDiscovered(.{ .pane_id = discovered, .location = first, .area = .{ .w = 40, .h = 10 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
@@ -689,7 +689,7 @@ test "tab detachment plans exact operational state before a silent commit" {
     const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     const root: schema.PaneId = @enumFromInt(1);
     const sibling: schema.PaneId = @enumFromInt(2);
-    try model.workspace.bootstrap(root, first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = root, .location = first, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = first, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     try std.testing.expect(model.workspace.active().?.model.focusPane(root));
     const root_pane = model.workspace.findPane(root).?;

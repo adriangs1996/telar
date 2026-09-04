@@ -298,7 +298,7 @@ fn installFocusedTarget(model: *client_model.Model) !attachments.Target {
         .pane_id = @enumFromInt(7),
         .pane_generation = 2,
     };
-    try model.workspace.bootstrap(target.pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = target.pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.reconcileAgentSnapshot(.{
         .revision = 1,
         .agents = &.{agents.AgentInput{

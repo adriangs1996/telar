@@ -192,7 +192,7 @@ const TestingModel = struct {
         };
         const pane_id: schema.PaneId = @enumFromInt(1);
         if (occupied) {
-            try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+            try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
         }
 
         return .{ .model = model, .location = location, .pane_id = pane_id };
@@ -295,10 +295,10 @@ test "SelectWorkspaceHandler propagates delivery failure without mutation" {
 test "SelectWorkspaceHandler permits base workspace selection from a worktree" {
     var testing = try TestingModel.init(false);
     defer testing.deinit();
-    try testing.model.workspace.bootstrap(@enumFromInt(1), .{
+    try testing.model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = .{ .worktree = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 20, .rows = 5 });
+    }, .size = .{ .cols = 20, .rows = 5 } });
     try prepareWorkspaceSelection(testing.model);
     var capture: SelectionCapture = .{};
     var handler: SelectWorkspaceHandler = .{

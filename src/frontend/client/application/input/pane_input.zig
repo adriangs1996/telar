@@ -211,7 +211,7 @@ const TestingModel = struct {
             .tab_id = @enumFromInt(1),
         };
         const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(pane_id, location, .{ .cols = 10, .rows = 5 });
+        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 10, .rows = 5 } });
         const pane = model.workspace.findPane(pane_id).?;
         pane.scroll = .{ .total_rows = 20, .offset = 10 };
         pane.input_modes.cursor_keys = true;

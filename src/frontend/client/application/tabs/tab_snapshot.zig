@@ -77,7 +77,7 @@ const TestingModel = struct {
             .tab_id = @enumFromInt(1),
         };
         const root_pane: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(root_pane, location, .{ .cols = 20, .rows = 5 });
+        try model.workspace.bootstrap(.{ .pane_id = root_pane, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
         const discovered_pane: schema.PaneId = @enumFromInt(2);
 

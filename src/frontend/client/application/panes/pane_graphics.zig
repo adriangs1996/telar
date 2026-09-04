@@ -205,10 +205,10 @@ const TestingModel = struct {
         model.* = client_model.Model.init(std.testing.allocator, true);
         errdefer model.deinit();
         const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(pane_id, .{
+        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
             .tab_id = @enumFromInt(1),
-        }, .{ .cols = 2, .rows = 2 });
+        }, .size = .{ .cols = 2, .rows = 2 } });
 
         return .{ .model = model, .pane_id = pane_id };
     }
@@ -251,7 +251,7 @@ const FallbackTestingModel = struct {
         const first: schema.PaneId = @enumFromInt(1);
         const second: schema.PaneId = @enumFromInt(2);
         const third: schema.PaneId = @enumFromInt(3);
-        try model.workspace.bootstrap(first, first_location, .{ .cols = 20, .rows = 5 });
+        try model.workspace.bootstrap(.{ .pane_id = first, .location = first_location, .size = .{ .cols = 20, .rows = 5 } });
         try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = first_location, .axis = .horizontal, .area = .{ .w = 20, .h = 5 } });
         _ = try model.workspace.addCreated(.{
             .location = second_location,

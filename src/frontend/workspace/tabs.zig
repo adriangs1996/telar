@@ -175,16 +175,17 @@ pub const Model = struct {
         }
     }
 
-    pub fn bootstrap(model: *Model, pane_id: schema.PaneId, location: schema.TabLocation, size: schema.TerminalSize) !void {
+    /// Creates the initial tab from its root pane description.
+    ///
+    /// ```zig
+    /// try model.bootstrap(.{ .pane_id = pane_id, .location = location, .size = size });
+    /// ```
+    pub fn bootstrap(model: *Model, root: RootTab) !void {
         if (model.count != 0) {
             return error.ModelNotEmpty;
         }
 
-        try model.replaceWithRoot(.{
-            .pane_id = pane_id,
-            .location = location,
-            .size = size,
-        });
+        try model.replaceWithRoot(root);
     }
 
     /// Constructs a root tab before retiring the current workspace. Failure
@@ -692,10 +693,10 @@ test "selection wraps and moving tabs preserves the active identity" {
     var model = Model.init(std.testing.allocator);
     defer model.deinit();
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try model.bootstrap(@enumFromInt(1), .{
+    try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 20, .rows = 5 });
+    }, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.addCreated(.{
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(2) },
         .position = 1,
@@ -724,7 +725,7 @@ test "canonical tab labels distinguish changes and reject invalid values" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectEqual(LabelChange.changed, try model.applyLabel(location.tab_id, "server"));
     try std.testing.expectEqualStrings("server", model.activeConst().?.labelSlice());
@@ -745,7 +746,7 @@ test "failed tab construction does not publish a shifted slot" {
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    try model.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     var failing: std.testing.FailingAllocator = .init(std.testing.allocator, .{ .fail_index = 0 });
     model.gpa = failing.allocator();
 
@@ -774,7 +775,7 @@ test "root replacement constructs before retiring the current workspace" {
     };
     const previous_pane: schema.PaneId = @enumFromInt(1);
     const replacement_pane: schema.PaneId = @enumFromInt(2);
-    try model.bootstrap(previous_pane, previous, .{ .cols = 20, .rows = 5 });
+    try model.bootstrap(.{ .pane_id = previous_pane, .location = previous, .size = .{ .cols = 20, .rows = 5 } });
     var failing: std.testing.FailingAllocator = .init(std.testing.allocator, .{ .fail_index = 0 });
     model.gpa = failing.allocator();
 
@@ -805,10 +806,10 @@ test "displayed workspace name stays canonical when pane cwd changes" {
     var model = Model.init(std.testing.allocator);
     defer model.deinit();
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try model.bootstrap(@enumFromInt(1), .{
+    try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 20, .rows = 5 });
+    }, .size = .{ .cols = 20, .rows = 5 } });
     @memcpy(model.workspace_name[0..5], "telar");
     model.workspace_name_len = 5;
 
@@ -834,10 +835,10 @@ test "pane gap configuration reaches current and future tabs" {
     defer model.deinit();
     model.setPaneGaps(false);
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try model.bootstrap(@enumFromInt(1), .{
+    try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 20, .rows = 5 });
+    }, .size = .{ .cols = 20, .rows = 5 } });
     try std.testing.expect(!model.active().?.model.layout.pane_gaps);
 
     const created = try model.addCreated(.{
@@ -858,10 +859,10 @@ test "host cell geometry reaches current and future tabs" {
     defer model.deinit();
     model.setCellSize(8, 16);
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try model.bootstrap(@enumFromInt(1), .{
+    try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 20, .rows = 5 });
+    }, .size = .{ .cols = 20, .rows = 5 } });
     try std.testing.expectEqual(@as(u16, 8), model.active().?.model.cell_width_px);
     try std.testing.expectEqual(@as(u16, 16), model.active().?.model.cell_height_px);
 
@@ -898,10 +899,10 @@ test "workspace snapshots restore labels and order without losing pane layouts" 
     var model = Model.init(std.testing.allocator);
     defer model.deinit();
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try model.bootstrap(@enumFromInt(7), .{
+    try model.bootstrap(.{ .pane_id = @enumFromInt(7), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 20, .rows = 5 });
+    }, .size = .{ .cols = 20, .rows = 5 } });
     var workspace_name = [_]u8{ 't', 'e', 'l', 'a', 'r' };
     var logs_label = [_]u8{ 'l', 'o', 'g', 's' };
     var main_label = [_]u8{ 'm', 'a', 'i', 'n' };
@@ -933,10 +934,10 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const root_tab: schema.TabId = @enumFromInt(1);
     const root_pane: schema.PaneId = @enumFromInt(7);
-    try model.bootstrap(root_pane, .{
+    try model.bootstrap(.{ .pane_id = root_pane, .location = .{
         .workspace = workspace,
         .tab_id = root_tab,
-    }, .{ .cols = 20, .rows = 5 });
+    }, .size = .{ .cols = 20, .rows = 5 } });
 
     const empty: WorkspaceSnapshotInput = .{
         .workspace = workspace,
@@ -1028,10 +1029,10 @@ test "workspace reconciliation replaces a tab at full capacity" {
     defer model.deinit();
 
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try model.bootstrap(@enumFromInt(1), .{
+    try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 2, .rows = 1 });
+    }, .size = .{ .cols = 2, .rows = 1 } });
     for (1..max_tabs) |index| {
         const raw_id = index + 1;
         _ = try model.addCreated(.{
@@ -1075,7 +1076,7 @@ test "tab reconciliation preserves the pane selected for workspace restoration" 
         .tab_id = @enumFromInt(2),
     };
     const restored: schema.PaneId = @enumFromInt(42);
-    try model.bootstrap(restored, location, .{ .cols = 30, .rows = 8 });
+    try model.bootstrap(.{ .pane_id = restored, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     const snapshot: PaneSnapshot = .{
         .location = location,
         .panes = &.{ @enumFromInt(10), restored, @enumFromInt(77) },
@@ -1098,7 +1099,7 @@ test "initial tab reconciliation replaces a vanished focused pane" {
     };
     const vanished: schema.PaneId = @enumFromInt(10);
     const replacement: schema.PaneId = @enumFromInt(42);
-    try model.bootstrap(vanished, location, .{ .cols = 30, .rows = 8 });
+    try model.bootstrap(.{ .pane_id = vanished, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     const snapshot: PaneSnapshot = .{
         .location = location,
         .panes = &.{replacement},
@@ -1120,7 +1121,7 @@ test "tab reconciliation rejects duplicate pane membership atomically" {
         .tab_id = @enumFromInt(1),
     };
     const root_pane: schema.PaneId = @enumFromInt(10);
-    try model.bootstrap(root_pane, location, .{ .cols = 30, .rows = 8 });
+    try model.bootstrap(.{ .pane_id = root_pane, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     const snapshot: PaneSnapshot = .{
         .location = location,
         .panes = &.{ root_pane, root_pane },
@@ -1157,7 +1158,7 @@ test "tab reconciliation restores a bookmarked nested split tree" {
     var expected: layout_mod.Snapshot = .{};
     saved.snapshot(area, &expected);
 
-    try model.bootstrap(top_right, location, .{ .cols = 30, .rows = 8 });
+    try model.bootstrap(.{ .pane_id = top_right, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     try std.testing.expect(model.restoreLayoutOnNextSnapshot(location, saved));
     const snapshot: PaneSnapshot = .{
         .location = location,
@@ -1186,7 +1187,7 @@ test "client layout reconciliation restores its saved pane focus" {
     try saved.split(.{ .existing_pane = left, .new_pane = right, .axis = .horizontal });
     try std.testing.expect(saved.focusPane(left));
 
-    try model.bootstrap(right, location, .{ .cols = 30, .rows = 8 });
+    try model.bootstrap(.{ .pane_id = right, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     try std.testing.expect(model.restoreClientLayoutOnNextSnapshot(location, saved));
     const snapshot: PaneSnapshot = .{
         .location = location,
@@ -1211,7 +1212,7 @@ test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
     try saved.split(.{ .existing_pane = @enumFromInt(10), .new_pane = selected, .axis = .horizontal });
     try saved.split(.{ .existing_pane = selected, .new_pane = @enumFromInt(77), .axis = .vertical });
 
-    try model.bootstrap(selected, location, .{ .cols = 30, .rows = 8 });
+    try model.bootstrap(.{ .pane_id = selected, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     try std.testing.expect(model.restoreLayoutOnNextSnapshot(location, saved));
     const snapshot: PaneSnapshot = .{
         .location = location,
@@ -1232,7 +1233,7 @@ test "later tab reconciliation preserves the client layout order" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    try model.bootstrap(@enumFromInt(10), location, .{ .cols = 30, .rows = 8 });
+    try model.bootstrap(.{ .pane_id = @enumFromInt(10), .location = location, .size = .{ .cols = 30, .rows = 8 } });
     const initial: PaneSnapshot = .{
         .location = location,
         .panes = &.{ @enumFromInt(10), @enumFromInt(42) },

@@ -66,10 +66,10 @@ const TestingModel = struct {
         model.* = client_model.Model.init(std.testing.allocator, true);
         errdefer model.deinit();
         const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(pane_id, .{
+        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
             .tab_id = @enumFromInt(1),
-        }, .{ .cols = 10, .rows = 5 });
+        }, .size = .{ .cols = 10, .rows = 5 } });
         model.workspace.findPane(pane_id).?.scroll = .{ .total_rows = 20, .offset = 10 };
 
         return .{ .model = model, .pane_id = pane_id };

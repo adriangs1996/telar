@@ -159,7 +159,7 @@ const TestingModel = struct {
         const second: schema.PaneId = @enumFromInt(2);
         const inactive_pane: schema.PaneId = @enumFromInt(3);
         const area: core.ui.Rect = .{ .w = 40, .h = 10 };
-        try model.workspace.bootstrap(first, active, .{ .cols = 40, .rows = 10 });
+        try model.workspace.bootstrap(.{ .pane_id = first, .location = active, .size = .{ .cols = 40, .rows = 10 } });
         try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = active, .axis = .horizontal, .area = area });
         _ = try model.workspace.addCreated(.{
             .location = inactive,

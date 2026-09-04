@@ -125,7 +125,7 @@ const TestingModel = struct {
         const root: schema.PaneId = @enumFromInt(1);
         const sibling: schema.PaneId = @enumFromInt(2);
         const active_pane: schema.PaneId = @enumFromInt(3);
-        try model.workspace.bootstrap(root, target, .{ .cols = 20, .rows = 5 });
+        try model.workspace.bootstrap(.{ .pane_id = root, .location = target, .size = .{ .cols = 20, .rows = 5 } });
         try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = target, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
         try std.testing.expect(model.workspace.active().?.model.focusPane(root));
         const root_pane = model.workspace.findPane(root).?;

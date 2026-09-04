@@ -142,7 +142,7 @@ const TestingModel = struct {
             .tab_id = @enumFromInt(1),
         };
         const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.workspace.bootstrap(pane_id, location, .{ .cols = 40, .rows = 10 });
+        try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
         model.workspace.active().?.model.setCellSize(8, 16);
 
         return .{ .model = model, .location = location, .pane_id = pane_id };

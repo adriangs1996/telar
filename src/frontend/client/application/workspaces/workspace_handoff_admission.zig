@@ -87,10 +87,10 @@ test "canonical workspace follow ignores stale requests only from an empty proje
     try handler.execute(.canonical_follow);
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
 
-    try model.workspace.bootstrap(@enumFromInt(1), .{
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 20, .rows = 5 });
+    }, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectError(
         error.WorkspaceStillActive,

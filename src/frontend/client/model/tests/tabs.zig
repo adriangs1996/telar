@@ -32,7 +32,7 @@ test "tab position commits version semantic changes only" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,
@@ -59,7 +59,7 @@ test "rejected tab positions do not advance the model" {
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     const other_workspace: schema.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
@@ -87,7 +87,7 @@ test "tab rename advances only the collection revision for a semantic change" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,
@@ -121,7 +121,7 @@ test "rejected tab renames preserve labels and revisions" {
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectError(error.UnexpectedWorkspace, model.renameTab(.{
         .location = .{
@@ -156,7 +156,7 @@ test "tab creation advances collection and active identity revisions" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
 
     const creation = try model.createTab(.{
         .created = .{
@@ -208,7 +208,7 @@ test "tab creation captures invalid copy-mode release" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     try std.testing.expect(model.enterCopyMode());
     const version_before = model.version();
 
@@ -237,7 +237,7 @@ test "rejected tab creations preserve state and revisions" {
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     const size: schema.TerminalSize = .{ .cols = 20, .rows = 5 };
 
     try std.testing.expectError(error.UnexpectedWorkspace, model.createTab(.{
@@ -298,7 +298,7 @@ test "active tab removal advances collection and active identity revisions" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,
@@ -347,7 +347,7 @@ test "inactive tab removal preserves the active identity revision" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,
@@ -385,7 +385,7 @@ test "workspace closure is validated before the last tab is removed" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectError(error.UnexpectedWorkspaceRemoval, model.removeTab(.{
         .location = location,
@@ -422,7 +422,7 @@ test "missing tab removal captures exact tab and workspace absence" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const missing: schema.TabLocation = .{
         .workspace = location.workspace,
         .tab_id = @enumFromInt(9),
@@ -470,7 +470,7 @@ test "tab selection resolves identity position and wrapping offset" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,

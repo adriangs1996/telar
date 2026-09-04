@@ -338,7 +338,7 @@ const TestingModel = struct {
             .workspace = workspace,
             .tab_id = @enumFromInt(2),
         };
-        try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+        try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
         if (with_second) {
             _ = try model.workspace.addCreated(.{
                 .location = second,
@@ -571,10 +571,10 @@ test "stale lifecycle tab removal from a departed workspace is ignored" {
     defer testing.deinit();
     const stale = testing.second;
     _ = testing.model.departWorkspace();
-    try testing.model.workspace.bootstrap(@enumFromInt(7), .{
+    try testing.model.workspace.bootstrap(.{ .pane_id = @enumFromInt(7), .location = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(7),
-    }, .{ .cols = 20, .rows = 5 });
+    }, .size = .{ .cols = 20, .rows = 5 } });
     var capture: RemovalCapture = .{ .model = testing.model };
     var handler: ApplyTabRemovalHandler = .{
         .model = testing.model,

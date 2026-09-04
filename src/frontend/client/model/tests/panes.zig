@@ -30,7 +30,7 @@ test "pane focus resolves identity and direction through one visible revision" {
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
     const area: ui.Rect = .{ .w = 80, .h = 24 };
-    try model.workspace.bootstrap(first, location, .{ .cols = 80, .rows = 24 });
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
 
     const directional = model.focusPane(.{
@@ -81,7 +81,7 @@ test "pane resize owns direction resolution geometry and visible revisions" {
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
     const area: ui.Rect = .{ .w = 101, .h = 41 };
-    try model.workspace.bootstrap(first, location, .{ .cols = 101, .rows = 41 });
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 101, .rows = 41 } });
     const active = &model.workspace.active().?.model;
     try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(active.focusPane(first));
@@ -132,7 +132,7 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
     const area: ui.Rect = .{ .w = 101, .h = 41 };
-    try model.workspace.bootstrap(first, location, .{ .cols = 101, .rows = 41 });
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 101, .rows = 41 } });
     const active = &model.workspace.active().?.model;
     try std.testing.expect(model.togglePaneFullscreen(.{ .area = area }) == null);
     try std.testing.expectEqual(client_model.Version{}, model.version());
@@ -173,7 +173,7 @@ test "pane closure planning requires the active attached pane without mutation" 
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     const closure = model.planPaneClosure().?;
 
@@ -197,7 +197,7 @@ test "active pane retirement advances the visible pane revision once" {
     };
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
-    try model.workspace.bootstrap(first, location, .{ .cols = 40, .rows = 10 });
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
 
     const retirement = model.retirePane(second);
@@ -238,7 +238,7 @@ test "inactive pane retirement changes membership without a visible revision" {
     const active: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
     const inactive: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     const inactive_pane: schema.PaneId = @enumFromInt(2);
-    try model.workspace.bootstrap(@enumFromInt(1), active, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = active, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = inactive,
         .position = 1,
@@ -275,7 +275,7 @@ test "split confirmation replaces a target retired during pane creation" {
     };
     const target: schema.PaneId = @enumFromInt(1);
     const created: schema.PaneId = @enumFromInt(2);
-    try model.workspace.bootstrap(target, location, .{ .cols = 40, .rows = 10 });
+    try model.workspace.bootstrap(.{ .pane_id = target, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     try std.testing.expect(model.workspace.active().?.model.removePane(target));
 
     const commit = try model.commitPaneSplit(.{
@@ -311,7 +311,7 @@ test "inactive split confirmation retains membership without visible revision" {
     const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     const target: schema.PaneId = @enumFromInt(1);
     const created: schema.PaneId = @enumFromInt(3);
-    try model.workspace.bootstrap(target, first, .{ .cols = 40, .rows = 10 });
+    try model.workspace.bootstrap(.{ .pane_id = target, .location = first, .size = .{ .cols = 40, .rows = 10 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,
@@ -351,7 +351,7 @@ test "split confirmation leaves a retired tab unrepresented" {
     const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     const target: schema.PaneId = @enumFromInt(1);
     const created: schema.PaneId = @enumFromInt(3);
-    try model.workspace.bootstrap(target, first, .{ .cols = 40, .rows = 10 });
+    try model.workspace.bootstrap(.{ .pane_id = target, .location = first, .size = .{ .cols = 40, .rows = 10 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,

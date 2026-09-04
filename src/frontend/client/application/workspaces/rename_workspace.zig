@@ -106,10 +106,10 @@ const TestingModel = struct {
         errdefer model.deinit();
 
         const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        try model.workspace.bootstrap(@enumFromInt(1), .{
+        try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
             .workspace = workspace,
             .tab_id = @enumFromInt(1),
-        }, .{ .cols = 20, .rows = 5 });
+        }, .size = .{ .cols = 20, .rows = 5 } });
 
         return .{ .model = model, .workspace = workspace };
     }

@@ -191,10 +191,10 @@ test "LuaActionHandler validates the whole callback before ordered application" 
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
     const pane_id = @as(schema.PaneId, @enumFromInt(7));
-    try model.workspace.bootstrap(pane_id, .{
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(3),
-    }, .{ .cols = 20, .rows = 5 });
+    }, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.setDiagnostic("old failure", .{});
     const effects = [_]Action{ .toggle_sidebar, .new_tab, .close_tab };
     var capture: Capture = .{

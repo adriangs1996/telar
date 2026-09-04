@@ -162,7 +162,7 @@ const TestingModel = struct {
         const first_pane: schema.PaneId = @enumFromInt(1);
         const second_pane: schema.PaneId = @enumFromInt(2);
         const created_pane: schema.PaneId = @enumFromInt(3);
-        try model.workspace.bootstrap(first_pane, first, .{ .cols = 40, .rows = 10 });
+        try model.workspace.bootstrap(.{ .pane_id = first_pane, .location = first, .size = .{ .cols = 40, .rows = 10 } });
 
         return .{
             .model = model,

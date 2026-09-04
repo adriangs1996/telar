@@ -60,7 +60,7 @@ test "pane input planning resolves one attached active target without mutation" 
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.input_modes = .{ .cursor_keys = true, .bracketed_paste = true };
     const inactive_pane: schema.PaneId = @enumFromInt(2);
@@ -102,7 +102,7 @@ test "pane input planning yields ownership to prompts and copy mode" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     model.name_prompt.begin(.create_workspace);
     const prompt_version = model.version();
@@ -127,7 +127,7 @@ test "reported pane focus derives protocol edges outside presentation versions" 
     };
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
-    try model.workspace.bootstrap(first, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const version = model.version();
 
     const disabled = model.syncReportedPaneFocus().?;
@@ -175,7 +175,7 @@ test "reported pane focus distinguishes intentional clear from stale retirement"
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.input_modes.focus_events = true;
     _ = model.syncReportedPaneFocus().?;
@@ -206,7 +206,7 @@ test "pane paste captures one exact target and framing mode outside presentation
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.input_modes.bracketed_paste = true;
     const version = model.version();
@@ -256,7 +256,7 @@ test "pane paste release and copy mode keep one input owner" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     _ = model.beginPanePaste().?;
     try std.testing.expect(!model.enterCopyMode());
@@ -275,7 +275,7 @@ test "pane frame application commits screen copy state and one frame revision" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.scroll = .{ .total_rows = 4, .offset = 2 };
     pane.cursor = .{ .visible = true, .x = 0, .y = 1 };
@@ -326,7 +326,7 @@ test "pane frame application separates stale detach recovery and invalid input" 
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.applied_frame_id = 3;
     var encoded: [512]u8 = undefined;
@@ -368,7 +368,7 @@ test "pane frame apply failure does not publish a frame revision" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.applied_frame_id = 3;
     var encoded: [256]u8 = undefined;
@@ -393,7 +393,7 @@ test "pane graphics fallback versions only semantic changes" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const tab = model.workspace.active().?;
 
     const shown = model.setPaneGraphicsFallback(pane_id, true).?;
@@ -423,7 +423,7 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const tab = model.workspace.active().?;
 
     const visible = (try model.updatePaneMetadata(.{ .cwd = .{
@@ -471,7 +471,7 @@ test "pane foreground metadata versions display changes independently" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const tab = model.workspace.active().?;
 
     const first = (try model.updatePaneMetadata(.{ .foreground = .{
@@ -515,7 +515,7 @@ test "pane cwd allocation failure preserves metadata and revisions" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 2, .rows = 2 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     _ = (try model.updatePaneMetadata(.{ .cwd = .{
         .pane_id = pane_id,
         .path = "/work/telar",
@@ -543,7 +543,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.scroll = .{ .total_rows = 20, .offset = 10 };
     pane.cursor = .{ .visible = true, .x = 2, .y = 4 };
@@ -607,7 +607,7 @@ test "copy mode entry owns one independent model revision" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.scroll = .{ .total_rows = 15, .offset = 10 };
     pane.cursor = .{ .visible = true, .x = 4, .y = 2 };
@@ -645,7 +645,7 @@ test "copy mode plans reject no-ops and stale commits" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
     try std.testing.expect(model.enterCopyMode());
     const version = model.version();
 
@@ -671,7 +671,7 @@ test "copy mode plans the textual link under its cursor without mutation" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: schema.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(pane_id, location, .{ .cols = 40, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 2 }, .text = "file:///tmp/a%20b.txt", .style = .{} });
@@ -695,7 +695,7 @@ test "an active tab transition releases copy authority" {
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const first: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
     const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
-    try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
+    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,
