@@ -25,9 +25,18 @@ const icons = @import("../ui/root.zig").icons;
 const theme_mod = @import("../ui/root.zig").theme;
 
 const Io = std.Io;
+const ensureArrayOnly = lua_value.ensureArrayOnly;
+const ensureOnlyFields = lua_value.ensureOnlyFields;
 const integer = lua_value.integer;
+const optionalIntegerField = lua_value.optionalIntegerField;
+const optionalMebibytes = lua_value.optionalMebibytes;
+const optionalMilliseconds = lua_value.optionalMilliseconds;
+const optionalPositiveId = lua_value.optionalPositiveId;
+const optionalStringField = lua_value.optionalStringField;
 const pop = lua_value.pop;
 const raiseLua = lua_value.raise;
+const requiredIntegerField = lua_value.requiredIntegerField;
+const requiredStringField = lua_value.requiredStringField;
 const string = lua_value.string;
 
 pub const api_version: u16 = 2;
@@ -391,7 +400,7 @@ pub const Generation = struct {
             diagnostic.set("config.lua must return a table", .{});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(state, -1, &.{ "api_version", "client", "runtime", "plugins", "profiles" }, "config", diagnostic);
+        try ensureOnlyFields(state, .{ .index = -1, .allowed = &.{ "api_version", "client", "runtime", "plugins", "profiles" }, .path = "config" }, diagnostic);
 
         _ = lua.lua_getfield(state, -1, "api_version");
         const version = integer(state, -1) orelse {
@@ -445,7 +454,7 @@ pub const Generation = struct {
     fn parseProfile(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
         const state = generation.vm.state;
         const absolute = lua.lua_absindex(state, index);
-        try ensureOnlyFields(state, absolute, &.{ "client", "runtime", "plugins" }, "profile", diagnostic);
+        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "client", "runtime", "plugins" }, .path = "profile" }, diagnostic);
         _ = lua.lua_getfield(state, absolute, "plugins");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
             try plugins_config.parse(state, &generation.snapshot, diagnostic);
@@ -512,13 +521,11 @@ pub const Generation = struct {
             diagnostic.set("config.runtime must be a table", .{});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(
-            state,
-            absolute,
-            &.{ "graphics", "history", "proxy", "agent_descriptions", "engine", "agents", "session" },
-            "config.runtime",
-            diagnostic,
-        );
+        try ensureOnlyFields(state, .{
+            .index = absolute,
+            .allowed = &.{ "graphics", "history", "proxy", "agent_descriptions", "engine", "agents", "session" },
+            .path = "config.runtime",
+        }, diagnostic);
         _ = lua.lua_getfield(state, absolute, "engine");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
             try commands_config.parseEngine(state, &generation.snapshot.runtime, diagnostic);
@@ -559,27 +566,21 @@ pub const Generation = struct {
             return error.InvalidConfig;
         }
         const graphics = lua.lua_absindex(state, -1);
-        try ensureOnlyFields(
-            state,
-            graphics,
-            &.{ "pane_mib", "global_mib" },
-            "config.runtime.graphics",
-            diagnostic,
-        );
-        generation.snapshot.runtime.graphics_pane_bytes = try optionalMebibytes(
-            state,
-            graphics,
-            "pane_mib",
-            generation.snapshot.runtime.graphics_pane_bytes,
-            diagnostic,
-        );
-        generation.snapshot.runtime.graphics_global_bytes = try optionalMebibytes(
-            state,
-            graphics,
-            "global_mib",
-            generation.snapshot.runtime.graphics_global_bytes,
-            diagnostic,
-        );
+        try ensureOnlyFields(state, .{
+            .index = graphics,
+            .allowed = &.{ "pane_mib", "global_mib" },
+            .path = "config.runtime.graphics",
+        }, diagnostic);
+        generation.snapshot.runtime.graphics_pane_bytes = try optionalMebibytes(state, .{
+            .index = graphics,
+            .name = "pane_mib",
+            .default = generation.snapshot.runtime.graphics_pane_bytes,
+        }, diagnostic);
+        generation.snapshot.runtime.graphics_global_bytes = try optionalMebibytes(state, .{
+            .index = graphics,
+            .name = "global_mib",
+            .default = generation.snapshot.runtime.graphics_global_bytes,
+        }, diagnostic);
         const runtime = generation.snapshot.runtime;
         if (runtime.graphics_pane_bytes < 2 * 1024 * 1024 or
             runtime.graphics_pane_bytes > core.graphics.max_image_bytes_per_pane or
@@ -598,13 +599,11 @@ pub const Generation = struct {
             diagnostic.set("config.client must be a table", .{});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(
-            state,
-            absolute,
-            &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "history" },
-            "config.client",
-            diagnostic,
-        );
+        try ensureOnlyFields(state, .{
+            .index = absolute,
+            .allowed = &.{ "prefix", "theme", "icons", "sidebar", "pane_gaps", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "history" },
+            .path = "config.client",
+        }, diagnostic);
 
         _ = lua.lua_getfield(state, absolute, "prefix");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
@@ -722,7 +721,7 @@ pub const Generation = struct {
             return error.InvalidConfig;
         }
 
-        try ensureOnlyFields(state, absolute, &.{ "bottom", "top" }, "config.client.bars", diagnostic);
+        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "bottom", "top" }, .path = "config.client.bars" }, diagnostic);
 
         _ = lua.lua_getfield(state, absolute, "bottom");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
@@ -745,7 +744,7 @@ pub const Generation = struct {
             return error.InvalidConfig;
         }
 
-        try ensureOnlyFields(state, absolute, &.{ "left", "center", "right" }, "config.client.bars.bottom", diagnostic);
+        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "left", "center", "right" }, .path = "config.client.bars.bottom" }, diagnostic);
         var parsed: [3]bars.Source = .{ .empty, .empty, .empty };
         inline for (.{ "left", "center", "right" }, 0..) |field, source_index| {
             _ = lua.lua_getfield(state, absolute, field);
@@ -775,7 +774,7 @@ pub const Generation = struct {
             return error.InvalidConfig;
         }
 
-        try ensureOnlyFields(state, absolute, &.{"right"}, "config.client.bars.top", diagnostic);
+        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"right"}, .path = "config.client.bars.top" }, diagnostic);
         _ = lua.lua_getfield(state, absolute, "right");
         defer pop(state, 1);
         if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
@@ -809,21 +808,21 @@ pub const Generation = struct {
         pop(state, 1);
 
         if (std.mem.eql(u8, kind, "tabs")) {
-            try ensureOnlyFields(state, absolute, &.{"bar_kind"}, "bar tabs", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"bar_kind"}, .path = "bar tabs" }, diagnostic);
             return .tabs;
         }
         if (std.mem.eql(u8, kind, "metrics")) {
-            try ensureOnlyFields(state, absolute, &.{"bar_kind"}, "bar metrics", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"bar_kind"}, .path = "bar metrics" }, diagnostic);
             return .metrics;
         }
         if (std.mem.eql(u8, kind, "static")) {
-            try ensureOnlyFields(state, absolute, &.{ "bar_kind", "value" }, "bar static block", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "bar_kind", "value" }, .path = "bar static block" }, diagnostic);
             _ = lua.lua_getfield(state, absolute, "value");
             defer pop(state, 1);
             return .{ .static = try parseBarContent(state, -1, diagnostic) };
         }
         if (std.mem.eql(u8, kind, "dynamic")) {
-            try ensureOnlyFields(state, absolute, &.{ "bar_kind", "every_ms", "render" }, "bar dynamic block", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "bar_kind", "every_ms", "render" }, .path = "bar dynamic block" }, diagnostic);
             const interval_ns = try parseBarInterval(state, absolute, diagnostic);
             _ = lua.lua_getfield(state, absolute, "render");
             defer pop(state, 1);
@@ -841,13 +840,11 @@ pub const Generation = struct {
     fn parseBarCommand(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !bars.Source {
         const state = generation.vm.state;
         const absolute = lua.lua_absindex(state, index);
-        try ensureOnlyFields(
-            state,
-            absolute,
-            &.{ "bar_kind", "command", "every_ms", "timeout_ms", "render" },
-            "bar command block",
-            diagnostic,
-        );
+        try ensureOnlyFields(state, .{
+            .index = absolute,
+            .allowed = &.{ "bar_kind", "command", "every_ms", "timeout_ms", "render" },
+            .path = "bar command block",
+        }, diagnostic);
 
         const interval_ns = try parseBarInterval(state, absolute, diagnostic);
         _ = lua.lua_getfield(state, absolute, "timeout_ms");
@@ -886,7 +883,7 @@ pub const Generation = struct {
             diagnostic.set("bar command must contain 1..{d} arguments", .{bars.max_command_args});
             return error.InvalidConfig;
         }
-        try ensureArrayOnly(state, command_table, count, "bar command", diagnostic);
+        try ensureArrayOnly(state, .{ .index = command_table, .count = count, .path = "bar command" }, diagnostic);
         for (0..count) |argument_index| {
             _ = lua.lua_geti(state, command_table, @intCast(argument_index + 1));
             const argument_value = string(state, -1) orelse {
@@ -955,31 +952,25 @@ pub const Generation = struct {
             diagnostic.set("config.client.input must be a table", .{});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(
-            state,
-            absolute,
-            &.{ "escape_timeout_ms", "sequence_timeout_ms" },
-            "config.client.input",
-            diagnostic,
-        );
-        generation.snapshot.input_escape_timeout_ns = try optionalMilliseconds(
-            state,
-            absolute,
-            "escape_timeout_ms",
-            generation.snapshot.input_escape_timeout_ns,
-            1,
-            1000,
-            diagnostic,
-        );
-        generation.snapshot.input_sequence_timeout_ns = try optionalMilliseconds(
-            state,
-            absolute,
-            "sequence_timeout_ms",
-            generation.snapshot.input_sequence_timeout_ns,
-            10,
-            10_000,
-            diagnostic,
-        );
+        try ensureOnlyFields(state, .{
+            .index = absolute,
+            .allowed = &.{ "escape_timeout_ms", "sequence_timeout_ms" },
+            .path = "config.client.input",
+        }, diagnostic);
+        generation.snapshot.input_escape_timeout_ns = try optionalMilliseconds(state, .{
+            .index = absolute,
+            .name = "escape_timeout_ms",
+            .default_ns = generation.snapshot.input_escape_timeout_ns,
+            .minimum_ms = 1,
+            .maximum_ms = 1000,
+        }, diagnostic);
+        generation.snapshot.input_sequence_timeout_ns = try optionalMilliseconds(state, .{
+            .index = absolute,
+            .name = "sequence_timeout_ms",
+            .default_ns = generation.snapshot.input_sequence_timeout_ns,
+            .minimum_ms = 10,
+            .maximum_ms = 10_000,
+        }, diagnostic);
     }
 
     fn parseSound(generation: *Generation, index: c_int, diagnostic: *Diagnostic) !void {
@@ -989,13 +980,11 @@ pub const Generation = struct {
             diagnostic.set("config.client.sound must be a table", .{});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(
-            state,
-            absolute,
-            &.{ "enabled", "ready", "needs_input" },
-            "config.client.sound",
-            diagnostic,
-        );
+        try ensureOnlyFields(state, .{
+            .index = absolute,
+            .allowed = &.{ "enabled", "ready", "needs_input" },
+            .path = "config.client.sound",
+        }, diagnostic);
         inline for (.{ "enabled", "ready", "needs_input" }) |field| {
             _ = lua.lua_getfield(state, absolute, field);
             if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
@@ -1017,13 +1006,11 @@ pub const Generation = struct {
             diagnostic.set("config.client.sidebar must be a table", .{});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(
-            state,
-            absolute,
-            &.{ "visible", "renderer" },
-            "config.client.sidebar",
-            diagnostic,
-        );
+        try ensureOnlyFields(state, .{
+            .index = absolute,
+            .allowed = &.{ "visible", "renderer" },
+            .path = "config.client.sidebar",
+        }, diagnostic);
         _ = lua.lua_getfield(state, absolute, "visible");
         if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
             if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
@@ -1094,13 +1081,11 @@ pub const Generation = struct {
             diagnostic.set("keybinding {d} must be a telar.bind value", .{binding_input.position + 1});
             return error.InvalidConfig;
         }
-        try ensureOnlyFields(
-            state,
-            absolute,
-            &.{ "keys", "action", "expression", "prefixed" },
-            "keybinding",
-            diagnostic,
-        );
+        try ensureOnlyFields(state, .{
+            .index = absolute,
+            .allowed = &.{ "keys", "action", "expression", "prefixed" },
+            .path = "keybinding",
+        }, diagnostic);
 
         _ = lua.lua_getfield(state, absolute, "prefixed");
         const prefixed = if (lua.lua_type(state, -1) == lua.LUA_TBOOLEAN)
@@ -1260,8 +1245,8 @@ pub const Generation = struct {
         defer pop(state, 1);
 
         if (std.mem.eql(u8, kind, "split-pane")) {
-            try ensureOnlyFields(state, absolute, &.{ "kind", "direction" }, "action", diagnostic);
-            const direction = try requiredStringField(state, absolute, "direction", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "direction" }, .path = "action" }, diagnostic);
+            const direction = try requiredStringField(state, .{ .index = absolute, .name = "direction" }, diagnostic);
             return .{ .split_pane = if (std.mem.eql(u8, direction, "horizontal"))
                 .horizontal
             else if (std.mem.eql(u8, direction, "vertical"))
@@ -1275,8 +1260,8 @@ pub const Generation = struct {
             std.mem.eql(u8, kind, "navigate-pane") or
             std.mem.eql(u8, kind, "resize-pane"))
         {
-            try ensureOnlyFields(state, absolute, &.{ "kind", "direction" }, "action", diagnostic);
-            const direction = try requiredStringField(state, absolute, "direction", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "direction" }, .path = "action" }, diagnostic);
+            const direction = try requiredStringField(state, .{ .index = absolute, .name = "direction" }, diagnostic);
             const parsed_direction: action_mod.Direction = if (std.mem.eql(u8, direction, "left"))
                 .left
             else if (std.mem.eql(u8, direction, "right"))
@@ -1300,8 +1285,8 @@ pub const Generation = struct {
                 .{ .resize_pane = parsed_direction };
         }
         if (std.mem.eql(u8, kind, "resize-sidebar")) {
-            try ensureOnlyFields(state, absolute, &.{ "kind", "direction" }, "action", diagnostic);
-            const direction = try requiredStringField(state, absolute, "direction", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "direction" }, .path = "action" }, diagnostic);
+            const direction = try requiredStringField(state, .{ .index = absolute, .name = "direction" }, diagnostic);
             if (std.mem.eql(u8, direction, "left")) {
                 return .{ .resize_sidebar = .left };
             }
@@ -1313,8 +1298,8 @@ pub const Generation = struct {
             return error.InvalidConfig;
         }
         if (std.mem.eql(u8, kind, "select-tab")) {
-            try ensureOnlyFields(state, absolute, &.{ "kind", "index" }, "action", diagnostic);
-            const one_based = try requiredIntegerField(state, absolute, "index", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "index" }, .path = "action" }, diagnostic);
+            const one_based = try requiredIntegerField(state, .{ .index = absolute, .name = "index" }, diagnostic);
             if (one_based <= 0 or one_based > 256) {
                 diagnostic.set("select-tab index must be in 1..256", .{});
                 return error.InvalidConfig;
@@ -1322,8 +1307,8 @@ pub const Generation = struct {
             return .{ .select_tab = @intCast(one_based - 1) };
         }
         if (std.mem.eql(u8, kind, "select-workspace")) {
-            try ensureOnlyFields(state, absolute, &.{ "kind", "index" }, "action", diagnostic);
-            const one_based = try requiredIntegerField(state, absolute, "index", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "index" }, .path = "action" }, diagnostic);
+            const one_based = try requiredIntegerField(state, .{ .index = absolute, .name = "index" }, diagnostic);
             if (one_based <= 0 or one_based > 256) {
                 diagnostic.set("select-workspace index must be in 1..256", .{});
                 return error.InvalidConfig;
@@ -1331,8 +1316,8 @@ pub const Generation = struct {
             return .{ .select_workspace = @intCast(one_based - 1) };
         }
         if (std.mem.eql(u8, kind, "select-tab-offset")) {
-            try ensureOnlyFields(state, absolute, &.{ "kind", "offset" }, "action", diagnostic);
-            const offset = try requiredIntegerField(state, absolute, "offset", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "offset" }, .path = "action" }, diagnostic);
+            const offset = try requiredIntegerField(state, .{ .index = absolute, .name = "offset" }, diagnostic);
             if (offset < std.math.minInt(i8) or offset > std.math.maxInt(i8)) {
                 diagnostic.set("select-tab-offset does not fit in i8", .{});
                 return error.InvalidConfig;
@@ -1340,8 +1325,8 @@ pub const Generation = struct {
             return .{ .select_tab_offset = @intCast(offset) };
         }
         if (std.mem.eql(u8, kind, "move-tab")) {
-            try ensureOnlyFields(state, absolute, &.{ "kind", "direction" }, "action", diagnostic);
-            const direction = try requiredStringField(state, absolute, "direction", diagnostic);
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "direction" }, .path = "action" }, diagnostic);
+            const direction = try requiredStringField(state, .{ .index = absolute, .name = "direction" }, diagnostic);
             return .{ .move_tab = if (std.mem.eql(u8, direction, "previous"))
                 .previous
             else if (std.mem.eql(u8, direction, "next"))
@@ -1352,13 +1337,11 @@ pub const Generation = struct {
             } };
         }
         if (std.mem.eql(u8, kind, "command-tab")) {
-            try ensureOnlyFields(
-                state,
-                absolute,
-                &.{ "kind", "command", "label" },
-                "action",
-                diagnostic,
-            );
+            try ensureOnlyFields(state, .{
+                .index = absolute,
+                .allowed = &.{ "kind", "command", "label" },
+                .path = "action",
+            }, diagnostic);
             _ = lua.lua_getfield(state, absolute, "command");
             defer pop(state, 1);
             if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
@@ -1371,7 +1354,7 @@ pub const Generation = struct {
                 diagnostic.set("command-tab command must contain 1..{d} arguments", .{action_mod.CommandTab.max_arguments});
                 return error.InvalidConfig;
             }
-            try ensureArrayOnly(state, command_table, count, "command-tab command", diagnostic);
+            try ensureArrayOnly(state, .{ .index = command_table, .count = count, .path = "command-tab command" }, diagnostic);
             var argument_storage: [action_mod.CommandTab.max_arguments][]const u8 = undefined;
             for (1..count + 1) |item| {
                 _ = lua.lua_rawgeti(state, command_table, @intCast(item));
@@ -1404,10 +1387,9 @@ pub const Generation = struct {
             } };
         }
         if (std.mem.eql(u8, kind, "notification")) {
-            try ensureOnlyFields(
-                state,
-                absolute,
-                &.{
+            try ensureOnlyFields(state, .{
+                .index = absolute,
+                .allowed = &.{
                     "kind",
                     "title",
                     "body",
@@ -1417,12 +1399,11 @@ pub const Generation = struct {
                     "tab_id",
                     "workspace_id",
                 },
-                "action",
-                diagnostic,
-            );
-            const title = try requiredStringField(state, absolute, "title", diagnostic);
-            const body = try optionalStringField(state, absolute, "body", "", diagnostic);
-            const level_name = try optionalStringField(state, absolute, "level", "info", diagnostic);
+                .path = "action",
+            }, diagnostic);
+            const title = try requiredStringField(state, .{ .index = absolute, .name = "title" }, diagnostic);
+            const body = try optionalStringField(state, .{ .index = absolute, .name = "body", .default = "" }, diagnostic);
+            const level_name = try optionalStringField(state, .{ .index = absolute, .name = "level", .default = "info" }, diagnostic);
             const level: core.schema.NotificationLevel = if (std.mem.eql(u8, level_name, "info"))
                 .info
             else if (std.mem.eql(u8, level_name, "success"))
@@ -1435,13 +1416,11 @@ pub const Generation = struct {
                 diagnostic.set("notification level must be info, success, warning, or failure", .{});
                 return error.InvalidConfig;
             };
-            const duration = try optionalIntegerField(
-                state,
-                absolute,
-                "duration_ms",
-                core.schema.default_notification_duration_ms,
-                diagnostic,
-            );
+            const duration = try optionalIntegerField(state, .{
+                .index = absolute,
+                .name = "duration_ms",
+                .default = core.schema.default_notification_duration_ms,
+            }, diagnostic);
             if (duration < core.schema.min_notification_duration_ms or
                 duration > core.schema.max_notification_duration_ms)
             {
@@ -1457,21 +1436,21 @@ pub const Generation = struct {
 
             var target: core.schema.NotificationTarget = .none;
             var target_count: u8 = 0;
-            if (try optionalPositiveId(state, absolute, "pane_id", diagnostic)) |raw| {
+            if (try optionalPositiveId(state, .{ .index = absolute, .name = "pane_id" }, diagnostic)) |raw| {
                 target = .{ .pane = core.schema.id.pane(raw) catch {
                     diagnostic.set("notification pane_id is invalid", .{});
                     return error.InvalidConfig;
                 } };
                 target_count += 1;
             }
-            if (try optionalPositiveId(state, absolute, "tab_id", diagnostic)) |raw| {
+            if (try optionalPositiveId(state, .{ .index = absolute, .name = "tab_id" }, diagnostic)) |raw| {
                 target = .{ .tab = core.schema.id.tab(raw) catch {
                     diagnostic.set("notification tab_id is invalid", .{});
                     return error.InvalidConfig;
                 } };
                 target_count += 1;
             }
-            if (try optionalPositiveId(state, absolute, "workspace_id", diagnostic)) |raw| {
+            if (try optionalPositiveId(state, .{ .index = absolute, .name = "workspace_id" }, diagnostic)) |raw| {
                 target = .{ .workspace = core.schema.id.workspace(raw) catch {
                     diagnostic.set("notification workspace_id is invalid", .{});
                     return error.InvalidConfig;
@@ -1494,15 +1473,13 @@ pub const Generation = struct {
             } };
         }
         if (std.mem.eql(u8, kind, "plugin")) {
-            try ensureOnlyFields(
-                state,
-                absolute,
-                &.{ "kind", "plugin", "action" },
-                "action",
-                diagnostic,
-            );
-            const plugin_name = try requiredStringField(state, absolute, "plugin", diagnostic);
-            const action_name = try requiredStringField(state, absolute, "action", diagnostic);
+            try ensureOnlyFields(state, .{
+                .index = absolute,
+                .allowed = &.{ "kind", "plugin", "action" },
+                .path = "action",
+            }, diagnostic);
+            const plugin_name = try requiredStringField(state, .{ .index = absolute, .name = "plugin" }, diagnostic);
+            const action_name = try requiredStringField(state, .{ .index = absolute, .name = "action" }, diagnostic);
             return .{ .plugin = .{
                 .plugin = core.plugin.stableId(plugin_name),
                 .action = core.plugin.stableId(action_name),
@@ -1512,7 +1489,7 @@ pub const Generation = struct {
             diagnostic.set("unknown action kind '{s}'", .{kind});
             return error.InvalidConfig;
         };
-        try ensureOnlyFields(state, absolute, &.{"kind"}, "action", diagnostic);
+        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"kind"}, .path = "action" }, diagnostic);
         return action;
     }
 };
@@ -1662,156 +1639,6 @@ fn validProfileName(name: []const u8) bool {
     return true;
 }
 
-fn requiredStringField(state: *lua.lua_State, index: c_int, name: [*:0]const u8, diagnostic: *Diagnostic) ![]const u8 {
-    const absolute = lua.lua_absindex(state, index);
-    _ = lua.lua_getfield(state, absolute, name);
-    const value = string(state, -1) orelse {
-        pop(state, 1);
-        diagnostic.set("action.{s} must be a string", .{std.mem.span(name)});
-        return error.InvalidConfig;
-    };
-    pop(state, 1);
-    return value;
-}
-
-fn requiredIntegerField(state: *lua.lua_State, index: c_int, name: [*:0]const u8, diagnostic: *Diagnostic) !lua.lua_Integer {
-    const absolute = lua.lua_absindex(state, index);
-    _ = lua.lua_getfield(state, absolute, name);
-    const value = integer(state, -1) orelse {
-        pop(state, 1);
-        diagnostic.set("action.{s} must be an integer", .{std.mem.span(name)});
-        return error.InvalidConfig;
-    };
-    pop(state, 1);
-    return value;
-}
-
-fn optionalStringField(state: *lua.lua_State, index: c_int, name: [*:0]const u8, default: []const u8, diagnostic: *Diagnostic) ![]const u8 {
-    const absolute = lua.lua_absindex(state, index);
-    _ = lua.lua_getfield(state, absolute, name);
-    defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
-        return default;
-    }
-    return string(state, -1) orelse {
-        diagnostic.set("action.{s} must be a string", .{std.mem.span(name)});
-        return error.InvalidConfig;
-    };
-}
-
-fn optionalIntegerField(state: *lua.lua_State, index: c_int, name: [*:0]const u8, default: lua.lua_Integer, diagnostic: *Diagnostic) !lua.lua_Integer {
-    const absolute = lua.lua_absindex(state, index);
-    _ = lua.lua_getfield(state, absolute, name);
-    defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
-        return default;
-    }
-    return integer(state, -1) orelse {
-        diagnostic.set("action.{s} must be an integer", .{std.mem.span(name)});
-        return error.InvalidConfig;
-    };
-}
-
-fn optionalPositiveId(state: *lua.lua_State, index: c_int, name: [*:0]const u8, diagnostic: *Diagnostic) !?u64 {
-    const absolute = lua.lua_absindex(state, index);
-    _ = lua.lua_getfield(state, absolute, name);
-    defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
-        return null;
-    }
-    const value = integer(state, -1) orelse {
-        diagnostic.set("action.{s} must be an integer", .{std.mem.span(name)});
-        return error.InvalidConfig;
-    };
-    if (value <= 0) {
-        diagnostic.set("action.{s} must be positive", .{std.mem.span(name)});
-        return error.InvalidConfig;
-    }
-    return @intCast(value);
-}
-
-fn optionalMebibytes(state: *lua.lua_State, index: c_int, name: [*:0]const u8, default: usize, diagnostic: *Diagnostic) !usize {
-    const absolute = lua.lua_absindex(state, index);
-    _ = lua.lua_getfield(state, absolute, name);
-    defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
-        return default;
-    }
-    const value = integer(state, -1) orelse {
-        diagnostic.set("runtime graphics {s} must be an integer", .{std.mem.span(name)});
-        return error.InvalidConfig;
-    };
-    if (value <= 0 or value > std.math.maxInt(usize) / (1024 * 1024)) {
-        diagnostic.set("runtime graphics {s} is out of range", .{std.mem.span(name)});
-        return error.InvalidConfig;
-    }
-    return @as(usize, @intCast(value)) * 1024 * 1024;
-}
-
-fn optionalMilliseconds(state: *lua.lua_State, index: c_int, name: [*:0]const u8, default_ns: u64, minimum_ms: u64, maximum_ms: u64, diagnostic: *Diagnostic) !u64 {
-    const absolute = lua.lua_absindex(state, index);
-    _ = lua.lua_getfield(state, absolute, name);
-    defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
-        return default_ns;
-    }
-    const value = integer(state, -1) orelse {
-        diagnostic.set("client input {s} must be an integer", .{std.mem.span(name)});
-        return error.InvalidConfig;
-    };
-    if (value < minimum_ms or value > maximum_ms) {
-        diagnostic.set(
-            "client input {s} must be in {d}..{d} milliseconds",
-            .{ std.mem.span(name), minimum_ms, maximum_ms },
-        );
-        return error.InvalidConfig;
-    }
-    return @as(u64, @intCast(value)) * std.time.ns_per_ms;
-}
-
-fn ensureOnlyFields(state: *lua.lua_State, index: c_int, allowed: []const []const u8, path: []const u8, diagnostic: *Diagnostic) !void {
-    const absolute = lua.lua_absindex(state, index);
-    lua.lua_pushnil(state);
-    while (lua.lua_next(state, absolute) != 0) {
-        const key = string(state, -2) orelse {
-            pop(state, 2);
-            diagnostic.set("{s} contains a non-string field", .{path});
-            return error.InvalidConfig;
-        };
-        const known = for (allowed) |name| {
-            if (std.mem.eql(u8, key, name)) {
-                break true;
-            }
-        } else false;
-        pop(state, 1);
-        if (!known) {
-            diagnostic.set("unknown field {s}.{s}", .{ path, key });
-            pop(state, 1);
-            return error.InvalidConfig;
-        }
-    }
-}
-
-fn ensureArrayOnly(state: *lua.lua_State, index: c_int, count: usize, path: []const u8, diagnostic: *Diagnostic) !void {
-    const absolute = lua.lua_absindex(state, index);
-    lua.lua_pushnil(state);
-    while (lua.lua_next(state, absolute) != 0) {
-        if (lua.lua_type(state, -2) != lua.LUA_TNUMBER or lua.lua_isinteger(state, -2) == 0) {
-            pop(state, 2);
-            diagnostic.set("{s} must be an array", .{path});
-            return error.InvalidConfig;
-        }
-        const key = integer(state, -2).?;
-        const valid = key >= 1 and key <= count;
-        pop(state, 1);
-        if (!valid) {
-            pop(state, 1);
-            diagnostic.set("{s} must be an array", .{path});
-            return error.InvalidConfig;
-        }
-    }
-}
-
 fn parseBarInterval(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !u64 {
     const absolute = lua.lua_absindex(state, index);
     _ = lua.lua_getfield(state, absolute, "every_ms");
@@ -1872,7 +1699,7 @@ fn parseBarContent(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic)
         diagnostic.set("bar content exceeds {d} segments", .{bars.max_segments});
         return error.InvalidBarContent;
     }
-    try ensureArrayOnly(state, absolute, count, "bar content", diagnostic);
+    try ensureArrayOnly(state, .{ .index = absolute, .count = count, .path = "bar content" }, diagnostic);
     for (0..count) |segment_index| {
         _ = lua.lua_geti(state, absolute, @intCast(segment_index + 1));
         const segment = parseBarSegment(state, -1, diagnostic) catch |err| {
@@ -1906,13 +1733,11 @@ fn parseBarSegment(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic)
         return error.InvalidBarContent;
     }
 
-    try ensureOnlyFields(
-        state,
-        absolute,
-        &.{ "text", "icon", "fg", "bg", "bold", "italic", "faint", "underline", "strikethrough" },
-        "bar segment",
-        diagnostic,
-    );
+    try ensureOnlyFields(state, .{
+        .index = absolute,
+        .allowed = &.{ "text", "icon", "fg", "bg", "bold", "italic", "faint", "underline", "strikethrough" },
+        .path = "bar segment",
+    }, diagnostic);
     _ = lua.lua_getfield(state, absolute, "text");
     const text_value = if (lua.lua_type(state, -1) == lua.LUA_TNIL)
         ""
@@ -2128,20 +1953,20 @@ fn parseInputDecision(state: *lua.lua_State, index: c_int, callback: *const Call
         diagnostic.set("Lua expression must return a telar.input value", .{});
         return error.InvalidExpressionResult;
     }
-    const kind = try requiredStringField(state, absolute, "input_kind", diagnostic);
+    const kind = try requiredStringField(state, .{ .index = absolute, .name = "input_kind" }, diagnostic);
     if (std.mem.eql(u8, kind, "consume")) {
-        try ensureOnlyFields(state, absolute, &.{"input_kind"}, "input decision", diagnostic);
+        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"input_kind"}, .path = "input decision" }, diagnostic);
         return .consume;
     }
     if (std.mem.eql(u8, kind, "forward")) {
-        try ensureOnlyFields(state, absolute, &.{"input_kind"}, "input decision", diagnostic);
+        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"input_kind"}, .path = "input decision" }, diagnostic);
         var keys: InputKeys = .{};
         @memcpy(keys.items[0..callback.trigger_len], callback.trigger[0..callback.trigger_len]);
         keys.len = callback.trigger_len;
         return .{ .forward_binding = keys };
     }
     if (std.mem.eql(u8, kind, "keys")) {
-        try ensureOnlyFields(state, absolute, &.{ "input_kind", "keys" }, "input decision", diagnostic);
+        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "input_kind", "keys" }, .path = "input decision" }, diagnostic);
         _ = lua.lua_getfield(state, absolute, "keys");
         defer pop(state, 1);
         if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
@@ -2172,7 +1997,7 @@ fn parseInputDecision(state: *lua.lua_State, index: c_int, callback: *const Call
         return .{ .keys = keys };
     }
     if (std.mem.eql(u8, kind, "paste")) {
-        try ensureOnlyFields(state, absolute, &.{ "input_kind", "text" }, "input decision", diagnostic);
+        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "input_kind", "text" }, .path = "input decision" }, diagnostic);
         _ = lua.lua_getfield(state, absolute, "text");
         defer pop(state, 1);
         const value = string(state, -1) orelse {
