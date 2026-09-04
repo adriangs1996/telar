@@ -1539,15 +1539,15 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
     defer screen.deinit();
 
     _ = try state.render(&screen, .{ .model = &model, .force = true });
-    const workspace_mark = for (state.graphics_plan.icons.slice()) |mark| {
-        if (mark.icon == .workspace_menu) {
+    const logo_mark = for (state.graphics_plan.icons.slice()) |mark| {
+        if (mark.icon == .telar_mark) {
             break mark;
         }
     } else null;
-    try std.testing.expect(workspace_mark != null);
+    try std.testing.expect(logo_mark != null);
     try std.testing.expectEqualStrings(
-        "W",
-        screen.back.at(workspace_mark.?.area.x, workspace_mark.?.area.y).?.text(),
+        " ",
+        screen.back.at(logo_mark.?.area.x, logo_mark.?.area.y).?.text(),
     );
     try std.testing.expect(state.graphics_plan.icons.len != 0);
     _ = try state.prepareGraphics(&empty_notifications, true);
@@ -1574,15 +1574,15 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
     defer screen.deinit();
 
     _ = try state.render(&screen, .{ .model = &model, .force = true });
-    const marker = for (state.hits.registered()) |entry| {
-        if (std.meta.activeTag(entry.action) == .toggle_workspace_list) {
+    const logo = for (state.hits.registered()) |entry| {
+        if (std.meta.activeTag(entry.action) == .toggle_sidebar) {
             break entry.rect;
         }
     } else null;
-    try std.testing.expect(marker != null);
+    try std.testing.expect(logo != null);
     try std.testing.expectEqualStrings(
-        "\u{2756}",
-        screen.back.at(marker.?.x + 1, marker.?.y).?.text(),
+        "\u{25a3}",
+        screen.back.at(logo.?.x + 1, logo.?.y).?.text(),
     );
     try std.testing.expectEqual(@as(u8, 0), state.graphics_plan.icons.len);
 }
@@ -1972,15 +1972,15 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     try std.testing.expect(sidebar_toggle.intent == .toggle_sidebar);
     try std.testing.expectEqual(sidebar_requested, state.sidebar_requested);
 
-    // Locate hits on the top row instead of pinning glyph widths.
+    // Locate hits on the top row instead of pinning glyph widths. While the
+    // list fits, nothing on the row collapses it.
     var workspace_x: ?u16 = null;
-    var marker_x: ?u16 = null;
     var x: u16 = 0;
     while (x < 100) : (x += 1) {
         const action = state.hits.at(x, 0) orelse continue;
         switch (std.meta.activeTag(action)) {
             .select_workspace => workspace_x = workspace_x orelse x,
-            .toggle_workspace_list => marker_x = marker_x orelse x,
+            .toggle_workspace_list => return error.TestUnexpectedResult,
             else => {},
         }
     }
@@ -1995,11 +1995,28 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         interaction.intent,
     );
 
+    // Once collapsed, the counter is the one mouse target that expands it.
+    state.workspace_list_collapsed = true;
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .workspaces = &workspaces,
+        .force = true,
+    });
+    var counter_x: ?u16 = null;
+    x = 0;
+    while (x < 100) : (x += 1) {
+        const action = state.hits.at(x, 0) orelse continue;
+        if (std.meta.activeTag(action) == .toggle_workspace_list) {
+            counter_x = x;
+            break;
+        }
+    }
+
     const workspace_list_toggle = state.handleMouse(.{
-        .x = marker_x.?,
+        .x = counter_x.?,
         .y = 0,
         .kind = .press,
     });
     try std.testing.expect(workspace_list_toggle.intent == .toggle_workspace_list);
-    try std.testing.expect(!state.workspace_list_collapsed);
+    try std.testing.expect(state.workspace_list_collapsed);
 }

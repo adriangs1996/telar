@@ -63,73 +63,55 @@ pub fn render(context: *widget.Context, input: Input) void {
     };
     context.buffer.fill(area, .{ .glyph = " ", .style = bar_style });
 
-    const toggle: ui.Rect = .{
+    // The telar mark is the only control before the workspace list: it opens
+    // and closes the sidebar, and dims while the sidebar is hidden. Collapsing
+    // the list is a keyboard action, or the counter shown while collapsed.
+    // The mark spans two cells so its square can grow to the row's height.
+    const logo: ui.Rect = .{
         .x = area.x,
         .y = area.y,
         .w = @min(area.w, 4),
         .h = 1,
     };
 
-    context.hits.add(toggle, .toggle_sidebar);
+    context.hits.add(logo, .toggle_sidebar);
 
-    const toggle_style: ui.Style =
+    const logo_style: ui.Style =
         if (context.isHovered(.toggle_sidebar))
             .{
                 .fg = context.palette.accent,
                 .bg = context.palette.surface1,
-                .flags = .{ .bold = true, .underline = .single },
+                .flags = .{ .bold = true },
             }
         else
             .{
-                .fg = context.palette.accent,
+                .fg = if (input.sidebar_visible) context.palette.accent else context.palette.subtext0,
                 .bg = context.palette.panel_bg,
-                .flags = .{
-                    .bold = true,
-                },
+                .flags = .{ .bold = true },
             };
 
-    context.buffer.fill(toggle, .{ .glyph = " ", .style = toggle_style });
+    context.buffer.fill(logo, .{ .glyph = " ", .style = logo_style });
 
-    if (toggle.w != 0) {
+    if (logo.w >= 2) {
         _ = context.drawIcon(.{
-            .area = toggle,
-            .point = .{ .x = toggle.x + (toggle.w - 1) / 2, .y = toggle.y },
-            .icon = if (input.sidebar_visible) .sidebar_collapse else .sidebar_expand,
-            .style = toggle_style,
+            .area = logo,
+            .point = .{ .x = logo.x + 1, .y = logo.y },
+            .icon = .telar_mark,
+            .style = logo_style,
+            .columns = if (logo.w >= 3) 2 else 1,
         });
     }
 
     // The badge is reserved first so a long workspace list cannot push the
     // interception or installed-trust signal off screen.
-    const safe_start = toggle.x + toggle.w + 1;
+    const safe_start = logo.x + logo.w;
     const badge_visible = input.proxy_tls_active or input.proxy_system_trusted;
     const badge_width: u16 = if (badge_visible) @min(area.w, 3) else 0;
     const right_capacity = area.x + area.w -| badge_width -| safe_start -| 4;
     const right_width = @min(rightDesiredWidth(input), right_capacity);
     const row_end = area.x + area.w - badge_width - right_width;
-    const safe_width = row_end -| safe_start;
-    const marker_width = @min(@as(u16, 3), safe_width);
     const active_id = activeWorkspaceId(input.location);
-    const group_x = @min(safe_start, row_end);
-    const marker_rect: ui.Rect = .{ .x = group_x, .y = area.y, .w = marker_width, .h = 1 };
-    context.hits.add(marker_rect, .toggle_workspace_list);
-    const marker_style: ui.Style = .{
-        .fg = if (context.isHovered(.toggle_workspace_list))
-            context.palette.subtext0
-        else
-            context.palette.overlay0,
-        .bg = context.palette.panel_bg,
-    };
-    context.buffer.fill(marker_rect, .{ .glyph = " ", .style = marker_style });
-    if (marker_width >= 2) {
-        _ = context.drawIcon(.{
-            .area = marker_rect,
-            .point = .{ .x = group_x + 1, .y = area.y },
-            .icon = .workspace_menu,
-            .style = marker_style,
-        });
-    }
-    const list_x = group_x + marker_width;
+    const list_x = @min(safe_start, row_end);
 
     if (input.workspaces.count == 0) {
         renderFallback(context, input, .{ .x = list_x, .y = area.y, .w = row_end -| list_x, .h = 1 });
@@ -462,7 +444,7 @@ test "the active name replaces only the active workspace snapshot name" {
     try std.testing.expect(!listFits(names, 12));
 }
 
-test "sidebar toggle publishes the matching Nerd Font action icon" {
+test "the telar mark toggles the sidebar and dims while it is hidden" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
@@ -488,14 +470,20 @@ test "sidebar toggle publishes the matching Nerd Font action icon" {
 
     render(&context, input);
     try std.testing.expect(plan.len >= 1);
-    try std.testing.expectEqual(ui.icons.Icon.sidebar_collapse, plan.slice()[0].icon);
+    try std.testing.expectEqual(ui.icons.Icon.telar_mark, plan.slice()[0].icon);
+    try std.testing.expectEqual(@as(u16, 2), plan.slice()[0].area.w);
+    try std.testing.expectEqual(widget.Action.toggle_sidebar, hits.at(1, 0).?);
+    try std.testing.expectEqualDeep(ui.theme.default_theme.palette.accent, buffer.at(1, 0).?.style.fg);
 
     plan.reset();
+    hits = .{};
     var hidden = input;
     hidden.sidebar_visible = false;
     render(&context, hidden);
     try std.testing.expect(plan.len >= 1);
-    try std.testing.expectEqual(ui.icons.Icon.sidebar_expand, plan.slice()[0].icon);
+    try std.testing.expectEqual(ui.icons.Icon.telar_mark, plan.slice()[0].icon);
+    try std.testing.expectEqual(widget.Action.toggle_sidebar, hits.at(1, 0).?);
+    try std.testing.expectEqualDeep(ui.theme.default_theme.palette.subtext0, buffer.at(1, 0).?.style.fg);
 }
 
 test "proxy badge reserves the right edge before workspace navigation" {
@@ -622,7 +610,7 @@ test "configured right content stops before the permanent proxy badge" {
     );
 }
 
-test "workspace navigation starts after the sidebar toggle" {
+test "workspace navigation starts right after the telar mark" {
     var buffer = try ui.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
@@ -651,8 +639,13 @@ test "workspace navigation starts after the sidebar toggle" {
         .proxy_tls_active = false,
     });
 
-    // The marker starts after the four-column toggle and its one-column gap.
-    try std.testing.expectEqual(widget.Action.toggle_workspace_list, hits.at(6, 0).?);
-    try std.testing.expectEqual(widget.Action.active_workspace, hits.at(8, 0).?);
-    try std.testing.expect(hits.at(15, 0) == null);
+    // The mark takes four columns and the list follows with nothing between.
+    try std.testing.expectEqual(widget.Action.toggle_sidebar, hits.at(0, 0).?);
+    try std.testing.expectEqual(widget.Action.toggle_sidebar, hits.at(3, 0).?);
+    try std.testing.expectEqual(widget.Action.active_workspace, hits.at(4, 0).?);
+    try std.testing.expectEqual(widget.Action.active_workspace, hits.at(10, 0).?);
+    try std.testing.expect(hits.at(11, 0) == null);
+    for (hits.registered()) |entry| {
+        try std.testing.expect(std.meta.activeTag(entry.action) != .toggle_workspace_list);
+    }
 }

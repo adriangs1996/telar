@@ -1,18 +1,31 @@
 //! Embedded Nerd Font icon rasterization and KGP placement.
 //!
 //! The widget frame supplies a bounded list of semantic marks. Preparation
-//! deduplicates their glyph/color tuples and builds one opaque atlas outside
-//! the interactive path. Cell fallbacks remain underneath every placement.
+//! deduplicates their glyph/color tuples and builds one atlas outside the
+//! interactive path. Glyph slots are opaque over their cell background; the
+//! telar mark keeps its own alpha, so it composes over any background the
+//! host paints, including one Telar does not know. Cell fallbacks remain
+//! underneath every placement.
 
 const std = @import("std");
 const core = @import("telar-core");
 const kitty = @import("kitty.zig");
+const bitmap = @import("bitmap.zig");
 const raster = @import("rasterizer.zig");
 const ui_icons = @import("../ui/root.zig").icons;
 
 const Io = std.Io;
 
 pub const embedded_font: []const u8 = @embedFile("../assets/TelarNerdIcons-Regular.ttf");
+
+/// The telar mark is artwork rather than a font glyph, checked in at the
+/// largest size a cell slot can use.
+const mark_source: []const u8 = @embedFile("../assets/telar-mark-64.rgba");
+const mark_source_side: u32 = 64;
+
+comptime {
+    std.debug.assert(mark_source.len == mark_source_side * mark_source_side * 4);
+}
 
 const image_id: u32 = 0x80000004;
 const first_placement_id: u32 = 0x80000200;
@@ -24,7 +37,12 @@ const Slot = struct {
     icon: ui_icons.Icon,
     foreground: [3]u8,
     background: [3]u8,
+    /// Cells the slot spans sideways. Glyphs take one; artwork may take two
+    /// so its square can grow to the row's height.
+    columns: u8,
 };
+
+const max_columns: u8 = 2;
 
 const Placement = struct {
     area: core.ui.Rect,
@@ -41,6 +59,7 @@ pub const Renderer = struct {
     pixel_width: u16 = 0,
     pixel_height: u16 = 0,
     atlas: []u8 = &.{},
+    atlas_width: u32 = 0,
     atlas_height: u32 = 0,
     slots: [ui_icons.max_marks]Slot = undefined,
     slot_count: u8 = 0,
@@ -130,6 +149,7 @@ pub const Renderer = struct {
                         .icon = frame,
                         .foreground = mark.foreground,
                         .background = mark.background,
+                        .columns = wanted.columns,
                     });
                 }
             }
@@ -138,8 +158,10 @@ pub const Renderer = struct {
         }
         const next_placement_count: u8 = @intCast(marks.len);
         const raster_size = fitCell(renderer.cell_width, renderer.cell_height);
+        const atlas_width = @as(u32, raster_size.width) * widestSlot(next_slots[0..next_slot_count]);
         const slots_changed = renderer.pixel_width != raster_size.width or
             renderer.pixel_height != raster_size.height or
+            renderer.atlas_width != atlas_width or
             !slotsEqual(
                 renderer.slots[0..renderer.slot_count],
                 next_slots[0..next_slot_count],
@@ -148,7 +170,7 @@ pub const Renderer = struct {
         if (slots_changed) {
             const atlas_height = std.math.mul(u32, raster_size.height, next_slot_count) catch
                 return error.IconAtlasTooLarge;
-            const atlas_len = try rgbaLength(raster_size.width, atlas_height);
+            const atlas_len = try rgbaLength(atlas_width, atlas_height);
             if (atlas_len > max_atlas_bytes) {
                 return error.IconAtlasTooLarge;
             }
@@ -158,12 +180,14 @@ pub const Renderer = struct {
             try renderAtlas(text, .{
                 .pixels = next_atlas,
                 .raster_size = raster_size,
+                .atlas_width = atlas_width,
                 .slots = next_slots[0..next_slot_count],
             });
             if (renderer.atlas.len != 0) {
                 renderer.gpa.free(renderer.atlas);
             }
             renderer.atlas = next_atlas;
+            renderer.atlas_width = atlas_width;
             renderer.atlas_height = atlas_height;
             renderer.pixel_width = raster_size.width;
             renderer.pixel_height = raster_size.height;
@@ -237,7 +261,7 @@ pub const Renderer = struct {
                 .image = .{
                     .key = .{ .image_id = image_id, .generation = 1 },
                     .format = .rgba,
-                    .width = renderer.pixel_width,
+                    .width = renderer.atlas_width,
                     .height = renderer.atlas_height,
                     .byte_len = renderer.atlas.len,
                 },
@@ -265,6 +289,7 @@ pub const Renderer = struct {
                 );
             }
             for (renderer.placements[0..renderer.placement_count], 0..) |placement, index| {
+                const columns: u32 = renderer.slots[placement.slot].columns;
                 written += try kitty.writePlacement(writer, .{
                     .image_id = image_id,
                     .placement_id = first_placement_id + @as(u32, @intCast(index)),
@@ -275,9 +300,9 @@ pub const Renderer = struct {
                         .offset_y = 0,
                         .source_x = 0,
                         .source_y = @as(u32, placement.slot) * renderer.pixel_height,
-                        .source_width = renderer.pixel_width,
+                        .source_width = columns * renderer.pixel_width,
                         .source_height = renderer.pixel_height,
-                        .columns = 1,
+                        .columns = columns,
                         .rows = 1,
                     },
                     .z = z_index,
@@ -295,7 +320,17 @@ fn slotFromMark(mark: ui_icons.Mark) Slot {
         .icon = mark.icon,
         .foreground = mark.foreground,
         .background = mark.background,
+        .columns = @intCast(std.math.clamp(mark.area.w, 1, max_columns)),
     };
+}
+
+fn widestSlot(slots: []const Slot) u32 {
+    var widest: u32 = 1;
+    for (slots) |slot| {
+        widest = @max(widest, slot.columns);
+    }
+
+    return widest;
 }
 
 fn ensureSlot(slots: *[ui_icons.max_marks]Slot, count: *u8, wanted: Slot) !u8 {
@@ -380,9 +415,13 @@ fn scaledDimension(value: u16, longest: u16) u16 {
 const AtlasInput = struct {
     pixels: []u8,
     raster_size: RasterSize,
+    atlas_width: u32,
     slots: []const Slot,
 };
 
+// Every slot is drawn into one contiguous cell-sized surface, then copied
+// into its atlas row. Rows are as wide as the widest slot; a narrower slot
+// leaves the rest of its row transparent and never places it.
 fn renderAtlas(text: *raster.Rasterizer, atlas: AtlasInput) !void {
     const icon_size = @min(atlas.raster_size.width, atlas.raster_size.height);
     try text.setPixelHeight(icon_size);
@@ -392,27 +431,87 @@ fn renderAtlas(text: *raster.Rasterizer, atlas: AtlasInput) !void {
         2,
     );
     const baseline = line_top + metrics.ascender;
-    const slot_bytes = @as(usize, atlas.raster_size.width) * atlas.raster_size.height * 4;
+    const row_bytes = @as(usize, atlas.atlas_width) * atlas.raster_size.height * 4;
+    var cell_pixels: [@as(usize, max_columns) * max_pixel_dimension * max_pixel_dimension * 4]u8 = undefined;
     for (atlas.slots, 0..) |slot, index| {
+        const width = @as(u32, atlas.raster_size.width) * slot.columns;
         const surface: raster.Surface = .{
-            .pixels = atlas.pixels[index * slot_bytes ..][0..slot_bytes],
-            .width = atlas.raster_size.width,
+            .pixels = cell_pixels[0 .. @as(usize, width) * atlas.raster_size.height * 4],
+            .width = width,
             .height = atlas.raster_size.height,
         };
-        fill(surface, slot.background);
-        const advance = try text.drawText(.{
-            .surface = surface,
-            .origin = .{ .x = 0, .y = baseline },
-            .text = slot.icon.nerdGlyph(),
-            .color = .{
-                .red = slot.foreground[0],
-                .green = slot.foreground[1],
-                .blue = slot.foreground[2],
-            },
-            .max_width = atlas.raster_size.width,
-        });
-        if (advance == 0) {
-            return error.EmptyIconGlyph;
+        if (slot.icon == .telar_mark) {
+            paintMark(surface);
+        } else {
+            fill(surface, slot.background);
+            const advance = try text.drawText(.{
+                .surface = surface,
+                .origin = .{ .x = 0, .y = baseline },
+                .text = slot.icon.nerdGlyph(),
+                .color = .{
+                    .red = slot.foreground[0],
+                    .green = slot.foreground[1],
+                    .blue = slot.foreground[2],
+                },
+                .max_width = width,
+            });
+            if (advance == 0) {
+                return error.EmptyIconGlyph;
+            }
+        }
+
+        const row = atlas.pixels[index * row_bytes ..][0..row_bytes];
+        @memset(row, 0);
+        var y: usize = 0;
+        while (y < atlas.raster_size.height) : (y += 1) {
+            const line = @as(usize, width) * 4;
+            @memcpy(row[y * atlas.atlas_width * 4 ..][0..line], surface.pixels[y * line ..][0..line]);
+        }
+    }
+}
+
+/// Every destination pixel averages this many bilinear taps per axis, so a
+/// 64 px source shrunk to a cell keeps its threads instead of skipping them.
+const mark_taps: u32 = 4;
+
+/// Paints the embedded mark into the slot with straight alpha: transparent
+/// outside its square and its rounded corners, so the host terminal composes
+/// it over whatever it paints behind the bar.
+fn paintMark(surface: raster.Surface) void {
+    @memset(surface.pixels, 0);
+    const icon_size = @min(surface.width, surface.height);
+    const offset_x = (surface.width - icon_size) / 2;
+    const offset_y = (surface.height - icon_size) / 2;
+    const source: bitmap.Bitmap = .{ .pixels = mark_source, .stride = mark_source_side, .side = mark_source_side };
+    const fine_size = icon_size * mark_taps;
+    const tap_count: u32 = mark_taps * mark_taps;
+
+    var y: u32 = 0;
+    while (y < icon_size) : (y += 1) {
+        var x: u32 = 0;
+        while (x < icon_size) : (x += 1) {
+            var premultiplied: [3]u32 = @splat(0);
+            var alpha: u32 = 0;
+            var tap_y: u32 = 0;
+            while (tap_y < mark_taps) : (tap_y += 1) {
+                var tap_x: u32 = 0;
+                while (tap_x < mark_taps) : (tap_x += 1) {
+                    const rgba = bitmap.sample(source, .{ .x = x * mark_taps + tap_x, .y = y * mark_taps + tap_y }, fine_size);
+                    alpha += rgba[3];
+                    inline for (0..3) |channel| {
+                        premultiplied[channel] += @as(u32, rgba[channel]) * rgba[3];
+                    }
+                }
+            }
+
+            const index = (@as(usize, offset_y + y) * surface.width + offset_x + x) * 4;
+            surface.pixels[index + 3] = @intCast((alpha + tap_count / 2) / tap_count);
+            if (alpha == 0) {
+                continue;
+            }
+            inline for (0..3) |channel| {
+                surface.pixels[index + channel] = @intCast((premultiplied[channel] + alpha / 2) / alpha);
+            }
         }
     }
 }
@@ -457,6 +556,56 @@ test "embedded subset rasterizes every configured Nerd Font icon" {
         }
         try std.testing.expect(visible);
     }
+}
+
+test "the telar mark slot keeps its weft and stays transparent outside its square" {
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 20, .cell_height = 40 });
+    try renderer.prepare(&.{.{
+        .area = .{ .w = 1, .h = 1 },
+        .icon = .telar_mark,
+        .foreground = .{ 0, 0, 0 },
+        .background = .{ 0, 0, 0 },
+    }});
+
+    var peach = false;
+    var index: usize = 0;
+    while (index < renderer.atlas.len) : (index += 4) {
+        const pixel = renderer.atlas[index..][0..4];
+        if (pixel[3] > 200 and pixel[0] > 200 and pixel[0] > pixel[2] + 40) {
+            peach = true;
+            break;
+        }
+    }
+    try std.testing.expect(peach);
+    // The rows above the square icon are fully transparent.
+    try std.testing.expectEqualSlices(u8, &.{ 0, 0, 0, 0 }, renderer.atlas[0..4]);
+    // The container's middle is opaque.
+    const middle = ((@as(usize, renderer.pixel_height) / 2) * renderer.pixel_width + renderer.pixel_width / 2) * 4;
+    try std.testing.expectEqual(@as(u8, 255), renderer.atlas[middle + 3]);
+}
+
+test "a two-column mark widens the atlas and places two cells" {
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
+    try renderer.prepare(&.{
+        .{ .area = .{ .x = 1, .w = 2, .h = 1 }, .icon = .telar_mark, .foreground = .{ 0, 0, 0 }, .background = .{ 0, 0, 0 } },
+        .{ .area = .{ .x = 5, .w = 1, .h = 1 }, .icon = .cpu, .foreground = .{ 255, 255, 255 }, .background = .{ 20, 20, 20 } },
+    });
+    try std.testing.expectEqual(@as(u32, 20), renderer.atlas_width);
+    try std.testing.expectEqual(@as(u32, 40), renderer.atlas_height);
+    // The glyph slot keeps its right half transparent.
+    const glyph_row = 20 * renderer.atlas_width * 4;
+    try std.testing.expectEqual(@as(u8, 255), renderer.atlas[glyph_row + 3]);
+    try std.testing.expectEqual(@as(u8, 0), renderer.atlas[glyph_row + 15 * 4 + 3]);
+
+    var output: [65536]u8 = undefined;
+    var writer = Io.Writer.fixed(&output);
+    _ = try renderer.write(&writer);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "w=20,h=20,c=2,r=1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "w=10,h=20,c=1,r=1") != null);
 }
 
 test "icon slots preserve the terminal cell aspect ratio" {

@@ -29,6 +29,16 @@ pub fn markerPolicy(markers: schema.AgentAttachmentMarkers) attachments.MarkerPo
     };
 }
 
+/// Reports whether the agent's editor turns Enter after a trailing backslash
+/// into a newline. Claude and Pi do; Codex submits the prompt regardless.
+///
+/// ```zig
+/// if (backslashContinuesPrompt(policy) and attachments.promptContinuesAtCursor(screen)) return;
+/// ```
+pub fn backslashContinuesPrompt(policy: attachments.MarkerPolicy) bool {
+    return policy != .ordered;
+}
+
 /// Reports whether one accepted key may remove a learned marker from the
 /// child's editor. Atomic placeholders only vanish on Backspace or Delete;
 /// Pi's plain-text path also yields to its word and line deletion bindings.
@@ -98,6 +108,7 @@ pub const ObserveEffects = struct {
     visible_target: *const fn (*anyopaque) ?attachments.Target,
     marker_at_cursor: *const fn (*anyopaque, attachments.MarkerDeletion) ?attachments.Id,
     pending_marker_at_cursor: *const fn (*anyopaque, attachments.MarkerDeletion) bool,
+    prompt_continues: *const fn (*anyopaque, attachments.Target) bool,
     remove: *const fn (*anyopaque, attachments.Id) ?bool,
     remove_prompt: *const fn (*anyopaque, attachments.Target) ?bool,
 };
@@ -107,7 +118,8 @@ pub const ObservePaneInputHandler = struct {
     effects: ObserveEffects,
 
     /// Mirrors marker deletion and prompt submission only after the child
-    /// input was accepted by the pane-input boundary.
+    /// input was accepted by the pane-input boundary. An Enter the editor
+    /// turns into a newline submits nothing and leaves previews alone.
     ///
     /// ```zig
     /// const layout_changed = handler.execute(pane_id, command);
@@ -129,6 +141,10 @@ pub const ObservePaneInputHandler = struct {
 
         switch (key.code) {
             .enter => {
+                if (handler.effects.prompt_continues(handler.effects.context, target)) {
+                    return false;
+                }
+
                 _ = handler.model.cancelClipboardCapture(target);
 
                 return handler.effects.remove_prompt(handler.effects.context, target) orelse false;
@@ -203,6 +219,9 @@ test "marker policies follow each provider's prompt conventions" {
     try std.testing.expect(markerPolicy(.none) == .ordered);
     try std.testing.expect(markerPolicy(.stable_number) == .stable_number);
     try std.testing.expect(markerPolicy(.pasted_path) == .pasted_path);
+    try std.testing.expect(backslashContinuesPrompt(.stable_number));
+    try std.testing.expect(backslashContinuesPrompt(.pasted_path));
+    try std.testing.expect(!backslashContinuesPrompt(.ordered));
 }
 
 test "Pi path markers yield to word and line deletion keys" {
@@ -238,6 +257,7 @@ const ObserveCapture = struct {
     target: attachments.Target,
     marker: ?attachments.Id = null,
     pending_marker: bool = false,
+    continues: bool = false,
     removed: ?attachments.Id = null,
     prompt_removed: bool = false,
 
@@ -247,6 +267,7 @@ const ObserveCapture = struct {
             .visible_target = visibleTarget,
             .marker_at_cursor = markerAtCursor,
             .pending_marker_at_cursor = pendingMarkerAtCursor,
+            .prompt_continues = promptContinues,
             .remove = remove,
             .remove_prompt = removePrompt,
         };
@@ -268,6 +289,12 @@ const ObserveCapture = struct {
         const capture: *ObserveCapture = @ptrCast(@alignCast(raw_context));
 
         return capture.pending_marker;
+    }
+
+    fn promptContinues(raw_context: *anyopaque, _: attachments.Target) bool {
+        const capture: *ObserveCapture = @ptrCast(@alignCast(raw_context));
+
+        return capture.continues;
     }
 
     fn remove(raw_context: *anyopaque, id: attachments.Id) ?bool {
@@ -306,4 +333,17 @@ test "pane input mirrors marker deletion and submission into preview state" {
     capture.pending_marker = true;
     try std.testing.expect(!handler.execute(target.pane_id, .{ .key = .{ .code = .delete } }));
     try std.testing.expect(model.clipboardCapture() == null);
+}
+
+test "an Enter the editor turns into a newline keeps previews and the capture" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const target: attachments.Target = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
+    var capture: ObserveCapture = .{ .target = target, .continues = true };
+    var handler: ObservePaneInputHandler = .{ .model = &model, .effects = capture.effects() };
+
+    _ = try model.beginClipboardCapture(target);
+    try std.testing.expect(!handler.execute(target.pane_id, .{ .key = .{ .code = .enter } }));
+    try std.testing.expect(!capture.prompt_removed);
+    try std.testing.expect(model.clipboardCapture() != null);
 }

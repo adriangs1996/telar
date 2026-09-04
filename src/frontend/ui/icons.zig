@@ -60,6 +60,9 @@ pub const Icon = enum {
     agent_failed,
     close,
     pane_fullscreen,
+    /// The telar mark. Embedded artwork under every icon theme wherever
+    /// graphics are available; a plain square glyph elsewhere.
+    telar_mark,
 
     /// The shipped artwork for a built-in agent. Configured agents have no
     /// artwork here; their manifest glyph or the generic mark is drawn instead.
@@ -104,6 +107,7 @@ pub const Icon = enum {
             .agent_failed => "\u{00d7}",
             .close => "\u{00d7}",
             .pane_fullscreen => "\u{26f6}",
+            .telar_mark => "\u{25a3}",
         };
     }
 
@@ -134,6 +138,7 @@ pub const Icon = enum {
             .agent_failed => "\u{ea87}", // cod-error
             .close => "\u{ea76}", // cod-close
             .pane_fullscreen => "\u{eb4c}", // cod-screen-full
+            .telar_mark => "\u{25a3}", // artwork in the atlas, never rasterized from the font
         };
     }
 
@@ -168,6 +173,7 @@ pub const Icon = enum {
             .agent_failed => "x",
             .close => "x",
             .pane_fullscreen => "F",
+            .telar_mark => " ", // the artwork carries alpha, so nothing may show through
         };
     }
 };
@@ -244,6 +250,12 @@ test "sidebar controls retain directional Unicode fallbacks" {
     try std.testing.expectEqualStrings("\u{25b6}", Icon.sidebar_expand.unicodeGlyph());
     try std.testing.expectEqual(@as(u16, 1), shared.measure(Icon.sidebar_collapse.unicodeGlyph()));
     try std.testing.expectEqual(@as(u16, 1), shared.measure(Icon.sidebar_expand.unicodeGlyph()));
+}
+
+test "the telar mark keeps one plain cell in every layer" {
+    try std.testing.expectEqualStrings("\u{25a3}", Icon.telar_mark.unicodeGlyph());
+    try std.testing.expectEqualStrings(" ", Icon.telar_mark.cellFallbackGlyph());
+    try std.testing.expectEqual(@as(u16, 1), shared.measure(Icon.telar_mark.unicodeGlyph()));
 }
 
 test "battery icon follows charge quarters" {

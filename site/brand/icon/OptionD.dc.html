@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400;500&amp;family=Instrument+Sans:wght@400;500&amp;display=swap">
+  <style>
+    body { margin: 0; font-family: "Instrument Sans", system-ui, sans-serif; }
+    a { color: #ffc799; } a:hover { color: #ffd1a8; }
+  </style>
+</helmet>
+<div style="width: 640px; height: 720px; box-sizing: border-box; padding: 36px 40px; background: {{page}}; color: {{text}}; display: flex; flex-direction: column; gap: 30px;">
+  <svg width="0" height="0" style="position: absolute;" aria-hidden="true">
+    <symbol id="mark" viewBox="0 0 64 64">
+      <rect x="0" y="0" width="64" height="64" rx="14" fill="{{ink}}"></rect>
+      <path d="M31 10 V42 C31 48, 34 52, 42 52" fill="none" stroke="{{accent}}" stroke-width="6" stroke-linecap="round"></path>
+      <path d="M16 24 H23 M39 24 H47" fill="none" stroke="{{paper}}" stroke-width="6" stroke-linecap="round"></path>
+    </symbol>
+  </svg>
+
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <div style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: {{muted}};">Option D</div>
+    <div style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 26px; font-weight: 300; letter-spacing: -0.02em;">Monogram</div>
+    <div style="font-size: 15px; line-height: 1.5; color: {{muted}}; max-width: 540px; text-wrap: pretty;">A lowercase t made of thread: the stem is a warp, the crossbar a weft passing behind it.</div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 44px;">
+    <svg width="256" height="256" viewBox="0 0 64 64" style="flex-shrink: 0;"><use href="#mark"></use></svg>
+    <div style="display: flex; flex-direction: column; gap: 22px;">
+      <div style="display: flex; align-items: flex-end; gap: 22px;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <svg width="64" height="64" viewBox="0 0 64 64"><use href="#mark"></use></svg>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{muted}};">64</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <svg width="32" height="32" viewBox="0 0 64 64"><use href="#mark"></use></svg>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{muted}};">32</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <svg width="16" height="16" viewBox="0 0 64 64"><use href="#mark"></use></svg>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{muted}};">16</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="width: 60px; height: 60px; border-radius: 12px; background: #f3efe8; display: flex; align-items: center; justify-content: center;">
+          <svg width="32" height="32" viewBox="0 0 64 64"><use href="#mark"></use></svg>
+        </div>
+        <div style="width: 60px; height: 60px; border-radius: 12px; background: #101010; border: 1px solid {{line}}; box-sizing: border-box; display: flex; align-items: center; justify-content: center;">
+          <svg width="32" height="32" viewBox="0 0 64 64"><use href="#mark"></use></svg>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <svg width="28" height="28" viewBox="0 0 64 64"><use href="#mark"></use></svg>
+        <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 22px; font-weight: 500; letter-spacing: -0.02em;">telar</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 24px; border-top: 1px solid {{line}}; font-size: 14px; line-height: 1.5;">
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: {{muted}};">keeps</span>
+      <span style="text-wrap: pretty;">Ties straight to the wordmark and to the mono type of the site. Works as a favicon without a container.</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: {{muted}};">risk</span>
+      <span style="text-wrap: pretty;">Letter marks are everywhere. The gap behind the stem is the only loom cue, and it needs size to be seen.</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#ffc799","options":["#ffc799","#99ffe4","#66ddcc","#ff8080"],"section":"Icon"},"surface":{"editor":"enum","default":"dark","options":["dark","light"],"section":"Artboard"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = (this.props.surface ?? 'dark') !== 'light';
+    return {
+      accent: this.props.accent ?? '#ffc799',
+      page: dark ? '#101010' : '#f3efe8',
+      text: dark ? '#ffffff' : '#171717',
+      muted: dark ? '#a0a0a0' : '#5c5c5c',
+      line: dark ? '#2c2c2c' : '#d9d3c8',
+      ink: '#1a1a1a',
+      paper: '#ffffff',
+      thread: '#5c5c5c'
+    };
+  }
+}
+</script>
+</body>
+</html>

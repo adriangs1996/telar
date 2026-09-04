@@ -759,7 +759,11 @@ pub fn main(init: std.process.Init) !void {
     var mirror: GraphicsMirror = .{};
     var model = multiplexer.Model.init(gpa);
     defer model.deinit();
-    try model.addRoot(pane_id, location, initial_size);
+    try model.addRoot(.{
+        .pane_id = pane_id,
+        .location = location,
+        .size = initial_size,
+    });
     model.setCellSize(initial_size.cell_width_px, initial_size.cell_height_px);
 
     var watcher = try platform.ResizeWatcher.init(&tty);

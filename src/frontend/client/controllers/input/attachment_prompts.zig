@@ -50,6 +50,7 @@ pub fn observe(client: *Client, pane_id: schema.PaneId, command: key_routing.Com
             .visible_target = visibleTarget,
             .marker_at_cursor = markerAtCursor,
             .pending_marker_at_cursor = pendingMarkerAtCursor,
+            .prompt_continues = promptContinues,
             .remove = removeAttachment,
             .remove_prompt = removePrompt,
         },
@@ -183,6 +184,25 @@ fn pendingMarkerAtCursor(raw_context: *anyopaque, deletion: attachments.MarkerDe
         .buffer = &pane.buffer,
         .cursor = pane.cursor,
     }, .{ .deletion = deletion, .policy = attachment_prompt.markerPolicy(markers) });
+}
+
+/// Reports whether the accepted Enter continues the prompt instead of
+/// submitting it: the agent's editor treats a trailing backslash as a
+/// newline request.
+fn promptContinues(raw_context: *anyopaque, target: attachments.Target) bool {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+    const markers = client.model.attachmentMarkers(target) orelse return false;
+    if (!attachment_prompt.backslashContinuesPrompt(attachment_prompt.markerPolicy(markers))) {
+        return false;
+    }
+
+    const model = client.model.activeTabModelConst() orelse return false;
+    const pane = model.findConst(target.pane_id) orelse return false;
+
+    return attachments.promptContinuesAtCursor(.{
+        .buffer = &pane.buffer,
+        .cursor = pane.cursor,
+    });
 }
 
 fn removeAttachment(raw_context: *anyopaque, id: attachments.Id) ?bool {

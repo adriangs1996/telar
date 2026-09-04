@@ -1,6 +1,7 @@
 //! Client-side Kitty graphics resource storage and host-protocol emission.
 
 const std = @import("std");
+const bitmap = @import("bitmap.zig");
 const builtin = @import("builtin");
 const core = @import("telar-core");
 const workspace = @import("../workspace/root.zig");
@@ -2366,13 +2367,6 @@ const ProviderAtlasInput = struct {
     slot: PixelSize,
 };
 
-const ProviderSample = struct {
-    destination: *[4]u8,
-    provider: u32,
-    point: PixelPoint,
-    size: u32,
-};
-
 fn renderProviderAtlas(input: ProviderAtlasInput) void {
     std.debug.assert(input.atlas.width == providerAtlasSourceCount() * input.slot.width);
     std.debug.assert(input.atlas.height == input.slot.height);
@@ -2382,6 +2376,12 @@ fn renderProviderAtlas(input: ProviderAtlasInput) void {
     const offset_y = (input.slot.height - icon_size) / 2;
     var provider: u32 = 0;
     while (provider < providerAtlasSourceCount()) : (provider += 1) {
+        const source: bitmap.Bitmap = .{
+            .pixels = KittySidebarRenderer.provider_source_pixels,
+            .stride = KittySidebarRenderer.provider_source_width,
+            .origin_x = provider * KittySidebarRenderer.provider_source_size,
+            .side = KittySidebarRenderer.provider_source_size,
+        };
         var y: u32 = 0;
         while (y < icon_size) : (y += 1) {
             var x: u32 = 0;
@@ -2389,81 +2389,10 @@ fn renderProviderAtlas(input: ProviderAtlasInput) void {
                 const destination_x = provider * input.slot.width + offset_x + x;
                 const destination_y = offset_y + y;
                 const destination_index = (@as(usize, destination_y) * input.atlas.width + destination_x) * 4;
-                sampleProviderPixel(.{
-                    .destination = input.destination[destination_index..][0..4],
-                    .provider = provider,
-                    .point = .{ .x = x, .y = y },
-                    .size = icon_size,
-                });
+                input.destination[destination_index..][0..4].* = bitmap.sample(source, .{ .x = x, .y = y }, icon_size);
             }
         }
     }
-}
-
-fn sampleProviderPixel(sample: ProviderSample) void {
-    const source_x = sampleAxis(sample.point.x, sample.size);
-    const source_y = sampleAxis(sample.point.y, sample.size);
-    const one: u64 = 1 << 16;
-    const weights = [4]u64{
-        (one - source_x.fraction) * (one - source_y.fraction),
-        source_x.fraction * (one - source_y.fraction),
-        (one - source_x.fraction) * source_y.fraction,
-        source_x.fraction * source_y.fraction,
-    };
-    const pixels = [4][4]u8{
-        providerSourcePixel(sample.provider, source_x.index, source_y.index),
-        providerSourcePixel(sample.provider, source_x.next, source_y.index),
-        providerSourcePixel(sample.provider, source_x.index, source_y.next),
-        providerSourcePixel(sample.provider, source_x.next, source_y.next),
-    };
-    const total_weight: u64 = one * one;
-    var alpha_sum: u64 = 0;
-    var premultiplied: [3]u64 = @splat(0);
-    for (pixels, weights) |pixel, weight| {
-        alpha_sum += @as(u64, pixel[3]) * weight;
-        inline for (0..3) |channel|
-            premultiplied[channel] += @as(u64, pixel[channel]) * pixel[3] * weight;
-    }
-    sample.destination[3] = @intCast((alpha_sum + total_weight / 2) / total_weight);
-    if (alpha_sum == 0) {
-        sample.destination[0] = 0;
-        sample.destination[1] = 0;
-        sample.destination[2] = 0;
-        return;
-    }
-    inline for (0..3) |channel|
-        sample.destination[channel] = @intCast((premultiplied[channel] + alpha_sum / 2) / alpha_sum);
-}
-
-const SampleAxis = struct {
-    index: u32,
-    next: u32,
-    fraction: u64,
-};
-
-fn sampleAxis(destination: u32, destination_size: u32) SampleAxis {
-    const source_last = KittySidebarRenderer.provider_source_size - 1;
-    if (destination_size <= 1) {
-        return .{
-            .index = source_last / 2,
-            .next = source_last / 2,
-            .fraction = 0,
-        };
-    }
-    const fixed = @as(u64, destination) * source_last * (1 << 16) /
-        (destination_size - 1);
-    const index: u32 = @intCast(fixed >> 16);
-    return .{
-        .index = index,
-        .next = @min(source_last, index + 1),
-        .fraction = fixed & 0xffff,
-    };
-}
-
-fn providerSourcePixel(provider: u32, x: u32, y: u32) [4]u8 {
-    const source_x = provider * KittySidebarRenderer.provider_source_size + x;
-    const index = (@as(usize, y) * KittySidebarRenderer.provider_source_width + source_x) * 4;
-    return KittySidebarRenderer.provider_source_pixels[index..][0..4].*;
 }
 
 fn providerAtlasSourceCount() u32 {

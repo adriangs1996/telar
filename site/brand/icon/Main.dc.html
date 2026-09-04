@@ -1,0 +1,176 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400;500&amp;family=Instrument+Sans:wght@400;500&amp;display=swap">
+  <style>
+    body { margin: 0; font-family: "Instrument Sans", system-ui, sans-serif; }
+    a { color: #ffc799; } a:hover { color: #ffd1a8; }
+  </style>
+</helmet>
+<div style="width: 960px; height: 860px; box-sizing: border-box; padding: 40px 44px; background: {{page}}; color: {{text}}; display: flex; flex-direction: column; gap: 32px;">
+  <svg width="0" height="0" style="position: absolute;" aria-hidden="true">
+    <symbol id="app" viewBox="0 0 64 64">
+      <rect x="0" y="0" width="64" height="64" rx="14" fill="{{ink}}"></rect>
+      <g fill="none" stroke="{{thread}}" stroke-width="3" stroke-linecap="round">
+        <path d="M14 12 V28 M14 36 V52"></path>
+        <path d="M23 12 V52"></path>
+        <path d="M32 12 V28 M32 36 V52"></path>
+        <path d="M41 12 V52"></path>
+        <path d="M50 12 V28 M50 36 V52"></path>
+      </g>
+      <path d="M6 32 H19 M27 32 H37 M45 32 H50" fill="none" stroke="{{accent}}" stroke-width="3" stroke-linecap="round"></path>
+      <path d="M49 32 L55 27.5 L61 32 L55 36.5 Z" fill="{{accent}}"></path>
+    </symbol>
+    <symbol id="small" viewBox="0 0 64 64">
+      <rect x="0" y="0" width="64" height="64" rx="14" fill="{{ink}}"></rect>
+      <g fill="none" stroke="{{thread}}" stroke-width="5" stroke-linecap="round">
+        <path d="M17 11 V26 M17 38 V53"></path>
+        <path d="M32 11 V53"></path>
+        <path d="M47 11 V26 M47 38 V53"></path>
+      </g>
+      <path d="M5 32 H26 M38 32 H47" fill="none" stroke="{{accent}}" stroke-width="5" stroke-linecap="round"></path>
+      <path d="M45 32 L53 26 L61 32 L53 38 Z" fill="{{accent}}"></path>
+    </symbol>
+    <symbol id="app-mono" viewBox="0 0 64 64">
+      <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+        <path d="M14 12 V28 M14 36 V52"></path>
+        <path d="M23 12 V52"></path>
+        <path d="M32 12 V28 M32 36 V52"></path>
+        <path d="M41 12 V52"></path>
+        <path d="M50 12 V28 M50 36 V52"></path>
+      </g>
+      <path d="M6 32 H19 M27 32 H37 M45 32 H50" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+      <path d="M49 32 L55 27.5 L61 32 L55 36.5 Z" fill="currentColor"></path>
+    </symbol>
+    <symbol id="small-mono" viewBox="0 0 64 64">
+      <g fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round">
+        <path d="M17 11 V26 M17 38 V53"></path>
+        <path d="M32 11 V53"></path>
+        <path d="M47 11 V26 M47 38 V53"></path>
+      </g>
+      <path d="M5 32 H26 M38 32 H47" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"></path>
+      <path d="M45 32 L53 26 L61 32 L53 38 Z" fill="currentColor"></path>
+    </symbol>
+  </svg>
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 26px; font-weight: 300; letter-spacing: -0.02em;">telar icon</div>
+      <div style="font-size: 15px; line-height: 1.5; color: {{muted}}; max-width: 560px; text-wrap: pretty;">Warp and weft. Five warp threads and one weft carrying the shuttle through them, over and under. Below 48 px the weave drops to three threads so the crossing still reads.</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <svg width="28" height="28" viewBox="0 0 64 64"><use href="#app"></use></svg>
+      <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 22px; font-weight: 500; letter-spacing: -0.02em;">telar</span>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 48px;">
+    <svg width="256" height="256" viewBox="0 0 64 64" style="flex-shrink: 0;"><use href="#app"></use></svg>
+    <div style="display: flex; flex-direction: column; gap: 26px;">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: {{muted}};">app, 48 px and up</span>
+        <div style="display: flex; align-items: flex-end; gap: 22px;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <svg width="128" height="128" viewBox="0 0 64 64"><use href="#app"></use></svg>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{muted}};">128</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <svg width="64" height="64" viewBox="0 0 64 64"><use href="#app"></use></svg>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{muted}};">64</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <svg width="48" height="48" viewBox="0 0 64 64"><use href="#app"></use></svg>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{muted}};">48</span>
+        </div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: {{muted}};">small, 32 px and below</span>
+        <div style="display: flex; align-items: flex-end; gap: 22px;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <svg width="32" height="32" viewBox="0 0 64 64"><use href="#small"></use></svg>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{muted}};">32</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <svg width="24" height="24" viewBox="0 0 64 64"><use href="#small"></use></svg>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{muted}};">24</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <svg width="16" height="16" viewBox="0 0 64 64"><use href="#small"></use></svg>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{muted}};">16</span>
+        </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: {{muted}};">one color</span>
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="width: 72px; height: 72px; border-radius: 14px; background: #101010; border: 1px solid {{line}}; box-sizing: border-box; display: flex; align-items: center; justify-content: center; color: #ffffff;">
+          <svg width="44" height="44" viewBox="0 0 64 64"><use href="#app-mono"></use></svg>
+        </div>
+        <div style="width: 72px; height: 72px; border-radius: 14px; background: #f3efe8; display: flex; align-items: center; justify-content: center; color: #101010;">
+          <svg width="44" height="44" viewBox="0 0 64 64"><use href="#app-mono"></use></svg>
+        </div>
+        <div style="width: 72px; height: 72px; border-radius: 14px; background: #101010; border: 1px solid {{line}}; box-sizing: border-box; display: flex; align-items: center; justify-content: center; color: #ffffff;">
+          <svg width="24" height="24" viewBox="0 0 64 64"><use href="#small-mono"></use></svg>
+        </div>
+        <div style="width: 72px; height: 72px; border-radius: 14px; background: #f3efe8; display: flex; align-items: center; justify-content: center; color: #101010;">
+          <svg width="24" height="24" viewBox="0 0 64 64"><use href="#small-mono"></use></svg>
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: {{muted}};">in a tab, in the sidebar</span>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 8px 8px 0 0; background: #232323; width: 180px; box-sizing: border-box;">
+          <svg width="16" height="16" viewBox="0 0 64 64"><use href="#small"></use></svg>
+          <span style="font-size: 12px; color: #a0a0a0;">telar</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; background: #282828; width: 240px; box-sizing: border-box;">
+          <svg width="20" height="20" viewBox="0 0 64 64"><use href="#small"></use></svg>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #ffffff;">telar</span>
+          <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #7e7e7e; margin-left: auto;">workspace</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; padding-top: 24px; border-top: 1px solid {{line}}; font-size: 13.5px; line-height: 1.55;">
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: {{muted}};">geometry</span>
+      <span style="text-wrap: pretty;">64-unit grid, container radius 14. App: threads at 14, 23, 32, 41, 50, stroke 3. Small: threads at 17, 32, 47, stroke 5. Weft at 32, one unit of clearance at every crossing. Shuttle 12 by 9 (app) and 16 by 12 (small).</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-family: 'Martian Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: {{muted}};">color</span>
+      <span style="text-wrap: pretty;">Weft and shuttle in the Vesper accent #FFC799. Warp threads #7E7E7E, container #1A1A1A. One-color versions use whatever color the surface gives them.</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#ffc799","options":["#ffc799","#99ffe4","#66ddcc","#ff8080"],"section":"Icon"},"surface":{"editor":"enum","default":"dark","options":["dark","light"],"section":"Artboard"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = (this.props.surface ?? 'dark') !== 'light';
+    return {
+      accent: this.props.accent ?? '#ffc799',
+      page: dark ? '#101010' : '#f3efe8',
+      text: dark ? '#ffffff' : '#171717',
+      muted: dark ? '#a0a0a0' : '#5c5c5c',
+      line: dark ? '#2c2c2c' : '#d9d3c8',
+      ink: '#1a1a1a',
+      thread: '#7e7e7e'
+    };
+  }
+}
+</script>
+</body>
+</html>

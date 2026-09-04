@@ -62,6 +62,11 @@ the marker scheme the agent's manifest declares (`attachments` in
   follow prompt order.
 - Claude (`stable_number`) keeps increasing marker numbers after deletion, so
   Telar learns and retains the actual number rendered for each preview.
+- Both editors word-wrap the placeholder at its inner space when it lands on
+  a row boundary, leaving `[Image` at the end of one row and `#N]` after the
+  indentation of the next. Marker scanning accepts that shape, so a wrapped
+  marker still counts as present, can be paired and can be dismissed when the
+  cursor shares a row with its end or start.
 - Pi (`pasted_path`) has no placeholder. Its `Ctrl+V` writes the image to
   `<tmpdir>/pi-clipboard-<uuid>.<ext>` and inserts that path as plain text.
   Telar learns the UUID from committed frames and treats the whole path as
@@ -91,8 +96,13 @@ inside Claude's attachment navigation context and Pi's `Ctrl+W`, `Ctrl+U`,
 `Ctrl+K`, `Alt+D` and `Alt+Backspace`. A plain `Enter` delivered to the owning
 pane retires every preview for that prompt. It also cancels an exact clipboard
 capture still in flight, so a late worker completion cannot recreate previews
-for a prompt that was already sent. Retiring image buffers remains deferred to
-the media path.
+for a prompt that was already sent. Claude and Pi turn an `Enter` typed after
+a trailing backslash into a newline instead of a submission;
+`attachment_prompt.backslashContinuesPrompt` names those policies and
+`attachments.promptContinuesAtCursor` reads the backslash before the editor
+cursor from the committed frame, so that `Enter` leaves previews and the
+capture alone. Codex submits regardless, so the rule never applies to it.
+Retiring image buffers remains deferred to the media path.
 
 ## State and worker ownership
 
@@ -174,10 +184,12 @@ event does not wipe megabytes synchronously.
   outcomes, notification mapping and publication failure propagation.
 - `src/frontend/client/application/input/attachment_prompt.zig` proves child
   marker deletion precedes local retirement, prompt submission cancels an
-  in-flight capture, and which keys arm a deletion watch per policy.
+  in-flight capture, a continued prompt keeps both, and which keys arm a
+  deletion watch per policy.
 - `src/frontend/attachments/root.zig` proves cancellation ownership, image
-  bounds, retained-byte limits, target scoping, marker planning, the bounded
-  deletion watch and ingress revision.
+  bounds, retained-byte limits, target scoping, marker planning across a
+  wrapped placeholder, backslash continuation, the bounded deletion watch and
+  ingress revision.
 - `src/frontend/attachments/path_marker.zig` proves Pi path parsing across
   forced wraps, extent limits, screen-order collection and cursor resolution.
 - `src/frontend/client/client_test.zig` proves pane delivery without a target,

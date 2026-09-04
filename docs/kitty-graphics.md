@@ -203,6 +203,15 @@ atlas, so animation changes placements without retransmitting pixels. Missing
 KGP support or non-RGB colors use the Unicode theme directly. Allocation or
 rasterization failure triggers the same fallback on the next cell frame.
 
+The top bar's telar mark is artwork, not a glyph. `telar-mark-64.rgba` is
+box-filtered into the same icon atlas under every icon theme, in a slot two
+cells wide so its square can reach the row's height, and the slot keeps the
+artwork's alpha instead of an opaque cell background. The mark therefore
+appears wherever KGP is available, including over a `default` panel background
+the host paints itself, and falls back to a one-cell `▣` elsewhere. Atlas rows
+are as wide as the widest slot; a one-cell glyph leaves the rest of its row
+transparent and never places it.
+
 ## Verification
 
 The automated suite covers exact query and command encoding, APC parsing at

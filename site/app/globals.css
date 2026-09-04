@@ -1,0 +1,549 @@
+@import "tailwindcss";
+
+/* Vesper, as src/frontend/ui/theme.zig defines it. Pane content always uses
+   these: applications inside a pane keep their own colors. */
+@theme {
+  --color-ink: #101010;
+  --color-panel: #1a1a1a;
+  --color-surface: #232323;
+  --color-surface-1: #282828;
+  --color-line: #2c2c2c;
+  --color-overlay-0: #5c5c5c;
+  --color-overlay-1: #7e7e7e;
+  --color-subtext: #a0a0a0;
+  --color-text: #ffffff;
+  --color-peach: #ffc799;
+  --color-mauve: #ffd1a8;
+  --color-mint: #99ffe4;
+  --color-teal: #66ddcc;
+  --color-red: #ff8080;
+
+  --font-mono: var(--font-martian), ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-sans: var(--font-instrument), system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* The chrome follows the selected theme: bars, sidebar, pane borders. */
+@theme inline {
+  --color-chrome-bg: var(--chrome-bg);
+  --color-chrome-panel: var(--chrome-panel);
+  --color-chrome-surface: var(--chrome-surface);
+  --color-chrome-line: var(--chrome-line);
+  --color-chrome-text: var(--chrome-text);
+  --color-chrome-subtext: var(--chrome-subtext);
+  --color-chrome-overlay: var(--chrome-overlay);
+  --color-chrome-accent: var(--chrome-accent);
+  --color-chrome-green: var(--chrome-green);
+  --color-chrome-teal: var(--chrome-teal);
+  --color-chrome-yellow: var(--chrome-yellow);
+  --color-chrome-red: var(--chrome-red);
+}
+
+:root {
+  color-scheme: dark;
+
+
+  --chrome-bg: #101010;
+  --chrome-panel: #1a1a1a;
+  --chrome-surface: #282828;
+  --chrome-line: #2c2c2c;
+  --chrome-text: #ffffff;
+  --chrome-subtext: #a0a0a0;
+  --chrome-overlay: #5c5c5c;
+  --chrome-accent: #ffc799;
+  --chrome-green: #99ffe4;
+  --chrome-teal: #66ddcc;
+  --chrome-yellow: #ffc799;
+  --chrome-red: #ff8080;
+}
+
+:root[data-theme="catppuccin"] {
+  --chrome-bg: #1e1e2e;
+  --chrome-panel: #181825;
+  --chrome-surface: #45475a;
+  --chrome-line: #313244;
+  --chrome-text: #cdd6f4;
+  --chrome-subtext: #a6adc8;
+  --chrome-overlay: #6c7086;
+  --chrome-accent: #89b4fa;
+  --chrome-green: #a6e3a1;
+  --chrome-teal: #94e2d5;
+  --chrome-yellow: #f9e2af;
+  --chrome-red: #f38ba8;
+}
+
+:root[data-theme="tokyo-night"] {
+  --chrome-bg: #1a1b26;
+  --chrome-panel: #1a1b26;
+  --chrome-surface: #414868;
+  --chrome-line: #24283b;
+  --chrome-text: #c0caf5;
+  --chrome-subtext: #a9b1d6;
+  --chrome-overlay: #565f89;
+  --chrome-accent: #7aa2f7;
+  --chrome-green: #9ece6a;
+  --chrome-teal: #7dcfff;
+  --chrome-yellow: #e0af68;
+  --chrome-red: #f7768e;
+}
+
+:root[data-theme="terminal"] {
+  --chrome-bg: #000000;
+  --chrome-panel: #0a0a0a;
+  --chrome-surface: #303030;
+  --chrome-line: #262626;
+  --chrome-text: #e5e5e5;
+  --chrome-subtext: #a3a3a3;
+  --chrome-overlay: #525252;
+  --chrome-accent: #5f87d7;
+  --chrome-green: #5faf5f;
+  --chrome-teal: #5fafaf;
+  --chrome-yellow: #d7af5f;
+  --chrome-red: #d75f5f;
+}
+
+html {
+  background: var(--chrome-bg);
+  scrollbar-color: var(--chrome-surface) var(--chrome-bg);
+  scrollbar-width: thin;
+  transition: background-color 300ms ease;
+}
+
+body {
+  background: var(--chrome-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background-color 300ms ease;
+}
+
+::selection {
+  background: var(--chrome-accent);
+  color: var(--chrome-bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--chrome-accent);
+  outline-offset: 3px;
+}
+
+/* ---------- client layout ---------- */
+
+/* The page is a desk with one terminal window on it. Scrolling steps through
+   the panes one screen at a time while the window stays pinned. */
+html {
+  scroll-snap-type: y mandatory;
+}
+
+.track {
+  position: relative;
+}
+
+.stage {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: start;
+  background-color: #0b0b0b;
+  background-image: repeating-linear-gradient(90deg, #141414 0 1px, transparent 1px 18px);
+}
+
+.step {
+  height: 100dvh;
+  scroll-snap-align: start;
+}
+
+.window {
+  display: flex;
+  /* 84% of each side is 70% of the viewport's area. */
+  width: 84vw;
+  height: 84dvh;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--chrome-line);
+  border-radius: 10px;
+  background: var(--chrome-bg);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65);
+  transition: width 360ms cubic-bezier(0.2, 0.8, 0.2, 1), height 360ms cubic-bezier(0.2, 0.8, 0.2, 1), border-radius 360ms ease, background-color 300ms ease;
+}
+
+.client[data-fullscreen="true"] .window {
+  width: 100vw;
+  height: 100dvh;
+  border-radius: 0;
+  border-color: transparent;
+}
+
+@media (max-width: 1023.98px) {
+  .window {
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+.window-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.window-main {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.strip {
+  position: absolute;
+  inset: 12px;
+  display: flex;
+  transition: transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.pane-slot {
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  flex: 0 0 100%;
+}
+
+.pane {
+  position: relative;
+  height: 100%;
+  border: 1px solid var(--chrome-line);
+  background: var(--chrome-bg);
+  transition: border-color 300ms ease, background-color 300ms ease;
+  animation: attach-fade 360ms ease-out backwards;
+  animation-delay: calc(var(--pane-index, 0) * 60ms + 120ms);
+}
+
+.pane-body {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.pane-title {
+  position: absolute;
+  top: -9px;
+  left: 16px;
+  z-index: 3;
+  padding: 0 6px;
+  background: var(--chrome-bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--chrome-subtext);
+  transition: color 200ms ease, background-color 300ms ease;
+  user-select: none;
+}
+
+.pane[data-focused="true"] .pane-title {
+  color: var(--chrome-accent);
+}
+
+/* ⛶ on the border, the way telar draws its own fullscreen affordance. */
+.pane-tools {
+  position: absolute;
+  top: -9px;
+  right: 14px;
+  z-index: 3;
+  padding: 0 6px;
+  background: var(--chrome-bg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--chrome-subtext);
+  opacity: 0;
+  transition: opacity 200ms ease, color 200ms ease;
+}
+
+.pane:hover .pane-tools,
+.pane[data-focused="true"] .pane-tools,
+.pane-tools:focus-visible {
+  opacity: 1;
+}
+
+.pane-tools:hover {
+  color: var(--chrome-accent);
+}
+
+/* Focus does not switch the border color. It draws the border again,
+   clockwise from the title, the way a thread is pulled through. */
+.pane-ring {
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.pane-ring rect {
+  x: 0.5px;
+  y: 0.5px;
+  width: calc(100% - 1px);
+  height: calc(100% - 1px);
+  fill: none;
+  stroke: var(--chrome-accent);
+  stroke-width: 1px;
+  opacity: 0;
+}
+
+.pane[data-focused="true"] .pane-ring rect {
+  opacity: 1;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: ring-draw 560ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes ring-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---------- attach sequence ---------- */
+
+@keyframes attach-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.attach {
+  animation: attach-fade 300ms ease-out backwards;
+}
+
+/* Rows arrive the way a terminal repaints: top to bottom, one after another. */
+@keyframes repaint {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.repaint {
+  animation: repaint 220ms ease-out backwards;
+  animation-delay: calc(var(--row, 0) * 60ms + 200ms);
+}
+
+/* ---------- type ---------- */
+
+.display {
+  font-family: var(--font-mono);
+  font-weight: 300;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.display-sm {
+  font-family: var(--font-mono);
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  line-height: 1.14;
+  text-wrap: balance;
+}
+
+.prose-measure {
+  max-width: 34rem;
+}
+
+/* ---------- motion ---------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.35em);
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    clip-path: inset(0 0 -20% 0);
+  }
+}
+
+.rise {
+  animation: rise 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.cursor::after {
+  content: "";
+  display: inline-block;
+  width: 0.6em;
+  height: 1.1em;
+  margin-left: 0.15em;
+  vertical-align: -0.2em;
+  background: var(--color-peach);
+  animation: blink 1.1s steps(1) infinite;
+}
+
+@keyframes ping-once {
+  0% { transform: scale(0.6); opacity: 0; }
+  30% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.ping-once {
+  display: inline-block;
+  animation: ping-once 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes title-swap {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.title-swap {
+  display: inline-block;
+  animation: title-swap 480ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.toast {
+  pointer-events: auto;
+  animation: toast-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-in {
+  animation: modal-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+/* The three budgets, each with its own cadence. */
+@keyframes lane-fast {
+  from { background-position: 0 0; }
+  to { background-position: 48px 0; }
+}
+
+@keyframes lane-frame {
+  0% { left: -12%; opacity: 1; }
+  55% { left: 46%; opacity: 1; }
+  56% { left: 46%; opacity: 0; }
+  57% { left: 30%; opacity: 1; }
+  100% { left: 100%; opacity: 1; }
+}
+
+@keyframes lane-slow {
+  0% { left: -30%; }
+  40% { left: 20%; }
+  55% { left: 20%; }
+  100% { left: 100%; }
+}
+
+.lane-fast {
+  background-image: repeating-linear-gradient(90deg, var(--color-peach) 0 14px, transparent 14px 24px);
+  background-size: 48px 100%;
+  animation: lane-fast 260ms linear infinite;
+}
+
+.lane-frame {
+  animation: lane-frame 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.lane-slow {
+  animation: lane-slow 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .pane,
+  .attach,
+  .repaint,
+  .rise,
+  .ping-once,
+  .title-swap,
+  .toast,
+  .modal-in,
+  .lane-fast,
+  .lane-frame,
+  .lane-slow,
+  .cursor::after,
+  .pane[data-focused="true"] .pane-ring rect {
+    animation: none !important;
+  }
+
+  .pane[data-focused="true"] .pane-ring rect {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+
+  html {
+    scroll-snap-type: none;
+  }
+
+  .window,
+  .strip,
+  .pane,
+  .pane-title {
+    transition: none;
+  }
+
+  .rise {
+    opacity: 1;
+    clip-path: none;
+    transform: none;
+  }
+
+  .lane-frame {
+    left: 40%;
+  }
+
+  .lane-slow {
+    left: 20%;
+  }
+}

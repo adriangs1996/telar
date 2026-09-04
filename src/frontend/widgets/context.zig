@@ -46,6 +46,9 @@ pub const IconDraw = struct {
     point: core.ui.Point,
     icon: icons.Icon,
     style: ui.Style,
+    /// Cells the graphical mark may span sideways. The fallback glyph still
+    /// takes the first cell only; the caller blanks the rest.
+    columns: u16 = 1,
 };
 
 /// Widgets receive no client state and cannot mutate navigation, layout,
@@ -68,7 +71,11 @@ pub const Context = struct {
     /// because the client cannot reproduce colors it does not know.
     /// For example: `_ = context.drawIcon(.{ .area = area, .point = point, .icon = .cpu, .style = style });`.
     pub fn drawIcon(context: *Context, draw: IconDraw) u16 {
-        const requested = if (context.icon_theme == .nerd_font) context.icon_plan else null;
+        // The telar mark is artwork with its own alpha: it takes the graphical
+        // plan under every icon theme and needs no reproducible colors. Glyph
+        // icons need the theme and an RGB pair for their opaque slot.
+        const artwork = draw.icon == .telar_mark;
+        const requested = if (context.icon_theme == .nerd_font or artwork) context.icon_plan else null;
         const foreground = switch (draw.style.fg) {
             .rgb => |value| value,
             else => null,
@@ -77,20 +84,23 @@ pub const Context = struct {
             .rgb => |value| value,
             else => null,
         };
-        const graphical = requested != null and foreground != null and background != null;
+        const graphical = requested != null and (artwork or (foreground != null and background != null));
         const fallback = if (graphical) draw.icon.cellFallbackGlyph() else draw.icon.unicodeGlyph();
         const written = context.buffer.writeText(draw.area, .{ .point = draw.point, .text = fallback, .style = draw.style });
         if (written != 1 or !graphical) {
             return written;
         }
-        if (!draw.area.contains(draw.point.x, draw.point.y) or !context.buffer.clip.contains(draw.point.x, draw.point.y)) {
+        const last_x = draw.point.x + @max(draw.columns, 1) - 1;
+        if (!draw.area.contains(draw.point.x, draw.point.y) or !draw.area.contains(last_x, draw.point.y) or
+            !context.buffer.clip.contains(draw.point.x, draw.point.y) or !context.buffer.clip.contains(last_x, draw.point.y))
+        {
             return written;
         }
         requested.?.add(.{
-            .area = .{ .x = draw.point.x, .y = draw.point.y, .w = 1, .h = 1 },
+            .area = .{ .x = draw.point.x, .y = draw.point.y, .w = @max(draw.columns, 1), .h = 1 },
             .icon = draw.icon,
-            .foreground = foreground.?,
-            .background = background.?,
+            .foreground = foreground orelse @splat(0),
+            .background = background orelse @splat(0),
         });
         return written;
     }
@@ -122,6 +132,53 @@ test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
     try std.testing.expectEqualStrings("C", buffer.at(1, 0).?.text());
     try std.testing.expectEqual(@as(u8, 1), plan.len);
     try std.testing.expectEqual(icons.Icon.cpu, plan.slice()[0].icon);
+}
+
+test "the telar mark stays graphical over a host-provided background" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 4, 1);
+    defer buffer.deinit();
+    var hits: Hits = .{};
+    var plan: icons.Plan = .{};
+    var context: Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &theme.default_theme.palette,
+        .hovered = null,
+        .icon_theme = .nerd_font,
+        .icon_plan = &plan,
+    };
+
+    _ = context.drawIcon(.{ .area = buffer.area(), .point = .{ .x = 1, .y = 0 }, .icon = .telar_mark, .style = .{} });
+    try std.testing.expectEqual(@as(u8, 1), plan.len);
+    try std.testing.expectEqualStrings(" ", buffer.at(1, 0).?.text());
+}
+
+test "the telar mark publishes a graphical mark under the Unicode theme too" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 4, 1);
+    defer buffer.deinit();
+    var hits: Hits = .{};
+    var plan: icons.Plan = .{};
+    var context: Context = .{
+        .buffer = &buffer,
+        .hits = &hits,
+        .palette = &theme.default_theme.palette,
+        .hovered = null,
+        .icon_theme = .unicode,
+        .icon_plan = &plan,
+    };
+    const style: ui.Style = .{
+        .fg = theme.default_theme.palette.accent,
+        .bg = theme.default_theme.palette.panel_bg,
+    };
+
+    _ = context.drawIcon(.{ .area = buffer.area(), .point = .{ .x = 1, .y = 0 }, .icon = .telar_mark, .style = style });
+    try std.testing.expectEqual(@as(u8, 1), plan.len);
+    try std.testing.expectEqual(icons.Icon.telar_mark, plan.slice()[0].icon);
+    try std.testing.expectEqualStrings(" ", buffer.at(1, 0).?.text());
+
+    _ = context.drawIcon(.{ .area = buffer.area(), .point = .{ .x = 2, .y = 0 }, .icon = .cpu, .style = style });
+    try std.testing.expectEqual(@as(u8, 1), plan.len);
+    try std.testing.expectEqualStrings(icons.Icon.cpu.unicodeGlyph(), buffer.at(2, 0).?.text());
 }
 
 test "Nerd Font theme keeps Unicode when terminal colors cannot be reproduced" {

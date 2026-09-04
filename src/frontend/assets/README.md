@@ -88,3 +88,23 @@ Official sources and usage terms:
 - <https://pi.dev/press-kit>
 - <https://pi.dev/favicon.svg>
 - <https://github.com/earendil-works/pi/blob/main/LICENSE>
+
+`telar-mark.svg` is Telar's own mark, the small variant of the icon designed
+for sizes at or below 32 px: three warp threads and one weft carrying the
+shuttle, on the rounded container. Its SHA-256 is
+`2bd0d0ad77297ac92076edf19f487313e6a32c56bb525d6593a36ab85c7e921c`.
+
+`telar-mark-64.png` is its 64 x 64 RGBA rasterization with SHA-256
+`514ff1658c1f3ee191827624bdf39865e367a3afb090341343b62f69cde1785c`,
+reproducible with librsvg 2.62.3:
+
+```sh
+rsvg-convert -w 64 -h 64 -f png -o telar-mark-64.png telar-mark.svg
+```
+
+`telar-mark-64.rgba` is the raw straight-alpha RGBA of that PNG, SHA-256
+`c1cd678c75399de6171cd9975927ced073a9043a9131f92fb3f27c7f2935d2dd`.
+`tools/build_telar_mark.py` rebuilds it with Pillow 12.2.0. The top bar
+box-filters it into the icon atlas at cell size, sixteen premultiplied-alpha
+bilinear taps per pixel, and keeps its alpha so the host composes it over
+whatever it paints behind the bar.

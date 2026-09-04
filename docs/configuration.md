@@ -475,8 +475,9 @@ another pane while fullscreen is active. The default binding is `prefix`, then
 
 `telar.action.toggle_workspace_list()` collapses the top bar's list of open
 workspaces to the active one plus a `+N` counter, and expands it again.
-Clicking the `❖` marker or the counter does the same; clicking a workspace
-name switches to it. The collapse state belongs to the client layout, and the
+Clicking the counter expands it too; clicking a workspace name switches to
+it. The telar mark at the left edge of the bar is the sidebar toggle, not a
+list control. The collapse state belongs to the client layout, and the
 runtime retains it for the same terminal while the server is alive. The default
 binding is `prefix`, then `w`.
 

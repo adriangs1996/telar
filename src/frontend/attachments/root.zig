@@ -28,9 +28,13 @@ pub const max_removal_keys: usize = 256;
 /// key. The child may publish an unrelated frame before it redraws its editor.
 pub const deletion_watch_frames: u8 = 3;
 
-const marker_prefix = "[Image #";
-const marker_prefix_width: u16 = marker_prefix.len;
-const minimum_marker_width: u16 = marker_prefix_width + 2;
+/// The placeholder's first word. Claude and Codex word-wrap `[Image #N]` at
+/// the space after it, so a marker may end on the row below its head.
+const marker_head = "[Image";
+const marker_head_width: u16 = marker_head.len;
+const marker_separator = " #";
+const marker_separator_width: u16 = marker_separator.len;
+const minimum_marker_width: u16 = marker_head_width + marker_separator_width + 2;
 
 pub fn platformSupported() bool {
     return builtin.os.tag == .macos;
@@ -1037,9 +1041,41 @@ pub const Store = struct {
 
 const MarkerPosition = struct {
     number: u16,
-    start: u16,
-    end: u16,
-    y: u16,
+    /// The `[` cell.
+    start: ui.Point,
+    /// One past the `]` cell, on the row holding it.
+    end: ui.Point,
+
+    fn contiguous(marker: MarkerPosition) bool {
+        return marker.start.y == marker.end.y;
+    }
+};
+
+/// Visits every `[Image #N]` marker on the screen in row-major order of its
+/// head cell, including markers wrapped onto a second row.
+const MarkerScan = struct {
+    buffer: *const ui.Buffer,
+    x: u16 = 0,
+    y: u16 = 0,
+
+    fn next(scan: *MarkerScan) ?MarkerPosition {
+        const buffer = scan.buffer;
+        while (scan.y < buffer.h and scan.x + marker_head_width <= buffer.w) {
+            const at: ui.Point = .{ .x = scan.x, .y = scan.y };
+            if (scan.x + marker_head_width < buffer.w) {
+                scan.x += 1;
+            } else {
+                scan.x = 0;
+                scan.y += 1;
+            }
+
+            if (parseMarker(buffer, at)) |marker| {
+                return marker;
+            }
+        }
+
+        return null;
+    }
 };
 
 fn snapshotOrdinal(snapshot: *const Snapshot, id: Id) ?u8 {
@@ -1052,6 +1088,9 @@ fn snapshotOrdinal(snapshot: *const Snapshot, id: Id) ?u8 {
     return null;
 }
 
+/// The cursor must share a row with the marker's end or start. A wrapped
+/// marker spans two rows, and steps across the wrap cannot be counted from
+/// cells alone.
 fn planPlaceholderRemoval(slot: *const Slot, ordinal: u8, screen: MarkerScreen) ?MarkerRemoval {
     const marker_number = slot.markerNumber() orelse @as(u16, ordinal) + 1;
     if (!screen.cursor.visible) {
@@ -1059,25 +1098,26 @@ fn planPlaceholderRemoval(slot: *const Slot, ordinal: u8, screen: MarkerScreen) 
     }
 
     const marker = findMarker(screen.buffer, marker_number, screen.cursor) orelse return null;
-    if (marker.y != screen.cursor.y) {
-        return null;
-    }
-
-    if (screen.cursor.x >= marker.end) {
-        const steps = atomicSteps(screen.buffer, marker.y, .{
-            .from = marker.end,
-            .to = screen.cursor.x,
+    const cursor = screen.cursor;
+    if (cursor.y == marker.end.y and cursor.x >= marker.end.x) {
+        const steps = atomicSteps(screen.buffer, marker.end.y, .{
+            .from = marker.end.x,
+            .to = cursor.x,
         }) orelse return null;
 
         return .{ .direction = .left, .steps = steps, .deletion = .backward };
     }
 
-    const steps = atomicSteps(screen.buffer, marker.y, .{
-        .from = screen.cursor.x,
-        .to = marker.start,
-    }) orelse return null;
+    if (cursor.y == marker.start.y and cursor.x <= marker.start.x) {
+        const steps = atomicSteps(screen.buffer, marker.start.y, .{
+            .from = cursor.x,
+            .to = marker.start.x,
+        }) orelse return null;
 
-    return .{ .direction = .right, .steps = steps, .deletion = .forward };
+        return .{ .direction = .right, .steps = steps, .deletion = .forward };
+    }
+
+    return null;
 }
 
 /// Pi's cursor must share a row with the path's end or start; steps across a
@@ -1164,29 +1204,23 @@ fn unpairedPathCount(store: *const Store, target: Target) u8 {
     return count;
 }
 
+/// Picks the marker carrying `number` closest to the cursor. The transcript
+/// above the prompt may repeat a sent prompt's markers.
 fn findMarker(buffer: *const ui.Buffer, number: u16, cursor: schema.frame.Cursor) ?MarkerPosition {
-    if (number == 0 or buffer.w < minimum_marker_width) {
-        return null;
-    }
-
     var best: ?MarkerPosition = null;
     var best_distance: u32 = std.math.maxInt(u32);
-    var y: u16 = 0;
-    while (y < buffer.h) : (y += 1) {
-        var x: u16 = 0;
-        while (x <= buffer.w -| minimum_marker_width) : (x += 1) {
-            const candidate = parseMarker(buffer, x, y) orelse continue;
-            if (candidate.number != number) {
-                continue;
-            }
+    var scan: MarkerScan = .{ .buffer = buffer };
+    while (scan.next()) |candidate| {
+        if (candidate.number != number) {
+            continue;
+        }
 
-            const row_distance = if (candidate.y > cursor.y) candidate.y - cursor.y else cursor.y - candidate.y;
-            const column_distance = if (candidate.end > cursor.x) candidate.end - cursor.x else cursor.x - candidate.end;
-            const distance = @as(u32, row_distance) * (@as(u32, buffer.w) + 1) + column_distance;
-            if (distance < best_distance) {
-                best = candidate;
-                best_distance = distance;
-            }
+        const row_distance = if (candidate.end.y > cursor.y) candidate.end.y - cursor.y else cursor.y - candidate.end.y;
+        const column_distance = if (candidate.end.x > cursor.x) candidate.end.x - cursor.x else cursor.x - candidate.end.x;
+        const distance = @as(u32, row_distance) * (@as(u32, buffer.w) + 1) + column_distance;
+        if (distance < best_distance) {
+            best = candidate;
+            best_distance = distance;
         }
     }
 
@@ -1194,45 +1228,37 @@ fn findMarker(buffer: *const ui.Buffer, number: u16, cursor: schema.frame.Cursor
 }
 
 fn markerForNextUnpaired(store: *const Store, target: Target, buffer: *const ui.Buffer) ?u16 {
-    if (buffer.w < minimum_marker_width) {
-        return null;
-    }
-
     var candidates: [max_items]u16 = @splat(0);
     var candidate_count: u8 = 0;
-    var y: u16 = 0;
-    while (y < buffer.h) : (y += 1) {
-        var x: u16 = 0;
-        while (x <= buffer.w -| minimum_marker_width) : (x += 1) {
-            const marker = parseMarker(buffer, x, y) orelse continue;
-            if (markerNumberClaimed(store, target, marker.number)) {
-                continue;
-            }
+    var scan: MarkerScan = .{ .buffer = buffer };
+    while (scan.next()) |marker| {
+        if (markerNumberClaimed(store, target, marker.number)) {
+            continue;
+        }
 
-            var duplicate = false;
-            for (candidates[0..candidate_count]) |candidate| {
-                duplicate = duplicate or candidate == marker.number;
-            }
-            if (duplicate) {
-                continue;
-            }
+        var duplicate = false;
+        for (candidates[0..candidate_count]) |candidate| {
+            duplicate = duplicate or candidate == marker.number;
+        }
+        if (duplicate) {
+            continue;
+        }
 
-            var at: usize = candidate_count;
-            if (candidate_count < candidates.len) {
-                candidate_count += 1;
-            } else if (marker.number <= candidates[candidates.len - 1]) {
-                continue;
-            } else {
-                at = candidates.len - 1;
-            }
-            while (at != 0 and candidates[at - 1] < marker.number) : (at -= 1) {
-                if (at < candidates.len) {
-                    candidates[at] = candidates[at - 1];
-                }
-            }
+        var at: usize = candidate_count;
+        if (candidate_count < candidates.len) {
+            candidate_count += 1;
+        } else if (marker.number <= candidates[candidates.len - 1]) {
+            continue;
+        } else {
+            at = candidates.len - 1;
+        }
+        while (at != 0 and candidates[at - 1] < marker.number) : (at -= 1) {
             if (at < candidates.len) {
-                candidates[at] = marker.number;
+                candidates[at] = candidates[at - 1];
             }
+        }
+        if (at < candidates.len) {
+            candidates[at] = marker.number;
         }
     }
 
@@ -1268,18 +1294,10 @@ fn markerNumberClaimed(store: *const Store, target: Target, number: u16) bool {
 }
 
 fn markerPresent(buffer: *const ui.Buffer, number: u16) bool {
-    if (buffer.w < minimum_marker_width) {
-        return false;
-    }
-
-    var y: u16 = 0;
-    while (y < buffer.h) : (y += 1) {
-        var x: u16 = 0;
-        while (x <= buffer.w -| minimum_marker_width) : (x += 1) {
-            const marker = parseMarker(buffer, x, y) orelse continue;
-            if (marker.number == number) {
-                return true;
-            }
+    var scan: MarkerScan = .{ .buffer = buffer };
+    while (scan.next()) |marker| {
+        if (marker.number == number) {
+            return true;
         }
     }
 
@@ -1293,24 +1311,18 @@ const MarkerBoundary = struct {
 };
 
 fn markerTouchesCursor(buffer: *const ui.Buffer, boundary: MarkerBoundary) bool {
-    if (boundary.cursor.y >= buffer.h or boundary.ordinal == 0 or
-        buffer.w < minimum_marker_width)
-    {
-        return false;
-    }
-
-    var x: u16 = 0;
-    while (x <= buffer.w - minimum_marker_width) : (x += 1) {
-        const marker = parseMarker(buffer, x, boundary.cursor.y) orelse continue;
+    const cursor: ui.Point = .{ .x = boundary.cursor.x, .y = boundary.cursor.y };
+    var scan: MarkerScan = .{ .buffer = buffer };
+    while (scan.next()) |marker| {
         if (marker.number != boundary.ordinal) {
             continue;
         }
 
-        const matches = switch (boundary.deletion) {
-            .backward => marker.end == boundary.cursor.x,
-            .forward => marker.start == boundary.cursor.x,
+        const edge = switch (boundary.deletion) {
+            .backward => marker.end,
+            .forward => marker.start,
         };
-        if (matches) {
+        if (std.meta.eql(edge, cursor)) {
             return true;
         }
     }
@@ -1318,32 +1330,58 @@ fn markerTouchesCursor(buffer: *const ui.Buffer, boundary: MarkerBoundary) bool 
     return false;
 }
 
-fn parseMarker(buffer: *const ui.Buffer, x: u16, y: u16) ?MarkerPosition {
-    if (y >= buffer.h or x > buffer.w -| minimum_marker_width) {
+/// Reads one `[Image #N]` placeholder whose head starts at `at`. The editor
+/// may have wrapped the placeholder at its space: the head then closes its
+/// row and `#N]` opens the next one after that row's indentation.
+fn parseMarker(buffer: *const ui.Buffer, at: ui.Point) ?MarkerPosition {
+    if (!cellsMatch(buffer, at, marker_head)) {
         return null;
     }
 
-    for (marker_prefix, 0..) |expected, offset| {
-        const cell = buffer.cells[@as(usize, y) * buffer.w + x + offset];
-        if (cell.width == 0 or cell.text().len != 1 or cell.text()[0] != expected) {
-            return null;
-        }
+    const after_head: ui.Point = .{ .x = at.x + marker_head_width, .y = at.y };
+    if (cellsMatch(buffer, after_head, marker_separator)) {
+        const tail = parseMarkerTail(buffer, .{ .x = after_head.x + marker_separator_width, .y = at.y }) orelse return null;
+
+        return .{ .number = tail.number, .start = at, .end = tail.end };
     }
 
+    if (at.y + 1 >= buffer.h or !rowBlankFrom(buffer, after_head)) {
+        return null;
+    }
+
+    const number_x = firstInkOnRow(buffer, at.y + 1) orelse return null;
+    const hash: ui.Point = .{ .x = number_x, .y = at.y + 1 };
+    if (!cellsMatch(buffer, hash, "#")) {
+        return null;
+    }
+
+    const tail = parseMarkerTail(buffer, .{ .x = hash.x + 1, .y = hash.y }) orelse return null;
+
+    return .{ .number = tail.number, .start = at, .end = tail.end };
+}
+
+const MarkerTail = struct {
+    number: u16,
+    end: ui.Point,
+};
+
+/// Reads the `N]` that closes a marker, starting at its first digit.
+fn parseMarkerTail(buffer: *const ui.Buffer, at: ui.Point) ?MarkerTail {
     var number: u16 = 0;
-    var at = x + marker_prefix_width;
-    while (at < buffer.w) : (at += 1) {
-        const cell = buffer.cells[@as(usize, y) * buffer.w + at];
+    var x = at.x;
+    while (x < buffer.w) : (x += 1) {
+        const cell = cellAt(buffer, .{ .x = x, .y = at.y });
         if (cell.width == 0 or cell.text().len != 1) {
             return null;
         }
+
         const byte = cell.text()[0];
         if (byte == ']') {
-            if (at == x + marker_prefix_width or number == 0) {
+            if (x == at.x or number == 0) {
                 return null;
             }
 
-            return .{ .number = number, .start = x, .end = at + 1, .y = y };
+            return .{ .number = number, .end = .{ .x = x + 1, .y = at.y } };
         }
         if (byte < '0' or byte > '9') {
             return null;
@@ -1356,10 +1394,94 @@ fn parseMarker(buffer: *const ui.Buffer, x: u16, y: u16) ?MarkerPosition {
     return null;
 }
 
-fn markerWidthAt(buffer: *const ui.Buffer, x: u16, y: u16) u16 {
-    const marker = parseMarker(buffer, x, y) orelse return 0;
+fn cellAt(buffer: *const ui.Buffer, at: ui.Point) ui.Cell {
+    return buffer.cells[@as(usize, at.y) * buffer.w + at.x];
+}
 
-    return marker.end - marker.start;
+/// Reports whether `literal` occupies the cells starting at `at`, one ASCII
+/// byte per single-width cell.
+fn cellsMatch(buffer: *const ui.Buffer, at: ui.Point, literal: []const u8) bool {
+    if (at.y >= buffer.h or at.x + literal.len > buffer.w) {
+        return false;
+    }
+
+    for (literal, 0..) |expected, offset| {
+        const cell = cellAt(buffer, .{ .x = at.x + @as(u16, @intCast(offset)), .y = at.y });
+        if (cell.width == 0 or cell.text().len != 1 or cell.text()[0] != expected) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+fn cellBlank(cell: ui.Cell) bool {
+    return cell.width == 0 or std.mem.eql(u8, cell.text(), " ");
+}
+
+fn rowBlankFrom(buffer: *const ui.Buffer, at: ui.Point) bool {
+    var x = at.x;
+    while (x < buffer.w) : (x += 1) {
+        if (!cellBlank(cellAt(buffer, .{ .x = x, .y = at.y }))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+fn firstInkOnRow(buffer: *const ui.Buffer, y: u16) ?u16 {
+    var x: u16 = 0;
+    while (x < buffer.w) : (x += 1) {
+        if (!cellBlank(cellAt(buffer, .{ .x = x, .y = y }))) {
+            return x;
+        }
+    }
+
+    return null;
+}
+
+/// Width of the marker occupying one row from `x`, or 0 when the cell opens
+/// no marker or the marker wraps onto the next row.
+fn markerWidthAt(buffer: *const ui.Buffer, x: u16, y: u16) u16 {
+    const marker = parseMarker(buffer, .{ .x = x, .y = y }) orelse return 0;
+    if (!marker.contiguous()) {
+        return 0;
+    }
+
+    return marker.end.x - marker.start.x;
+}
+
+/// Reports whether the editor cursor follows a backslash. Claude and Pi
+/// turn the Enter that follows one into a newline instead of a submission.
+///
+/// ```zig
+/// if (attachments.promptContinuesAtCursor(screen)) return;
+/// ```
+pub fn promptContinuesAtCursor(screen: MarkerScreen) bool {
+    const cursor = editorCursor(screen) orelse return false;
+    if (cursor.x == 0) {
+        return false;
+    }
+
+    return cellsMatch(screen.buffer, .{ .x = cursor.x - 1, .y = cursor.y }, "\\");
+}
+
+/// The hardware cursor when the child shows it, otherwise Pi's isolated
+/// inverse-video cell.
+fn editorCursor(screen: MarkerScreen) ?ui.Point {
+    if (screen.cursor.visible) {
+        return .{ .x = screen.cursor.x, .y = screen.cursor.y };
+    }
+
+    var y: u16 = 0;
+    while (y < screen.buffer.h) : (y += 1) {
+        if (path_marker.cursorOnRow(pathScreen(screen), y)) |x| {
+            return .{ .x = x, .y = y };
+        }
+    }
+
+    return null;
 }
 
 fn atomicSteps(buffer: *const ui.Buffer, y: u16, span: path_marker.Span) ?u8 {
@@ -1665,6 +1787,61 @@ test "Claude previews retain stable marker numbers across attachment deletion" {
     const remaining = store.snapshot();
     try std.testing.expectEqual(@as(u8, 1), remaining.len);
     try std.testing.expectEqual(@as(u64, 2), @intFromEnum(remaining.items[0].id));
+}
+
+test "a marker wrapped at its space keeps its preview and stays dismissable" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const target: Target = .{ .pane_id = @enumFromInt(8), .pane_generation = 4 };
+    _ = store.setTarget(target);
+    const capture = try testCapture(std.testing.allocator, testRequest(1, target), "first");
+    capture.request.marker_policy = .stable_number;
+    try store.adopt(capture);
+    var buffer = try ui.Buffer.init(std.testing.allocator, 40, 3);
+    defer buffer.deinit();
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> aaaaaaaaaaaaaaaaaaaaaaaaaaaaa [Image", .style = .{} });
+    const end_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "  #1]", .style = .{} });
+    const after_marker: MarkerScreen = .{ .buffer = &buffer, .cursor = .{ .visible = true, .x = end_x, .y = 1 } };
+
+    try std.testing.expectEqual(@as(u8, 0), store.reconcileMarkers(target, after_marker));
+    try std.testing.expectEqual(@as(?u16, 1), store.findConst(@enumFromInt(1)).?.markerNumber());
+
+    store.expectMarkerDeletion(target);
+    try std.testing.expectEqual(@as(u8, 0), store.reconcileMarkers(target, after_marker));
+    try std.testing.expectEqual(@as(u8, 1), store.snapshot().len);
+
+    const backward = store.planMarkerRemoval(@enumFromInt(1), after_marker).?;
+    try std.testing.expectEqual(MarkerDeletion.backward, backward.deletion);
+    try std.testing.expectEqual(@as(u8, 0), backward.steps);
+    try std.testing.expectEqual(@as(?Id, @enumFromInt(1)), store.idAtMarkerDeletion(after_marker, .backward));
+
+    const before_marker: MarkerScreen = .{ .buffer = &buffer, .cursor = .{ .visible = true, .x = 2, .y = 0 } };
+    const forward = store.planMarkerRemoval(@enumFromInt(1), before_marker).?;
+    try std.testing.expectEqual(MarkerDeletion.forward, forward.deletion);
+    try std.testing.expectEqual(@as(u8, 30), forward.steps);
+    try std.testing.expectEqual(@as(?Id, @enumFromInt(1)), store.idAtMarkerDeletion(.{
+        .buffer = &buffer,
+        .cursor = .{ .visible = true, .x = 32, .y = 0 },
+    }, .forward));
+
+    buffer.clear(.{});
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> aaaaaaaaaaaaaaaaaaaaaaaaaaaaa", .style = .{} });
+    store.expectMarkerDeletion(target);
+    try std.testing.expectEqual(@as(u8, 1), store.reconcileMarkers(target, after_marker));
+    try std.testing.expectEqual(@as(u8, 0), store.snapshot().len);
+}
+
+test "Enter after a trailing backslash continues the prompt" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 20, 2);
+    defer buffer.deinit();
+    const end_x = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "> hello\\", .style = .{} });
+
+    try std.testing.expect(promptContinuesAtCursor(.{ .buffer = &buffer, .cursor = .{ .visible = true, .x = end_x, .y = 0 } }));
+    try std.testing.expect(!promptContinuesAtCursor(.{ .buffer = &buffer, .cursor = .{ .visible = true, .x = end_x - 1, .y = 0 } }));
+    try std.testing.expect(!promptContinuesAtCursor(.{ .buffer = &buffer, .cursor = .{ .visible = false, .x = end_x, .y = 0 } }));
+
+    writePiCursor(&buffer, end_x, 0);
+    try std.testing.expect(promptContinuesAtCursor(.{ .buffer = &buffer, .cursor = .{ .visible = false, .x = 0, .y = 0 } }));
 }
 
 const pi_uuid = "3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b";

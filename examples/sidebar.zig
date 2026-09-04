@@ -1470,7 +1470,11 @@ pub fn main(init: std.process.Init) !void {
     screen.cursor = state.cursor;
     state.last_frame = try screen.flush(w);
     state.frames += 1;
-    pacer.record(monotonic(io), null, 1);
+    pacer.record(.{
+        .now = monotonic(io),
+        .scheduled_deadline = null,
+        .absorbed = 1,
+    });
 
     while (!state.quit) {
         // Blocks for the first message and returns everything queued behind
@@ -1531,7 +1535,11 @@ pub fn main(init: std.process.Init) !void {
         try sendClipboard(&state, w);
         state.last_frame = try screen.flush(w);
         state.frames += 1;
-        pacer.record(monotonic(io), scheduled_deadline, absorbed);
+        pacer.record(.{
+            .now = monotonic(io),
+            .scheduled_deadline = scheduled_deadline,
+            .absorbed = absorbed,
+        });
     }
 
     // On stderr and after the alternate screen is gone, so it lands in the
