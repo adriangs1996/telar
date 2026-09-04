@@ -183,6 +183,11 @@ pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !Manifest {
 
 pub const Digest = [32]u8;
 
+pub const PluginIdentity = struct {
+    id: []const u8,
+    digest: Digest,
+};
+
 pub fn contentDigest(manifest_bytes: []const u8, entry_bytes: []const u8) Digest {
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
     hasher.update("telar-plugin-v1\x00");
@@ -201,9 +206,14 @@ pub const Grant = struct {
     digest: Digest,
     capabilities: CapabilitySet,
 
-    pub fn allows(grant: Grant, plugin_id: []const u8, digest: Digest, capability: Capability) bool {
-        return grant.plugin_hash == stableId(plugin_id) and
-            std.mem.eql(u8, &grant.digest, &digest) and
+    /// Checks that this grant matches an exact package before testing one capability.
+    ///
+    /// ```zig
+    /// if (grant.allows(.{ .id = manifest.id(), .digest = digest }, .history_read)) readHistory();
+    /// ```
+    pub fn allows(grant: Grant, identity: PluginIdentity, capability: Capability) bool {
+        return grant.plugin_hash == stableId(identity.id) and
+            std.mem.eql(u8, &grant.digest, &identity.digest) and
             grant.capabilities.contains(capability);
     }
 };
@@ -409,9 +419,9 @@ test "trust grants are invalidated by content changes" {
         .digest = first,
         .capabilities = capabilities,
     };
-    try std.testing.expect(grant.allows("sample", first, .history_read));
-    try std.testing.expect(!grant.allows("sample", second, .history_read));
-    try std.testing.expect(!grant.allows("sample", first, .network));
+    try std.testing.expect(grant.allows(.{ .id = "sample", .digest = first }, .history_read));
+    try std.testing.expect(!grant.allows(.{ .id = "sample", .digest = second }, .history_read));
+    try std.testing.expect(!grant.allows(.{ .id = "sample", .digest = first }, .network));
 }
 
 test "trust store round trips digest-bound capability grants" {
@@ -428,9 +438,5 @@ test "trust store round trips digest-bound capability grants" {
     try store.writeJson(&writer);
     const decoded = try TrustStore.parse(std.testing.allocator, writer.buffered());
     try std.testing.expectEqual(@as(u8, 1), decoded.count);
-    try std.testing.expect(decoded.entries[0].grant.allows(
-        "sample",
-        digest,
-        .history_read,
-    ));
+    try std.testing.expect(decoded.entries[0].grant.allows(.{ .id = "sample", .digest = digest }, .history_read));
 }

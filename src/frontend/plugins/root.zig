@@ -129,8 +129,12 @@ pub const Registry = struct {
         if (!package.manifest.capabilities.contains(capability)) {
             return error.CapabilityNotDeclared;
         }
-        for (registry.grants[0..registry.grant_count]) |grant|
-            if (grant.allows(package.manifest.id(), package.digest, capability)) return;
+        for (registry.grants[0..registry.grant_count]) |grant| {
+            if (grant.allows(.{ .id = package.manifest.id(), .digest = package.digest }, capability)) {
+                return;
+            }
+        }
+
         return error.CapabilityNotGranted;
     }
 
