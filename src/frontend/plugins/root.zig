@@ -75,7 +75,7 @@ pub const Registry = struct {
             if (registry.count == max_packages) {
                 return error.TooManyPlugins;
             }
-            const package = try loadPackage(context.gpa, context.io, context.config_dir, spec.path());
+            const package = try loadPackage(context, spec.path());
             for (registry.packages[0..registry.count]) |*existing| {
                 if (std.mem.eql(u8, existing.manifest.id(), package.manifest.id())) {
                     return error.DuplicatePluginId;
@@ -303,11 +303,13 @@ pub fn executeWorker(io: Io, gpa: std.mem.Allocator, request: WorkerRequest) !Wo
     };
 }
 
-fn loadPackage(gpa: std.mem.Allocator, io: Io, config_dir: []const u8, configured_path: []const u8) !Package {
+fn loadPackage(context: LoadContext, configured_path: []const u8) !Package {
+    const gpa = context.gpa;
+    const io = context.io;
     const joined = if (std.fs.path.isAbsolute(configured_path))
         try gpa.dupe(u8, configured_path)
     else
-        try std.fs.path.resolve(gpa, &.{ config_dir, configured_path });
+        try std.fs.path.resolve(gpa, &.{ context.config_dir, configured_path });
     defer gpa.free(joined);
 
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -428,8 +430,10 @@ fn digestPackage(gpa: std.mem.Allocator, io: Io, root: []const u8) !plugin.Diges
     return hasher.finalResult();
 }
 
+/// Loads and validates one package without registering it.
+/// For example: `const package = try inspectPackage(gpa, io, path);`.
 pub fn inspectPackage(gpa: std.mem.Allocator, io: Io, path: []const u8) !Package {
-    return loadPackage(gpa, io, ".", path);
+    return loadPackage(.{ .gpa = gpa, .io = io, .config_dir = "." }, path);
 }
 
 pub fn installPackage(gpa: std.mem.Allocator, io: Io, package: *const Package, destination: []const u8) !void {
