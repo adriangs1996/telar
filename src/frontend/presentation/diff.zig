@@ -30,15 +30,21 @@ pub const DamageRow = struct {
     }
 };
 
+pub const CellSpan = struct {
+    start: usize,
+    count: usize,
+};
+
 /// Marks every damage row a linear cell span [start, start+count) touches,
 /// splitting the span at row boundaries. The caller validates bounds; this
 /// assumes `start + count` lies inside `damage_rows.len * width`.
-pub fn markRows(damage_rows: []DamageRow, width: usize, start: usize, count: usize) void {
-    if (count == 0) {
+/// For example: `markRows(rows, width, .{ .start = first, .count = len });`.
+pub fn markRows(damage_rows: []DamageRow, width: usize, span: CellSpan) void {
+    if (span.count == 0) {
         return;
     }
-    var cursor = start;
-    const end = start + count;
+    var cursor = span.start;
+    const end = span.start + span.count;
     while (cursor < end) {
         const row = cursor / width;
         const row_end = @min(end, (row + 1) * width);
@@ -83,7 +89,7 @@ const testing = std.testing;
 
 test "a span crossing rows marks exact damage on each" {
     var rows = [_]DamageRow{.{}} ** 3;
-    markRows(&rows, 10, 8, 4);
+    markRows(&rows, 10, .{ .start = 8, .count = 4 });
     try testing.expect(rows[0].dirty());
     try testing.expectEqual(@as(u16, 8), rows[0].start);
     try testing.expectEqual(@as(u16, 10), rows[0].end);
@@ -95,8 +101,8 @@ test "a span crossing rows marks exact damage on each" {
 
 test "marks accumulate as one conservative range" {
     var rows = [_]DamageRow{.{}} ** 1;
-    markRows(&rows, 10, 1, 1);
-    markRows(&rows, 10, 8, 1);
+    markRows(&rows, 10, .{ .start = 1, .count = 1 });
+    markRows(&rows, 10, .{ .start = 8, .count = 1 });
     try testing.expectEqual(@as(u16, 1), rows[0].start);
     try testing.expectEqual(@as(u16, 9), rows[0].end);
     rows[0].clear();

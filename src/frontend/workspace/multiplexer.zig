@@ -87,7 +87,7 @@ pub const Pane = struct {
     }
 
     fn markSpan(pane: *Pane, start: u32, count: u32) void {
-        diff.markRows(pane.damage_rows, pane.buffer.w, start, count);
+        diff.markRows(pane.damage_rows, pane.buffer.w, .{ .start = start, .count = count });
     }
 
     fn setCwd(pane: *Pane, path: []const u8) !bool {

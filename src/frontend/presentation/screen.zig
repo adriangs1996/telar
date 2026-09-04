@@ -133,7 +133,7 @@ pub const Screen = struct {
             return error.PatchOutOfBounds;
         }
 
-        diff.markRows(s.damage_rows, s.back.w, first, len);
+        diff.markRows(s.damage_rows, s.back.w, .{ .start = first, .count = len });
         return s.back.cells[first..end];
     }
 
