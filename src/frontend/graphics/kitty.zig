@@ -31,6 +31,12 @@ pub const Support = capability_mod.Support;
 pub const SidebarRendering = capability_mod.SidebarRendering;
 pub const ResolvedSidebarRendering = capability_mod.ResolvedSidebarRendering;
 
+pub const Configuration = struct {
+    support: Support,
+    cell_width: u16,
+    cell_height: u16,
+};
+
 /// Encoded image bytes one media pass may put on the direct-data fallback
 /// wire. Local Ghostty sessions use a compact shared-memory command instead.
 pub const transmission_budget_per_frame: usize = 256 * 1024;

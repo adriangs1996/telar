@@ -307,10 +307,16 @@ pub const Store = struct {
         }
     }
 
-    pub fn configure(store: *Store, support: kitty.Support, cell_width: u16, cell_height: u16) bool {
-        const supported = support == .supported;
-        if (store.supported == supported and store.cell_width == cell_width and
-            store.cell_height == cell_height)
+    /// Applies host graphics support and cell dimensions, returning whether
+    /// attachment rendering state changed.
+    ///
+    /// ```zig
+    /// const changed = store.configure(.{ .support = .supported, .cell_width = 8, .cell_height = 16 });
+    /// ```
+    pub fn configure(store: *Store, configuration: kitty.Configuration) bool {
+        const supported = configuration.support == .supported;
+        if (store.supported == supported and store.cell_width == configuration.cell_width and
+            store.cell_height == configuration.cell_height)
         {
             return false;
         }
@@ -318,8 +324,8 @@ pub const Store = struct {
             store.cancelPartial();
         }
         store.supported = supported;
-        store.cell_width = cell_width;
-        store.cell_height = cell_height;
+        store.cell_width = configuration.cell_width;
+        store.cell_height = configuration.cell_height;
         if (supported) {
             for (&store.slots) |*maybe_slot| {
                 if (maybe_slot.*) |*slot| {
@@ -1802,7 +1808,7 @@ test "preview store emits PNG and client-owned z-index placements" {
         testRequest(1, target),
         "encoded png",
     ));
-    _ = store.configure(.supported, 10, 20);
+    _ = store.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var plan: Plan = .{ .thumbnail_count = 1 };
     plan.thumbnails[0] = .{
         .id = @enumFromInt(1),
@@ -1851,7 +1857,7 @@ test "cancelling a dismissed PNG transfer owns the graphics stream until abort" 
         testRequest(1, target),
         large,
     ));
-    _ = store.configure(.supported, 10, 20);
+    _ = store.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var plan: Plan = .{ .thumbnail_count = 1 };
     plan.thumbnails[0] = .{
         .id = @enumFromInt(1),

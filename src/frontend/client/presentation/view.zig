@@ -275,11 +275,11 @@ pub const State = struct {
         const toast_changed = state.kitty_toasts.configure(support, cell_width, cell_height);
         const modal_changed = state.kitty_modal.configure(support, cell_width, cell_height);
         const icons_changed = state.kitty_icons.configure(support, cell_width, cell_height);
-        const attachments_changed = state.attachment_store.configure(
-            support,
-            cell_width,
-            cell_height,
-        );
+        const attachments_changed = state.attachment_store.configure(.{
+            .support = support,
+            .cell_width = cell_width,
+            .cell_height = cell_height,
+        });
         if (state.sidebar_rendering != resolved or state.cell_width_px != cell_width or
             state.cell_height_px != cell_height or toast_changed or icons_changed or
             modal_changed or attachments_changed)
