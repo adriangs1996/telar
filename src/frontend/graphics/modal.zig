@@ -463,37 +463,64 @@ fn renderCorners(asset: *Asset, key: RenderKey) void {
             var x: u32 = 0;
             while (x < key.cell_width) : (x += 1) {
                 const destination_x = @as(u32, @intCast(corner)) * key.cell_width + x;
-                renderCornerPixel(asset, destination_x, y, x, y, right, bottom, key);
+                renderCornerPixel(asset, .{
+                    .destination = .{ .x = destination_x, .y = y },
+                    .local = .{ .x = x, .y = y },
+                    .right = right,
+                    .bottom = bottom,
+                    .key = key,
+                });
             }
         }
     }
 }
 
-fn renderCornerPixel(asset: *Asset, destination_x: u32, destination_y: u32, local_x: u32, local_y: u32, right: bool, bottom: bool, key: RenderKey) void {
-    const width_units = key.target_width * units_per_pixel;
-    const height_units = key.target_height * units_per_pixel;
-    const radius_units = @as(u32, key.radius) * units_per_pixel;
-    const border_units = @as(u32, key.border_width) * units_per_pixel;
+const PixelPoint = struct {
+    x: u32,
+    y: u32,
+};
+
+const RoundedRectangle = struct {
+    width: u32,
+    height: u32,
+    radius: u32,
+};
+
+const CornerPixel = struct {
+    destination: PixelPoint,
+    local: PixelPoint,
+    right: bool,
+    bottom: bool,
+    key: RenderKey,
+};
+
+fn renderCornerPixel(asset: *Asset, pixel: CornerPixel) void {
+    const width_units = pixel.key.target_width * units_per_pixel;
+    const height_units = pixel.key.target_height * units_per_pixel;
+    const radius_units = @as(u32, pixel.key.radius) * units_per_pixel;
+    const border_units = @as(u32, pixel.key.border_width) * units_per_pixel;
+    const outer: RoundedRectangle = .{ .width = width_units, .height = height_units, .radius = radius_units };
+    const inner: RoundedRectangle = .{
+        .width = width_units -| border_units * 2,
+        .height = height_units -| border_units * 2,
+        .radius = radius_units -| border_units,
+    };
     var border_samples: u32 = 0;
     var background_samples: u32 = 0;
     for (0..supersample) |sample_y| {
         for (0..supersample) |sample_x| {
-            const x = (if (right) key.target_width - key.cell_width else 0) * units_per_pixel +
-                local_x * units_per_pixel + @as(u32, @intCast(sample_x * 2 + 1));
-            const y = (if (bottom) key.target_height - key.cell_height else 0) * units_per_pixel +
-                local_y * units_per_pixel + @as(u32, @intCast(sample_y * 2 + 1));
-            if (!insideRoundedRectangle(x, y, width_units, height_units, radius_units)) {
+            const point: PixelPoint = .{
+                .x = (if (pixel.right) pixel.key.target_width - pixel.key.cell_width else 0) * units_per_pixel +
+                    pixel.local.x * units_per_pixel + @as(u32, @intCast(sample_x * 2 + 1)),
+                .y = (if (pixel.bottom) pixel.key.target_height - pixel.key.cell_height else 0) * units_per_pixel +
+                    pixel.local.y * units_per_pixel + @as(u32, @intCast(sample_y * 2 + 1)),
+            };
+            if (!insideRoundedRectangle(point, outer)) {
                 continue;
             }
-            const in_inner = x >= border_units and y >= border_units and
-                x + border_units < width_units and y + border_units < height_units and
-                insideRoundedRectangle(
-                    x - border_units,
-                    y - border_units,
-                    width_units - border_units * 2,
-                    height_units - border_units * 2,
-                    radius_units -| border_units,
-                );
+            const in_inner = point.x >= border_units and point.y >= border_units and
+                point.x + border_units < width_units and point.y + border_units < height_units and
+                insideRoundedRectangle(.{ .x = point.x - border_units, .y = point.y - border_units }, inner);
             if (in_inner) {
                 background_samples += 1;
             } else {
@@ -505,11 +532,11 @@ fn renderCornerPixel(asset: *Asset, destination_x: u32, destination_y: u32, loca
     if (painted == 0) {
         return;
     }
-    const index = (@as(usize, destination_y) * asset.width + destination_x) * 4;
+    const index = (@as(usize, pixel.destination.y) * asset.width + pixel.destination.x) * 4;
     inline for (0..3) |channel| {
         asset.pixels[index + channel] = @intCast(
-            (@as(u32, key.accent[channel]) * border_samples +
-                @as(u32, key.background[channel]) * background_samples + painted / 2) /
+            (@as(u32, pixel.key.accent[channel]) * border_samples +
+                @as(u32, pixel.key.background[channel]) * background_samples + painted / 2) /
                 painted,
         );
     }
@@ -519,20 +546,20 @@ fn renderCornerPixel(asset: *Asset, destination_x: u32, destination_y: u32, loca
     );
 }
 
-fn insideRoundedRectangle(x: u32, y: u32, width: u32, height: u32, radius: u32) bool {
-    if (radius == 0) {
+fn insideRoundedRectangle(point: PixelPoint, rectangle: RoundedRectangle) bool {
+    if (rectangle.radius == 0) {
         return true;
     }
-    if ((x >= radius and x <= width - radius) or
-        (y >= radius and y <= height - radius))
+    if ((point.x >= rectangle.radius and point.x <= rectangle.width - rectangle.radius) or
+        (point.y >= rectangle.radius and point.y <= rectangle.height - rectangle.radius))
     {
         return true;
     }
-    const center_x = if (x < radius) radius else width - radius;
-    const center_y = if (y < radius) radius else height - radius;
-    const delta_x = @as(i64, x) - center_x;
-    const delta_y = @as(i64, y) - center_y;
-    return delta_x * delta_x + delta_y * delta_y <= @as(i64, radius) * radius;
+    const center_x = if (point.x < rectangle.radius) rectangle.radius else rectangle.width - rectangle.radius;
+    const center_y = if (point.y < rectangle.radius) rectangle.radius else rectangle.height - rectangle.radius;
+    const delta_x = @as(i64, point.x) - center_x;
+    const delta_y = @as(i64, point.y) - center_y;
+    return delta_x * delta_x + delta_y * delta_y <= @as(i64, rectangle.radius) * rectangle.radius;
 }
 
 fn fill(pixels: []u8, color: [3]u8) void {
