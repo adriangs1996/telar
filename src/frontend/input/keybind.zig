@@ -402,6 +402,11 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
             now_ns: u64,
         };
 
+        const Drain = struct {
+            now_ns: u64,
+            force_escape: bool,
+        };
+
         map: Map,
         prefix: ?Key = null,
         candidates: Map.Range = .{ .start = 0, .end = 0 },
@@ -502,7 +507,7 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
                 @memcpy(router.input[router.input_end..][0..take], bytes[offset..][0..take]);
                 router.input_end += take;
                 offset += take;
-                if (try router.drain(now_ns, false, handler) == .stop) {
+                if (try router.drain(.{ .now_ns = now_ns, .force_escape = false }, handler) == .stop) {
                     return .stop;
                 }
             }
@@ -531,7 +536,7 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
 
             const pending = router.input[router.input_start..router.input_end];
             if (pending.len == 1 and pending[0] == 0x1b) {
-                if (try router.drain(now_ns, true, handler) == .stop) {
+                if (try router.drain(.{ .now_ns = now_ns, .force_escape = true }, handler) == .stop) {
                     return .stop;
                 }
             } else {
@@ -557,12 +562,12 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
             return .continue_routing;
         }
 
-        fn drain(router: *Self, now_ns: u64, force_escape: bool, handler: anytype) !Control {
+        fn drain(router: *Self, input: Drain, handler: anytype) !Control {
             while (router.input_start < router.input_end) {
                 const pending = router.input[router.input_start..router.input_end];
-                if (!force_escape and pending.len == 1 and pending[0] == 0x1b) {
+                if (!input.force_escape and pending.len == 1 and pending[0] == 0x1b) {
                     if (router.input_since_ns == null) {
-                        router.input_since_ns = now_ns;
+                        router.input_since_ns = input.now_ns;
                     }
                     break;
                 }
@@ -570,7 +575,7 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
                 const parsed = term.parse(pending) orelse break;
                 if (parsed.len == 0) {
                     if (router.input_since_ns == null) {
-                        router.input_since_ns = now_ns;
+                        router.input_since_ns = input.now_ns;
                     }
                     break;
                 }
@@ -592,7 +597,7 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
                         const control = try router.handleKey(.{
                             .key = key,
                             .raw = raw,
-                            .now_ns = now_ns,
+                            .now_ns = input.now_ns,
                         }, handler);
                         router.input_start += parsed.len;
                         if (control == .stop) {
