@@ -85,16 +85,18 @@ pub const ScheduleArgs = struct {
 /// ```
 pub fn schedule(state: *State, args: ScheduleArgs) !void {
     try args.select.concurrent(.config_reload, waitConfigReload, .{
-        args.io,
-        args.gpa,
-        args.path,
-        state.mtime_ns,
-        state.next_generation,
-        args.profile,
-        args.current_generation,
-        args.current_registry,
-        args.trust_path,
-        &state.orphans,
+        WaitArgs{
+            .io = args.io,
+            .gpa = args.gpa,
+            .path = args.path,
+            .known_mtime_ns = state.mtime_ns,
+            .generation_number = state.next_generation,
+            .profile = args.profile,
+            .current_generation = args.current_generation,
+            .current_registry = args.current_registry,
+            .trust_path = args.trust_path,
+            .orphans = &state.orphans,
+        },
     });
 }
 
@@ -227,65 +229,78 @@ const Partial = struct {
     }
 };
 
-fn waitConfigReload(io: Io, gpa: std.mem.Allocator, path: []const u8, known_mtime_ns: i128, generation_number: u64, profile: ?[]const u8, current_generation: *const lua_config.Generation, current_registry: *const plugin_broker.Registry, trust_path: []const u8, orphans: *Orphans) anyerror!ConfigReload {
-    try io.sleep(.fromSeconds(1), .awake);
-    const mtime_ns = current_generation.watchFingerprint(io, path) ^
-        @as(i128, current_registry.watchFingerprint(gpa, io)) ^
-        @as(i128, trustWatchFingerprint(io, trust_path));
-    if (mtime_ns == known_mtime_ns) {
+const WaitArgs = struct {
+    io: Io,
+    gpa: std.mem.Allocator,
+    path: []const u8,
+    known_mtime_ns: i128,
+    generation_number: u64,
+    profile: ?[]const u8,
+    current_generation: *const lua_config.Generation,
+    current_registry: *const plugin_broker.Registry,
+    trust_path: []const u8,
+    orphans: *Orphans,
+};
+
+fn waitConfigReload(args: WaitArgs) anyerror!ConfigReload {
+    try args.io.sleep(.fromSeconds(1), .awake);
+    const mtime_ns = args.current_generation.watchFingerprint(args.io, args.path) ^
+        @as(i128, args.current_registry.watchFingerprint(args.gpa, args.io)) ^
+        @as(i128, trustWatchFingerprint(args.io, args.trust_path));
+    if (mtime_ns == args.known_mtime_ns) {
         return .{ .unchanged = mtime_ns };
     }
     var diagnostic: lua_config.Diagnostic = .{};
     const generation = lua_config.Generation.loadFileProfile(
-        gpa,
-        io,
-        path,
-        generation_number,
-        profile,
+        args.gpa,
+        args.io,
+        args.path,
+        args.generation_number,
+        args.profile,
         &diagnostic,
     ) catch return .{ .failed = .{
         .diagnostic = diagnostic,
         .mtime_ns = mtime_ns,
     } };
-    orphans.generation = generation;
+    args.orphans.generation = generation;
     var partial: Partial = .{ .generation = generation };
-    const trust = loadReloadTrustStore(gpa, io, trust_path) catch |err| {
-        partial.abandon(gpa, orphans);
+    const trust = loadReloadTrustStore(args.gpa, args.io, args.trust_path) catch |err| {
+        partial.abandon(args.gpa, args.orphans);
         diagnostic.set("cannot load plugin trust store: {s}", .{@errorName(err)});
         return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
     };
-    orphans.trust = trust;
+    args.orphans.trust = trust;
     partial.trust = trust;
-    const registry = gpa.create(plugin_broker.Registry) catch {
-        partial.abandon(gpa, orphans);
+    const registry = args.gpa.create(plugin_broker.Registry) catch {
+        partial.abandon(args.gpa, args.orphans);
         diagnostic.set("cannot allocate reloaded plugin registry", .{});
         return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
     };
     partial.registry = registry;
     registry.* = plugin_broker.Registry.loadWithTrust(
-        gpa,
-        io,
+        args.gpa,
+        args.io,
         generation.configDir(),
         generation.pluginSlice(),
         trust,
     ) catch |err| {
-        partial.abandon(gpa, orphans);
+        partial.abandon(args.gpa, args.orphans);
         diagnostic.set("cannot load plugins: {s}", .{@errorName(err)});
         return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
     };
     registry.validateConfiguredActions(generation.snapshot.bindingSlice()) catch |err| {
-        partial.abandon(gpa, orphans);
+        partial.abandon(args.gpa, args.orphans);
         diagnostic.set("invalid configured plugin action: {s}", .{@errorName(err)});
         return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
     };
-    orphans.registry = registry;
+    args.orphans.registry = registry;
     return .{ .loaded = .{
         .generation = generation,
         .registry = registry,
         .trust_store = trust,
-        .mtime_ns = generation.watchFingerprint(io, path) ^
-            @as(i128, registry.watchFingerprint(gpa, io)) ^
-            @as(i128, trustWatchFingerprint(io, trust_path)),
+        .mtime_ns = generation.watchFingerprint(args.io, args.path) ^
+            @as(i128, registry.watchFingerprint(args.gpa, args.io)) ^
+            @as(i128, trustWatchFingerprint(args.io, args.trust_path)),
     } };
 }
 
