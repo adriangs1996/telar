@@ -2038,13 +2038,11 @@ pub const KittySidebarRenderer = struct {
             renderer.provider_slot_height = provider_slot_height;
             renderer.provider_atlas_width = provider_atlas_width;
             renderer.provider_atlas_height = provider_atlas_height;
-            renderProviderAtlas(
-                renderer.provider_atlas,
-                provider_atlas_width,
-                provider_atlas_height,
-                provider_slot_width,
-                provider_slot_height,
-            );
+            renderProviderAtlas(.{
+                .destination = renderer.provider_atlas,
+                .atlas = .{ .width = provider_atlas_width, .height = provider_atlas_height },
+                .slot = .{ .width = provider_slot_width, .height = provider_slot_height },
+            });
             renderer.provider_emitted = false;
             renderer.provider_dirty = content.provider_marks.len != 0;
             renderer.placements_dirty = true;
@@ -2362,37 +2360,49 @@ fn clearRgba(pixels: []u8) void {
     @memset(pixels, 0);
 }
 
-fn renderProviderAtlas(destination: []u8, atlas_width: u32, atlas_height: u32, slot_width: u32, slot_height: u32) void {
-    std.debug.assert(atlas_width == providerAtlasSourceCount() * slot_width);
-    std.debug.assert(atlas_height == slot_height);
-    clearRgba(destination);
-    const icon_size = @min(slot_width, slot_height);
-    const offset_x = (slot_width - icon_size) / 2;
-    const offset_y = (slot_height - icon_size) / 2;
+const ProviderAtlasInput = struct {
+    destination: []u8,
+    atlas: PixelSize,
+    slot: PixelSize,
+};
+
+const ProviderSample = struct {
+    destination: *[4]u8,
+    provider: u32,
+    point: PixelPoint,
+    size: u32,
+};
+
+fn renderProviderAtlas(input: ProviderAtlasInput) void {
+    std.debug.assert(input.atlas.width == providerAtlasSourceCount() * input.slot.width);
+    std.debug.assert(input.atlas.height == input.slot.height);
+    clearRgba(input.destination);
+    const icon_size = @min(input.slot.width, input.slot.height);
+    const offset_x = (input.slot.width - icon_size) / 2;
+    const offset_y = (input.slot.height - icon_size) / 2;
     var provider: u32 = 0;
     while (provider < providerAtlasSourceCount()) : (provider += 1) {
         var y: u32 = 0;
         while (y < icon_size) : (y += 1) {
             var x: u32 = 0;
             while (x < icon_size) : (x += 1) {
-                const destination_x = provider * slot_width + offset_x + x;
+                const destination_x = provider * input.slot.width + offset_x + x;
                 const destination_y = offset_y + y;
-                const destination_index = (@as(usize, destination_y) * atlas_width + destination_x) * 4;
-                sampleProviderPixel(
-                    destination[destination_index..][0..4],
-                    provider,
-                    x,
-                    y,
-                    icon_size,
-                );
+                const destination_index = (@as(usize, destination_y) * input.atlas.width + destination_x) * 4;
+                sampleProviderPixel(.{
+                    .destination = input.destination[destination_index..][0..4],
+                    .provider = provider,
+                    .point = .{ .x = x, .y = y },
+                    .size = icon_size,
+                });
             }
         }
     }
 }
 
-fn sampleProviderPixel(destination: *[4]u8, provider: u32, destination_x: u32, destination_y: u32, destination_size: u32) void {
-    const source_x = sampleAxis(destination_x, destination_size);
-    const source_y = sampleAxis(destination_y, destination_size);
+fn sampleProviderPixel(sample: ProviderSample) void {
+    const source_x = sampleAxis(sample.point.x, sample.size);
+    const source_y = sampleAxis(sample.point.y, sample.size);
     const one: u64 = 1 << 16;
     const weights = [4]u64{
         (one - source_x.fraction) * (one - source_y.fraction),
@@ -2401,10 +2411,10 @@ fn sampleProviderPixel(destination: *[4]u8, provider: u32, destination_x: u32, d
         source_x.fraction * source_y.fraction,
     };
     const pixels = [4][4]u8{
-        providerSourcePixel(provider, source_x.index, source_y.index),
-        providerSourcePixel(provider, source_x.next, source_y.index),
-        providerSourcePixel(provider, source_x.index, source_y.next),
-        providerSourcePixel(provider, source_x.next, source_y.next),
+        providerSourcePixel(sample.provider, source_x.index, source_y.index),
+        providerSourcePixel(sample.provider, source_x.next, source_y.index),
+        providerSourcePixel(sample.provider, source_x.index, source_y.next),
+        providerSourcePixel(sample.provider, source_x.next, source_y.next),
     };
     const total_weight: u64 = one * one;
     var alpha_sum: u64 = 0;
@@ -2414,15 +2424,15 @@ fn sampleProviderPixel(destination: *[4]u8, provider: u32, destination_x: u32, d
         inline for (0..3) |channel|
             premultiplied[channel] += @as(u64, pixel[channel]) * pixel[3] * weight;
     }
-    destination[3] = @intCast((alpha_sum + total_weight / 2) / total_weight);
+    sample.destination[3] = @intCast((alpha_sum + total_weight / 2) / total_weight);
     if (alpha_sum == 0) {
-        destination[0] = 0;
-        destination[1] = 0;
-        destination[2] = 0;
+        sample.destination[0] = 0;
+        sample.destination[1] = 0;
+        sample.destination[2] = 0;
         return;
     }
     inline for (0..3) |channel|
-        destination[channel] = @intCast((premultiplied[channel] + alpha_sum / 2) / alpha_sum);
+        sample.destination[channel] = @intCast((premultiplied[channel] + alpha_sum / 2) / alpha_sum);
 }
 
 const SampleAxis = struct {
