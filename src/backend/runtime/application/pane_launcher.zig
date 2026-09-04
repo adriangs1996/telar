@@ -151,8 +151,10 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
             const child_environment = if (launcher.proxy) |proxy| block: {
                 proxy_environment = try proxy.registerPane(
                     pane_key,
-                    launcher.inherited_environment,
-                    identity_overrides,
+                    .{
+                        .inherited = launcher.inherited_environment,
+                        .overrides = identity_overrides,
+                    },
                 );
                 proxy_registered = true;
                 break :block proxy_environment.?.environment();

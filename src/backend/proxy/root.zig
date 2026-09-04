@@ -73,6 +73,11 @@ pub const PaneEnvironment = struct {
     }
 };
 
+pub const PaneEnvironmentOptions = struct {
+    inherited: std.process.Environ,
+    overrides: []const pty.ChildEnvironment.Override,
+};
+
 const lifecycle_port: lifecycle_mod.Port(service_mod.Service, service_mod.Worker) = .{
     .start = service_mod.Service.start,
     .cancel = service_mod.Service.cancel,
@@ -149,11 +154,11 @@ pub const Proxy = struct {
     /// its own credentials and trust configuration after them.
     ///
     /// ```zig
-    /// var pane_environment = try proxy.registerPane(key, inherited, pane_overrides);
+    /// var pane_environment = try proxy.registerPane(key, .{ .inherited = inherited, .overrides = pane_overrides });
     /// defer pane_environment.deinit();
     /// ```
-    pub fn registerPane(proxy: *Proxy, key: PaneKey, inherited: std.process.Environ, pane_overrides: []const pty.ChildEnvironment.Override) !PaneEnvironment {
-        std.debug.assert(pane_overrides.len <= max_pane_overrides);
+    pub fn registerPane(proxy: *Proxy, key: PaneKey, options: PaneEnvironmentOptions) !PaneEnvironment {
+        std.debug.assert(options.overrides.len <= max_pane_overrides);
         const service = proxy.lifecycle.service;
         var credential = try service.registerPane(.{ .id = key.id, .generation = key.generation });
         defer std.crypto.secureZero(u8, &credential.token);
@@ -169,11 +174,11 @@ pub const Proxy = struct {
             client.bundle_path,
         );
         var overrides: [max_pane_overrides + environment_override_count]pty.ChildEnvironment.Override = undefined;
-        @memcpy(overrides[0..pane_overrides.len], pane_overrides);
-        @memcpy(overrides[pane_overrides.len .. pane_overrides.len + proxy_overrides.len], &proxy_overrides);
-        return .{ .value = try pty.ChildEnvironment.initWithOverrides(proxy.gpa, inherited, .{
+        @memcpy(overrides[0..options.overrides.len], options.overrides);
+        @memcpy(overrides[options.overrides.len .. options.overrides.len + proxy_overrides.len], &proxy_overrides);
+        return .{ .value = try pty.ChildEnvironment.initWithOverrides(proxy.gpa, options.inherited, .{
             .telar_term_program = "telar",
-            .overrides = overrides[0 .. pane_overrides.len + proxy_overrides.len],
+            .overrides = overrides[0 .. options.overrides.len + proxy_overrides.len],
         }) };
     }
 
@@ -324,8 +329,9 @@ test "pane registration owns and disposes its ephemeral environment" {
     const inherited_block = try inherited_map.createPosixBlock(gpa, .{});
     defer inherited_block.deinit(gpa);
     const key: PaneKey = .{ .id = try core.schema.id.pane(7), .generation = 2 };
-    var environment = try proxy.registerPane(key, .{ .block = inherited_block }, &.{
-        .{ .name = "TELAR_PANE_ID", .value = "7" },
+    var environment = try proxy.registerPane(key, .{
+        .inherited = .{ .block = inherited_block },
+        .overrides = &.{.{ .name = "TELAR_PANE_ID", .value = "7" }},
     });
     const child: std.process.Environ = .{ .block = environment.environment().block };
     try std.testing.expect(std.mem.startsWith(
