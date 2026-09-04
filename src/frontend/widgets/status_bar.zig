@@ -164,30 +164,52 @@ const PairInput = struct {
     label: []const u8,
 };
 
+const WriteInput = struct {
+    area: ui.Rect,
+    x: *u16,
+    text: []const u8,
+    style: ui.Style,
+};
+
 fn renderPair(context: *widget.Context, pair: PairInput) void {
     const area = pair.area;
     const x = pair.x;
 
-    write(context, area, x, " ", .{ .bg = context.palette.panel_bg });
-    write(context, area, x, pair.key, .{
-        .fg = context.palette.accent,
-        .bg = context.palette.panel_bg,
-        .flags = .{ .bold = true },
+    write(context, .{ .area = area, .x = x, .text = " ", .style = .{ .bg = context.palette.panel_bg } });
+    write(context, .{
+        .area = area,
+        .x = x,
+        .text = pair.key,
+        .style = .{
+            .fg = context.palette.accent,
+            .bg = context.palette.panel_bg,
+            .flags = .{ .bold = true },
+        },
     });
-    write(context, area, x, " ", .{ .bg = context.palette.panel_bg });
-    write(context, area, x, pair.label, .{
-        .fg = context.palette.overlay0,
-        .bg = context.palette.panel_bg,
+    write(context, .{ .area = area, .x = x, .text = " ", .style = .{ .bg = context.palette.panel_bg } });
+    write(context, .{
+        .area = area,
+        .x = x,
+        .text = pair.label,
+        .style = .{
+            .fg = context.palette.overlay0,
+            .bg = context.palette.panel_bg,
+        },
     });
-    write(context, area, x, " ", .{ .bg = context.palette.panel_bg });
+    write(context, .{ .area = area, .x = x, .text = " ", .style = .{ .bg = context.palette.panel_bg } });
 }
 
-fn write(context: *widget.Context, area: ui.Rect, x: *u16, text: []const u8, style: ui.Style) void {
-    const remaining = area.x + area.w -| x.*;
+fn write(context: *widget.Context, input_write: WriteInput) void {
+    const remaining = input_write.area.x + input_write.area.w -| input_write.x.*;
     if (remaining == 0) {
         return;
     }
-    x.* += context.buffer.writeTruncated(area, .{ .point = .{ .x = x.*, .y = area.y }, .text = text, .max_width = remaining, .style = style });
+    input_write.x.* += context.buffer.writeTruncated(input_write.area, .{
+        .point = .{ .x = input_write.x.*, .y = input_write.area.y },
+        .text = input_write.text,
+        .max_width = remaining,
+        .style = input_write.style,
+    });
 }
 
 fn formatKey(buffer: *[32]u8, key: keybind.Key) []const u8 {
