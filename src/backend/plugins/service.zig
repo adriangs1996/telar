@@ -79,6 +79,12 @@ const Frame = struct {
 };
 
 const Worker = struct {
+    const WorkerInitOptions = struct {
+        gpa: std.mem.Allocator,
+        spec: Spec,
+        results: *Io.Queue(*effects.Result),
+    };
+
     gpa: std.mem.Allocator,
     spec: Spec,
     results: *Io.Queue(*effects.Result),
@@ -91,8 +97,8 @@ const Worker = struct {
     disabled: bool = false,
     dropped: std.atomic.Value(u64) = .init(0),
 
-    fn init(worker: *Worker, gpa: std.mem.Allocator, spec: Spec, results: *Io.Queue(*effects.Result)) void {
-        worker.* = .{ .gpa = gpa, .spec = spec, .results = results };
+    fn init(worker: *Worker, options: WorkerInitOptions) void {
+        worker.* = .{ .gpa = options.gpa, .spec = options.spec, .results = options.results };
         worker.requests = .init(&worker.request_storage);
     }
 
@@ -229,7 +235,7 @@ pub const Service = struct {
             for (service.workers[0..service.worker_count]) |*worker| worker.stop(options.io);
         }
         for (options.specs, 0..) |spec, index| {
-            service.workers[index].init(options.gpa, spec, &service.results);
+            service.workers[index].init(.{ .gpa = options.gpa, .spec = spec, .results = &service.results });
             try service.workers[index].start(options.io);
             service.worker_count += 1;
         }
@@ -404,7 +410,7 @@ test "worker queue drops the oldest frame when full" {
     var result_storage: [1]*effects.Result = undefined;
     var results: Io.Queue(*effects.Result) = .init(&result_storage);
     var worker: Worker = undefined;
-    worker.init(std.testing.allocator, undefined, &results);
+    worker.init(.{ .gpa = std.testing.allocator, .spec = undefined, .results = &results });
     defer worker.stop(io);
 
     for (0..queue_depth + 1) |index| {
@@ -427,7 +433,7 @@ test "five restarts in one window disable a worker" {
     var worker: Worker = undefined;
     var result_storage: [1]*effects.Result = undefined;
     var results: Io.Queue(*effects.Result) = .init(&result_storage);
-    worker.init(std.testing.allocator, undefined, &results);
+    worker.init(.{ .gpa = std.testing.allocator, .spec = undefined, .results = &results });
 
     for (0..restart_limit) |_| worker.recordRestart(std.testing.io);
 
