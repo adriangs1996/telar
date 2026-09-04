@@ -91,6 +91,8 @@ pub const Vm = struct {
         return message[0..len];
     }
 
+    // Lua fixes this four-parameter allocator signature as part of its C ABI.
+    // codestyle: allow(maximum-parameter-count)
     fn allocate(userdata: ?*anyopaque, pointer: ?*anyopaque, old_size: usize, new_size: usize) callconv(.c) ?*anyopaque {
         const vm: *Vm = @ptrCast(@alignCast(userdata.?));
         if (new_size == 0) {
