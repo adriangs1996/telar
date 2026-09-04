@@ -99,6 +99,13 @@ const RatioCandidate = struct {
     ratio: u16,
 };
 
+const SplitGeometry = struct {
+    area: ui.Rect,
+    axis: Axis,
+    ratio: u16,
+    pane_gaps: bool,
+};
+
 /// Immutable geometry consumed by every subsystem during a frame. Building it
 /// is O(panes); pane lookup is bounded open addressing with no allocations.
 pub const Snapshot = struct {
@@ -165,12 +172,12 @@ pub const Snapshot = struct {
             return null;
         }
 
-        const first, const second = splitArea(
-            view.outer,
-            target.axis,
-            default_split_ratio,
-            snapshot.pane_gaps,
-        );
+        const first, const second = splitArea(.{
+            .area = view.outer,
+            .axis = target.axis,
+            .ratio = default_split_ratio,
+            .pane_gaps = snapshot.pane_gaps,
+        });
 
         return .{
             .existing_content = borderedContent(first),
@@ -686,12 +693,12 @@ pub const Layout = struct {
                     });
                 },
                 .split => |branch| {
-                    const first, const second = splitArea(
-                        pending.area,
-                        branch.axis,
-                        branch.ratio,
-                        layout.pane_gaps,
-                    );
+                    const first, const second = splitArea(.{
+                        .area = pending.area,
+                        .axis = branch.axis,
+                        .ratio = branch.ratio,
+                        .pane_gaps = layout.pane_gaps,
+                    });
                     stack[stack_len] = .{ .node = branch.second, .area = second };
                     stack_len += 1;
                     stack[stack_len] = .{ .node = branch.first, .area = first };
@@ -749,12 +756,12 @@ pub const Layout = struct {
             path_len -= 1;
             const child = path[path_len];
             const branch = layout.nodes[current].node.split;
-            const first, const second = splitArea(
-                current_area,
-                branch.axis,
-                branch.ratio,
-                layout.pane_gaps,
-            );
+            const first, const second = splitArea(.{
+                .area = current_area,
+                .axis = branch.axis,
+                .ratio = branch.ratio,
+                .pane_gaps = layout.pane_gaps,
+            });
             current_area = if (branch.first == child) first else second;
             current = child;
         }
@@ -762,7 +769,12 @@ pub const Layout = struct {
     }
 
     fn ratioFits(layout: *const Layout, branch: Split, candidate: RatioCandidate) bool {
-        const first, const second = splitArea(candidate.area, branch.axis, candidate.ratio, layout.pane_gaps);
+        const first, const second = splitArea(.{
+            .area = candidate.area,
+            .axis = branch.axis,
+            .ratio = candidate.ratio,
+            .pane_gaps = layout.pane_gaps,
+        });
         const first_extent = extent(first, branch.axis);
         const second_extent = extent(second, branch.axis);
 
@@ -857,37 +869,38 @@ const ClientLayoutBuilder = struct {
     }
 };
 
-fn splitArea(area: ui.Rect, axis: Axis, ratio: u16, pane_gaps: bool) [2]ui.Rect {
-    std.debug.assert(ratio <= ratio_scale);
-    return switch (axis) {
+fn splitArea(geometry: SplitGeometry) [2]ui.Rect {
+    std.debug.assert(geometry.ratio <= ratio_scale);
+
+    return switch (geometry.axis) {
         .horizontal => horizontal: {
-            const gutter: u16 = @intFromBool(pane_gaps and area.w >= 3);
-            const usable = area.w - gutter;
+            const gutter: u16 = @intFromBool(geometry.pane_gaps and geometry.area.w >= 3);
+            const usable = geometry.area.w - gutter;
             const first_width: u16 = @intCast(
-                @as(u32, usable) * ratio / ratio_scale,
+                @as(u32, usable) * geometry.ratio / ratio_scale,
             );
             break :horizontal .{
-                .{ .x = area.x, .y = area.y, .w = first_width, .h = area.h },
+                .{ .x = geometry.area.x, .y = geometry.area.y, .w = first_width, .h = geometry.area.h },
                 .{
-                    .x = area.x + first_width + gutter,
-                    .y = area.y,
+                    .x = geometry.area.x + first_width + gutter,
+                    .y = geometry.area.y,
                     .w = usable - first_width,
-                    .h = area.h,
+                    .h = geometry.area.h,
                 },
             };
         },
         .vertical => vertical: {
-            const gutter: u16 = @intFromBool(pane_gaps and area.h >= 5);
-            const usable = area.h - gutter;
+            const gutter: u16 = @intFromBool(geometry.pane_gaps and geometry.area.h >= 5);
+            const usable = geometry.area.h - gutter;
             const first_height: u16 = @intCast(
-                @as(u32, usable) * ratio / ratio_scale,
+                @as(u32, usable) * geometry.ratio / ratio_scale,
             );
             break :vertical .{
-                .{ .x = area.x, .y = area.y, .w = area.w, .h = first_height },
+                .{ .x = geometry.area.x, .y = geometry.area.y, .w = geometry.area.w, .h = first_height },
                 .{
-                    .x = area.x,
-                    .y = area.y + first_height + gutter,
-                    .w = area.w,
+                    .x = geometry.area.x,
+                    .y = geometry.area.y + first_height + gutter,
+                    .w = geometry.area.w,
                     .h = usable - first_height,
                 },
             };
