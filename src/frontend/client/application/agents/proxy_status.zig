@@ -20,7 +20,7 @@ pub const ApplyProxyStatusHandler = struct {
     /// const commit = try handler.execute(.{ .active = true, .scope = .exact, .system_trusted = false }) orelse return;
     /// ```
     pub fn execute(handler: *ApplyProxyStatusHandler, status: core.schema.ProxyStatus) !?client_model.ProxyStatusCommit {
-        const commit = handler.model.reconcileProxyStatus(status.active, status.scope, status.system_trusted) orelse return null;
+        const commit = handler.model.reconcileProxyStatus(status) orelse return null;
 
         try handler.delivery.deliver(handler.delivery.context, commit);
         return commit;

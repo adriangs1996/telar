@@ -126,7 +126,7 @@ fn deliveryHandler(model: *const client_model.Model, capture: *Capture) DeliverP
 test "DeliverProxyStatusHandler publishes exact enabled and disabled notifications" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const enabled = model.reconcileProxyStatus(true, .exact, false).?;
+    const enabled = model.reconcileProxyStatus(.{ .active = true, .scope = .exact, .system_trusted = false }).?;
     var capture: Capture = .{ .model = &model, .expected = enabled };
     var use_case = deliveryHandler(&model, &capture);
 
@@ -136,7 +136,7 @@ test "DeliverProxyStatusHandler publishes exact enabled and disabled notificatio
     try std.testing.expect(capture.observed_commit);
     try std.testing.expect(capture.notification_valid);
 
-    const disabled = model.reconcileProxyStatus(false, .exact, false).?;
+    const disabled = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = false }).?;
     capture.expected = disabled;
     capture.notification_valid = false;
     try use_case.execute(disabled);
@@ -149,7 +149,7 @@ test "DeliverProxyStatusHandler publishes exact enabled and disabled notificatio
 test "DeliverProxyStatusHandler reports trust-only transitions" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const trusted = model.reconcileProxyStatus(false, .exact, true).?;
+    const trusted = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = true }).?;
     var capture: Capture = .{ .model = &model, .expected = trusted };
     var use_case = deliveryHandler(&model, &capture);
 
@@ -162,7 +162,7 @@ test "DeliverProxyStatusHandler reports trust-only transitions" {
 test "DeliverProxyStatusHandler rejects stale transitions before publication" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const commit = model.reconcileProxyStatus(true, .wildcard, false).?;
+    const commit = model.reconcileProxyStatus(.{ .active = true, .scope = .wildcard, .system_trusted = false }).?;
     var capture: Capture = .{ .model = &model, .expected = commit };
     var use_case = deliveryHandler(&model, &capture);
 
@@ -183,7 +183,7 @@ test "DeliverProxyStatusHandler rejects stale transitions before publication" {
     altered.proxy_status_revision -%= 1;
     try std.testing.expectError(error.StaleProxyStatusCommit, use_case.execute(altered));
 
-    _ = model.reconcileProxyStatus(false, .exact, false).?;
+    _ = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = false }).?;
     try std.testing.expectError(error.StaleProxyStatusCommit, use_case.execute(commit));
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
 }
@@ -191,7 +191,7 @@ test "DeliverProxyStatusHandler rejects stale transitions before publication" {
 test "DeliverProxyStatusHandler preserves the commit after publication failure" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const commit = model.reconcileProxyStatus(true, .exact, false).?;
+    const commit = model.reconcileProxyStatus(.{ .active = true, .scope = .exact, .system_trusted = false }).?;
     var capture: Capture = .{
         .model = &model,
         .expected = commit,

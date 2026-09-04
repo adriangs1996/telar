@@ -926,10 +926,10 @@ pub const Model = struct {
     /// effect or presentation work.
     ///
     /// ```zig
-    /// const commit = model.reconcileProxyStatus(true, .exact, false) orelse return;
+    /// const commit = model.reconcileProxyStatus(.{ .active = true, .scope = .exact, .system_trusted = false }) orelse return;
     /// ```
-    pub fn reconcileProxyStatus(model: *Model, active: bool, scope: schema.ProxyScope, system_trusted: bool) ?ProxyStatusCommit {
-        if (model.proxy_tls_active == active and model.proxy_tls_scope == scope and model.proxy_system_trusted == system_trusted) {
+    pub fn reconcileProxyStatus(model: *Model, status: schema.ProxyStatus) ?ProxyStatusCommit {
+        if (model.proxy_tls_active == status.active and model.proxy_tls_scope == status.scope and model.proxy_system_trusted == status.system_trusted) {
             return null;
         }
 
@@ -937,18 +937,18 @@ pub const Model = struct {
         const previous_scope = model.proxy_tls_scope;
         const previous_system_trusted = model.proxy_system_trusted;
         const proxy_status_revision_before = model.proxy_status_revision;
-        model.proxy_tls_active = active;
-        model.proxy_tls_scope = scope;
-        model.proxy_system_trusted = system_trusted;
+        model.proxy_tls_active = status.active;
+        model.proxy_tls_scope = status.scope;
+        model.proxy_system_trusted = status.system_trusted;
         model.proxy_status_revision +%= 1;
 
         return .{
             .previous = previous,
             .previous_scope = previous_scope,
             .previous_system_trusted = previous_system_trusted,
-            .active = active,
-            .scope = scope,
-            .system_trusted = system_trusted,
+            .active = status.active,
+            .scope = status.scope,
+            .system_trusted = status.system_trusted,
             .proxy_status_revision_before = proxy_status_revision_before,
             .proxy_status_revision = model.proxy_status_revision,
         };

@@ -23,11 +23,11 @@ test "proxy status reconciliation commits only changed runtime state" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expect(model.reconcileProxyStatus(false, .exact, false) == null);
+    try std.testing.expect(model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = false }) == null);
     try std.testing.expect(!model.proxyTlsActive());
     try std.testing.expectEqualDeep(client_model.Version{}, model.version());
 
-    const enabled = model.reconcileProxyStatus(true, .wildcard, false).?;
+    const enabled = model.reconcileProxyStatus(.{ .active = true, .scope = .wildcard, .system_trusted = false }).?;
 
     try std.testing.expect(!enabled.previous);
     try std.testing.expect(enabled.active);
@@ -36,10 +36,10 @@ test "proxy status reconciliation commits only changed runtime state" {
     try std.testing.expectEqual(@as(u64, 1), enabled.proxy_status_revision);
     try std.testing.expect(model.proxyTlsActive());
     try std.testing.expectEqual(client_model.Version{ .proxy_status = 1 }, model.version());
-    try std.testing.expect(model.reconcileProxyStatus(true, .wildcard, false) == null);
+    try std.testing.expect(model.reconcileProxyStatus(.{ .active = true, .scope = .wildcard, .system_trusted = false }) == null);
     try std.testing.expectEqual(client_model.Version{ .proxy_status = 1 }, model.version());
 
-    const disabled = model.reconcileProxyStatus(false, .exact, false).?;
+    const disabled = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = false }).?;
 
     try std.testing.expect(disabled.previous);
     try std.testing.expect(!disabled.active);
@@ -48,7 +48,7 @@ test "proxy status reconciliation commits only changed runtime state" {
     try std.testing.expect(!model.proxyTlsActive());
     try std.testing.expectEqual(client_model.Version{ .proxy_status = 2 }, model.version());
 
-    const trusted = model.reconcileProxyStatus(false, .exact, true).?;
+    const trusted = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = true }).?;
 
     try std.testing.expect(!trusted.previous_system_trusted);
     try std.testing.expect(trusted.system_trusted);
