@@ -251,7 +251,7 @@ fn blitRow(projection: RowProjection) void {
             // A wide glyph did not fit before a soft wrap. There is no
             // character to draw, only a column to keep blank.
             .spacer_head => {
-                b.setCell(area.x + x, area.y + y, " ", 1, style);
+                b.setCell(.{ .x = area.x + x, .y = area.y + y }, .{ .text = " ", .width = 1, .style = style });
                 continue;
             },
 
@@ -267,18 +267,18 @@ fn blitRow(projection: RowProjection) void {
                     graphemes[x]
                 else
                     &.{});
-                b.setCell(area.x + x, area.y + y, text, cell_width, style);
+                b.setCell(.{ .x = area.x + x, .y = area.y + y }, .{ .text = text, .width = cell_width, .style = style });
             },
 
             // A cell with a background and no text. The emulator stores these
             // without a style entry precisely because they are common, so the
             // colour comes off the cell itself.
-            .bg_color_palette => b.setCell(area.x + x, area.y + y, " ", 1, .{
+            .bg_color_palette => b.setCell(.{ .x = area.x + x, .y = area.y + y }, .{ .text = " ", .width = 1, .style = .{
                 .bg = paletteColor(colors, raw.content.color_palette.data),
-            }),
+            } }),
             .bg_color_rgb => {
                 const c = raw.content.color_rgb;
-                b.setCell(area.x + x, area.y + y, " ", 1, .{ .bg = .{ .rgb = .{ c.r, c.g, c.b } } });
+                b.setCell(.{ .x = area.x + x, .y = area.y + y }, .{ .text = " ", .width = 1, .style = .{ .bg = .{ .rgb = .{ c.r, c.g, c.b } } } });
             },
         }
     }
@@ -286,9 +286,9 @@ fn blitRow(projection: RowProjection) void {
     // Columns the pane does not reach.
     var pad = width;
     while (pad < area.w) : (pad += 1) {
-        b.setCell(area.x + pad, area.y + y, " ", 1, .{
+        b.setCell(.{ .x = area.x + pad, .y = area.y + y }, .{ .text = " ", .width = 1, .style = .{
             .bg = defaultBackground(colors),
-        });
+        } });
     }
 }
 

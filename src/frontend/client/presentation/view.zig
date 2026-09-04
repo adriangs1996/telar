@@ -1767,11 +1767,8 @@ test "clickable toast restores pane cells after its exit animation" {
     const click_x = overlay.x + overlay.w - visible_width;
     const click_y = overlay.y;
     model.find(@enumFromInt(1)).?.buffer.setCell(
-        click_x - state.workbench().x,
-        click_y - state.workbench().y,
-        "u",
-        1,
-        .{},
+        .{ .x = click_x - state.workbench().x, .y = click_y - state.workbench().y },
+        .{ .text = "u" },
     );
     var screen = try term.Screen.init(gpa, 120, 30);
     defer screen.deinit();

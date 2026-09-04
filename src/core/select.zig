@@ -22,19 +22,17 @@
 const std = @import("std");
 const ui = @import("ui/root.zig");
 
-pub const Point = struct {
-    x: u16,
-    y: u16,
+pub const Point = ui.Point;
 
-    /// Reading order, which is what makes a range comparable at all: a
-    /// selection dragged upwards has its anchor after its head.
-    fn before(a: Point, b: Point) bool {
-        if (a.y != b.y) {
-            return a.y < b.y;
-        }
-        return a.x < b.x;
+/// Reading order, which is what makes a range comparable at all: a selection
+/// dragged upwards has its anchor after its head.
+fn pointBefore(a: Point, b: Point) bool {
+    if (a.y != b.y) {
+        return a.y < b.y;
     }
-};
+
+    return a.x < b.x;
+}
 
 pub const Mode = enum {
     /// Follows the text: from the anchor to the end of its row, whole rows in
@@ -66,7 +64,7 @@ pub const Range = struct {
 
     /// Anchor and head in reading order.
     pub fn ordered(r: Range) [2]Point {
-        return if (r.anchor.before(r.head) or
+        return if (pointBefore(r.anchor, r.head) or
             (r.anchor.x == r.head.x and r.anchor.y == r.head.y))
             .{ r.anchor, r.head }
         else

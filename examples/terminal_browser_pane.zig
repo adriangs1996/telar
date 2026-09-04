@@ -553,15 +553,12 @@ fn drawFrame(buffer: *ui.Buffer, frame: FrameGeometry) void {
         .w = 1,
         .h = frame.outer.h,
     }, .{ .glyph = "│", .style = border });
-    buffer.setCell(frame.outer.x, frame.outer.y, "┌", 1, border);
-    buffer.setCell(frame.outer.x + frame.outer.w - 1, frame.outer.y, "┐", 1, border);
-    buffer.setCell(frame.outer.x, frame.outer.y + frame.outer.h - 1, "└", 1, border);
+    buffer.setCell(.{ .x = frame.outer.x, .y = frame.outer.y }, .{ .text = "┌", .width = 1, .style = border });
+    buffer.setCell(.{ .x = frame.outer.x + frame.outer.w - 1, .y = frame.outer.y }, .{ .text = "┐", .width = 1, .style = border });
+    buffer.setCell(.{ .x = frame.outer.x, .y = frame.outer.y + frame.outer.h - 1 }, .{ .text = "└", .width = 1, .style = border });
     buffer.setCell(
-        frame.outer.x + frame.outer.w - 1,
-        frame.outer.y + frame.outer.h - 1,
-        "┘",
-        1,
-        border,
+        .{ .x = frame.outer.x + frame.outer.w - 1, .y = frame.outer.y + frame.outer.h - 1 },
+        .{ .text = "┘", .style = border },
     );
     if (frame.outer.w > 22) {
         _ = buffer.writeText(

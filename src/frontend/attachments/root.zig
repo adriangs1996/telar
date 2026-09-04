@@ -1665,7 +1665,7 @@ fn adoptPiCapture(store: *Store, sequence: u64, target: Target) !void {
 }
 
 fn writePiCursor(buffer: *ui.Buffer, x: u16, y: u16) void {
-    buffer.setCell(x, y, " ", 1, .{ .flags = .{ .inverse = true } });
+    buffer.setCell(.{ .x = x, .y = y }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
 }
 
 test "Pi previews pair with pasted paths and are closed by deleting the whole path" {
@@ -1720,7 +1720,7 @@ test "a Pi path removed by any editor command retires its preview within the wat
             x = 0;
             y += 1;
         }
-        buffer.setCell(x, y, &.{byte}, 1, .{});
+        buffer.setCell(.{ .x = x, .y = y }, .{ .text = &.{byte}, .width = 1, .style = .{} });
         x += 1;
     }
     const hidden: schema.frame.Cursor = .{ .visible = false, .x = 0, .y = 0 };

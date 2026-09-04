@@ -443,11 +443,8 @@ pub const Compositor = struct {
                         }
 
                         target.setCell(
-                            view.content.x + x,
-                            view.content.y + y,
-                            source.text(),
-                            source.width,
-                            style,
+                            .{ .x = view.content.x + x, .y = view.content.y + y },
+                            .{ .text = source.text(), .width = source.width, .style = style },
                         );
                         full_stats.cells += 1;
                     }
@@ -1386,14 +1383,14 @@ fn drawProgress(buffer: *ui.Buffer, input: BorderInput, title_width: u16) void {
     if (input.progress_state != .indeterminate) {
         var x: u16 = 0;
         while (x < position) : (x += 1) {
-            buffer.setCell(start + x, input.view.outer.y, "━", 1, progress_style);
+            buffer.setCell(.{ .x = start + x, .y = input.view.outer.y }, .{ .text = "━", .width = 1, .style = progress_style });
         }
     } else if (position > 0) {
-        buffer.setCell(start + position - 1, input.view.outer.y, "·", 1, progress_style);
+        buffer.setCell(.{ .x = start + position - 1, .y = input.view.outer.y }, .{ .text = "·", .width = 1, .style = progress_style });
     }
-    buffer.setCell(start + position, input.view.outer.y, head, 1, progress_style);
+    buffer.setCell(.{ .x = start + position, .y = input.view.outer.y }, .{ .text = head, .width = 1, .style = progress_style });
     if (input.progress_state == .indeterminate and position + 1 < width) {
-        buffer.setCell(start + position + 1, input.view.outer.y, "·", 1, progress_style);
+        buffer.setCell(.{ .x = start + position + 1, .y = input.view.outer.y }, .{ .text = "·", .width = 1, .style = progress_style });
     }
 }
 
@@ -1510,8 +1507,8 @@ test "two pane buffers compose into their layout rectangles" {
         .horizontal,
         .{ .w = 40, .h = 7 },
     );
-    model.find(@enumFromInt(1)).?.buffer.setCell(0, 0, "a", 1, .{});
-    model.find(@enumFromInt(2)).?.buffer.setCell(0, 0, "b", 1, .{});
+    model.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "a", .width = 1, .style = .{} });
+    model.find(@enumFromInt(2)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "b", .width = 1, .style = .{} });
 
     var screen = try term.Screen.init(gpa, 40, 7);
     defer screen.deinit();
@@ -1666,7 +1663,7 @@ test "copy mode projection stays outside the multiplexer model" {
     try std.testing.expect(screen.back.cells[2].style.flags.inverse);
 
     const pane = model.find(pane_id).?;
-    pane.buffer.setCell(1, 0, "x", 1, .{});
+    pane.buffer.setCell(.{ .x = 1, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
     pane.markSpan(1, 1);
     const patched = try testingRender(&compositor, .{
         .model = &model,
@@ -1701,8 +1698,8 @@ test "fullscreen composes only the focused pane across the whole tab" {
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 20, .rows = 6 });
     try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
-    model.find(@enumFromInt(1)).?.buffer.setCell(0, 0, "x", 1, .{});
-    model.find(@enumFromInt(2)).?.buffer.setCell(0, 0, "y", 1, .{});
+    model.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
+    model.find(@enumFromInt(2)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "y", .width = 1, .style = .{} });
     try std.testing.expect(model.toggleFullscreen());
 
     try std.testing.expectEqual(
@@ -1777,7 +1774,7 @@ test "pane borders use the selected theme without coloring pane contents" {
     const second = model.find(@enumFromInt(41)).?;
     try std.testing.expectEqual(MetadataChange.display_changed, model.setPaneForeground(first.id, "zsh"));
     try std.testing.expectEqual(MetadataChange.display_changed, model.setPaneForeground(second.id, "Claude Code"));
-    first.buffer.setCell(0, 0, "x", 1, .{});
+    first.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
     const selected = theme.builtin(.tokyo_night);
     var screen = try term.Screen.init(gpa, 20, 4);
     defer screen.deinit();
@@ -1817,7 +1814,7 @@ test "one pane has no telar border" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(@enumFromInt(1), location, .{ .cols = 12, .rows = 3 });
-    model.find(@enumFromInt(1)).?.buffer.setCell(0, 0, "x", 1, .{});
+    model.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
 
     var screen = try term.Screen.init(gpa, 12, 3);
     defer screen.deinit();

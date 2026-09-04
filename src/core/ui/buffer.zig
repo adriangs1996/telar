@@ -6,7 +6,9 @@
 //! extension mechanism.
 
 const std = @import("std");
-const Rect = @import("geometry.zig").Rect;
+const geometry = @import("geometry.zig");
+const Point = geometry.Point;
+const Rect = geometry.Rect;
 const cell_mod = @import("cell.zig");
 const Cell = cell_mod.Cell;
 const Style = cell_mod.Style;
@@ -17,6 +19,12 @@ const GraphemeIterator = text_mod.GraphemeIterator;
 pub const Buffer = struct {
     pub const Fill = struct {
         glyph: []const u8 = " ",
+        style: Style = .{},
+    };
+
+    pub const CellWrite = struct {
+        text: []const u8,
+        width: u8 = 1,
         style: Style = .{},
     };
 
@@ -116,7 +124,7 @@ pub const Buffer = struct {
         while (y < y_end) : (y += 1) {
             var x: u32 = r.x;
             while (x < x_end) : (x += 1) {
-                b.setCell(@intCast(x), @intCast(y), fill_value.glyph, 1, fill_value.style);
+                b.setCell(.{ .x = @intCast(x), .y = @intCast(y) }, .{ .text = fill_value.glyph, .width = 1, .style = fill_value.style });
             }
         }
     }
@@ -126,8 +134,12 @@ pub const Buffer = struct {
     /// Public because `blit` writes cells the emulator already laid out: it
     /// knows each cluster's width from the pane's own tables and must not have
     /// them measured a second time.
-    pub fn setCell(b: *Buffer, x: u16, y: u16, bytes: []const u8, width: u8, style: Style) void {
-        if (!b.clip.contains(x, y)) {
+    ///
+    /// ```zig
+    /// buffer.setCell(.{ .x = 4, .y = 2 }, .{ .text = "界", .width = 2 });
+    /// ```
+    pub fn setCell(b: *Buffer, point: Point, value: CellWrite) void {
+        if (!b.clip.contains(point.x, point.y)) {
             return;
         }
 
@@ -135,27 +147,27 @@ pub const Buffer = struct {
         // ours to write. Drawing the head alone makes the terminal advance two
         // columns and paint over the neighbour, so the glyph is replaced by a
         // blank that stays inside the clip.
-        const fits = width != 2 or
-            (x < std.math.maxInt(u16) and b.clip.contains(x + 1, y));
-        const text = if (fits) bytes else " ";
-        const drawn: u8 = if (fits) width else 1;
+        const fits = value.width != 2 or
+            (point.x < std.math.maxInt(u16) and b.clip.contains(point.x + 1, point.y));
+        const text = if (fits) value.text else " ";
+        const drawn: u8 = if (fits) value.width else 1;
 
-        const cell = b.at(x, y) orelse return;
+        const cell = b.at(point.x, point.y) orelse return;
         var len: u8 = @intCast(@min(text.len, Cell.max_bytes));
         // A cluster longer than the cell is cut, but never mid-codepoint:
         // invalid UTF-8 stored here would reach the host terminal verbatim.
         if (len < text.len) {
             while (len > 0 and text[len] & 0xc0 == 0x80) len -= 1;
         }
-        cell.* = .{ .len = len, .width = drawn, .style = style };
+        cell.* = .{ .len = len, .width = drawn, .style = value.style };
         @memcpy(cell.bytes[0..len], text[0..len]);
 
         // The second column of a wide glyph. Width 0 keeps the diff from
         // emitting anything there and keeps a later write from leaving half of
         // a character behind.
         if (drawn == 2) {
-            if (b.at(x + 1, y)) |tail| {
-                tail.* = .{ .len = 0, .width = 0, .style = style };
+            if (b.at(point.x + 1, point.y)) |tail| {
+                tail.* = .{ .len = 0, .width = 0, .style = value.style };
             }
         }
     }
@@ -187,7 +199,7 @@ pub const Buffer = struct {
                 break;
             }
             if (column >= r.x) {
-                b.setCell(@intCast(column), y, cluster.bytes, cluster.width, style);
+                b.setCell(.{ .x = @intCast(column), .y = y }, .{ .text = cluster.bytes, .width = cluster.width, .style = style });
             }
             column += cluster.width;
         }
@@ -305,18 +317,18 @@ pub const Buffer = struct {
 
         var x = r.x + 1;
         while (x < right) : (x += 1) {
-            b.setCell(x, r.y, "─", 1, style);
-            b.setCell(x, bottom, "─", 1, style);
+            b.setCell(.{ .x = x, .y = r.y }, .{ .text = "─", .width = 1, .style = style });
+            b.setCell(.{ .x = x, .y = bottom }, .{ .text = "─", .width = 1, .style = style });
         }
         var y = r.y + 1;
         while (y < bottom) : (y += 1) {
-            b.setCell(r.x, y, "│", 1, style);
-            b.setCell(right, y, "│", 1, style);
+            b.setCell(.{ .x = r.x, .y = y }, .{ .text = "│", .width = 1, .style = style });
+            b.setCell(.{ .x = right, .y = y }, .{ .text = "│", .width = 1, .style = style });
         }
-        b.setCell(r.x, r.y, "╭", 1, style);
-        b.setCell(right, r.y, "╮", 1, style);
-        b.setCell(r.x, bottom, "╰", 1, style);
-        b.setCell(right, bottom, "╯", 1, style);
+        b.setCell(.{ .x = r.x, .y = r.y }, .{ .text = "╭", .width = 1, .style = style });
+        b.setCell(.{ .x = right, .y = r.y }, .{ .text = "╮", .width = 1, .style = style });
+        b.setCell(.{ .x = r.x, .y = bottom }, .{ .text = "╰", .width = 1, .style = style });
+        b.setCell(.{ .x = right, .y = bottom }, .{ .text = "╯", .width = 1, .style = style });
 
         if (title) |t| {
             const inside: Rect = .{ .x = r.x + 2, .y = r.y, .w = r.w -| 4, .h = 1 };
@@ -479,7 +491,7 @@ test "an oversized cluster is truncated on a codepoint boundary" {
     // the host terminal verbatim.
     const cluster = "\u{1F468}\u{200D}\u{1F680}\u{200D}\u{1F468}";
     try testing.expect(cluster.len > Cell.max_bytes);
-    buf.setCell(0, 0, cluster, 2, .{});
+    buf.setCell(.{ .x = 0, .y = 0 }, .{ .text = cluster, .width = 2, .style = .{} });
     const stored = buf.at(0, 0).?.text();
     try testing.expect(std.unicode.utf8ValidateSlice(stored));
     // The whole first three codepoints survive; the cut codepoint is dropped.
@@ -547,7 +559,7 @@ test "a wide glyph cut by the clip becomes a blank, not half a character" {
     buf.fill(buf.area(), .{ .glyph = ".", .style = .{} });
 
     buf.pushClip(.{ .x = 0, .y = 0, .w = 3, .h = 1 });
-    buf.setCell(2, 0, "漢", 2, .{});
+    buf.setCell(.{ .x = 2, .y = 0 }, .{ .text = "漢", .width = 2, .style = .{} });
     buf.popClip();
 
     try testing.expectEqual(@as(u8, 1), buf.at(2, 0).?.width);

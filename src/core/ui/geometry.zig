@@ -6,6 +6,11 @@
 
 const std = @import("std");
 
+pub const Point = struct {
+    x: u16,
+    y: u16,
+};
+
 pub const Rect = struct {
     x: u16 = 0,
     y: u16 = 0,

@@ -29,6 +29,7 @@ const text = @import("text.zig");
 const buffer = @import("buffer.zig");
 
 pub const Rect = geometry.Rect;
+pub const Point = geometry.Point;
 
 pub const Color = cell.Color;
 pub const Style = cell.Style;

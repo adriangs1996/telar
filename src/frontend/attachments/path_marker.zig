@@ -409,7 +409,7 @@ fn writeWrapped(buffer: *ui.Buffer, origin: Position, text: []const u8) Position
             x = 0;
             y += 1;
         }
-        buffer.setCell(x, y, &.{byte}, 1, .{});
+        buffer.setCell(.{ .x = x, .y = y }, .{ .text = &.{byte}, .width = 1, .style = .{} });
         x += 1;
     }
 
@@ -492,7 +492,7 @@ test "the cursor is the hardware cursor or Pi's isolated inverse cell" {
     var buffer = try ui.Buffer.init(testing.allocator, 20, 2);
     defer buffer.deinit();
     _ = buffer.writeText(buffer.area(), 0, 0, "abc", .{});
-    buffer.setCell(3, 0, " ", 1, .{ .flags = .{ .inverse = true } });
+    buffer.setCell(.{ .x = 3, .y = 0 }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
     _ = buffer.writeText(buffer.area(), 0, 1, "sel", .{ .flags = .{ .inverse = true } });
 
     const hidden: Screen = .{ .buffer = &buffer, .cursor = .{ .visible = false, .x = 0, .y = 0 } };

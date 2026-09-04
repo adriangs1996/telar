@@ -245,7 +245,7 @@ fn commitPiFrame(client: *Client, target: attachments.Target, prompt: []const u8
     var pane_buffer = try core.ui.Buffer.init(std.testing.allocator, 120, 3);
     defer pane_buffer.deinit();
     const cursor_x = pane_buffer.writeText(pane_buffer.area(), 0, 1, prompt, .{});
-    pane_buffer.setCell(cursor_x, 1, " ", 1, .{ .flags = .{ .inverse = true } });
+    pane_buffer.setCell(.{ .x = cursor_x, .y = 1 }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
     var payload: [16 * 1024]u8 = undefined;
     const frame = try schema.encodePaneFrame(&payload, .{
         .pane_id = target.pane_id,
