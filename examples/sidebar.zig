@@ -388,7 +388,7 @@ fn drawDialog(context: DrawContext, index: usize) void {
     defer buf.popClip();
 
     buf.fill(frame, .{ .glyph = " ", .style = .{ .bg = raised } });
-    buf.box(frame, .{ .fg = apricot, .bg = raised }, null);
+    buf.box(frame, .{ .style = .{ .fg = apricot, .bg = raised } });
     _ = buf.writeText(frame, .{ .point = .{ .x = frame.x + 2, .y = frame.y }, .text = " action ", .style = .{ .fg = apricot, .bg = raised } });
 
     const inside: ui.Rect = .{ .x = frame.x + 2, .y = frame.y + 2, .w = frame.w - 4, .h = frame.h - 4 };
@@ -430,7 +430,7 @@ fn drawSidebar(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
         return;
     }
     buf.fill(area, .{ .glyph = " ", .style = .{ .bg = bg } });
-    buf.box(area, .{ .fg = faint, .bg = bg }, null);
+    buf.box(area, .{ .style = .{ .fg = faint, .bg = bg } });
 
     // The title sits inside the top border, which is why it is drawn after the
     // box rather than by it.

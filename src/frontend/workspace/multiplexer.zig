@@ -1344,7 +1344,7 @@ fn drawBorder(buffer: *ui.Buffer, input: BorderInput) void {
         " {d} {s} ",
         .{ input.view.display_index, if (input.foreground_name.len == 0) "shell" else input.foreground_name },
     ) catch " pane ";
-    buffer.box(input.view.outer, style, text);
+    buffer.box(input.view.outer, .{ .style = style, .title = text });
     drawProgress(buffer, input, ui.measure(text));
 }
 

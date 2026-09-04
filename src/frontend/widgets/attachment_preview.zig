@@ -42,7 +42,7 @@ pub fn renderShelf(context: *widget.Context, area: ui.Rect, snapshot: *const att
         const background = if (hovered) context.palette.surface1 else context.palette.surface0;
         const card_style: ui.Style = .{ .fg = context.palette.accent, .bg = background };
         context.buffer.fill(card, .{ .glyph = " ", .style = .{ .fg = context.palette.text, .bg = background } });
-        context.buffer.box(card, card_style, null);
+        context.buffer.box(card, .{ .style = card_style });
         context.hits.add(card, open);
         if (card.w >= 4) {
             const close: ui.Rect = .{ .x = card.x + card.w - 2, .y = card.y, .w = 1, .h = 1 };
@@ -116,7 +116,7 @@ pub fn renderModal(context: *widget.Context, input: ModalInput) ui.Rect {
         context.buffer.fillWithoutCorners(area, style);
     } else {
         context.buffer.fill(area, .{ .glyph = " ", .style = style });
-        context.buffer.box(area, border_style, null);
+        context.buffer.box(area, .{ .style = border_style });
     }
     const title: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 6, .h = 1 };
     _ = context.buffer.writeTruncated(title, .{ .point = .{ .x = title.x, .y = title.y }, .text = "Image preview", .max_width = title.w, .style = .{

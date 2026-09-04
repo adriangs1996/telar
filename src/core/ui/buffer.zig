@@ -47,6 +47,11 @@ pub const Buffer = struct {
         style: Style = .{},
     };
 
+    pub const Box = struct {
+        style: Style,
+        title: ?[]const u8 = null,
+    };
+
     cells: []Cell,
     w: u16,
     h: u16,
@@ -340,7 +345,11 @@ pub const Buffer = struct {
     }
 
     /// Draws a box, with an optional title in the top edge.
-    pub fn box(b: *Buffer, r: Rect, style: Style, title: ?[]const u8) void {
+    ///
+    /// ```zig
+    /// buffer.box(area, .{ .style = border, .title = " session " });
+    /// ```
+    pub fn box(b: *Buffer, r: Rect, box_value: Box) void {
         if (r.w < 2 or r.h < 2) {
             return;
         }
@@ -356,22 +365,22 @@ pub const Buffer = struct {
 
         var x = r.x + 1;
         while (x < right) : (x += 1) {
-            b.setCell(.{ .x = x, .y = r.y }, .{ .text = "─", .width = 1, .style = style });
-            b.setCell(.{ .x = x, .y = bottom }, .{ .text = "─", .width = 1, .style = style });
+            b.setCell(.{ .x = x, .y = r.y }, .{ .text = "─", .width = 1, .style = box_value.style });
+            b.setCell(.{ .x = x, .y = bottom }, .{ .text = "─", .width = 1, .style = box_value.style });
         }
         var y = r.y + 1;
         while (y < bottom) : (y += 1) {
-            b.setCell(.{ .x = r.x, .y = y }, .{ .text = "│", .width = 1, .style = style });
-            b.setCell(.{ .x = right, .y = y }, .{ .text = "│", .width = 1, .style = style });
+            b.setCell(.{ .x = r.x, .y = y }, .{ .text = "│", .width = 1, .style = box_value.style });
+            b.setCell(.{ .x = right, .y = y }, .{ .text = "│", .width = 1, .style = box_value.style });
         }
-        b.setCell(.{ .x = r.x, .y = r.y }, .{ .text = "╭", .width = 1, .style = style });
-        b.setCell(.{ .x = right, .y = r.y }, .{ .text = "╮", .width = 1, .style = style });
-        b.setCell(.{ .x = r.x, .y = bottom }, .{ .text = "╰", .width = 1, .style = style });
-        b.setCell(.{ .x = right, .y = bottom }, .{ .text = "╯", .width = 1, .style = style });
+        b.setCell(.{ .x = r.x, .y = r.y }, .{ .text = "╭", .width = 1, .style = box_value.style });
+        b.setCell(.{ .x = right, .y = r.y }, .{ .text = "╮", .width = 1, .style = box_value.style });
+        b.setCell(.{ .x = r.x, .y = bottom }, .{ .text = "╰", .width = 1, .style = box_value.style });
+        b.setCell(.{ .x = right, .y = bottom }, .{ .text = "╯", .width = 1, .style = box_value.style });
 
-        if (title) |t| {
+        if (box_value.title) |title| {
             const inside: Rect = .{ .x = r.x + 2, .y = r.y, .w = r.w -| 4, .h = 1 };
-            _ = b.writeText(inside, .{ .point = .{ .x = r.x + 2, .y = r.y }, .text = t, .style = style });
+            _ = b.writeText(inside, .{ .point = .{ .x = r.x + 2, .y = r.y }, .text = title, .style = box_value.style });
         }
     }
 

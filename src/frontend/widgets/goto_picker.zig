@@ -73,9 +73,11 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
     } else {
         context.buffer.fill(area, .{ .glyph = " ", .style = style });
         context.buffer.box(area, .{
-            .fg = context.palette.accent,
-            .bg = background,
-        }, null);
+            .style = .{
+                .fg = context.palette.accent,
+                .bg = background,
+            },
+        });
     }
 
     const title: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 4, .h = 1 };
