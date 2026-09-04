@@ -182,8 +182,8 @@ and telemetry policy.
 `InputHandler.mouse` delegates to `pointer_routing`. The adapter records host
 telemetry, rejects prompt-owned input or an absent active model, and converts
 supported host pixels to cells. `PointerRoutingHandler` gives copy mode, the
-view and pane input exclusive refusal in that order. It knows their outcomes,
-but it does not read any model or view representation.
+view, textual links and pane input exclusive refusal in that order. It knows
+their outcomes, but it does not read any model or view representation.
 
 `copy_mode_pointer` resolves a fixed copy and geometry snapshot;
 `CopyModePointerHandler` consumes every pointer event while copy mode is active

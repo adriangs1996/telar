@@ -188,8 +188,8 @@ runtime = {
       process_paths = { "/@google/gemini-cli/" },   -- entry-point path fragments for
                                                     -- interpreter launches (node, python)
 
-      -- Screen phrases: case-insensitive substrings of the pane's output
-      -- (optional, max 8 each, max 48 bytes each).
+      -- Screen phrases: case-insensitive substrings of the pane's visible
+      -- screen, not of its byte stream (optional, max 8 each, max 48 bytes each).
       brand = { "gemini" },          -- attributes a generic working/blocked phrase to this agent
       identity = { "gemini cli" },   -- confirms identity on screen without proving readiness
       working = { "esc to cancel" },
@@ -448,11 +448,20 @@ events, and an alternate-screen application with alternate-scroll enabled
 receives cursor keys instead. Normal pane input returns the viewport to the
 bottom.
 
+`telar.action.history_palette()` opens command-history search. Its default
+binding is `prefix`, then `/`. Bind it with `telar.bind_global` when it should
+open without the prefix.
+
 Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
 `}`, `0`, `^`, `$`, `g`, `G`, Page Up, Page Down, Ctrl-B, Ctrl-F, Ctrl-U, and Ctrl-D.
 Press `v` or Space for a character selection, `V` for a line selection, then
 `y` or Enter to copy through OSC 52. Escape first clears an active selection;
 a second Escape, or `q`, leaves copy mode and restores the entry viewport.
+Press `o` over a textual `http://`, `https://`, or `file://` URI to open it
+without leaving copy mode. A left click opens the same URI outside copy mode.
+Web URIs use the operating system's default handler. Local file URIs open a
+new tab with `$EDITOR` as the executable and the decoded path as its only
+argument; Telar does not evaluate `$EDITOR` through a shell.
 The bottom bar replaces metrics and tabs with these movement, selection, copy,
 and exit hints until copy mode ends. Pressing the configured prefix temporarily
 replaces them with the prefix-mode hints.

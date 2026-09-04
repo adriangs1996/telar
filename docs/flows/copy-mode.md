@@ -65,6 +65,10 @@ copy. Unhandled keys and boundary motions return no plan and advance no
 revision. `commitCopyMode` accepts only the revision and exact prior state that
 were planned, so an obsolete plan cannot overwrite a newer command.
 
+`o` resolves the textual URI under the cursor through the bounded cell adapter.
+The application dispatches that target without committing copy state, moving
+the viewport or leaving the mode. See [Link opening](link-opening.md).
+
 Copy delivery is intentionally ordered before the exit commit. If the outbox
 is full, the selection and copy-mode revision remain intact and the user can
 retry. Viewport synchronization follows the commit. If that effect fails, the

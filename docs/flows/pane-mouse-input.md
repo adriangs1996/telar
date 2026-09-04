@@ -1,9 +1,9 @@
 # Pane mouse input
 
 A host pointer event first crosses client chrome and copy-mode ownership. If
-neither consumes it, the client resolves one pane and selects one effect:
-move its viewport, translate an alternate-screen wheel into cursor keys, or
-send an SGR mouse report to the child.
+neither consumes it, textual links get first refusal. Remaining events resolve
+one pane and select one effect: move its viewport, translate an alternate-screen
+wheel into cursor keys, or send an SGR mouse report to the child.
 
 This is an interactive-path flow. It allocates no memory, retains no pane
 pointer and adds no queue. The application decision uses fixed values. Mouse
@@ -33,6 +33,10 @@ DispatchViewInteractionHandler
         |
 inside workbench and unconsumed
         |
+link_openings
+        |
+unowned only
+        |
 pane_mouse_inputs adapter
         |
 PaneMouseHandler
@@ -57,10 +61,11 @@ SetPaneViewportHandler      +---------+----------+
 client or no active model exists, and converts supported raw pixel coordinates
 to host cells. It captures one active model pointer for the synchronous call.
 
-`PointerRoutingHandler` owns the order between the three existing policies.
+`PointerRoutingHandler` owns the order between the four policies.
 It gives `copy_mode_pointer` first refusal, then asks the view to resolve client
-chrome, and reaches `pane_mouse_inputs` only while the normalized pointer is
-inside the post-interaction workbench and the view did not consume it.
+chrome, then offers pane content to `link_openings`. It reaches
+`pane_mouse_inputs` only while the normalized pointer is inside the
+post-interaction workbench and neither the view nor a link consumed it.
 `CopyModePointerHandler` still owns copy-mode policy. See
 [Copy mode](copy-mode.md).
 
