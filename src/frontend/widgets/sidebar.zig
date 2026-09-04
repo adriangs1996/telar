@@ -170,7 +170,7 @@ fn drawAgents(context: *widget.Context, input: Input, semantic: *Semantic) void 
             .background = background,
         });
     }
-    drawScrollbar(context, input.state, area, total, background);
+    drawScrollbar(context, .{ .state = input.state, .list = area, .total = total, .background = background });
 }
 
 fn drawAgentLine(context: *widget.Context, line_input: AgentLineInput) void {
@@ -295,6 +295,13 @@ const AgentStatusInput = struct {
     area: ui.Rect,
     status: schema.AgentStatus,
     animation_frame: u8,
+    background: ui.Color,
+};
+
+const ScrollbarInput = struct {
+    state: *State,
+    list: ui.Rect,
+    total: u16,
     background: ui.Color,
 };
 
@@ -447,7 +454,12 @@ fn drawEmpty(context: *widget.Context, area: ui.Rect, background: ui.Color) void
     }
 }
 
-fn drawScrollbar(context: *widget.Context, state: *State, list: ui.Rect, total: u16, background: ui.Color) void {
+fn drawScrollbar(context: *widget.Context, input: ScrollbarInput) void {
+    const state = input.state;
+    const list = input.list;
+    const total = input.total;
+    const background = input.background;
+
     if (total <= list.h or list.h == 0) {
         return;
     }
