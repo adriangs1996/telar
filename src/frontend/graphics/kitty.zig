@@ -165,6 +165,12 @@ const FallbackFrame = struct {
     image: ImageEntry,
 };
 
+const PlacementGeometry = struct {
+    pane_id: schema.PaneId,
+    placement: graphics.Placement,
+    image: graphics.Image,
+};
+
 pub const Store = struct {
     pub const Credit = struct { pane_id: schema.PaneId, bytes: usize };
     const PaneUsage = struct {
@@ -1506,7 +1512,11 @@ pub const KittyGraphicsWriter = struct {
             if (!image.transmitted) {
                 continue;
             }
-            const output = self.geometry(entry.key_ptr.pane_id, placement.placement, image.metadata) orelse {
+            const output = self.geometry(.{
+                .pane_id = entry.key_ptr.pane_id,
+                .placement = placement.placement,
+                .image = image.metadata,
+            }) orelse {
                 if (placement.emitted_image_id) |previous_image_id| {
                     written += try writeDeletePlacement(
                         writer,
@@ -1570,11 +1580,11 @@ pub const KittyGraphicsWriter = struct {
             {
                 continue;
             }
-            const output = self.geometry(
-                frame.partial.key.pane_id,
-                fallback.placement,
-                frame.image.metadata,
-            ) orelse continue;
+            const output = self.geometry(.{
+                .pane_id = frame.partial.key.pane_id,
+                .placement = fallback.placement,
+                .image = frame.image.metadata,
+            }) orelse continue;
             written += try writePlacement(
                 writer,
                 frame.image.external_id,
@@ -1597,13 +1607,13 @@ pub const KittyGraphicsWriter = struct {
         return written;
     }
 
-    fn geometry(self: *const KittyGraphicsWriter, pane_id: schema.PaneId, placement: graphics.Placement, image: graphics.Image) ?OutputPlacement {
-        const view = self.layout_snapshot.find(pane_id) orelse return null;
-        const source = placement.sourceRect(image) catch return null;
+    fn geometry(self: *const KittyGraphicsWriter, geometry_input: PlacementGeometry) ?OutputPlacement {
+        const view = self.layout_snapshot.find(geometry_input.pane_id) orelse return null;
+        const source = geometry_input.placement.sourceRect(geometry_input.image) catch return null;
         const source_width: u32 = @intCast(source.width);
         const source_height: u32 = @intCast(source.height);
         const width, const height = destinationSize(
-            placement,
+            geometry_input.placement,
             source_width,
             source_height,
             self.cell_width,
@@ -1613,8 +1623,8 @@ pub const KittyGraphicsWriter = struct {
             return null;
         }
         const destination: graphics.Rect = .{
-            .x = (@as(i64, view.content.x) + placement.x) * self.cell_width + placement.offset_x,
-            .y = (@as(i64, view.content.y) + placement.y) * self.cell_height + placement.offset_y,
+            .x = (@as(i64, view.content.x) + geometry_input.placement.x) * self.cell_width + geometry_input.placement.offset_x,
+            .y = (@as(i64, view.content.y) + geometry_input.placement.y) * self.cell_height + geometry_input.placement.offset_y,
             .width = width,
             .height = height,
         };
