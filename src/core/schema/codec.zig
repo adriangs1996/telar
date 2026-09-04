@@ -250,9 +250,9 @@ pub fn Derived(comptime T: type) type {
     };
 }
 
-pub fn encodeDerived(comptime tag: u8, comptime T: type, buffer: []u8, message: T) ![]const u8 {
+pub fn encodeDerived(comptime tag: u8, buffer: []u8, message: anytype) ![]const u8 {
     var encoder = wire.Encoder.init(buffer);
     try encoder.writeByte(tag);
-    try Derived(T).encode(&encoder, message);
+    try Derived(@TypeOf(message)).encode(&encoder, message);
     return encoder.finish();
 }

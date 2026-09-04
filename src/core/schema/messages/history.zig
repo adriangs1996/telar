@@ -375,7 +375,7 @@ pub fn encodeDeleteHistory(buffer: []u8, message: DeleteHistory) ![]const u8 {
     if (message.id == 0) {
         return error.InvalidHistoryId;
     }
-    return encodeDerived(@intFromEnum(ClientTag.delete_history), DeleteHistory, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.delete_history), buffer, message);
 }
 
 pub fn encodePruneHistory(buffer: []u8, message: PruneHistory) ![]const u8 {
@@ -442,7 +442,7 @@ pub fn decodePruneHistory(decoder: *wire.Decoder) !PruneHistory {
 
 pub fn encodeHistoryPruned(buffer: []u8, message: HistoryPruned) ![]const u8 {
     try validateRequestId(message.request_id);
-    return encodeDerived(@intFromEnum(ServerTag.history_pruned), HistoryPruned, buffer, message);
+    return encodeDerived(@intFromEnum(ServerTag.history_pruned), buffer, message);
 }
 
 pub fn encodeReadHistoryOutput(buffer: []u8, message: ReadHistoryOutput) ![]const u8 {
@@ -450,7 +450,7 @@ pub fn encodeReadHistoryOutput(buffer: []u8, message: ReadHistoryOutput) ![]cons
     if (message.id == 0) {
         return error.InvalidHistoryId;
     }
-    return encodeDerived(@intFromEnum(ClientTag.read_history_output), ReadHistoryOutput, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.read_history_output), buffer, message);
 }
 
 pub fn encodeHistoryOutput(buffer: []u8, message: HistoryOutput) ![]const u8 {

@@ -353,19 +353,19 @@ pub fn decodePaneInput(decoder: *wire.Decoder) !PaneInput {
 }
 
 pub fn encodePaneResize(buffer: []u8, message: PaneResize) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.pane_resize), PaneResize, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.pane_resize), buffer, message);
 }
 
 pub fn encodeFrameAck(buffer: []u8, message: FrameAck) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.frame_ack), FrameAck, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.frame_ack), buffer, message);
 }
 
 pub fn encodeRequestSnapshot(buffer: []u8, message: RequestSnapshot) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.request_snapshot), RequestSnapshot, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.request_snapshot), buffer, message);
 }
 
 pub fn encodeDetachPane(buffer: []u8, message: DetachPane) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.detach_pane), DetachPane, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.detach_pane), buffer, message);
 }
 
 pub fn encodeCreatePane(buffer: []u8, message: CreatePane) ![]const u8 {
@@ -390,20 +390,19 @@ pub fn decodeCreatePane(decoder: *wire.Decoder) !CreatePaneView {
 }
 
 pub fn encodeClosePane(buffer: []u8, message: ClosePane) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.close_pane), ClosePane, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.close_pane), buffer, message);
 }
 
 pub fn encodeSetPaneViewport(buffer: []u8, message: SetPaneViewport) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ClientTag.set_pane_viewport),
-        SetPaneViewport,
         buffer,
         message,
     );
 }
 
 pub fn encodeReadPane(buffer: []u8, message: ReadPane) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.read_pane), ReadPane, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.read_pane), buffer, message);
 }
 
 pub fn encodeSendPaneText(buffer: []u8, message: SendPaneText) ![]const u8 {
@@ -562,14 +561,13 @@ pub fn decodePaneTitle(decoder: *wire.Decoder) !PaneTitle {
 pub fn encodeCopySelection(buffer: []u8, message: CopySelection) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ClientTag.copy_selection),
-        CopySelection,
         buffer,
         message,
     );
 }
 
 pub fn encodePaneOpened(buffer: []u8, message: PaneOpened) ![]const u8 {
-    return encodeDerived(@intFromEnum(ServerTag.pane_opened), PaneOpened, buffer, message);
+    return encodeDerived(@intFromEnum(ServerTag.pane_opened), buffer, message);
 }
 
 pub fn encodePaneFrame(buffer: []u8, message: frame.Frame) ![]const u8 {
@@ -603,7 +601,7 @@ pub fn decodePaneClipboard(decoder: *wire.Decoder) !PaneClipboard {
 }
 
 pub fn encodePaneExited(buffer: []u8, message: PaneExited) ![]const u8 {
-    return encodeDerived(@intFromEnum(ServerTag.pane_exited), PaneExited, buffer, message);
+    return encodeDerived(@intFromEnum(ServerTag.pane_exited), buffer, message);
 }
 
 pub fn encodePaneCwd(buffer: []u8, message: PaneCwd) ![]const u8 {

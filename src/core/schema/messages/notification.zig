@@ -83,7 +83,6 @@ pub fn decodeNotification(decoder: *wire.Decoder) !Notification {
 pub fn encodeNotificationShown(buffer: []u8, message: NotificationShown) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ServerTag.notification_shown),
-        NotificationShown,
         buffer,
         message,
     );

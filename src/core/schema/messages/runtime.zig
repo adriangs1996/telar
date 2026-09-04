@@ -134,13 +134,13 @@ pub fn decodeRequestFailed(decoder: *wire.Decoder) !RequestFailed {
 }
 
 pub fn encodeRequestCompleted(buffer: []u8, message: RequestCompleted) ![]const u8 {
-    return encodeDerived(@intFromEnum(ServerTag.request_completed), RequestCompleted, buffer, message);
+    return encodeDerived(@intFromEnum(ServerTag.request_completed), buffer, message);
 }
 
 pub fn encodeProxyStatus(buffer: []u8, message: ProxyStatus) ![]const u8 {
-    return encodeDerived(@intFromEnum(ServerTag.proxy_status), ProxyStatus, buffer, message);
+    return encodeDerived(@intFromEnum(ServerTag.proxy_status), buffer, message);
 }
 
 pub fn encodeSystemMetrics(buffer: []u8, message: SystemMetrics) ![]const u8 {
-    return encodeDerived(@intFromEnum(ServerTag.system_metrics), SystemMetrics, buffer, message);
+    return encodeDerived(@intFromEnum(ServerTag.system_metrics), buffer, message);
 }

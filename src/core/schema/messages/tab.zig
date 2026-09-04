@@ -150,7 +150,6 @@ pub const PaneDescriptorIterator = struct {
 pub fn encodeRequestTabSnapshot(buffer: []u8, message: RequestTabSnapshot) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ClientTag.request_tab_snapshot),
-        RequestTabSnapshot,
         buffer,
         message,
     );
@@ -204,11 +203,11 @@ pub fn decodeRenameTab(decoder: *wire.Decoder) !RenameTab {
 }
 
 pub fn encodeCloseTab(buffer: []u8, message: CloseTab) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.close_tab), CloseTab, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.close_tab), buffer, message);
 }
 
 pub fn encodeMoveTab(buffer: []u8, message: MoveTab) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.move_tab), MoveTab, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.move_tab), buffer, message);
 }
 
 pub fn encodeTabSnapshot(buffer: []u8, message: TabSnapshot) ![]const u8 {
@@ -314,9 +313,9 @@ pub fn decodeTabRenamed(decoder: *wire.Decoder) !TabRenamed {
 }
 
 pub fn encodeTabClosed(buffer: []u8, message: TabClosed) ![]const u8 {
-    return encodeDerived(@intFromEnum(ServerTag.tab_closed), TabClosed, buffer, message);
+    return encodeDerived(@intFromEnum(ServerTag.tab_closed), buffer, message);
 }
 
 pub fn encodeTabMoved(buffer: []u8, message: TabMoved) ![]const u8 {
-    return encodeDerived(@intFromEnum(ServerTag.tab_moved), TabMoved, buffer, message);
+    return encodeDerived(@intFromEnum(ServerTag.tab_moved), buffer, message);
 }

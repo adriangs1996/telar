@@ -187,14 +187,13 @@ pub fn truncateSessionTitle(buffer: *[types.max_agent_session_title_bytes]u8, va
 pub fn encodeAcknowledgeAgent(buffer: []u8, message: AcknowledgeAgent) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ClientTag.acknowledge_agent),
-        AcknowledgeAgent,
         buffer,
         message,
     );
 }
 
 pub fn encodeQueryAgents(buffer: []u8, message: QueryAgents) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.query_agents), QueryAgents, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.query_agents), buffer, message);
 }
 
 pub fn encodeReportAgentSession(buffer: []u8, message: ReportAgentSession) ![]const u8 {

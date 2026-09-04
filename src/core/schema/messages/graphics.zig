@@ -40,18 +40,17 @@ pub const ConfigureGraphics = struct {
 pub fn encodeRequestGraphicsSnapshot(buffer: []u8, message: RequestGraphicsSnapshot) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ClientTag.request_graphics_snapshot),
-        RequestGraphicsSnapshot,
         buffer,
         message,
     );
 }
 
 pub fn encodeGraphicsCredit(buffer: []u8, message: GraphicsCredit) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.graphics_credit), GraphicsCredit, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.graphics_credit), buffer, message);
 }
 
 pub fn encodeConfigureGraphics(buffer: []u8, message: ConfigureGraphics) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.configure_graphics), ConfigureGraphics, buffer, message);
+    return encodeDerived(@intFromEnum(ClientTag.configure_graphics), buffer, message);
 }
 
 pub fn encodeGraphicsSnapshot(buffer: []u8, message: bodies.Snapshot) ![]const u8 {

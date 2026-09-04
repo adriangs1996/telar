@@ -214,7 +214,6 @@ pub fn decodeRenameWorkspace(decoder: *wire.Decoder) !RenameWorkspace {
 pub fn encodeRequestWorkspaceSnapshot(buffer: []u8, message: RequestWorkspaceSnapshot) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ClientTag.request_workspace_snapshot),
-        RequestWorkspaceSnapshot,
         buffer,
         message,
     );
@@ -289,7 +288,6 @@ pub fn decodeWorkspaceSnapshot(decoder: *wire.Decoder) !WorkspaceSnapshotView {
 pub fn encodeResyncRequired(buffer: []u8, message: ResyncRequired) ![]const u8 {
     return encodeDerived(
         @intFromEnum(ServerTag.resync_required),
-        ResyncRequired,
         buffer,
         message,
     );
