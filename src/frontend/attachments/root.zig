@@ -1061,12 +1061,18 @@ fn planPlaceholderRemoval(slot: *const Slot, ordinal: u8, screen: MarkerScreen) 
     }
 
     if (screen.cursor.x >= marker.end) {
-        const steps = atomicSteps(screen.buffer, marker.end, screen.cursor.x, marker.y) orelse return null;
+        const steps = atomicSteps(screen.buffer, marker.y, .{
+            .from = marker.end,
+            .to = screen.cursor.x,
+        }) orelse return null;
 
         return .{ .direction = .left, .steps = steps, .deletion = .backward };
     }
 
-    const steps = atomicSteps(screen.buffer, screen.cursor.x, marker.start, marker.y) orelse return null;
+    const steps = atomicSteps(screen.buffer, marker.y, .{
+        .from = screen.cursor.x,
+        .to = marker.start,
+    }) orelse return null;
 
     return .{ .direction = .right, .steps = steps, .deletion = .forward };
 }
@@ -1353,16 +1359,16 @@ fn markerWidthAt(buffer: *const ui.Buffer, x: u16, y: u16) u16 {
     return marker.end - marker.start;
 }
 
-fn atomicSteps(buffer: *const ui.Buffer, start: u16, end: u16, y: u16) ?u8 {
-    if (start > end or end > buffer.w) {
+fn atomicSteps(buffer: *const ui.Buffer, y: u16, span: path_marker.Span) ?u8 {
+    if (span.from > span.to or span.to > buffer.w) {
         return null;
     }
 
     var steps: u16 = 0;
-    var x = start;
-    while (x < end) {
+    var x = span.from;
+    while (x < span.to) {
         const width = markerWidthAt(buffer, x, y);
-        if (width != 0 and x + width <= end) {
+        if (width != 0 and x + width <= span.to) {
             steps += 1;
             x += width;
         } else {
