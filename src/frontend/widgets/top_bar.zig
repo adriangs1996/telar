@@ -126,7 +126,7 @@ pub fn render(context: *widget.Context, input: Input) void {
     const list_x = group_x + marker_width;
 
     if (input.workspaces.count == 0) {
-        renderFallback(context, input, list_x, row_end, area.y);
+        renderFallback(context, input, .{ .x = list_x, .y = area.y, .w = row_end -| list_x, .h = 1 });
     } else {
         renderList(context, input, .{
             .area = .{ .x = list_x, .y = area.y, .w = row_end -| list_x, .h = 1 },
@@ -277,15 +277,17 @@ fn drawWorkspace(context: *widget.Context, draw: WorkspaceDraw) u16 {
     return draw.area.x + width;
 }
 
-fn renderFallback(context: *widget.Context, input: Input, x: u16, row_end: u16, y: u16) void {
+fn renderFallback(context: *widget.Context, input: Input, area: ui.Rect) void {
     var workspace_buffer: [schema.max_workspace_name_bytes + 16]u8 = undefined;
     const workspace = workspaceLabel(input.location, input.workspace_name, &workspace_buffer);
-    const width = @min(ui.measure(workspace) + 1, row_end -| x);
+    const width = @min(ui.measure(workspace) + 1, area.w);
     if (width == 0) {
         return;
     }
-    const rect: ui.Rect = .{ .x = x, .y = y, .w = width, .h = 1 };
+
+    const rect: ui.Rect = .{ .x = area.x, .y = area.y, .w = width, .h = 1 };
     context.hits.add(rect, .active_workspace);
+
     const style: ui.Style = .{
         .fg = context.palette.text,
         .bg = if (context.isHovered(.active_workspace))
@@ -295,7 +297,8 @@ fn renderFallback(context: *widget.Context, input: Input, x: u16, row_end: u16, 
         .underline_color = context.palette.accent,
         .flags = .{ .bold = true, .underline = .single },
     };
-    _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = y }, .text = workspace, .max_width = width, .style = style });
+
+    _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = area.x, .y = area.y }, .text = workspace, .max_width = width, .style = style });
 }
 
 fn listFits(snapshot: *const workspace_list.Snapshot, active_index: ?usize, active_name: []const u8, available: u16) bool {
