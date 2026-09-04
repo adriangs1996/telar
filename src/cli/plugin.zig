@@ -108,7 +108,7 @@ fn install(init: std.process.Init, package: *const Package) !void {
         package.manifest.id(),
         &digest_hex,
     });
-    try frontend.plugins.installPackage(init.gpa, init.io, package, destination);
+    try frontend.plugins.installPackage(init.gpa, init.io, .{ .package = package, .destination = destination });
 
     var output_buffer: [std.fs.max_path_bytes + 64]u8 = undefined;
     const output = try std.fmt.bufPrint(&output_buffer, "telar plugin installed: {s}\n", .{destination});

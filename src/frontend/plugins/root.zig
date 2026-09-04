@@ -31,6 +31,11 @@ pub const BatchAuthorization = struct {
     batch: *const lua_config.EffectBatch,
 };
 
+pub const Installation = struct {
+    package: *const Package,
+    destination: []const u8,
+};
+
 pub const Package = struct {
     manifest: plugin.Manifest,
     digest: plugin.Digest,
@@ -249,7 +254,7 @@ pub fn executeWorker(io: Io, gpa: std.mem.Allocator, request: WorkerRequest) !Wo
         "{s}/package",
         .{snapshot_root},
     );
-    try installPackage(gpa, io, &request.package, snapshot_package);
+    try installPackage(gpa, io, .{ .package = &request.package, .destination = snapshot_package });
     var entry_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const entry = try std.fmt.bufPrint(
         &entry_buffer,
@@ -436,7 +441,12 @@ pub fn inspectPackage(gpa: std.mem.Allocator, io: Io, path: []const u8) !Package
     return loadPackage(.{ .gpa = gpa, .io = io, .config_dir = "." }, path);
 }
 
-pub fn installPackage(gpa: std.mem.Allocator, io: Io, package: *const Package, destination: []const u8) !void {
+/// Installs one immutable package snapshot at a destination directory.
+/// For example: `try installPackage(gpa, io, .{ .package = package, .destination = path });`.
+pub fn installPackage(gpa: std.mem.Allocator, io: Io, installation: Installation) !void {
+    const package = installation.package;
+    const destination = installation.destination;
+
     if (Io.Dir.cwd().statFile(io, destination, .{ .follow_symlinks = false })) |stat| {
         if (stat.kind != .directory) {
             return error.PluginInstallTargetExists;
@@ -748,7 +758,7 @@ test "installation copies and revalidates the exact inspected package" {
         "{s}/installed",
         .{destination_directory_buffer[0..destination_directory_len]},
     );
-    try installPackage(std.testing.allocator, io, &package, destination);
+    try installPackage(std.testing.allocator, io, .{ .package = &package, .destination = destination });
     const installed = try inspectPackage(std.testing.allocator, io, destination);
     try std.testing.expectEqualSlices(u8, &package.digest, &installed.digest);
 
@@ -765,6 +775,6 @@ test "installation copies and revalidates the exact inspected package" {
     );
     try std.testing.expectError(
         error.PluginChangedDuringInstall,
-        installPackage(std.testing.allocator, io, &package, changed_destination),
+        installPackage(std.testing.allocator, io, .{ .package = &package, .destination = changed_destination }),
     );
 }

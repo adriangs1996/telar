@@ -265,7 +265,10 @@ const Launch = struct {
             const snapshot_root = try launch.ensureTapSnapshot();
             var package_buffer: [std.fs.max_path_bytes]u8 = undefined;
             const package_path = try std.fmt.bufPrint(&package_buffer, "{s}/package-{d}", .{ snapshot_root, launch.tap_spec_count });
-            try frontend.plugins.installPackage(launch.process.gpa, launch.process.io, package, package_path);
+            try frontend.plugins.installPackage(launch.process.gpa, launch.process.io, .{
+                .package = package,
+                .destination = package_path,
+            });
             const copied = try frontend.plugins.inspectPackage(launch.process.gpa, launch.process.io, package_path);
             if (!std.mem.eql(u8, &copied.digest, &package.digest)) {
                 return error.PluginChangedDuringInstall;
