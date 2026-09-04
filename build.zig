@@ -397,7 +397,6 @@ pub fn build(b: *std.Build) void {
         .{ .path = "src/frontend/root.zig", .libc = true, .frontend = true },
         .{ .path = "src/frontend/transport/local.zig", .libc = true, .transport = true },
         .{ .path = "src/backend/history/escape.zig" },
-        .{ .path = "src/backend/history/agent_detection.zig" },
         .{ .path = "src/backend/runtime/observability/system_metrics.zig" },
         .{ .path = "src/frontend/workspace/workspace_list.zig" },
         .{ .path = "src/backend/proxy_test.zig", .vt = true, .libc = true },
