@@ -373,7 +373,7 @@ pub const Generation = struct {
             diagnostic.set("a callback cannot return another callback", .{});
             return error.InvalidCallbackResult;
         }
-        const action = generation.parseAction(index, false, diagnostic) catch
+        const action = generation.parseAction(.{ .index = index, .expression = false }, diagnostic) catch
             return error.InvalidCallbackResult;
         return switch (action) {
             .lua_callback, .lua_expr => error.InvalidCallbackResult,
@@ -1168,7 +1168,7 @@ pub const Generation = struct {
         pop(state, 1);
 
         _ = lua.lua_getfield(state, absolute, "action");
-        const action = generation.parseAction(-1, expression, diagnostic) catch |err| {
+        const action = generation.parseAction(.{ .index = -1, .expression = expression }, diagnostic) catch |err| {
             pop(state, 1);
             return err;
         };
@@ -1200,9 +1200,14 @@ pub const Generation = struct {
         };
     }
 
-    fn parseAction(generation: *Generation, index: c_int, expression: bool, diagnostic: *Diagnostic) !action_mod.Action {
+    const ActionInput = struct {
+        index: c_int,
+        expression: bool,
+    };
+
+    fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *Diagnostic) !action_mod.Action {
         const state = generation.vm.state;
-        const absolute = lua.lua_absindex(state, index);
+        const absolute = lua.lua_absindex(state, action_input.index);
         if (lua.lua_type(state, absolute) == lua.LUA_TFUNCTION) {
             if (generation.callback_count == max_callbacks) {
                 diagnostic.set("configuration exceeds {d} Lua callbacks", .{max_callbacks});
@@ -1213,21 +1218,21 @@ pub const Generation = struct {
             const id = generation.callback_count;
             generation.callbacks[id] = .{
                 .registry_ref = registry_ref,
-                .expression = expression,
+                .expression = action_input.expression,
             };
             generation.callback_count += 1;
             const reference: action_mod.CallbackRef = .{
                 .generation = generation.number,
                 .id = id,
             };
-            return if (expression)
+            return if (action_input.expression)
                 .{ .lua_expr = reference }
             else
                 .{ .lua_callback = reference };
         }
 
         if (string(state, absolute)) |name| {
-            if (expression) {
+            if (action_input.expression) {
                 diagnostic.set("expression binding action must be a Lua function", .{});
                 return error.InvalidConfig;
             }
@@ -1241,7 +1246,7 @@ pub const Generation = struct {
             diagnostic.set("keybinding action must be a string, action, or function", .{});
             return error.InvalidConfig;
         }
-        if (expression) {
+        if (action_input.expression) {
             diagnostic.set("expression binding action must be a Lua function", .{});
             return error.InvalidConfig;
         }
