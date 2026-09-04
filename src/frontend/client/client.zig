@@ -205,9 +205,11 @@ pub fn init(params: Params) !*Client {
     view.setSidebarLayout(params.options.sidebar_visible, client_view.sidebar_width);
     try view.configureSidebar(
         params.options.sidebar_rendering,
-        capabilities.kitty_graphics,
-        cell_size.width,
-        cell_size.height,
+        .{
+            .support = capabilities.kitty_graphics,
+            .cell_width = cell_size.width,
+            .cell_height = cell_size.height,
+        },
     );
     const configuration_generation = if (params.options.lua_generation) |generation|
         generation.number

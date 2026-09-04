@@ -198,9 +198,11 @@ fn configureSidebar(raw_context: *anyopaque) !void {
 
     try client.view.configureSidebar(
         client.sidebar_rendering,
-        client.model.hostCapabilities().kitty_graphics,
-        host_size.cell_width_px,
-        host_size.cell_height_px,
+        .{
+            .support = client.model.hostCapabilities().kitty_graphics,
+            .cell_width = host_size.cell_width_px,
+            .cell_height = host_size.cell_height_px,
+        },
     );
 }
 

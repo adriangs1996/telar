@@ -290,23 +290,24 @@ pub const State = struct {
         state.sidebar.scroll = 0;
     }
 
-    pub fn configureSidebar(state: *State, requested: kitty.SidebarRendering, support: kitty.Support, cell_width: u16, cell_height: u16) !void {
-        const resolved = try requested.resolve(support);
-        const toast_changed = state.kitty_toasts.configure(support, cell_width, cell_height);
-        const modal_changed = state.kitty_modal.configure(support, cell_width, cell_height);
-        const icons_changed = state.kitty_icons.configure(support, cell_width, cell_height);
-        const attachments_changed = state.attachment_store.configure(.{
-            .support = support,
-            .cell_width = cell_width,
-            .cell_height = cell_height,
-        });
-        if (state.sidebar_rendering != resolved or state.cell_width_px != cell_width or
-            state.cell_height_px != cell_height or toast_changed or icons_changed or
+    /// Resolves the requested sidebar mode against host graphics support.
+    ///
+    /// ```zig
+    /// try view.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 8, .cell_height = 16 });
+    /// ```
+    pub fn configureSidebar(state: *State, requested: kitty.SidebarRendering, configuration: kitty.Configuration) !void {
+        const resolved = try requested.resolve(configuration.support);
+        const toast_changed = state.kitty_toasts.configure(configuration.support, configuration.cell_width, configuration.cell_height);
+        const modal_changed = state.kitty_modal.configure(configuration.support, configuration.cell_width, configuration.cell_height);
+        const icons_changed = state.kitty_icons.configure(configuration.support, configuration.cell_width, configuration.cell_height);
+        const attachments_changed = state.attachment_store.configure(configuration);
+        if (state.sidebar_rendering != resolved or state.cell_width_px != configuration.cell_width or
+            state.cell_height_px != configuration.cell_height or toast_changed or icons_changed or
             modal_changed or attachments_changed)
         {
             state.sidebar_rendering = resolved;
-            state.cell_width_px = cell_width;
-            state.cell_height_px = cell_height;
+            state.cell_width_px = configuration.cell_width;
+            state.cell_height_px = configuration.cell_height;
             state.dirty = true;
         }
     }
@@ -1506,7 +1507,7 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
 test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     var state = try State.init(std.testing.allocator, 100, 30);
     defer state.deinit();
-    try state.configureSidebar(.kitty_hybrid, .supported, 10, 20);
+    try state.configureSidebar(.kitty_hybrid, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
     const location: schema.TabLocation = .{
@@ -1547,7 +1548,7 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
         .{ .theme = theme_mod.default_theme, .icons = .nerd_font },
     );
     defer state.deinit();
-    try state.configureSidebar(.automatic, .supported, 10, 20);
+    try state.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
     const location: schema.TabLocation = .{
@@ -1582,7 +1583,7 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
         .{ .theme = theme_mod.default_theme, .icons = .nerd_font },
     );
     defer state.deinit();
-    try state.configureSidebar(.automatic, .unsupported, 10, 20);
+    try state.configureSidebar(.automatic, .{ .support = .unsupported, .cell_width = 10, .cell_height = 20 });
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
     const location: schema.TabLocation = .{
@@ -1611,7 +1612,7 @@ test "cell rendering leaves toast rasterization to the media pass" {
     const gpa = std.testing.allocator;
     var state = try State.init(gpa, 120, 30);
     defer state.deinit();
-    try state.configureSidebar(.cells, .supported, 22, 58);
+    try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
     var model = multiplexer.Model.init(gpa);
     defer model.deinit();
     const location: schema.TabLocation = .{

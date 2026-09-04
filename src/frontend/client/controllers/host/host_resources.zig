@@ -63,9 +63,11 @@ fn configureSidebar(raw_context: *anyopaque, configuration: host_resource_delive
 
     try client.view.configureSidebar(
         client.sidebar_rendering,
-        configuration.capabilities.kitty_graphics,
-        configuration.size.cell_width_px,
-        configuration.size.cell_height_px,
+        .{
+            .support = configuration.capabilities.kitty_graphics,
+            .cell_width = configuration.size.cell_width_px,
+            .cell_height = configuration.size.cell_height_px,
+        },
     );
 }
 
