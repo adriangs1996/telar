@@ -230,6 +230,11 @@ pub const StoredGrant = struct {
     }
 };
 
+pub const GrantUpdate = struct {
+    digest: Digest,
+    capabilities: CapabilitySet,
+};
+
 pub const TrustStore = struct {
     entries: [max_grants]StoredGrant = undefined,
     count: u8 = 0,
@@ -287,15 +292,20 @@ pub const TrustStore = struct {
         return store;
     }
 
-    pub fn upsert(store: *TrustStore, manifest: *const Manifest, digest: Digest, capabilities: CapabilitySet) !void {
+    /// Replaces or adds the digest-bound capabilities for one manifest.
+    ///
+    /// ```zig
+    /// try store.upsert(&manifest, .{ .digest = digest, .capabilities = capabilities });
+    /// ```
+    pub fn upsert(store: *TrustStore, manifest: *const Manifest, update: GrantUpdate) !void {
         for (store.entries[0..store.count]) |*entry| {
             if (!std.mem.eql(u8, entry.pluginId(), manifest.id())) {
                 continue;
             }
             entry.grant = .{
                 .plugin_hash = stableId(manifest.id()),
-                .digest = digest,
-                .capabilities = capabilities,
+                .digest = update.digest,
+                .capabilities = update.capabilities,
             };
             return;
         }
@@ -306,8 +316,8 @@ pub const TrustStore = struct {
             .plugin_len = manifest.id_len,
             .grant = .{
                 .plugin_hash = stableId(manifest.id()),
-                .digest = digest,
-                .capabilities = capabilities,
+                .digest = update.digest,
+                .capabilities = update.capabilities,
             },
         };
         @memcpy(entry.plugin_bytes[0..manifest.id_len], manifest.id());
@@ -432,7 +442,7 @@ test "trust store round trips digest-bound capability grants" {
     capabilities.insert(.history_read);
     var store: TrustStore = .{};
     const digest = contentDigest("manifest", "entry");
-    try store.upsert(&manifest, digest, capabilities);
+    try store.upsert(&manifest, .{ .digest = digest, .capabilities = capabilities });
     var bytes: [4096]u8 = undefined;
     var writer: std.Io.Writer = .fixed(&bytes);
     try store.writeJson(&writer);

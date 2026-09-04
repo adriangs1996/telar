@@ -120,7 +120,7 @@ fn trust(init: std.process.Init, package: *const Package, options: *const Plugin
     var trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try trustPath(init.minimal.environ, &trust_path_buffer);
     var store = try loadStore(init.io, init.gpa, path);
-    try store.upsert(&package.manifest, package.digest, granted);
+    try store.upsert(&package.manifest, .{ .digest = package.digest, .capabilities = granted });
     try writeStore(init.io, path, &store);
     try File.stdout().writeStreamingAll(init.io, "telar plugin trust updated\n");
 }
