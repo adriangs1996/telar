@@ -159,20 +159,21 @@ pub fn run(init_process: std.process.Init, entry_path: []const u8) !void {
 
 fn pushExchange(state: *lua.lua_State, exchange: protocol.Exchange) void {
     lua.lua_createtable(state, 0, 14);
-    setInteger(state, -1, "id", exchange.id);
-    setInteger(state, -1, "pane", core.schema.id.raw(exchange.pane));
-    setInteger(state, -1, "pane_generation", exchange.pane_generation);
-    setString(state, -1, "host", exchange.host);
-    setString(state, -1, "protocol", @tagName(exchange.protocol));
-    setString(state, -1, "dialect", @tagName(exchange.dialect));
-    setInteger(state, -1, "connection_id", exchange.connection_id);
-    setInteger(state, -1, "stream_id", exchange.stream_id);
-    setString(state, -1, "method", exchange.method);
-    setString(state, -1, "target", exchange.target);
-    setInteger(state, -1, "status", if (exchange.response) |half| half.status_code else 0);
-    setString(state, -1, "outcome", @tagName(if (exchange.response) |half| half.outcome else exchange.request.?.outcome));
-    setInteger(state, -1, "started_at_ms", exchange.started_at_ms);
-    setInteger(state, -1, "finished_at_ms", if (exchange.response) |half| half.finished_at_ms else exchange.request.?.finished_at_ms);
+    const destination = LuaTable.init(state, -1);
+    destination.setInteger("id", exchange.id);
+    destination.setInteger("pane", core.schema.id.raw(exchange.pane));
+    destination.setInteger("pane_generation", exchange.pane_generation);
+    destination.setString("host", exchange.host);
+    destination.setString("protocol", @tagName(exchange.protocol));
+    destination.setString("dialect", @tagName(exchange.dialect));
+    destination.setInteger("connection_id", exchange.connection_id);
+    destination.setInteger("stream_id", exchange.stream_id);
+    destination.setString("method", exchange.method);
+    destination.setString("target", exchange.target);
+    destination.setInteger("status", if (exchange.response) |half| half.status_code else 0);
+    destination.setString("outcome", @tagName(if (exchange.response) |half| half.outcome else exchange.request.?.outcome));
+    destination.setInteger("started_at_ms", exchange.started_at_ms);
+    destination.setInteger("finished_at_ms", if (exchange.response) |half| half.finished_at_ms else exchange.request.?.finished_at_ms);
     pushHalf(state, exchange.request);
     lua.lua_setfield(state, -2, "request");
     pushHalf(state, exchange.response);
@@ -186,18 +187,20 @@ fn pushHalf(state: *lua.lua_State, optional: ?protocol.Half) void {
         return;
     };
     lua.lua_createtable(state, 0, 6);
+    const destination = LuaTable.init(state, -1);
     pushHead(state, half.head);
     lua.lua_setfield(state, -2, "head");
-    setString(state, -1, "body", half.body);
-    setBoolean(state, -1, "body_truncated", half.body_truncated);
-    setString(state, -1, "body_encoding", half.encoding);
-    setBoolean(state, -1, "body_decoded", half.decoded);
+    destination.setString("body", half.body);
+    destination.setBoolean("body_truncated", half.body_truncated);
+    destination.setString("body_encoding", half.encoding);
+    destination.setBoolean("body_decoded", half.decoded);
     freezeTable(state);
 }
 
 fn pushHead(state: *lua.lua_State, raw: []const u8) void {
     lua.lua_createtable(state, 0, 2);
-    setString(state, -1, "raw", raw);
+    const destination = LuaTable.init(state, -1);
+    destination.setString("raw", raw);
     lua.lua_createtable(state, 0, 0);
     var index: c_int = 1;
     var lines = std.mem.splitSequence(u8, raw, "\r\n");
@@ -210,8 +213,9 @@ fn pushHead(state: *lua.lua_State, raw: []const u8) void {
         const name = std.mem.trim(u8, line[0..colon], " \t");
         const value = std.mem.trim(u8, line[colon + 1 ..], " \t");
         lua.lua_createtable(state, 0, 2);
-        setString(state, -1, "name", name);
-        setString(state, -1, "value", value);
+        const field = LuaTable.init(state, -1);
+        field.setString("name", name);
+        field.setString("value", value);
         freezeTable(state);
         lua.lua_seti(state, -2, index);
         index += 1;
@@ -242,31 +246,32 @@ fn parseEffects(state: *lua.lua_State, index: c_int) !effects.Batch {
             return error.InvalidEffect;
         }
         const effect_table = lua.lua_absindex(state, -1);
-        const kind = try stringField(state, effect_table, "__telar_kind", true);
+        const effect = LuaTable.init(state, effect_table);
+        const kind = try effect.string("__telar_kind", true);
         batch.items[effect_index] = if (std.mem.eql(u8, kind, "record_command"))
             .{ .record_command = .{
-                .command = try stringField(state, effect_table, "command", true),
-                .cwd = try stringField(state, effect_table, "cwd", false),
-                .provider = try stringField(state, effect_table, "provider", false),
-                .tool_call_id = try stringField(state, effect_table, "tool_call_id", false),
-                .session = try optionalStringField(state, effect_table, "session"),
-                .exit_code = @intCast(try integerField(state, effect_table, "exit_code", 0)),
-                .started_at_ms = try integerField(state, effect_table, "started_at_ms", 0),
-                .duration_ms = @intCast(try integerField(state, effect_table, "duration_ms", 0)),
-                .redact = try booleanField(state, effect_table, "redact", true),
+                .command = try effect.string("command", true),
+                .cwd = try effect.string("cwd", false),
+                .provider = try effect.string("provider", false),
+                .tool_call_id = try effect.string("tool_call_id", false),
+                .session = try effect.optionalString("session"),
+                .exit_code = @intCast(try effect.integer("exit_code", 0)),
+                .started_at_ms = try effect.integer("started_at_ms", 0),
+                .duration_ms = @intCast(try effect.integer("duration_ms", 0)),
+                .redact = try effect.boolean("redact", true),
             } }
         else if (std.mem.eql(u8, kind, "agent_evidence"))
             .{ .agent_evidence = .{
-                .pane = core.schema.id.pane(@intCast(try integerField(state, effect_table, "pane", 0))) catch return error.InvalidEffect,
-                .state = try agentState(try stringField(state, effect_table, "state", true)),
-                .confidence = try confidence(try stringField(state, effect_table, "confidence", true)),
+                .pane = core.schema.id.pane(@intCast(try effect.integer("pane", 0))) catch return error.InvalidEffect,
+                .state = try agentState(try effect.string("state", true)),
+                .confidence = try confidence(try effect.string("confidence", true)),
             } }
         else if (std.mem.eql(u8, kind, "notification"))
             .{ .notification = .{
-                .level = try notificationLevel(try stringField(state, effect_table, "level", false)),
-                .duration_ms = @intCast(try integerField(state, effect_table, "duration_ms", core.schema.default_notification_duration_ms)),
-                .title = try stringField(state, effect_table, "title", true),
-                .message = try stringField(state, effect_table, "message", false),
+                .level = try notificationLevel(try effect.string("level", false)),
+                .duration_ms = @intCast(try effect.integer("duration_ms", core.schema.default_notification_duration_ms)),
+                .title = try effect.string("title", true),
+                .message = try effect.string("message", false),
             } }
         else
             return error.InvalidEffect;
@@ -274,46 +279,76 @@ fn parseEffects(state: *lua.lua_State, index: c_int) !effects.Batch {
     return batch;
 }
 
-fn stringField(state: *lua.lua_State, table: c_int, name: [*:0]const u8, required: bool) ![]const u8 {
-    _ = lua.lua_getfield(state, table, name);
-    defer pop(state, 1);
-    if (!required and lua.lua_type(state, -1) == lua.LUA_TNIL) {
-        return "";
-    }
-    return luaString(state, -1) orelse error.InvalidEffect;
-}
+const LuaTable = struct {
+    state: *lua.lua_State,
+    index: c_int,
 
-fn optionalStringField(state: *lua.lua_State, table: c_int, name: [*:0]const u8) !?[]const u8 {
-    _ = lua.lua_getfield(state, table, name);
-    defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
-        return null;
+    fn init(state: *lua.lua_State, index: c_int) LuaTable {
+        return .{ .state = state, .index = lua.lua_absindex(state, index) };
     }
-    return luaString(state, -1) orelse error.InvalidEffect;
-}
 
-fn integerField(state: *lua.lua_State, table: c_int, name: [*:0]const u8, default: i64) !i64 {
-    _ = lua.lua_getfield(state, table, name);
-    defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
-        return default;
-    }
-    var valid: c_int = 0;
-    const value = lua.lua_tointegerx(state, -1, &valid);
-    return if (valid != 0) value else error.InvalidEffect;
-}
+    fn string(table: LuaTable, name: [*:0]const u8, required: bool) ![]const u8 {
+        _ = lua.lua_getfield(table.state, table.index, name);
+        defer pop(table.state, 1);
+        if (!required and lua.lua_type(table.state, -1) == lua.LUA_TNIL) {
+            return "";
+        }
 
-fn booleanField(state: *lua.lua_State, table: c_int, name: [*:0]const u8, default: bool) !bool {
-    _ = lua.lua_getfield(state, table, name);
-    defer pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
-        return default;
+        return luaString(table.state, -1) orelse error.InvalidEffect;
     }
-    if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
-        return error.InvalidEffect;
+
+    fn optionalString(table: LuaTable, name: [*:0]const u8) !?[]const u8 {
+        _ = lua.lua_getfield(table.state, table.index, name);
+        defer pop(table.state, 1);
+        if (lua.lua_type(table.state, -1) == lua.LUA_TNIL) {
+            return null;
+        }
+
+        return luaString(table.state, -1) orelse error.InvalidEffect;
     }
-    return lua.lua_toboolean(state, -1) != 0;
-}
+
+    fn integer(table: LuaTable, name: [*:0]const u8, default: i64) !i64 {
+        _ = lua.lua_getfield(table.state, table.index, name);
+        defer pop(table.state, 1);
+        if (lua.lua_type(table.state, -1) == lua.LUA_TNIL) {
+            return default;
+        }
+
+        var valid: c_int = 0;
+        const value = lua.lua_tointegerx(table.state, -1, &valid);
+
+        return if (valid != 0) value else error.InvalidEffect;
+    }
+
+    fn boolean(table: LuaTable, name: [*:0]const u8, default: bool) !bool {
+        _ = lua.lua_getfield(table.state, table.index, name);
+        defer pop(table.state, 1);
+        if (lua.lua_type(table.state, -1) == lua.LUA_TNIL) {
+            return default;
+        }
+
+        if (lua.lua_type(table.state, -1) != lua.LUA_TBOOLEAN) {
+            return error.InvalidEffect;
+        }
+
+        return lua.lua_toboolean(table.state, -1) != 0;
+    }
+
+    fn setString(table: LuaTable, name: [*:0]const u8, value: []const u8) void {
+        _ = lua.lua_pushlstring(table.state, value.ptr, value.len);
+        lua.lua_setfield(table.state, table.index, name);
+    }
+
+    fn setInteger(table: LuaTable, name: [*:0]const u8, value: anytype) void {
+        lua.lua_pushinteger(table.state, @intCast(value));
+        lua.lua_setfield(table.state, table.index, name);
+    }
+
+    fn setBoolean(table: LuaTable, name: [*:0]const u8, value: bool) void {
+        lua.lua_pushboolean(table.state, @intFromBool(value));
+        lua.lua_setfield(table.state, table.index, name);
+    }
+};
 
 fn agentState(value: []const u8) !core.schema.AgentReportState {
     if (std.mem.eql(u8, value, "working")) {
@@ -484,24 +519,6 @@ fn freezeTable(state: *lua.lua_State) void {
 
 fn readonlyNewIndex(state_optional: ?*lua.lua_State) callconv(.c) c_int {
     return raise(state_optional.?, "exchange is immutable");
-}
-
-fn setString(state: *lua.lua_State, index: c_int, name: [*:0]const u8, value: []const u8) void {
-    const absolute = lua.lua_absindex(state, index);
-    _ = lua.lua_pushlstring(state, value.ptr, value.len);
-    lua.lua_setfield(state, absolute, name);
-}
-
-fn setInteger(state: *lua.lua_State, index: c_int, name: [*:0]const u8, value: anytype) void {
-    const absolute = lua.lua_absindex(state, index);
-    lua.lua_pushinteger(state, @intCast(value));
-    lua.lua_setfield(state, absolute, name);
-}
-
-fn setBoolean(state: *lua.lua_State, index: c_int, name: [*:0]const u8, value: bool) void {
-    const absolute = lua.lua_absindex(state, index);
-    lua.lua_pushboolean(state, @intFromBool(value));
-    lua.lua_setfield(state, absolute, name);
 }
 
 fn luaString(state: *lua.lua_State, index: c_int) ?[]const u8 {
