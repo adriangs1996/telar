@@ -141,6 +141,12 @@ const FallbackPlacement = struct {
     external_id: u32,
 };
 
+const PartialPlacement = struct {
+    pane_id: schema.PaneId,
+    placement: graphics.Placement,
+    external_id: u32,
+};
+
 /// A chunked transfer the frame budget interrupted. The next frame resumes
 /// it before emitting any other graphics escape, which the protocol demands.
 const PartialTransmission = struct {
@@ -738,7 +744,7 @@ pub const Store = struct {
         if (store.placements.getPtr(key)) |entry| {
             entry.placement = placement;
             entry.dirty = true;
-            store.rememberPartialPlacement(pane_id, placement, entry.external_id);
+            store.rememberPartialPlacement(.{ .pane_id = pane_id, .placement = placement, .external_id = entry.external_id });
         } else {
             if (store.panePlacementCount(pane_id) == graphics.max_placements_per_pane) {
                 return error.GraphicsPlacementLimitExceeded;
@@ -750,7 +756,7 @@ pub const Store = struct {
                 .external_id = external_id,
             });
             usage.placements += 1;
-            store.rememberPartialPlacement(pane_id, placement, external_id);
+            store.rememberPartialPlacement(.{ .pane_id = pane_id, .placement = placement, .external_id = external_id });
         }
         store.damage = true;
         store.noteIngressChange();
@@ -1150,27 +1156,27 @@ pub const Store = struct {
         }
     }
 
-    fn rememberPartialPlacement(store: *Store, pane_id: schema.PaneId, placement: graphics.Placement, external_id: u32) void {
+    fn rememberPartialPlacement(store: *Store, remembered: PartialPlacement) void {
         const partial = if (store.partial) |*value| value else return;
-        if (partial.key.pane_id != pane_id or
-            partial.key.image_id != placement.key.image_id or
-            partial.key.generation != placement.key.generation)
+        if (partial.key.pane_id != remembered.pane_id or
+            partial.key.image_id != remembered.placement.key.image_id or
+            partial.key.generation != remembered.placement.key.generation)
         {
             return;
         }
         for (partial.fallbacks[0..partial.fallback_count]) |*fallback| {
-            if (fallback.placement.virtual_id != placement.virtual_id) {
+            if (fallback.placement.virtual_id != remembered.placement.virtual_id) {
                 continue;
             }
-            fallback.* = .{ .placement = placement, .external_id = external_id };
+            fallback.* = .{ .placement = remembered.placement, .external_id = remembered.external_id };
             return;
         }
         if (partial.fallback_count == partial.fallbacks.len) {
             return;
         }
         partial.fallbacks[partial.fallback_count] = .{
-            .placement = placement,
-            .external_id = external_id,
+            .placement = remembered.placement,
+            .external_id = remembered.external_id,
         };
         partial.fallback_count += 1;
     }
@@ -1181,11 +1187,11 @@ pub const Store = struct {
         }
         var placements = store.placements.iterator();
         while (placements.next()) |entry| {
-            store.rememberPartialPlacement(
-                entry.key_ptr.pane_id,
-                entry.value_ptr.placement,
-                entry.value_ptr.external_id,
-            );
+            store.rememberPartialPlacement(.{
+                .pane_id = entry.key_ptr.pane_id,
+                .placement = entry.value_ptr.placement,
+                .external_id = entry.value_ptr.external_id,
+            });
         }
     }
 
