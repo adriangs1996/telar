@@ -228,6 +228,12 @@ test "Claude marker disappearance in a committed frame retires its paired previe
 
 const pi_test_path = "/var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.png";
 
+const PiFrame = struct {
+    target: attachments.Target,
+    prompt: []const u8,
+    id: u64,
+};
+
 fn adoptPiPreview(client: *Client, target: attachments.Target) !void {
     const capture = try client.gpa.create(attachments.Capture);
     capture.* = .{
@@ -241,15 +247,15 @@ fn adoptPiPreview(client: *Client, target: attachments.Target) !void {
 
 /// Commits one Pi editor frame: hidden hardware cursor, an inverse-video
 /// cell right after `prompt` as Pi's own cursor.
-fn commitPiFrame(client: *Client, target: attachments.Target, prompt: []const u8, frame_id: u64) !void {
+fn commitPiFrame(client: *Client, input: PiFrame) !void {
     var pane_buffer = try core.ui.Buffer.init(std.testing.allocator, 120, 3);
     defer pane_buffer.deinit();
-    const cursor_x = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = prompt, .style = .{} });
+    const cursor_x = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = input.prompt, .style = .{} });
     pane_buffer.setCell(.{ .x = cursor_x, .y = 1 }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
     var payload: [16 * 1024]u8 = undefined;
     const frame = try schema.encodePaneFrame(&payload, .{
-        .pane_id = target.pane_id,
-        .frame_id = frame_id,
+        .pane_id = input.target.pane_id,
+        .frame_id = input.id,
         .base_frame_id = 0,
         .cols = pane_buffer.w,
         .rows = pane_buffer.h,
@@ -269,7 +275,7 @@ test "closing a Pi preview deletes its whole pasted path from the editor" {
     const client = harness.client;
     const target = try installTestingAttachmentProvider(client, 1, .pi);
     try adoptPiPreview(client, target);
-    try commitPiFrame(client, target, "> " ++ pi_test_path, 1);
+    try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
     const id = client.view.kittyAttachments().snapshot().items[0].id;
     const model = client.model.activeTabModel().?;
 
@@ -294,13 +300,17 @@ test "a Pi path removed by a word deletion retires its preview on the next frame
     const client = harness.client;
     const target = try installTestingAttachmentProvider(client, 1, .pi);
     try adoptPiPreview(client, target);
-    try commitPiFrame(client, target, "> " ++ pi_test_path, 1);
+    try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
     try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
     var handler: InputHandler = .{ .client = client };
 
     try handler.key(try keybind.parseKey("ctrl+w"));
     try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
-    try commitPiFrame(client, target, "> /var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.", 2);
+    try commitPiFrame(client, .{
+        .target = target,
+        .prompt = "> /var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.",
+        .id = 2,
+    });
 
     try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
 }
