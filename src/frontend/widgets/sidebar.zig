@@ -320,14 +320,12 @@ fn drawAgentMeta(context: *widget.Context, area: ui.Rect, agent: *const agents.A
     }
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = separator, .style = style });
     remaining -= separator_width;
-    _ = context.buffer.writeLeftTruncated(
-        area,
-        x,
-        area.y,
-        agent.cwdLabel(),
-        remaining,
-        style,
-    );
+    _ = context.buffer.writeLeftTruncated(area, .{
+        .point = .{ .x = x, .y = area.y },
+        .text = agent.cwdLabel(),
+        .max_width = remaining,
+        .style = style,
+    });
 }
 
 fn drawStatus(context: *widget.Context, area: ui.Rect, status: schema.AgentStatus, animation_frame: u8, background: ui.Color) void {
