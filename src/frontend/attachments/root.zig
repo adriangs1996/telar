@@ -798,13 +798,12 @@ pub const Store = struct {
             store.abort_pending = false;
         } else if (store.partial) |index| {
             const slot = &store.slots[index].?;
-            const progress = try kitty.writePngTransmissionChunks(
-                writer,
-                slot.image_id,
-                slot.png,
-                slot.transfer_offset,
-                kitty.transmission_budget_per_frame,
-            );
+            const progress = try kitty.writePngTransmissionChunks(writer, .{
+                .external_id = slot.image_id,
+                .png = slot.png,
+                .start_offset = slot.transfer_offset,
+                .budget = kitty.transmission_budget_per_frame,
+            });
             written += progress.written;
             slot.transfer_offset = progress.offset;
             if (progress.offset != slot.png.len) {
@@ -843,13 +842,12 @@ pub const Store = struct {
             if (!wanted or !slot.image_dirty) {
                 continue;
             }
-            const progress = try kitty.writePngTransmissionChunks(
-                writer,
-                slot.image_id,
-                slot.png,
-                0,
-                kitty.transmission_budget_per_frame,
-            );
+            const progress = try kitty.writePngTransmissionChunks(writer, .{
+                .external_id = slot.image_id,
+                .png = slot.png,
+                .start_offset = 0,
+                .budget = kitty.transmission_budget_per_frame,
+            });
             written += progress.written;
             slot.transfer_offset = progress.offset;
             if (progress.offset != slot.png.len) {

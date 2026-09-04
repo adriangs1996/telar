@@ -1715,6 +1715,13 @@ pub const TransmissionChunks = struct {
     compressed: bool,
 };
 
+pub const PngTransmissionChunks = struct {
+    external_id: u32,
+    png: []const u8,
+    start_offset: usize,
+    budget: usize,
+};
+
 /// Emits transmission chunks for `pixels` starting at byte `start_offset`,
 /// spending roughly `budget` encoded bytes. Always makes progress: at least
 /// one chunk goes out even under a zero budget, so a caller looping on the
@@ -1753,24 +1760,25 @@ pub fn writeTransmissionChunks(writer: *Io.Writer, transmission: TransmissionChu
 /// Emits an already encoded PNG using Kitty's direct-data transport. PNG is
 /// the one encoded format the protocol standardizes (`f=100`), so local
 /// clipboard previews can stay compressed in client memory and on the wire.
-pub fn writePngTransmissionChunks(writer: *Io.Writer, external_id: u32, png: []const u8, start_offset: usize, budget: usize) Io.Writer.Error!ChunkProgress {
+/// For example: `try writePngTransmissionChunks(writer, transmission)`.
+pub fn writePngTransmissionChunks(writer: *Io.Writer, transmission: PngTransmissionChunks) Io.Writer.Error!ChunkProgress {
     const Encoder = std.base64.standard.Encoder;
     const raw_chunk_size = 3072;
     var encoded: [4096]u8 = undefined;
-    var offset = start_offset;
+    var offset = transmission.start_offset;
     var written: usize = 0;
-    while (offset < png.len) {
-        if (written != 0 and written >= budget) {
+    while (offset < transmission.png.len) {
+        if (written != 0 and written >= transmission.budget) {
             break;
         }
-        const take = @min(raw_chunk_size, png.len - offset);
-        const payload = Encoder.encode(encoded[0..Encoder.calcSize(take)], png[offset..][0..take]);
-        const more = offset + take < png.len;
+        const take = @min(raw_chunk_size, transmission.png.len - offset);
+        const payload = Encoder.encode(encoded[0..Encoder.calcSize(take)], transmission.png[offset..][0..take]);
+        const more = offset + take < transmission.png.len;
         if (offset == 0) {
             written += try printCounted(
                 writer,
                 "\x1b_Ga=t,f=100,t=d,i={d},q=2,m={d};",
-                .{ external_id, @intFromBool(more) },
+                .{ transmission.external_id, @intFromBool(more) },
             );
         } else {
             written += try printCounted(writer, "\x1b_Gm={d};", .{@intFromBool(more)});
@@ -1863,13 +1871,12 @@ pub fn writeDeleteImageRange(writer: *Io.Writer, first: u32, last: u32) Io.Write
 test "PNG transmissions use encoded format without raw pixel dimensions" {
     var output: [8192]u8 = undefined;
     var writer = Io.Writer.fixed(&output);
-    const progress = try writePngTransmissionChunks(
-        &writer,
-        0x90000001,
-        "encoded png bytes",
-        0,
-        transmission_budget_per_frame,
-    );
+    const progress = try writePngTransmissionChunks(&writer, .{
+        .external_id = 0x90000001,
+        .png = "encoded png bytes",
+        .start_offset = 0,
+        .budget = transmission_budget_per_frame,
+    });
     try std.testing.expectEqual(@as(usize, 17), progress.offset);
     const bytes = writer.buffered();
     try std.testing.expect(std.mem.indexOf(u8, bytes, "a=t,f=100,t=d") != null);
