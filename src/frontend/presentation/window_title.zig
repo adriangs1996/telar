@@ -16,6 +16,11 @@ pub const Tokens = struct {
     hostname: []const u8 = "",
 };
 
+pub const SyncInput = struct {
+    template: []const u8,
+    tokens: Tokens,
+};
+
 pub const State = struct {
     hostname: [max_hostname_bytes]u8 = undefined,
     hostname_len: u8 = 0,
@@ -51,20 +56,20 @@ pub const State = struct {
     /// from the last title sent. An empty template sends nothing.
     ///
     /// ```zig
-    /// try state.sync(writer, template, tokens);
+    /// try state.sync(writer, .{ .template = template, .tokens = tokens });
     /// ```
-    pub fn sync(state: *State, writer: *Io.Writer, template: []const u8, tokens: Tokens) !void {
-        if (template.len == 0) {
+    pub fn sync(state: *State, writer: *Io.Writer, input: SyncInput) !void {
+        if (input.template.len == 0) {
             return;
         }
 
         var buffer: [max_title_bytes]u8 = undefined;
-        var complete = tokens;
+        var complete = input.tokens;
         if (complete.hostname.len == 0) {
             state.ensureHostname();
             complete.hostname = state.hostnameSlice();
         }
-        const title = render(&buffer, template, complete);
+        const title = render(&buffer, input.template, complete);
         if (state.ever_sent and std.mem.eql(u8, state.sent[0..state.sent_len], title)) {
             return;
         }
@@ -152,13 +157,13 @@ test "sync writes the title once per change and nothing for an empty template" {
     var writer = Io.Writer.fixed(&output);
     var state: State = .{};
 
-    try state.sync(&writer, "", .{ .workspace = "a" });
+    try state.sync(&writer, .{ .template = "", .tokens = .{ .workspace = "a" } });
     try std.testing.expectEqual(@as(usize, 0), writer.buffered().len);
 
-    try state.sync(&writer, "{workspace}", .{ .workspace = "a" });
-    try state.sync(&writer, "{workspace}", .{ .workspace = "a" });
+    try state.sync(&writer, .{ .template = "{workspace}", .tokens = .{ .workspace = "a" } });
+    try state.sync(&writer, .{ .template = "{workspace}", .tokens = .{ .workspace = "a" } });
     try std.testing.expectEqualStrings("\x1b]0;a\x07", writer.buffered());
 
-    try state.sync(&writer, "{workspace}", .{ .workspace = "b" });
+    try state.sync(&writer, .{ .template = "{workspace}", .tokens = .{ .workspace = "b" } });
     try std.testing.expectEqualStrings("\x1b]0;a\x07\x1b]0;b\x07", writer.buffered());
 }

@@ -734,10 +734,13 @@ fn syncWindowTitle(presenter: *Presenter, projection: Projection, writer: *Io.Wr
     const tab_label = if (projection.tabs.activeConst()) |tab| tab.labelSlice() else "";
     const pane_title = if (projection.model) |model| focusedPaneTitle(model) else "";
 
-    try presenter.window_title.sync(writer, projection.window_title_template, .{
-        .workspace = projection.tabs.workspaceName(),
-        .tab = tab_label,
-        .pane_title = pane_title,
+    try presenter.window_title.sync(writer, .{
+        .template = projection.window_title_template,
+        .tokens = .{
+            .workspace = projection.tabs.workspaceName(),
+            .tab = tab_label,
+            .pane_title = pane_title,
+        },
     });
 }
 
