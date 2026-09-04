@@ -41,6 +41,13 @@ pub const Cursor = struct {
 // The fixed table keeps the input path allocation-free.
 pub const Hits = ui.Hits(Action, 704);
 
+pub const IconDraw = struct {
+    area: ui.Rect,
+    point: core.ui.Point,
+    icon: icons.Icon,
+    style: ui.Style,
+};
+
 /// Widgets receive no client state and cannot mutate navigation, layout,
 /// transport, or runtime models.
 pub const Context = struct {
@@ -59,28 +66,29 @@ pub const Context = struct {
     /// Draws the one-cell fallback and, when possible, records an opaque KGP
     /// replacement. Indexed and terminal-default colors stay cell-rendered
     /// because the client cannot reproduce colors it does not know.
-    pub fn drawIcon(context: *Context, area: ui.Rect, x: u16, y: u16, icon: icons.Icon, style: ui.Style) u16 {
+    /// For example: `_ = context.drawIcon(.{ .area = area, .point = point, .icon = .cpu, .style = style });`.
+    pub fn drawIcon(context: *Context, draw: IconDraw) u16 {
         const requested = if (context.icon_theme == .nerd_font) context.icon_plan else null;
-        const foreground = switch (style.fg) {
+        const foreground = switch (draw.style.fg) {
             .rgb => |value| value,
             else => null,
         };
-        const background = switch (style.bg) {
+        const background = switch (draw.style.bg) {
             .rgb => |value| value,
             else => null,
         };
         const graphical = requested != null and foreground != null and background != null;
-        const fallback = if (graphical) icon.cellFallbackGlyph() else icon.unicodeGlyph();
-        const written = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = fallback, .style = style });
+        const fallback = if (graphical) draw.icon.cellFallbackGlyph() else draw.icon.unicodeGlyph();
+        const written = context.buffer.writeText(draw.area, .{ .point = draw.point, .text = fallback, .style = draw.style });
         if (written != 1 or !graphical) {
             return written;
         }
-        if (!area.contains(x, y) or !context.buffer.clip.contains(x, y)) {
+        if (!draw.area.contains(draw.point.x, draw.point.y) or !context.buffer.clip.contains(draw.point.x, draw.point.y)) {
             return written;
         }
         requested.?.add(.{
-            .area = .{ .x = x, .y = y, .w = 1, .h = 1 },
-            .icon = icon,
+            .area = .{ .x = draw.point.x, .y = draw.point.y, .w = 1, .h = 1 },
+            .icon = draw.icon,
             .foreground = foreground.?,
             .background = background.?,
         });
@@ -105,13 +113,12 @@ test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
         .fg = .{ .rgb = .{ 1, 2, 3 } },
         .bg = .{ .rgb = .{ 4, 5, 6 } },
     };
-    try std.testing.expectEqual(@as(u16, 1), context.drawIcon(
-        buffer.area(),
-        1,
-        0,
-        .cpu,
-        style,
-    ));
+    try std.testing.expectEqual(@as(u16, 1), context.drawIcon(.{
+        .area = buffer.area(),
+        .point = .{ .x = 1, .y = 0 },
+        .icon = .cpu,
+        .style = style,
+    }));
     try std.testing.expectEqualStrings("C", buffer.at(1, 0).?.text());
     try std.testing.expectEqual(@as(u8, 1), plan.len);
     try std.testing.expectEqual(icons.Icon.cpu, plan.slice()[0].icon);
@@ -130,7 +137,7 @@ test "Nerd Font theme keeps Unicode when terminal colors cannot be reproduced" {
         .icon_theme = .nerd_font,
         .icon_plan = &plan,
     };
-    _ = context.drawIcon(buffer.area(), 1, 0, .cpu, .{});
+    _ = context.drawIcon(.{ .area = buffer.area(), .point = .{ .x = 1, .y = 0 }, .icon = .cpu, .style = .{} });
     try std.testing.expectEqualStrings("\u{2699}", buffer.at(1, 0).?.text());
     try std.testing.expectEqual(@as(u8, 0), plan.len);
 }

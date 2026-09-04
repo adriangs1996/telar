@@ -72,13 +72,12 @@ pub fn render(context: *widget.Context, input: Input) void {
     context.buffer.fill(toggle, .{ .glyph = " ", .style = toggle_style });
 
     if (toggle.w != 0) {
-        _ = context.drawIcon(
-            toggle,
-            toggle.x + (toggle.w - 1) / 2,
-            toggle.y,
-            if (input.sidebar_visible) .sidebar_collapse else .sidebar_expand,
-            toggle_style,
-        );
+        _ = context.drawIcon(.{
+            .area = toggle,
+            .point = .{ .x = toggle.x + (toggle.w - 1) / 2, .y = toggle.y },
+            .icon = if (input.sidebar_visible) .sidebar_collapse else .sidebar_expand,
+            .style = toggle_style,
+        });
     }
 
     // The badge is reserved first so a long workspace list cannot push the
@@ -104,13 +103,12 @@ pub fn render(context: *widget.Context, input: Input) void {
     };
     context.buffer.fill(marker_rect, .{ .glyph = " ", .style = marker_style });
     if (marker_width >= 2) {
-        _ = context.drawIcon(
-            marker_rect,
-            group_x + 1,
-            area.y,
-            .workspace_menu,
-            marker_style,
-        );
+        _ = context.drawIcon(.{
+            .area = marker_rect,
+            .point = .{ .x = group_x + 1, .y = area.y },
+            .icon = .workspace_menu,
+            .style = marker_style,
+        });
     }
     const list_x = group_x + marker_width;
 
@@ -146,13 +144,12 @@ pub fn render(context: *widget.Context, input: Input) void {
         };
         context.buffer.fill(badge, .{ .glyph = " ", .style = badge_style });
         if (badge_width >= 2) {
-            _ = context.drawIcon(
-                badge,
-                badge.x + 1,
-                badge.y,
-                .proxy_active,
-                badge_style,
-            );
+            _ = context.drawIcon(.{
+                .area = badge,
+                .point = .{ .x = badge.x + 1, .y = badge.y },
+                .icon = .proxy_active,
+                .style = badge_style,
+            });
         }
     }
 }

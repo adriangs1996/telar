@@ -241,7 +241,7 @@ fn drawAgentTitle(context: *widget.Context, input: Input, semantic: *Semantic, a
     } else if (input.transparent and artwork != null) {
         semantic.addProviderMark(.{ .area = mark_area, .provider = agent.provider });
     } else {
-        _ = context.drawIcon(area, area.x, area.y, artwork orelse .provider_unknown, icon_style);
+        _ = context.drawIcon(.{ .area = area, .point = .{ .x = area.x, .y = area.y }, .icon = artwork orelse .provider_unknown, .style = icon_style });
     }
     const status_width = statusWidth(agent.status);
     _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x + 3, .y = area.y }, .text = if (agent.sessionTitle().len != 0)
@@ -334,9 +334,11 @@ fn drawStatus(context: *widget.Context, area: ui.Rect, status: schema.AgentStatu
         return;
     }
     var x = area.x + area.w - width;
-    x += context.drawIcon(area, x, area.y, statusIcon(status, animation_frame), .{
-        .fg = statusColor(context, status),
-        .bg = background,
+    x += context.drawIcon(.{
+        .area = area,
+        .point = .{ .x = x, .y = area.y },
+        .icon = statusIcon(status, animation_frame),
+        .style = .{ .fg = statusColor(context, status), .bg = background },
     });
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = " ", .style = .{ .bg = background } });
     _ = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = statusLabel(status), .style = .{

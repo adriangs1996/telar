@@ -119,10 +119,15 @@ fn drawCard(context: *widget.Context, card: ui.Rect, item: *const notifications.
             .w = 2,
             .h = 1,
         };
-        _ = context.drawIcon(close, close.x, close.y, .close, .{
-            .fg = if (context.isHovered(dismiss)) context.palette.text else accent,
-            .bg = background,
-            .flags = .{ .bold = true },
+        _ = context.drawIcon(.{
+            .area = close,
+            .point = .{ .x = close.x, .y = close.y },
+            .icon = .close,
+            .style = .{
+                .fg = if (context.isHovered(dismiss)) context.palette.text else accent,
+                .bg = background,
+                .flags = .{ .bold = true },
+            },
         });
     }
 }

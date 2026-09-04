@@ -22,7 +22,7 @@ pub fn render(context: *widget.Context, area: ui.Rect, input: Input) void {
 
         const style = resolveStyle(context, segment.style);
         if (segment.icon) |icon| {
-            x += context.drawIcon(area, x, area.y, icon, style);
+            x += context.drawIcon(.{ .area = area, .point = .{ .x = x, .y = area.y }, .icon = icon, .style = style });
         }
         const remaining = area.x + area.w - x;
         x += context.buffer.writeTruncated(area, .{ .point = .{ .x = x, .y = area.y }, .text = input.content.text(segment), .max_width = remaining, .style = style });

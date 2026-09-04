@@ -64,7 +64,7 @@ const Label = struct {
         }
 
         const marker_x = rect.x + text_width;
-        _ = context.drawIcon(rect, marker_x, rect.y, .pane_fullscreen, placement.style);
+        _ = context.drawIcon(.{ .area = rect, .point = .{ .x = marker_x, .y = rect.y }, .icon = .pane_fullscreen, .style = placement.style });
         _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = marker_x + 1, .y = rect.y }, .text = " ", .max_width = 1, .style = placement.style });
     }
 };

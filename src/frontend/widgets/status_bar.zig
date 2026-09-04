@@ -61,7 +61,7 @@ pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
         .fg = cpuColor(context, values.cpu_percent),
         .bg = background,
     };
-    x += context.drawIcon(area, x, area.y, .cpu, cpu_style);
+    x += context.drawIcon(.{ .area = area, .point = .{ .x = x, .y = area.y }, .icon = .cpu, .style = cpu_style });
     var cpu_buffer: [10]u8 = undefined;
     const cpu = std.fmt.bufPrint(&cpu_buffer, " {d}%", .{values.cpu_percent}) catch return;
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = cpu, .style = cpu_style });
@@ -71,7 +71,7 @@ pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
         .fg = context.palette.mauve,
         .bg = background,
     };
-    x += context.drawIcon(area, x, area.y, .memory, memory_style);
+    x += context.drawIcon(.{ .area = area, .point = .{ .x = x, .y = area.y }, .icon = .memory, .style = memory_style });
     var memory_buffer: [14]u8 = undefined;
     const memory = std.fmt.bufPrint(&memory_buffer, " {d}.{d}G", .{
         values.memory_used_decigib / 10,
@@ -86,7 +86,7 @@ pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
             .fg = if (battery < 20) context.palette.red else context.palette.green,
             .bg = background,
         };
-        x += context.drawIcon(area, x, area.y, ui.icons.battery(battery), battery_style);
+        x += context.drawIcon(.{ .area = area, .point = .{ .x = x, .y = area.y }, .icon = ui.icons.battery(battery), .style = battery_style });
         var battery_buffer: [10]u8 = undefined;
         const text = std.fmt.bufPrint(&battery_buffer, "{d}%", .{battery}) catch return;
         _ = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = text, .style = battery_style });
