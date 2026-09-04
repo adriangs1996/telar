@@ -263,11 +263,10 @@ pub fn Checkpointer(comptime Application: type) type {
                 },
                 .tab => |tab| {
                     const workspace_id = try schema.id.workspace(tab.workspace_id);
-                    repository.restoreTab(
-                        .{ .workspace = workspace_id },
-                        try schema.id.tab(tab.tab_id),
-                        tab.label,
-                    ) catch continue;
+                    repository.restoreTab(.{
+                        .workspace = .{ .workspace = workspace_id },
+                        .tab_id = try schema.id.tab(tab.tab_id),
+                    }, tab.label) catch continue;
                 },
                 .pane => |pane| restorePane(application, reader.counters, pane) catch continue,
                 .layout => |layout| restoreLayout(application, layout) catch continue,

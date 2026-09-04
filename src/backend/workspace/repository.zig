@@ -429,15 +429,15 @@ pub const Repository = struct {
     /// Rebuilds one additional tab of a restored workspace.
     ///
     /// ```zig
-    /// try repository.restoreTab(location.workspace, tab_id, "logs");
+    /// try repository.restoreTab(.{ .workspace = workspace, .tab_id = tab_id }, "logs");
     /// ```
-    pub fn restoreTab(repository: *Repository, workspace_location: schema.WorkspaceLocation, tab_id: schema.TabId, label: []const u8) !void {
-        const workspace = repository.find(workspace_location) orelse return error.WorkspaceNotFound;
-        if (workspace.containsTab(tab_id)) {
+    pub fn restoreTab(repository: *Repository, location: schema.TabLocation, label: []const u8) !void {
+        const workspace = repository.find(location.workspace) orelse return error.WorkspaceNotFound;
+        if (workspace.containsTab(location.tab_id)) {
             return error.DuplicateTabIdentity;
         }
-        _ = try workspace.createTab(tab_id, label);
-        repository.state.next_tab_id = @max(repository.state.next_tab_id, schema.id.raw(tab_id) + 1);
+        _ = try workspace.createTab(location.tab_id, label);
+        repository.state.next_tab_id = @max(repository.state.next_tab_id, schema.id.raw(location.tab_id) + 1);
         state_mod.advanceRevision(repository.state);
     }
 
@@ -687,7 +687,7 @@ test "restored workspaces keep their identities and push the counters past them"
         .first_tab_id = @enumFromInt(9),
         .first_tab_label = "editor",
     });
-    try repository.restoreTab(location.workspace, @enumFromInt(11), "logs");
+    try repository.restoreTab(.{ .workspace = location.workspace, .tab_id = @enumFromInt(11) }, "logs");
 
     try std.testing.expectEqual(@as(u64, 4), schema.id.raw(location.workspace.workspace));
     try std.testing.expectEqualStrings("core", repository.reader().workspaceName(location.workspace).?);
