@@ -265,7 +265,8 @@ pub const Service = struct {
         }
         const event_id = service.next_event_id.fetchAdd(1, .monotonic);
         for (service.workers[0..service.worker_count]) |*worker| {
-            const frame = service.encodeFrame(captured, event_id, worker.spec.generation) catch continue;
+            const identity: protocol.ExchangeIdentity = .{ .id = event_id, .generation = worker.spec.generation };
+            const frame = service.encodeFrame(captured, identity) catch continue;
             worker.submit(service.io, frame);
         }
     }
@@ -303,16 +304,16 @@ pub const Service = struct {
         }
     }
 
-    fn encodeFrame(service: *Service, captured: *const proxy.CaptureExchange, event_id: u64, generation: u64) !*Frame {
+    fn encodeFrame(service: *Service, captured: *const proxy.CaptureExchange, identity: protocol.ExchangeIdentity) !*Frame {
         const size = capturedBytes(captured) + protocol.overhead_bytes;
         const bytes = try service.gpa.alloc(u8, size);
         errdefer service.gpa.free(bytes);
-        const payload = try protocol.encodeExchange(bytes, event_id, generation, captured);
+        const payload = try protocol.encodeExchange(bytes, identity, captured);
         const representative = captured.request orelse captured.response orelse return error.EmptyCapture;
         const frame = try service.gpa.create(Frame);
         frame.* = .{
             .gpa = service.gpa,
-            .event_id = event_id,
+            .event_id = identity.id,
             .pane = representative.pane.id,
             .pane_generation = representative.pane.generation,
             .storage = bytes,

@@ -37,17 +37,22 @@ pub const Exchange = struct {
     response: ?Half,
 };
 
+pub const ExchangeIdentity = struct {
+    id: u64,
+    generation: u64,
+};
+
 /// Encodes one captured exchange into caller-owned frame payload storage.
 ///
 /// ```zig
-/// const payload = try encodeExchange(buffer, id, generation, &exchange);
+/// const payload = try encodeExchange(buffer, .{ .id = id, .generation = generation }, &exchange);
 /// ```
-pub fn encodeExchange(buffer: []u8, id: u64, generation: u64, captured: *const proxy.CaptureExchange) ![]const u8 {
+pub fn encodeExchange(buffer: []u8, identity: ExchangeIdentity, captured: *const proxy.CaptureExchange) ![]const u8 {
     const representative = captured.request orelse captured.response orelse return error.EmptyCapture;
     var writer: std.Io.Writer = .fixed(buffer);
     try writer.writeByte(1);
-    try writeInt(&writer, u64, id);
-    try writeInt(&writer, u64, generation);
+    try writeInt(&writer, u64, identity.id);
+    try writeInt(&writer, u64, identity.generation);
     try writeInt(&writer, u64, core.schema.id.raw(representative.pane.id));
     try writeInt(&writer, u64, representative.pane.generation);
     try writer.writeByte(@intFromEnum(representative.protocol));
