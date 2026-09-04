@@ -252,13 +252,7 @@ const FallbackTestingModel = struct {
         const second: schema.PaneId = @enumFromInt(2);
         const third: schema.PaneId = @enumFromInt(3);
         try model.workspace.bootstrap(first, first_location, .{ .cols = 20, .rows = 5 });
-        try model.workspace.active().?.model.split(
-            first,
-            second,
-            first_location,
-            .horizontal,
-            .{ .w = 20, .h = 5 },
-        );
+        try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = first_location, .axis = .horizontal, .area = .{ .w = 20, .h = 5 } });
         _ = try model.workspace.addCreated(.{
             .location = second_location,
             .position = 1,

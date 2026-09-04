@@ -70,7 +70,7 @@ const TestingModel = struct {
         const root: schema.PaneId = @enumFromInt(1);
         const sibling: schema.PaneId = @enumFromInt(2);
         try model.workspace.bootstrap(root, location, .{ .cols = 40, .rows = 10 });
-        try model.workspace.active().?.model.split(root, sibling, location, .horizontal, .{ .w = 40, .h = 10 });
+        try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
         if (!model.workspace.active().?.model.focusPane(root)) {
             return error.FocusNotChanged;
         }

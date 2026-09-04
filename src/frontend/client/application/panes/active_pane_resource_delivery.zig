@@ -195,7 +195,7 @@ fn prepareModel(model: *client_model.Model, fullscreen: bool) !client_model.Pane
     const second: core.schema.PaneId = @enumFromInt(2);
     const area: ui.Rect = .{ .w = 80, .h = 24 };
     try model.workspace.bootstrap(first, location, .{ .cols = 80, .rows = 24 });
-    try model.workspace.active().?.model.split(first, second, location, .horizontal, area);
+    try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     if (fullscreen) {
         try std.testing.expect(model.workspace.active().?.model.toggleFullscreen());
     }

@@ -100,8 +100,8 @@ test "a created workspace bookmarks and replaces the prior layout" {
     const bottom_right: schema.PaneId = @enumFromInt(12);
     const workbench = client.view.workbench();
     const prior_model = &client.model.workspace.active().?.model;
-    try prior_model.split(left, top_right, prior_location, .horizontal, workbench);
-    try prior_model.split(top_right, bottom_right, prior_location, .vertical, workbench);
+    try prior_model.split(.{ .existing_pane = left, .new_pane = top_right, .location = prior_location, .axis = .horizontal, .area = workbench });
+    try prior_model.split(.{ .existing_pane = top_right, .new_pane = bottom_right, .location = prior_location, .axis = .vertical, .area = workbench });
     prior_model.find(left).?.input_modes.focus_events = true;
     try std.testing.expect(prior_model.focusPane(left));
     _ = client.model.syncReportedPaneFocus().?;

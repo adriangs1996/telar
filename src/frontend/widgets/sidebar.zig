@@ -600,7 +600,7 @@ test "active layout projects pane indices without mutating runtime agent state" 
     var active = multiplexer.Model.init(std.testing.allocator);
     defer active.deinit();
     try active.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
-    try active.split(first, second, location, .horizontal, .{ .w = 80, .h = 24 });
+    try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 80, .h = 24 } });
     var snapshot: Snapshot = .{};
     const agent: AgentInput = .{
         .key = .{ .pane_id = second, .pane_generation = 1 },

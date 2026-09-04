@@ -1197,7 +1197,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
     try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 50, .rows = 22 } });
-    try model.split(first, second, location, .horizontal, state.workbench());
+    try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = state.workbench() });
     try std.testing.expect(model.focusPane(first));
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
@@ -1247,13 +1247,7 @@ test "sidebar agent snapshots version changed hover only once" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 34, .rows = 27 } });
-    try model.split(
-        @enumFromInt(1),
-        @enumFromInt(2),
-        location,
-        .horizontal,
-        state.workbench(),
-    );
+    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = state.workbench() });
     try std.testing.expect(model.toggleFullscreen());
     const agent_entries = [_]agents.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 },
@@ -1309,7 +1303,7 @@ test "focused agent image preview reserves space below its pane and opens a moda
         .cols = state.workbench().w,
         .rows = state.workbench().h,
     } });
-    try model.split(first_pane, target_pane, location, .horizontal, state.workbench());
+    try model.split(.{ .existing_pane = first_pane, .new_pane = target_pane, .location = location, .axis = .horizontal, .area = state.workbench() });
     const agent_entries = [_]agents.AgentInput{.{
         .key = .{ .pane_id = target_pane, .pane_generation = 4 },
         .location = location,
@@ -1429,20 +1423,8 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
     var first_model = multiplexer.Model.init(gpa);
     defer first_model.deinit();
     try first_model.addRoot(.{ .pane_id = first_pane, .location = first_location, .size = .{ .cols = 34, .rows = 27 } });
-    try first_model.split(
-        first_pane,
-        second_pane,
-        first_location,
-        .horizontal,
-        state.workbench(),
-    );
-    try first_model.split(
-        second_pane,
-        shell_pane,
-        first_location,
-        .vertical,
-        state.workbench(),
-    );
+    try first_model.split(.{ .existing_pane = first_pane, .new_pane = second_pane, .location = first_location, .axis = .horizontal, .area = state.workbench() });
+    try first_model.split(.{ .existing_pane = second_pane, .new_pane = shell_pane, .location = first_location, .axis = .vertical, .area = state.workbench() });
     try std.testing.expect(first_model.focusPane(first_pane));
 
     var second_model = multiplexer.Model.init(gpa);
@@ -1917,7 +1899,7 @@ test "tab bar marks the tab whose pane is fullscreen" {
     }, .{ .cols = 50, .rows = 22 });
     // Creating "logs" made it the active tab; its root pane is pane 2.
     const model = &tabs.active().?.model;
-    try model.split(@enumFromInt(2), @enumFromInt(3), logs, .horizontal, state.workbench());
+    try model.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(3), .location = logs, .axis = .horizontal, .area = state.workbench() });
     try std.testing.expect(model.toggleFullscreen());
     var screen = try term.Screen.init(gpa, 100, 30);
     defer screen.deinit();

@@ -718,13 +718,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
 
     const retired: schema.PaneId = @enumFromInt(11);
     const model = &client.model.workspace.active().?.model;
-    try model.split(
-        TestHarness.bootstrap_pane,
-        retired,
-        TestHarness.bootstrap_location,
-        .horizontal,
-        client.view.workbench(),
-    );
+    try model.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = retired, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
     try active_pane_resources.synchronize(client);
     try std.testing.expect(client.model.enterCopyMode());
     try client.graphics_store.applyImage(.{

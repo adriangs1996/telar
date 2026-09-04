@@ -221,13 +221,7 @@ const TestingModel = struct {
         const removed_sibling: schema.PaneId = @enumFromInt(2);
         const successor_root: schema.PaneId = @enumFromInt(3);
         try model.workspace.bootstrap(removed_root, removed, .{ .cols = 40, .rows = 10 });
-        try model.workspace.active().?.model.split(
-            removed_root,
-            removed_sibling,
-            removed,
-            .horizontal,
-            .{ .w = 40, .h = 10 },
-        );
+        try model.workspace.active().?.model.split(.{ .existing_pane = removed_root, .new_pane = removed_sibling, .location = removed, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
         if (!model.workspace.active().?.model.focusPane(removed_root)) {
             return error.RemovedFocusNotRestored;
         }
@@ -650,13 +644,7 @@ test "DeliverTabRemovalHandler catches active identity and layout ABA plus repre
     const pane_commit = try pane_testing.removeActive();
     var pane_capture = captureFor(&pane_testing, pane_commit);
     var pane_handler = deliveryHandler(&pane_testing, &pane_capture);
-    try pane_testing.model.workspace.active().?.model.split(
-        pane_testing.successor_root,
-        pane_testing.removed_root,
-        pane_testing.successor,
-        .horizontal,
-        .{ .w = 40, .h = 10 },
-    );
+    try pane_testing.model.workspace.active().?.model.split(.{ .existing_pane = pane_testing.successor_root, .new_pane = pane_testing.removed_root, .location = pane_testing.successor, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     pane_capture.commit.removed.active_layout_revision =
         pane_testing.model.workspace.activeConst().?.model.layout.currentRevision();
 

@@ -70,7 +70,7 @@ test "workspace departure commits one empty version and captures bounded client 
     const third: schema.PaneId = @enumFromInt(3);
     const area: ui.Rect = .{ .w = 40, .h = 10 };
     try model.workspace.bootstrap(first, active, .{ .cols = 20, .rows = 5 });
-    try model.workspace.active().?.model.split(first, focused, active, .horizontal, area);
+    try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = focused, .location = active, .axis = .horizontal, .area = area });
     _ = try model.workspace.addCreated(.{
         .location = inactive,
         .position = 1,
@@ -221,7 +221,7 @@ test "workspace replacement commits the confirmed root and captures retired stat
     const inactive_pane: schema.PaneId = @enumFromInt(3);
     const replacement_pane: schema.PaneId = @enumFromInt(4);
     try model.workspace.bootstrap(first, previous, .{ .cols = 20, .rows = 5 });
-    try model.workspace.active().?.model.split(first, focused, previous, .horizontal, .{ .w = 40, .h = 10 });
+    try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = focused, .location = previous, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     _ = try model.workspace.addCreated(.{
         .location = inactive,
         .position = 1,
@@ -690,7 +690,7 @@ test "tab detachment plans exact operational state before a silent commit" {
     const root: schema.PaneId = @enumFromInt(1);
     const sibling: schema.PaneId = @enumFromInt(2);
     try model.workspace.bootstrap(root, first, .{ .cols = 20, .rows = 5 });
-    try model.workspace.active().?.model.split(root, sibling, first, .horizontal, .{ .w = 40, .h = 10 });
+    try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = first, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     try std.testing.expect(model.workspace.active().?.model.focusPane(root));
     const root_pane = model.workspace.findPane(root).?;
     const sibling_pane = model.workspace.findPane(sibling).?;

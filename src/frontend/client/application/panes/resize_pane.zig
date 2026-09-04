@@ -51,7 +51,7 @@ const TestingModel = struct {
         const first: schema.PaneId = @enumFromInt(1);
         const second: schema.PaneId = @enumFromInt(2);
         try model.workspace.bootstrap(first, location, .{ .cols = 101, .rows = 41 });
-        try model.workspace.active().?.model.split(first, second, location, .horizontal, .{ .w = 101, .h = 41 });
+        try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 101, .h = 41 } });
         try std.testing.expect(model.workspace.active().?.model.focusPane(first));
 
         return .{

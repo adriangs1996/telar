@@ -796,13 +796,7 @@ test "displayed workspace name stays canonical when pane cwd changes" {
         try tab.model.setPaneCwd(@enumFromInt(1), "/work/telar"),
     );
     try std.testing.expectEqualStrings("telar", model.displayedWorkspaceName());
-    try tab.model.split(
-        @enumFromInt(1),
-        @enumFromInt(2),
-        tab.location,
-        .horizontal,
-        .{ .x = 0, .y = 0, .w = 20, .h = 5 },
-    );
+    try tab.model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = tab.location, .axis = .horizontal, .area = .{ .x = 0, .y = 0, .w = 20, .h = 5 } });
     try std.testing.expectEqual(
         multiplexer.MetadataChange.display_changed,
         try tab.model.setPaneCwd(@enumFromInt(2), "/work/agents/"),
@@ -1222,13 +1216,7 @@ test "later tab reconciliation preserves the client layout order" {
         .panes = &.{ @enumFromInt(10), @enumFromInt(42) },
     };
     const tab = try model.reconcileTab(initial, .{ .w = 60, .h = 12 });
-    try tab.model.split(
-        @enumFromInt(10),
-        @enumFromInt(77),
-        location,
-        .vertical,
-        .{ .w = 60, .h = 12 },
-    );
+    try tab.model.split(.{ .existing_pane = @enumFromInt(10), .new_pane = @enumFromInt(77), .location = location, .axis = .vertical, .area = .{ .w = 60, .h = 12 } });
 
     const refresh: PaneSnapshot = .{
         .location = location,

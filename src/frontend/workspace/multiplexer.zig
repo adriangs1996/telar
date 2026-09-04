@@ -38,6 +38,14 @@ pub const PaneSpec = struct {
     size: schema.TerminalSize,
 };
 
+pub const PaneSplit = struct {
+    existing_pane: schema.PaneId,
+    new_pane: schema.PaneId,
+    location: schema.TabLocation,
+    axis: layout_mod.Axis,
+    area: ui.Rect,
+};
+
 const PaneInit = struct {
     spec: PaneSpec,
     attached: bool,
@@ -916,16 +924,22 @@ pub const Model = struct {
         model.location = spec.location;
     }
 
-    pub fn split(model: *Model, existing_pane: schema.PaneId, new_pane: schema.PaneId, location: schema.TabLocation, axis: layout_mod.Axis, area: ui.Rect) !void {
-        const prospective = model.prospectiveSplit(existing_pane, axis, area) orelse
+    /// Adds a pane by splitting an existing pane within the current workbench.
+    ///
+    /// ```zig
+    /// try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
+    /// ```
+    pub fn split(model: *Model, request: PaneSplit) !void {
+        const prospective = model.prospectiveSplit(request.existing_pane, request.axis, request.area) orelse
             return error.PaneTooSmall;
         const size = rectSize(prospective.new_content) orelse return error.PaneTooSmall;
-        try model.insertPane(new_pane, location, size, true);
-        errdefer _ = model.removePane(new_pane);
+
+        try model.insertPane(request.new_pane, request.location, size, true);
+        errdefer _ = model.removePane(request.new_pane);
         try model.layout.split(.{
-            .existing_pane = existing_pane,
-            .new_pane = new_pane,
-            .axis = axis,
+            .existing_pane = request.existing_pane,
+            .new_pane = request.new_pane,
+            .axis = request.axis,
         });
     }
 
@@ -1546,13 +1560,7 @@ test "two pane buffers compose into their layout rectangles" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
-    try model.split(
-        @enumFromInt(1),
-        @enumFromInt(2),
-        location,
-        .horizontal,
-        .{ .w = 40, .h = 7 },
-    );
+    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 7 } });
     model.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "a", .width = 1, .style = .{} });
     model.find(@enumFromInt(2)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "b", .width = 1, .style = .{} });
 
@@ -1587,7 +1595,7 @@ test "compositor places a bottom reservation below only its target pane" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 40, .rows = 12 } });
-    try model.split(first, second, location, .horizontal, area);
+    try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
 
     var screen = try term.Screen.init(gpa, area.w, area.h);
     defer screen.deinit();
@@ -1742,7 +1750,7 @@ test "fullscreen composes only the focused pane across the whole tab" {
     };
     const area: ui.Rect = .{ .w = 40, .h = 7 };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
-    try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
+    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
     model.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
     model.find(@enumFromInt(2)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "y", .width = 1, .style = .{} });
@@ -1780,7 +1788,7 @@ test "fullscreen border keeps the pane's tiled display index" {
     };
     const area: ui.Rect = .{ .w = 40, .h = 7 };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
-    try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
+    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(model.focusPane(@enumFromInt(2)));
     try std.testing.expect(model.toggleFullscreen());
     var screen = try term.Screen.init(gpa, area.w, area.h);
@@ -1809,13 +1817,7 @@ test "pane borders use the selected theme without coloring pane contents" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(10), .location = location, .size = .{ .cols = 10, .rows = 3 } });
-    try model.split(
-        @enumFromInt(10),
-        @enumFromInt(41),
-        location,
-        .horizontal,
-        .{ .w = 20, .h = 4 },
-    );
+    try model.split(.{ .existing_pane = @enumFromInt(10), .new_pane = @enumFromInt(41), .location = location, .axis = .horizontal, .area = .{ .w = 20, .h = 4 } });
     const first = model.find(@enumFromInt(10)).?;
     const second = model.find(@enumFromInt(41)).?;
     try std.testing.expectEqual(MetadataChange.display_changed, model.setPaneForeground(first.id, "zsh"));
@@ -1881,13 +1883,7 @@ test "frame state and pending acknowledgements stay per pane" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 2, .rows = 1 } });
-    try model.split(
-        @enumFromInt(1),
-        @enumFromInt(2),
-        location,
-        .horizontal,
-        .{ .w = 7, .h = 3 },
-    );
+    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 7, .h = 3 } });
 
     const cells = [_]ui.Cell{ .{}, .{} };
     const spans = [_]schema.frame.Span{.{ .start = 0, .cells = &cells }};
@@ -1985,7 +1981,7 @@ test "fullscreen presentation commits include hidden panes" {
     };
     const area: ui.Rect = .{ .w = 20, .h = 4 };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 9, .rows = 3 } });
-    try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
+    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
     try std.testing.expect(model.toggleFullscreen());
     model.find(@enumFromInt(1)).?.pending_frame_id = 3;
@@ -2125,13 +2121,7 @@ test "compositor detects focus changes while stable focus stays incremental" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    try model.split(
-        @enumFromInt(1),
-        @enumFromInt(2),
-        location,
-        .horizontal,
-        .{ .w = 40, .h = 6 },
-    );
+    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 6 } });
     var screen = try term.Screen.init(gpa, 40, 6);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
@@ -2212,7 +2202,7 @@ test "pane index survives collisions removal and slot reuse" {
     };
     const area: ui.Rect = .{ .w = 80, .h = 24 };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 80, .rows = 24 } });
-    try model.split(@enumFromInt(1), @enumFromInt(129), location, .horizontal, area);
+    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(129), .location = location, .axis = .horizontal, .area = area });
 
     try std.testing.expect(model.removePane(@enumFromInt(1)));
     try std.testing.expect(model.find(@enumFromInt(1)) == null);
@@ -2241,13 +2231,7 @@ test "layout snapshot cache invalidates on geometry and revision" {
     try std.testing.expectEqual(first_revision, resized.revision);
     try std.testing.expectEqual(@as(u16, 40), resized.find(@enumFromInt(1)).?.content.w);
 
-    try model.split(
-        @enumFromInt(1),
-        @enumFromInt(2),
-        location,
-        .horizontal,
-        .{ .w = 40, .h = 12 },
-    );
+    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 12 } });
     const split = model.layoutSnapshot(.{ .w = 40, .h = 12 });
     try std.testing.expect(split.revision != first_revision);
     try std.testing.expectEqual(@as(usize, 2), split.views().len);
@@ -2265,7 +2249,7 @@ test "pane mouse planning keeps buttons focused and wheels pointer-local" {
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
     try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 39, .rows = 24 } });
-    try model.split(first, second, location, .horizontal, area);
+    try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(model.focusPane(first));
     const second_pane = model.find(second).?;
     second_pane.mouse = .{ .tracking = .any, .sgr = true, .pixels = true };

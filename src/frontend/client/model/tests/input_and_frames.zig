@@ -147,7 +147,7 @@ test "reported pane focus derives protocol edges outside presentation versions" 
     try std.testing.expectEqual(first, enabled.focus_in.?);
     try std.testing.expect(enabled.focus_out == null);
 
-    try model.workspace.active().?.model.split(first, second, location, .horizontal, .{ .w = 20, .h = 5 });
+    try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 20, .h = 5 } });
     model.workspace.findPane(second).?.input_modes.focus_events = true;
     const moved = model.syncReportedPaneFocus().?;
 

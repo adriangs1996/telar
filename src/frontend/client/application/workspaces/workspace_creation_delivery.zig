@@ -124,13 +124,7 @@ const TestingModel = struct {
         const previous_sibling: schema.PaneId = @enumFromInt(2);
         const created_root: schema.PaneId = @enumFromInt(3);
         try model.workspace.bootstrap(previous_root, previous, .{ .cols = 40, .rows = 10 });
-        try model.workspace.active().?.model.split(
-            previous_root,
-            previous_sibling,
-            previous,
-            .horizontal,
-            .{ .w = 40, .h = 10 },
-        );
+        try model.workspace.active().?.model.split(.{ .existing_pane = previous_root, .new_pane = previous_sibling, .location = previous, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
         if (!model.workspace.active().?.model.focusPane(previous_root)) {
             return error.PreviousFocusNotRestored;
         }
@@ -368,13 +362,7 @@ test "DeliverWorkspaceCreationHandler validates replacement before release" {
     altered = replacement;
     altered.departure.bookmark.?.location.workspace = replacement.activation.location.workspace;
     try std.testing.expectError(error.StaleWorkspaceCreation, handler.execute(&altered));
-    try testing.model.workspace.active().?.model.split(
-        testing.created_root,
-        @enumFromInt(4),
-        testing.created,
-        .vertical,
-        .{ .w = 50, .h = 12 },
-    );
+    try testing.model.workspace.active().?.model.split(.{ .existing_pane = testing.created_root, .new_pane = @enumFromInt(4), .location = testing.created, .axis = .vertical, .area = .{ .w = 50, .h = 12 } });
     try std.testing.expectError(error.StaleWorkspaceActivation, handler.execute(&replacement));
 
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);

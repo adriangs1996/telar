@@ -137,13 +137,7 @@ const TestingModel = struct {
         const selected_sibling: schema.PaneId = @enumFromInt(4);
         const area: core.ui.Rect = .{ .w = 40, .h = 10 };
         try model.workspace.bootstrap(previous_root, previous, .{ .cols = 40, .rows = 10 });
-        try model.workspace.active().?.model.split(
-            previous_root,
-            previous_sibling,
-            previous,
-            .horizontal,
-            area,
-        );
+        try model.workspace.active().?.model.split(.{ .existing_pane = previous_root, .new_pane = previous_sibling, .location = previous, .axis = .horizontal, .area = area });
         if (!model.workspace.active().?.model.focusPane(previous_root)) {
             return error.PreviousFocusNotRestored;
         }
@@ -160,13 +154,7 @@ const TestingModel = struct {
             .label = "selected",
             .root_pane_id = selected_root,
         }, .{ .cols = 40, .rows = 10 });
-        try selected_tab.model.split(
-            selected_root,
-            selected_sibling,
-            selected,
-            .horizontal,
-            area,
-        );
+        try selected_tab.model.split(.{ .existing_pane = selected_root, .new_pane = selected_sibling, .location = selected, .axis = .horizontal, .area = area });
         var selected_panes = selected_tab.model.paneIterator();
         while (selected_panes.next()) |pane| {
             pane.attached = false;

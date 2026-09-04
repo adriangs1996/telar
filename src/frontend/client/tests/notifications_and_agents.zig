@@ -427,13 +427,7 @@ test "toast activation commits by id before following its navigation target" {
     const client = harness.client;
     const active = &client.model.workspace.active().?.model;
     const second_pane: schema.PaneId = @enumFromInt(11);
-    try active.split(
-        TestHarness.bootstrap_pane,
-        second_pane,
-        TestHarness.bootstrap_location,
-        .horizontal,
-        client.view.workbench(),
-    );
+    try active.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = second_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
     try std.testing.expect(active.focusPane(TestHarness.bootstrap_pane));
 
     try notification_flow.publishNow(client, .{

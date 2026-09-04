@@ -132,13 +132,7 @@ const TestingModel = struct {
         const previous_sibling: schema.PaneId = @enumFromInt(2);
         const created_root: schema.PaneId = @enumFromInt(3);
         try model.workspace.bootstrap(previous_root, previous, .{ .cols = 40, .rows = 10 });
-        try model.workspace.active().?.model.split(
-            previous_root,
-            previous_sibling,
-            previous,
-            .horizontal,
-            .{ .w = 40, .h = 10 },
-        );
+        try model.workspace.active().?.model.split(.{ .existing_pane = previous_root, .new_pane = previous_sibling, .location = previous, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
         if (!model.workspace.active().?.model.focusPane(previous_root)) {
             return error.PreviousFocusNotRestored;
         }
@@ -461,13 +455,7 @@ test "DeliverTabCreationHandler catches active identity and layout ABA" {
     var pane_creation = try pane_testing.create();
     var pane_capture = captureFor(&pane_testing, pane_creation);
     var pane_handler = deliveryHandler(&pane_testing, &pane_capture);
-    try pane_testing.model.workspace.active().?.model.split(
-        pane_testing.created_root,
-        @enumFromInt(4),
-        pane_testing.created,
-        .vertical,
-        .{ .w = 40, .h = 10 },
-    );
+    try pane_testing.model.workspace.active().?.model.split(.{ .existing_pane = pane_testing.created_root, .new_pane = @enumFromInt(4), .location = pane_testing.created, .axis = .vertical, .area = .{ .w = 40, .h = 10 } });
     pane_creation.created_layout_revision =
         pane_testing.model.workspace.activeConst().?.model.layout.currentRevision();
 

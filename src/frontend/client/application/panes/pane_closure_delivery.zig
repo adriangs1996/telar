@@ -160,7 +160,7 @@ const TestingModel = struct {
         const inactive_pane: schema.PaneId = @enumFromInt(3);
         const area: core.ui.Rect = .{ .w = 40, .h = 10 };
         try model.workspace.bootstrap(first, active, .{ .cols = 40, .rows = 10 });
-        try model.workspace.active().?.model.split(first, second, active, .horizontal, area);
+        try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = active, .axis = .horizontal, .area = area });
         _ = try model.workspace.addCreated(.{
             .location = inactive,
             .position = 1,
@@ -464,13 +464,7 @@ test "DeliverPaneClosureHandler catches inactive layout ABA and represented stal
     try std.testing.expectError(error.StalePaneExit, stale_handler.execute(wrong_stale_revision));
     try std.testing.expectEqual(@as(usize, 0), stale_capture.event_count);
 
-    try stale_testing.model.workspace.active().?.model.split(
-        stale_testing.second,
-        missing,
-        stale_testing.active,
-        .horizontal,
-        stale_testing.area,
-    );
+    try stale_testing.model.workspace.active().?.model.split(.{ .existing_pane = stale_testing.second, .new_pane = missing, .location = stale_testing.active, .axis = .horizontal, .area = stale_testing.area });
 
     try std.testing.expectError(error.StalePaneExit, stale_handler.execute(stale_exit));
     try std.testing.expectEqual(@as(usize, 0), stale_capture.event_count);

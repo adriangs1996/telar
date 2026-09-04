@@ -31,7 +31,7 @@ test "pane focus resolves identity and direction through one visible revision" {
     const second: schema.PaneId = @enumFromInt(2);
     const area: ui.Rect = .{ .w = 80, .h = 24 };
     try model.workspace.bootstrap(first, location, .{ .cols = 80, .rows = 24 });
-    try model.workspace.active().?.model.split(first, second, location, .horizontal, area);
+    try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
 
     const directional = model.focusPane(.{
         .target = .{ .direction = .left },
@@ -83,7 +83,7 @@ test "pane resize owns direction resolution geometry and visible revisions" {
     const area: ui.Rect = .{ .w = 101, .h = 41 };
     try model.workspace.bootstrap(first, location, .{ .cols = 101, .rows = 41 });
     const active = &model.workspace.active().?.model;
-    try active.split(first, second, location, .horizontal, area);
+    try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(active.focusPane(first));
     const width_before = active.contentSize(first, area).?.cols;
 
@@ -136,7 +136,7 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
     const active = &model.workspace.active().?.model;
     try std.testing.expect(model.togglePaneFullscreen(.{ .area = area }) == null);
     try std.testing.expectEqual(client_model.Version{}, model.version());
-    try active.split(first, second, location, .horizontal, area);
+    try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(active.focusPane(first));
     const first_tiled = active.contentSize(first, area).?;
     const second_tiled = active.contentSize(second, area).?;
@@ -198,13 +198,7 @@ test "active pane retirement advances the visible pane revision once" {
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
     try model.workspace.bootstrap(first, location, .{ .cols = 40, .rows = 10 });
-    try model.workspace.active().?.model.split(
-        first,
-        second,
-        location,
-        .horizontal,
-        .{ .w = 40, .h = 10 },
-    );
+    try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
 
     const retirement = model.retirePane(second);
 

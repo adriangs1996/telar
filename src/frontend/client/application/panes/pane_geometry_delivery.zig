@@ -205,13 +205,7 @@ fn prepareModel(model: *client_model.Model) !TestingLayout {
         .area = .{ .w = 100, .h = 30 },
     };
     try model.workspace.bootstrap(testing.first, testing.location, .{ .cols = 100, .rows = 30 });
-    try model.workspace.active().?.model.split(
-        testing.first,
-        testing.second,
-        testing.location,
-        .horizontal,
-        testing.area,
-    );
+    try model.workspace.active().?.model.split(.{ .existing_pane = testing.first, .new_pane = testing.second, .location = testing.location, .axis = .horizontal, .area = testing.area });
 
     return testing;
 }

@@ -426,7 +426,7 @@ test "an unfocused done agent is never acknowledged" {
     const second: schema.PaneId = @enumFromInt(2);
     const area: ui.Rect = .{ .w = 80, .h = 24 };
     try model.workspace.bootstrap(first, location, .{ .cols = 80, .rows = 24 });
-    try model.workspace.active().?.model.split(first, second, location, .horizontal, area);
+    try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     const done_key: agents.AgentKey = .{ .pane_id = first, .pane_generation = 2 };
     const entry: agents.AgentInput = .{
         .key = done_key,

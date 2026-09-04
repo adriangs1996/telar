@@ -406,13 +406,7 @@ test "streamed paste captures target and framing while restoring its live viewpo
     const client = harness.client;
     const tab = &client.model.workspace.active().?.model;
     const other_pane: schema.PaneId = @enumFromInt(11);
-    try tab.split(
-        TestHarness.bootstrap_pane,
-        other_pane,
-        TestHarness.bootstrap_location,
-        .horizontal,
-        client.view.workbench(),
-    );
+    try tab.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
     try std.testing.expect(tab.focusPane(TestHarness.bootstrap_pane));
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.input_modes.bracketed_paste = true;
@@ -641,13 +635,7 @@ test "alternate-screen wheel sends cursor keys to the pane under the pointer" {
     const model = &client.model.workspace.active().?.model;
     const focused = TestHarness.bootstrap_pane;
     const hovered: schema.PaneId = @enumFromInt(20);
-    try model.split(
-        focused,
-        hovered,
-        TestHarness.bootstrap_location,
-        .horizontal,
-        client.view.workbench(),
-    );
+    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
     try std.testing.expect(model.focusPane(focused));
     const pane = model.find(hovered).?;
     pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
