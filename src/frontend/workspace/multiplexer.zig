@@ -1099,7 +1099,10 @@ pub const Model = struct {
     }
 
     pub fn prospectiveSplit(model: *Model, pane_id: schema.PaneId, axis: layout_mod.Axis, area: ui.Rect) ?layout_mod.ProspectiveSplit {
-        return model.layoutSnapshot(area).prospectiveSplit(pane_id, axis, model.pane_count);
+        return model.layoutSnapshot(area).prospectiveSplit(.{
+            .pane_id = pane_id,
+            .axis = axis,
+        }, model.pane_count);
     }
 
     pub fn setCellSize(model: *Model, width: u16, height: u16) void {

@@ -72,6 +72,11 @@ pub const ProspectiveSplit = struct {
     new_content: ui.Rect,
 };
 
+pub const SplitTarget = struct {
+    pane_id: schema.PaneId,
+    axis: Axis,
+};
+
 /// Immutable geometry consumed by every subsystem during a frame. Building it
 /// is O(panes); pane lookup is bounded open addressing with no allocations.
 pub const Snapshot = struct {
@@ -118,25 +123,33 @@ pub const Snapshot = struct {
         return reserved;
     }
 
-    pub fn prospectiveSplit(snapshot: *const Snapshot, pane_id: schema.PaneId, axis: Axis, pane_count: usize) ?ProspectiveSplit {
+    /// Computes the two content regions produced by splitting one pane.
+    ///
+    /// ```zig
+    /// const split = snapshot.prospectiveSplit(.{ .pane_id = pane_id, .axis = .horizontal }, pane_count);
+    /// ```
+    pub fn prospectiveSplit(snapshot: *const Snapshot, target: SplitTarget, pane_count: usize) ?ProspectiveSplit {
         if (pane_count == max_panes) {
             return null;
         }
-        const view = snapshot.find(pane_id) orelse return null;
+
+        const view = snapshot.find(target.pane_id) orelse return null;
         const minimum_split_extent: u16 = 6 + @as(u16, @intFromBool(snapshot.pane_gaps));
-        const enough_space = switch (axis) {
+        const enough_space = switch (target.axis) {
             .horizontal => view.outer.w >= minimum_split_extent and view.outer.h >= 3,
             .vertical => view.outer.w >= 3 and view.outer.h >= minimum_split_extent,
         };
         if (!enough_space) {
             return null;
         }
+
         const first, const second = splitArea(
             view.outer,
-            axis,
+            target.axis,
             default_split_ratio,
             snapshot.pane_gaps,
         );
+
         return .{
             .existing_content = borderedContent(first),
             .new_content = borderedContent(second),
@@ -561,13 +574,13 @@ pub const Layout = struct {
     pub fn canSplit(layout: *const Layout, pane_id: schema.PaneId, axis: Axis, area: ui.Rect) bool {
         var geometry: Snapshot = .{};
         layout.snapshot(area, &geometry);
-        return geometry.prospectiveSplit(pane_id, axis, layout.pane_count) != null;
+        return geometry.prospectiveSplit(.{ .pane_id = pane_id, .axis = axis }, layout.pane_count) != null;
     }
 
     pub fn prospectiveSplit(layout: *const Layout, pane_id: schema.PaneId, axis: Axis, area: ui.Rect) ?ProspectiveSplit {
         var geometry: Snapshot = .{};
         layout.snapshot(area, &geometry);
-        return geometry.prospectiveSplit(pane_id, axis, layout.pane_count);
+        return geometry.prospectiveSplit(.{ .pane_id = pane_id, .axis = axis }, layout.pane_count);
     }
 
     /// A fullscreen pane keeps its border: fullscreen requires two panes, and
