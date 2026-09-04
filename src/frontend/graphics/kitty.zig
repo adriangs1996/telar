@@ -1434,12 +1434,11 @@ pub const KittyGraphicsWriter = struct {
             }
             if (image.shared) |*shared| {
                 if (!image.force_direct and self.store.shared_memory) {
-                    const emitted = try writeSharedTransmission(
-                        writer,
-                        image.external_id,
-                        image.metadata,
-                        shared.slice(),
-                    );
+                    const emitted = try writeSharedTransmission(writer, .{
+                        .external_id = image.external_id,
+                        .image = image.metadata,
+                        .name = shared.slice(),
+                    });
                     written += emitted;
                     image.transmitted = true;
                     image.emitted_shared = true;
@@ -1728,6 +1727,12 @@ pub const Transmission = struct {
     pixels: []const u8,
 };
 
+pub const SharedTransmission = struct {
+    external_id: u32,
+    image: graphics.Image,
+    name: []const u8,
+};
+
 /// Emits transmission chunks for `pixels` starting at byte `start_offset`,
 /// spending roughly `budget` encoded bytes. Always makes progress: at least
 /// one chunk goes out even under a zero budget, so a caller looping on the
@@ -1814,14 +1819,15 @@ pub fn writeTransmission(writer: *Io.Writer, transmission: Transmission) Io.Writ
 /// Hands the host a shared object's name. Unlike every other pane escape it
 /// asks for a reply (`q=0`): the host's `OK` is the consume signal that
 /// retires the image, and an error reclaims the name at once.
-pub fn writeSharedTransmission(writer: *Io.Writer, external_id: u32, image: graphics.Image, name: []const u8) Io.Writer.Error!usize {
+/// For example: `try writeSharedTransmission(writer, transmission)`.
+pub fn writeSharedTransmission(writer: *Io.Writer, transmission: SharedTransmission) Io.Writer.Error!usize {
     const Encoder = std.base64.standard.Encoder;
     var encoded: [128]u8 = undefined;
-    const payload = Encoder.encode(encoded[0..Encoder.calcSize(name.len)], name);
+    const payload = Encoder.encode(encoded[0..Encoder.calcSize(transmission.name.len)], transmission.name);
     var written = try printCounted(
         writer,
         "\x1b_Ga=t,f={d},s={d},v={d},t=s,i={d},q=0;",
-        .{ @intFromEnum(image.format), image.width, image.height, external_id },
+        .{ @intFromEnum(transmission.image.format), transmission.image.width, transmission.image.height, transmission.external_id },
     );
     try writer.writeAll(payload);
     try writer.writeAll("\x1b\\");
@@ -3498,13 +3504,17 @@ test "shared client pixels have a bounded POSIX lifetime" {
 test "shared transmission sends only a KGP resource name" {
     var output: [256]u8 = undefined;
     var writer = Io.Writer.fixed(&output);
-    const written = try writeSharedTransmission(&writer, 7, .{
-        .key = .{ .image_id = 7, .generation = 1 },
-        .format = .rgba,
-        .width = 1,
-        .height = 1,
-        .byte_len = 4,
-    }, "/telar-test");
+    const written = try writeSharedTransmission(&writer, .{
+        .external_id = 7,
+        .image = .{
+            .key = .{ .image_id = 7, .generation = 1 },
+            .format = .rgba,
+            .width = 1,
+            .height = 1,
+            .byte_len = 4,
+        },
+        .name = "/telar-test",
+    });
     try std.testing.expectEqualStrings(
         "\x1b_Ga=t,f=32,s=1,v=1,t=s,i=7,q=0;L3RlbGFyLXRlc3Q=\x1b\\",
         writer.buffered(),
