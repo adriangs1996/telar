@@ -34,34 +34,36 @@ pub const Loaded = struct {
     mtime_ns: i128,
 };
 
+const Orphans = struct {
+    generation: ?*lua_config.Generation = null,
+    registry: ?*plugin_broker.Registry = null,
+    trust: ?*core.plugin.TrustStore = null,
+};
+
 /// The reload's own state on the client: the watch fingerprint, the
 /// generation counter, and the race-window handoff slots the async task
 /// publishes into so a cancelled reload can still be freed.
 pub const State = struct {
     mtime_ns: i128,
     next_generation: u64 = 2,
-    generation_orphan: ?*lua_config.Generation = null,
-    registry_orphan: ?*plugin_broker.Registry = null,
-    trust_orphan: ?*core.plugin.TrustStore = null,
+    orphans: Orphans = .{},
 
     /// Frees whatever a cancelled reload task published. Call only after
     /// the select's tasks are cancelled.
     pub fn deinit(state: *State, gpa: std.mem.Allocator) void {
-        if (state.generation_orphan) |generation| {
+        if (state.orphans.generation) |generation| {
             generation.deinit();
         }
-        if (state.registry_orphan) |registry| {
+        if (state.orphans.registry) |registry| {
             gpa.destroy(registry);
         }
-        if (state.trust_orphan) |store| {
+        if (state.orphans.trust) |store| {
             gpa.destroy(store);
         }
     }
 
     fn clearOrphans(state: *State) void {
-        state.generation_orphan = null;
-        state.registry_orphan = null;
-        state.trust_orphan = null;
+        state.orphans = .{};
     }
 };
 
@@ -92,9 +94,7 @@ pub fn schedule(state: *State, args: ScheduleArgs) !void {
         args.current_generation,
         args.current_registry,
         args.trust_path,
-        &state.generation_orphan,
-        &state.registry_orphan,
-        &state.trust_orphan,
+        &state.orphans,
     });
 }
 
@@ -215,9 +215,8 @@ const Partial = struct {
     trust: ?*core.plugin.TrustStore = null,
     registry: ?*plugin_broker.Registry = null,
 
-    fn abandon(partial: Partial, gpa: std.mem.Allocator, orphan: *?*lua_config.Generation, trust_orphan: *?*core.plugin.TrustStore) void {
-        orphan.* = null;
-        trust_orphan.* = null;
+    fn abandon(partial: Partial, gpa: std.mem.Allocator, orphans: *Orphans) void {
+        orphans.* = .{};
         if (partial.registry) |registry| {
             gpa.destroy(registry);
         }
@@ -228,7 +227,7 @@ const Partial = struct {
     }
 };
 
-fn waitConfigReload(io: Io, gpa: std.mem.Allocator, path: []const u8, known_mtime_ns: i128, generation_number: u64, profile: ?[]const u8, current_generation: *const lua_config.Generation, current_registry: *const plugin_broker.Registry, trust_path: []const u8, orphan: *?*lua_config.Generation, registry_orphan: *?*plugin_broker.Registry, trust_orphan: *?*core.plugin.TrustStore) anyerror!ConfigReload {
+fn waitConfigReload(io: Io, gpa: std.mem.Allocator, path: []const u8, known_mtime_ns: i128, generation_number: u64, profile: ?[]const u8, current_generation: *const lua_config.Generation, current_registry: *const plugin_broker.Registry, trust_path: []const u8, orphans: *Orphans) anyerror!ConfigReload {
     try io.sleep(.fromSeconds(1), .awake);
     const mtime_ns = current_generation.watchFingerprint(io, path) ^
         @as(i128, current_registry.watchFingerprint(gpa, io)) ^
@@ -248,17 +247,17 @@ fn waitConfigReload(io: Io, gpa: std.mem.Allocator, path: []const u8, known_mtim
         .diagnostic = diagnostic,
         .mtime_ns = mtime_ns,
     } };
-    orphan.* = generation;
+    orphans.generation = generation;
     var partial: Partial = .{ .generation = generation };
     const trust = loadReloadTrustStore(gpa, io, trust_path) catch |err| {
-        partial.abandon(gpa, orphan, trust_orphan);
+        partial.abandon(gpa, orphans);
         diagnostic.set("cannot load plugin trust store: {s}", .{@errorName(err)});
         return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
     };
-    trust_orphan.* = trust;
+    orphans.trust = trust;
     partial.trust = trust;
     const registry = gpa.create(plugin_broker.Registry) catch {
-        partial.abandon(gpa, orphan, trust_orphan);
+        partial.abandon(gpa, orphans);
         diagnostic.set("cannot allocate reloaded plugin registry", .{});
         return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
     };
@@ -270,16 +269,16 @@ fn waitConfigReload(io: Io, gpa: std.mem.Allocator, path: []const u8, known_mtim
         generation.pluginSlice(),
         trust,
     ) catch |err| {
-        partial.abandon(gpa, orphan, trust_orphan);
+        partial.abandon(gpa, orphans);
         diagnostic.set("cannot load plugins: {s}", .{@errorName(err)});
         return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
     };
     registry.validateConfiguredActions(generation.snapshot.bindingSlice()) catch |err| {
-        partial.abandon(gpa, orphan, trust_orphan);
+        partial.abandon(gpa, orphans);
         diagnostic.set("invalid configured plugin action: {s}", .{@errorName(err)});
         return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
     };
-    registry_orphan.* = registry;
+    orphans.registry = registry;
     return .{ .loaded = .{
         .generation = generation,
         .registry = registry,
@@ -342,9 +341,7 @@ test "a rejected load is freed once and reports why" {
         1,
         &diagnostic,
     );
-    state.generation_orphan = generation;
-    state.registry_orphan = registry;
-    state.trust_orphan = trust;
+    state.orphans = .{ .generation = generation, .registry = registry, .trust = trust };
 
     const rejection: RejectContext = .{
         .state = &state,
@@ -354,7 +351,7 @@ test "a rejected load is freed once and reports why" {
     const outcome = rejection.reject("test rejection: {s}", .{"boom"});
     try std.testing.expect(outcome == .rejected);
     try std.testing.expectEqual(@as(i128, 9), state.mtime_ns);
-    try std.testing.expect(state.generation_orphan == null);
-    try std.testing.expect(state.registry_orphan == null);
-    try std.testing.expect(state.trust_orphan == null);
+    try std.testing.expect(state.orphans.generation == null);
+    try std.testing.expect(state.orphans.registry == null);
+    try std.testing.expect(state.orphans.trust == null);
 }
