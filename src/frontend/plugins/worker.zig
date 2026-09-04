@@ -6,7 +6,18 @@ const protocol = @import("protocol.zig");
 
 const Io = std.Io;
 
-pub fn run(init: std.process.Init, entry_path: []const u8, action_name: []const u8, context: lua_config.CallbackContext) !void {
+pub const Input = struct {
+    entry_path: []const u8,
+    action_name: []const u8,
+    context: lua_config.CallbackContext,
+};
+
+/// Runs one validated plugin callback and writes its encoded effect batch.
+/// For example: `try run(init, .{ .entry_path = entry, .action_name = action, .context = context });`.
+pub fn run(init: std.process.Init, input: Input) !void {
+    const entry_path = input.entry_path;
+    const action_name = input.action_name;
+
     if (!validActionName(action_name)) {
         return error.InvalidPluginAction;
     }
@@ -63,7 +74,7 @@ pub fn run(init: std.process.Init, entry_path: []const u8, action_name: []const 
         .lua_callback => |value| value,
         else => return error.InvalidPluginAction,
     };
-    const batch = generation.invokeCallback(.{ .reference = reference, .context = context }, &diagnostic) catch |err| {
+    const batch = generation.invokeCallback(.{ .reference = reference, .context = input.context }, &diagnostic) catch |err| {
         std.debug.print("plugin action failed: {s}\n", .{diagnostic.message()});
         return err;
     };
