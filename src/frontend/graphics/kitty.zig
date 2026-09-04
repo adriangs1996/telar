@@ -562,7 +562,7 @@ pub const Store = struct {
         const byte_len = try store.admitImage(message.pane_id, message.image);
         var allocation = try store.allocatePixels(byte_len);
         errdefer store.freeAllocation(&allocation);
-        try store.commitImage(message.pane_id, message.image, &allocation, 0);
+        try store.commitImage(.{ .pane_id = message.pane_id, .image = message.image, .allocation = &allocation, .received = 0 });
         store.noteIngressChange();
     }
 
@@ -586,7 +586,7 @@ pub const Store = struct {
             return error.GraphicsSharedMappingFailed;
         };
         errdefer store.freeAllocation(&allocation);
-        try store.commitImage(message.pane_id, message.image, &allocation, byte_len);
+        try store.commitImage(.{ .pane_id = message.pane_id, .image = message.image, .allocation = &allocation, .received = byte_len });
         store.removeOtherGenerations(message.pane_id, message.image.key);
         store.noteIngressChange();
     }
@@ -670,19 +670,26 @@ pub const Store = struct {
         return byte_len;
     }
 
-    fn commitImage(store: *Store, pane_id: schema.PaneId, image: graphics.Image, allocation: *PixelAllocation, received: usize) !void {
-        const byte_len = allocation.pixels.len;
+    const ImageCommit = struct {
+        pane_id: schema.PaneId,
+        image: graphics.Image,
+        allocation: *PixelAllocation,
+        received: usize,
+    };
+
+    fn commitImage(store: *Store, commit: ImageCommit) !void {
+        const byte_len = commit.allocation.pixels.len;
         const external_id = try store.allocateImageId();
-        const usage = try store.usageFor(pane_id);
-        try store.images.put(store.gpa, identity(pane_id, image.key), .{
-            .metadata = image,
-            .pixels = allocation.pixels,
-            .shared = allocation.shared,
-            .received = received,
+        const usage = try store.usageFor(commit.pane_id);
+        try store.images.put(store.gpa, identity(commit.pane_id, commit.image.key), .{
+            .metadata = commit.image,
+            .pixels = commit.allocation.pixels,
+            .shared = commit.allocation.shared,
+            .received = commit.received,
             .external_id = external_id,
         });
-        allocation.pixels = &.{};
-        allocation.shared = null;
+        commit.allocation.pixels = &.{};
+        commit.allocation.shared = null;
         usage.count += 1;
         usage.bytes += byte_len;
         store.total_bytes += byte_len;
