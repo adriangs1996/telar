@@ -952,7 +952,7 @@ pub const Model = struct {
         }
         for (pane_ids) |pane_id|
             if (model.find(pane_id) == null) return false;
-        if (!model.layout.restoreSaved(saved, pane_ids, focused_pane)) {
+        if (!model.layout.restoreSaved(saved, .{ .ids = pane_ids, .focused = focused_pane })) {
             return false;
         }
         return true;

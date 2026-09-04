@@ -77,6 +77,11 @@ pub const SplitTarget = struct {
     axis: Axis,
 };
 
+pub const PaneSet = struct {
+    ids: []const schema.PaneId,
+    focused: schema.PaneId,
+};
+
 const SnapshotReset = struct {
     area: ui.Rect,
     revision: u64,
@@ -416,28 +421,36 @@ pub const Layout = struct {
     /// Restores an earlier client-owned split tree when it still describes
     /// exactly the panes reported by the runtime. Focus remains a separate
     /// navigation choice and the current pane-gap preference wins.
-    pub fn restoreSaved(layout: *Layout, saved: Layout, pane_ids: []const schema.PaneId, focused_pane: schema.PaneId) bool {
-        if (pane_ids.len == 0 or pane_ids.len != saved.count()) {
+    ///
+    /// ```zig
+    /// const restored = layout.restoreSaved(saved, .{ .ids = pane_ids, .focused = focused_pane });
+    /// ```
+    pub fn restoreSaved(layout: *Layout, saved: Layout, panes: PaneSet) bool {
+        if (panes.ids.len == 0 or panes.ids.len != saved.count()) {
             return false;
         }
-        for (pane_ids, 0..) |pane_id, index| {
+
+        for (panes.ids, 0..) |pane_id, index| {
             if (!saved.contains(pane_id)) {
                 return false;
             }
-            if (std.mem.findScalar(schema.PaneId, pane_ids[0..index], pane_id) != null) {
+
+            if (std.mem.findScalar(schema.PaneId, panes.ids[0..index], pane_id) != null) {
                 return false;
             }
         }
-        if (!saved.contains(focused_pane)) {
+
+        if (!saved.contains(panes.focused)) {
             return false;
         }
 
         var restored = saved;
         restored.pane_gaps = layout.pane_gaps;
         restored.revision = layout.revision;
-        restored.focused_pane = focused_pane;
+        restored.focused_pane = panes.focused;
         restored.changed();
         layout.* = restored;
+
         return true;
     }
 
