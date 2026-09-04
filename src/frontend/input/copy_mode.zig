@@ -175,9 +175,9 @@ pub const State = struct {
     /// Moves to the next or previous stored match, wrapping around.
     ///
     /// ```zig
-    /// state.cycleMatch(1, scroll, rows);
+    /// state.cycleMatch(1, viewport);
     /// ```
-    pub fn cycleMatch(state: *State, delta: i2, scroll: schema.frame.Scroll, rows: u16) void {
+    pub fn cycleMatch(state: *State, delta: i2, viewport: Viewport) void {
         if (state.match_count == 0) {
             return;
         }
@@ -185,7 +185,7 @@ pub const State = struct {
         const count: i16 = state.match_count;
         var index: i16 = state.match_index;
         index = @mod(index + delta, count);
-        state.gotoMatch(@intCast(index), scroll, rows);
+        state.gotoMatch(@intCast(index), viewport.scroll, viewport.rows);
     }
 
     pub fn matchSlice(state: *const State) []const schema.SearchMatch {
@@ -293,9 +293,9 @@ pub fn applyKey(state: *State, pressed: keybind.Key, buffer: *const ui.Buffer, s
             state.search_direction = .backward;
             return .{ .search = .backward };
         } else if (char.eql("n")) {
-            state.cycleMatch(if (state.search_direction == .forward) 1 else -1, scroll, buffer.h);
+            state.cycleMatch(if (state.search_direction == .forward) 1 else -1, viewport);
         } else if (char.eql("N")) {
-            state.cycleMatch(if (state.search_direction == .forward) -1 else 1, scroll, buffer.h);
+            state.cycleMatch(if (state.search_direction == .forward) -1 else 1, viewport);
         } else if (char.eql("o")) {
             return .{ .open_link = true };
         } else if (char.eql("v") or char.eql(" ")) {
@@ -606,9 +606,9 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
     try std.testing.expectEqualDeep(Point{ .x = 1, .y = 12 }, state.anchor.?);
     try std.testing.expectEqualDeep(Point{ .x = 2, .y = 12 }, state.cursor);
 
-    state.cycleMatch(1, scroll, 5);
+    state.cycleMatch(1, .{ .scroll = scroll, .rows = 5 });
     try std.testing.expectEqual(@as(u8, 2), state.match_index);
-    state.cycleMatch(1, scroll, 5);
+    state.cycleMatch(1, .{ .scroll = scroll, .rows = 5 });
     try std.testing.expectEqual(@as(u8, 0), state.match_index);
     try std.testing.expect(state.viewport_offset <= 4);
 
