@@ -262,20 +262,25 @@ pub const Session = struct {
         text: []const u8,
     };
 
+    pub const ReadOptions = struct {
+        rows: u16,
+        source: schema.PaneTextSource,
+    };
+
     /// Reads bounded plain text from one exact pane generation. The returned
     /// slice borrows the session's receive buffer until the next request.
     ///
     /// ```zig
-    /// const text = try session.readPane(pane, 40, .recent);
+    /// const text = try session.readPane(pane, .{ .rows = 40, .source = .recent });
     /// ```
-    pub fn readPane(session: *Session, pane: PaneRef, rows: u16, source: schema.PaneTextSource) !Text {
+    pub fn readPane(session: *Session, pane: PaneRef, options: ReadOptions) !Text {
         var send_buffer: [64]u8 = undefined;
         try session.connection.send(session.io, try schema.encodeReadPane(&send_buffer, .{
             .request_id = session.requestId(),
             .pane_id = try schema.id.pane(pane.pane_id),
             .pane_generation = pane.pane_generation,
-            .rows = rows,
-            .source = source,
+            .rows = options.rows,
+            .source = options.source,
         }));
 
         const response = try schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));

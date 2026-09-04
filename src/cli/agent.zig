@@ -76,7 +76,7 @@ fn execute(session: *control.Session, options: AgentOptions, output: Output) !u8
             const text = try session.readPane(.{
                 .pane_id = agent.pane_id,
                 .pane_generation = agent.pane_generation,
-            }, options.lines, options.source);
+            }, .{ .rows = options.lines, .source = options.source });
             try writeText(output.writer, text, options.json);
             return exit_ok;
         },
