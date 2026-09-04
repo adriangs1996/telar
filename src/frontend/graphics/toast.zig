@@ -38,6 +38,12 @@ const RenderKey = struct {
     subtext: [3]u8,
 };
 
+const SlotRender = struct {
+    slot: *Slot,
+    item: *const notifications.Item,
+    key: RenderKey,
+};
+
 pub const Preparation = struct {
     area: ui.Rect,
     center: *const notifications.Center,
@@ -198,7 +204,7 @@ pub const Renderer = struct {
                     renderer.frame_usable = false;
                     continue;
                 }
-                renderer.renderSlot(slot, item, key) catch {
+                renderer.renderSlot(.{ .slot = slot, .item = item, .key = key }) catch {
                     slot.key = null;
                     slot.failed_key = key;
                     renderer.frame_usable = false;
@@ -459,7 +465,11 @@ pub const Renderer = struct {
         }
     }
 
-    fn renderSlot(renderer: *Renderer, slot: *Slot, item: *const notifications.Item, key: RenderKey) !void {
+    fn renderSlot(renderer: *Renderer, rendering: SlotRender) !void {
+        const slot = rendering.slot;
+        const item = rendering.item;
+        const key = rendering.key;
+
         const width = std.math.mul(u32, key.card_columns, renderer.cell_width) catch
             return error.ToastTooLarge;
         const height = std.math.mul(u32, toast.card_height, renderer.cell_height) catch
