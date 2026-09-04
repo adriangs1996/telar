@@ -1066,11 +1066,7 @@ pub const Generation = struct {
         generation.snapshot.binding_count = 0;
         for (0..count) |binding_index| {
             _ = lua.lua_geti(state, absolute, @intCast(binding_index + 1));
-            const parsed = generation.parseBinding(
-                -1,
-                binding_index,
-                diagnostic,
-            ) catch |err| {
+            const parsed = generation.parseBinding(.{ .index = -1, .position = binding_index }, diagnostic) catch |err| {
                 pop(state, 1);
                 return err;
             };
@@ -1086,11 +1082,16 @@ pub const Generation = struct {
         prefixed: bool,
     };
 
-    fn parseBinding(generation: *Generation, index: c_int, binding_index: usize, diagnostic: *Diagnostic) !ParsedBinding {
+    const BindingInput = struct {
+        index: c_int,
+        position: usize,
+    };
+
+    fn parseBinding(generation: *Generation, binding_input: BindingInput, diagnostic: *Diagnostic) !ParsedBinding {
         const state = generation.vm.state;
-        const absolute = lua.lua_absindex(state, index);
+        const absolute = lua.lua_absindex(state, binding_input.index);
         if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
-            diagnostic.set("keybinding {d} must be a telar.bind value", .{binding_index + 1});
+            diagnostic.set("keybinding {d} must be a telar.bind value", .{binding_input.position + 1});
             return error.InvalidConfig;
         }
         try ensureOnlyFields(
@@ -1106,7 +1107,7 @@ pub const Generation = struct {
             lua.lua_toboolean(state, -1) != 0
         else {
             pop(state, 1);
-            diagnostic.set("keybinding {d}.prefixed must be a boolean", .{binding_index + 1});
+            diagnostic.set("keybinding {d}.prefixed must be a boolean", .{binding_input.position + 1});
             return error.InvalidConfig;
         };
         pop(state, 1);
@@ -1114,7 +1115,7 @@ pub const Generation = struct {
         _ = lua.lua_getfield(state, absolute, "keys");
         if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
             pop(state, 1);
-            diagnostic.set("keybinding {d}.keys must be an array", .{binding_index + 1});
+            diagnostic.set("keybinding {d}.keys must be an array", .{binding_input.position + 1});
             return error.InvalidConfig;
         }
         const key_count = lua.lua_rawlen(state, -1);
@@ -1123,7 +1124,7 @@ pub const Generation = struct {
             pop(state, 1);
             diagnostic.set(
                 "keybinding {d}.keys must contain 1..{d} keys",
-                .{ binding_index + 1, key_limit },
+                .{ binding_input.position + 1, key_limit },
             );
             return error.InvalidConfig;
         }
@@ -1138,7 +1139,7 @@ pub const Generation = struct {
                 pop(state, 2);
                 diagnostic.set(
                     "keybinding {d}.keys[{d}] must be a string",
-                    .{ binding_index + 1, key_index + 1 },
+                    .{ binding_input.position + 1, key_index + 1 },
                 );
                 return error.InvalidConfig;
             };
@@ -1146,7 +1147,7 @@ pub const Generation = struct {
                 pop(state, 2);
                 diagnostic.set(
                     "invalid keybinding {d}: {s}",
-                    .{ binding_index + 1, @errorName(err) },
+                    .{ binding_input.position + 1, @errorName(err) },
                 );
                 return error.InvalidConfig;
             };
@@ -1161,7 +1162,7 @@ pub const Generation = struct {
             lua.lua_toboolean(state, -1) != 0
         else {
             pop(state, 1);
-            diagnostic.set("keybinding {d}.expression must be a boolean", .{binding_index + 1});
+            diagnostic.set("keybinding {d}.expression must be a boolean", .{binding_input.position + 1});
             return error.InvalidConfig;
         };
         pop(state, 1);
@@ -1174,7 +1175,7 @@ pub const Generation = struct {
         pop(state, 1);
         const total_key_count = key_offset + key_count;
         const binding = ConfiguredBinding.init(keys[0..total_key_count], action) catch |err| {
-            diagnostic.set("invalid keybinding {d}: {s}", .{ binding_index + 1, @errorName(err) });
+            diagnostic.set("invalid keybinding {d}: {s}", .{ binding_input.position + 1, @errorName(err) });
             return error.InvalidConfig;
         };
         switch (binding.action) {
