@@ -996,15 +996,23 @@ pub const Model = struct {
         try model.layout.restoreDisplayOrder(pane_ids, focused_pane);
     }
 
-    pub fn restoreSavedLayout(model: *Model, saved: layout_mod.Layout, pane_ids: []const schema.PaneId, focused_pane: schema.PaneId) bool {
-        if (pane_ids.len != model.pane_count) {
+    /// Restores a saved split tree when it matches the model pane membership.
+    ///
+    /// ```zig
+    /// const restored = model.restoreSavedLayout(saved, .{ .ids = pane_ids, .focused = focused_pane });
+    /// ```
+    pub fn restoreSavedLayout(model: *Model, saved: layout_mod.Layout, panes: layout_mod.PaneSet) bool {
+        if (panes.ids.len != model.pane_count) {
             return false;
         }
-        for (pane_ids) |pane_id|
+
+        for (panes.ids) |pane_id|
             if (model.find(pane_id) == null) return false;
-        if (!model.layout.restoreSaved(saved, .{ .ids = pane_ids, .focused = focused_pane })) {
+
+        if (!model.layout.restoreSaved(saved, panes)) {
             return false;
         }
+
         return true;
     }
 

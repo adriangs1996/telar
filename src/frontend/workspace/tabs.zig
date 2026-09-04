@@ -359,8 +359,10 @@ pub const Model = struct {
                 std.meta.eql(pending.location, snapshot.location) and
                     tab.model.restoreSavedLayout(
                         pending.layout,
-                        snapshot.panes,
-                        if (pending.restore_saved_focus) pending.layout.focused() orelse pane_id else pane_id,
+                        .{
+                            .ids = snapshot.panes,
+                            .focused = if (pending.restore_saved_focus) pending.layout.focused() orelse pane_id else pane_id,
+                        },
                     )
             else
                 false;
