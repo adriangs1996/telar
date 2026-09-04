@@ -1856,10 +1856,10 @@ fn normalizedNameEql(left: []const u8, right: []const u8) bool {
 fn pushReadonlyContext(state: *lua.lua_State, context: CallbackContext) void {
     lua.lua_createtable(state, 0, 5);
     setBooleanField(state, .{ .index = -1, .name = "sidebar_visible" }, context.sidebar_visible);
-    setIntegerField(state, -1, "tab_count", context.tab_count);
-    setIntegerField(state, -1, "active_tab_index", @as(u32, context.active_tab_index) + 1);
-    setIntegerField(state, -1, "pane_count", context.pane_count);
-    setIntegerField(state, -1, "focused_pane_id", context.focused_pane_id);
+    setIntegerField(state, .{ .index = -1, .name = "tab_count" }, context.tab_count);
+    setIntegerField(state, .{ .index = -1, .name = "active_tab_index" }, @as(u32, context.active_tab_index) + 1);
+    setIntegerField(state, .{ .index = -1, .name = "pane_count" }, context.pane_count);
+    setIntegerField(state, .{ .index = -1, .name = "focused_pane_id" }, context.focused_pane_id);
 
     freezeTable(state);
 }
@@ -1867,30 +1867,30 @@ fn pushReadonlyContext(state: *lua.lua_State, context: CallbackContext) void {
 fn pushReadonlyBarContext(state: *lua.lua_State, context: BarCallbackContext) void {
     lua.lua_createtable(state, 0, 9);
     setBooleanField(state, .{ .index = -1, .name = "sidebar_visible" }, context.client.sidebar_visible);
-    setIntegerField(state, -1, "tab_count", context.client.tab_count);
-    setIntegerField(state, -1, "active_tab_index", @as(u32, context.client.active_tab_index) + 1);
-    setIntegerField(state, -1, "pane_count", context.client.pane_count);
-    setIntegerField(state, -1, "focused_pane_id", context.client.focused_pane_id);
+    setIntegerField(state, .{ .index = -1, .name = "tab_count" }, context.client.tab_count);
+    setIntegerField(state, .{ .index = -1, .name = "active_tab_index" }, @as(u32, context.client.active_tab_index) + 1);
+    setIntegerField(state, .{ .index = -1, .name = "pane_count" }, context.client.pane_count);
+    setIntegerField(state, .{ .index = -1, .name = "focused_pane_id" }, context.client.focused_pane_id);
 
     lua.lua_createtable(state, 0, 8);
-    setIntegerField(state, -1, "unix_seconds", context.time.unix_seconds);
-    setIntegerField(state, -1, "year", context.time.year);
-    setIntegerField(state, -1, "month", context.time.month);
-    setIntegerField(state, -1, "day", context.time.day);
-    setIntegerField(state, -1, "hour", context.time.hour);
-    setIntegerField(state, -1, "minute", context.time.minute);
-    setIntegerField(state, -1, "second", context.time.second);
-    setIntegerField(state, -1, "weekday", context.time.weekday);
+    setIntegerField(state, .{ .index = -1, .name = "unix_seconds" }, context.time.unix_seconds);
+    setIntegerField(state, .{ .index = -1, .name = "year" }, context.time.year);
+    setIntegerField(state, .{ .index = -1, .name = "month" }, context.time.month);
+    setIntegerField(state, .{ .index = -1, .name = "day" }, context.time.day);
+    setIntegerField(state, .{ .index = -1, .name = "hour" }, context.time.hour);
+    setIntegerField(state, .{ .index = -1, .name = "minute" }, context.time.minute);
+    setIntegerField(state, .{ .index = -1, .name = "second" }, context.time.second);
+    setIntegerField(state, .{ .index = -1, .name = "weekday" }, context.time.weekday);
     freezeTable(state);
     lua.lua_setfield(state, -2, "time");
 
     lua.lua_createtable(state, 0, 4);
     setBooleanField(state, .{ .index = -1, .name = "available" }, context.metrics != null);
     if (context.metrics) |metrics| {
-        setIntegerField(state, -1, "cpu_percent", metrics.cpu_percent);
-        setIntegerField(state, -1, "memory_used_decigib", metrics.memory_used_decigib);
+        setIntegerField(state, .{ .index = -1, .name = "cpu_percent" }, metrics.cpu_percent);
+        setIntegerField(state, .{ .index = -1, .name = "memory_used_decigib" }, metrics.memory_used_decigib);
         if (metrics.battery_percent) |battery| {
-            setIntegerField(state, -1, "battery_percent", battery);
+            setIntegerField(state, .{ .index = -1, .name = "battery_percent" }, battery);
         }
     }
     freezeTable(state);
@@ -1941,10 +1941,10 @@ fn setBooleanField(state: *lua.lua_State, target: FieldTarget, value: bool) void
     lua.lua_setfield(state, absolute, target.name);
 }
 
-fn setIntegerField(state: *lua.lua_State, index: c_int, name: [*:0]const u8, value: anytype) void {
-    const absolute = lua.lua_absindex(state, index);
+fn setIntegerField(state: *lua.lua_State, target: FieldTarget, value: anytype) void {
+    const absolute = lua.lua_absindex(state, target.index);
     lua.lua_pushinteger(state, @intCast(value));
-    lua.lua_setfield(state, absolute, name);
+    lua.lua_setfield(state, absolute, target.name);
 }
 
 fn readonlyNewIndex(state: ?*lua.lua_State) callconv(.c) c_int {
