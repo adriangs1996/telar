@@ -289,6 +289,7 @@ pub const Heap = struct {
         add(&heap.frees, 1);
     }
 
+    // codestyle: allow(maximum-parameter-count)
     fn alloc(context: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
         const heap: *Heap = @ptrCast(@alignCast(context));
         const result = heap.child.rawAlloc(len, alignment, ret_addr) orelse return null;
@@ -296,6 +297,7 @@ pub const Heap = struct {
         return result;
     }
 
+    // codestyle: allow(maximum-parameter-count)
     fn resize(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
         const heap: *Heap = @ptrCast(@alignCast(context));
         if (!heap.child.rawResize(memory, alignment, new_len, ret_addr)) {
@@ -310,6 +312,7 @@ pub const Heap = struct {
         return true;
     }
 
+    // codestyle: allow(maximum-parameter-count)
     fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const heap: *Heap = @ptrCast(@alignCast(context));
         const result = heap.child.rawRemap(memory, alignment, new_len, ret_addr) orelse
@@ -323,6 +326,7 @@ pub const Heap = struct {
         return result;
     }
 
+    // codestyle: allow(maximum-parameter-count)
     fn free(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
         const heap: *Heap = @ptrCast(@alignCast(context));
         heap.child.rawFree(memory, alignment, ret_addr);
