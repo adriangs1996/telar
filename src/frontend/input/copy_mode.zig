@@ -286,9 +286,9 @@ pub fn applyKey(state: *State, pressed: keybind.Key, screen: Screen) Effect {
         } else if (char.eql("b")) {
             wordBackward(state, buffer, scroll);
         } else if (char.eql("{")) {
-            paragraph(state, buffer, scroll, -1);
+            paragraph(state, screen, -1);
         } else if (char.eql("}")) {
-            paragraph(state, buffer, scroll, 1);
+            paragraph(state, screen, 1);
         } else if (char.eql("g")) {
             state.top();
         } else if (char.eql("G")) {
@@ -373,7 +373,9 @@ fn lastNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Sc
     state.cursor.x = x;
 }
 
-fn paragraph(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll, direction: i32) void {
+fn paragraph(state: *State, screen: Screen, direction: i32) void {
+    const buffer = screen.buffer;
+    const scroll = screen.scroll;
     var y = state.cursor.y;
     while (true) {
         const next = if (direction < 0) y -| 1 else @min(y +| 1, scroll.total_rows -| 1);
