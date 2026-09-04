@@ -70,19 +70,20 @@ pub const State = struct {
     /// Lands one reply. Replies for any other request are ignored.
     ///
     /// ```zig
-    /// _ = model.suggestion.apply(request_id, status, text);
+    /// _ = model.suggestion.apply(.{ .request_id = request_id, .status = .ready, .text = "ls" });
     /// ```
-    pub fn apply(state: *State, request_id: u64, status: schema.SuggestionStatus, text: []const u8) bool {
+    pub fn apply(state: *State, suggestion: schema.CommandSuggestion) bool {
+        const request_id = schema.id.raw(suggestion.request_id);
         if (request_id == 0 or request_id != state.pending_request) {
             return false;
         }
 
         state.pending_request = 0;
-        state.status = status;
-        const len = @min(text.len, max_text_bytes);
-        @memcpy(state.text[0..len], text[0..len]);
+        state.status = suggestion.status;
+        const len = @min(suggestion.text.len, max_text_bytes);
+        @memcpy(state.text[0..len], suggestion.text[0..len]);
         state.text_len = @intCast(len);
-        state.phase = if (status == .ready and len != 0) .ready else .failed;
+        state.phase = if (suggestion.status == .ready and len != 0) .ready else .failed;
         state.revision +%= 1;
         return true;
     }
@@ -102,13 +103,13 @@ test "only the awaited reply lands and edits discard it" {
     state.expect(7);
     try std.testing.expectEqual(Phase.waiting, state.phase);
 
-    try std.testing.expect(!state.apply(6, .ready, "ls"));
+    try std.testing.expect(!state.apply(.{ .request_id = @enumFromInt(6), .status = .ready, .text = "ls" }));
     try std.testing.expectEqual(Phase.waiting, state.phase);
 
-    try std.testing.expect(state.apply(7, .ready, "ls -la"));
+    try std.testing.expect(state.apply(.{ .request_id = @enumFromInt(7), .status = .ready, .text = "ls -la" }));
     try std.testing.expectEqual(Phase.ready, state.phase);
     try std.testing.expectEqualStrings("ls -la", state.textSlice());
-    try std.testing.expect(!state.apply(7, .ready, "again"));
+    try std.testing.expect(!state.apply(.{ .request_id = @enumFromInt(7), .status = .ready, .text = "again" }));
 
     const before = state.version();
     state.invalidate();
@@ -119,11 +120,11 @@ test "only the awaited reply lands and edits discard it" {
     try std.testing.expectEqual(before + 1, state.version());
 
     state.expect(8);
-    try std.testing.expect(state.apply(8, .timeout, ""));
+    try std.testing.expect(state.apply(.{ .request_id = @enumFromInt(8), .status = .timeout }));
     try std.testing.expectEqual(Phase.failed, state.phase);
     try std.testing.expectEqual(schema.SuggestionStatus.timeout, state.status);
 
     state.expect(9);
-    try std.testing.expect(state.apply(9, .ready, ""));
+    try std.testing.expect(state.apply(.{ .request_id = @enumFromInt(9), .status = .ready }));
     try std.testing.expectEqual(Phase.failed, state.phase);
 }

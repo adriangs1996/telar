@@ -38,7 +38,7 @@ pub fn begin(client: *Client) !bool {
 pub fn request(client: *Client, text: []const u8) !void {
     const pane_id = focusedPane(client) orelse {
         client.model.suggestion.expect(1);
-        _ = client.model.suggestion.apply(1, .failed, "");
+        _ = client.model.suggestion.apply(.{ .request_id = @enumFromInt(1), .status = .failed });
         return;
     };
 
@@ -61,7 +61,7 @@ pub fn request(client: *Client, text: []const u8) !void {
 /// _ = try apply(client, message);
 /// ```
 pub fn apply(client: *Client, message: schema.CommandSuggestion) !bool {
-    return client.model.suggestion.apply(schema.id.raw(message.request_id), message.status, message.text);
+    return client.model.suggestion.apply(message);
 }
 
 /// Pastes the landed suggestion into the focused pane. Runs after the
