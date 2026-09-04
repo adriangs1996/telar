@@ -44,6 +44,12 @@ const WorkspaceDraw = struct {
     area: ui.Rect,
 };
 
+const WorkspaceNames = struct {
+    snapshot: *const workspace_list.Snapshot,
+    active_index: ?usize,
+    active_name: []const u8,
+};
+
 pub fn render(context: *widget.Context, input: Input) void {
     const area = input.area;
 
@@ -242,7 +248,11 @@ fn renderList(context: *widget.Context, input: Input, list: ListInput) void {
 fn drawWorkspace(context: *widget.Context, draw: WorkspaceDraw) u16 {
     var label_buffer: [workspace_list.max_name_bytes + 4]u8 = undefined;
     const label = std.fmt.bufPrint(&label_buffer, " {s} ", .{
-        workspaceNameAt(draw.snapshot, draw.index, draw.active_index, draw.active_name),
+        workspaceNameAt(.{
+            .snapshot = draw.snapshot,
+            .active_index = draw.active_index,
+            .active_name = draw.active_name,
+        }, draw.index),
     }) catch " workspace ";
     const width = @min(ui.measure(label), draw.area.w);
     if (width == 0) {
@@ -308,16 +318,21 @@ fn listFits(snapshot: *const workspace_list.Snapshot, active_index: ?usize, acti
 fn listWidth(snapshot: *const workspace_list.Snapshot, active_index: ?usize, active_name: []const u8) u16 {
     var total: u16 = 0;
     for (0..snapshot.count) |index| {
-        total +|= ui.measure(workspaceNameAt(snapshot, index, active_index, active_name)) + 2;
+        total +|= ui.measure(workspaceNameAt(.{
+            .snapshot = snapshot,
+            .active_index = active_index,
+            .active_name = active_name,
+        }, index)) + 2;
     }
     return total;
 }
 
-fn workspaceNameAt(snapshot: *const workspace_list.Snapshot, index: usize, active_index: ?usize, active_name: []const u8) []const u8 {
-    if (active_name.len != 0 and active_index != null and active_index.? == index) {
-        return workspace_list.truncateName(active_name);
+fn workspaceNameAt(names: WorkspaceNames, index: usize) []const u8 {
+    if (names.active_name.len != 0 and names.active_index != null and names.active_index.? == index) {
+        return workspace_list.truncateName(names.active_name);
     }
-    return snapshot.nameAt(index);
+
+    return names.snapshot.nameAt(index);
 }
 
 fn activeWorkspaceId(location: ?schema.TabLocation) ?schema.WorkspaceId {
@@ -429,8 +444,13 @@ test "the active name replaces only the active workspace snapshot name" {
     };
     _ = try snapshot.replace(.{ .revision = 1, .entries = &entries });
 
-    try std.testing.expectEqualStrings("agents", workspaceNameAt(&snapshot, 0, 0, "agents"));
-    try std.testing.expectEqualStrings("api", workspaceNameAt(&snapshot, 1, 0, "agents"));
+    const names: WorkspaceNames = .{
+        .snapshot = &snapshot,
+        .active_index = 0,
+        .active_name = "agents",
+    };
+    try std.testing.expectEqualStrings("agents", workspaceNameAt(names, 0));
+    try std.testing.expectEqualStrings("api", workspaceNameAt(names, 1));
     // " agents " + " api " = 13 columns.
     try std.testing.expect(listFits(&snapshot, 0, "agents", 13));
     try std.testing.expect(!listFits(&snapshot, 0, "agents", 12));
