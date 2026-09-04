@@ -40,6 +40,16 @@ pub const Sources = struct {
     tabs: ?*const tabs_mod.Model,
 };
 
+const Scorer = struct {
+    sources: Sources,
+    query: []const u8,
+    label: [max_label_bytes]u8 = undefined,
+
+    fn scoreItem(scorer: *Scorer, item: Item) ?u32 {
+        return score(describe(scorer.sources, item, &scorer.label), scorer.query);
+    }
+};
+
 /// Fills `results` with every candidate matching `query`, best score first.
 /// An empty query lists everything in canonical order: workspaces, then the
 /// active workspace's tabs, then agents.
@@ -50,24 +60,24 @@ pub const Sources = struct {
 /// ```
 pub fn collect(sources: Sources, query: []const u8, results: *Results) void {
     results.len = 0;
-    var label: [max_label_bytes]u8 = undefined;
+    var scorer: Scorer = .{ .sources = sources, .query = query };
 
     for (0..sources.workspaces.count) |index| {
         const item: Item = .{ .workspace = sources.workspaces.workspaceAt(index) };
-        insert(results, item, scoreItem(sources, item, query, &label) orelse continue);
+        insert(results, item, scorer.scoreItem(item) orelse continue);
     }
 
     if (sources.tabs) |tabs| {
         for (tabs.items[0..tabs.count]) |slot| {
             const tab = &(slot orelse continue);
             const item: Item = .{ .tab = tab.location.tab_id };
-            insert(results, item, scoreItem(sources, item, query, &label) orelse continue);
+            insert(results, item, scorer.scoreItem(item) orelse continue);
         }
     }
 
     for (sources.agents.slice()) |*agent| {
         const item: Item = .{ .agent = agent.key };
-        insert(results, item, scoreItem(sources, item, query, &label) orelse continue);
+        insert(results, item, scorer.scoreItem(item) orelse continue);
     }
 }
 
@@ -119,10 +129,6 @@ pub fn describe(sources: Sources, item: Item, buffer: *[max_label_bytes]u8) []co
 
 /// Shared subsequence scorer; see `telar-core`'s `fuzzy.score`.
 pub const score = core.fuzzy.score;
-
-fn scoreItem(sources: Sources, item: Item, query: []const u8, buffer: *[max_label_bytes]u8) ?u32 {
-    return score(describe(sources, item, buffer), query);
-}
 
 fn insert(results: *Results, item: Item, item_score: u32) void {
     var index: usize = results.len;
