@@ -50,6 +50,11 @@ pub const Dimensions = struct {
     height: u16,
 };
 
+pub const Appearance = struct {
+    theme: theme_mod.Theme,
+    icons: ui.icons.Theme = .unicode,
+};
+
 pub const InteractionIntent = view_interaction.Intent;
 pub const Interaction = view_interaction.Command;
 
@@ -128,18 +133,23 @@ pub const State = struct {
     /// var view = try State.initWithTheme(gpa, .{ .width = 80, .height = 24 }, theme);
     /// ```
     pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_theme: theme_mod.Theme) !State {
-        return initWithAppearance(gpa, dimensions.width, dimensions.height, selected_theme, .unicode);
+        return initWithAppearance(gpa, dimensions, .{ .theme = selected_theme });
     }
 
-    pub fn initWithAppearance(gpa: std.mem.Allocator, width: u16, height: u16, selected_theme: theme_mod.Theme, selected_icons: ui.icons.Theme) !State {
+    /// Initializes view state with selected color and icon themes.
+    ///
+    /// ```zig
+    /// var view = try State.initWithAppearance(gpa, .{ .width = 80, .height = 24 }, .{ .theme = theme, .icons = .nerd_font });
+    /// ```
+    pub fn initWithAppearance(gpa: std.mem.Allocator, dimensions: Dimensions, appearance: Appearance) !State {
         return .{
-            .scratch = try .init(gpa, width, height),
-            .regions = .calculate(width, height, .{
+            .scratch = try .init(gpa, dimensions.width, dimensions.height),
+            .regions = .calculate(dimensions.width, dimensions.height, .{
                 .visible = true,
                 .preferred_width = sidebar_width,
             }),
-            .theme = selected_theme,
-            .icon_theme = selected_icons,
+            .theme = appearance.theme,
+            .icon_theme = appearance.icons,
             .kitty_sidebar = .init(gpa),
             .kitty_icons = .init(gpa),
             .kitty_toasts = .init(gpa),
@@ -1533,10 +1543,8 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
 test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
     var state = try State.initWithAppearance(
         std.testing.allocator,
-        100,
-        30,
-        theme_mod.default_theme,
-        .nerd_font,
+        .{ .width = 100, .height = 30 },
+        .{ .theme = theme_mod.default_theme, .icons = .nerd_font },
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .supported, 10, 20);
@@ -1570,10 +1578,8 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
 test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
     var state = try State.initWithAppearance(
         std.testing.allocator,
-        100,
-        30,
-        theme_mod.default_theme,
-        .nerd_font,
+        .{ .width = 100, .height = 30 },
+        .{ .theme = theme_mod.default_theme, .icons = .nerd_font },
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .unsupported, 10, 20);

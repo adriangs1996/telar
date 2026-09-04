@@ -198,10 +198,8 @@ pub fn init(params: Params) !*Client {
     errdefer screen.deinit();
     var view = try client_view.State.initWithAppearance(
         gpa,
-        host_size.cols,
-        host_size.rows,
-        params.options.theme,
-        params.options.icon_theme,
+        .{ .width = host_size.cols, .height = host_size.rows },
+        .{ .theme = params.options.theme, .icons = params.options.icon_theme },
     );
     errdefer view.deinit();
     view.setSidebarLayout(params.options.sidebar_visible, client_view.sidebar_width);
