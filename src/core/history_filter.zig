@@ -7,6 +7,11 @@ const std = @import("std");
 pub const max_patterns = 16;
 pub const max_pattern_bytes = 96;
 
+pub const Input = struct {
+    command: []const u8,
+    cwd: []const u8,
+};
+
 /// Bounded list of case-sensitive substring patterns from configuration.
 pub const PatternList = struct {
     storage: [max_patterns][max_pattern_bytes]u8 = undefined,
@@ -61,22 +66,22 @@ pub const Filters = struct {
     /// space keeps a command out of history by convention.
     ///
     /// ```zig
-    /// if (!filters.shouldRecord(command, cwd)) return;
+    /// if (!filters.shouldRecord(.{ .command = command, .cwd = cwd })) return;
     /// ```
-    pub fn shouldRecord(filters: *const Filters, command: []const u8, cwd: []const u8) bool {
-        if (command.len == 0) {
+    pub fn shouldRecord(filters: *const Filters, input: Input) bool {
+        if (input.command.len == 0) {
             return false;
         }
-        if (command[0] == ' ') {
+        if (input.command[0] == ' ') {
             return false;
         }
-        if (filters.secrets and looksLikeSecret(command)) {
+        if (filters.secrets and looksLikeSecret(input.command)) {
             return false;
         }
-        if (filters.commands.matches(command)) {
+        if (filters.commands.matches(input.command)) {
             return false;
         }
-        if (filters.cwds.matches(cwd)) {
+        if (filters.cwds.matches(input.cwd)) {
             return false;
         }
 
@@ -87,19 +92,19 @@ pub const Filters = struct {
     /// leading space as shell history control. Secret refusal is optional.
     ///
     /// ```zig
-    /// if (!filters.shouldRecordAgent(command, cwd, true)) return;
+    /// if (!filters.shouldRecordAgent(.{ .command = command, .cwd = cwd }, true)) return;
     /// ```
-    pub fn shouldRecordAgent(filters: *const Filters, command: []const u8, cwd: []const u8, redact: bool) bool {
-        if (command.len == 0) {
+    pub fn shouldRecordAgent(filters: *const Filters, input: Input, redact: bool) bool {
+        if (input.command.len == 0) {
             return false;
         }
-        if (redact and filters.secrets and looksLikeSecret(command)) {
+        if (redact and filters.secrets and looksLikeSecret(input.command)) {
             return false;
         }
-        if (filters.commands.matches(command)) {
+        if (filters.commands.matches(input.command)) {
             return false;
         }
-        if (filters.cwds.matches(cwd)) {
+        if (filters.cwds.matches(input.cwd)) {
             return false;
         }
 
@@ -222,14 +227,14 @@ test "filters refuse leading spaces and configured patterns" {
     try filters.commands.add("vault kv");
     try filters.cwds.add("/private/notes");
 
-    try std.testing.expect(filters.shouldRecord("git status", "/work"));
-    try std.testing.expect(!filters.shouldRecord(" git status", "/work"));
-    try std.testing.expect(!filters.shouldRecord("", "/work"));
-    try std.testing.expect(!filters.shouldRecord("vault kv get secret/x", "/work"));
-    try std.testing.expect(!filters.shouldRecord("ls", "/private/notes/journal"));
+    try std.testing.expect(filters.shouldRecord(.{ .command = "git status", .cwd = "/work" }));
+    try std.testing.expect(!filters.shouldRecord(.{ .command = " git status", .cwd = "/work" }));
+    try std.testing.expect(!filters.shouldRecord(.{ .command = "", .cwd = "/work" }));
+    try std.testing.expect(!filters.shouldRecord(.{ .command = "vault kv get secret/x", .cwd = "/work" }));
+    try std.testing.expect(!filters.shouldRecord(.{ .command = "ls", .cwd = "/private/notes/journal" }));
 
     filters.secrets = false;
-    try std.testing.expect(filters.shouldRecord("export t=ghp_abcdefghijklmnopqrstuvwx", "/work"));
+    try std.testing.expect(filters.shouldRecord(.{ .command = "export t=ghp_abcdefghijklmnopqrstuvwx", .cwd = "/work" }));
 
     try std.testing.expectError(error.InvalidFilterPattern, filters.commands.add(""));
     try std.testing.expectError(error.InvalidFilterPattern, filters.commands.add("a" ** 97));

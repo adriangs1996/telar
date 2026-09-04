@@ -213,7 +213,7 @@ pub const Service = struct {
     /// _ = service.recordCommand(io, record);
     /// ```
     pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecord) bool {
-        if (!service.filters.shouldRecord(record.command.bytes, record.command.cwd)) {
+        if (!service.filters.shouldRecord(.{ .command = record.command.bytes, .cwd = record.command.cwd })) {
             return true;
         }
 
@@ -250,7 +250,7 @@ pub const Service = struct {
         {
             return false;
         }
-        if (!service.filters.shouldRecordAgent(record.command.bytes, record.command.cwd, record.redact)) {
+        if (!service.filters.shouldRecordAgent(.{ .command = record.command.bytes, .cwd = record.command.cwd }, record.redact)) {
             return true;
         }
 
