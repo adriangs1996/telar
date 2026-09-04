@@ -251,14 +251,15 @@ fn waitConfigReload(args: WaitArgs) anyerror!ConfigReload {
         return .{ .unchanged = mtime_ns };
     }
     var diagnostic: lua_config.Diagnostic = .{};
-    const generation = lua_config.Generation.loadFileProfile(
-        args.gpa,
-        args.io,
-        args.path,
-        args.generation_number,
-        args.profile,
-        &diagnostic,
-    ) catch return .{ .failed = .{
+    const generation = lua_config.Generation.loadFile(.{
+        .gpa = args.gpa,
+        .io = args.io,
+        .diagnostic = &diagnostic,
+    }, .{
+        .path = args.path,
+        .number = args.generation_number,
+        .profile = args.profile,
+    }) catch return .{ .failed = .{
         .diagnostic = diagnostic,
         .mtime_ns = mtime_ns,
     } };
@@ -345,17 +346,19 @@ test "a rejected load is freed once and reports why" {
     const trust = try gpa.create(core.plugin.TrustStore);
     trust.* = .{};
     var diagnostic: lua_config.Diagnostic = .{};
-    const generation = try lua_config.Generation.loadSource(
-        gpa,
-        std.testing.io,
+    const generation = try lua_config.Generation.loadSource(.{
+        .gpa = gpa,
+        .io = std.testing.io,
+        .diagnostic = &diagnostic,
+    }, .{
+        .source =
         \\local telar = require("telar")
         \\local config = telar.config({ api_version = 2 })
         \\return config
-    ,
-        "@reload-test",
-        1,
-        &diagnostic,
-    );
+        ,
+        .source_name = "@reload-test",
+        .number = 1,
+    });
     state.orphans = .{ .generation = generation, .registry = registry, .trust = trust };
 
     const rejection: RejectContext = .{

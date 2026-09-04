@@ -473,14 +473,15 @@ pub fn testingConfigAdoption(number: u64, changed: bool) !config_reloads.Adoptio
 
 pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !config_reloads.Adoption {
     var diagnostic: lua_config.Diagnostic = .{};
-    const generation = try lua_config.Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@client-reload-test",
-        number,
-        &diagnostic,
-    );
+    const generation = try lua_config.Generation.loadSource(.{
+        .gpa = std.testing.allocator,
+        .io = std.testing.io,
+        .diagnostic = &diagnostic,
+    }, .{
+        .source = source,
+        .source_name = "@client-reload-test",
+        .number = number,
+    });
     errdefer generation.deinit();
     const registry = try std.testing.allocator.create(plugin_broker.Registry);
     errdefer std.testing.allocator.destroy(registry);

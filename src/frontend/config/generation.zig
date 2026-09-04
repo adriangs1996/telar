@@ -99,6 +99,26 @@ pub const Limits = config_model.Limits;
 pub const Meter = lua_runtime.Meter;
 pub const Vm = lua_runtime.Vm;
 
+pub const LoadContext = struct {
+    gpa: std.mem.Allocator,
+    io: Io,
+    diagnostic: *Diagnostic,
+};
+
+pub const SourceInput = struct {
+    source: []const u8,
+    source_name: [*:0]const u8,
+    config_dir: []const u8 = ".",
+    number: u64,
+    profile: ?[]const u8 = null,
+};
+
+pub const FileInput = struct {
+    path: []const u8,
+    number: u64,
+    profile: ?[]const u8 = null,
+};
+
 pub const Generation = struct {
     gpa: std.mem.Allocator,
     number: u64,
@@ -118,108 +138,84 @@ pub const Generation = struct {
     profile_bytes: [max_profile_name_bytes]u8 = undefined,
     profile_len: u8 = 0,
 
-    pub fn loadSource(gpa: std.mem.Allocator, io: Io, source: []const u8, source_name: [*:0]const u8, number: u64, diagnostic: *Diagnostic) !*Generation {
-        return loadSourceInDir(gpa, io, source, source_name, ".", number, null, diagnostic);
-    }
-
-    pub fn loadSourceProfile(gpa: std.mem.Allocator, io: Io, source: []const u8, source_name: [*:0]const u8, number: u64, profile: []const u8, diagnostic: *Diagnostic) !*Generation {
-        return loadSourceInDir(gpa, io, source, source_name, ".", number, profile, diagnostic);
-    }
-
-    fn loadSourceInDir(gpa: std.mem.Allocator, io: Io, source: []const u8, source_name: [*:0]const u8, config_dir: []const u8, number: u64, profile: ?[]const u8, diagnostic: *Diagnostic) !*Generation {
-        if (config_dir.len > std.math.maxInt(u16)) {
+    /// Compiles configuration source within the supplied loading environment.
+    /// For example: `Generation.loadSource(context, .{ .source = bytes, .source_name = "@config.lua", .number = 1 })`.
+    pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
+        if (spec.config_dir.len > std.math.maxInt(u16)) {
             return error.NameTooLong;
         }
-        if (profile) |name| {
+        if (spec.profile) |name| {
             if (!validProfileName(name)) {
-                diagnostic.set("invalid profile name '{s}'", .{name});
+                context.diagnostic.set("invalid profile name '{s}'", .{name});
                 return error.InvalidProfileName;
             }
         }
-        const generation = try gpa.create(Generation);
-        errdefer gpa.destroy(generation);
+        const generation = try context.gpa.create(Generation);
+        errdefer context.gpa.destroy(generation);
         generation.* = .{
-            .gpa = gpa,
-            .number = number,
-            .vm = try Vm.init(io, .{
+            .gpa = context.gpa,
+            .number = spec.number,
+            .vm = try Vm.init(context.io, .{
                 .memory = config_model.default_memory_limit,
                 .instructions = config_model.default_load_instruction_limit,
                 .deadline_after_ns = (config_model.Limits{}).deadline_after_ns,
             }),
-            .config_dir_len = @intCast(config_dir.len),
+            .config_dir_len = @intCast(spec.config_dir.len),
         };
-        @memcpy(generation.config_dir[0..config_dir.len], config_dir);
-        if (profile) |name| {
+        @memcpy(generation.config_dir[0..spec.config_dir.len], spec.config_dir);
+        if (spec.profile) |name| {
             @memcpy(generation.profile_bytes[0..name.len], name);
             generation.profile_len = @intCast(name.len);
         }
         errdefer generation.vm.deinit();
 
         generation.openEnvironment() catch |err| {
-            diagnostic.set("failed to initialize Lua: {s}", .{@errorName(err)});
+            context.diagnostic.set("failed to initialize Lua: {s}", .{@errorName(err)});
             return err;
         };
         generation.vm.resetBudget(default_load_instruction_limit, 100 * std.time.ns_per_ms);
         generation.vm.execute(.{ .source = bootstrap, .name = "@telar/bootstrap.lua", .results = 0 }) catch |err| {
-            diagnostic.set("failed to initialize telar Lua API: {s}", .{generation.vm.errorMessage()});
+            context.diagnostic.set("failed to initialize telar Lua API: {s}", .{generation.vm.errorMessage()});
             return err;
         };
         generation.installRequire();
-        generation.vm.execute(.{ .source = source, .name = source_name, .results = 1 }) catch |err| {
-            diagnostic.set("{s}", .{generation.vm.errorMessage()});
+        generation.vm.execute(.{ .source = spec.source, .name = spec.source_name, .results = 1 }) catch |err| {
+            context.diagnostic.set("{s}", .{generation.vm.errorMessage()});
             return err;
         };
-        generation.parseSnapshot(diagnostic) catch |err| return err;
+        generation.parseSnapshot(context.diagnostic) catch |err| return err;
         generation.syncCallbackTriggers();
         lua.lua_settop(generation.vm.state, 0);
         return generation;
     }
 
-    pub fn loadFile(gpa: std.mem.Allocator, io: Io, path: []const u8, number: u64, diagnostic: *Diagnostic) !*Generation {
-        return loadFileProfile(gpa, io, path, number, null, diagnostic);
-    }
-
-    pub fn loadFileProfile(gpa: std.mem.Allocator, io: Io, path: []const u8, number: u64, profile: ?[]const u8, diagnostic: *Diagnostic) !*Generation {
+    /// Reads and compiles one configuration file.
+    /// For example: `Generation.loadFile(context, .{ .path = "config.lua", .number = 1 })`.
+    pub fn loadFile(context: LoadContext, spec: FileInput) !*Generation {
         var real_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const real_path_len = Io.Dir.cwd().realPathFile(io, path, &real_path_buffer) catch |err| {
-            diagnostic.set("cannot resolve config '{s}': {s}", .{ path, @errorName(err) });
+        const real_path_len = Io.Dir.cwd().realPathFile(context.io, spec.path, &real_path_buffer) catch |err| {
+            context.diagnostic.set("cannot resolve config '{s}': {s}", .{ spec.path, @errorName(err) });
             return err;
         };
         const real_path = real_path_buffer[0..real_path_len];
         const source = Io.Dir.cwd().readFileAlloc(
-            io,
+            context.io,
             real_path,
-            gpa,
+            context.gpa,
             .limited(max_config_bytes),
         ) catch |err| {
-            diagnostic.set("cannot read config '{s}': {s}", .{ path, @errorName(err) });
+            context.diagnostic.set("cannot read config '{s}': {s}", .{ spec.path, @errorName(err) });
             return err;
         };
-        defer gpa.free(source);
+        defer context.gpa.free(source);
         const config_dir = std.fs.path.dirname(real_path) orelse ".";
-        return loadSourceInDir(
-            gpa,
-            io,
-            source,
-            "@config.lua",
-            config_dir,
-            number,
-            profile,
-            diagnostic,
-        );
-    }
-
-    pub fn loadSourceAt(gpa: std.mem.Allocator, io: Io, source: []const u8, source_name: [*:0]const u8, config_dir: []const u8, number: u64, diagnostic: *Diagnostic) !*Generation {
-        return loadSourceInDir(
-            gpa,
-            io,
-            source,
-            source_name,
-            config_dir,
-            number,
-            null,
-            diagnostic,
-        );
+        return loadSource(context, .{
+            .source = source,
+            .source_name = "@config.lua",
+            .config_dir = config_dir,
+            .number = spec.number,
+            .profile = spec.profile,
+        });
     }
 
     pub fn deinit(generation: *Generation) void {
@@ -2205,14 +2201,7 @@ test "client config compiles theme, bindings, and callbacks" {
         \\return config
     ;
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        7,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 7 });
     defer generation.deinit();
     try std.testing.expectEqual(@as(u16, 7), generation.snapshot.binding_count);
     try std.testing.expectEqual(@as(u16, 1), generation.callback_count);
@@ -2273,14 +2262,7 @@ test "history palette Lua action constructor compiles" {
         \\} } }
     ;
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
     try std.testing.expectEqual(@as(u16, 1), generation.snapshot.binding_count);
@@ -2299,14 +2281,7 @@ test "client config rejects an incompatible API version" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.IncompatibleConfigApi,
-        Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            "return { api_version = 1 }",
-            "@config.lua",
-            1,
-            &diagnostic,
-        ),
+        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 1 }", .source_name = "@config.lua", .number = 1 }),
     );
     try std.testing.expectEqualStrings(
         "config.api_version is 1; this Telar accepts 2",
@@ -2318,14 +2293,7 @@ test "client config rejects non-boolean pane gaps" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.InvalidConfig,
-        Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            "return { api_version = 2, client = { pane_gaps = 0 } }",
-            "@config.lua",
-            1,
-            &diagnostic,
-        ),
+        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { pane_gaps = 0 } }", .source_name = "@config.lua", .number = 1 }),
     );
     try std.testing.expectEqualStrings(
         "config.client.pane_gaps must be a boolean",
@@ -2337,14 +2305,7 @@ test "client config rejects non-boolean sound settings" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.InvalidConfig,
-        Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            "return { api_version = 2, client = { sound = { ready = 1 } } }",
-            "@config.lua",
-            1,
-            &diagnostic,
-        ),
+        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { sound = { ready = 1 } } }", .source_name = "@config.lua", .number = 1 }),
     );
     try std.testing.expectEqualStrings(
         "config.client.sound.ready must be a boolean",
@@ -2356,14 +2317,7 @@ test "client config rejects an unknown icon theme" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.InvalidConfig,
-        Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            "return { api_version = 2, client = { icons = 'emoji' } }",
-            "@config.lua",
-            1,
-            &diagnostic,
-        ),
+        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { icons = 'emoji' } }", .source_name = "@config.lua", .number = 1 }),
     );
     try std.testing.expectEqualStrings(
         "unknown config.client.icons: emoji",
@@ -2375,14 +2329,7 @@ test "client config rejects invalid prefixes" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.InvalidConfig,
-        Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            "return { api_version = 2, client = { prefix = 'ctrl' } }",
-            "@config.lua",
-            1,
-            &diagnostic,
-        ),
+        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { prefix = 'ctrl' } }", .source_name = "@config.lua", .number = 1 }),
     );
     try std.testing.expectEqualStrings(
         "invalid config.client.prefix: MissingKey",
@@ -2400,14 +2347,7 @@ test "client config rejects invalid resize directions" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.InvalidConfig,
-        Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            source,
-            "@config.lua",
-            1,
-            &diagnostic,
-        ),
+        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 }),
     );
     try std.testing.expectEqualStrings(
         "resize-pane direction must be left, right, up, or down",
@@ -2419,14 +2359,7 @@ test "client config rejects unknown fields without replacing a generation" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.InvalidConfig,
-        Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            "return { api_version = 2, client = { typo = true } }",
-            "@config.lua",
-            1,
-            &diagnostic,
-        ),
+        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { typo = true } }", .source_name = "@config.lua", .number = 1 }),
     );
     try std.testing.expectEqualStrings("unknown field config.client.typo", diagnostic.message());
 }
@@ -2445,14 +2378,7 @@ test "Lua callback receives an immutable snapshot and returns bounded effects" {
         \\}
     ;
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        11,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 11 });
     defer generation.deinit();
     const batch = try generation.invokeCallback(
         generation.snapshot.bindings[0].action.lua_callback,
@@ -2492,14 +2418,7 @@ test "Lua callbacks produce bounded clickable notifications" {
         \\}
     ;
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        12,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 12 });
     defer generation.deinit();
     const batch = try generation.invokeCallback(
         generation.snapshot.bindings[0].action.lua_callback,
@@ -2537,14 +2456,7 @@ test "Lua expression returns semantic input instead of terminal bytes" {
         \\}
     ;
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        3,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 3 });
     defer generation.deinit();
     const decision = try generation.invokeExpression(
         generation.snapshot.bindings[0].action.lua_expr,
@@ -2574,14 +2486,7 @@ test "Lua callback cannot mutate its context" {
         \\} } }
     ;
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        4,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 4 });
     defer generation.deinit();
     try std.testing.expectError(
         error.LuaCallbackFailed,
@@ -2608,14 +2513,7 @@ test "Lua callback execution is interrupted by its instruction budget" {
         \\} } }
     ;
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     try std.testing.expectError(
         error.LuaCallbackFailed,
@@ -2636,14 +2534,7 @@ test "Lua callback execution is interrupted by its instruction budget" {
 
 test "configuration environment excludes ambient authority" {
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { sidebar = { visible = io == nil and os == nil and debug == nil } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { sidebar = { visible = io == nil and os == nil and debug == nil } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     try std.testing.expect(generation.snapshot.sidebar_visible);
 }
@@ -2691,14 +2582,7 @@ test "client bars compile styled static dynamic and command sources" {
         \\})
     ;
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        8,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 8 });
     defer generation.deinit();
 
     const left = &generation.snapshot.bars.bottom[0].static;
@@ -2777,14 +2661,7 @@ test "bar callback context tables are immutable" {
         \\} } }
     ;
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        9,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 9 });
     defer generation.deinit();
     const callback = generation.snapshot.bars.bottom[0].dynamic.callback;
 
@@ -2829,28 +2706,14 @@ test "client bars reject invalid positions timing and tab ownership" {
 
     for (cases) |case| {
         var diagnostic: Diagnostic = .{};
-        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            case.source,
-            "@config.lua",
-            1,
-            &diagnostic,
-        ));
+        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = case.source, .source_name = "@config.lua", .number = 1 }));
         try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), case.message) != null);
     }
 }
 
 test "runtime proxy defaults to the Claude Code and Codex API hosts" {
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2 }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
     var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
@@ -2864,14 +2727,7 @@ test "runtime proxy defaults to the Claude Code and Codex API hosts" {
 
 test "an explicit empty intercept host list disables interception" {
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, runtime = { proxy = { intercept_hosts = {} } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = {} } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
     var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
@@ -2907,14 +2763,7 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
         \\  },
         \\}
     ;
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     try std.testing.expectEqual(
         @as(usize, 32 * 1024 * 1024),
@@ -2968,7 +2817,7 @@ test "runtime engine parses its command, deadline and idle interval" {
         \\  },
         \\}
     ;
-    const generation = try Generation.loadSource(std.testing.allocator, std.testing.io, source, "@config.lua", 1, &diagnostic);
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
     const engine = &generation.snapshot.runtime.engine;
@@ -2997,21 +2846,14 @@ test "runtime engine parses its command, deadline and idle interval" {
     };
     for (cases) |case| {
         var case_diagnostic: Diagnostic = .{};
-        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(std.testing.allocator, std.testing.io, case.source, "@config.lua", 1, &case_diagnostic));
+        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &case_diagnostic }, .{ .source = case.source, .source_name = "@config.lua", .number = 1 }));
         try std.testing.expect(std.mem.indexOf(u8, case_diagnostic.message(), case.message) != null);
     }
 }
 
 test "runtime proxy accepts wildcard intercept hosts" {
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, runtime = { proxy = { intercept_hosts = { '*.Example.com', '*' } } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = { '*.Example.com', '*' } } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
     var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
@@ -3044,14 +2886,7 @@ test "runtime proxy rejects unsafe intercept host patterns" {
         var diagnostic: Diagnostic = .{};
         try std.testing.expectError(
             error.InvalidConfig,
-            Generation.loadSource(
-                std.testing.allocator,
-                std.testing.io,
-                case.source,
-                "@config.lua",
-                1,
-                &diagnostic,
-            ),
+            Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = case.source, .source_name = "@config.lua", .number = 1 }),
         );
         try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), case.message) != null);
     }
@@ -3059,14 +2894,7 @@ test "runtime proxy rejects unsafe intercept host patterns" {
 
 test "runtime proxy accepts and sorts 256 intercept hosts" {
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "local h = {}; for i = 256, 1, -1 do h[#h + 1] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { intercept_hosts = h } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "local h = {}; for i = 256, 1, -1 do h[#h + 1] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { intercept_hosts = h } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
     const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
@@ -3096,14 +2924,7 @@ test "runtime description command rejects unbounded values" {
     };
     for (cases) |case| {
         var diagnostic: Diagnostic = .{};
-        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            case.source,
-            "@config.lua",
-            1,
-            &diagnostic,
-        ));
+        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = case.source, .source_name = "@config.lua", .number = 1 }));
         try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), case.message) != null);
     }
 }
@@ -3112,14 +2933,7 @@ test "runtime ProxyTLS config rejects live Lua middleware closures" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.InvalidConfig,
-        Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            "return { api_version = 2, runtime = { proxy = { enabled = true, middleware = function() end } } }",
-            "@config.lua",
-            1,
-            &diagnostic,
-        ),
+        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, runtime = { proxy = { enabled = true, middleware = function() end } } }", .source_name = "@config.lua", .number = 1 }),
     );
     try std.testing.expectEqualStrings(
         "unknown field config.runtime.proxy.middleware",
@@ -3153,15 +2967,16 @@ test "profile overlays base config before CLI locks are applied" {
         \\}
     ;
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadSourceProfile(
-        std.testing.allocator,
-        std.testing.io,
-        source,
-        "@config.lua",
-        1,
-        "remote",
-        &diagnostic,
-    );
+    const generation = try Generation.loadSource(.{
+        .gpa = std.testing.allocator,
+        .io = std.testing.io,
+        .diagnostic = &diagnostic,
+    }, .{
+        .source = source,
+        .source_name = "@config.lua",
+        .number = 1,
+        .profile = "remote",
+    });
     defer generation.deinit();
     try std.testing.expect(!generation.snapshot.sidebar_visible);
     try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
@@ -3191,15 +3006,16 @@ test "selected profile must exist" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.UnknownProfile,
-        Generation.loadSourceProfile(
-            std.testing.allocator,
-            std.testing.io,
-            "return { api_version = 2, profiles = {} }",
-            "@config.lua",
-            1,
-            "missing",
-            &diagnostic,
-        ),
+        Generation.loadSource(.{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .diagnostic = &diagnostic,
+        }, .{
+            .source = "return { api_version = 2, profiles = {} }",
+            .source_name = "@config.lua",
+            .number = 1,
+            .profile = "missing",
+        }),
     );
     try std.testing.expectEqualStrings("profile 'missing' is not defined", diagnostic.message());
 }
@@ -3208,14 +3024,7 @@ test "unselected profiles are still validated deeply" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.InvalidConfig,
-        Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            "return { api_version = 2, profiles = { broken = { client = { typo = true } } } }",
-            "@config.lua",
-            1,
-            &diagnostic,
-        ),
+        Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, profiles = { broken = { client = { typo = true } } } }", .source_name = "@config.lua", .number = 1 }),
     );
     try std.testing.expectEqualStrings("unknown field config.client.typo", diagnostic.message());
 }
@@ -3246,13 +3055,11 @@ test "local modules are contained and participate in reload fingerprints" {
         .{directory_buffer[0..directory_len]},
     );
     var diagnostic: Diagnostic = .{};
-    const generation = try Generation.loadFile(
-        std.testing.allocator,
-        io,
-        config_path,
-        1,
-        &diagnostic,
-    );
+    const generation = try Generation.loadFile(.{
+        .gpa = std.testing.allocator,
+        .io = io,
+        .diagnostic = &diagnostic,
+    }, .{ .path = config_path, .number = 1 });
     defer generation.deinit();
     try std.testing.expectEqual(@as(u8, 1), generation.dependency_count);
     try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
@@ -3304,13 +3111,11 @@ test "local require rejects a symlink escaping the config directory" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(
         error.LuaRuntimeFailed,
-        Generation.loadFile(
-            std.testing.allocator,
-            io,
-            config_path,
-            1,
-            &diagnostic,
-        ),
+        Generation.loadFile(.{
+            .gpa = std.testing.allocator,
+            .io = io,
+            .diagnostic = &diagnostic,
+        }, .{ .path = config_path, .number = 1 }),
     );
     try std.testing.expect(std.mem.indexOf(u8, diagnostic.message(), "escapes") != null);
 }
@@ -3336,7 +3141,7 @@ test "runtime agents extend built-ins and add custom manifests" {
         \\}
     ;
     var diagnostic: Diagnostic = .{};
-    var generation = try Generation.loadSource(std.testing.allocator, std.testing.io, source, "@config.lua", 1, &diagnostic);
+    var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     const table = &generation.snapshot.runtime.agent_manifests;
 
@@ -3352,25 +3157,11 @@ test "runtime agents extend built-ins and add custom manifests" {
 
 test "runtime agents reject bad names and oversized phrases" {
     var diagnostic: Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, runtime = { agents = { { name = \"Gemini\" } } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    ));
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, runtime = { agents = { { name = \"Gemini\" } } } }", .source_name = "@config.lua", .number = 1 }));
     try std.testing.expect(std.mem.startsWith(u8, diagnostic.message(), "config.runtime.agents[1].name must be"));
 
     var long_phrase: Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, runtime = { agents = { { name = \"x\", working = { string.rep(\"a\", 49) } } } } }",
-        "@config.lua",
-        1,
-        &long_phrase,
-    ));
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &long_phrase }, .{ .source = "return { api_version = 2, runtime = { agents = { { name = \"x\", working = { string.rep(\"a\", 49) } } } } }", .source_name = "@config.lua", .number = 1 }));
     try std.testing.expectEqualStrings("config.runtime.agents[1].working[1] is too long", long_phrase.message());
 }
 
@@ -3388,7 +3179,7 @@ test "runtime agents carry presentation and the attachment scheme" {
         \\}
     ;
     var diagnostic: Diagnostic = .{};
-    var generation = try Generation.loadSource(std.testing.allocator, std.testing.io, source, "@config.lua", 1, &diagnostic);
+    var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     const table = &generation.snapshot.runtime.agent_manifests;
     const gemini: core.schema.AgentProvider = @enumFromInt(core.schema.first_custom_agent_provider);
@@ -3429,78 +3220,36 @@ test "runtime agents reject bad presentation fields" {
     };
     for (cases) |case| {
         var diagnostic: Diagnostic = .{};
-        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-            std.testing.allocator,
-            std.testing.io,
-            case.source,
-            "@config.lua",
-            1,
-            &diagnostic,
-        ));
+        try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = case.source, .source_name = "@config.lua", .number = 1 }));
         try std.testing.expectEqualStrings(case.message, diagnostic.message());
     }
 }
 
 test "notification delivery parses and rejects unknown channels" {
     var diagnostic: Diagnostic = .{};
-    var generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { notifications = { delivery = \"system\" } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { notifications = { delivery = \"system\" } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     try std.testing.expectEqual(config_model.NotificationDelivery.system, generation.snapshot.notification_delivery);
 
     var invalid: Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { notifications = { delivery = \"popup\" } } }",
-        "@config.lua",
-        1,
-        &invalid,
-    ));
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { notifications = { delivery = \"popup\" } } }", .source_name = "@config.lua", .number = 1 }));
     try std.testing.expectEqualStrings("config.client.notifications.delivery must be telar, terminal or system", invalid.message());
 }
 
 test "appearance themes parse and reject unknown names" {
     var diagnostic: Diagnostic = .{};
-    var generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { appearance = { light = \"catppuccin\", dark = \"vesper\" } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { appearance = { light = \"catppuccin\", dark = \"vesper\" } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     try std.testing.expectEqual(theme_mod.Builtin.catppuccin, generation.snapshot.theme_light.?.base);
     try std.testing.expectEqual(theme_mod.Builtin.vesper, generation.snapshot.theme_dark.?.base);
 
     var invalid: Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { appearance = { light = \"neon\" } } }",
-        "@config.lua",
-        1,
-        &invalid,
-    ));
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { appearance = { light = \"neon\" } } }", .source_name = "@config.lua", .number = 1 }));
 }
 
 test "command-tab actions parse a bounded argv and reject empty commands" {
     var diagnostic: Diagnostic = .{};
-    var generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { keybindings = { telar.bind({ \"ctrl+g\" }, telar.action.command_tab({ command = { \"lazygit\", \"-p\" }, label = \"git\" })) } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { keybindings = { telar.bind({ \"ctrl+g\" }, telar.action.command_tab({ command = { \"lazygit\", \"-p\" }, label = \"git\" })) } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
     const parsed = generation.snapshot.bindings[0].action.command_tab;
@@ -3509,26 +3258,12 @@ test "command-tab actions parse a bounded argv and reject empty commands" {
     try std.testing.expectEqualStrings("git", parsed.label());
 
     var invalid: Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { keybindings = { telar.bind({ \"ctrl+g\" }, telar.action.command_tab({ command = {} })) } } }",
-        "@config.lua",
-        1,
-        &invalid,
-    ));
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { keybindings = { telar.bind({ \"ctrl+g\" }, telar.action.command_tab({ command = {} })) } } }", .source_name = "@config.lua", .number = 1 }));
 }
 
 test "runtime history filters parse and reject invalid patterns" {
     var diagnostic: Diagnostic = .{};
-    var generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, runtime = { history = { secrets_filter = false, command_filters = { \"vault kv\" }, cwd_filters = { \"/private\" } } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, runtime = { history = { secrets_filter = false, command_filters = { \"vault kv\" }, cwd_filters = { \"/private\" } } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
     const filters = generation.snapshot.runtime.history_filters;
@@ -3538,94 +3273,38 @@ test "runtime history filters parse and reject invalid patterns" {
     try std.testing.expectEqual(@as(?[]const u8, null), generation.snapshot.runtime.historyPath());
 
     var invalid: Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, runtime = { history = { command_filters = { \"\" } } } }",
-        "@config.lua",
-        1,
-        &invalid,
-    ));
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, runtime = { history = { command_filters = { \"\" } } } }", .source_name = "@config.lua", .number = 1 }));
 
     var bad_flag: Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, runtime = { history = { secrets_filter = \"yes\" } } }",
-        "@config.lua",
-        1,
-        &bad_flag,
-    ));
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &bad_flag }, .{ .source = "return { api_version = 2, runtime = { history = { secrets_filter = \"yes\" } } }", .source_name = "@config.lua", .number = 1 }));
 }
 
 test "client history config toggles agent command visibility" {
     var diagnostic: Diagnostic = .{};
-    var generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { history = { show_agent_commands = true } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { history = { show_agent_commands = true } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     try std.testing.expect(generation.snapshot.history_show_agent_commands);
 
     var invalid: Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { history = { show_agent_commands = \"yes\" } } }",
-        "@config.lua",
-        1,
-        &invalid,
-    ));
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { history = { show_agent_commands = \"yes\" } } }", .source_name = "@config.lua", .number = 1 }));
 }
 
 test "client history enter mode parses paste or run only" {
     var diagnostic: Diagnostic = .{};
-    var generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { history = { enter = \"run\" } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { history = { enter = \"run\" } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     try std.testing.expect(generation.snapshot.history_enter_runs);
 
     var invalid: Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { history = { enter = \"always\" } } }",
-        "@config.lua",
-        1,
-        &invalid,
-    ));
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { history = { enter = \"always\" } } }", .source_name = "@config.lua", .number = 1 }));
 }
 
 test "client history match mode parses fuzzy or fts only" {
     var diagnostic: Diagnostic = .{};
-    var generation = try Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { history = { match = \"fts\" } } }",
-        "@config.lua",
-        1,
-        &diagnostic,
-    );
+    var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { history = { match = \"fts\" } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     try std.testing.expect(generation.snapshot.history_match_fts);
 
     var invalid: Diagnostic = .{};
-    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(
-        std.testing.allocator,
-        std.testing.io,
-        "return { api_version = 2, client = { history = { match = \"regex\" } } }",
-        "@config.lua",
-        1,
-        &invalid,
-    ));
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { history = { match = \"regex\" } } }", .source_name = "@config.lua", .number = 1 }));
 }

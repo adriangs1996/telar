@@ -45,15 +45,16 @@ pub fn run(init: std.process.Init, entry_path: []const u8, action_name: []const 
     );
 
     var diagnostic: lua_config.Diagnostic = .{};
-    const generation = lua_config.Generation.loadSourceAt(
-        init.gpa,
-        init.io,
-        writer.buffered(),
-        "@plugin-worker.lua",
-        std.fs.path.dirname(entry_path) orelse ".",
-        1,
-        &diagnostic,
-    ) catch |err| {
+    const generation = lua_config.Generation.loadSource(.{
+        .gpa = init.gpa,
+        .io = init.io,
+        .diagnostic = &diagnostic,
+    }, .{
+        .source = writer.buffered(),
+        .source_name = "@plugin-worker.lua",
+        .config_dir = std.fs.path.dirname(entry_path) orelse ".",
+        .number = 1,
+    }) catch |err| {
         std.debug.print("plugin load failed: {s}\n", .{diagnostic.message()});
         return err;
     };

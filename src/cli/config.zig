@@ -37,14 +37,15 @@ pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer:
         else => |other| return other,
     };
     var diagnostic: frontend.config.Diagnostic = .{};
-    return frontend.config.Generation.loadFileProfile(
-        init.gpa,
-        init.io,
-        selected.path,
-        1,
-        if (selection.profile) |value| std.mem.span(value) else null,
-        &diagnostic,
-    ) catch |err| {
+    return frontend.config.Generation.loadFile(.{
+        .gpa = init.gpa,
+        .io = init.io,
+        .diagnostic = &diagnostic,
+    }, .{
+        .path = selected.path,
+        .number = 1,
+        .profile = if (selection.profile) |value| std.mem.span(value) else null,
+    }) catch |err| {
         std.debug.print("telar config: {s}\n", .{diagnostic.message()});
         return err;
     };
@@ -63,14 +64,15 @@ pub fn runCheck(init: std.process.Init, options: parser.ConfigCheckOptions) !voi
     else
         try frontend.config.defaultPath(init.minimal.environ, &path_buffer);
     var diagnostic: frontend.config.Diagnostic = .{};
-    const generation = frontend.config.Generation.loadFileProfile(
-        init.gpa,
-        init.io,
-        path,
-        1,
-        if (options.profile) |value| std.mem.span(value) else null,
-        &diagnostic,
-    ) catch |err| {
+    const generation = frontend.config.Generation.loadFile(.{
+        .gpa = init.gpa,
+        .io = init.io,
+        .diagnostic = &diagnostic,
+    }, .{
+        .path = path,
+        .number = 1,
+        .profile = if (options.profile) |value| std.mem.span(value) else null,
+    }) catch |err| {
         std.debug.print("telar config: {s}\n", .{diagnostic.message()});
         return err;
     };
