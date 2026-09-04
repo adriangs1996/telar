@@ -232,8 +232,10 @@ a visible cursor immediately after its `❯` input prompt. The raw PTY byte stre
 cannot establish that state because a later terminal control sequence may have
 erased or moved the glyph. Claude identity must already be known from the
 foreground process, proxy, or branding; a bare `❯` never establishes it.
-Codex's explicit branded input prompt confirms `ready` in one sample. Generic
-prompts without established agent identity are discarded.
+Manifest phrases are matched on that emulated screen as well, so Codex's
+branded input prompt, which stays visible while a turn runs, confirms `ready`
+only once the status line above it is gone. Generic prompts without
+established agent identity are discarded.
 Evidence expires, and pane generation plus process and history-session
 identity prevent a late event from attaching to a reused pane.
 

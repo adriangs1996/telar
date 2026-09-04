@@ -2265,6 +2265,36 @@ test "client config compiles theme, bindings, and callbacks" {
     );
 }
 
+test "history palette Lua action constructor compiles" {
+    const source =
+        \\local telar = require("telar")
+        \\return { api_version = 2, client = { keybindings = {
+        \\  telar.bind_global({ "ctrl+r" }, telar.action.history_palette()),
+        \\} } }
+    ;
+    var diagnostic: Diagnostic = .{};
+    const generation = try Generation.loadSource(
+        std.testing.allocator,
+        std.testing.io,
+        source,
+        "@config.lua",
+        1,
+        &diagnostic,
+    );
+    defer generation.deinit();
+
+    try std.testing.expectEqual(@as(u16, 1), generation.snapshot.binding_count);
+    try std.testing.expectEqualDeep(
+        try keybind.parseKey("ctrl+r"),
+        generation.snapshot.bindings[0].keys[0],
+    );
+    try std.testing.expectEqual(@as(u8, 1), generation.snapshot.bindings[0].len);
+    try std.testing.expectEqual(
+        action_mod.Action.history_palette,
+        generation.snapshot.bindings[0].action,
+    );
+}
+
 test "client config rejects an incompatible API version" {
     var diagnostic: Diagnostic = .{};
     try std.testing.expectError(

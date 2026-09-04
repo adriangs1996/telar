@@ -66,7 +66,11 @@ manifests. Each manifest names the agent and carries:
   (`none`, `ordered`, `stable_number`, `pasted_path`).
 
 `Table.detect` keeps the historical precedence: any blocked phrase, then any
-working phrase, then a ready prompt, then identity alone. An agent that
+working phrase, then a ready prompt, then identity alone. The observation
+worker runs it on `history.agent_detection.Sample`, the plain text of the
+history emulator's active screen after each batch, never on the raw bytes: a
+client that repaints only changed cells can emit its idle prompt without the
+status line still drawn above it, and only the screen holds both. An agent that
 declares `ready_prompt` phrases (`Table.declaresReadyPrompt`) is exempt from
 the generic prompt-glyph scan in `history.prompt_scan`, because its manifest
 already proves readiness. `builtin_table` is a comptime constant that

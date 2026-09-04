@@ -20,6 +20,10 @@ const schema = core.schema;
 pub const batch_bytes = 4 * 16 * 1024;
 pub const batch_events = 512;
 
+/// An unchanged screen signal is handed over again after this long, so the
+/// runtime refreshes its screen evidence well before that evidence expires.
+pub const signal_refresh_ms: i64 = 15 * 1000;
+
 pub const Stats = struct {
     input_bytes: u64 = 0,
     captured: u64 = 0,
@@ -127,8 +131,10 @@ pub const Observer = struct {
     dropped_bytes: u64 = 0,
     resets: u64 = 0,
     failures: u64 = 0,
-    detector: agent_detection.Detector = .{},
+    sample: agent_detection.Sample = .{},
     manifests: *const agent_detection.Table = &core.agent_manifest.builtin_table,
+    last_signal: ?agent_detection.Signal = null,
+    last_signal_ms: i64 = 0,
 
     /// Initializes the disposable history emulator and its bounded event
     /// buffers for one pane.
@@ -164,8 +170,10 @@ pub const Observer = struct {
         observer.dropped_bytes = 0;
         observer.resets = 0;
         observer.failures = 0;
-        observer.detector = .{};
+        observer.sample = .{};
         observer.manifests = initialization.manifests;
+        observer.last_signal = null;
+        observer.last_signal_ms = 0;
     }
 
     pub fn deinit(observer: *Observer) void {
@@ -265,7 +273,7 @@ pub const Observer = struct {
 
         const index = observer.worker orelse return;
         const batch = &observer.batches[index];
-        observer.detector.resetSample();
+        var latest_ms: ?i64 = null;
         if (batch.reset_before) {
             const reset_cwd = cwd orelse if (observer.enabled)
                 observer.tracker.currentCwd()
@@ -297,6 +305,7 @@ pub const Observer = struct {
             },
             .output => |output| {
                 const start: usize = output.offset;
+                latest_ms = output.clock.real_ms;
                 observer.observeOutput(.{
                     .bytes = batch.bytes[start..][0..output.len],
                     .clock = output.clock,
@@ -313,25 +322,42 @@ pub const Observer = struct {
             }, sink),
             .interrupt => |clock| observer.tracker.interrupt(clock, sink),
         };
-        const stream_signal = observer.detector.signal(observer.manifests);
-        const screen_signal = prompt_scan.scanReadyPrompt(&observer.terminal);
-        // An agent whose manifest declares its own ready prompt phrases is not
-        // subject to the generic glyph scan; its stream signal stands.
-        stats.agent_signal = if (stream_signal) |signal|
-            if (signal.status == .blocked)
-                signal
-            else if (!observer.manifests.declaresReadyPrompt(signal.provider) and screen_signal != null) merged: {
-                var result = screen_signal.?;
-                result.identity_confirmed = signal.provider == result.provider and
-                    signal.identity_confirmed;
-                break :merged result;
-            } else signal
-        else
-            screen_signal;
+        observer.sample.capture(&observer.terminal);
+        const phrase_signal = observer.sample.signal(observer.manifests);
+        const prompt_signal = prompt_scan.scanReadyPrompt(&observer.terminal);
+        const signal = mergeSignals(observer.manifests, phrase_signal, prompt_signal);
+        stats.agent_signal = observer.publishSignal(signal, latest_ms);
+    }
+
+    /// Hands one screen signal to the runtime when it differs from the last
+    /// one handed over, or when that one is old enough to need a refresh.
+    /// An unchanged screen stays quiet in between, so a repainting spinner
+    /// does not republish the projection on every batch.
+    fn publishSignal(observer: *Observer, signal: ?agent_detection.Signal, now_ms: ?i64) ?agent_detection.Signal {
+        const current = signal orelse {
+            observer.last_signal = null;
+            return null;
+        };
+
+        if (observer.last_signal) |previous| {
+            if (std.meta.eql(previous, current)) {
+                const clock = now_ms orelse return null;
+
+                if (clock - observer.last_signal_ms < signal_refresh_ms) {
+                    return null;
+                }
+            }
+        }
+
+        observer.last_signal = current;
+        if (now_ms) |clock| {
+            observer.last_signal_ms = clock;
+        }
+
+        return current;
     }
 
     fn observeOutput(observer: *Observer, observation: OutputObservation, sink: anytype) void {
-        observer.detector.observe(observation.bytes);
         var offset: usize = 0;
         while (offset < observation.bytes.len) {
             const remaining = observation.bytes[offset..];
@@ -398,6 +424,22 @@ pub const Observer = struct {
         observer.enabled = true;
     }
 };
+
+/// Combines the manifest phrases visible on screen with the prompt-glyph scan.
+/// A visible blocked phrase stands. An agent whose manifest declares its own
+/// ready prompt is not subject to the generic glyph scan; for the rest the
+/// glyph scan decides readiness and the phrases only confirm identity.
+fn mergeSignals(table: *const agent_detection.Table, phrases: ?agent_detection.Signal, prompt: ?agent_detection.Signal) ?agent_detection.Signal {
+    const signal = phrases orelse return prompt;
+
+    if (signal.status == .blocked or table.declaresReadyPrompt(signal.provider)) {
+        return signal;
+    }
+
+    var result = prompt orelse return signal;
+    result.identity_confirmed = signal.provider == result.provider and signal.identity_confirmed;
+    return result;
+}
 
 fn vtResize(size: schema.TerminalSize) vt.Terminal.Resize {
     return .{

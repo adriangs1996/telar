@@ -1,9 +1,17 @@
-//! Bounded terminal-output sampling for agent screen heuristics.
+//! Bounded screen sampling for agent heuristics.
+//!
+//! Manifest phrases describe what an agent shows, so they are matched against
+//! the history emulator's active screen rather than the raw byte stream. A
+//! client that repaints only the cells that changed, as Codex and Claude Code
+//! do, can emit its idle prompt in one batch without the status line that is
+//! still drawn above it. The screen holds both, and `Table.detect` ranks a
+//! visible blocked or working phrase above the prompt.
 //!
 //! These patterns are presentation hints only. They may mark a pane as busy or
 //! visibly blocked; they never grant permission or generate input.
 
 const std = @import("std");
+const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 
 const schema = core.schema;
@@ -12,130 +20,203 @@ pub const Status = core.agent_manifest.Status;
 pub const Signal = core.agent_manifest.Signal;
 pub const Table = core.agent_manifest.Table;
 
-/// A sample spans one sealed observation batch, so a prompt which disappeared
-/// cannot remain authoritative in a long-lived byte ring.
-pub const Detector = struct {
+/// Plain text of the active screen, captured bottom-up so the rows nearest
+/// the prompt are complete whenever the screen exceeds the capacity.
+pub const Sample = struct {
     pub const capacity = 16 * 1024;
 
     bytes: [capacity]u8 = undefined,
-    len: usize = 0,
-    state: enum { text, escape, csi, osc, osc_escape, string, string_escape } = .text,
+    start: usize = capacity,
 
-    pub fn resetSample(detector: *Detector) void {
-        detector.len = 0;
-    }
-
-    pub fn observe(detector: *Detector, input: []const u8) void {
-        for (input) |byte| detector.observeByte(byte);
-    }
-
-    /// Applies the manifest table's heuristics to the plain-text sample.
+    /// Replaces the sample with the terminal's current active screen. Blank
+    /// cells become spaces, a hard line break becomes one space and a
+    /// soft-wrapped row continues into the next one without a separator.
     ///
     /// ```zig
-    /// const signal = detector.signal(&core.agent_manifest.builtin_table);
+    /// sample.capture(&observer.terminal);
+    /// const signal = sample.signal(observer.manifests);
     /// ```
-    pub fn signal(detector: *const Detector, table: *const Table) ?Signal {
-        return table.detect(detector.bytes[0..detector.len]);
-    }
+    pub fn capture(sample: *Sample, terminal: *const vt.Terminal) void {
+        sample.start = capacity;
+        const screen = terminal.screens.active;
+        var y: usize = terminal.rows;
 
-    fn observeByte(detector: *Detector, byte: u8) void {
-        switch (detector.state) {
-            .text => switch (byte) {
-                0x1b => detector.state = .escape,
-                '\r', '\n', '\t' => detector.append(' '),
-                else => if (byte >= 0x20 and byte != 0x7f) detector.append(byte),
-            },
-            .escape => switch (byte) {
-                '[' => detector.state = .csi,
-                ']' => detector.state = .osc,
-                'P', '_', '^' => detector.state = .string,
-                else => detector.state = .text,
-            },
-            .csi => {
-                if (byte >= 0x40 and byte <= 0x7e) {
-                    detector.state = .text;
+        while (y != 0) {
+            y -= 1;
+            const pin = screen.pages.pin(.{ .active = .{ .y = @intCast(y) } }) orelse continue;
+
+            if (sample.start != capacity and !pin.rowAndCell().row.wrap) {
+                if (!sample.prepend(" ")) {
+                    return;
                 }
-            },
-            .osc => switch (byte) {
-                0x07 => detector.state = .text,
-                0x1b => detector.state = .osc_escape,
-                else => {},
-            },
-            .osc_escape => detector.state = if (byte == '\\') .text else .osc,
-            .string => {
-                if (byte == 0x1b) {
-                    detector.state = .string_escape;
-                }
-            },
-            .string_escape => detector.state = if (byte == '\\') .text else .string,
+            }
+
+            if (!sample.prependRow(pin.cells(.all))) {
+                return;
+            }
         }
     }
 
-    fn append(detector: *Detector, byte: u8) void {
-        if (detector.len == detector.bytes.len) {
-            const keep = detector.bytes.len / 2;
-            std.mem.copyForwards(
-                u8,
-                detector.bytes[0..keep],
-                detector.bytes[detector.bytes.len - keep ..],
-            );
-            detector.len = keep;
+    pub fn text(sample: *const Sample) []const u8 {
+        return sample.bytes[sample.start..];
+    }
+
+    /// Applies the manifest table's heuristics to the captured screen.
+    ///
+    /// ```zig
+    /// const signal = sample.signal(&core.agent_manifest.builtin_table);
+    /// ```
+    pub fn signal(sample: *const Sample, table: *const Table) ?Signal {
+        return table.detect(sample.text());
+    }
+
+    fn prependRow(sample: *Sample, cells: []const vt.Cell) bool {
+        var index = cells.len;
+        while (index != 0 and cells[index - 1].codepoint() == 0) : (index -= 1) {}
+
+        while (index != 0) {
+            index -= 1;
+            const codepoint = cells[index].codepoint();
+
+            if (codepoint == 0) {
+                if (!sample.prepend(" ")) {
+                    return false;
+                }
+                continue;
+            }
+
+            var encoded: [4]u8 = undefined;
+            const len = std.unicode.utf8Encode(codepoint, &encoded) catch replaced: {
+                encoded[0] = '?';
+                break :replaced 1;
+            };
+
+            if (!sample.prepend(encoded[0..len])) {
+                return false;
+            }
         }
-        detector.bytes[detector.len] = byte;
-        detector.len += 1;
+
+        return true;
+    }
+
+    fn prepend(sample: *Sample, bytes: []const u8) bool {
+        if (bytes.len > sample.start) {
+            return false;
+        }
+
+        sample.start -= bytes.len;
+        @memcpy(sample.bytes[sample.start..][0..bytes.len], bytes);
+        return true;
     }
 };
 
-test "strips terminal controls and recognizes permission prompts" {
-    var detector: Detector = .{};
-    detector.observe("\x1b[31mClaude\x1b[0m\r\nDo you want to proceed?  Enter to confirm");
-    const detected = detector.signal(&core.agent_manifest.builtin_table).?;
-    try std.testing.expectEqual(Status.blocked, detected.status);
-    try std.testing.expectEqual(schema.AgentProvider.claude, detected.provider);
+fn testTerminal(cols: u16, rows: u16) !vt.Terminal {
+    return vt.Terminal.init(std.testing.io, std.testing.allocator, .{ .cols = cols, .rows = rows });
 }
 
-test "recognizes codex work split across output bursts" {
-    var detector: Detector = .{};
-    detector.observe("Cod");
-    detector.observe("ex  Work");
-    detector.observe("ing (12s, esc to interrupt)");
-    const detected = detector.signal(&core.agent_manifest.builtin_table).?;
+fn sampleSignal(terminal: *const vt.Terminal) ?Signal {
+    var sample: Sample = .{};
+    sample.capture(terminal);
+    return sample.signal(&core.agent_manifest.builtin_table);
+}
+
+test "a status line above the idle prompt keeps Codex working" {
+    var terminal = try testTerminal(60, 6);
+    defer terminal.deinit(std.testing.allocator);
+    try terminal.printString("• Working (12s • esc to interrupt)\n\nAsk Codex to do anything");
+
+    const detected = sampleSignal(&terminal).?;
     try std.testing.expectEqual(Status.working, detected.status);
     try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
 }
 
-test "recognizes an open Codex prompt without proxy evidence" {
-    var detector: Detector = .{};
-    detector.observe("OpenAI Codex  Ask Codex to do anything");
-    const detected = detector.signal(&core.agent_manifest.builtin_table).?;
+test "the idle prompt alone marks Codex ready" {
+    var terminal = try testTerminal(60, 6);
+    defer terminal.deinit(std.testing.allocator);
+    try terminal.printString("OpenAI Codex\n\nAsk Codex to do anything");
+
+    const detected = sampleSignal(&terminal).?;
     try std.testing.expectEqual(Status.ready, detected.status);
     try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
     try std.testing.expect(detected.identity_confirmed);
     try std.testing.expect(detected.ready_confirmed);
 }
 
+test "an erased status line no longer counts" {
+    var terminal = try testTerminal(60, 6);
+    defer terminal.deinit(std.testing.allocator);
+    try terminal.printString("• Working (12s • esc to interrupt)\n\nAsk Codex to do anything");
+    terminal.setCursorPos(1, 1);
+    terminal.eraseLine(.complete, false);
+
+    const detected = sampleSignal(&terminal).?;
+    try std.testing.expectEqual(Status.ready, detected.status);
+    try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
+}
+
+test "permission prompts outrank work and the prompt" {
+    var terminal = try testTerminal(60, 6);
+    defer terminal.deinit(std.testing.allocator);
+    try terminal.printString("Claude\nDo you want to proceed?\nesc to interrupt");
+
+    const detected = sampleSignal(&terminal).?;
+    try std.testing.expectEqual(Status.blocked, detected.status);
+    try std.testing.expectEqual(schema.AgentProvider.claude, detected.provider);
+}
+
 test "Claude branding confirms identity without claiming a prompt" {
-    var detector: Detector = .{};
-    detector.observe("\x1b[1mClaude Code\x1b[0m v2.1");
-    const branded = detector.signal(&core.agent_manifest.builtin_table).?;
+    var terminal = try testTerminal(60, 6);
+    defer terminal.deinit(std.testing.allocator);
+    try terminal.printString("Claude Code v2.1");
+
+    const branded = sampleSignal(&terminal).?;
     try std.testing.expectEqual(Status.ready, branded.status);
     try std.testing.expectEqual(schema.AgentProvider.claude, branded.provider);
     try std.testing.expect(branded.identity_confirmed);
     try std.testing.expect(!branded.ready_confirmed);
-
-    detector.resetSample();
-    detector.observe("\xe2\x9d\xaf");
-    try std.testing.expect(detector.signal(&core.agent_manifest.builtin_table) == null);
 }
 
-test "terminal controls may split at every byte" {
-    const input = "\x1b]2;private title\x1b\\\x1b[31mClaude\x1b[0m Do you want to proceed?";
-    for (0..input.len + 1) |split| {
-        var detector: Detector = .{};
-        detector.observe(input[0..split]);
-        detector.observe(input[split..]);
-        const detected = detector.signal(&core.agent_manifest.builtin_table).?;
-        try std.testing.expectEqual(Status.blocked, detected.status);
-        try std.testing.expectEqual(schema.AgentProvider.claude, detected.provider);
+test "soft-wrapped rows join without a separator" {
+    var terminal = try testTerminal(10, 4);
+    defer terminal.deinit(std.testing.allocator);
+    try terminal.printString("Codex esc to interrupt");
+
+    var sample: Sample = .{};
+    sample.capture(&terminal);
+    try std.testing.expectEqualStrings("Codex esc to interrupt", sample.text());
+
+    const detected = sample.signal(&core.agent_manifest.builtin_table).?;
+    try std.testing.expectEqual(Status.working, detected.status);
+    try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
+}
+
+test "hard line breaks separate rows and blank cells become spaces" {
+    var terminal = try testTerminal(8, 4);
+    defer terminal.deinit(std.testing.allocator);
+    try terminal.printString("esc\nto  x");
+
+    var sample: Sample = .{};
+    sample.capture(&terminal);
+    try std.testing.expectEqualStrings("esc to  x", sample.text());
+}
+
+test "the bottom rows survive a screen larger than the capacity" {
+    var terminal = try testTerminal(200, 100);
+    defer terminal.deinit(std.testing.allocator);
+    const filler: [200]u8 = @splat('x');
+
+    for (0..99) |_| {
+        try terminal.printString(&filler);
+        try terminal.printString("\n");
     }
+    try terminal.printString("Ask Codex to do anything");
+
+    var sample: Sample = .{};
+    sample.capture(&terminal);
+    try std.testing.expect(sample.text().len <= Sample.capacity);
+    try std.testing.expect(std.mem.endsWith(u8, sample.text(), "Ask Codex to do anything"));
+
+    const detected = sample.signal(&core.agent_manifest.builtin_table).?;
+    try std.testing.expectEqual(Status.ready, detected.status);
+    try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
 }

@@ -164,7 +164,7 @@ connection-level failure settles every remaining stream for that connection.
 A visible permission prompt is stronger than network activity. Terminal
 working hints also override an early network completion. A ready prompt
 requires established Claude identity and three samples before it can recover a
-missing proxy completion. Codex's explicit branded input prompt confirms
-`ready` in one sample. Every record carries its source, confidence, process and
-session identity, sequence, timestamps, and expiry. None of these presentation
-hints authorizes approval or input.
+missing proxy completion. Codex's branded input prompt confirms `ready` once
+no working phrase remains visible above it. Every record carries its source,
+confidence, process and session identity, sequence, timestamps, and expiry.
+None of these presentation hints authorizes approval or input.
