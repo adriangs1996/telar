@@ -1722,6 +1722,12 @@ pub const PngTransmissionChunks = struct {
     budget: usize,
 };
 
+pub const Transmission = struct {
+    external_id: u32,
+    image: graphics.Image,
+    pixels: []const u8,
+};
+
 /// Emits transmission chunks for `pixels` starting at byte `start_offset`,
 /// spending roughly `budget` encoded bytes. Always makes progress: at least
 /// one chunk goes out even under a zero budget, so a caller looping on the
@@ -1791,11 +1797,13 @@ pub fn writePngTransmissionChunks(writer: *Io.Writer, transmission: PngTransmiss
     return .{ .written = written, .offset = offset };
 }
 
-pub fn writeTransmission(writer: *Io.Writer, external_id: u32, image: graphics.Image, pixels: []const u8) Io.Writer.Error!usize {
+/// Emits one complete raw image transmission.
+/// For example: `try writeTransmission(writer, transmission)`.
+pub fn writeTransmission(writer: *Io.Writer, transmission: Transmission) Io.Writer.Error!usize {
     const progress = try writeTransmissionChunks(writer, .{
-        .external_id = external_id,
-        .image = image,
-        .pixels = pixels,
+        .external_id = transmission.external_id,
+        .image = transmission.image,
+        .pixels = transmission.pixels,
         .start_offset = 0,
         .budget = std.math.maxInt(usize),
         .compressed = false,
@@ -2120,23 +2128,31 @@ pub const KittySidebarRenderer = struct {
             return written;
         }
         if (renderer.focused_card_dirty) {
-            written += try writeTransmission(writer, focused_card_id, .{
-                .key = .{ .image_id = focused_card_id, .generation = 1 },
-                .format = .rgba,
-                .width = renderer.focused_card_width,
-                .height = renderer.focused_card_height,
-                .byte_len = renderer.focused_card_pixels.len,
-            }, renderer.focused_card_pixels);
+            written += try writeTransmission(writer, .{
+                .external_id = focused_card_id,
+                .image = .{
+                    .key = .{ .image_id = focused_card_id, .generation = 1 },
+                    .format = .rgba,
+                    .width = renderer.focused_card_width,
+                    .height = renderer.focused_card_height,
+                    .byte_len = renderer.focused_card_pixels.len,
+                },
+                .pixels = renderer.focused_card_pixels,
+            });
             renderer.focused_card_emitted = true;
         }
         if (renderer.provider_dirty) {
-            written += try writeTransmission(writer, provider_atlas_id, .{
-                .key = .{ .image_id = provider_atlas_id, .generation = 1 },
-                .format = .rgba,
-                .width = renderer.provider_atlas_width,
-                .height = renderer.provider_atlas_height,
-                .byte_len = renderer.provider_atlas.len,
-            }, renderer.provider_atlas);
+            written += try writeTransmission(writer, .{
+                .external_id = provider_atlas_id,
+                .image = .{
+                    .key = .{ .image_id = provider_atlas_id, .generation = 1 },
+                    .format = .rgba,
+                    .width = renderer.provider_atlas_width,
+                    .height = renderer.provider_atlas_height,
+                    .byte_len = renderer.provider_atlas.len,
+                },
+                .pixels = renderer.provider_atlas,
+            });
             renderer.provider_emitted = true;
         }
         if (renderer.placements_dirty) {
@@ -2429,13 +2445,17 @@ test "direct transmission chunks payload without changing pixels" {
     for (&pixels, 0..) |*byte, index| byte.* = @truncate(index);
     var output: [8192]u8 = undefined;
     var writer = Io.Writer.fixed(&output);
-    _ = try writeTransmission(&writer, 9, .{
-        .key = .{ .image_id = 1, .generation = 1 },
-        .format = .rgba,
-        .width = 3073,
-        .height = 1,
-        .byte_len = pixels.len,
-    }, &pixels);
+    _ = try writeTransmission(&writer, .{
+        .external_id = 9,
+        .image = .{
+            .key = .{ .image_id = 1, .generation = 1 },
+            .format = .rgba,
+            .width = 3073,
+            .height = 1,
+            .byte_len = pixels.len,
+        },
+        .pixels = &pixels,
+    });
     try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), "\x1b_Ga=t,f=32,s=3073,v=1,t=d,i=9,q=2,m=1;"));
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b\\\x1b_Gm=0;") != null);
 }
