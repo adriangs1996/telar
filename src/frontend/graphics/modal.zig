@@ -76,17 +76,19 @@ pub const Renderer = struct {
         return total;
     }
 
-    pub fn configure(renderer: *Renderer, support: kitty.Support, cell_width: u16, cell_height: u16) bool {
-        const supported = support == .supported;
-        if (renderer.supported == supported and renderer.cell_width == cell_width and
-            renderer.cell_height == cell_height)
+    /// Applies host graphics support and cell geometry to modal rendering.
+    /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
+    pub fn configure(renderer: *Renderer, configuration: kitty.Configuration) bool {
+        const supported = configuration.support == .supported;
+        if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
+            renderer.cell_height == configuration.cell_height)
         {
             return false;
         }
         renderer.cancelPartial();
         renderer.supported = supported;
-        renderer.cell_width = cell_width;
-        renderer.cell_height = cell_height;
+        renderer.cell_width = configuration.cell_width;
+        renderer.cell_height = configuration.cell_height;
         renderer.key = null;
         if (!supported) {
             renderer.frame_usable = false;
@@ -568,7 +570,7 @@ fn optionalAreaEql(a: ?ui.Rect, b: ?ui.Rect) bool {
 test "rounded modal assets are exact-size bounded and transparent outside corners" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.supported, 10, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     renderer.prepare(.{ .x = 2, .y = 1, .w = 80, .h = 28 }, &theme.default_theme.palette);
 
     try std.testing.expect(renderer.frame_usable);
@@ -592,7 +594,7 @@ test "rounded modal assets are exact-size bounded and transparent outside corner
 test "modal assets use the same background as the client chrome" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.supported, 10, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var palette = theme.default_theme.palette;
     palette.panel_bg = .{ .rgb = .{ 1, 2, 3 } };
     palette.surface0 = .{ .rgb = .{ 4, 5, 6 } };
@@ -605,7 +607,7 @@ test "modal assets use the same background as the client chrome" {
 test "modal frame transmission ends in eight natural-size placements" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.supported, 10, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     const area: ui.Rect = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
     renderer.prepare(area, &theme.default_theme.palette);
 
@@ -627,7 +629,7 @@ test "modal frame transmission ends in eight natural-size placements" {
 test "closing a stale modal frame leaves no media work behind" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.supported, 10, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     const area: ui.Rect = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
     renderer.prepare(area, &theme.default_theme.palette);
 
@@ -635,7 +637,7 @@ test "closing a stale modal frame leaves no media work behind" {
     defer initial.deinit();
     while (renderer.damaged()) _ = try renderer.write(&initial.writer);
 
-    _ = renderer.configure(.supported, 11, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 11, .cell_height = 20 });
     renderer.prepare(area, &theme.default_theme.palette);
     renderer.prepare(.{}, &theme.default_theme.palette);
     var closed: Io.Writer.Allocating = .init(std.testing.allocator);
