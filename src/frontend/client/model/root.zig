@@ -1841,7 +1841,7 @@ pub const Model = struct {
                     return null;
                 }
 
-                next.applyMatches(found.matches, pane.scroll, pane.buffer.h);
+                next.applyMatches(found.matches, .{ .scroll = pane.scroll, .rows = pane.buffer.h });
             },
             .leave => return model.planCopyModeExit(previous, null),
         }

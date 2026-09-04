@@ -134,9 +134,9 @@ pub const State = struct {
     /// the selection so it is visibly highlighted.
     ///
     /// ```zig
-    /// state.applyMatches(results, scroll, rows);
+    /// state.applyMatches(results, viewport);
     /// ```
-    pub fn applyMatches(state: *State, results: []const schema.SearchMatch, scroll: schema.frame.Scroll, rows: u16) void {
+    pub fn applyMatches(state: *State, results: []const schema.SearchMatch, viewport: Viewport) void {
         state.match_count = @intCast(@min(results.len, state.matches.len));
         @memcpy(state.matches[0..state.match_count], results[0..state.match_count]);
         if (state.match_count == 0) {
@@ -169,7 +169,7 @@ pub const State = struct {
         state.gotoMatch(selected orelse switch (state.search_direction) {
             .forward => 0,
             .backward => state.match_count - 1,
-        }, scroll, rows);
+        }, viewport.scroll, viewport.rows);
     }
 
     /// Moves to the next or previous stored match, wrapping around.
@@ -601,7 +601,7 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
         .{ .x = 5, .y = 30, .len = 4 },
     };
 
-    state.applyMatches(&results, scroll, 5);
+    state.applyMatches(&results, .{ .scroll = scroll, .rows = 5 });
     try std.testing.expectEqual(@as(u8, 1), state.match_index);
     try std.testing.expectEqualDeep(Point{ .x = 1, .y = 12 }, state.anchor.?);
     try std.testing.expectEqualDeep(Point{ .x = 2, .y = 12 }, state.cursor);
@@ -614,10 +614,10 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
 
     state.search_direction = .backward;
     state.cursor = .{ .x = 0, .y = 10 };
-    state.applyMatches(&results, scroll, 5);
+    state.applyMatches(&results, .{ .scroll = scroll, .rows = 5 });
     try std.testing.expectEqual(@as(u8, 0), state.match_index);
 
-    state.applyMatches(&.{}, scroll, 5);
+    state.applyMatches(&.{}, .{ .scroll = scroll, .rows = 5 });
     try std.testing.expectEqual(@as(u8, 0), state.match_count);
 }
 
