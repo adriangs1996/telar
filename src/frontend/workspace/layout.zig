@@ -77,6 +77,12 @@ pub const SplitTarget = struct {
     axis: Axis,
 };
 
+const SnapshotReset = struct {
+    area: ui.Rect,
+    revision: u64,
+    pane_gaps: bool,
+};
+
 /// Immutable geometry consumed by every subsystem during a frame. Building it
 /// is O(panes); pane lookup is bounded open addressing with no allocations.
 pub const Snapshot = struct {
@@ -210,10 +216,10 @@ pub const Snapshot = struct {
         return candidate;
     }
 
-    fn reset(snapshot: *Snapshot, area: ui.Rect, revision: u64, pane_gaps: bool) void {
-        snapshot.area = area;
-        snapshot.revision = revision;
-        snapshot.pane_gaps = pane_gaps;
+    fn reset(snapshot: *Snapshot, state: SnapshotReset) void {
+        snapshot.area = state.area;
+        snapshot.revision = state.revision;
+        snapshot.pane_gaps = state.pane_gaps;
         snapshot.len = 0;
         snapshot.index.reset();
     }
@@ -589,7 +595,7 @@ pub const Layout = struct {
         if (!layout.fullscreen) {
             return layout.snapshotTiled(area, output);
         }
-        output.reset(area, layout.revision, layout.pane_gaps);
+        output.reset(.{ .area = area, .revision = layout.revision, .pane_gaps = layout.pane_gaps });
         const pane_id = layout.focused() orelse return;
         output.append(.{
             .pane_id = pane_id,
@@ -601,7 +607,7 @@ pub const Layout = struct {
     }
 
     fn snapshotTiled(layout: *const Layout, area: ui.Rect, output: *Snapshot) void {
-        output.reset(area, layout.revision, layout.pane_gaps);
+        output.reset(.{ .area = area, .revision = layout.revision, .pane_gaps = layout.pane_gaps });
         const root = layout.root orelse return;
         const Pending = struct { node: NodeIndex, area: ui.Rect };
         var stack: [max_nodes]Pending = undefined;
