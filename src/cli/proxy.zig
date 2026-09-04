@@ -203,6 +203,12 @@ const AuthorityCommand = struct {
     writer: *Io.Writer,
 };
 
+const AuthorityRemoval = struct {
+    target: AuthorityTarget,
+    fingerprint: []const u8,
+    destination: []const u8,
+};
+
 /// Reports whether the record, files, fingerprint, and lifetime prove that
 /// Telar's system authority is installed.
 ///
@@ -274,10 +280,18 @@ fn install(init: std.process.Init, options: InstallOptions) !void {
         .backend = options.backend,
         .certificate = prepared_files.certificate,
     }, store_path);
-    errdefer uninstallAuthority(init, options.backend, &fingerprint, rollback_certificate, store_path, options.writer) catch {};
+    errdefer uninstallAuthority(.{ .init = init, .writer = options.writer }, .{
+        .target = .{ .backend = options.backend, .certificate = rollback_certificate },
+        .fingerprint = &fingerprint,
+        .destination = store_path,
+    }) catch {};
     if (options.previous) |old| {
         if (removePreviousSeparately(old.backend, options.backend)) {
-            try uninstallAuthority(init, old.backend, &old.fingerprint, options.paths.files().certificate, old.storePath(), options.writer);
+            try uninstallAuthority(.{ .init = init, .writer = options.writer }, .{
+                .target = .{ .backend = old.backend, .certificate = options.paths.files().certificate },
+                .fingerprint = &old.fingerprint,
+                .destination = old.storePath(),
+            });
         }
     }
     if (prepared.temporary) {
@@ -419,17 +433,21 @@ fn installAuthority(command: AuthorityCommand, target: AuthorityTarget, destinat
 fn uninstallRecord(command: AuthorityCommand, record: Record, certificate: []const u8) !void {
     try validateRecordTarget(command.init.minimal.environ, record, certificate);
 
-    return uninstallAuthority(command.init, record.backend, &record.fingerprint, certificate, record.storePath(), command.writer);
+    return uninstallAuthority(command, .{
+        .target = .{ .backend = record.backend, .certificate = certificate },
+        .fingerprint = &record.fingerprint,
+        .destination = record.storePath(),
+    });
 }
 
-fn uninstallAuthority(init: std.process.Init, selected: TrustBackend, fingerprint: []const u8, certificate: []const u8, destination: []const u8, writer: *Io.Writer) !void {
-    switch (selected) {
-        .macos => try runCommand(init, &.{ "/usr/bin/security", "delete-certificate", "-Z", fingerprint, destination }, writer),
+fn uninstallAuthority(command: AuthorityCommand, removal: AuthorityRemoval) !void {
+    switch (removal.target.backend) {
+        .macos => try runCommand(command.init, &.{ "/usr/bin/security", "delete-certificate", "-Z", removal.fingerprint, removal.destination }, command.writer),
         .update_ca_certificates => {
-            try runCommand(init, &.{ "sudo", "--", "rm", "-f", destination }, writer);
-            try runCommand(init, &.{ "sudo", "--", "update-ca-certificates" }, writer);
+            try runCommand(command.init, &.{ "sudo", "--", "rm", "-f", removal.destination }, command.writer);
+            try runCommand(command.init, &.{ "sudo", "--", "update-ca-certificates" }, command.writer);
         },
-        .trust => try runCommand(init, &.{ "sudo", "--", "trust", "anchor", "--remove", certificate }, writer),
+        .trust => try runCommand(command.init, &.{ "sudo", "--", "trust", "anchor", "--remove", removal.target.certificate }, command.writer),
     }
 }
 
