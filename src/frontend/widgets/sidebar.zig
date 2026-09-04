@@ -270,7 +270,12 @@ fn drawAgentTitle(context: *widget.Context, line_input: AgentLineInput, area: ui
         agent.sessionTitle()
     else
         core.agent_manifest.generic_placeholder, .max_width = area.w -| status_width -| 3, .style = .{ .fg = context.palette.text, .bg = background, .flags = .{ .bold = true } } });
-    drawStatus(context, area, agent.status, input.animation_frame, background);
+    drawStatus(context, .{
+        .area = area,
+        .status = agent.status,
+        .animation_frame = input.animation_frame,
+        .background = background,
+    });
 }
 
 const AgentLocationInput = struct {
@@ -283,6 +288,13 @@ const AgentLocationInput = struct {
 const AgentMetaInput = struct {
     area: ui.Rect,
     agent: *const agents.Agent,
+    background: ui.Color,
+};
+
+const AgentStatusInput = struct {
+    area: ui.Rect,
+    status: schema.AgentStatus,
+    animation_frame: u8,
     background: ui.Color,
 };
 
@@ -360,7 +372,11 @@ fn drawAgentMeta(context: *widget.Context, input: AgentMetaInput) void {
     });
 }
 
-fn drawStatus(context: *widget.Context, area: ui.Rect, status: schema.AgentStatus, animation_frame: u8, background: ui.Color) void {
+fn drawStatus(context: *widget.Context, input: AgentStatusInput) void {
+    const area = input.area;
+    const status = input.status;
+    const background = input.background;
+
     const width = statusWidth(status);
     if (width > area.w) {
         return;
@@ -369,7 +385,7 @@ fn drawStatus(context: *widget.Context, area: ui.Rect, status: schema.AgentStatu
     x += context.drawIcon(.{
         .area = area,
         .point = .{ .x = x, .y = area.y },
-        .icon = statusIcon(status, animation_frame),
+        .icon = statusIcon(status, input.animation_frame),
         .style = .{ .fg = statusColor(context, status), .bg = background },
     });
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = " ", .style = .{ .bg = background } });
