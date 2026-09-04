@@ -936,7 +936,10 @@ pub const Model = struct {
     /// try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     /// ```
     pub fn split(model: *Model, request: PaneSplit) !void {
-        const prospective = model.prospectiveSplit(request.existing_pane, request.axis, request.area) orelse
+        const prospective = model.prospectiveSplit(.{
+            .pane_id = request.existing_pane,
+            .axis = request.axis,
+        }, request.area) orelse
             return error.PaneTooSmall;
         const size = rectSize(prospective.new_content) orelse return error.PaneTooSmall;
 
@@ -973,7 +976,7 @@ pub const Model = struct {
             return;
         };
 
-        const size = if (model.prospectiveSplit(focused, .horizontal, discovered.area)) |prospective|
+        const size = if (model.prospectiveSplit(.{ .pane_id = focused, .axis = .horizontal }, discovered.area)) |prospective|
             rectSize(prospective.new_content) orelse placeholder_size
         else
             placeholder_size;
@@ -1156,11 +1159,13 @@ pub const Model = struct {
         return &model.layout_snapshot;
     }
 
-    pub fn prospectiveSplit(model: *Model, pane_id: schema.PaneId, axis: layout_mod.Axis, area: ui.Rect) ?layout_mod.ProspectiveSplit {
-        return model.layoutSnapshot(area).prospectiveSplit(.{
-            .pane_id = pane_id,
-            .axis = axis,
-        }, model.pane_count);
+    /// Computes a split preview against the model's current pane membership.
+    ///
+    /// ```zig
+    /// const split = model.prospectiveSplit(.{ .pane_id = pane_id, .axis = .horizontal }, area);
+    /// ```
+    pub fn prospectiveSplit(model: *Model, target: layout_mod.SplitTarget, area: ui.Rect) ?layout_mod.ProspectiveSplit {
+        return model.layoutSnapshot(area).prospectiveSplit(target, model.pane_count);
     }
 
     pub fn setCellSize(model: *Model, width: u16, height: u16) void {

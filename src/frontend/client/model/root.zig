@@ -2485,7 +2485,7 @@ pub const Model = struct {
         }
 
         const restore_size = active.model.contentSize(focused.id, request.area) orelse return null;
-        const prospective = active.model.prospectiveSplit(focused.id, request.axis, request.area) orelse
+        const prospective = active.model.prospectiveSplit(.{ .pane_id = focused.id, .axis = request.axis }, request.area) orelse
             return null;
         var provisional_size = multiplexer.rectSize(prospective.existing_content) orelse return null;
         var new_pane_size = multiplexer.rectSize(prospective.new_content) orelse return null;
