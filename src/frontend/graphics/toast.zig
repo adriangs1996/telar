@@ -44,6 +44,13 @@ const SlotRender = struct {
     key: RenderKey,
 };
 
+const PixelRectangle = struct {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+};
+
 pub const Preparation = struct {
     area: ui.Rect,
     center: *const notifications.Center,
@@ -501,11 +508,16 @@ pub const Renderer = struct {
             @max(@as(u32, 1), renderer.cell_width / 8),
             @max(@as(u32, 1), @min(width, height) / 2),
         );
-        fillRect(surface, 0, 0, width, border, accent);
-        fillRect(surface, 0, height - border, width, border, accent);
-        fillRect(surface, 0, 0, border, height, accent);
-        fillRect(surface, width - border, 0, border, height, accent);
-        fillRect(surface, border, border, @max(border, renderer.cell_width / 3), height - border * 2, accent);
+        fillRect(surface, .{ .x = 0, .y = 0, .width = width, .height = border }, accent);
+        fillRect(surface, .{ .x = 0, .y = height - border, .width = width, .height = border }, accent);
+        fillRect(surface, .{ .x = 0, .y = 0, .width = border, .height = height }, accent);
+        fillRect(surface, .{ .x = width - border, .y = 0, .width = border, .height = height }, accent);
+        fillRect(surface, .{
+            .x = border,
+            .y = border,
+            .width = @max(border, renderer.cell_width / 3),
+            .height = height - border * 2,
+        }, accent);
 
         const font_height: u16 = @intCast(std.math.clamp(
             @as(u32, renderer.cell_height) * 3 / 4,
@@ -637,12 +649,12 @@ fn fill(surface: raster.Surface, color: [4]u8) void {
         @memcpy(surface.pixels[index..][0..4], &color);
 }
 
-fn fillRect(surface: raster.Surface, x: u32, y: u32, width: u32, height: u32, color: raster.Color) void {
-    const right = @min(surface.width, x +| width);
-    const bottom = @min(surface.height, y +| height);
-    var row = y;
+fn fillRect(surface: raster.Surface, rectangle: PixelRectangle, color: raster.Color) void {
+    const right = @min(surface.width, rectangle.x +| rectangle.width);
+    const bottom = @min(surface.height, rectangle.y +| rectangle.height);
+    var row = rectangle.y;
     while (row < bottom) : (row += 1) {
-        var column = x;
+        var column = rectangle.x;
         while (column < right) : (column += 1) {
             const index = (@as(usize, row) * surface.width + column) * 4;
             surface.pixels[index..][0..4].* = .{ color.red, color.green, color.blue, color.alpha };
