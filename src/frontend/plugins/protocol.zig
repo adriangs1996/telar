@@ -149,13 +149,13 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
                 };
                 const title = try sized8(bytes, &offset);
                 const message = try sized8(bytes, &offset);
-                break :notification .{ .notification = action_mod.Notification.init(
-                    level,
-                    duration_ms,
-                    target,
-                    title,
-                    message,
-                ) catch return error.InvalidWorkerEffect };
+                break :notification .{ .notification = action_mod.Notification.init(.{
+                    .level = level,
+                    .duration_ms = duration_ms,
+                    .target = target,
+                    .title = title,
+                    .message = message,
+                }) catch return error.InvalidWorkerEffect };
             },
             19 => .{ .resize_sidebar = std.enums.fromInt(
                 action_mod.SidebarDirection,
@@ -234,13 +234,13 @@ test "plugin result protocol round trips semantic effects" {
     batch.items[5] = .{ .resize_sidebar = .right };
     batch.items[6] = .new_workspace;
     batch.items[7] = .{ .select_workspace = 3 };
-    batch.items[8] = .{ .notification = try action_mod.Notification.init(
-        .warning,
-        3000,
-        .{ .workspace = @enumFromInt(9) },
-        "Agent waiting",
-        "Review its question",
-    ) };
+    batch.items[8] = .{ .notification = try action_mod.Notification.init(.{
+        .level = .warning,
+        .duration_ms = 3000,
+        .target = .{ .workspace = @enumFromInt(9) },
+        .title = "Agent waiting",
+        .message = "Review its question",
+    }) };
     batch.len = 9;
     var buffer: [max_bytes]u8 = undefined;
     try std.testing.expectEqualDeep(batch, try decode(try encode(&buffer, &batch)));

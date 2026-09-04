@@ -1461,13 +1461,13 @@ pub const Generation = struct {
                 diagnostic.set("notification accepts only one click target", .{});
                 return error.InvalidConfig;
             }
-            return .{ .notification = action_mod.Notification.init(
-                level,
-                @intCast(duration),
-                target,
-                title,
-                body,
-            ) catch {
+            return .{ .notification = action_mod.Notification.init(.{
+                .level = level,
+                .duration_ms = @intCast(duration),
+                .target = target,
+                .title = title,
+                .message = body,
+            }) catch {
                 diagnostic.set("notification title or body is invalid or too long", .{});
                 return error.InvalidConfig;
             } };

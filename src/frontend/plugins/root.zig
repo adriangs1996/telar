@@ -618,13 +618,13 @@ test "plugin notification effects require the notifications capability" {
     };
     registry.count = 1;
     var batch: lua_config.EffectBatch = .{};
-    batch.items[0] = .{ .notification = try action_mod.Notification.init(
-        .info,
-        2000,
-        .none,
-        "Ready",
-        "",
-    ) };
+    batch.items[0] = .{ .notification = try action_mod.Notification.init(.{
+        .level = .info,
+        .duration_ms = 2000,
+        .target = .none,
+        .title = "Ready",
+        .message = "",
+    }) };
     batch.len = 1;
 
     try std.testing.expectError(

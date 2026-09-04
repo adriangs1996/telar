@@ -204,13 +204,13 @@ test "notification action delivers one correlated runtime request without model 
     try runtime_transport.enqueue(client, .{
         .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
     });
-    var notification = try input_capability.action.Notification.init(
-        .warning,
-        2500,
-        .{ .tab = @enumFromInt(3) },
-        "Agent waiting",
-        "Review its question",
-    );
+    var notification = try input_capability.action.Notification.init(.{
+        .level = .warning,
+        .duration_ms = 2500,
+        .target = .{ .tab = @enumFromInt(3) },
+        .title = "Agent waiting",
+        .message = "Review its question",
+    });
 
     try std.testing.expectEqual(
         keybind.Control.continue_routing,
@@ -255,13 +255,13 @@ test "notification request rolls correlation back when transport is full" {
     const next_request_id = client.request_lifecycle.next_request_id;
     const version_before = client.model.version();
     const pending_updates_before = client.presenter.pending_updates;
-    const notification = try input_capability.action.Notification.init(
-        .info,
-        schema.default_notification_duration_ms,
-        .none,
-        "Build complete",
-        "Review the output",
-    );
+    const notification = try input_capability.action.Notification.init(.{
+        .level = .info,
+        .duration_ms = schema.default_notification_duration_ms,
+        .target = .none,
+        .title = "Build complete",
+        .message = "Review the output",
+    });
 
     try std.testing.expectError(
         error.ClientOutboxFull,

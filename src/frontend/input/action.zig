@@ -25,6 +25,14 @@ pub const SidebarDirection = enum(u8) { left, right };
 pub const TabMove = enum(u8) { previous, next };
 
 pub const Notification = struct {
+    pub const Input = struct {
+        level: schema.NotificationLevel = .info,
+        duration_ms: u32 = schema.default_notification_duration_ms,
+        target: schema.NotificationTarget = .none,
+        title: []const u8,
+        message: []const u8,
+    };
+
     level: schema.NotificationLevel = .info,
     duration_ms: u32 = schema.default_notification_duration_ms,
     target: schema.NotificationTarget = .none,
@@ -33,7 +41,9 @@ pub const Notification = struct {
     message_bytes: [schema.max_notification_message_bytes]u8 = @splat(0),
     message_len: u8,
 
-    pub fn init(level: schema.NotificationLevel, duration_ms: u32, target: schema.NotificationTarget, title_text: []const u8, message_text: []const u8) !Notification {
+    /// Copies a validated notification into bounded inline storage.
+    /// For example: `const notification = try Notification.init(.{ .title = "Ready", .message = "Open result" });`.
+    pub fn init(input: Input) !Notification {
         // Reuse the wire validator so Lua and plugins cannot construct a value
         // that the runtime will reject after the effect batch is committed.
         var validation_buffer: [
@@ -44,22 +54,22 @@ pub const Notification = struct {
         _ = try schema.encodeShowNotification(&validation_buffer, .{
             .request_id = @enumFromInt(1),
             .notification = .{
-                .level = level,
-                .duration_ms = duration_ms,
-                .target = target,
-                .title = title_text,
-                .message = message_text,
+                .level = input.level,
+                .duration_ms = input.duration_ms,
+                .target = input.target,
+                .title = input.title,
+                .message = input.message,
             },
         });
         var value: Notification = .{
-            .level = level,
-            .duration_ms = duration_ms,
-            .target = target,
-            .title_len = @intCast(title_text.len),
-            .message_len = @intCast(message_text.len),
+            .level = input.level,
+            .duration_ms = input.duration_ms,
+            .target = input.target,
+            .title_len = @intCast(input.title.len),
+            .message_len = @intCast(input.message.len),
         };
-        @memcpy(value.title_bytes[0..title_text.len], title_text);
-        @memcpy(value.message_bytes[0..message_text.len], message_text);
+        @memcpy(value.title_bytes[0..input.title.len], input.title);
+        @memcpy(value.message_bytes[0..input.message.len], input.message);
         return value;
     }
 
