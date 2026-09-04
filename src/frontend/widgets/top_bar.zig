@@ -36,6 +36,14 @@ const ListInput = struct {
     active_id: ?schema.WorkspaceId,
 };
 
+const WorkspaceDraw = struct {
+    snapshot: *const workspace_list.Snapshot,
+    index: usize,
+    active_index: ?usize,
+    active_name: []const u8,
+    area: ui.Rect,
+};
+
 pub fn render(context: *widget.Context, input: Input) void {
     const area = input.area;
 
@@ -191,16 +199,13 @@ fn renderList(context: *widget.Context, input: Input, list: ListInput) void {
 
     if (collapsed) {
         const shown = active_index orelse 0;
-        x = drawWorkspace(
-            context,
-            snapshot,
-            shown,
-            active_index,
-            input.workspace_name,
-            x,
-            row_end,
-            list.area.y,
-        );
+        x = drawWorkspace(context, .{
+            .snapshot = snapshot,
+            .index = shown,
+            .active_index = active_index,
+            .active_name = input.workspace_name,
+            .area = .{ .x = x, .y = list.area.y, .w = row_end -| x, .h = 1 },
+        });
         if (snapshot.count > 1) {
             var counter_buffer: [8]u8 = undefined;
             const counter = std.fmt.bufPrint(&counter_buffer, " +{d} ", .{
@@ -224,35 +229,34 @@ fn renderList(context: *widget.Context, input: Input, list: ListInput) void {
         if (x >= row_end) {
             break;
         }
-        x = drawWorkspace(
-            context,
-            snapshot,
-            index,
-            active_index,
-            input.workspace_name,
-            x,
-            row_end,
-            list.area.y,
-        );
+        x = drawWorkspace(context, .{
+            .snapshot = snapshot,
+            .index = index,
+            .active_index = active_index,
+            .active_name = input.workspace_name,
+            .area = .{ .x = x, .y = list.area.y, .w = row_end -| x, .h = 1 },
+        });
     }
 }
 
-fn drawWorkspace(context: *widget.Context, snapshot: *const workspace_list.Snapshot, index: usize, active_index: ?usize, active_name: []const u8, x: u16, row_end: u16, y: u16) u16 {
+fn drawWorkspace(context: *widget.Context, draw: WorkspaceDraw) u16 {
     var label_buffer: [workspace_list.max_name_bytes + 4]u8 = undefined;
     const label = std.fmt.bufPrint(&label_buffer, " {s} ", .{
-        workspaceNameAt(snapshot, index, active_index, active_name),
+        workspaceNameAt(draw.snapshot, draw.index, draw.active_index, draw.active_name),
     }) catch " workspace ";
-    const width = @min(ui.measure(label), row_end -| x);
+    const width = @min(ui.measure(label), draw.area.w);
     if (width == 0) {
-        return x;
+        return draw.area.x;
     }
-    const rect: ui.Rect = .{ .x = x, .y = y, .w = width, .h = 1 };
-    const is_active = active_index != null and active_index.? == index;
+
+    const rect: ui.Rect = .{ .x = draw.area.x, .y = draw.area.y, .w = width, .h = 1 };
+    const is_active = draw.active_index != null and draw.active_index.? == draw.index;
     const action: widget.Action = if (is_active)
         .active_workspace
     else
-        .{ .select_workspace = snapshot.workspaceAt(index) };
+        .{ .select_workspace = draw.snapshot.workspaceAt(draw.index) };
     context.hits.add(rect, action);
+
     const style: ui.Style = if (is_active)
         .{
             .fg = context.palette.text,
@@ -267,8 +271,10 @@ fn drawWorkspace(context: *widget.Context, snapshot: *const workspace_list.Snaps
         .{ .fg = context.palette.text, .bg = context.palette.surface0 }
     else
         .{ .fg = context.palette.overlay0, .bg = context.palette.panel_bg };
-    _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = y }, .text = label, .max_width = width, .style = style });
-    return x + width;
+
+    _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = draw.area.x, .y = draw.area.y }, .text = label, .max_width = width, .style = style });
+
+    return draw.area.x + width;
 }
 
 fn renderFallback(context: *widget.Context, input: Input, x: u16, row_end: u16, y: u16) void {
@@ -392,7 +398,13 @@ test "the workspace label ignores git branch and dirty state" {
         .hovered = null,
     };
 
-    const end = drawWorkspace(&context, &snapshot, 0, null, "", 0, 40, 0);
+    const end = drawWorkspace(&context, .{
+        .snapshot = &snapshot,
+        .index = 0,
+        .active_index = null,
+        .active_name = "",
+        .area = .{ .x = 0, .y = 0, .w = 40, .h = 1 },
+    });
     var text: [16]u8 = undefined;
     var len: usize = 0;
     for (0..end) |x| {
