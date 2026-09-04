@@ -9,6 +9,11 @@ const schema = core.schema;
 
 pub const Config = proxy_mod.Config;
 
+pub const InitOptions = struct {
+    config: ?Config,
+    system_trusted: bool,
+};
+
 pub const ObservationScheduler = struct {
     context: *anyopaque,
     schedule_fn: *const fn (*anyopaque, *proxy_mod.Proxy) anyerror!void,
@@ -80,21 +85,21 @@ pub const Runtime = struct {
     /// Creates the configured proxy, or an inactive owner when disabled.
     ///
     /// ```zig
-    /// var proxy_runtime = try Runtime.init(io, gpa, config, false);
+    /// var proxy_runtime = try Runtime.init(io, gpa, .{ .config = config, .system_trusted = false });
     /// defer proxy_runtime.deinit();
     /// ```
-    pub fn init(io: Io, gpa: std.mem.Allocator, config: ?Config, system_trusted: bool) !Runtime {
-        const owned_proxy = if (config) |value|
+    pub fn init(io: Io, gpa: std.mem.Allocator, options: InitOptions) !Runtime {
+        const owned_proxy = if (options.config) |value|
             try proxy_mod.Proxy.create(io, gpa, value)
         else
             null;
 
-        const timeout_ms = if (config) |value| value.capture.join_timeout_ms else (proxy_mod.CaptureConfig{}).join_timeout_ms;
+        const timeout_ms = if (options.config) |value| value.capture.join_timeout_ms else (proxy_mod.CaptureConfig{}).join_timeout_ms;
 
         return .{
             .owner = .init(owned_proxy),
-            .scope = if (config) |value| configuredScope(value.intercept_hosts) else .exact,
-            .system_trusted = system_trusted,
+            .scope = if (options.config) |value| configuredScope(value.intercept_hosts) else .exact,
+            .system_trusted = options.system_trusted,
             .captures = .init(timeout_ms),
             .capture_sink = null,
         };
@@ -357,7 +362,7 @@ test "schedule failure preserves ownership and deinit destroys exactly once" {
 }
 
 test "disabled runtime exposes zero state and skips receive scheduling" {
-    var runtime = try Runtime.init(std.testing.io, std.testing.allocator, null, true);
+    var runtime = try Runtime.init(std.testing.io, std.testing.allocator, .{ .config = null, .system_trusted = true });
     var capture: ScheduleCapture = .{};
 
     try runtime.schedule(capture.scheduler());
@@ -375,7 +380,7 @@ test "configured runtime schedules its owned proxy and tears it down" {
     const io = std.testing.io;
     var files = try ProxyTestFiles.init(io);
     defer files.deinit();
-    var runtime = try Runtime.init(io, std.testing.allocator, files.config(), false);
+    var runtime = try Runtime.init(io, std.testing.allocator, .{ .config = files.config(), .system_trusted = false });
     var capture: ScheduleCapture = .{ .failure = error.SchedulerUnavailable };
 
     try std.testing.expectError(error.SchedulerUnavailable, runtime.schedule(capture.scheduler()));
