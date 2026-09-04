@@ -65,6 +65,12 @@ pub const default_input_frames: u32 = 16;
 /// is quiet, one per interval up to `burst`, each immediate frame spends one,
 /// and only a frame that finds no credit waits for the next cadence slot.
 pub const Pacer = struct {
+    pub const Record = struct {
+        now: u64,
+        scheduled_deadline: ?u64,
+        absorbed: usize,
+    };
+
     interval: u64 = default_interval,
     /// Maximum credits held; zero makes every frame wait, which tests use to
     /// exercise the scheduled path deterministically.
@@ -119,22 +125,22 @@ pub const Pacer = struct {
     /// they only happen while credit is available.
     ///
     /// ```zig
-    /// pacer.record(now_ns, deadline_ns, pending_updates);
+    /// pacer.record(.{ .now = now_ns, .scheduled_deadline = deadline_ns, .absorbed = pending_updates });
     /// ```
-    pub fn record(p: *Pacer, now: u64, scheduled_deadline: ?u64, absorbed: usize) void {
+    pub fn record(p: *Pacer, frame: Record) void {
         std.debug.assert(p.interval != 0);
-        const usable = p.available(now);
-        if (usable == 0 and scheduled_deadline == null) {
+        const usable = p.available(frame.now);
+        if (usable == 0 and frame.scheduled_deadline == null) {
             p.input_frames_left -|= 1;
         }
         p.credits = usable -| 1;
-        p.anchor_ns = if (scheduled_deadline) |deadline|
-            latestCadenceSlot(deadline, now, p.interval)
+        p.anchor_ns = if (frame.scheduled_deadline) |deadline|
+            latestCadenceSlot(deadline, frame.now, p.interval)
         else
-            now;
+            frame.now;
         p.stats.drawn += 1;
         // The first message earned the frame; the rest rode along.
-        p.stats.absorbed += absorbed -| 1;
+        p.stats.absorbed += frame.absorbed -| 1;
     }
 
     /// Records host input at `now`, opening the grace window.
@@ -258,7 +264,7 @@ test "an idle ui draws immediately" {
     var p: Pacer = .{};
     try testing.expectEqual(@as(?u64, null), p.waitUntil(0));
 
-    p.record(1000 * ns_per_ms, null, 1);
+    p.record(.{ .now = 1000 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
     // Long after the budget elapsed.
     try testing.expectEqual(@as(?u64, null), p.waitUntil(1100 * ns_per_ms));
 }
@@ -271,7 +277,7 @@ test "an interaction's follow-up frames spend credit instead of waiting" {
     var frame: u32 = 0;
     while (frame < default_burst) : (frame += 1) {
         try testing.expectEqual(@as(?u64, null), p.waitUntil(now));
-        p.record(now, null, 1);
+        p.record(.{ .now = now, .scheduled_deadline = null, .absorbed = 1 });
         now += ns_per_ms;
     }
 
@@ -281,7 +287,7 @@ test "an interaction's follow-up frames spend credit instead of waiting" {
 
 test "with no burst a second frame inside the budget gets an absolute deadline" {
     var p: Pacer = .{ .interval = 16 * ns_per_ms, .burst = 1, .credits = 1 };
-    p.record(100 * ns_per_ms, null, 1);
+    p.record(.{ .now = 100 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
 
     try testing.expectEqual(@as(?u64, 116 * ns_per_ms), p.waitUntil(104 * ns_per_ms));
     // Exactly on the boundary the frame is due.
@@ -290,42 +296,42 @@ test "with no burst a second frame inside the budget gets an absolute deadline" 
 
 test "a clock that does not advance keeps the same deadline" {
     var p: Pacer = .{ .interval = 16 * ns_per_ms, .burst = 1, .credits = 1 };
-    p.record(500, null, 1);
+    p.record(.{ .now = 500, .scheduled_deadline = null, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, 500 + 16 * ns_per_ms), p.waitUntil(500));
     try testing.expectEqual(@as(?u64, 500 + 16 * ns_per_ms), p.waitUntil(499));
 }
 
 test "credit refills one frame per interval of quiet" {
     var p: Pacer = .{ .interval = 10 * ns_per_ms, .burst = 3, .credits = 3 };
-    p.record(0, null, 1);
-    p.record(0, null, 1);
-    p.record(0, null, 1);
+    p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
+    p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
+    p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, 10 * ns_per_ms), p.waitUntil(5 * ns_per_ms));
 
     // One interval of quiet buys one immediate frame, not the whole burst.
     try testing.expectEqual(@as(?u64, null), p.waitUntil(10 * ns_per_ms));
-    p.record(10 * ns_per_ms, null, 1);
+    p.record(.{ .now = 10 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, 20 * ns_per_ms), p.waitUntil(11 * ns_per_ms));
 
     // Long quiet caps at the burst.
     try testing.expectEqual(@as(?u64, null), p.waitUntil(1000 * ns_per_ms));
-    p.record(1000 * ns_per_ms, null, 1);
-    p.record(1000 * ns_per_ms, null, 1);
-    p.record(1000 * ns_per_ms, null, 1);
+    p.record(.{ .now = 1000 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
+    p.record(.{ .now = 1000 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
+    p.record(.{ .now = 1000 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, 1010 * ns_per_ms), p.waitUntil(1000 * ns_per_ms));
 }
 
 test "frames inside the input grace window never wait" {
     var p: Pacer = .{ .interval = 16 * ns_per_ms, .burst = 0, .credits = 0 };
-    p.record(100 * ns_per_ms, null, 1);
+    p.record(.{ .now = 100 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, 116 * ns_per_ms), p.waitUntil(101 * ns_per_ms));
 
     // A keystroke lands: the in-flight frame and the echo frame both present.
     p.noteInput(101 * ns_per_ms);
     try testing.expectEqual(@as(?u64, null), p.waitUntil(102 * ns_per_ms));
-    p.record(102 * ns_per_ms, null, 1);
+    p.record(.{ .now = 102 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, null), p.waitUntil(104 * ns_per_ms));
-    p.record(104 * ns_per_ms, null, 1);
+    p.record(.{ .now = 104 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
 
     // The window closes and the flood is back on cadence.
     try testing.expectEqual(
@@ -338,9 +344,9 @@ test "input grace is bounded in frames so a flood after Enter is paced" {
     var p: Pacer = .{ .interval = 16 * ns_per_ms, .burst = 0, .credits = 0, .input_frames = 2 };
     p.noteInput(0);
     try testing.expectEqual(@as(?u64, null), p.waitUntil(1 * ns_per_ms));
-    p.record(1 * ns_per_ms, null, 1);
+    p.record(.{ .now = 1 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, null), p.waitUntil(2 * ns_per_ms));
-    p.record(2 * ns_per_ms, null, 1);
+    p.record(.{ .now = 2 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
 
     // Two frames spent: the third waits even though the window is open.
     try testing.expectEqual(@as(?u64, 18 * ns_per_ms), p.waitUntil(3 * ns_per_ms));
@@ -353,26 +359,26 @@ test "input grace is bounded in frames so a flood after Enter is paced" {
 test "a zero burst schedules every frame" {
     var p: Pacer = .{ .interval = 10 * ns_per_ms, .burst = 0, .credits = 0 };
     try testing.expectEqual(@as(?u64, 10 * ns_per_ms), p.waitUntil(0));
-    p.record(10 * ns_per_ms, 10 * ns_per_ms, 1);
+    p.record(.{ .now = 10 * ns_per_ms, .scheduled_deadline = 10 * ns_per_ms, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, 20 * ns_per_ms), p.waitUntil(10 * ns_per_ms));
 }
 
 test "a late scheduled frame does not shift the cadence" {
     var p: Pacer = .{ .interval = 10 * ns_per_ms, .burst = 1, .credits = 1 };
-    p.record(0, null, 1);
+    p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
     const deadline = p.waitUntil(2 * ns_per_ms).?;
     try testing.expectEqual(10 * ns_per_ms, deadline);
 
-    p.record(13 * ns_per_ms, deadline, 1);
+    p.record(.{ .now = 13 * ns_per_ms, .scheduled_deadline = deadline, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, 20 * ns_per_ms), p.waitUntil(13 * ns_per_ms));
 }
 
 test "a badly late frame skips missed cadence slots" {
     var p: Pacer = .{ .interval = 10 * ns_per_ms, .burst = 1, .credits = 1 };
-    p.record(0, null, 1);
+    p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
     const deadline = p.waitUntil(1 * ns_per_ms).?;
 
-    p.record(35 * ns_per_ms, deadline, 1);
+    p.record(.{ .now = 35 * ns_per_ms, .scheduled_deadline = deadline, .absorbed = 1 });
     // The frame lands on slot 30, and the next one waits for the slot after.
     try testing.expectEqual(@as(?u64, 40 * ns_per_ms), p.waitUntil(35 * ns_per_ms));
 }
@@ -386,10 +392,10 @@ test "cadence arithmetic saturates at the end of monotonic time" {
 
 test "an immediate frame after idle starts a fresh cadence" {
     var p: Pacer = .{ .interval = 10 * ns_per_ms, .burst = 1, .credits = 1 };
-    p.record(0, null, 1);
+    p.record(.{ .now = 0, .scheduled_deadline = null, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, null), p.waitUntil(100 * ns_per_ms));
 
-    p.record(100 * ns_per_ms, null, 1);
+    p.record(.{ .now = 100 * ns_per_ms, .scheduled_deadline = null, .absorbed = 1 });
     try testing.expectEqual(@as(?u64, 110 * ns_per_ms), p.waitUntil(101 * ns_per_ms));
 }
 
@@ -406,7 +412,7 @@ test "a burst is bounded and the frames it skips are counted" {
         if (p.waitUntil(now) != null) {
             continue;
         }
-        p.record(now, null, absorbed);
+        p.record(.{ .now = now, .scheduled_deadline = null, .absorbed = absorbed });
         absorbed = 0;
         frames += 1;
     }

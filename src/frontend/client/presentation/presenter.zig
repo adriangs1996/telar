@@ -388,11 +388,11 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     presenter.presented_attachment_ingress = presenter.observed_attachment_ingress;
     presenter.presented_presentation_ingress = projection.presentation_ingress;
     presenter.observePresentation(presented.presented_ns);
-    presenter.pacer.record(
-        presented.presented_ns,
-        if (presenter.draw_scheduled) presenter.draw_due_ns else null,
-        presenter.pending_updates,
-    );
+    presenter.pacer.record(.{
+        .now = presented.presented_ns,
+        .scheduled_deadline = if (presenter.draw_scheduled) presenter.draw_due_ns else null,
+        .absorbed = presenter.pending_updates,
+    });
     presenter.pending_updates = 0;
 
     return .{
