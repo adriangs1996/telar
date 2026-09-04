@@ -160,6 +160,11 @@ const PartialTransmission = struct {
     fallbacks: [graphics.max_placements_per_pane]FallbackPlacement = undefined,
 };
 
+const FallbackFrame = struct {
+    partial: PartialTransmission,
+    image: ImageEntry,
+};
+
 pub const Store = struct {
     pub const Credit = struct { pane_id: schema.PaneId, bytes: usize };
     const PaneUsage = struct {
@@ -1374,7 +1379,7 @@ pub const KittyGraphicsWriter = struct {
                 self.stats.compressed_images += @intFromBool(partial.compressed);
                 self.store.freeCompression(entry);
                 self.store.partial = null;
-                written += try self.writeFallbackPlacements(writer, partial, entry.*);
+                written += try self.writeFallbackPlacements(writer, .{ .partial = partial, .image = entry.* });
                 self.store.collectRetired(
                     partial.key.pane_id,
                     partial.key.image_id,
@@ -1548,37 +1553,37 @@ pub const KittyGraphicsWriter = struct {
     /// Presents a completed frame even if a newer generation arrived while
     /// it crossed the host terminal. This bounds the queue to the visible,
     /// in-flight and latest generations without starving continuous repaint.
-    fn writeFallbackPlacements(self: *KittyGraphicsWriter, writer: *Io.Writer, partial: PartialTransmission, image: ImageEntry) Io.Writer.Error!usize {
-        if (!self.store.paneVisible(partial.key.pane_id)) {
+    fn writeFallbackPlacements(self: *KittyGraphicsWriter, writer: *Io.Writer, frame: FallbackFrame) Io.Writer.Error!usize {
+        if (!self.store.paneVisible(frame.partial.key.pane_id)) {
             return 0;
         }
         var written: usize = 0;
-        for (partial.fallbacks[0..partial.fallback_count]) |fallback| {
+        for (frame.partial.fallbacks[0..frame.partial.fallback_count]) |fallback| {
             const key: PlacementIdentity = .{
-                .pane_id = partial.key.pane_id,
+                .pane_id = frame.partial.key.pane_id,
                 .virtual_id = fallback.placement.virtual_id,
             };
             const placement = self.store.placements.getPtr(key) orelse continue;
             if (placement.external_id != fallback.external_id or
-                placement.placement.key.image_id != partial.key.image_id or
-                placement.placement.key.generation < partial.key.generation)
+                placement.placement.key.image_id != frame.partial.key.image_id or
+                placement.placement.key.generation < frame.partial.key.generation)
             {
                 continue;
             }
             const output = self.geometry(
-                partial.key.pane_id,
+                frame.partial.key.pane_id,
                 fallback.placement,
-                image.metadata,
+                frame.image.metadata,
             ) orelse continue;
             written += try writePlacement(
                 writer,
-                image.external_id,
+                frame.image.external_id,
                 placement.external_id,
                 output,
                 fallback.placement.z_index,
             );
             if (placement.emitted_image_id) |previous_image_id| {
-                if (previous_image_id != image.external_id) {
+                if (previous_image_id != frame.image.external_id) {
                     written += try writeDeletePlacement(
                         writer,
                         previous_image_id,
@@ -1586,7 +1591,7 @@ pub const KittyGraphicsWriter = struct {
                     );
                 }
             }
-            placement.emitted_image_id = image.external_id;
+            placement.emitted_image_id = frame.image.external_id;
             placement.dirty = !std.meta.eql(placement.placement, fallback.placement);
         }
         return written;
