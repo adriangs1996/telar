@@ -2533,7 +2533,7 @@ test "unchanged graphics emit no work and resize does not retransmit pixels" {
     };
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 10, .rows = 5 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
     var store = Store.init(std.testing.allocator);
     defer store.deinit();
@@ -2610,7 +2610,7 @@ test "image transmission is paced across frames by the byte budget" {
     };
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 10, .rows = 5 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
     var store = Store.init(std.testing.allocator);
     defer store.deinit();
@@ -2700,7 +2700,7 @@ const TransmissionFixture = struct {
         };
         var model = multiplexer.Model.init(std.testing.allocator);
         errdefer model.deinit();
-        try model.addRoot(@enumFromInt(1), location, .{ .cols = 10, .rows = 5 });
+        try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
         var store = Store.init(std.testing.allocator);
         errdefer store.deinit();
         try store.applyImage(.{ .pane_id = @enumFromInt(1), .revision = 1, .image = metadata });
@@ -2940,7 +2940,7 @@ test "continuous replacements complete and hand off without a blank frame" {
     };
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(pane_id, location, .{ .cols = 10, .rows = 5 });
+    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
     var store = Store.init(std.testing.allocator);
     defer store.deinit();
@@ -3494,10 +3494,10 @@ test "shared client pixels have a bounded POSIX lifetime" {
     });
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(pane_id, .{
+    try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 10, .rows = 5 });
+    }, .size = .{ .cols = 10, .rows = 5 } });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
         .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
@@ -3593,10 +3593,10 @@ test "a host acknowledgement retires a replaced shared image without probing" {
     });
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(pane_id, .{
+    try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 10, .rows = 5 });
+    }, .size = .{ .cols = 10, .rows = 5 } });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
         .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
@@ -3656,10 +3656,10 @@ test "a host error reply reclaims the shared name and retransmits inline" {
     });
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(pane_id, .{
+    try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 10, .rows = 5 });
+    }, .size = .{ .cols = 10, .rows = 5 } });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
         .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
@@ -3871,10 +3871,10 @@ test "a runtime-named image maps without copying and hands the host its name" {
     });
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(pane_id, .{
+    try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 10, .rows = 5 });
+    }, .size = .{ .cols = 10, .rows = 5 } });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
         .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
@@ -3957,10 +3957,10 @@ test "a control pass hands the host shared names and placements without pixel st
     store.images.getPtr(identity(pane_id, inline_image.key)).?.force_direct = true;
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(pane_id, .{
+    try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 10, .rows = 5 });
+    }, .size = .{ .cols = 10, .rows = 5 } });
     const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
 
     var control: KittyGraphicsWriter = .{
@@ -4002,10 +4002,10 @@ test "a control pass emits nothing while a chunked transfer is open" {
     const pane_id: schema.PaneId = @enumFromInt(1);
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(pane_id, .{
+    try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 10, .rows = 5 });
+    }, .size = .{ .cols = 10, .rows = 5 } });
     const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
 
     var store = Store.init(std.testing.allocator);
@@ -4064,10 +4064,10 @@ test "a host that never consumes shared names loses them and gets pixels inline"
     const pane_id: schema.PaneId = @enumFromInt(1);
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(pane_id, .{
+    try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
-    }, .{ .cols = 10, .rows = 5 });
+    }, .size = .{ .cols = 10, .rows = 5 } });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
         .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),

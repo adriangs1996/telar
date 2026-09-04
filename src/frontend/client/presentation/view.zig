@@ -1139,7 +1139,7 @@ test "sidebar separator drag reports exact preferred widths" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 58, .rows = 27 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 58, .rows = 27 } });
     var screen = try term.Screen.init(gpa, 120, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{ .model = &model, .force = true });
@@ -1175,7 +1175,7 @@ test "empty production sidebar has no task controls" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 38, .rows = 27 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{ .model = &model, .force = true });
@@ -1196,7 +1196,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     };
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
-    try model.addRoot(first, location, .{ .cols = 50, .rows = 22 });
+    try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 50, .rows = 22 } });
     try model.split(first, second, location, .horizontal, state.workbench());
     try std.testing.expect(model.focusPane(first));
     var screen = try term.Screen.init(gpa, 80, 24);
@@ -1246,7 +1246,7 @@ test "sidebar agent snapshots version changed hover only once" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 34, .rows = 27 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 34, .rows = 27 } });
     try model.split(
         @enumFromInt(1),
         @enumFromInt(2),
@@ -1305,10 +1305,10 @@ test "focused agent image preview reserves space below its pane and opens a moda
     };
     const first_pane: schema.PaneId = @enumFromInt(1);
     const target_pane: schema.PaneId = @enumFromInt(2);
-    try model.addRoot(first_pane, location, .{
+    try model.addRoot(.{ .pane_id = first_pane, .location = location, .size = .{
         .cols = state.workbench().w,
         .rows = state.workbench().h,
-    });
+    } });
     try model.split(first_pane, target_pane, location, .horizontal, state.workbench());
     const agent_entries = [_]agents.AgentInput{.{
         .key = .{ .pane_id = target_pane, .pane_generation = 4 },
@@ -1428,7 +1428,7 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
 
     var first_model = multiplexer.Model.init(gpa);
     defer first_model.deinit();
-    try first_model.addRoot(first_pane, first_location, .{ .cols = 34, .rows = 27 });
+    try first_model.addRoot(.{ .pane_id = first_pane, .location = first_location, .size = .{ .cols = 34, .rows = 27 } });
     try first_model.split(
         first_pane,
         second_pane,
@@ -1447,7 +1447,7 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
 
     var second_model = multiplexer.Model.init(gpa);
     defer second_model.deinit();
-    try second_model.addRoot(workspace_pane, second_location, .{ .cols = 38, .rows = 27 });
+    try second_model.addRoot(.{ .pane_id = workspace_pane, .location = second_location, .size = .{ .cols = 38, .rows = 27 } });
 
     const agent_entries = [_]agents.AgentInput{
         .{
@@ -1511,7 +1511,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 30, .rows = 20 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 30, .rows = 20 } });
     const agent_entries = [_]agents.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 4 },
         .location = location,
@@ -1552,7 +1552,7 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 38, .rows = 28 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 28 } });
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
 
@@ -1587,7 +1587,7 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 38, .rows = 28 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 28 } });
     var screen = try term.Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
 
@@ -1616,10 +1616,10 @@ test "cell rendering leaves toast rasterization to the media pass" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{
         .cols = state.workbench().w,
         .rows = state.workbench().h,
-    });
+    } });
     var center: notifications.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
     var screen = try term.Screen.init(gpa, 120, 30);
@@ -1662,7 +1662,7 @@ test "client chrome uses Vesper by default" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 50, .rows = 22 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 50, .rows = 22 } });
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
     var compositor = multiplexer.Compositor.init(gpa);
@@ -1728,7 +1728,7 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 50, .rows = 22 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 50, .rows = 22 } });
     var screen = try term.Screen.init(gpa, 80, 24);
     defer screen.deinit();
     var compositor = multiplexer.Compositor.init(gpa);
@@ -1763,10 +1763,10 @@ test "clickable toast restores pane cells after its exit animation" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(7),
     };
-    try model.addRoot(@enumFromInt(1), location, .{
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{
         .cols = state.workbench().w,
         .rows = state.workbench().h,
-    });
+    } });
     const overlay = widgets.toast.overlayArea(state.workbench());
     var center: notifications.Center = .{};
     const notification_id = center.push(100, .{
@@ -1963,7 +1963,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(@enumFromInt(1), location, .{ .cols = 38, .rows = 27 });
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
     var workspaces: workspace_list.Snapshot = .{};
     const entries = [_]workspace_list.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },

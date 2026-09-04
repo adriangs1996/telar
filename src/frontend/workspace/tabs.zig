@@ -189,7 +189,7 @@ pub const Model = struct {
         var tab = Tab.init(model.gpa, root.location, "main", model.pane_gaps);
         errdefer tab.deinit();
         tab.model.setCellSize(model.cell_width_px, model.cell_height_px);
-        try tab.model.addRoot(root.pane_id, root.location, root.size);
+        try tab.model.addRoot(.{ .pane_id = root.pane_id, .location = root.location, .size = root.size });
         tab.restore_display_order = true;
 
         model.deinit();
@@ -550,7 +550,7 @@ pub const Model = struct {
         var tab = Tab.init(model.gpa, created.location, created.label, model.pane_gaps);
         errdefer tab.deinit();
         tab.model.setCellSize(model.cell_width_px, model.cell_height_px);
-        try tab.model.addRoot(created.root_pane_id, created.location, size);
+        try tab.model.addRoot(.{ .pane_id = created.root_pane_id, .location = created.location, .size = size });
         tab.snapshot_loaded = true;
 
         var cursor = model.count;

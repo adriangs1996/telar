@@ -948,7 +948,7 @@ test "child KGP becomes an exterior placement at the centered pane offset" {
 
     var model = multiplexer.Model.init(std.testing.allocator);
     defer model.deinit();
-    try model.addRoot(pane_id, location, size);
+    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = size });
     const area: ui.Rect = .{ .x = 10, .y = 5, .w = 20, .h = 10 };
     var graphics_writer: kitty.KittyGraphicsWriter = .{
         .store = &store,
