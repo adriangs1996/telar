@@ -117,7 +117,7 @@ test "workspace arrival commits atomically and stages the saved layout" {
     const area: ui.Rect = .{ .w = 60, .h = 12 };
     var saved: layout_mod.Layout = .{};
     try saved.addRoot(left);
-    try saved.split(left, focused, .horizontal);
+    try saved.split(.{ .existing_pane = left, .new_pane = focused, .axis = .horizontal });
     var expected: layout_mod.Snapshot = .{};
     saved.snapshot(area, &expected);
 

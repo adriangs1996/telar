@@ -77,6 +77,12 @@ pub const SplitTarget = struct {
     axis: Axis,
 };
 
+pub const SplitRequest = struct {
+    existing_pane: schema.PaneId,
+    new_pane: schema.PaneId,
+    axis: Axis,
+};
+
 pub const PaneSet = struct {
     ids: []const schema.PaneId,
     focused: schema.PaneId,
@@ -402,7 +408,11 @@ pub const Layout = struct {
         try restored.addRoot(pane_ids[0]);
         var previous = pane_ids[0];
         for (pane_ids[1..], 1..) |pane_id, index| {
-            try restored.split(previous, pane_id, .horizontal);
+            try restored.split(.{
+                .existing_pane = previous,
+                .new_pane = pane_id,
+                .axis = .horizontal,
+            });
             restored.setParentRatio(pane_id, equalShareRatio(pane_ids.len - index + 1));
             previous = pane_id;
         }
@@ -456,37 +466,49 @@ pub const Layout = struct {
 
     pub fn splitFocused(layout: *Layout, pane_id: schema.PaneId, axis: Axis) !void {
         const focused_pane = layout.focused() orelse return error.LayoutEmpty;
-        try layout.split(focused_pane, pane_id, axis);
+        try layout.split(.{
+            .existing_pane = focused_pane,
+            .new_pane = pane_id,
+            .axis = axis,
+        });
     }
 
-    pub fn split(layout: *Layout, existing_pane: schema.PaneId, new_pane: schema.PaneId, axis: Axis) !void {
-        if (new_pane == .invalid) {
+    /// Replaces one leaf with a split containing the existing and new panes.
+    ///
+    /// ```zig
+    /// try layout.split(.{ .existing_pane = first, .new_pane = second, .axis = .horizontal });
+    /// ```
+    pub fn split(layout: *Layout, request: SplitRequest) !void {
+        if (request.new_pane == .invalid) {
             return error.InvalidPaneId;
         }
-        if (layout.contains(new_pane)) {
+
+        if (layout.contains(request.new_pane)) {
             return error.DuplicatePane;
         }
+
         if (layout.pane_count == max_panes) {
             return error.PaneLimitReached;
         }
-        const target = layout.findLeaf(existing_pane) orelse return error.PaneNotFound;
+
+        const target = layout.findLeaf(request.existing_pane) orelse return error.PaneNotFound;
 
         const first = layout.allocateNode() orelse return error.NodeLimitReached;
         errdefer layout.nodes[first] = .{};
         layout.nodes[first].node = .{ .leaf = .invalid };
         const second = layout.allocateNode() orelse return error.NodeLimitReached;
         const parent = layout.nodes[target].parent;
-        layout.nodes[first] = .{ .parent = target, .node = .{ .leaf = existing_pane } };
-        layout.nodes[second] = .{ .parent = target, .node = .{ .leaf = new_pane } };
+        layout.nodes[first] = .{ .parent = target, .node = .{ .leaf = request.existing_pane } };
+        layout.nodes[second] = .{ .parent = target, .node = .{ .leaf = request.new_pane } };
         layout.nodes[target] = .{
             .parent = parent,
             .node = .{ .split = .{
-                .axis = axis,
+                .axis = request.axis,
                 .first = first,
                 .second = second,
             } },
         };
-        layout.focused_pane = new_pane;
+        layout.focused_pane = request.new_pane;
         layout.pane_count += 1;
         layout.changed();
     }

@@ -1132,8 +1132,8 @@ test "tab reconciliation restores a bookmarked nested split tree" {
 
     var saved: layout_mod.Layout = .{};
     try saved.addRoot(left);
-    try saved.split(left, top_right, .horizontal);
-    try saved.split(top_right, bottom_right, .vertical);
+    try saved.split(.{ .existing_pane = left, .new_pane = top_right, .axis = .horizontal });
+    try saved.split(.{ .existing_pane = top_right, .new_pane = bottom_right, .axis = .vertical });
     try std.testing.expect(saved.focusPane(left));
     try std.testing.expect(saved.resizeFocused(.right, area));
     try std.testing.expect(saved.focusPane(top_right));
@@ -1167,7 +1167,7 @@ test "client layout reconciliation restores its saved pane focus" {
     const right: schema.PaneId = @enumFromInt(42);
     var saved: layout_mod.Layout = .{};
     try saved.addRoot(left);
-    try saved.split(left, right, .horizontal);
+    try saved.split(.{ .existing_pane = left, .new_pane = right, .axis = .horizontal });
     try std.testing.expect(saved.focusPane(left));
 
     try model.bootstrap(right, location, .{ .cols = 30, .rows = 8 });
@@ -1192,8 +1192,8 @@ test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
     const selected: schema.PaneId = @enumFromInt(42);
     var saved: layout_mod.Layout = .{};
     try saved.addRoot(@enumFromInt(10));
-    try saved.split(@enumFromInt(10), selected, .horizontal);
-    try saved.split(selected, @enumFromInt(77), .vertical);
+    try saved.split(.{ .existing_pane = @enumFromInt(10), .new_pane = selected, .axis = .horizontal });
+    try saved.split(.{ .existing_pane = selected, .new_pane = @enumFromInt(77), .axis = .vertical });
 
     try model.bootstrap(selected, location, .{ .cols = 30, .rows = 8 });
     try std.testing.expect(model.restoreLayoutOnNextSnapshot(location, saved));

@@ -903,7 +903,11 @@ pub const Model = struct {
         const size = rectSize(prospective.new_content) orelse return error.PaneTooSmall;
         try model.insertPane(new_pane, location, size, true);
         errdefer _ = model.removePane(new_pane);
-        try model.layout.split(existing_pane, new_pane, axis);
+        try model.layout.split(.{
+            .existing_pane = existing_pane,
+            .new_pane = new_pane,
+            .axis = axis,
+        });
     }
 
     /// Adds panes discovered in a location snapshot. Reconstructed layouts are
@@ -934,7 +938,11 @@ pub const Model = struct {
             placeholder_size;
         try model.insertPane(pane_id, location, size, false);
         errdefer _ = model.removePane(pane_id);
-        try model.layout.split(focused, pane_id, .horizontal);
+        try model.layout.split(.{
+            .existing_pane = focused,
+            .new_pane = pane_id,
+            .axis = .horizontal,
+        });
     }
 
     pub fn restoreDisplayOrder(model: *Model, pane_ids: []const schema.PaneId, focused_pane: schema.PaneId) !void {

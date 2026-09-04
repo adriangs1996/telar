@@ -449,8 +449,8 @@ test "clicking a sidebar agent hands off directly to its pane" {
     const bottom_right_pane: schema.PaneId = @enumFromInt(92);
     var saved_layout: workspace_capability.layout.Layout = .{};
     try saved_layout.addRoot(left_pane);
-    try saved_layout.split(left_pane, agent_pane, .horizontal);
-    try saved_layout.split(agent_pane, bottom_right_pane, .vertical);
+    try saved_layout.split(.{ .existing_pane = left_pane, .new_pane = agent_pane, .axis = .horizontal });
+    try saved_layout.split(.{ .existing_pane = agent_pane, .new_pane = bottom_right_pane, .axis = .vertical });
     client.navigation_history.remember(.{
         .location = agent.location,
         .pane_id = agent_pane,
