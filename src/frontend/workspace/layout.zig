@@ -94,6 +94,11 @@ const SnapshotReset = struct {
     pane_gaps: bool,
 };
 
+const RatioCandidate = struct {
+    area: ui.Rect,
+    ratio: u16,
+};
+
 /// Immutable geometry consumed by every subsystem during a frame. Building it
 /// is O(panes); pane lookup is bounded open addressing with no allocations.
 pub const Snapshot = struct {
@@ -595,9 +600,10 @@ pub const Layout = struct {
             return false;
         }
         const target_area = layout.nodeArea(target, area);
-        if (!layout.ratioFits(branch, target_area, candidate)) {
+        if (!layout.ratioFits(branch, .{ .area = target_area, .ratio = candidate })) {
             return false;
         }
+
         layout.nodes[target].node.split.ratio = candidate;
         layout.changed();
         return true;
@@ -755,10 +761,11 @@ pub const Layout = struct {
         return current_area;
     }
 
-    fn ratioFits(layout: *const Layout, branch: Split, area: ui.Rect, ratio: u16) bool {
-        const first, const second = splitArea(area, branch.axis, ratio, layout.pane_gaps);
+    fn ratioFits(layout: *const Layout, branch: Split, candidate: RatioCandidate) bool {
+        const first, const second = splitArea(candidate.area, branch.axis, candidate.ratio, layout.pane_gaps);
         const first_extent = extent(first, branch.axis);
         const second_extent = extent(second, branch.axis);
+
         return first_extent >= layout.minimumExtent(branch.first, branch.axis) and
             second_extent >= layout.minimumExtent(branch.second, branch.axis);
     }
