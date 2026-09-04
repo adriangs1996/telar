@@ -467,13 +467,11 @@ pub const State = struct {
         );
         state.attachment_store.prepare(state.graphics_plan.attachments);
         state.kitty_modal.prepare(state.graphics_plan.modal_area, state.palette());
-        try state.kitty_sidebar.prepare(
-            state.graphics_plan.sidebar_area,
-            state.graphics_plan.focused_card,
-            state.graphics_plan.provider_marks[0..state.graphics_plan.provider_mark_count],
-            state.cell_width_px,
-            state.cell_height_px,
-        );
+        try state.kitty_sidebar.prepare(.{
+            .area = state.graphics_plan.sidebar_area,
+            .focused_card = state.graphics_plan.focused_card,
+            .provider_marks = state.graphics_plan.provider_marks[0..state.graphics_plan.provider_mark_count],
+        }, .{ .width = state.cell_width_px, .height = state.cell_height_px });
         var icon_fallback_changed = false;
         state.kitty_icons.prepare(state.graphics_plan.icons.slice()) catch {
             state.kitty_icons.disable();

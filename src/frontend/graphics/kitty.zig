@@ -1933,6 +1933,17 @@ pub const SidebarFocus = struct {
     color: [3]u8,
 };
 
+pub const SidebarContent = struct {
+    area: core.ui.Rect,
+    focused_card: ?SidebarFocus,
+    provider_marks: []const SidebarProviderPlacement,
+};
+
+pub const CellSize = struct {
+    width: u16,
+    height: u16,
+};
+
 /// Media assets for the hybrid sidebar. Cells retain the complete fallback,
 /// hover, text, and hit targets; graphics add only the rounded focus edge and
 /// official provider artwork.
@@ -1997,19 +2008,21 @@ pub const KittySidebarRenderer = struct {
         return renderer.focused_card_pixels.len + renderer.provider_atlas.len;
     }
 
-    pub fn prepare(renderer: *KittySidebarRenderer, area: core.ui.Rect, focused_card: ?SidebarFocus, provider_marks: []const SidebarProviderPlacement, cell_width: u16, cell_height: u16) !void {
-        if (provider_marks.len > max_provider_placements) {
+    /// Prepares sidebar graphics for one cell-layout frame.
+    /// For example: `try renderer.prepare(content, .{ .width = 10, .height = 20 })`.
+    pub fn prepare(renderer: *KittySidebarRenderer, content: SidebarContent, cell: CellSize) !void {
+        if (content.provider_marks.len > max_provider_placements) {
             return error.TooManySidebarPlacements;
         }
-        if (area.isEmpty() or cell_width == 0 or cell_height == 0) {
+        if (content.area.isEmpty() or cell.width == 0 or cell.height == 0) {
             renderer.visible = false;
             renderer.placements_dirty = renderer.emitted;
             return;
         }
-        try renderer.prepareFocusedCard(focused_card, cell_width, cell_height);
-        const provider_scale = @max(@as(u32, 1), provider_raster_size / @as(u32, @min(cell_width, cell_height)));
-        const provider_slot_width = std.math.mul(u32, cell_width, provider_scale) catch return error.SidebarTooLarge;
-        const provider_slot_height = std.math.mul(u32, cell_height, provider_scale) catch return error.SidebarTooLarge;
+        try renderer.prepareFocusedCard(content.focused_card, cell);
+        const provider_scale = @max(@as(u32, 1), provider_raster_size / @as(u32, @min(cell.width, cell.height)));
+        const provider_slot_width = std.math.mul(u32, cell.width, provider_scale) catch return error.SidebarTooLarge;
+        const provider_slot_height = std.math.mul(u32, cell.height, provider_scale) catch return error.SidebarTooLarge;
         const provider_atlas_width = std.math.mul(u32, provider_count, provider_slot_width) catch return error.SidebarTooLarge;
         const provider_atlas_height = provider_slot_height;
         const provider_atlas_len = try rgbaLength(provider_atlas_width, provider_atlas_height);
@@ -2033,29 +2046,29 @@ pub const KittySidebarRenderer = struct {
                 provider_slot_height,
             );
             renderer.provider_emitted = false;
-            renderer.provider_dirty = provider_marks.len != 0;
+            renderer.provider_dirty = content.provider_marks.len != 0;
             renderer.placements_dirty = true;
         }
         if (!renderer.visible) {
-            renderer.provider_dirty = provider_marks.len != 0;
+            renderer.provider_dirty = content.provider_marks.len != 0;
             renderer.placements_dirty = true;
         }
-        if (!std.meta.eql(renderer.area, area)) {
+        if (!std.meta.eql(renderer.area, content.area)) {
             renderer.placements_dirty = true;
         }
-        if (!providerPlacementsEqual(renderer.provider_marks[0..renderer.provider_mark_count], provider_marks)) {
-            @memcpy(renderer.provider_marks[0..provider_marks.len], provider_marks);
-            renderer.provider_mark_count = @intCast(provider_marks.len);
+        if (!providerPlacementsEqual(renderer.provider_marks[0..renderer.provider_mark_count], content.provider_marks)) {
+            @memcpy(renderer.provider_marks[0..content.provider_marks.len], content.provider_marks);
+            renderer.provider_mark_count = @intCast(content.provider_marks.len);
             renderer.placements_dirty = true;
         }
-        if (provider_marks.len != 0 and !renderer.provider_emitted) {
+        if (content.provider_marks.len != 0 and !renderer.provider_emitted) {
             renderer.provider_dirty = true;
         }
-        renderer.area = area;
+        renderer.area = content.area;
         renderer.visible = true;
     }
 
-    fn prepareFocusedCard(renderer: *KittySidebarRenderer, focused: ?SidebarFocus, cell_width: u16, cell_height: u16) !void {
+    fn prepareFocusedCard(renderer: *KittySidebarRenderer, focused: ?SidebarFocus, cell: CellSize) !void {
         const next_card = if (focused) |value| value.area else null;
         if (!std.meta.eql(renderer.focused_card, next_card)) {
             renderer.placements_dirty = true;
@@ -2065,9 +2078,9 @@ pub const KittySidebarRenderer = struct {
             renderer.focused_card_dirty = false;
             return;
         };
-        const target_width = std.math.mul(u32, value.area.w, cell_width) catch
+        const target_width = std.math.mul(u32, value.area.w, cell.width) catch
             return error.SidebarTooLarge;
-        const target_height = std.math.mul(u32, value.area.h, cell_height) catch
+        const target_height = std.math.mul(u32, value.area.h, cell.height) catch
             return error.SidebarTooLarge;
         const raster_size = fitWithinPixels(
             target_width,
@@ -2086,7 +2099,7 @@ pub const KittySidebarRenderer = struct {
         const byte_len = try rgbaLength(raster_size.width, raster_size.height);
         const next_pixels = try renderer.gpa.alloc(u8, byte_len);
         errdefer renderer.gpa.free(next_pixels);
-        const target_radius = @max(@as(u32, 2), @min(@as(u32, 12), cell_height / 3));
+        const target_radius = @max(@as(u32, 2), @min(@as(u32, 12), cell.height / 3));
         const raster_radius = @max(
             @as(u32, 1),
             (@as(u64, target_radius) * raster_size.width + target_width / 2) / target_width,
@@ -3691,7 +3704,7 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
             .provider = .pi,
         },
     };
-    try renderer.prepare(area, null, &providers, 10, 20);
+    try renderer.prepare(.{ .area = area, .focused_card = null, .provider_marks = &providers }, .{ .width = 10, .height = 20 });
     try std.testing.expectEqual(@as(u32, 60), renderer.provider_slot_width);
     try std.testing.expectEqual(@as(u32, 120), renderer.provider_slot_height);
     var initial_buffer: [128 * 1024]u8 = undefined;
@@ -3702,18 +3715,18 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
     try std.testing.expect(std.mem.indexOf(u8, initial.buffered(), "x=120,y=0,w=60,h=120,c=2,r=2") != null);
     try std.testing.expect(renderer.provider_emitted);
 
-    try renderer.prepare(area, null, &providers, 10, 20);
+    try renderer.prepare(.{ .area = area, .focused_card = null, .provider_marks = &providers }, .{ .width = 10, .height = 20 });
     try std.testing.expect(!renderer.damaged());
 
     // A cell-size change while no agents are visible must still invalidate the
     // resident atlas before a later provider reuses it.
-    try renderer.prepare(area, null, &.{}, 9, 18);
+    try renderer.prepare(.{ .area = area, .focused_card = null, .provider_marks = &.{} }, .{ .width = 9, .height = 18 });
     var cleared_buffer: [4096]u8 = undefined;
     var cleared = Io.Writer.fixed(&cleared_buffer);
     _ = try renderer.write(&cleared);
     try std.testing.expect(!renderer.provider_emitted);
 
-    try renderer.prepare(area, null, &providers, 9, 18);
+    try renderer.prepare(.{ .area = area, .focused_card = null, .provider_marks = &providers }, .{ .width = 9, .height = 18 });
     try std.testing.expect(renderer.provider_dirty);
     var resized_buffer: [128 * 1024]u8 = undefined;
     var resized = Io.Writer.fixed(&resized_buffer);
@@ -3731,7 +3744,7 @@ test "sidebar focused card is rounded bounded and moves without retransmission" 
         .area = .{ .x = 2, .y = 4, .w = 57, .h = 3 },
         .color = color,
     };
-    try renderer.prepare(area, first, &.{}, 10, 20);
+    try renderer.prepare(.{ .area = area, .focused_card = first, .provider_marks = &.{} }, .{ .width = 10, .height = 20 });
     try std.testing.expect(
         renderer.focused_card_pixels.len <= KittySidebarRenderer.max_focused_card_pixels * 4,
     );
@@ -3755,7 +3768,7 @@ test "sidebar focused card is rounded bounded and moves without retransmission" 
         .area = .{ .x = 2, .y = 8, .w = 57, .h = 3 },
         .color = color,
     };
-    try renderer.prepare(area, moved, &.{}, 10, 20);
+    try renderer.prepare(.{ .area = area, .focused_card = moved, .provider_marks = &.{} }, .{ .width = 10, .height = 20 });
     var moved_buffer: [4096]u8 = undefined;
     var moved_writer = Io.Writer.fixed(&moved_buffer);
     _ = try renderer.write(&moved_writer);
