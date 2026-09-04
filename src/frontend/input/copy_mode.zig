@@ -169,7 +169,7 @@ pub const State = struct {
         state.gotoMatch(selected orelse switch (state.search_direction) {
             .forward => 0,
             .backward => state.match_count - 1,
-        }, viewport.scroll, viewport.rows);
+        }, viewport);
     }
 
     /// Moves to the next or previous stored match, wrapping around.
@@ -185,21 +185,21 @@ pub const State = struct {
         const count: i16 = state.match_count;
         var index: i16 = state.match_index;
         index = @mod(index + delta, count);
-        state.gotoMatch(@intCast(index), viewport.scroll, viewport.rows);
+        state.gotoMatch(@intCast(index), viewport);
     }
 
     pub fn matchSlice(state: *const State) []const schema.SearchMatch {
         return state.matches[0..state.match_count];
     }
 
-    fn gotoMatch(state: *State, index: u8, scroll: schema.frame.Scroll, rows: u16) void {
+    fn gotoMatch(state: *State, index: u8, viewport: Viewport) void {
         const match = state.matches[index];
         state.match_index = index;
         state.anchor = .{ .x = match.x, .y = match.y };
         state.linewise = false;
         state.cursor = .{ .x = match.x + match.len - 1, .y = match.y };
-        state.cursor.y = @min(state.cursor.y, scroll.total_rows -| 1);
-        state.reveal(rows, scroll);
+        state.cursor.y = @min(state.cursor.y, viewport.scroll.total_rows -| 1);
+        state.reveal(viewport.rows, viewport.scroll);
     }
 
     fn reveal(state: *State, rows: u16, scroll: schema.frame.Scroll) void {
