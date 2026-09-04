@@ -229,7 +229,9 @@ fn drawAgentLine(context: *widget.Context, line_input: AgentLineInput) void {
 
     const body: ui.Rect = .{ .x = row.x + 2, .y = y, .w = row.w -| 3, .h = 1 };
     if (line == 0) {
-        drawAgentTitle(context, input, semantic, body, agent, row_bg);
+        var title_input = line_input;
+        title_input.background = row_bg;
+        drawAgentTitle(context, title_input, body);
     } else if (line == 1) {
         drawAgentLocation(context, .{
             .area = body,
@@ -243,7 +245,12 @@ fn drawAgentLine(context: *widget.Context, line_input: AgentLineInput) void {
     context.hits.add(row, action);
 }
 
-fn drawAgentTitle(context: *widget.Context, input: Input, semantic: *Semantic, area: ui.Rect, agent: *const agents.Agent, background: ui.Color) void {
+fn drawAgentTitle(context: *widget.Context, line_input: AgentLineInput, area: ui.Rect) void {
+    const input = line_input.sidebar;
+    const semantic = line_input.semantic;
+    const agent = line_input.agent;
+    const background = line_input.background;
+
     if (area.w == 0) {
         return;
     }
