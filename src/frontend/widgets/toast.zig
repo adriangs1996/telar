@@ -8,6 +8,12 @@ pub const card_height: u16 = 4;
 pub const card_gap: u16 = 1;
 pub const max_width: u16 = 48;
 
+const RenderMode = struct {
+    area: ui.Rect,
+    center: *const notifications.Center,
+    paint: bool,
+};
+
 pub fn overlayArea(workbench: ui.Rect) ui.Rect {
     if (workbench.w < 12 or workbench.h < card_height) {
         return .{};
@@ -29,16 +35,22 @@ pub fn overlayArea(workbench: ui.Rect) ui.Rect {
     };
 }
 
+/// Renders visible notification cards and their semantic targets.
+/// For example: `render(context, area, center);`.
 pub fn render(context: *widget.Context, area: ui.Rect, center: *const notifications.Center) void {
-    renderMode(context, area, center, true);
+    renderMode(context, .{ .area = area, .center = center, .paint = true });
 }
 
 /// Keeps the cell-aligned semantic targets when KGP owns the pixels.
+/// For example: `registerHits(context, area, center);`.
 pub fn registerHits(context: *widget.Context, area: ui.Rect, center: *const notifications.Center) void {
-    renderMode(context, area, center, false);
+    renderMode(context, .{ .area = area, .center = center, .paint = false });
 }
 
-fn renderMode(context: *widget.Context, area: ui.Rect, center: *const notifications.Center, paint: bool) void {
+fn renderMode(context: *widget.Context, mode: RenderMode) void {
+    const area = mode.area;
+    const center = mode.center;
+
     if (area.isEmpty() or !center.hasItems()) {
         return;
     }
@@ -58,7 +70,7 @@ fn renderMode(context: *widget.Context, area: ui.Rect, center: *const notificati
             .w = visible_width,
             .h = card_height,
         };
-        drawCard(context, card, item, paint);
+        drawCard(context, card, item, mode.paint);
     }
 }
 
