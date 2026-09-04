@@ -13,6 +13,11 @@ const RuntimeConnector = runtime_connection.RuntimeConnector;
 
 pub const max_entries = schema.max_agent_snapshot_entries;
 
+pub const ExecutionContext = struct {
+    writer: *Io.Writer,
+    environ: std.process.Environ,
+};
+
 pub const AgentCommandReport = struct {
     phase: schema.AgentCommandPhase,
     provider: []const u8,

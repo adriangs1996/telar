@@ -42,10 +42,7 @@ pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
     };
 }
 
-const Output = struct {
-    writer: *Io.Writer,
-    environ: std.process.Environ,
-};
+const Output = control.ExecutionContext;
 
 fn execute(session: *control.Session, options: AgentOptions, output: Output) !u8 {
     var snapshot: control.Snapshot = .{};

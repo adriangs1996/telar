@@ -25,7 +25,7 @@ pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
     const writer = &output.interface;
     defer writer.flush() catch {};
 
-    return execute(&session, options, writer, init.minimal.environ) catch |err| {
+    return execute(&session, options, .{ .writer = writer, .environ = init.minimal.environ }) catch |err| {
         std.debug.print("telar pane: {s}\n", .{control.describe(err)});
         return switch (err) {
             error.PaneNotFound, error.PaneExited => agent.exit_not_found,
@@ -34,26 +34,26 @@ pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
     };
 }
 
-fn execute(session: *control.Session, options: PaneOptions, writer: *Io.Writer, environ: std.process.Environ) !u8 {
+fn execute(session: *control.Session, options: PaneOptions, context: control.ExecutionContext) !u8 {
     const pane: control.Session.PaneRef = if (options.action == .focus)
         .{
-            .pane_id = try control.currentPaneId(environ),
-            .pane_generation = try control.currentPaneGeneration(environ),
+            .pane_id = try control.currentPaneId(context.environ),
+            .pane_generation = try control.currentPaneGeneration(context.environ),
         }
     else
-        try resolvePane(session, options.target, environ);
+        try resolvePane(session, options.target, context.environ);
 
     switch (options.action) {
         .read => {
             const text = try session.readPane(pane, .{ .rows = options.lines, .source = options.source });
             if (options.json) {
-                try writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ text.pane_id, text.truncated });
-                try control.writeJsonString(writer, text.text);
-                try writer.writeAll("}\n");
+                try context.writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ text.pane_id, text.truncated });
+                try control.writeJsonString(context.writer, text.text);
+                try context.writer.writeAll("}\n");
             } else {
-                try writer.writeAll(text.text);
+                try context.writer.writeAll(text.text);
                 if (text.text.len != 0 and text.text[text.text.len - 1] != '\n') {
-                    try writer.writeByte('\n');
+                    try context.writer.writeByte('\n');
                 }
                 if (text.truncated) {
                     std.debug.print("telar pane: older rows were omitted\n", .{});
@@ -75,7 +75,7 @@ fn execute(session: *control.Session, options: PaneOptions, writer: *Io.Writer, 
         .focus => {
             const result = try session.focusPane(pane, options.direction.?);
             if (options.json) {
-                try writer.print("{{\"changed\":{},\"focused_pane_id\":{d},\"reason\":\"{s}\"}}\n", .{
+                try context.writer.print("{{\"changed\":{},\"focused_pane_id\":{d},\"reason\":\"{s}\"}}\n", .{
                     result.outcome == .focused,
                     schema.id.raw(result.focused_pane_id),
                     @tagName(result.outcome),
