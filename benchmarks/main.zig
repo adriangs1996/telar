@@ -661,7 +661,12 @@ fn runOutboxInput(context: *OutboxContext, iterations: usize) !u64 {
 
 const KeybindAction = enum(u8) { detach, palette };
 const KeybindBinding = frontend.keybind.Binding(KeybindAction, 4);
-const KeybindRouter = frontend.keybind.Router(KeybindAction, 16, 4, 64, 32);
+const KeybindRouter = frontend.keybind.Router(KeybindAction, .{
+    .max_bindings = 16,
+    .max_keys = 4,
+    .input_capacity = 64,
+    .held_capacity = 32,
+});
 
 const KeybindContext = struct {
     router: KeybindRouter,

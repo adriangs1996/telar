@@ -22,10 +22,12 @@ const held_binding_bytes = 128;
 
 pub const Router = keybind.Router(
     Action,
-    lua_config.max_bindings,
-    lua_config.default_binding_max_keys,
-    chunk_size,
-    held_binding_bytes,
+    .{
+        .max_bindings = lua_config.max_bindings,
+        .max_keys = lua_config.default_binding_max_keys,
+        .input_capacity = chunk_size,
+        .held_capacity = held_binding_bytes,
+    },
 );
 
 comptime {

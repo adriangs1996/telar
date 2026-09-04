@@ -373,7 +373,21 @@ fn isPlainEscape(key: Key) bool {
     };
 }
 
-pub fn Router(comptime Action: type, comptime max_bindings: usize, comptime max_keys: usize, comptime input_capacity: usize, comptime held_capacity: usize) type {
+pub const RouterLimits = struct {
+    max_bindings: usize,
+    max_keys: usize,
+    input_capacity: usize,
+    held_capacity: usize,
+};
+
+/// Builds a fixed-capacity key router for one semantic action type.
+/// For example: `const InputRouter = Router(Action, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });`.
+pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
+    const max_bindings = limits.max_bindings;
+    const max_keys = limits.max_keys;
+    const input_capacity = limits.input_capacity;
+    const held_capacity = limits.held_capacity;
+
     if (input_capacity == 0 or held_capacity == 0) {
         @compileError("router buffers must be non-zero");
     }
@@ -947,7 +961,7 @@ const testing = std.testing;
 
 const TestAction = enum { detach, palette, next };
 const TestBinding = Binding(TestAction, 4);
-const TestRouter = Router(TestAction, 16, 4, 64, 32);
+const TestRouter = Router(TestAction, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });
 
 const Capture = struct {
     bytes: [256]u8 = undefined,
@@ -1143,7 +1157,7 @@ test "keymap accepts sibling sequences with one shared prefix" {
 test "keymap action representation does not affect sequence identity" {
     const SmallAction = enum(u8) { detach, palette };
     const SmallBinding = Binding(SmallAction, 4);
-    const SmallRouter = Router(SmallAction, 16, 4, 64, 32);
+    const SmallRouter = Router(SmallAction, .{ .max_bindings = 16, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 });
     const siblings = [_]SmallBinding{
         try .parse(&.{ "ctrl+b", "d" }, .detach),
         try .parse(&.{ "ctrl+b", "p" }, .palette),
