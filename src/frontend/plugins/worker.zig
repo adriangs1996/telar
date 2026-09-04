@@ -63,7 +63,7 @@ pub fn run(init: std.process.Init, entry_path: []const u8, action_name: []const 
         .lua_callback => |value| value,
         else => return error.InvalidPluginAction,
     };
-    const batch = generation.invokeCallback(reference, context, &diagnostic) catch |err| {
+    const batch = generation.invokeCallback(.{ .reference = reference, .context = context }, &diagnostic) catch |err| {
         std.debug.print("plugin action failed: {s}\n", .{diagnostic.message()});
         return err;
     };

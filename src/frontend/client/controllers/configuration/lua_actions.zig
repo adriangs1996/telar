@@ -43,16 +43,20 @@ fn invoke(raw_context: *anyopaque, command: Command, callback_context: lua_confi
 
     return switch (command) {
         .callback => |reference| if (generation.invokeCallback(
-            reference,
-            callback_context,
+            .{
+                .reference = reference,
+                .context = callback_context,
+            },
             &context.diagnostic,
         )) |batch|
             .{ .callback = batch }
         else |err|
             invocationFailure(context, err),
         .expression => |reference| if (generation.invokeExpression(
-            reference,
-            callback_context,
+            .{
+                .reference = reference,
+                .context = callback_context,
+            },
             &context.diagnostic,
         )) |decision|
             .{ .expression = decision }

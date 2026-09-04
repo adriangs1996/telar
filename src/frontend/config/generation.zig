@@ -96,6 +96,16 @@ pub const InputPaste = config_model.InputPaste;
 pub const InputDecision = config_model.InputDecision;
 pub const Limits = config_model.Limits;
 
+pub const CallbackInvocation = struct {
+    reference: action_mod.CallbackRef,
+    context: CallbackContext,
+};
+
+const CallbackPreparation = struct {
+    invocation: CallbackInvocation,
+    expression: bool,
+};
+
 pub const Meter = lua_runtime.Meter;
 pub const Vm = lua_runtime.Vm;
 
@@ -255,8 +265,10 @@ pub const Generation = struct {
         lua.lua_setglobal(state, "require");
     }
 
-    pub fn invokeCallback(generation: *Generation, reference: action_mod.CallbackRef, context: CallbackContext, diagnostic: *Diagnostic) !EffectBatch {
-        const callback = try generation.prepareCallback(reference, false, context, diagnostic);
+    /// Runs an action callback against one immutable client snapshot.
+    /// For example: `generation.invokeCallback(.{ .reference = callback, .context = snapshot }, diagnostic)`.
+    pub fn invokeCallback(generation: *Generation, invocation: CallbackInvocation, diagnostic: *Diagnostic) !EffectBatch {
+        const callback = try generation.prepareCallback(.{ .invocation = invocation, .expression = false }, diagnostic);
         _ = callback;
         const state = generation.vm.state;
         defer lua.lua_settop(state, 0);
@@ -267,8 +279,10 @@ pub const Generation = struct {
         return generation.parseEffectBatch(-1, diagnostic);
     }
 
-    pub fn invokeExpression(generation: *Generation, reference: action_mod.CallbackRef, context: CallbackContext, diagnostic: *Diagnostic) !InputDecision {
-        const callback = try generation.prepareCallback(reference, true, context, diagnostic);
+    /// Runs an input expression against one immutable client snapshot.
+    /// For example: `generation.invokeExpression(.{ .reference = expression, .context = snapshot }, diagnostic)`.
+    pub fn invokeExpression(generation: *Generation, invocation: CallbackInvocation, diagnostic: *Diagnostic) !InputDecision {
+        const callback = try generation.prepareCallback(.{ .invocation = invocation, .expression = true }, diagnostic);
         const state = generation.vm.state;
         defer lua.lua_settop(state, 0);
         if (lua.lua_pcallk(state, 1, 1, 0, 0, null) != lua.LUA_OK) {
@@ -299,13 +313,14 @@ pub const Generation = struct {
         return parseBarContent(state, -1, diagnostic);
     }
 
-    fn prepareCallback(generation: *Generation, reference: action_mod.CallbackRef, expression: bool, context: CallbackContext, diagnostic: *Diagnostic) !*const Callback {
+    fn prepareCallback(generation: *Generation, preparation: CallbackPreparation, diagnostic: *Diagnostic) !*const Callback {
+        const reference = preparation.invocation.reference;
         if (reference.generation != generation.number or reference.id >= generation.callback_count) {
             diagnostic.set("callback belongs to an obsolete configuration generation", .{});
             return error.StaleCallback;
         }
         const callback = &generation.callbacks[reference.id];
-        if (callback.expression != expression) {
+        if (callback.expression != preparation.expression) {
             diagnostic.set("callback kind does not match its binding", .{});
             return error.InvalidCallbackKind;
         }
@@ -316,7 +331,7 @@ pub const Generation = struct {
             default_callback_deadline_ns,
         );
         _ = lua.lua_rawgeti(state, lua.LUA_REGISTRYINDEX, callback.registry_ref);
-        pushReadonlyContext(state, context);
+        pushReadonlyContext(state, preparation.invocation.context);
         return callback;
     }
 
@@ -2381,14 +2396,13 @@ test "Lua callback receives an immutable snapshot and returns bounded effects" {
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 11 });
     defer generation.deinit();
     const batch = try generation.invokeCallback(
-        generation.snapshot.bindings[0].action.lua_callback,
-        .{
+        .{ .reference = generation.snapshot.bindings[0].action.lua_callback, .context = .{
             .sidebar_visible = true,
             .tab_count = 3,
             .active_tab_index = 1,
             .pane_count = 2,
             .focused_pane_id = 42,
-        },
+        } },
         &diagnostic,
     );
     try std.testing.expectEqual(@as(u8, 2), batch.len);
@@ -2421,14 +2435,13 @@ test "Lua callbacks produce bounded clickable notifications" {
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 12 });
     defer generation.deinit();
     const batch = try generation.invokeCallback(
-        generation.snapshot.bindings[0].action.lua_callback,
-        .{
+        .{ .reference = generation.snapshot.bindings[0].action.lua_callback, .context = .{
             .sidebar_visible = true,
             .tab_count = 1,
             .active_tab_index = 0,
             .pane_count = 1,
             .focused_pane_id = 42,
-        },
+        } },
         &diagnostic,
     );
     const notification = &batch.items[0].notification;
@@ -2459,14 +2472,13 @@ test "Lua expression returns semantic input instead of terminal bytes" {
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 3 });
     defer generation.deinit();
     const decision = try generation.invokeExpression(
-        generation.snapshot.bindings[0].action.lua_expr,
-        .{
+        .{ .reference = generation.snapshot.bindings[0].action.lua_expr, .context = .{
             .sidebar_visible = true,
             .tab_count = 1,
             .active_tab_index = 0,
             .pane_count = 1,
             .focused_pane_id = 1,
-        },
+        } },
         &diagnostic,
     );
     try std.testing.expect(decision == .keys);
@@ -2491,14 +2503,13 @@ test "Lua callback cannot mutate its context" {
     try std.testing.expectError(
         error.LuaCallbackFailed,
         generation.invokeCallback(
-            generation.snapshot.bindings[0].action.lua_callback,
-            .{
+            .{ .reference = generation.snapshot.bindings[0].action.lua_callback, .context = .{
                 .sidebar_visible = true,
                 .tab_count = 1,
                 .active_tab_index = 0,
                 .pane_count = 1,
                 .focused_pane_id = 1,
-            },
+            } },
             &diagnostic,
         ),
     );
@@ -2518,14 +2529,13 @@ test "Lua callback execution is interrupted by its instruction budget" {
     try std.testing.expectError(
         error.LuaCallbackFailed,
         generation.invokeCallback(
-            generation.snapshot.bindings[0].action.lua_callback,
-            .{
+            .{ .reference = generation.snapshot.bindings[0].action.lua_callback, .context = .{
                 .sidebar_visible = true,
                 .tab_count = 1,
                 .active_tab_index = 0,
                 .pane_count = 1,
                 .focused_pane_id = 1,
-            },
+            } },
             &diagnostic,
         ),
     );
@@ -2986,14 +2996,13 @@ test "profile overlays base config before CLI locks are applied" {
     try std.testing.expectEqualDeep(try keybind.parseKey("ctrl+s"), binding.keys[0]);
     try std.testing.expectEqualDeep(try keybind.parseKey("f"), binding.keys[1]);
     const decision = try generation.invokeExpression(
-        binding.action.lua_expr,
-        .{
+        .{ .reference = binding.action.lua_expr, .context = .{
             .sidebar_visible = false,
             .tab_count = 1,
             .active_tab_index = 0,
             .pane_count = 1,
             .focused_pane_id = 1,
-        },
+        } },
         &diagnostic,
     );
     try std.testing.expect(decision == .forward_binding);
