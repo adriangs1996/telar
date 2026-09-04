@@ -109,7 +109,7 @@ fn renderCells(context: *widget.Context, input: Input, semantic: *Semantic) void
         .w = area.w - 2,
         .h = area.h - 1,
     };
-    _ = drawRule(context, area, inside.y + 1, background);
+    _ = drawRule(context, .{ .area = area, .y = inside.y + 1, .background = background });
     semantic.list_area = .{
         .x = inside.x,
         .y = inside.y + 2,
@@ -305,6 +305,12 @@ const ScrollbarInput = struct {
     background: ui.Color,
 };
 
+const RuleInput = struct {
+    area: ui.Rect,
+    y: u16,
+    background: ui.Color,
+};
+
 fn drawAgentLocation(context: *widget.Context, input: AgentLocationInput) void {
     var location_buffer: [256]u8 = undefined;
     const workspace_label = input.agent.workspaceLabel();
@@ -480,7 +486,11 @@ fn drawScrollbar(context: *widget.Context, input: ScrollbarInput) void {
     }
 }
 
-fn drawRule(context: *widget.Context, area: ui.Rect, y: u16, background: ui.Color) u16 {
+fn drawRule(context: *widget.Context, input: RuleInput) u16 {
+    const area = input.area;
+    const y = input.y;
+    const background = input.background;
+
     const style: ui.Style = .{ .fg = context.palette.surface1, .bg = background };
     var x = area.x + 1;
     while (x < area.x + area.w - 1) : (x += 1)
