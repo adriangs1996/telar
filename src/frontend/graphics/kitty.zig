@@ -1612,13 +1612,13 @@ pub const KittyGraphicsWriter = struct {
         const source = geometry_input.placement.sourceRect(geometry_input.image) catch return null;
         const source_width: u32 = @intCast(source.width);
         const source_height: u32 = @intCast(source.height);
-        const width, const height = destinationSize(
-            geometry_input.placement,
-            source_width,
-            source_height,
-            self.cell_width,
-            self.cell_height,
-        );
+        const width, const height = destinationSize(.{
+            .placement = geometry_input.placement,
+            .source_width = source_width,
+            .source_height = source_height,
+            .cell_width = self.cell_width,
+            .cell_height = self.cell_height,
+        });
         if (width == 0 or height == 0) {
             return null;
         }
@@ -1670,22 +1670,30 @@ pub const OutputPlacement = struct {
     rows: u32,
 };
 
-fn destinationSize(placement: graphics.Placement, source_width: u32, source_height: u32, cell_width: u16, cell_height: u16) struct { u64, u64 } {
-    if (placement.columns == 0 and placement.rows == 0) {
-        return .{ source_width, source_height };
+const DestinationSizeInput = struct {
+    placement: graphics.Placement,
+    source_width: u32,
+    source_height: u32,
+    cell_width: u16,
+    cell_height: u16,
+};
+
+fn destinationSize(size_input: DestinationSizeInput) struct { u64, u64 } {
+    if (size_input.placement.columns == 0 and size_input.placement.rows == 0) {
+        return .{ size_input.source_width, size_input.source_height };
     }
-    if (placement.columns != 0 and placement.rows != 0) {
+    if (size_input.placement.columns != 0 and size_input.placement.rows != 0) {
         return .{
-            @as(u64, placement.columns) * cell_width -| placement.offset_x,
-            @as(u64, placement.rows) * cell_height -| placement.offset_y,
+            @as(u64, size_input.placement.columns) * size_input.cell_width -| size_input.placement.offset_x,
+            @as(u64, size_input.placement.rows) * size_input.cell_height -| size_input.placement.offset_y,
         };
     }
-    if (placement.columns != 0) {
-        const width = @as(u64, placement.columns) * cell_width -| placement.offset_x;
-        return .{ width, width * source_height / source_width };
+    if (size_input.placement.columns != 0) {
+        const width = @as(u64, size_input.placement.columns) * size_input.cell_width -| size_input.placement.offset_x;
+        return .{ width, width * size_input.source_height / size_input.source_width };
     }
-    const height = @as(u64, placement.rows) * cell_height -| placement.offset_y;
-    return .{ height * source_width / source_height, height };
+    const height = @as(u64, size_input.placement.rows) * size_input.cell_height -| size_input.placement.offset_y;
+    return .{ height * size_input.source_width / size_input.source_height, height };
 }
 
 /// Formats once into a bounded scratch buffer, writes the result, and
