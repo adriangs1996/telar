@@ -393,12 +393,12 @@ fn drawDialog(context: DrawContext, index: usize) void {
 
     const inside: ui.Rect = .{ .x = frame.x + 2, .y = frame.y + 2, .w = frame.w - 4, .h = frame.h - 4 };
     const task = state.tasks[index];
-    _ = buf.writeTruncated(inside, inside.x, inside.y, task.title, inside.w, .{
+    _ = buf.writeTruncated(inside, .{ .point = .{ .x = inside.x, .y = inside.y }, .text = task.title, .max_width = inside.w, .style = .{
         .fg = white,
         .bg = raised,
         .flags = .{ .bold = true },
-    });
-    _ = buf.writeTruncated(inside, inside.x, inside.y + 1, task.place, inside.w, .{ .fg = muted, .bg = raised });
+    } });
+    _ = buf.writeTruncated(inside, .{ .point = .{ .x = inside.x, .y = inside.y + 1 }, .text = task.place, .max_width = inside.w, .style = .{ .fg = muted, .bg = raised } });
 
     // The buttons, registered inside the layer so they beat the dismiss
     // rectangle underneath them.
@@ -494,7 +494,7 @@ fn drawSearch(context: DrawContext, y: u16) u16 {
 
     const width = right -| x;
     if (state.search.len == 0 and !focused) {
-        _ = buf.writeTruncated(row, x, y, "search tasks\u{2026}", width, .{ .fg = faint, .bg = field_bg });
+        _ = buf.writeTruncated(row, .{ .point = .{ .x = x, .y = y }, .text = "search tasks\u{2026}", .max_width = width, .style = .{ .fg = faint, .bg = field_bg } });
         return y + 1;
     }
 
@@ -736,11 +736,11 @@ fn drawTaskLine(context: DrawContext, position: TaskLine) void {
         0 => {
             // The chip is placed first so the title knows what room is left.
             const chip_width = if (task.chip == .none) 0 else drawTaskChip(.{ .state = state, .buffer = buf, .area = body }, index, task.chip);
-            _ = buf.writeTruncated(body, body.x, y, task.title, body.w -| chip_width -| 1, .{
+            _ = buf.writeTruncated(body, .{ .point = .{ .x = body.x, .y = y }, .text = task.title, .max_width = body.w -| chip_width -| 1, .style = .{
                 .fg = white,
                 .bg = row_bg,
                 .flags = .{ .bold = true },
-            });
+            } });
         },
         1 => {
             const icon: []const u8 = if (task.origin == .host) "\u{2302}" else "\u{2387}";
@@ -751,10 +751,10 @@ fn drawTaskLine(context: DrawContext, position: TaskLine) void {
             x += buf.writeText(body, .{ .point = .{ .x = x, .y = y }, .text = " \u{00b7} ", .style = .{ .fg = faint, .bg = row_bg } });
 
             const status_width = drawStatus(buf, .{ .area = body, .y = y, .task = task, .background = row_bg });
-            _ = buf.writeTruncated(body, x, y, task.place_detail, body.x + body.w -| x -| status_width -| 1, .{
+            _ = buf.writeTruncated(body, .{ .point = .{ .x = x, .y = y }, .text = task.place_detail, .max_width = body.x + body.w -| x -| status_width -| 1, .style = .{
                 .fg = muted,
                 .bg = row_bg,
-            });
+            } });
         },
         else => {
             const agent = task.origin == .agent;
@@ -769,7 +769,7 @@ fn drawTaskLine(context: DrawContext, position: TaskLine) void {
                 .bg = row_bg,
             } });
             x += buf.writeText(body, .{ .point = .{ .x = x, .y = y }, .text = " \u{00b7} ", .style = .{ .fg = faint, .bg = row_bg } });
-            _ = buf.writeTruncated(body, x, y, task.note, body.x + body.w -| x, .{ .fg = faint, .bg = row_bg });
+            _ = buf.writeTruncated(body, .{ .point = .{ .x = x, .y = y }, .text = task.note, .max_width = body.x + body.w -| x, .style = .{ .fg = faint, .bg = row_bg } });
         },
     }
 
@@ -906,11 +906,11 @@ fn drawFooter(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
     buf.fill(area, .{ .glyph = " ", .style = .{ .bg = bg } });
 
     if (state.flash.len > 0) {
-        _ = buf.writeTruncated(area, area.x + 1, area.y, state.flash, area.w -| 4, .{
+        _ = buf.writeTruncated(area, .{ .point = .{ .x = area.x + 1, .y = area.y }, .text = state.flash, .max_width = area.w -| 4, .style = .{
             .fg = mint,
             .bg = bg,
             .flags = .{ .bold = true },
-        });
+        } });
     } else {
         var x = area.x + 1;
         for (state.hints, 0..) |hint, index| {
@@ -941,7 +941,7 @@ fn drawPane(state: *const State, buf: *ui.Buffer, area: ui.Rect) void {
 
     const task = state.tasks[state.selected_task];
     var y = inner.y;
-    _ = buf.writeTruncated(inner, inner.x, y, task.title, inner.w, .{ .fg = white, .bg = bg, .flags = .{ .bold = true } });
+    _ = buf.writeTruncated(inner, .{ .point = .{ .x = inner.x, .y = y }, .text = task.title, .max_width = inner.w, .style = .{ .fg = white, .bg = bg, .flags = .{ .bold = true } } });
     y += 2;
 
     const lines = [_][]const u8{
@@ -958,7 +958,7 @@ fn drawPane(state: *const State, buf: *ui.Buffer, area: ui.Rect) void {
         if (y >= inner.y + inner.h) {
             break;
         }
-        _ = buf.writeTruncated(inner, inner.x, y, line, inner.w, .{ .fg = muted, .bg = bg });
+        _ = buf.writeTruncated(inner, .{ .point = .{ .x = inner.x, .y = y }, .text = line, .max_width = inner.w, .style = .{ .fg = muted, .bg = bg } });
         y += 1;
     }
 
@@ -978,7 +978,7 @@ fn drawPane(state: *const State, buf: *ui.Buffer, area: ui.Rect) void {
         },
     ) catch "";
     if (area.h >= 3) {
-        _ = buf.writeTruncated(inner, inner.x, area.y + area.h - 2, text, inner.w, .{ .fg = faint, .bg = bg });
+        _ = buf.writeTruncated(inner, .{ .point = .{ .x = inner.x, .y = area.y + area.h - 2 }, .text = text, .max_width = inner.w, .style = .{ .fg = faint, .bg = bg } });
     }
 }
 

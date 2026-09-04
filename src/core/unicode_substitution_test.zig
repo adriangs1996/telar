@@ -36,7 +36,7 @@ test "truncation measures with the injected table too" {
     defer buf.deinit();
 
     // "abcd" is eight columns here, so it does not fit in five.
-    const written = buf.writeTruncated(buf.area(), 0, 0, "abcd", 5, .{});
+    const written = buf.writeTruncated(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "abcd", .max_width = 5, .style = .{} });
     try testing.expect(written <= 5);
     try testing.expectEqualStrings("a", buf.at(0, 0).?.text());
 }

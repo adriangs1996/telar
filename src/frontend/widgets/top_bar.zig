@@ -204,13 +204,13 @@ fn renderList(context: *widget.Context, input: Input, active_id: ?schema.Workspa
             const width = @min(ui.measure(counter), row_end -| x);
             const rect: ui.Rect = .{ .x = x, .y = y, .w = width, .h = 1 };
             context.hits.add(rect, .toggle_workspace_list);
-            _ = context.buffer.writeTruncated(rect, x, y, counter, width, .{
+            _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = y }, .text = counter, .max_width = width, .style = .{
                 .fg = if (context.isHovered(.toggle_workspace_list))
                     context.palette.text
                 else
                     context.palette.subtext0,
                 .bg = context.palette.panel_bg,
-            });
+            } });
         }
         return;
     }
@@ -262,7 +262,7 @@ fn drawWorkspace(context: *widget.Context, snapshot: *const workspace_list.Snaps
         .{ .fg = context.palette.text, .bg = context.palette.surface0 }
     else
         .{ .fg = context.palette.overlay0, .bg = context.palette.panel_bg };
-    _ = context.buffer.writeTruncated(rect, x, y, label, width, style);
+    _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = y }, .text = label, .max_width = width, .style = style });
     return x + width;
 }
 
@@ -284,7 +284,7 @@ fn renderFallback(context: *widget.Context, input: Input, x: u16, row_end: u16, 
         .underline_color = context.palette.accent,
         .flags = .{ .bold = true, .underline = .single },
     };
-    _ = context.buffer.writeTruncated(rect, x, y, workspace, width, style);
+    _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = y }, .text = workspace, .max_width = width, .style = style });
 }
 
 fn listFits(snapshot: *const workspace_list.Snapshot, active_index: ?usize, active_name: []const u8, available: u16) bool {

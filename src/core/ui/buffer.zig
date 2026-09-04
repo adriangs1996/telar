@@ -34,6 +34,13 @@ pub const Buffer = struct {
         style: Style = .{},
     };
 
+    pub const TruncatedText = struct {
+        point: Point,
+        text: []const u8,
+        max_width: u16,
+        style: Style = .{},
+    };
+
     cells: []Cell,
     w: u16,
     h: u16,
@@ -221,12 +228,18 @@ pub const Buffer = struct {
     /// The ellipsis has to be measured too, and the cut has to land on a
     /// grapheme boundary: truncating by bytes is how a name ending in an accent
     /// turns into a replacement character.
-    pub fn writeTruncated(b: *Buffer, r: Rect, x: u16, y: u16, text: []const u8, max_width: u16, style: Style) u16 {
-        if (max_width == 0) {
+    ///
+    /// ```zig
+    /// buffer.writeTruncated(area, .{ .point = .{ .x = 0, .y = 0 }, .text = name, .max_width = 12 });
+    /// ```
+    pub fn writeTruncated(b: *Buffer, r: Rect, truncated: TruncatedText) u16 {
+        const write: TextWrite = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
+
+        if (truncated.max_width == 0) {
             return 0;
         }
-        if (measure(text) <= max_width) {
-            return b.writeText(r, .{ .point = .{ .x = x, .y = y }, .text = text, .style = style });
+        if (measure(write.text) <= truncated.max_width) {
+            return b.writeText(r, write);
         }
 
         // Measured, not assumed to be one column. It is one in every real
@@ -236,12 +249,12 @@ pub const Buffer = struct {
         const marker = measure(ellipsis);
         // Not even room for the marker. Drawing it alone would say a value was
         // cut without saying anything about the value.
-        if (marker >= max_width) {
+        if (marker >= truncated.max_width) {
             return 0;
         }
-        const budget = max_width - marker;
+        const budget = truncated.max_width - marker;
 
-        var it: GraphemeIterator = .{ .bytes = text };
+        var it: GraphemeIterator = .{ .bytes = write.text };
         var used: u32 = 0;
         var cut: usize = 0;
         while (it.next()) |cluster| {
@@ -251,12 +264,12 @@ pub const Buffer = struct {
             used += cluster.width;
             cut = it.index;
         }
-        const written = b.writeText(r, .{ .point = .{ .x = x, .y = y }, .text = text[0..cut], .style = style });
-        const ellipsis_x = @as(u32, x) + written;
+        const written = b.writeText(r, .{ .point = write.point, .text = write.text[0..cut], .style = write.style });
+        const ellipsis_x = @as(u32, write.point.x) + written;
         if (ellipsis_x > std.math.maxInt(u16)) {
             return written;
         }
-        return written + b.writeText(r, .{ .point = .{ .x = @intCast(ellipsis_x), .y = y }, .text = ellipsis, .style = style });
+        return written + b.writeText(r, .{ .point = .{ .x = @intCast(ellipsis_x), .y = write.point.y }, .text = ellipsis, .style = write.style });
     }
 
     /// Draws the end of `text`, prepending an ellipsis when it does not fit.
@@ -301,7 +314,7 @@ pub const Buffer = struct {
     pub fn writeRight(b: *Buffer, r: Rect, y: u16, text: []const u8, style: Style) u16 {
         const width = measure(text);
         if (width > r.w) {
-            return b.writeTruncated(r, r.x, y, text, r.w, style);
+            return b.writeTruncated(r, .{ .point = .{ .x = r.x, .y = y }, .text = text, .max_width = r.w, .style = style });
         }
         const start = @as(u32, r.x) + (r.w - width);
         if (start > std.math.maxInt(u16)) {
@@ -442,7 +455,7 @@ test "truncation lands on a grapheme boundary and leaves room for the ellipsis" 
 
     // Cutting "booking-flow-copy" by bytes at the same point would be fine, but
     // cutting an accented name would not, so the cut is by cluster either way.
-    const written = buf.writeTruncated(buf.area(), 0, 0, "booking-flow-copy", 8, .{});
+    const written = buf.writeTruncated(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "booking-flow-copy", .max_width = 8, .style = .{} });
     try testing.expectEqual(@as(u16, 8), written);
     try testing.expectEqualStrings("\u{2026}", buf.at(7, 0).?.text());
     try testing.expectEqualStrings("b", buf.at(0, 0).?.text());
@@ -454,7 +467,7 @@ test "truncation never splits a wide glyph" {
     defer buf.deinit();
 
     // Four columns available, one for the ellipsis, so one wide glyph fits.
-    const written = buf.writeTruncated(buf.area(), 0, 0, "漢字漢字", 4, .{});
+    const written = buf.writeTruncated(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "漢字漢字", .max_width = 4, .style = .{} });
     try testing.expect(written <= 4);
     try testing.expectEqual(@as(u8, 2), buf.at(0, 0).?.width);
 }
@@ -475,7 +488,7 @@ test "text that fits is not truncated" {
     const gpa = testing.allocator;
     var buf = try Buffer.init(gpa, 20, 1);
     defer buf.deinit();
-    const written = buf.writeTruncated(buf.area(), 0, 0, "main", 10, .{});
+    const written = buf.writeTruncated(buf.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "main", .max_width = 10, .style = .{} });
     try testing.expectEqual(@as(u16, 4), written);
     try testing.expectEqualStrings(" ", buf.at(4, 0).?.text());
 }

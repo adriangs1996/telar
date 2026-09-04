@@ -237,24 +237,17 @@ fn drawAgentTitle(context: *widget.Context, input: Input, semantic: *Semantic, a
     const glyph = agent.iconGlyph();
     const artwork = ui.icons.Icon.forProvider(agent.provider);
     if (glyph.len != 0) {
-        _ = context.buffer.writeTruncated(area, area.x, area.y, glyph, 1, icon_style);
+        _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = glyph, .max_width = 1, .style = icon_style });
     } else if (input.transparent and artwork != null) {
         semantic.addProviderMark(.{ .area = mark_area, .provider = agent.provider });
     } else {
         _ = context.drawIcon(area, area.x, area.y, artwork orelse .provider_unknown, icon_style);
     }
     const status_width = statusWidth(agent.status);
-    _ = context.buffer.writeTruncated(
-        area,
-        area.x + 3,
-        area.y,
-        if (agent.sessionTitle().len != 0)
-            agent.sessionTitle()
-        else
-            core.agent_manifest.generic_placeholder,
-        area.w -| status_width -| 3,
-        .{ .fg = context.palette.text, .bg = background, .flags = .{ .bold = true } },
-    );
+    _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x + 3, .y = area.y }, .text = if (agent.sessionTitle().len != 0)
+        agent.sessionTitle()
+    else
+        core.agent_manifest.generic_placeholder, .max_width = area.w -| status_width -| 3, .style = .{ .fg = context.palette.text, .bg = background, .flags = .{ .bold = true } } });
     drawStatus(context, area, agent.status, input.animation_frame, background);
 }
 
@@ -289,10 +282,10 @@ fn drawAgentLocation(context: *widget.Context, input: AgentLocationInput) void {
         ) catch ""
     else
         std.fmt.bufPrint(&location_buffer, "pane {d}", .{input.pane_index}) catch "";
-    _ = context.buffer.writeTruncated(input.area, input.area.x + 3, input.area.y, location, input.area.w -| 3, .{
+    _ = context.buffer.writeTruncated(input.area, .{ .point = .{ .x = input.area.x + 3, .y = input.area.y }, .text = location, .max_width = input.area.w -| 3, .style = .{
         .fg = context.palette.overlay0,
         .bg = input.background,
-    });
+    } });
 }
 
 fn projectedPaneIndex(input: Input, agent: *const agents.Agent) u16 {
@@ -315,7 +308,7 @@ fn drawAgentMeta(context: *widget.Context, area: ui.Rect, agent: *const agents.A
     var remaining = area.w - 3;
     const provider_width = ui.measure(provider);
     if (provider_width > remaining or agent.cwdLabel().len == 0) {
-        _ = context.buffer.writeTruncated(area, x, area.y, provider, remaining, style);
+        _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = x, .y = area.y }, .text = provider, .max_width = remaining, .style = style });
         return;
     }
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = provider, .style = style });
@@ -396,20 +389,13 @@ fn drawEmpty(context: *widget.Context, area: ui.Rect, background: ui.Color) void
     if (area.h < 2) {
         return;
     }
-    _ = context.buffer.writeTruncated(area, area.x + 2, area.y + 1, "No open agents", area.w -| 4, .{
+    _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x + 2, .y = area.y + 1 }, .text = "No open agents", .max_width = area.w -| 4, .style = .{
         .fg = context.palette.subtext0,
         .bg = background,
         .flags = .{ .bold = true },
-    });
+    } });
     if (area.h >= 4) {
-        _ = context.buffer.writeTruncated(
-            area,
-            area.x + 2,
-            area.y + 3,
-            "Agent sessions will appear here.",
-            area.w -| 4,
-            .{ .fg = context.palette.overlay0, .bg = background },
-        );
+        _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x + 2, .y = area.y + 3 }, .text = "Agent sessions will appear here.", .max_width = area.w -| 4, .style = .{ .fg = context.palette.overlay0, .bg = background } });
     }
 }
 

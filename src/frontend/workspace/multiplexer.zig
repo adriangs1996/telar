@@ -1411,11 +1411,11 @@ fn drawGraphicsPlaceholder(buffer: *ui.Buffer, area: ui.Rect, palette: *const th
     const width = @min(area.w, ui.measure(label));
     const x = area.x + (area.w - width) / 2;
     const y = area.y + area.h / 2;
-    _ = buffer.writeTruncated(area, x, y, label, width, .{
+    _ = buffer.writeTruncated(area, .{ .point = .{ .x = x, .y = y }, .text = label, .max_width = width, .style = .{
         .fg = palette.yellow,
         .bg = palette.surface_dim,
         .flags = .{ .bold = true },
-    });
+    } });
 }
 
 test "progress thread weaves determinate state and moves indeterminate shuttle" {

@@ -33,18 +33,11 @@ pub fn render(context: *widget.Context, area: ui.Rect, field: *Field, kind: Kind
         .h = 1,
     };
     const view = field.view(field_area.w);
-    _ = context.buffer.writeTruncated(
-        field_area,
-        field_x,
-        area.y,
-        view.text,
-        field_area.w,
-        .{
-            .fg = context.palette.text,
-            .bg = context.palette.surface0,
-            .flags = .{ .bold = true },
-        },
-    );
+    _ = context.buffer.writeTruncated(field_area, .{ .point = .{ .x = field_x, .y = area.y }, .text = view.text, .max_width = field_area.w, .style = .{
+        .fg = context.palette.text,
+        .bg = context.palette.surface0,
+        .flags = .{ .bold = true },
+    } });
     return .{
         .cursor_x = field_x + view.cursor,
         .cursor_y = area.y,

@@ -79,11 +79,11 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
     }
 
     const title: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 4, .h = 1 };
-    _ = context.buffer.writeTruncated(title, title.x, title.y, input.title, title.w, .{
+    _ = context.buffer.writeTruncated(title, .{ .point = .{ .x = title.x, .y = title.y }, .text = input.title, .max_width = title.w, .style = .{
         .fg = context.palette.accent,
         .bg = background,
         .flags = .{ .bold = true },
-    });
+    } });
 
     const inner = area.inner(1);
     const query: ui.Rect = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = 1 };
@@ -94,7 +94,7 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
     } });
     const field_width = query.w -| prefix_width;
     const view = input.field.view(field_width);
-    _ = context.buffer.writeTruncated(query, query.x + prefix_width, query.y, view.text, field_width, style);
+    _ = context.buffer.writeTruncated(query, .{ .point = .{ .x = query.x + prefix_width, .y = query.y }, .text = view.text, .max_width = field_width, .style = style });
 
     var row_y = query.y + 1;
     for (input.rows) |*row| {
@@ -105,11 +105,11 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
         const line: ui.Rect = .{ .x = inner.x, .y = row_y, .w = inner.w, .h = 1 };
         const row_background = if (row.selected) context.palette.surface1 else background;
         context.buffer.fill(line, .{ .glyph = " ", .style = .{ .fg = context.palette.text, .bg = row_background } });
-        _ = context.buffer.writeTruncated(line, line.x + 1, line.y, row.slice(), line.w -| 2, .{
+        _ = context.buffer.writeTruncated(line, .{ .point = .{ .x = line.x + 1, .y = line.y }, .text = row.slice(), .max_width = line.w -| 2, .style = .{
             .fg = if (row.selected) context.palette.accent else context.palette.text,
             .bg = row_background,
             .flags = .{ .bold = row.selected },
-        });
+        } });
         row_y += 1;
     }
 
@@ -125,10 +125,10 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
         "";
     if (footer_text.len != 0) {
         const footer: ui.Rect = .{ .x = area.x + 2, .y = area.y + area.h - 1, .w = area.w -| 4, .h = 1 };
-        _ = context.buffer.writeTruncated(footer, footer.x, footer.y, footer_text, footer.w, .{
+        _ = context.buffer.writeTruncated(footer, .{ .point = .{ .x = footer.x, .y = footer.y }, .text = footer_text, .max_width = footer.w, .style = .{
             .fg = context.palette.subtext0,
             .bg = background,
-        });
+        } });
     }
 
     return .{

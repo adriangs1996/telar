@@ -58,14 +58,14 @@ const Label = struct {
     fn draw(label: *const Label, context: *widget.Context, placement: Placement) void {
         const rect = placement.rect;
         const text_width = @min(ui.measure(label.text()), rect.w);
-        _ = context.buffer.writeTruncated(rect, rect.x, rect.y, label.text(), text_width, placement.style);
+        _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = rect.x, .y = rect.y }, .text = label.text(), .max_width = text_width, .style = placement.style });
         if (!label.fullscreen or rect.w < text_width + fullscreen_marker_width) {
             return;
         }
 
         const marker_x = rect.x + text_width;
         _ = context.drawIcon(rect, marker_x, rect.y, .pane_fullscreen, placement.style);
-        _ = context.buffer.writeTruncated(rect, marker_x + 1, rect.y, " ", 1, placement.style);
+        _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = marker_x + 1, .y = rect.y }, .text = " ", .max_width = 1, .style = placement.style });
     }
 };
 
@@ -85,7 +85,7 @@ pub fn render(context: *widget.Context, input: Input) void {
         const width = @min(ui.measure(label), input.area.w);
         const x = alignedStart(input, width);
         const rect: ui.Rect = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
-        _ = context.buffer.writeTruncated(rect, x, input.area.y, label, width, activeStyle(context));
+        _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = input.area.y }, .text = label, .max_width = width, .style = activeStyle(context) });
     }
 }
 
@@ -153,7 +153,7 @@ fn renderCollection(context: *widget.Context, input: Input, collection: *const t
             }
 
             const gap: ui.Rect = .{ .x = x, .y = input.area.y, .w = tab_gap, .h = 1 };
-            _ = context.buffer.writeTruncated(gap, x, input.area.y, " ", tab_gap, barStyle(context));
+            _ = context.buffer.writeTruncated(gap, .{ .point = .{ .x = x, .y = input.area.y }, .text = " ", .max_width = tab_gap, .style = barStyle(context) });
             x += tab_gap;
         }
 

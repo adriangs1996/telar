@@ -103,27 +103,13 @@ fn drawCard(context: *widget.Context, card: ui.Rect, item: *const notifications.
         .w = card.w -| 4,
         .h = 2,
     };
-    _ = context.buffer.writeTruncated(
-        content.row(0),
-        content.x,
-        content.y,
-        item.message(),
-        content.w,
-        body_style,
-    );
+    _ = context.buffer.writeTruncated(content.row(0), .{ .point = .{ .x = content.x, .y = content.y }, .text = item.message(), .max_width = content.w, .style = body_style });
     const hint = if (item.clickable()) "click to open" else "click to dismiss";
-    _ = context.buffer.writeTruncated(
-        content.row(1),
-        content.x,
-        content.y + 1,
-        hint,
-        content.w,
-        .{
-            .fg = if (hovered) accent else context.palette.subtext0,
-            .bg = background,
-            .flags = .{ .underline = if (hovered) .single else .none },
-        },
-    );
+    _ = context.buffer.writeTruncated(content.row(1), .{ .point = .{ .x = content.x, .y = content.y + 1 }, .text = hint, .max_width = content.w, .style = .{
+        .fg = if (hovered) accent else context.palette.subtext0,
+        .bg = background,
+        .flags = .{ .underline = if (hovered) .single else .none },
+    } });
 
     if (card.w >= 12) {
         const dismiss: widget.Action = .{ .notification_dismiss = item.id };

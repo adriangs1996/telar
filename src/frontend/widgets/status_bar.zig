@@ -150,18 +150,11 @@ fn renderCopy(context: *widget.Context, area: ui.Rect) void {
 }
 
 fn renderModeLabel(context: *widget.Context, area: ui.Rect, label: []const u8) u16 {
-    return area.x + context.buffer.writeTruncated(
-        area,
-        area.x,
-        area.y,
-        label,
-        area.w,
-        .{
-            .fg = context.palette.surface_dim,
-            .bg = context.palette.accent,
-            .flags = .{ .bold = true },
-        },
-    );
+    return area.x + context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = label, .max_width = area.w, .style = .{
+        .fg = context.palette.surface_dim,
+        .bg = context.palette.accent,
+        .flags = .{ .bold = true },
+    } });
 }
 
 fn renderPair(context: *widget.Context, area: ui.Rect, x: *u16, key: []const u8, label: []const u8) void {
@@ -184,7 +177,7 @@ fn write(context: *widget.Context, area: ui.Rect, x: *u16, text: []const u8, sty
     if (remaining == 0) {
         return;
     }
-    x.* += context.buffer.writeTruncated(area, x.*, area.y, text, remaining, style);
+    x.* += context.buffer.writeTruncated(area, .{ .point = .{ .x = x.*, .y = area.y }, .text = text, .max_width = remaining, .style = style });
 }
 
 fn formatKey(buffer: *[32]u8, key: keybind.Key) []const u8 {

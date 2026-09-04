@@ -60,14 +60,7 @@ pub fn renderShelf(context: *widget.Context, area: ui.Rect, snapshot: *const att
                 2 => "▧ image 3",
                 else => "▧ image 4",
             };
-            _ = context.buffer.writeTruncated(
-                image_area.row(image_area.h / 2),
-                image_area.x,
-                image_area.y + image_area.h / 2,
-                label,
-                image_area.w,
-                .{ .fg = context.palette.subtext0, .bg = background },
-            );
+            _ = context.buffer.writeTruncated(image_area.row(image_area.h / 2), .{ .point = .{ .x = image_area.x, .y = image_area.y + image_area.h / 2 }, .text = label, .max_width = image_area.w, .style = .{ .fg = context.palette.subtext0, .bg = background } });
             plan.thumbnails[plan.thumbnail_count] = .{ .id = item.id, .area = image_area };
             plan.thumbnail_count += 1;
         }
@@ -126,17 +119,10 @@ pub fn renderModal(context: *widget.Context, input: ModalInput) ui.Rect {
         context.buffer.box(area, border_style, null);
     }
     const title: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 6, .h = 1 };
-    _ = context.buffer.writeTruncated(
-        title,
-        title.x,
-        title.y,
-        "Image preview",
-        title.w,
-        .{
-            .fg = context.palette.accent,
-            .bg = background,
-        },
-    );
+    _ = context.buffer.writeTruncated(title, .{ .point = .{ .x = title.x, .y = title.y }, .text = "Image preview", .max_width = title.w, .style = .{
+        .fg = context.palette.accent,
+        .bg = background,
+    } });
     const close: ui.Rect = .{ .x = area.x + area.w - 3, .y = area.y, .w = 2, .h = 1 };
     context.hits.add(close, .attachment_modal_close);
     _ = context.buffer.writeText(close, .{ .point = .{ .x = close.x, .y = close.y }, .text = "× ", .style = .{
@@ -145,14 +131,7 @@ pub fn renderModal(context: *widget.Context, input: ModalInput) ui.Rect {
     } });
     const image_area = area.inner(2);
     if (!image_area.isEmpty()) {
-        _ = context.buffer.writeTruncated(
-            image_area.row(image_area.h / 2),
-            image_area.x,
-            image_area.y + image_area.h / 2,
-            "Kitty graphics unavailable — press Esc to close",
-            image_area.w,
-            .{ .fg = context.palette.subtext0, .bg = background },
-        );
+        _ = context.buffer.writeTruncated(image_area.row(image_area.h / 2), .{ .point = .{ .x = image_area.x, .y = image_area.y + image_area.h / 2 }, .text = "Kitty graphics unavailable — press Esc to close", .max_width = image_area.w, .style = .{ .fg = context.palette.subtext0, .bg = background } });
         input.plan.modal = .{ .id = id, .area = image_area };
     }
     return area;
