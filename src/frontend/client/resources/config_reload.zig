@@ -138,6 +138,24 @@ pub const Outcome = union(enum) {
     adopted: Adoption,
 };
 
+const RejectContext = struct {
+    state: *State,
+    gpa: std.mem.Allocator,
+    loaded: Loaded,
+
+    fn reject(context: RejectContext, comptime format: []const u8, args: anytype) Outcome {
+        var diagnostic: lua_config.Diagnostic = .{};
+        diagnostic.set(format, args);
+        context.state.clearOrphans();
+        context.state.mtime_ns = context.loaded.mtime_ns;
+        context.loaded.generation.deinit();
+        context.gpa.destroy(context.loaded.registry);
+        context.gpa.destroy(context.loaded.trust_store);
+
+        return .{ .rejected = diagnostic };
+    }
+};
+
 /// Resolves one finished reload attempt. A rejection frees the loaded
 /// objects and clears the orphan slots here — the unwind lives once. An
 /// adoption clears the slots and hands the objects to the caller, which
@@ -157,15 +175,13 @@ pub fn resolve(state: *State, args: ResolveArgs) Outcome {
             return .{ .rejected = failure.diagnostic };
         },
         .loaded => |loaded| {
+            const rejection: RejectContext = .{ .state = state, .gpa = args.gpa, .loaded = loaded };
             const snapshot = &loaded.generation.snapshot;
             const requested_sidebar = if (args.checks.sidebar_renderer_locked)
                 args.checks.current_sidebar
             else
                 snapshot.sidebar_rendering;
-            _ = requested_sidebar.resolve(args.checks.kitty_support) catch |err| return reject(
-                state,
-                args.gpa,
-                loaded,
+            _ = requested_sidebar.resolve(args.checks.kitty_support) catch |err| return rejection.reject(
                 "reloaded sidebar renderer is unavailable: {s}",
                 .{@errorName(err)},
             );
@@ -174,10 +190,7 @@ pub fn resolve(state: *State, args: ResolveArgs) Outcome {
                 .bindings = snapshot.bindingSlice(),
                 .escape_timeout_ns = snapshot.input_escape_timeout_ns,
                 .sequence_timeout_ns = snapshot.input_sequence_timeout_ns,
-            }) catch |err| return reject(
-                state,
-                args.gpa,
-                loaded,
+            }) catch |err| return rejection.reject(
                 "reloaded keymap is invalid: {s}",
                 .{@errorName(err)},
             );
@@ -193,17 +206,6 @@ pub fn resolve(state: *State, args: ResolveArgs) Outcome {
             } };
         },
     }
-}
-
-fn reject(state: *State, gpa: std.mem.Allocator, loaded: Loaded, comptime format: []const u8, args: anytype) Outcome {
-    var diagnostic: lua_config.Diagnostic = .{};
-    diagnostic.set(format, args);
-    state.clearOrphans();
-    state.mtime_ns = loaded.mtime_ns;
-    loaded.generation.deinit();
-    gpa.destroy(loaded.registry);
-    gpa.destroy(loaded.trust_store);
-    return .{ .rejected = diagnostic };
 }
 
 /// The pieces the async task has built so far, so every failure unwinds
@@ -344,13 +346,12 @@ test "a rejected load is freed once and reports why" {
     state.registry_orphan = registry;
     state.trust_orphan = trust;
 
-    const outcome = reject(
-        &state,
-        gpa,
-        .{ .generation = generation, .registry = registry, .trust_store = trust, .mtime_ns = 9 },
-        "test rejection: {s}",
-        .{"boom"},
-    );
+    const rejection: RejectContext = .{
+        .state = &state,
+        .gpa = gpa,
+        .loaded = .{ .generation = generation, .registry = registry, .trust_store = trust, .mtime_ns = 9 },
+    };
+    const outcome = rejection.reject("test rejection: {s}", .{"boom"});
     try std.testing.expect(outcome == .rejected);
     try std.testing.expectEqual(@as(i128, 9), state.mtime_ns);
     try std.testing.expect(state.generation_orphan == null);
