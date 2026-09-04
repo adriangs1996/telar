@@ -590,6 +590,77 @@ test "copy mode round trip: enter, select, copy, leave" {
     }
 }
 
+test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.options.editor = "nvim";
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.buffer.fill(pane.buffer.area(), " ", .{});
+    _ = pane.buffer.writeText(pane.buffer.area(), 0, 0, "file:///tmp/a%20b.txt", .{});
+    pane.cursor = .{ .visible = true, .x = 12, .y = 0 };
+
+    var handler: InputHandler = .{ .client = client };
+    _ = try client_actions.apply(client, .enter_copy_mode);
+    const version = client.model.version();
+    try handler.key(try keybind.parseKey("o"));
+
+    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try harness.settle();
+
+    var buffer: [512]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .create_tab);
+    var arguments = message.create_tab.launch.arguments();
+    try std.testing.expectEqualStrings("nvim", (try arguments.next()).?);
+    try std.testing.expectEqualStrings("/tmp/a b.txt", (try arguments.next()).?);
+    try std.testing.expect(try arguments.next() == null);
+}
+
+test "a left click opens a file URI and owns the complete mouse gesture" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.options.editor = "nvim";
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.buffer.fill(pane.buffer.area(), " ", .{});
+    _ = pane.buffer.writeText(pane.buffer.area(), 0, 0, "file:///tmp/click.txt", .{});
+    const pane_view = client.model.workspace.active().?.model.viewForPane(
+        pane.id,
+        client.view.workbench(),
+    ).?;
+
+    var handler: InputHandler = .{ .client = client };
+    try handler.mouse(.{
+        .x = pane_view.content.x + 10,
+        .y = pane_view.content.y,
+        .kind = .press,
+        .button = 0,
+    });
+    try std.testing.expect(client.link_pointer.owned);
+    try handler.mouse(.{
+        .x = pane_view.content.x + 10,
+        .y = pane_view.content.y,
+        .kind = .release,
+        .button = 0,
+    });
+    try std.testing.expect(!client.link_pointer.owned);
+    try harness.settle();
+
+    var buffer: [512]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(message == .create_tab);
+    var arguments = message.create_tab.launch.arguments();
+    try std.testing.expectEqualStrings("nvim", (try arguments.next()).?);
+    try std.testing.expectEqualStrings("/tmp/click.txt", (try arguments.next()).?);
+    try std.testing.expect(try arguments.next() == null);
+}
+
 test "native action preflight retires copy mode before concrete delivery" {
     var harness: TestHarness = undefined;
     try harness.init();

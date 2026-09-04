@@ -17,6 +17,7 @@ pub const notifications = @import("notifications/root.zig");
 pub const graphics = @import("graphics/root.zig");
 pub const attachments = @import("attachments/root.zig");
 pub const bars = @import("bars/root.zig");
+pub const links = @import("links/root.zig");
 pub const config = @import("config/root.zig");
 pub const plugins = @import("plugins/root.zig");
 pub const platform = @import("platform/root.zig");
@@ -48,6 +49,7 @@ test {
     _ = @import("graphics/root.zig");
     _ = @import("attachments/root.zig");
     _ = @import("bars/root.zig");
+    _ = @import("links/root.zig");
     _ = @import("agents/root.zig");
     _ = @import("sound/root.zig");
     _ = @import("workspace/root.zig");

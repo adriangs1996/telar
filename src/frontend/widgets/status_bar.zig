@@ -144,6 +144,7 @@ fn renderCopy(context: *widget.Context, area: ui.Rect) void {
     renderPair(context, area, &x, "g/G", "ends");
     renderPair(context, area, &x, "v/Space", "select");
     renderPair(context, area, &x, "V", "lines");
+    renderPair(context, area, &x, "o", "open link");
     renderPair(context, area, &x, "y/Enter", "copy");
     renderPair(context, area, &x, "q/Esc", "exit");
 }

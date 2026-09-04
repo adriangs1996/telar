@@ -6,6 +6,7 @@ const presentation = @import("../../../presentation/root.zig");
 const workspace_capability = @import("../../../workspace/root.zig");
 const input_application = @import("../../application/input/root.zig");
 const copy_mode_pointer = @import("copy_mode_pointer.zig");
+const link_openings = @import("link_openings.zig");
 const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
 const view_interactions = @import("view_interactions.zig");
 
@@ -39,11 +40,18 @@ pub fn apply(client: *Client, event: term.Event.Mouse) !Outcome {
             .context = &context,
             .copy_mode = copyMode,
             .view = view,
+            .link = link,
             .pane = pane,
         },
     };
 
     return use_case.execute(resolve(&context, event));
+}
+
+fn link(raw_context: *anyopaque, command: pointer_routing.Command) !bool {
+    const context: *Context = @ptrCast(@alignCast(raw_context));
+
+    return link_openings.pointer(context.client, context.model.?, command.event);
 }
 
 fn resolve(context: *Context, event: term.Event.Mouse) pointer_routing.Authority {

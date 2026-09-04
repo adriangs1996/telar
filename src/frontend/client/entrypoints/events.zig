@@ -14,6 +14,7 @@ const bar_updates = @import("../controllers/configuration/bar_updates.zig");
 const config_reloads = @import("../controllers/configuration/config_reloads.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
+const link_openings = @import("../controllers/input/link_openings.zig");
 const host_resizes = @import("../controllers/host/host_resizes.zig");
 const notifications = @import("../controllers/notifications/notifications.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
@@ -103,6 +104,7 @@ fn route(client: *Client, event: Event, resources: Resources) !Outcome {
             }
         },
         .clipboard_image => |result| try clipboard_images.complete(client, result),
+        .link_opened => |result| try link_openings.complete(client, result),
     }
 
     return .keep_running;
@@ -130,6 +132,7 @@ fn pathFor(tag: EventTag) diagnostics.Path {
         .telemetry_written,
         .config_reload,
         .plugin_result,
+        .link_opened,
         => .observation,
     };
 }
@@ -157,6 +160,7 @@ test "client event paths preserve interactive media and observation budgets" {
         .telemetry_written,
         .config_reload,
         .plugin_result,
+        .link_opened,
     };
 
     for (interactive) |tag| {

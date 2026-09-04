@@ -178,6 +178,7 @@ const Launch = struct {
             .trust_store = launch.trust_store,
             .trust_path = launch.trust_path,
             .profile = if (options.profile) |value| std.mem.span(value) else null,
+            .editor = configuredEditor(launch.process.minimal.environ),
         };
     }
 
@@ -212,6 +213,10 @@ fn supportsHostSharedMemory(environ: std.process.Environ) bool {
     return std.ascii.eqlIgnoreCase(terminal_program, "ghostty");
 }
 
+fn configuredEditor(environ: std.process.Environ) []const u8 {
+    return environ.getPosix("EDITOR") orelse "";
+}
+
 test "local Ghostty clients may use host shared memory" {
     var environment = try TestEnvironment.init(&.{.{ "TERM_PROGRAM", "Ghostty" }});
     defer environment.deinit();
@@ -235,4 +240,15 @@ test "other terminals do not use Ghostty shared memory" {
 
     try std.testing.expect(!supportsHostSharedMemory(.{ .block = environment.block }));
     try std.testing.expect(!supportsHostSharedMemory(.empty));
+}
+
+test "the client snapshots EDITOR without inventing a fallback" {
+    var environment = try TestEnvironment.init(&.{.{ "EDITOR", "/usr/bin/nvim" }});
+    defer environment.deinit();
+
+    try std.testing.expectEqualStrings(
+        "/usr/bin/nvim",
+        configuredEditor(.{ .block = environment.block }),
+    );
+    try std.testing.expectEqualStrings("", configuredEditor(.empty));
 }

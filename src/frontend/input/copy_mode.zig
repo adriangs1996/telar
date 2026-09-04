@@ -220,6 +220,8 @@ pub const Effect = struct {
     copy: bool = false,
     /// Ask the client to open the search input in this direction.
     search: ?Direction = null,
+    /// Ask the client to open the textual link under the copy cursor.
+    open_link: bool = false,
 };
 
 /// Interprets one key over the pane's visible cells. Pure: the only mutation
@@ -287,6 +289,8 @@ pub fn applyKey(state: *State, pressed: keybind.Key, buffer: *const ui.Buffer, s
             state.cycleMatch(if (state.search_direction == .forward) 1 else -1, scroll, buffer.h);
         } else if (char.eql("N")) {
             state.cycleMatch(if (state.search_direction == .forward) -1 else 1, scroll, buffer.h);
+        } else if (char.eql("o")) {
+            return .{ .open_link = true };
         } else if (char.eql("v") or char.eql(" ")) {
             state.toggleSelection(false);
         } else if (char.eql("V")) {
@@ -621,4 +625,16 @@ test "slash and question mark ask for the search input" {
     const backward = applyKey(&state, .{ .code = .{ .char = .init("?") } }, &buffer, scroll);
     try std.testing.expectEqual(Direction.backward, backward.search.?);
     try std.testing.expectEqual(Direction.backward, state.search_direction);
+}
+
+test "o asks the client to open the link under the cursor" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 5);
+    defer buffer.deinit();
+    const scroll: schema.frame.Scroll = .{ .total_rows = 5, .offset = 0 };
+    var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
+
+    const effect = applyKey(&state, .{ .code = .{ .char = .init("o") } }, &buffer, scroll);
+
+    try std.testing.expect(effect.open_link);
+    try std.testing.expect(!effect.exit);
 }

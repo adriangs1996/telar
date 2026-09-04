@@ -8,6 +8,7 @@ const bars_capability = @import("../../bars/root.zig");
 const lua_config = @import("../../config/root.zig");
 const graphics = @import("../../graphics/root.zig");
 const input_capability = @import("../../input/root.zig");
+const link_capability = @import("../../links/root.zig");
 const notifications = @import("../../notifications/root.zig");
 const frontend_ui = @import("../../ui/root.zig");
 const history_palette_mod = @import("history_palette.zig");
@@ -1806,6 +1807,19 @@ pub const Model = struct {
                         .next = next,
                         .viewport = copyModeViewport(pane, next.viewport_offset),
                         .search = direction,
+                    };
+                }
+                if (effect.open_link) {
+                    const target = link_capability.extract(&pane.buffer, pane.scroll, .{
+                        .x = next.cursor.x,
+                        .y = next.cursor.y,
+                    }) orelse return null;
+
+                    return .{
+                        .expected_revision = model.copy_revision,
+                        .previous = previous,
+                        .next = next,
+                        .open_link = target,
                     };
                 }
                 if (effect.exit) {

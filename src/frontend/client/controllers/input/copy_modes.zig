@@ -4,6 +4,7 @@ const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
 const input_application = @import("../../application/input/root.zig");
 const pane_viewports = @import("../panes/pane_viewports.zig");
+const link_openings = @import("link_openings.zig");
 
 const Client = @import("../../client.zig");
 const copy_mode = input_application.copy_mode;
@@ -83,9 +84,16 @@ fn handler(client: *Client) copy_mode.CopyModeHandler {
             .context = client,
             .copy = copySelection,
             .open_search = openSearch,
+            .open_link = openLink,
             .viewport = pane_viewports.effects(client),
         },
     };
+}
+
+fn openLink(context: *anyopaque, target: @import("../../../links/root.zig").Target) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+
+    _ = try link_openings.apply(client, target);
 }
 
 fn openSearch(context: *anyopaque, direction: input_capability.copy_mode.Direction) !void {

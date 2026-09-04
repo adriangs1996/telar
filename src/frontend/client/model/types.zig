@@ -8,6 +8,7 @@ const bars = @import("../../bars/root.zig");
 const lua_config = @import("../../config/root.zig");
 const graphics = @import("../../graphics/root.zig");
 const input_capability = @import("../../input/root.zig");
+const link_capability = @import("../../links/root.zig");
 const notifications = @import("../../notifications/root.zig");
 const frontend_ui = @import("../../ui/root.zig");
 const workspace_capability = @import("../../workspace/root.zig");
@@ -678,6 +679,8 @@ pub const CopyModePlan = struct {
     viewport: ?schema.SetPaneViewport = null,
     /// Open the search input in this direction after the commit.
     search: ?copy_mode.Direction = null,
+    /// Open this immutable target without committing copy-mode state.
+    open_link: ?link_capability.Target = null,
 };
 
 pub const CopyModeCommit = struct {

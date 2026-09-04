@@ -663,6 +663,32 @@ test "copy mode plans reject no-ops and stale commits" {
     try std.testing.expectEqual(version.copy + 1, model.version().copy);
 }
 
+test "copy mode plans the textual link under its cursor without mutation" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(pane_id, location, .{ .cols = 40, .rows = 5 });
+    const pane = model.workspace.findPane(pane_id).?;
+    pane.buffer.fill(pane.buffer.area(), " ", .{});
+    _ = pane.buffer.writeText(pane.buffer.area(), 0, 2, "file:///tmp/a%20b.txt", .{});
+    pane.cursor = .{ .visible = true, .x = 12, .y = 2 };
+    try std.testing.expect(model.enterCopyMode());
+    const version = model.version();
+
+    const plan = model.planCopyMode(.{ .key = try keybind.parseKey("o") }).?;
+
+    try std.testing.expectEqualStrings("file:///tmp/a%20b.txt", plan.open_link.?.uri());
+    try std.testing.expectEqualDeep(version, model.version());
+    try std.testing.expect(model.planCopyMode(.{ .key = try keybind.parseKey("o") }) != null);
+
+    pane.buffer.fill(pane.buffer.area(), " ", .{});
+    try std.testing.expect(model.planCopyMode(.{ .key = try keybind.parseKey("o") }) == null);
+}
+
 test "an active tab transition releases copy authority" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();

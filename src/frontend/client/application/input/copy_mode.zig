@@ -4,6 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
 const client_model = @import("../../model/root.zig");
+const link_capability = @import("../../../links/root.zig");
 const set_pane_viewport = @import("../panes/set_pane_viewport.zig");
 
 const keybind = input_capability.keybind;
@@ -13,6 +14,7 @@ pub const CopyModeEffects = struct {
     context: *anyopaque,
     copy: *const fn (*anyopaque, schema.CopySelection) anyerror!void,
     open_search: *const fn (*anyopaque, input_capability.copy_mode.Direction) anyerror!void,
+    open_link: *const fn (*anyopaque, link_capability.Target) anyerror!void,
     viewport: set_pane_viewport.PaneViewportEffects,
 };
 
@@ -44,6 +46,11 @@ pub const CopyModeHandler = struct {
     /// ```
     pub fn execute(handler: *CopyModeHandler, command: client_model.CopyModeCommand) !Outcome {
         const plan = handler.model.planCopyMode(command) orelse return .unchanged;
+        if (plan.open_link) |target| {
+            try handler.effects.open_link(handler.effects.context, target);
+
+            return .unchanged;
+        }
         if (plan.selection) |selection| {
             try handler.effects.copy(handler.effects.context, selection);
         }
@@ -100,6 +107,7 @@ const EffectsCapture = struct {
     viewport: ?client_model.PaneViewportChange = null,
     fail_copy: bool = false,
     search_opened: ?input_capability.copy_mode.Direction = null,
+    link_opened: ?link_capability.Target = null,
     fail_viewport: bool = false,
 
     fn port(capture: *EffectsCapture) CopyModeEffects {
@@ -107,6 +115,7 @@ const EffectsCapture = struct {
             .context = capture,
             .copy = copy,
             .open_search = openSearch,
+            .open_link = openLink,
             .viewport = .{
                 .context = capture,
                 .sync = syncViewport,
@@ -117,6 +126,11 @@ const EffectsCapture = struct {
     fn openSearch(context: *anyopaque, direction: input_capability.copy_mode.Direction) !void {
         const capture: *EffectsCapture = @ptrCast(@alignCast(context));
         capture.search_opened = direction;
+    }
+
+    fn openLink(context: *anyopaque, target: link_capability.Target) !void {
+        const capture: *EffectsCapture = @ptrCast(@alignCast(context));
+        capture.link_opened = target;
     }
 
     fn copy(context: *anyopaque, selection: schema.CopySelection) !void {
@@ -200,6 +214,27 @@ test "CopyModeHandler retains selection and revision when copy delivery fails" {
     try std.testing.expectEqualDeep(version, testing.model.version());
     try std.testing.expectEqual(@as(usize, 1), capture.copy_calls);
     try std.testing.expectEqual(@as(usize, 0), capture.viewport_calls);
+}
+
+test "CopyModeHandler opens a link without committing or leaving copy mode" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    const pane = testing.model.workspace.findPane(testing.pane_id).?;
+    try pane.buffer.resize(40, 5);
+    pane.buffer.fill(pane.buffer.area(), " ", .{});
+    _ = pane.buffer.writeText(pane.buffer.area(), 0, 4, "https://example.com/path", .{});
+    pane.cursor = .{ .visible = true, .x = 10, .y = 4 };
+
+    var capture: EffectsCapture = .{ .model = testing.model };
+    var handler: CopyModeHandler = .{ .model = testing.model, .effects = capture.port() };
+    try std.testing.expect(handler.enter());
+    const version = testing.model.version();
+
+    try std.testing.expectEqual(Outcome.unchanged, try handler.execute(.{ .key = try keybind.parseKey("o") }));
+
+    try std.testing.expectEqualStrings("https://example.com/path", capture.link_opened.?.uri());
+    try std.testing.expect(testing.model.copyModeActive());
+    try std.testing.expectEqualDeep(version, testing.model.version());
 }
 
 test "CopyModeHandler preserves a movement commit when viewport sync fails" {

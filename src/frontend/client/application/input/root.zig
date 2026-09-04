@@ -11,6 +11,7 @@ pub const lua_action = @import("lua_action.zig");
 pub const name_prompt = @import("name_prompt.zig");
 pub const name_prompt_opening = @import("name_prompt_opening.zig");
 pub const native_action = @import("native_action.zig");
+pub const open_link = @import("open_link.zig");
 pub const pane_input = @import("pane_input.zig");
 pub const pane_mouse = @import("pane_mouse.zig");
 pub const pane_paste = @import("pane_paste.zig");
@@ -32,6 +33,7 @@ test {
     _ = name_prompt;
     _ = name_prompt_opening;
     _ = native_action;
+    _ = open_link;
     _ = pane_input;
     _ = pane_mouse;
     _ = pane_paste;

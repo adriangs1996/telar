@@ -15,6 +15,7 @@ const client_layout_resource = @import("resources/client_layouts.zig");
 const client_view = @import("presentation/view.zig");
 const client_model = @import("model/root.zig");
 const lua_config = @import("../config/root.zig");
+const link_capability = @import("../links/root.zig");
 const sound_capability = @import("../sound/root.zig");
 const theme_capability = @import("../ui/theme.zig");
 const notification_capability = @import("../notifications/root.zig");
@@ -65,6 +66,8 @@ pub const Options = struct {
     trust_store: ?*core.plugin.TrustStore = null,
     trust_path: ?[]const u8 = null,
     profile: ?[]const u8 = null,
+    /// Executable used for local `file://` links. Empty disables file opening.
+    editor: []const u8 = "",
 };
 
 const clipboard_images = @import("controllers/host/clipboard_images.zig");
@@ -106,6 +109,7 @@ pub const ClientEvent = union(enum) {
     config_reload: anyerror!config_reload.ConfigReload,
     plugin_result: plugin_actions.Completion,
     clipboard_image: clipboard_images.Completion,
+    link_opened: anyerror!void,
 };
 
 const client_event_count = @typeInfo(ClientEvent).@"union".fields.len;
@@ -164,6 +168,8 @@ history_match_fts: bool = false,
 list_submission_alternate: bool = false,
 appearance_themes: AppearanceThemes = .{},
 clipboard_capture_resources: attachments.CaptureResources = .{},
+link_opening: link_capability.Opening = .{},
+link_pointer: link_capability.Pointer = .{},
 
 request_lifecycle: request_lifecycle_mod.State = .{},
 sidebar_animation_scheduler: sidebar_animations.Scheduler = .{},

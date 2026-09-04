@@ -7,6 +7,7 @@ pub const copy_mode_pointer = @import("copy_mode_pointer.zig");
 pub const copy_modes = @import("copy_modes.zig");
 pub const host_inputs = @import("host_inputs.zig");
 pub const key_routing = @import("key_routing.zig");
+pub const link_openings = @import("link_openings.zig");
 pub const name_prompts = @import("name_prompts.zig");
 pub const pane_inputs = @import("pane_inputs.zig");
 pub const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
@@ -23,6 +24,7 @@ test {
     _ = copy_modes;
     _ = host_inputs;
     _ = key_routing;
+    _ = link_openings;
     _ = name_prompts;
     _ = pane_inputs;
     _ = pane_mouse_inputs;
