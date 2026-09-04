@@ -1365,15 +1365,14 @@ pub const KittyGraphicsWriter = struct {
                 // so the resume reads the buffer that header described.
                 const source = if (partial.compressed) entry.compressed.? else entry.pixels;
                 self.stats.transmission_passes += 1;
-                const progress = try writeTransmissionChunks(
-                    writer,
-                    partial.external_id,
-                    entry.metadata,
-                    source,
-                    partial.offset,
-                    budget,
-                    partial.compressed,
-                );
+                const progress = try writeTransmissionChunks(writer, .{
+                    .external_id = partial.external_id,
+                    .image = entry.metadata,
+                    .pixels = source,
+                    .start_offset = partial.offset,
+                    .budget = budget,
+                    .compressed = partial.compressed,
+                });
                 written += progress.written;
                 if (progress.offset < source.len) {
                     self.store.partial.?.offset = progress.offset;
@@ -1468,15 +1467,14 @@ pub const KittyGraphicsWriter = struct {
             const compressed = image.compressed != null;
             const source = image.compressed orelse image.pixels;
             self.stats.transmission_passes += 1;
-            const progress = try writeTransmissionChunks(
-                writer,
-                image.external_id,
-                image.metadata,
-                source,
-                0,
-                budget,
-                compressed,
-            );
+            const progress = try writeTransmissionChunks(writer, .{
+                .external_id = image.external_id,
+                .image = image.metadata,
+                .pixels = source,
+                .start_offset = 0,
+                .budget = budget,
+                .compressed = compressed,
+            });
             written += progress.written;
             if (progress.offset < source.len) {
                 self.store.partial = .{
@@ -1708,28 +1706,38 @@ fn printCounted(writer: *Io.Writer, comptime format: []const u8, args: anytype) 
 
 pub const ChunkProgress = struct { written: usize, offset: usize };
 
+pub const TransmissionChunks = struct {
+    external_id: u32,
+    image: graphics.Image,
+    pixels: []const u8,
+    start_offset: usize,
+    budget: usize,
+    compressed: bool,
+};
+
 /// Emits transmission chunks for `pixels` starting at byte `start_offset`,
 /// spending roughly `budget` encoded bytes. Always makes progress: at least
 /// one chunk goes out even under a zero budget, so a caller looping on the
 /// offset cannot stall. `offset == pixels.len` in the result means the final
 /// `m=0` chunk went out and the transfer is closed.
-pub fn writeTransmissionChunks(writer: *Io.Writer, external_id: u32, image: graphics.Image, pixels: []const u8, start_offset: usize, budget: usize, compressed: bool) Io.Writer.Error!ChunkProgress {
+/// For example: `try writeTransmissionChunks(writer, transmission)`.
+pub fn writeTransmissionChunks(writer: *Io.Writer, transmission: TransmissionChunks) Io.Writer.Error!ChunkProgress {
     const Encoder = std.base64.standard.Encoder;
     const raw_chunk_size = 3072;
     var encoded: [4096]u8 = undefined;
-    var offset = start_offset;
+    var offset = transmission.start_offset;
     var written: usize = 0;
-    while (offset < pixels.len) {
-        if (written != 0 and written >= budget) {
+    while (offset < transmission.pixels.len) {
+        if (written != 0 and written >= transmission.budget) {
             break;
         }
-        const take = @min(raw_chunk_size, pixels.len - offset);
-        const payload = Encoder.encode(encoded[0..Encoder.calcSize(take)], pixels[offset..][0..take]);
-        const more = offset + take < pixels.len;
+        const take = @min(raw_chunk_size, transmission.pixels.len - offset);
+        const payload = Encoder.encode(encoded[0..Encoder.calcSize(take)], transmission.pixels[offset..][0..take]);
+        const more = offset + take < transmission.pixels.len;
         if (offset == 0) {
             written += try printCounted(writer, "\x1b_Ga=t,f={d},s={d},v={d},t=d,i={d},q=2{s},m={d};", .{
-                @intFromEnum(image.format), image.width,                    image.height,
-                external_id,                if (compressed) ",o=z" else "", @intFromBool(more),
+                @intFromEnum(transmission.image.format), transmission.image.width,                    transmission.image.height,
+                transmission.external_id,                if (transmission.compressed) ",o=z" else "", @intFromBool(more),
             });
         } else {
             written += try printCounted(writer, "\x1b_Gm={d};", .{@intFromBool(more)});
@@ -1776,15 +1784,14 @@ pub fn writePngTransmissionChunks(writer: *Io.Writer, external_id: u32, png: []c
 }
 
 pub fn writeTransmission(writer: *Io.Writer, external_id: u32, image: graphics.Image, pixels: []const u8) Io.Writer.Error!usize {
-    const progress = try writeTransmissionChunks(
-        writer,
-        external_id,
-        image,
-        pixels,
-        0,
-        std.math.maxInt(usize),
-        false,
-    );
+    const progress = try writeTransmissionChunks(writer, .{
+        .external_id = external_id,
+        .image = image,
+        .pixels = pixels,
+        .start_offset = 0,
+        .budget = std.math.maxInt(usize),
+        .compressed = false,
+    });
     return progress.written;
 }
 

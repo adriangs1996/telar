@@ -364,13 +364,20 @@ pub const Renderer = struct {
                 if (slot.transfer_offset == 0) {
                     slot.transfer_key = slot.key;
                 }
-                const progress = try kitty.writeTransmissionChunks(writer, imageId(index), .{
-                    .key = .{ .image_id = imageId(index), .generation = 1 },
-                    .format = .rgba,
-                    .width = slot.width,
-                    .height = slot.height,
-                    .byte_len = slot.pixels.len,
-                }, slot.pixels, slot.transfer_offset, kitty.transmission_budget_per_frame, false);
+                const progress = try kitty.writeTransmissionChunks(writer, .{
+                    .external_id = imageId(index),
+                    .image = .{
+                        .key = .{ .image_id = imageId(index), .generation = 1 },
+                        .format = .rgba,
+                        .width = slot.width,
+                        .height = slot.height,
+                        .byte_len = slot.pixels.len,
+                    },
+                    .pixels = slot.pixels,
+                    .start_offset = slot.transfer_offset,
+                    .budget = kitty.transmission_budget_per_frame,
+                    .compressed = false,
+                });
                 written += progress.written;
                 slot.transfer_offset = progress.offset;
                 if (progress.offset == slot.pixels.len) {

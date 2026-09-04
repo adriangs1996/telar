@@ -262,21 +262,20 @@ pub const Renderer = struct {
                     written += try kitty.writeDeleteImage(writer, imageId(index));
                     asset.emitted = false;
                 }
-                const progress = try kitty.writeTransmissionChunks(
-                    writer,
-                    imageId(index),
-                    .{
+                const progress = try kitty.writeTransmissionChunks(writer, .{
+                    .external_id = imageId(index),
+                    .image = .{
                         .key = .{ .image_id = imageId(index), .generation = 1 },
                         .format = .rgba,
                         .width = asset.width,
                         .height = asset.height,
                         .byte_len = asset.pixels.len,
                     },
-                    asset.pixels,
-                    asset.transfer_offset,
-                    kitty.transmission_budget_per_frame,
-                    false,
-                );
+                    .pixels = asset.pixels,
+                    .start_offset = asset.transfer_offset,
+                    .budget = kitty.transmission_budget_per_frame,
+                    .compressed = false,
+                });
                 written += progress.written;
                 asset.transfer_offset = progress.offset;
                 if (progress.offset != asset.pixels.len) {

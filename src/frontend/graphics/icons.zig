@@ -232,21 +232,20 @@ pub const Renderer = struct {
                 renderer.image_emitted = false;
                 renderer.emitted_placement_count = 0;
             }
-            const progress = try kitty.writeTransmissionChunks(
-                writer,
-                image_id,
-                .{
+            const progress = try kitty.writeTransmissionChunks(writer, .{
+                .external_id = image_id,
+                .image = .{
                     .key = .{ .image_id = image_id, .generation = 1 },
                     .format = .rgba,
                     .width = renderer.pixel_width,
                     .height = renderer.atlas_height,
                     .byte_len = renderer.atlas.len,
                 },
-                renderer.atlas,
-                renderer.transfer_offset,
-                kitty.transmission_budget_per_frame,
-                false,
-            );
+                .pixels = renderer.atlas,
+                .start_offset = renderer.transfer_offset,
+                .budget = kitty.transmission_budget_per_frame,
+                .compressed = false,
+            });
             written += progress.written;
             renderer.transfer_offset = progress.offset;
             if (progress.offset != renderer.atlas.len) {
