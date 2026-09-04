@@ -1855,7 +1855,7 @@ fn normalizedNameEql(left: []const u8, right: []const u8) bool {
 
 fn pushReadonlyContext(state: *lua.lua_State, context: CallbackContext) void {
     lua.lua_createtable(state, 0, 5);
-    setBooleanField(state, -1, "sidebar_visible", context.sidebar_visible);
+    setBooleanField(state, .{ .index = -1, .name = "sidebar_visible" }, context.sidebar_visible);
     setIntegerField(state, -1, "tab_count", context.tab_count);
     setIntegerField(state, -1, "active_tab_index", @as(u32, context.active_tab_index) + 1);
     setIntegerField(state, -1, "pane_count", context.pane_count);
@@ -1866,7 +1866,7 @@ fn pushReadonlyContext(state: *lua.lua_State, context: CallbackContext) void {
 
 fn pushReadonlyBarContext(state: *lua.lua_State, context: BarCallbackContext) void {
     lua.lua_createtable(state, 0, 9);
-    setBooleanField(state, -1, "sidebar_visible", context.client.sidebar_visible);
+    setBooleanField(state, .{ .index = -1, .name = "sidebar_visible" }, context.client.sidebar_visible);
     setIntegerField(state, -1, "tab_count", context.client.tab_count);
     setIntegerField(state, -1, "active_tab_index", @as(u32, context.client.active_tab_index) + 1);
     setIntegerField(state, -1, "pane_count", context.client.pane_count);
@@ -1885,7 +1885,7 @@ fn pushReadonlyBarContext(state: *lua.lua_State, context: BarCallbackContext) vo
     lua.lua_setfield(state, -2, "time");
 
     lua.lua_createtable(state, 0, 4);
-    setBooleanField(state, -1, "available", context.metrics != null);
+    setBooleanField(state, .{ .index = -1, .name = "available" }, context.metrics != null);
     if (context.metrics) |metrics| {
         setIntegerField(state, -1, "cpu_percent", metrics.cpu_percent);
         setIntegerField(state, -1, "memory_used_decigib", metrics.memory_used_decigib);
@@ -1930,10 +1930,15 @@ fn freezeTable(state: *lua.lua_State) void {
     lua.lua_remove(state, -2);
 }
 
-fn setBooleanField(state: *lua.lua_State, index: c_int, name: [*:0]const u8, value: bool) void {
-    const absolute = lua.lua_absindex(state, index);
+const FieldTarget = struct {
+    index: c_int,
+    name: [*:0]const u8,
+};
+
+fn setBooleanField(state: *lua.lua_State, target: FieldTarget, value: bool) void {
+    const absolute = lua.lua_absindex(state, target.index);
     lua.lua_pushboolean(state, @intFromBool(value));
-    lua.lua_setfield(state, absolute, name);
+    lua.lua_setfield(state, absolute, target.name);
 }
 
 fn setIntegerField(state: *lua.lua_State, index: c_int, name: [*:0]const u8, value: anytype) void {
