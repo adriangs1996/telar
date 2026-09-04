@@ -297,7 +297,7 @@ pub const State = struct {
     /// ```
     pub fn configureSidebar(state: *State, requested: kitty.SidebarRendering, configuration: kitty.Configuration) !void {
         const resolved = try requested.resolve(configuration.support);
-        const toast_changed = state.kitty_toasts.configure(configuration.support, configuration.cell_width, configuration.cell_height);
+        const toast_changed = state.kitty_toasts.configure(configuration);
         const modal_changed = state.kitty_modal.configure(configuration);
         const icons_changed = state.kitty_icons.configure(configuration);
         const attachments_changed = state.attachment_store.configure(configuration);

@@ -92,16 +92,18 @@ pub const Renderer = struct {
         return total;
     }
 
-    pub fn configure(renderer: *Renderer, support: kitty.Support, cell_width: u16, cell_height: u16) bool {
-        const supported = support == .supported;
-        if (renderer.supported == supported and renderer.cell_width == cell_width and
-            renderer.cell_height == cell_height)
+    /// Applies host graphics support and cell geometry to toast rendering.
+    /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
+    pub fn configure(renderer: *Renderer, configuration: kitty.Configuration) bool {
+        const supported = configuration.support == .supported;
+        if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
+            renderer.cell_height == configuration.cell_height)
         {
             return false;
         }
         renderer.supported = supported;
-        renderer.cell_width = cell_width;
-        renderer.cell_height = cell_height;
+        renderer.cell_width = configuration.cell_width;
+        renderer.cell_height = configuration.cell_height;
         for (&renderer.slots) |*slot| {
             slot.key = null;
             slot.failed_key = null;
@@ -651,7 +653,7 @@ fn optionalPlacementEql(a: ?kitty.OutputPlacement, b: ?kitty.OutputPlacement) bo
 test "terminal-derived palettes keep the cell fallback" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.supported, 10, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var center: notifications.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
     renderer.prepare(.{ .w = 48, .h = 4 }, &center, &theme.builtin(.terminal).palette);
@@ -663,7 +665,7 @@ test "Nerd Font theme rasterizes the close icon into graphical toasts" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
     try std.testing.expect(renderer.icons != null);
-    _ = renderer.configure(.supported, 10, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     renderer.setMediaIdle(true);
     var center: notifications.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
@@ -688,7 +690,7 @@ test "large toast transmission is chunked across bounded media passes" {
     defer renderer.deinit();
     // These are the cell dimensions from the instrumented Ghostty session:
     // one 48x4-cell toast is 1,056x232 pixels, or 979,968 retained RGBA bytes.
-    _ = renderer.configure(.supported, 22, 58);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 22, .cell_height = 58 });
     renderer.setMediaIdle(true);
     var center: notifications.Center = .{};
     const id = center.push(0, .{
@@ -745,7 +747,7 @@ test "large toast transmission is chunked across bounded media passes" {
 test "rasterization waits for media idle and oversized cells fall back" {
     var renderer = Renderer.init(std.testing.allocator);
     defer renderer.deinit();
-    _ = renderer.configure(.supported, 10, 20);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var center: notifications.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
     _ = center.advance(notifications.transition_duration_ns);
@@ -761,7 +763,7 @@ test "rasterization waits for media idle and oversized cells fall back" {
     renderer.prepare(area, &center, &theme.default_theme.palette);
     try std.testing.expect(renderer.transmissionPending());
 
-    _ = renderer.configure(.supported, 40, 80);
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 40, .cell_height = 80 });
     renderer.prepare(area, &center, &theme.default_theme.palette);
     try std.testing.expect(!renderer.frame_usable);
     try std.testing.expect(!renderer.coversAll());
