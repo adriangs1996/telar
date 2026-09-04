@@ -63,19 +63,20 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
             }, diagnostic);
         }
 
-        try parseCommandTools(state, entry, manifest, position, diagnostic);
-        try parsePresentation(state, .{ .entry = entry, .manifest = manifest, .position = position }, diagnostic);
+        const input: EntryInput = .{ .entry = entry, .manifest = manifest, .position = position };
+        try parseCommandTools(state, input, diagnostic);
+        try parsePresentation(state, input, diagnostic);
     }
 }
 
-fn parseCommandTools(state: *lua.lua_State, entry: c_int, manifest: *Manifest, position: usize, diagnostic: *config_model.Diagnostic) !void {
-    _ = lua.lua_getfield(state, entry, "command_tools");
+fn parseCommandTools(state: *lua.lua_State, input: EntryInput, diagnostic: *config_model.Diagnostic) !void {
+    _ = lua.lua_getfield(state, input.entry, "command_tools");
     defer value.pop(state, 1);
     if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
         return;
     }
     if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
-        diagnostic.set("config.runtime.agents[{d}].command_tools must be an array", .{position});
+        diagnostic.set("config.runtime.agents[{d}].command_tools must be an array", .{input.position});
         return error.InvalidConfig;
     }
 
@@ -86,7 +87,7 @@ fn parseCommandTools(state: *lua.lua_State, entry: c_int, manifest: *Manifest, p
         _ = lua.lua_rawgeti(state, tools, @intCast(tool_position));
         defer value.pop(state, 1);
         if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
-            diagnostic.set("config.runtime.agents[{d}].command_tools[{d}] must be a table", .{ position, tool_position });
+            diagnostic.set("config.runtime.agents[{d}].command_tools[{d}] must be a table", .{ input.position, tool_position });
             return error.InvalidConfig;
         }
 
@@ -96,9 +97,9 @@ fn parseCommandTools(state: *lua.lua_State, entry: c_int, manifest: *Manifest, p
         const tool = value.string(state, -1) orelse "";
         _ = lua.lua_getfield(state, mapping, "field");
         const field = value.string(state, -1) orelse "";
-        manifest.command_tools.append(tool, field) catch |err| {
+        input.manifest.command_tools.append(tool, field) catch |err| {
             value.pop(state, 2);
-            diagnostic.set("config.runtime.agents[{d}].command_tools[{d}] {s}", .{ position, tool_position, switch (err) {
+            diagnostic.set("config.runtime.agents[{d}].command_tools[{d}] {s}", .{ input.position, tool_position, switch (err) {
                 error.EmptyEntry => "requires non-empty tool and field strings",
                 error.EntryTooLong => "contains an oversized tool or field",
                 error.TooManyEntries => "exceeds the command tool limit",
@@ -109,7 +110,7 @@ fn parseCommandTools(state: *lua.lua_State, entry: c_int, manifest: *Manifest, p
     }
 }
 
-const PresentationInput = struct {
+const EntryInput = struct {
     entry: c_int,
     manifest: *Manifest,
     position: usize,
@@ -127,7 +128,7 @@ const TextValue = struct {
 };
 
 /// Reads the optional display fields and the attachment policy of one entry.
-fn parsePresentation(state: *lua.lua_State, input: PresentationInput, diagnostic: *config_model.Diagnostic) !void {
+fn parsePresentation(state: *lua.lua_State, input: EntryInput, diagnostic: *config_model.Diagnostic) !void {
     inline for (text_fields) |field| {
         const lookup: FieldLookup = .{ .entry = input.entry, .position = input.position, .field = field };
         if (try optionalText(state, lookup, diagnostic)) |text| {
@@ -175,7 +176,7 @@ fn optionalText(state: *lua.lua_State, lookup: FieldLookup, diagnostic: *config_
 
 /// Stores one presentation string on the manifest. `icon` must also occupy
 /// exactly one cell so custom marks align with the built-in artwork.
-fn applyText(input: PresentationInput, item: TextValue, diagnostic: *config_model.Diagnostic) !void {
+fn applyText(input: EntryInput, item: TextValue, diagnostic: *config_model.Diagnostic) !void {
     if (std.mem.eql(u8, item.field, "icon") and core.ui.measure(item.text) != 1) {
         diagnostic.set("config.runtime.agents[{d}].icon must be exactly one cell wide", .{input.position});
         return error.InvalidConfig;
