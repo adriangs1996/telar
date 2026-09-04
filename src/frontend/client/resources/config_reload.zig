@@ -105,6 +105,12 @@ pub const Checks = struct {
     current_sidebar: kitty.SidebarRendering,
 };
 
+pub const ResolveArgs = struct {
+    gpa: std.mem.Allocator,
+    reload: ConfigReload,
+    checks: Checks,
+};
+
 /// Everything a validated reload hands over: the owned configuration
 /// objects and the values already compiled from them.
 pub const Adoption = struct {
@@ -136,8 +142,12 @@ pub const Outcome = union(enum) {
 /// objects and clears the orphan slots here — the unwind lives once. An
 /// adoption clears the slots and hands the objects to the caller, which
 /// owns applying and swapping them.
-pub fn resolve(state: *State, gpa: std.mem.Allocator, reload: ConfigReload, checks: Checks) Outcome {
-    switch (reload) {
+///
+/// ```zig
+/// const outcome = resolve(&state, args);
+/// ```
+pub fn resolve(state: *State, args: ResolveArgs) Outcome {
+    switch (args.reload) {
         .unchanged => |mtime_ns| {
             state.mtime_ns = mtime_ns;
             return .unchanged;
@@ -148,13 +158,13 @@ pub fn resolve(state: *State, gpa: std.mem.Allocator, reload: ConfigReload, chec
         },
         .loaded => |loaded| {
             const snapshot = &loaded.generation.snapshot;
-            const requested_sidebar = if (checks.sidebar_renderer_locked)
-                checks.current_sidebar
+            const requested_sidebar = if (args.checks.sidebar_renderer_locked)
+                args.checks.current_sidebar
             else
                 snapshot.sidebar_rendering;
-            _ = requested_sidebar.resolve(checks.kitty_support) catch |err| return reject(
+            _ = requested_sidebar.resolve(args.checks.kitty_support) catch |err| return reject(
                 state,
-                gpa,
+                args.gpa,
                 loaded,
                 "reloaded sidebar renderer is unavailable: {s}",
                 .{@errorName(err)},
@@ -166,7 +176,7 @@ pub fn resolve(state: *State, gpa: std.mem.Allocator, reload: ConfigReload, chec
                 .sequence_timeout_ns = snapshot.input_sequence_timeout_ns,
             }) catch |err| return reject(
                 state,
-                gpa,
+                args.gpa,
                 loaded,
                 "reloaded keymap is invalid: {s}",
                 .{@errorName(err)},

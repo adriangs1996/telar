@@ -48,10 +48,14 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
     const reload = try result;
     var context: DeliveryContext = .{ .client = client };
     defer context.releaseOwned();
-    const resolution: config_delivery.Resolution = switch (reload_worker.resolve(&client.reload, client.gpa, reload, .{
-        .kitty_support = client.model.hostCapabilities().kitty_graphics,
-        .sidebar_renderer_locked = client.options.sidebar_renderer_locked,
-        .current_sidebar = client.sidebar_rendering,
+    const resolution: config_delivery.Resolution = switch (reload_worker.resolve(&client.reload, .{
+        .gpa = client.gpa,
+        .reload = reload,
+        .checks = .{
+            .kitty_support = client.model.hostCapabilities().kitty_graphics,
+            .sidebar_renderer_locked = client.options.sidebar_renderer_locked,
+            .current_sidebar = client.sidebar_rendering,
+        },
     })) {
         .unchanged => .unchanged,
         .rejected => |diagnostic| .{ .rejected = diagnostic },
