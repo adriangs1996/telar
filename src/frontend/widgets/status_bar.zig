@@ -130,23 +130,23 @@ pub fn renderMode(context: *widget.Context, area: ui.Rect, mode: Mode) void {
 
 fn renderPrefix(context: *widget.Context, area: ui.Rect, hints: *const Hints) void {
     var x = renderModeLabel(context, area, " PREFIX ");
-    renderPair(context, area, &x, "Esc", "cancel");
+    renderPair(context, .{ .area = area, .x = &x, .key = "Esc", .label = "cancel" });
     for (hints.slice()) |hint| {
         var key_buffer: [32]u8 = undefined;
-        renderPair(context, area, &x, formatKey(&key_buffer, hint.key), hint.label);
+        renderPair(context, .{ .area = area, .x = &x, .key = formatKey(&key_buffer, hint.key), .label = hint.label });
     }
 }
 
 fn renderCopy(context: *widget.Context, area: ui.Rect) void {
     var x = renderModeLabel(context, area, " COPY ");
-    renderPair(context, area, &x, "h/j/k/l", "move");
-    renderPair(context, area, &x, "w/b/e", "word");
-    renderPair(context, area, &x, "g/G", "ends");
-    renderPair(context, area, &x, "v/Space", "select");
-    renderPair(context, area, &x, "V", "lines");
-    renderPair(context, area, &x, "o", "open link");
-    renderPair(context, area, &x, "y/Enter", "copy");
-    renderPair(context, area, &x, "q/Esc", "exit");
+    renderPair(context, .{ .area = area, .x = &x, .key = "h/j/k/l", .label = "move" });
+    renderPair(context, .{ .area = area, .x = &x, .key = "w/b/e", .label = "word" });
+    renderPair(context, .{ .area = area, .x = &x, .key = "g/G", .label = "ends" });
+    renderPair(context, .{ .area = area, .x = &x, .key = "v/Space", .label = "select" });
+    renderPair(context, .{ .area = area, .x = &x, .key = "V", .label = "lines" });
+    renderPair(context, .{ .area = area, .x = &x, .key = "o", .label = "open link" });
+    renderPair(context, .{ .area = area, .x = &x, .key = "y/Enter", .label = "copy" });
+    renderPair(context, .{ .area = area, .x = &x, .key = "q/Esc", .label = "exit" });
 }
 
 fn renderModeLabel(context: *widget.Context, area: ui.Rect, label: []const u8) u16 {
@@ -157,15 +157,25 @@ fn renderModeLabel(context: *widget.Context, area: ui.Rect, label: []const u8) u
     } });
 }
 
-fn renderPair(context: *widget.Context, area: ui.Rect, x: *u16, key: []const u8, label: []const u8) void {
+const PairInput = struct {
+    area: ui.Rect,
+    x: *u16,
+    key: []const u8,
+    label: []const u8,
+};
+
+fn renderPair(context: *widget.Context, pair: PairInput) void {
+    const area = pair.area;
+    const x = pair.x;
+
     write(context, area, x, " ", .{ .bg = context.palette.panel_bg });
-    write(context, area, x, key, .{
+    write(context, area, x, pair.key, .{
         .fg = context.palette.accent,
         .bg = context.palette.panel_bg,
         .flags = .{ .bold = true },
     });
     write(context, area, x, " ", .{ .bg = context.palette.panel_bg });
-    write(context, area, x, label, .{
+    write(context, area, x, pair.label, .{
         .fg = context.palette.overlay0,
         .bg = context.palette.panel_bg,
     });
