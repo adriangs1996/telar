@@ -41,6 +41,12 @@ pub const Buffer = struct {
         style: Style = .{},
     };
 
+    pub const RightAlignedText = struct {
+        y: u16,
+        text: []const u8,
+        style: Style = .{},
+    };
+
     cells: []Cell,
     w: u16,
     h: u16,
@@ -317,16 +323,20 @@ pub const Buffer = struct {
     }
 
     /// Draws `text` so that it ends at the right edge of `r`.
-    pub fn writeRight(b: *Buffer, r: Rect, y: u16, text: []const u8, style: Style) u16 {
-        const width = measure(text);
+    ///
+    /// ```zig
+    /// buffer.writeRight(area, .{ .y = area.y, .text = "100%" });
+    /// ```
+    pub fn writeRight(b: *Buffer, r: Rect, write: RightAlignedText) u16 {
+        const width = measure(write.text);
         if (width > r.w) {
-            return b.writeTruncated(r, .{ .point = .{ .x = r.x, .y = y }, .text = text, .max_width = r.w, .style = style });
+            return b.writeTruncated(r, .{ .point = .{ .x = r.x, .y = write.y }, .text = write.text, .max_width = r.w, .style = write.style });
         }
         const start = @as(u32, r.x) + (r.w - width);
         if (start > std.math.maxInt(u16)) {
             return 0;
         }
-        return b.writeText(r, .{ .point = .{ .x = @intCast(start), .y = y }, .text = text, .style = style });
+        return b.writeText(r, .{ .point = .{ .x = @intCast(start), .y = write.y }, .text = write.text, .style = write.style });
     }
 
     /// Draws a box, with an optional title in the top edge.
@@ -505,7 +515,7 @@ test "right aligned text ends at the right edge" {
     defer buf.deinit();
 
     const r: Rect = .{ .x = 0, .y = 0, .w = 20, .h = 1 };
-    _ = buf.writeRight(r, 0, "6 tasks", .{});
+    _ = buf.writeRight(r, .{ .y = 0, .text = "6 tasks" });
     try testing.expectEqualStrings("s", buf.at(19, 0).?.text());
     try testing.expectEqualStrings("6", buf.at(13, 0).?.text());
 }

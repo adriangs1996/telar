@@ -622,7 +622,7 @@ fn drawScope(context: DrawContext, y: u16) u16 {
 
     var count_buf: [24]u8 = undefined;
     const text = std.fmt.bufPrint(&count_buf, "{d} tasks ", .{state.tasks.len}) catch "";
-    _ = buf.writeRight(row, y, text, .{ .fg = muted, .bg = row_bg });
+    _ = buf.writeRight(row, .{ .y = y, .text = text, .style = .{ .fg = muted, .bg = row_bg } });
 
     state.hits.add(row, .toggle_scope);
     state.focus.register(.scope);
@@ -680,10 +680,10 @@ fn drawSectionHeader(context: DrawContext, y: u16, section: Section) void {
     const rule_end = row.x + row.w -| ui.measure(count_text) -| 2;
     while (x < rule_end) : (x += 1) _ = buf.writeText(row, .{ .point = .{ .x = x, .y = y }, .text = "\u{2500}", .style = .{ .fg = faint, .bg = bg } });
 
-    _ = buf.writeRight(.{ .x = row.x, .y = y, .w = row.w -| 1, .h = 1 }, y, count_text, .{
+    _ = buf.writeRight(.{ .x = row.x, .y = y, .w = row.w -| 1, .h = 1 }, .{ .y = y, .text = count_text, .style = .{
         .fg = muted,
         .bg = bg,
-    });
+    } });
 }
 
 const TaskLine = struct {
@@ -926,10 +926,10 @@ fn drawFooter(state: *State, buf: *ui.Buffer, area: ui.Rect) void {
             x += 2;
         }
     }
-    _ = buf.writeRight(.{ .x = area.x, .y = area.y, .w = area.w -| 1, .h = 1 }, area.y, "^g", .{
+    _ = buf.writeRight(.{ .x = area.x, .y = area.y, .w = area.w -| 1, .h = 1 }, .{ .y = area.y, .text = "^g", .style = .{
         .fg = faint,
         .bg = bg,
-    });
+    } });
 }
 
 fn drawPane(state: *const State, buf: *ui.Buffer, area: ui.Rect) void {
