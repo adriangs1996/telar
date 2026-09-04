@@ -624,10 +624,16 @@ pub const Layout = struct {
         return geometry.prospectiveSplit(target, layout.pane_count) != null;
     }
 
-    pub fn prospectiveSplit(layout: *const Layout, pane_id: schema.PaneId, axis: Axis, area: ui.Rect) ?ProspectiveSplit {
+    /// Computes the target split geometry without mutating the layout.
+    ///
+    /// ```zig
+    /// const split = layout.prospectiveSplit(.{ .pane_id = pane_id, .axis = .horizontal }, area);
+    /// ```
+    pub fn prospectiveSplit(layout: *const Layout, target: SplitTarget, area: ui.Rect) ?ProspectiveSplit {
         var geometry: Snapshot = .{};
         layout.snapshot(area, &geometry);
-        return geometry.prospectiveSplit(.{ .pane_id = pane_id, .axis = axis }, layout.pane_count);
+
+        return geometry.prospectiveSplit(target, layout.pane_count);
     }
 
     /// A fullscreen pane keeps its border: fullscreen requires two panes, and
