@@ -47,18 +47,26 @@ pub fn Controller(comptime Executor: type) type {
                 .handled => try controller.responses.push(.{ .request_completed = .{
                     .request_id = request.request_id,
                 } }),
-                .pane_not_found => try controller.fail(request.request_id, .pane_not_found, "pane not found"),
-                .pane_exited => try controller.fail(request.request_id, .pane_exited, "pane already exited"),
-                .agent_blocked => try controller.fail(request.request_id, .agent_blocked, "agent is waiting for a decision"),
+                .pane_not_found => try controller.fail(.{
+                    .request_id = request.request_id,
+                    .code = .pane_not_found,
+                    .message = "pane not found",
+                }),
+                .pane_exited => try controller.fail(.{
+                    .request_id = request.request_id,
+                    .code = .pane_exited,
+                    .message = "pane already exited",
+                }),
+                .agent_blocked => try controller.fail(.{
+                    .request_id = request.request_id,
+                    .code = .agent_blocked,
+                    .message = "agent is waiting for a decision",
+                }),
             }
         }
 
-        fn fail(controller: *Self, request_id: schema.RequestId, code: schema.FailureCode, message: []const u8) !void {
-            try controller.responses.push(.{ .request_failed = .{
-                .request_id = request_id,
-                .code = code,
-                .message = message,
-            } });
+        fn fail(controller: *Self, failure: delivery_mod.PendingFailure) !void {
+            try controller.responses.push(.{ .request_failed = failure });
         }
     };
 }
