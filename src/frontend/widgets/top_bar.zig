@@ -31,6 +31,11 @@ pub const Input = struct {
     system_metrics: ?status_bar.Metrics = null,
 };
 
+const ListInput = struct {
+    area: ui.Rect,
+    active_id: ?schema.WorkspaceId,
+};
+
 pub fn render(context: *widget.Context, input: Input) void {
     const area = input.area;
 
@@ -115,7 +120,10 @@ pub fn render(context: *widget.Context, input: Input) void {
     if (input.workspaces.count == 0) {
         renderFallback(context, input, list_x, row_end, area.y);
     } else {
-        renderList(context, input, active_id, list_x, row_end, area.y);
+        renderList(context, input, .{
+            .area = .{ .x = list_x, .y = area.y, .w = row_end -| list_x, .h = 1 },
+            .active_id = active_id,
+        });
     }
 
     renderRight(context, .{
@@ -173,13 +181,13 @@ fn renderRight(context: *widget.Context, area: ui.Rect, input: Input) void {
     }
 }
 
-fn renderList(context: *widget.Context, input: Input, active_id: ?schema.WorkspaceId, start_x: u16, row_end: u16, y: u16) void {
+fn renderList(context: *widget.Context, input: Input, list: ListInput) void {
     const snapshot = input.workspaces;
-    const available = row_end -| start_x;
-    const active_index = if (active_id) |id| snapshot.indexOf(id) else null;
+    const row_end = list.area.x + list.area.w;
+    const active_index = if (list.active_id) |id| snapshot.indexOf(id) else null;
     const collapsed = input.collapsed or
-        !listFits(snapshot, active_index, input.workspace_name, available);
-    var x = start_x;
+        !listFits(snapshot, active_index, input.workspace_name, list.area.w);
+    var x = list.area.x;
 
     if (collapsed) {
         const shown = active_index orelse 0;
@@ -191,7 +199,7 @@ fn renderList(context: *widget.Context, input: Input, active_id: ?schema.Workspa
             input.workspace_name,
             x,
             row_end,
-            y,
+            list.area.y,
         );
         if (snapshot.count > 1) {
             var counter_buffer: [8]u8 = undefined;
@@ -199,9 +207,9 @@ fn renderList(context: *widget.Context, input: Input, active_id: ?schema.Workspa
                 snapshot.count - 1,
             }) catch " + ";
             const width = @min(ui.measure(counter), row_end -| x);
-            const rect: ui.Rect = .{ .x = x, .y = y, .w = width, .h = 1 };
+            const rect: ui.Rect = .{ .x = x, .y = list.area.y, .w = width, .h = 1 };
             context.hits.add(rect, .toggle_workspace_list);
-            _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = y }, .text = counter, .max_width = width, .style = .{
+            _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = list.area.y }, .text = counter, .max_width = width, .style = .{
                 .fg = if (context.isHovered(.toggle_workspace_list))
                     context.palette.text
                 else
@@ -224,7 +232,7 @@ fn renderList(context: *widget.Context, input: Input, active_id: ?schema.Workspa
             input.workspace_name,
             x,
             row_end,
-            y,
+            list.area.y,
         );
     }
 }
