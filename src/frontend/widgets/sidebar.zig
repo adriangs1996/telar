@@ -73,6 +73,15 @@ pub const Input = struct {
     animation_frame: u8 = 0,
 };
 
+const AgentLineInput = struct {
+    sidebar: Input,
+    semantic: *Semantic,
+    y: u16,
+    agent: *const agents.Agent,
+    line: u2,
+    background: ui.Color,
+};
+
 pub fn render(context: *widget.Context, input: Input) Semantic {
     var semantic: Semantic = .{ .area = input.area };
     renderCells(context, input, &semantic);
@@ -152,20 +161,26 @@ fn drawAgents(context: *widget.Context, input: Input, semantic: *Semantic) void 
             continue;
         }
 
-        drawAgentLine(
-            context,
-            input,
-            semantic,
-            area.y + line,
-            &input.snapshot.slice()[agent_index],
-            card_line,
-            background,
-        );
+        drawAgentLine(context, .{
+            .sidebar = input,
+            .semantic = semantic,
+            .y = area.y + line,
+            .agent = &input.snapshot.slice()[agent_index],
+            .line = card_line,
+            .background = background,
+        });
     }
     drawScrollbar(context, input.state, area, total, background);
 }
 
-fn drawAgentLine(context: *widget.Context, input: Input, semantic: *Semantic, y: u16, agent: *const agents.Agent, line: u2, background: ui.Color) void {
+fn drawAgentLine(context: *widget.Context, line_input: AgentLineInput) void {
+    const input = line_input.sidebar;
+    const semantic = line_input.semantic;
+    const y = line_input.y;
+    const agent = line_input.agent;
+    const line = line_input.line;
+    const background = line_input.background;
+
     const action: widget.Action = .{ .sidebar_focus_agent = agent.key };
     const focused = if (input.focused_agent) |key| std.meta.eql(key, agent.key) else false;
     const hovered = context.isHovered(action);
