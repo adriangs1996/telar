@@ -1048,13 +1048,12 @@ fn syncRegion(screen: *term.Screen, source: *const ui.Buffer, area: ui.Rect) !Re
             .source_row = source_row,
             .base = row_start,
         };
-        stats.damaged += try diff.syncRow(
-            source_row,
-            screen.back.cells[row_start..][0..source.w],
-            area.x,
-            area.x + area.w,
-            &sink,
-        );
+        stats.damaged += try diff.syncRow(.{
+            .source = source_row,
+            .reference = screen.back.cells[row_start..][0..source.w],
+            .start = area.x,
+            .end = area.x + area.w,
+        }, &sink);
         stats.scanned += area.w;
     }
     return stats;

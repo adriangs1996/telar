@@ -1243,7 +1243,12 @@ fn syncPaneRange(range: PaneRange) !usize {
         .patch = .{ .screen = range.screen, .source_row = source_row, .base = destination_base },
         .composed_row = range.composed.cells[destination_base..],
     };
-    return diff.syncRow(source_row, sink.composed_row, range.start, range.end, &sink);
+    return diff.syncRow(.{
+        .source = source_row,
+        .reference = sink.composed_row,
+        .start = range.start,
+        .end = range.end,
+    }, &sink);
 }
 
 const PaneCursor = struct {
@@ -1287,13 +1292,12 @@ fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
             .source_row = source_row,
             .base = row_start,
         };
-        damaged += try diff.syncRow(
-            source_row,
-            screen.back.cells[row_start..][0..composed.w],
-            0,
-            composed.w,
-            &sink,
-        );
+        damaged += try diff.syncRow(.{
+            .source = source_row,
+            .reference = screen.back.cells[row_start..][0..composed.w],
+            .start = 0,
+            .end = composed.w,
+        }, &sink);
     }
     return damaged;
 }
@@ -1311,7 +1315,12 @@ fn syncComposedRow(screen: *term.Screen, composed: *const ui.Buffer, y: u16) !us
         .source_row = source_row,
         .base = row_start,
     };
-    return diff.syncRow(source_row, screen.back.cells[row_start..][0..composed.w], 0, composed.w, &sink);
+    return diff.syncRow(.{
+        .source = source_row,
+        .reference = screen.back.cells[row_start..][0..composed.w],
+        .start = 0,
+        .end = composed.w,
+    }, &sink);
 }
 
 /// The buffer a discovered pane keeps while the layout gives it no content.
