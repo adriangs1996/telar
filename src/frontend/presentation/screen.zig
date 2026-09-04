@@ -1255,24 +1255,24 @@ fn parseMouse(input: []const u8) ?Parsed {
 const testing = std.testing;
 const KeyCode = Event.Key.Code;
 
-fn expectMouse(input: []const u8, x: u16, y: u16, kind: Event.Mouse.Kind) !void {
+fn expectMouse(input: []const u8, expected: Event.Mouse) !void {
     const parsed = parse(input) orelse return error.NoEvent;
     try testing.expectEqual(input.len, parsed.len);
-    try testing.expectEqual(x, parsed.event.mouse.x);
-    try testing.expectEqual(y, parsed.event.mouse.y);
-    try testing.expectEqual(kind, parsed.event.mouse.kind);
+    try testing.expectEqual(expected.x, parsed.event.mouse.x);
+    try testing.expectEqual(expected.y, parsed.event.mouse.y);
+    try testing.expectEqual(expected.kind, parsed.event.mouse.kind);
 }
 
 test "mouse reports are parsed and converted to zero based coordinates" {
     // Terminals count from one. Getting this wrong puts every click one cell
     // down and to the right, which looks like a layout bug for a long time.
-    try expectMouse("\x1b[<0;1;1M", 0, 0, .press);
-    try expectMouse("\x1b[<0;10;5M", 9, 4, .press);
-    try expectMouse("\x1b[<0;10;5m", 9, 4, .release);
-    try expectMouse("\x1b[<32;10;5M", 9, 4, .drag);
-    try expectMouse("\x1b[<35;10;5M", 9, 4, .move);
-    try expectMouse("\x1b[<64;10;5M", 9, 4, .scroll_up);
-    try expectMouse("\x1b[<65;10;5M", 9, 4, .scroll_down);
+    try expectMouse("\x1b[<0;1;1M", .{ .x = 0, .y = 0, .kind = .press });
+    try expectMouse("\x1b[<0;10;5M", .{ .x = 9, .y = 4, .kind = .press });
+    try expectMouse("\x1b[<0;10;5m", .{ .x = 9, .y = 4, .kind = .release });
+    try expectMouse("\x1b[<32;10;5M", .{ .x = 9, .y = 4, .kind = .drag });
+    try expectMouse("\x1b[<35;10;5M", .{ .x = 9, .y = 4, .kind = .move });
+    try expectMouse("\x1b[<64;10;5M", .{ .x = 9, .y = 4, .kind = .scroll_up });
+    try expectMouse("\x1b[<65;10;5M", .{ .x = 9, .y = 4, .kind = .scroll_down });
 }
 
 test "Kitty graphics and pixel capability replies are consumed" {
@@ -1301,7 +1301,7 @@ test "Kitty graphics and pixel capability replies are consumed" {
 }
 
 test "coordinates past 223 survive, which the older encoding cannot" {
-    try expectMouse("\x1b[<0;300;120M", 299, 119, .press);
+    try expectMouse("\x1b[<0;300;120M", .{ .x = 299, .y = 119, .kind = .press });
     const pixels = parse("\x1b[<0;70000;80000M").?.event.mouse;
     try std.testing.expectEqual(@as(u32, 69999), pixels.raw_x);
     try std.testing.expectEqual(@as(u32, 79999), pixels.raw_y);
