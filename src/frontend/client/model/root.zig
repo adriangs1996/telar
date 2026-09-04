@@ -1835,7 +1835,7 @@ pub const Model = struct {
                     return model.planCopyModeExit(previous, selection);
                 }
             },
-            .vertical => |delta| next.vertical(delta, pane.scroll, pane.buffer.h),
+            .vertical => |delta| next.vertical(delta, .{ .scroll = pane.scroll, .rows = pane.buffer.h }),
             .matches => |found| {
                 if (found.pane_id != previous.pane_id) {
                     return null;

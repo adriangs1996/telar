@@ -19,6 +19,11 @@ pub const Point = struct {
     y: u32,
 };
 
+pub const Viewport = struct {
+    scroll: schema.frame.Scroll,
+    rows: u16,
+};
+
 pub const View = struct {
     cursor: Point,
     anchor: ?Point,
@@ -96,14 +101,14 @@ pub const State = struct {
         }
     }
 
-    pub fn vertical(state: *State, delta: i32, scroll: schema.frame.Scroll, rows: u16) void {
-        const last = scroll.total_rows -| 1;
+    pub fn vertical(state: *State, delta: i32, viewport: Viewport) void {
+        const last = viewport.scroll.total_rows -| 1;
         if (delta < 0) {
             state.cursor.y -|= @intCast(-delta);
         } else {
             state.cursor.y = @min(last, state.cursor.y +| @as(u32, @intCast(delta)));
         }
-        state.reveal(rows, scroll);
+        state.reveal(viewport.rows, viewport.scroll);
     }
 
     pub fn top(state: *State) void {
@@ -228,35 +233,37 @@ pub const Effect = struct {
 /// is the copy-mode state itself.
 pub fn applyKey(state: *State, pressed: keybind.Key, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) Effect {
     const page: i32 = @intCast(@max(@as(u16, 1), buffer.h -| 1));
+    const viewport: Viewport = .{ .scroll = scroll, .rows = buffer.h };
+
     switch (pressed.code) {
         .escape => if (!state.clearSelection()) return .{ .exit = true },
         .enter => return .{ .exit = true, .copy = true },
         .left => state.horizontal(-1, buffer.w),
         .right => state.horizontal(1, buffer.w),
-        .up => state.vertical(-1, scroll, buffer.h),
-        .down => state.vertical(1, scroll, buffer.h),
+        .up => state.vertical(-1, viewport),
+        .down => state.vertical(1, viewport),
         .home => state.lineStart(),
         .end => lastNonBlank(state, buffer, scroll),
-        .page_up => state.vertical(-page, scroll, buffer.h),
-        .page_down => state.vertical(page, scroll, buffer.h),
+        .page_up => state.vertical(-page, viewport),
+        .page_down => state.vertical(page, viewport),
         .char => |char| if (pressed.mods.ctrl) {
             if (char.eql("b")) {
-                state.vertical(-page, scroll, buffer.h);
+                state.vertical(-page, viewport);
             } else if (char.eql("f")) {
-                state.vertical(page, scroll, buffer.h);
+                state.vertical(page, viewport);
             } else if (char.eql("u")) {
-                state.vertical(-@divTrunc(page, 2), scroll, buffer.h);
+                state.vertical(-@divTrunc(page, 2), viewport);
             } else if (char.eql("d")) {
-                state.vertical(@divTrunc(page, 2), scroll, buffer.h);
+                state.vertical(@divTrunc(page, 2), viewport);
             } else {
                 return .{ .handled = false };
             }
         } else if (char.eql("h")) {
             state.horizontal(-1, buffer.w);
         } else if (char.eql("j")) {
-            state.vertical(1, scroll, buffer.h);
+            state.vertical(1, viewport);
         } else if (char.eql("k")) {
-            state.vertical(-1, scroll, buffer.h);
+            state.vertical(-1, viewport);
         } else if (char.eql("l")) {
             state.horizontal(1, buffer.w);
         } else if (char.eql("0")) {
@@ -382,7 +389,7 @@ fn paragraph(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scrol
     }
     state.cursor.y = y;
     state.cursor.x = 0;
-    state.vertical(0, scroll, buffer.h);
+    state.vertical(0, .{ .scroll = scroll, .rows = buffer.h });
 }
 
 fn wordClass(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, point: Point) ?WordClass {
@@ -420,7 +427,7 @@ fn previousPoint(point: Point, cols: u16) Point {
 
 fn wordForward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll, end: bool) void {
     const initial = wordClass(buffer, scroll, state.cursor) orelse {
-        state.vertical(1, scroll, buffer.h);
+        state.vertical(1, .{ .scroll = scroll, .rows = buffer.h });
         state.lineStart();
         return;
     };
@@ -463,7 +470,7 @@ fn wordForward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scr
         }
     }
     state.cursor = point;
-    state.vertical(0, scroll, buffer.h);
+    state.vertical(0, .{ .scroll = scroll, .rows = buffer.h });
 }
 
 fn wordBackward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) void {
@@ -476,7 +483,7 @@ fn wordBackward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Sc
         point = previous;
     }
     const class = wordClass(buffer, scroll, point) orelse {
-        state.vertical(-1, scroll, buffer.h);
+        state.vertical(-1, .{ .scroll = scroll, .rows = buffer.h });
         state.lineStart();
         return;
     };
@@ -488,15 +495,15 @@ fn wordBackward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Sc
         point = previous;
     }
     state.cursor = point;
-    state.vertical(0, scroll, buffer.h);
+    state.vertical(0, .{ .scroll = scroll, .rows = buffer.h });
 }
 
 test "vertical movement scrolls the viewport only at its edges" {
     const scroll: schema.frame.Scroll = .{ .total_rows = 100, .offset = 90 };
     var state = State.init(@enumFromInt(1), .{ .x = 2, .y = 99 }, 90);
-    state.vertical(-1, scroll, 10);
+    state.vertical(-1, .{ .scroll = scroll, .rows = 10 });
     try std.testing.expectEqual(@as(u32, 90), state.viewport_offset);
-    state.vertical(-20, scroll, 10);
+    state.vertical(-20, .{ .scroll = scroll, .rows = 10 });
     try std.testing.expectEqual(@as(u32, 78), state.cursor.y);
     try std.testing.expectEqual(@as(u32, 78), state.viewport_offset);
 }
