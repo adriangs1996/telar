@@ -76,6 +76,12 @@ const PendingLayoutRestore = struct {
     restore_saved_focus: bool = false,
 };
 
+const TabInit = struct {
+    location: schema.TabLocation,
+    label: []const u8,
+    pane_gaps: bool,
+};
+
 pub const Tab = struct {
     location: schema.TabLocation,
     label: [schema.max_tab_label_bytes]u8 = undefined,
@@ -84,13 +90,15 @@ pub const Tab = struct {
     snapshot_loaded: bool = false,
     restore_display_order: bool = false,
 
-    fn init(gpa: std.mem.Allocator, location: schema.TabLocation, label: []const u8, pane_gaps: bool) Tab {
+    fn init(gpa: std.mem.Allocator, input: TabInit) Tab {
         var tab: Tab = .{
-            .location = location,
+            .location = input.location,
             .model = .init(gpa),
         };
-        tab.model.setPaneGaps(pane_gaps);
-        tab.setLabel(label);
+
+        tab.model.setPaneGaps(input.pane_gaps);
+        tab.setLabel(input.label);
+
         return tab;
     }
 
@@ -186,7 +194,11 @@ pub const Model = struct {
     /// try model.replaceWithRoot(root);
     /// ```
     pub fn replaceWithRoot(model: *Model, root: RootTab) !void {
-        var tab = Tab.init(model.gpa, root.location, "main", model.pane_gaps);
+        var tab = Tab.init(model.gpa, .{
+            .location = root.location,
+            .label = "main",
+            .pane_gaps = model.pane_gaps,
+        });
         errdefer tab.deinit();
         tab.model.setCellSize(model.cell_width_px, model.cell_height_px);
         try tab.model.addRoot(.{ .pane_id = root.pane_id, .location = root.location, .size = root.size });
@@ -519,9 +531,13 @@ pub const Model = struct {
         }
 
         model.items[index] = Tab.init(model.gpa, .{
-            .workspace = model.workspace.?,
-            .tab_id = descriptor.tab_id,
-        }, descriptor.label, model.pane_gaps);
+            .location = .{
+                .workspace = model.workspace.?,
+                .tab_id = descriptor.tab_id,
+            },
+            .label = descriptor.label,
+            .pane_gaps = model.pane_gaps,
+        });
         model.items[index].?.model.setCellSize(model.cell_width_px, model.cell_height_px);
         model.count += 1;
     }
@@ -549,7 +565,11 @@ pub const Model = struct {
             return error.InvalidTabPosition;
         }
 
-        var tab = Tab.init(model.gpa, created.location, created.label, model.pane_gaps);
+        var tab = Tab.init(model.gpa, .{
+            .location = created.location,
+            .label = created.label,
+            .pane_gaps = model.pane_gaps,
+        });
         errdefer tab.deinit();
         tab.model.setCellSize(model.cell_width_px, model.cell_height_px);
         try tab.model.addRoot(.{ .pane_id = created.root_pane_id, .location = created.location, .size = size });
