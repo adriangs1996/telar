@@ -240,7 +240,7 @@ fn drawAgentLine(context: *widget.Context, line_input: AgentLineInput) void {
             .background = row_bg,
         });
     } else {
-        drawAgentMeta(context, body, agent, row_bg);
+        drawAgentMeta(context, .{ .area = body, .agent = agent, .background = row_bg });
     }
     context.hits.add(row, action);
 }
@@ -277,6 +277,12 @@ const AgentLocationInput = struct {
     area: ui.Rect,
     agent: *const agents.Agent,
     pane_index: u16,
+    background: ui.Color,
+};
+
+const AgentMetaInput = struct {
+    area: ui.Rect,
+    agent: *const agents.Agent,
     background: ui.Color,
 };
 
@@ -320,7 +326,11 @@ fn projectedPaneIndex(input: Input, agent: *const agents.Agent) u16 {
     return active.displayIndex(agent.key.pane_id) orelse agent.pane_index;
 }
 
-fn drawAgentMeta(context: *widget.Context, area: ui.Rect, agent: *const agents.Agent, background: ui.Color) void {
+fn drawAgentMeta(context: *widget.Context, input: AgentMetaInput) void {
+    const area = input.area;
+    const agent = input.agent;
+    const background = input.background;
+
     if (area.w <= 3) {
         return;
     }
