@@ -46,6 +46,12 @@ pub const PaneSplit = struct {
     area: ui.Rect,
 };
 
+pub const DiscoveredPane = struct {
+    pane_id: schema.PaneId,
+    location: schema.TabLocation,
+    area: ui.Rect,
+};
+
 const PaneInit = struct {
     spec: PaneSpec,
     attached: bool,
@@ -950,30 +956,33 @@ pub const Model = struct {
     /// visible content until the geometry changes.
     ///
     /// ```zig
-    /// try model.addDiscovered(pane_id, location, area);
+    /// try model.addDiscovered(.{ .pane_id = pane_id, .location = location, .area = area });
     /// ```
-    pub fn addDiscovered(model: *Model, pane_id: schema.PaneId, location: schema.TabLocation, area: ui.Rect) !void {
-        if (model.find(pane_id) != null) {
+    pub fn addDiscovered(model: *Model, discovered: DiscoveredPane) !void {
+        if (model.find(discovered.pane_id) != null) {
             return;
         }
+
         const focused = model.layout.focused() orelse {
-            const size = rectSize(area) orelse placeholder_size;
-            try model.insertPane(pane_id, location, size, false);
-            errdefer _ = model.removePane(pane_id);
-            try model.layout.addRoot(pane_id);
-            model.location = location;
+            const size = rectSize(discovered.area) orelse placeholder_size;
+            try model.insertPane(discovered.pane_id, discovered.location, size, false);
+            errdefer _ = model.removePane(discovered.pane_id);
+            try model.layout.addRoot(discovered.pane_id);
+            model.location = discovered.location;
+
             return;
         };
 
-        const size = if (model.prospectiveSplit(focused, .horizontal, area)) |prospective|
+        const size = if (model.prospectiveSplit(focused, .horizontal, discovered.area)) |prospective|
             rectSize(prospective.new_content) orelse placeholder_size
         else
             placeholder_size;
-        try model.insertPane(pane_id, location, size, false);
-        errdefer _ = model.removePane(pane_id);
+
+        try model.insertPane(discovered.pane_id, discovered.location, size, false);
+        errdefer _ = model.removePane(discovered.pane_id);
         try model.layout.split(.{
             .existing_pane = focused,
-            .new_pane = pane_id,
+            .new_pane = discovered.pane_id,
             .axis = .horizontal,
         });
     }
@@ -2011,11 +2020,7 @@ test "snapshot discovery does not imply a runtime attachment" {
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 40, .rows = 8 } });
-    try model.addDiscovered(
-        @enumFromInt(2),
-        location,
-        .{ .w = 40, .h = 8 },
-    );
+    try model.addDiscovered(.{ .pane_id = @enumFromInt(2), .location = location, .area = .{ .w = 40, .h = 8 } });
 
     try std.testing.expect(model.find(@enumFromInt(1)).?.attached);
     try std.testing.expect(!model.find(@enumFromInt(2)).?.attached);
@@ -2034,7 +2039,7 @@ test "snapshot discovery keeps a pane the area cannot fit" {
     const area: ui.Rect = .{ .w = 4, .h = 3 };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 4, .rows = 3 } });
 
-    try model.addDiscovered(@enumFromInt(2), location, area);
+    try model.addDiscovered(.{ .pane_id = @enumFromInt(2), .location = location, .area = area });
 
     try std.testing.expectEqual(@as(usize, 2), model.pane_count);
     try std.testing.expect(model.layout.contains(@enumFromInt(2)));
@@ -2208,7 +2213,7 @@ test "pane index survives collisions removal and slot reuse" {
     try std.testing.expect(model.find(@enumFromInt(1)) == null);
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(129)), model.find(@enumFromInt(129)).?.id);
 
-    try model.addDiscovered(@enumFromInt(257), location, area);
+    try model.addDiscovered(.{ .pane_id = @enumFromInt(257), .location = location, .area = area });
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(257)), model.find(@enumFromInt(257)).?.id);
     try std.testing.expectEqual(@as(usize, 2), model.pane_count);
 }

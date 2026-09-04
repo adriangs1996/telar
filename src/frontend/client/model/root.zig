@@ -2550,7 +2550,7 @@ pub const Model = struct {
         if (tab.model.find(command.split.target_pane) != null) {
             try tab.model.split(.{ .existing_pane = command.split.target_pane, .new_pane = command.new_pane, .location = command.split.location, .axis = command.split.axis, .area = command.split.area });
         } else {
-            try tab.model.addDiscovered(command.new_pane, command.split.location, command.split.area);
+            try tab.model.addDiscovered(.{ .pane_id = command.new_pane, .location = command.split.location, .area = command.split.area });
             try tab.model.markAttached(command.new_pane);
         }
 

@@ -633,7 +633,7 @@ test "pane attachment confirmation changes only active operational state" {
     };
     const discovered: schema.PaneId = @enumFromInt(2);
     try model.workspace.bootstrap(@enumFromInt(1), location, .{ .cols = 20, .rows = 5 });
-    try model.workspace.active().?.model.addDiscovered(discovered, location, .{ .w = 40, .h = 10 });
+    try model.workspace.active().?.model.addDiscovered(.{ .pane_id = discovered, .location = location, .area = .{ .w = 40, .h = 10 } });
     const attachment: client_model.PaneAttachment = .{ .pane_id = discovered, .location = location };
 
     try std.testing.expect(model.needsPaneAttachment(attachment));
@@ -655,7 +655,7 @@ test "pane attachment confirmation ignores inactive missing and wrong-location p
     const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     const discovered: schema.PaneId = @enumFromInt(3);
     try model.workspace.bootstrap(@enumFromInt(1), first, .{ .cols = 20, .rows = 5 });
-    try model.workspace.active().?.model.addDiscovered(discovered, first, .{ .w = 40, .h = 10 });
+    try model.workspace.active().?.model.addDiscovered(.{ .pane_id = discovered, .location = first, .area = .{ .w = 40, .h = 10 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
         .position = 1,

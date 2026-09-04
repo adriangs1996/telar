@@ -343,7 +343,7 @@ pub const Model = struct {
 
         for (snapshot.panes) |pane_id| {
             if (tab.model.find(pane_id) == null) {
-                try tab.model.addDiscovered(pane_id, snapshot.location, area);
+                try tab.model.addDiscovered(.{ .pane_id = pane_id, .location = snapshot.location, .area = area });
             }
         }
 
