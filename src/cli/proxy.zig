@@ -149,7 +149,7 @@ pub fn run(init: std.process.Init, options: parser.ProxyOptions) !u8 {
             }
 
             try prepareDirectory(init.io, directory);
-            try install(init, paths, current.record, selected_backend, writer);
+            try install(init, .{ .paths = paths, .previous = current.record, .backend = selected_backend, .writer = writer });
             try printFirefoxNotice(writer, paths.files().certificate);
             return 0;
         },
@@ -186,6 +186,13 @@ const InspectionContext = struct {
     }
 };
 
+const InstallOptions = struct {
+    paths: AuthorityPaths,
+    previous: ?Record,
+    backend: TrustBackend,
+    writer: *Io.Writer,
+};
+
 /// Reports whether the record, files, fingerprint, and lifetime prove that
 /// Telar's system authority is installed.
 ///
@@ -211,7 +218,7 @@ pub fn rotateIfNeeded(init: std.process.Init, directory: []const u8) !bool {
     var output_buffer: [4096]u8 = undefined;
     var output = File.stderr().writerStreaming(init.io, &output_buffer);
     defer output.interface.flush() catch {};
-    try install(init, paths, current.record, current.record.?.backend, &output.interface);
+    try install(init, .{ .paths = paths, .previous = current.record, .backend = current.record.?.backend, .writer = &output.interface });
     return true;
 }
 
@@ -237,34 +244,34 @@ fn inspect(context: InspectionContext, paths: *const AuthorityPaths) Inspection 
     return .{ .status = .installed, .record = stored };
 }
 
-fn install(init: std.process.Init, paths: AuthorityPaths, previous: ?Record, selected_backend: TrustBackend, writer: *Io.Writer) !void {
-    if (previous) |record| {
-        try validateRecordTarget(init.minimal.environ, record, paths.files().certificate);
+fn install(init: std.process.Init, options: InstallOptions) !void {
+    if (options.previous) |record| {
+        try validateRecordTarget(init.minimal.environ, record, options.paths.files().certificate);
     }
 
-    var prepared = try prepareAuthority(init, &paths);
+    var prepared = try prepareAuthority(init, &options.paths);
     defer prepared.cleanup(init.io);
     const fingerprint = prepared.authority.fingerprint();
-    const prepared_files = prepared.files(&paths);
+    const prepared_files = prepared.files(&options.paths);
     var rollback_certificate = prepared_files.certificate;
     var store_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const store_path = try storePath(init.minimal.environ, selected_backend, paths.files().certificate, &store_path_buffer);
+    const store_path = try storePath(init.minimal.environ, options.backend, options.paths.files().certificate, &store_path_buffer);
 
-    try installAuthority(init, selected_backend, prepared_files.certificate, store_path, writer);
-    errdefer uninstallAuthority(init, selected_backend, &fingerprint, rollback_certificate, store_path, writer) catch {};
-    if (previous) |old| {
-        if (removePreviousSeparately(old.backend, selected_backend)) {
-            try uninstallAuthority(init, old.backend, &old.fingerprint, paths.files().certificate, old.storePath(), writer);
+    try installAuthority(init, options.backend, prepared_files.certificate, store_path, options.writer);
+    errdefer uninstallAuthority(init, options.backend, &fingerprint, rollback_certificate, store_path, options.writer) catch {};
+    if (options.previous) |old| {
+        if (removePreviousSeparately(old.backend, options.backend)) {
+            try uninstallAuthority(init, old.backend, &old.fingerprint, options.paths.files().certificate, old.storePath(), options.writer);
         }
     }
     if (prepared.temporary) {
-        try activatePrepared(init.io, &prepared, &paths);
-        rollback_certificate = paths.files().certificate;
+        try activatePrepared(init.io, &prepared, &options.paths);
+        rollback_certificate = options.paths.files().certificate;
     }
 
-    const record = try makeRecord(selected_backend, fingerprint, store_path);
-    try writeRecord(init.io, paths.recordPath(), record);
-    try writer.print("telar proxy trust: installed {s}\n", .{&fingerprint});
+    const record = try makeRecord(options.backend, fingerprint, store_path);
+    try writeRecord(init.io, options.paths.recordPath(), record);
+    try options.writer.print("telar proxy trust: installed {s}\n", .{&fingerprint});
 }
 
 fn prepareAuthority(init: std.process.Init, paths: *const AuthorityPaths) !PreparedAuthority {
