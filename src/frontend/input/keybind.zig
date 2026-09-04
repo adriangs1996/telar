@@ -282,13 +282,14 @@ pub fn Keymap(comptime Action: type, comptime max_bindings: usize, comptime max_
         }
 
         const Range = struct { start: usize, end: usize };
+        const Match = struct { depth: usize, key: Key };
 
-        fn matchingRange(map: *const Self, range: Range, depth: usize, key: Key) ?Range {
+        fn matchingRange(map: *const Self, range: Range, match: Match) ?Range {
             var low = range.start;
             var high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (keyOrder(map.bindingAt(middle).keys[depth], key) == .lt) {
+                if (keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .lt) {
                     low = middle + 1;
                 } else {
                     high = middle;
@@ -299,7 +300,7 @@ pub fn Keymap(comptime Action: type, comptime max_bindings: usize, comptime max_
             high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (keyOrder(map.bindingAt(middle).keys[depth], key) == .gt) {
+                if (keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .gt) {
                     high = middle;
                 } else {
                     low = middle + 1;
@@ -789,7 +790,7 @@ pub fn Router(comptime Action: type, comptime max_bindings: usize, comptime max_
                 Map.Range{ .start = 0, .end = router.map.len }
             else
                 router.candidates;
-            const matched = router.map.matchingRange(range, router.depth, key) orelse {
+            const matched = router.map.matchingRange(range, .{ .depth = router.depth, .key = key }) orelse {
                 if (router.depth == 0) {
                     return .{ .forward = .{ .key = key, .raw = raw } };
                 }
