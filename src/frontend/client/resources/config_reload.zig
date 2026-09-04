@@ -66,6 +66,9 @@ pub const State = struct {
 };
 
 pub const ScheduleArgs = struct {
+    io: Io,
+    gpa: std.mem.Allocator,
+    select: *Io.Select(ClientEvent),
     path: []const u8,
     profile: ?[]const u8,
     trust_path: []const u8,
@@ -73,10 +76,15 @@ pub const ScheduleArgs = struct {
     current_registry: *const plugin_broker.Registry,
 };
 
-pub fn schedule(state: *State, io: Io, gpa: std.mem.Allocator, select: *Io.Select(ClientEvent), args: ScheduleArgs) !void {
-    try select.concurrent(.config_reload, waitConfigReload, .{
-        io,
-        gpa,
+/// Schedules one asynchronous watch using the current reload fingerprint.
+///
+/// ```zig
+/// try schedule(&state, args);
+/// ```
+pub fn schedule(state: *State, args: ScheduleArgs) !void {
+    try args.select.concurrent(.config_reload, waitConfigReload, .{
+        args.io,
+        args.gpa,
         args.path,
         state.mtime_ns,
         state.next_generation,

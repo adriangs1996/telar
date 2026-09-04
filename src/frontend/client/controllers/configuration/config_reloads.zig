@@ -27,7 +27,10 @@ pub const Outcome = config_delivery.Outcome;
 pub fn schedule(client: *Client) !void {
     const path = client.options.config_path orelse return;
 
-    try reload_worker.schedule(&client.reload, client.io, client.gpa, &client.select, .{
+    try reload_worker.schedule(&client.reload, .{
+        .io = client.io,
+        .gpa = client.gpa,
+        .select = &client.select,
         .path = path,
         .profile = client.options.profile,
         .trust_path = client.options.trust_path.?,
