@@ -944,7 +944,6 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             const application = request.application;
             var handler: report_agent_command_commands.ReportAgentCommandHandler = .{
                 .panes = &application.model.panes,
-                .history_service = application.history_service,
             };
             var controller = ReportAgentCommandController.init(&request.session.delivery.responses, &handler);
             const now_ms = Io.Timestamp.now(application.io, .real).toMilliseconds();

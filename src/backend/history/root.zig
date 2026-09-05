@@ -13,6 +13,7 @@ pub const prompt_scan = @import("prompt_scan.zig");
 pub const detection = @import("agent_detection.zig");
 pub const escape = @import("escape.zig");
 
+pub const Sequence = @import("sequence.zig").Sequence;
 pub const Service = service_mod.Service;
 pub const Tracker = terminal_mod.Tracker;
 pub const Command = terminal_mod.Command;

@@ -746,7 +746,7 @@ pub const Pane = struct {
     progress_revision: u64 = 1,
     history_session_id: history.SessionId,
     started_at_ms: i64,
-    history_sequence: u64 = 0,
+    history_sequence: history.Sequence = .{},
     /// Command submissions injected through the control API or a session
     /// restore that have not completed yet. Written by the runtime thread,
     /// consumed by the observation actor when the next command finishes.
@@ -1909,6 +1909,39 @@ pub const Pane = struct {
         };
     }
 
+    pub const AgentCommand = struct {
+        command: history.Command,
+        provider: []const u8,
+        tool_call_id: []const u8,
+        origin: schema.HistoryOrigin,
+        phase: schema.AgentCommandPhase = .finished,
+        redact: bool = true,
+    };
+
+    /// Captures runtime-owned metadata without borrowing the observation worker's VT.
+    /// Call only on the runtime thread. Example: `_ = pane.recordAgentCommand(report);`.
+    pub fn recordAgentCommand(pane: *Pane, report: AgentCommand) bool {
+        const sequence = pane.history_sequence.reserve() orelse return false;
+
+        return pane.history_service.recordAgentCommand(pane.io, .{
+            .context = .{
+                .session_id = pane.history_session_id,
+                .pane_id = pane.id,
+                .location = pane.location,
+                .sequence = sequence,
+                .workspace_path = pane.workspace_path,
+                .cols = pane.size.cols,
+                .rows = pane.size.rows,
+            },
+            .command = report.command,
+            .provider = report.provider,
+            .tool_call_id = report.tool_call_id,
+            .origin = report.origin,
+            .phase = report.phase,
+            .redact = report.redact,
+        });
+    }
+
     pub const CaptureContext = struct {
         pane: *Pane,
         observation_stats: ?*history.observer.Stats = null,
@@ -1918,7 +1951,13 @@ pub const Pane = struct {
             if (!pane.history_session_started) {
                 return;
             }
-            pane.history_sequence += 1;
+            const sequence = pane.history_sequence.reserve() orelse {
+                if (context.observation_stats) |stats| {
+                    stats.dropped += 1;
+                }
+
+                return;
+            };
             var author: core.schema.HistoryAuthor = .human;
             if (pane.injected_submissions.load(.monotonic) > 0) {
                 _ = pane.injected_submissions.fetchSub(1, .monotonic);
@@ -1931,7 +1970,7 @@ pub const Pane = struct {
                     .session_id = pane.history_session_id,
                     .pane_id = pane.id,
                     .location = pane.location,
-                    .sequence = pane.history_sequence,
+                    .sequence = sequence,
                     .workspace_path = pane.workspace_path,
                     .cols = pane.history_observer.terminal.cols,
                     .rows = pane.history_observer.terminal.rows,
@@ -2436,6 +2475,34 @@ pub fn historyClock(io: Io) history.osc.Clock {
         .real_ms = Io.Timestamp.now(io, .real).toMilliseconds(),
         .awake_ns = @intCast(Io.Timestamp.now(io, .awake).toNanoseconds()),
     };
+}
+
+test "agent reports capture runtime geometry without accessing the observation terminal" {
+    const io = std.testing.io;
+    var service = try history.Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
+    defer service.deinit(io);
+    const pane = try std.testing.allocator.create(Pane);
+    defer std.testing.allocator.destroy(pane);
+    pane.io = io;
+    pane.history_service = &service;
+    pane.history_sequence = .{};
+    pane.history_session_id = @splat(1);
+    pane.id = @enumFromInt(7);
+    pane.location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(2) };
+    pane.workspace_path = &.{};
+    pane.size = .{ .cols = 80, .rows = 24 };
+
+    try std.testing.expect(pane.recordAgentCommand(.{
+        .command = .{ .bytes = "echo hello", .cwd = "/", .started_at_ms = 1, .duration_ns = 0, .exit_code = 0, .status = .completed, .truncated = false },
+        .provider = "pi",
+        .tool_call_id = "call-1",
+        .origin = .hook,
+    }));
+    const request = try service.channel.receiveRequest(io, &service.stats);
+    defer history.model.deinitRequest(request, std.testing.allocator);
+    try std.testing.expectEqual(@as(u16, 80), request.command_finished.cols);
+    try std.testing.expectEqual(@as(u16, 24), request.command_finished.rows);
+    try std.testing.expectEqual(@as(u64, 1), request.command_finished.sequence);
 }
 
 test "cwd state is bounded and advances only for a new valid path" {

@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const agent_mod = @import("../../../agent/root.zig");
 const pane_mod = @import("../../../pane/root.zig");
 const plugins = @import("../../../plugins/root.zig");
-const history = @import("../../../history/root.zig");
 
 const schema = core.schema;
 
@@ -13,7 +12,6 @@ pub const Resources = struct {
     panes: *pane_mod.PaneStore,
     agents: *agent_mod.Tracker,
     service: *plugins.Service,
-    history_service: *history.Service,
 };
 
 /// Defines runtime operations supplied by application composition.
@@ -84,18 +82,8 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
                 return;
             }
 
-            pane.history_sequence += 1;
             const duration = std.math.cast(i64, record.duration_ms) orelse std.math.maxInt(i64);
-            _ = adapter.resources.history_service.recordAgentCommand(pane.io, .{
-                .context = .{
-                    .session_id = pane.history_session_id,
-                    .pane_id = pane.id,
-                    .location = pane.location,
-                    .sequence = pane.history_sequence,
-                    .workspace_path = pane.workspace_path,
-                    .cols = pane.history_observer.terminal.cols,
-                    .rows = pane.history_observer.terminal.rows,
-                },
+            _ = pane.recordAgentCommand(.{
                 .command = .{
                     .bytes = record.command,
                     .cwd = record.cwd,

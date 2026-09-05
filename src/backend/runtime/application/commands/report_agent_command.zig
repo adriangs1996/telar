@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const history = @import("../../../history/root.zig");
 const pane_mod = @import("../../../pane/root.zig");
 
 const schema = core.schema;
@@ -22,7 +21,6 @@ pub const Outcome = enum { applied, pane_not_found, queue_full };
 
 pub const ReportAgentCommandHandler = struct {
     panes: *pane_mod.PaneStore,
-    history_service: *history.Service,
 
     /// Queues one start or finish report against the exact live pane.
     ///
@@ -35,17 +33,7 @@ pub const ReportAgentCommandHandler = struct {
             return .pane_not_found;
         }
 
-        pane.history_sequence += 1;
-        const queued = handler.history_service.recordAgentCommand(pane.io, .{
-            .context = .{
-                .session_id = pane.history_session_id,
-                .pane_id = pane.id,
-                .location = pane.location,
-                .sequence = pane.history_sequence,
-                .workspace_path = pane.workspace_path,
-                .cols = pane.history_observer.terminal.cols,
-                .rows = pane.history_observer.terminal.rows,
-            },
+        const queued = pane.recordAgentCommand(.{
             .command = .{
                 .bytes = report.command,
                 .cwd = report.cwd,
