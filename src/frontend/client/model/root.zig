@@ -134,6 +134,8 @@ pub const RemovedWorkspaceTabs = model_types.RemovedWorkspaceTabs;
 pub const RemovedWorkspacePanes = model_types.RemovedWorkspacePanes;
 pub const WorkspaceReconciliation = model_types.WorkspaceReconciliation;
 
+pub const HistoryPageResult = history_palette_mod.State.PageResult;
+
 pub const Model = struct {
     workspace: tabs_mod.Model,
     clipboard: @import("clipboard_capture.zig").State = .{},

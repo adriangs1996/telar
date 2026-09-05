@@ -158,6 +158,15 @@ remain constraints, not targets for consolidation.
 - Added clamp/no-op/combined-update regressions; prompt and browser integration
   tests pass with `zig build test --summary all`.
 
-16. Atomic history page request/result transitions.
+## 16. Atomic history pages
+
+- beginPageRequest reserves correlation, installs scope and invalidates old rows.
+- acceptPageResult commits entries, offsets, snapshot boundary, continuation and
+  display time under one revision, then retires the active request.
+- Split public expect/apply/metadata operations are no longer available.
+  Duplicate and stale pages cannot rewrite metadata or advance revisions.
+- Added metadata/revision replay regression; full suite passes with
+  `zig build test --summary all`.
+
 17. Shared incremental HTTP/2 framing.
 18. Per-command CLI grammars and argument cursor.

@@ -9,13 +9,7 @@ const schema = core.schema;
 pub const Handler = struct {
     model: *model.Model,
 
-    pub const Page = struct {
-        request_id: u64,
-        entries: []const schema.HistoryEntry,
-        snapshot_id: u64,
-        has_more: bool,
-        now_ms: i64,
-    };
+    pub const Page = model.HistoryPageResult;
 
     /// Opens one search generation with the configured Enter behavior.
     /// Example: `handler.begin(.{ .enter_runs = false, .match_fuzzy = true });`.
@@ -34,15 +28,7 @@ pub const Handler = struct {
     /// Reserves a request before delivery and makes previous rows non-actionable.
     /// Example: `if (!handler.requestPage(id, .global)) return;`.
     pub fn requestPage(handler: Handler, id: u64, scope: schema.HistoryScope) bool {
-        const palette = &handler.model.history_palette;
-        if (!palette.track(id)) {
-            palette.rejectQuery();
-            return false;
-        }
-
-        palette.setScope(scope);
-        palette.expect(id);
-        return true;
+        return handler.model.history_palette.beginPageRequest(id, scope);
     }
 
     /// Commits only the current result page, preserving the search field and inspector.
@@ -54,11 +40,10 @@ pub const Handler = struct {
         }
 
         const previous_offset = palette.page_offset;
-        if (!palette.apply(page.request_id, page.entries)) {
+        if (!palette.acceptPageResult(page)) {
             return false;
         }
 
-        palette.acceptPage(.{ .snapshot_id = page.snapshot_id, .has_more = page.has_more, .now_ms = page.now_ms });
         if (handler.model.name_prompt.currentConst()) |prompt| {
             const selection = if (palette.page_offset < previous_offset) palette.len -| 1 else @min(prompt.selection(), palette.len -| 1);
             handler.model.name_prompt.updateHistory(.{ .selection = selection, .reset_scroll = true });

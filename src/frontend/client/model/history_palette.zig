@@ -38,6 +38,28 @@ pub const Entry = struct {
     }
 };
 
+test "page results commit metadata once and stale replies cannot alter it" {
+    var state: State = .{};
+    try std.testing.expect(state.beginPageRequest(1, .cwd));
+    try std.testing.expectEqual(schema.HistoryScope.cwd, state.effective_scope);
+    try std.testing.expect(state.beginPageRequest(2, .workspace));
+    const before = state.revision;
+    const page: State.PageResult = .{ .request_id = 2, .entries = &.{}, .snapshot_id = 30, .has_more = true, .now_ms = 100 };
+    var stale = page;
+    stale.request_id = 1;
+    stale.snapshot_id = 99;
+    try std.testing.expect(!state.acceptPageResult(stale));
+    try std.testing.expectEqual(before, state.revision);
+    try std.testing.expectEqual(@as(u64, 0), state.snapshot_id);
+    try std.testing.expect(state.acceptPageResult(page));
+    try std.testing.expectEqual(before + 1, state.revision);
+    try std.testing.expectEqual(@as(u64, 30), state.snapshot_id);
+    try std.testing.expectEqual(@as(i64, 100), state.now_ms);
+    try std.testing.expect(state.has_more);
+    try std.testing.expect(!state.acceptPageResult(page));
+    try std.testing.expectEqual(before + 1, state.revision);
+}
+
 pub const State = struct {
     const Storage = struct {
         commands: [max_command_storage]u8 = undefined,
@@ -128,16 +150,40 @@ pub const State = struct {
         state.match_fuzzy = options.match_fuzzy;
     }
 
-    pub fn setScope(state: *State, scope: schema.HistoryScope) void {
+    pub const PageResult = struct {
+        request_id: u64,
+        entries: []const schema.HistoryEntry,
+        snapshot_id: u64,
+        has_more: bool,
+        now_ms: i64,
+    };
+
+    /// Reserves correlation and replaces actionable rows in one transition.
+    /// Example: `if (!state.beginPageRequest(id, .global)) return;`.
+    pub fn beginPageRequest(state: *State, id: u64, scope: schema.HistoryScope) bool {
+        if (id == 0 or !state.track(id)) {
+            state.rejectQuery();
+            return false;
+        }
+
         state.effective_scope = scope;
+        state.expect(id);
+        return true;
     }
 
-    /// Commits pagination metadata together with the accepted results.
-    /// Example: `state.acceptPage(.{ .snapshot_id = 8, .has_more = false, .now_ms = 100 });`.
-    pub fn acceptPage(state: *State, result: struct { snapshot_id: u64, has_more: bool, now_ms: i64 }) void {
+    /// Commits entries, pagination and display time under a single revision.
+    /// Example: `_ = state.acceptPageResult(page);`.
+    pub fn acceptPageResult(state: *State, result: PageResult) bool {
+        if (!state.applyEntries(result.request_id, result.entries)) {
+            return false;
+        }
+
         state.snapshot_id = result.snapshot_id;
         state.has_more = result.has_more;
         state.now_ms = result.now_ms;
+        state.pending_request = 0;
+        state.revision +%= 1;
+        return true;
     }
 
     /// Plans an adjacent bounded page; the visible page remains until its reply lands.
@@ -169,7 +215,7 @@ pub const State = struct {
 
     /// Prevents submitting previous results when no new request can be admitted.
     /// Example: `state.rejectQuery();`.
-    pub fn rejectQuery(state: *State) void {
+    fn rejectQuery(state: *State) void {
         state.phase = .failed;
         state.pending_request = 0;
     }
@@ -200,9 +246,9 @@ pub const State = struct {
     /// in-flight replies become stale immediately.
     ///
     /// ```zig
-    /// model.history_palette.expect(schema.id.raw(request_id));
+    /// Internal half of beginPageRequest; never exposed independently.
     /// ```
-    pub fn expect(state: *State, request_id: u64) void {
+    fn expect(state: *State, request_id: u64) void {
         state.pending_request = request_id;
         state.phase = .loading;
         state.full_id = 0;
@@ -217,11 +263,11 @@ pub const State = struct {
     /// request than the awaited one are ignored.
     ///
     /// ```zig
-    /// _ = model.history_palette.apply(request_id, decoded_entries);
+    /// Internal half of acceptPageResult; metadata commits before publication.
     /// ```
-    pub fn apply(state: *State, request_id: u64, entries: []const schema.HistoryEntry) bool {
+    fn applyEntries(state: *State, request_id: u64, entries: []const schema.HistoryEntry) bool {
         _ = state.retire(request_id);
-        if (request_id == 0 or request_id != state.pending_request) {
+        if (request_id == 0 or request_id != state.pending_request or state.phase != .loading) {
             return false;
         }
 
@@ -262,7 +308,6 @@ pub const State = struct {
 
         state.phase = .ready;
         state.page_offset = state.pending_offset;
-        state.revision +%= 1;
         return true;
     }
 
@@ -454,7 +499,7 @@ fn copyBounded(buffer: []u8, source: []const u8) u16 {
 test "only the awaited reply lands and commands stay bounded" {
     var state: State = .{};
     state.begin();
-    state.expect(7);
+    try std.testing.expect(state.beginPageRequest(7, .global));
 
     const long = "x" ** (max_command_bytes + 32);
     const entries = [_]schema.HistoryEntry{
@@ -482,10 +527,10 @@ test "only the awaited reply lands and commands stay bounded" {
         },
     };
 
-    try std.testing.expect(!state.apply(6, &entries));
+    try std.testing.expect(!state.acceptPageResult(.{ .request_id = 6, .entries = &entries, .snapshot_id = 0, .has_more = false, .now_ms = 0 }));
     try std.testing.expectEqual(@as(u8, 0), state.len);
 
-    try std.testing.expect(state.apply(7, &entries));
+    try std.testing.expect(state.acceptPageResult(.{ .request_id = 7, .entries = &entries, .snapshot_id = 0, .has_more = false, .now_ms = 0 }));
     try std.testing.expectEqual(@as(u8, 2), state.len);
     try std.testing.expectEqualStrings("git status", state.slice()[0].commandSlice());
     try std.testing.expectEqual(@as(u16, max_command_bytes), state.slice()[1].command_len);
@@ -497,15 +542,15 @@ test "history retains full command bytes and rejects actions on stale results" {
     defer state.deinit();
     var command = [_]u8{'x'} ** (max_command_bytes + 100);
     const entry: schema.HistoryEntry = .{ .id = 7, .pane_id = @enumFromInt(1), .started_at_ms = 123, .duration_ns = 9000, .exit_code = 1, .status = .completed, .command = &command, .cwd = "/work", .workspace_path = "/work" };
-    state.expect(1);
-    try std.testing.expect(state.apply(1, &.{entry}));
+    try std.testing.expect(state.beginPageRequest(1, .global));
+    try std.testing.expect(state.acceptPageResult(.{ .request_id = 1, .entries = &.{entry}, .snapshot_id = 0, .has_more = false, .now_ms = 0 }));
     command[0] = 'z';
 
     const full = state.commandAt(0).?;
     try std.testing.expectEqual(@as(usize, max_command_bytes + 100), full.len);
     try std.testing.expectEqual(@as(u8, 'x'), full[0]);
     try std.testing.expectEqual(@as(i64, 123), state.slice()[0].started_at_ms);
-    state.expect(2);
+    try std.testing.expect(state.beginPageRequest(2, .global));
     try std.testing.expect(state.commandAt(0) == null);
 }
 
@@ -533,8 +578,8 @@ test "captured truncation blocks paste and unicode previews end at a codepoint b
     var state: State = .{};
     const command = "x" ** (max_command_bytes - 1) ++ "é";
     const entry: schema.HistoryEntry = .{ .id = 7, .pane_id = @enumFromInt(1), .started_at_ms = 0, .duration_ns = 0, .exit_code = null, .status = .completed, .command = command, .cwd = "", .workspace_path = "", .command_truncated = true };
-    state.expect(1);
-    try std.testing.expect(state.apply(1, &.{entry}));
+    try std.testing.expect(state.beginPageRequest(1, .global));
+    try std.testing.expect(state.acceptPageResult(.{ .request_id = 1, .entries = &.{entry}, .snapshot_id = 0, .has_more = false, .now_ms = 0 }));
     try std.testing.expect(state.commandAt(0) == null);
     try std.testing.expect(std.unicode.utf8ValidateSlice(state.slice()[0].commandSlice()));
     try std.testing.expectEqual(@as(u16, max_command_bytes - 1), state.slice()[0].command_len);
@@ -550,8 +595,8 @@ test "command storage exhaustion uses one correlated full-command fallback" {
         entry.* = .{ .id = index + 1, .pane_id = @enumFromInt(1), .started_at_ms = 0, .duration_ns = 0, .exit_code = 0, .status = .completed, .command = command, .cwd = "", .workspace_path = "" };
     }
 
-    state.expect(1);
-    try std.testing.expect(state.apply(1, &entries));
+    try std.testing.expect(state.beginPageRequest(1, .global));
+    try std.testing.expect(state.acceptPageResult(.{ .request_id = 1, .entries = &entries, .snapshot_id = 0, .has_more = false, .now_ms = 0 }));
     try std.testing.expect(state.commandAt(13) == null);
     try std.testing.expect(state.track(2));
     state.expectFull(.{ .request_id = 2, .id = 14 });
@@ -559,7 +604,7 @@ test "command storage exhaustion uses one correlated full-command fallback" {
     try std.testing.expect(state.applyFull(2, entries[13..14]));
     try std.testing.expectEqualStrings(command, state.commandAt(13).?);
     try std.testing.expect(state.commandAt(12) == null);
-    state.expect(4);
+    try std.testing.expect(state.beginPageRequest(4, .global));
     try std.testing.expect(!state.applyFull(2, entries[13..14]));
     try std.testing.expect(state.commandAt(13) == null);
 }
