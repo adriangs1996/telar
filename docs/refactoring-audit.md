@@ -65,7 +65,14 @@ remain constraints, not targets for consolidation.
 - Proof: stale results, cancellation, due ordering and workspace removal while
   probing. `zig build test --summary all` passed.
 
-7. Provider session-file adapters.
+## 7. Session-file readers
+
+- Provider readers own transcript scanning and the Codex SQLite schema.
+- The runtime application schedules an owned reader job and applies its typed
+  completion without importing SQLite or opening provider files.
+- Existing transcript append/rewrite/missing-file and database-title tests moved
+  with the supported reader boundary. `zig build test --summary all` passed.
+
 8. Agent observation values independent of producers.
 9. Client submodels and revisions.
 10. Pane media ownership and dependency cycle.

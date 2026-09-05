@@ -10,6 +10,7 @@ const types = @import("types.zig");
 pub const soundForTransition = @import("sound.zig").soundForTransition;
 pub const description = @import("description.zig");
 pub const session_file = @import("session_file.zig");
+pub const session_readers = @import("session_readers/root.zig");
 pub const transcript = @import("transcript.zig");
 pub const providers = @import("providers/root.zig");
 pub const Tracker = tracker.Tracker;
