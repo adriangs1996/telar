@@ -3,7 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_requests = @import("requests.zig");
-const runtime_transport = @import("runtime_transport.zig");
+const runtime_transport = @import("../entrypoints/runtime_io.zig");
 
 const Client = @import("../client.zig");
 const schema = core.schema;

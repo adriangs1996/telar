@@ -9,7 +9,7 @@ const link_openings = @import("link_openings.zig");
 const Client = @import("../../client.zig");
 const copy_mode = input_application.copy_mode;
 const keybind = input_capability.keybind;
-const runtime_transport = @import("../../connection/runtime_transport.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const schema = core.schema;
 
 /// Enters copy mode on the attached focused pane.

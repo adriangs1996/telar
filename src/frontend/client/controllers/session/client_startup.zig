@@ -11,7 +11,7 @@ const bar_updates = @import("../configuration/bar_updates.zig");
 const config_reloads = @import("../configuration/config_reloads.zig");
 const host_capabilities = @import("../host/host_capabilities.zig");
 const host_resizes = @import("../host/host_resizes.zig");
-const runtime_transport = @import("../../connection/runtime_transport.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 const kitty = graphics.kitty;
 

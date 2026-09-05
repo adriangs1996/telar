@@ -19,7 +19,7 @@ const host_resizes = @import("../controllers/host/host_resizes.zig");
 const notifications = @import("../controllers/notifications/notifications.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const runtime_transport = @import("../connection/runtime_transport.zig");
+const runtime_transport = @import("runtime_io.zig");
 const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
 
 const diagnostics = core.diagnostics;

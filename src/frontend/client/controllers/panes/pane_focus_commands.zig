@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const workspace = @import("../../../workspace/root.zig");
-const runtime_transport = @import("../../connection/runtime_transport.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const pane_focus = @import("pane_focus.zig");
 
 const Client = @import("../../client.zig");

@@ -1,5 +1,8 @@
 //! Host input parsing, routing and semantic actions.
 
+/// Maximum encoded input chunk retained by the client outbox.
+pub const max_encoded_bytes: usize = 8 * 1024;
+
 pub const action = @import("action.zig");
 pub const copy_mode = @import("copy_mode.zig");
 pub const edit = @import("edit.zig");

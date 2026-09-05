@@ -24,6 +24,12 @@ which typed continuation may consume a reply. Transport only preserves framed
 delivery, bounded storage and I/O ordering. See
 [Client request lifecycle](request-lifecycle.md).
 
+I/O completion orchestration lives in `client/entrypoints/runtime_io.zig`.
+It connects transport state to graphics credit, host input and runtime-message
+controllers. `connection/runtime_transport.zig` never imports `Client` or a
+controller. Existing local aliases named `runtime_transport` in controllers
+refer to this event adapter for enqueue and scheduling operations.
+
 ## Bootstrap
 
 Before the event loop starts its first read, `client_startup` registers the

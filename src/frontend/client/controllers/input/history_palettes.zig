@@ -9,7 +9,7 @@ const name_prompts = @import("name_prompts.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const connection_outbox = @import("../../connection/outbox.zig");
-const runtime_transport = @import("../../connection/runtime_transport.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 const Client = @import("../../client.zig");
 const schema = core.schema;

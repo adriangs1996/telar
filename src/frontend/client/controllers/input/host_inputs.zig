@@ -7,7 +7,7 @@ const widgets = @import("../../../widgets/root.zig");
 const input_application = @import("../../application/input/root.zig");
 const client_clock = @import("../../resources/clock.zig");
 const deadline_timer = @import("../../resources/deadline_timer.zig");
-const runtime_transport = @import("../../connection/runtime_transport.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 const Client = @import("../../client.zig");
 const InputHandler = @import("../../resources/input_handler.zig");

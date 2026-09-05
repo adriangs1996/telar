@@ -7,7 +7,7 @@ const panes_application = @import("../../application/panes/root.zig");
 const client_model = @import("../../model/root.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_geometry = @import("pane_geometry.zig");
-const runtime_transport = @import("../../connection/runtime_transport.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 const Client = @import("../../client.zig");
 const active_pane_resource_delivery = panes_application.active_pane_resource_delivery;

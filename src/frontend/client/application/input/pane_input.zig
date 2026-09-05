@@ -10,7 +10,7 @@ const host_input = input_capability.host;
 const keybind = input_capability.keybind;
 const schema = core.schema;
 
-pub const max_bytes: usize = 8 * 1024;
+pub const max_bytes = input_capability.max_encoded_bytes;
 /// Keys one synthetic sequence may carry; each key encodes to at most 32 bytes.
 pub const max_keys: usize = max_bytes / 32;
 

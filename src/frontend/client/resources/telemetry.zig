@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const Client = @import("../client.zig");
 const client_model = @import("../model/root.zig");
-const runtime_transport = @import("../connection/runtime_transport.zig");
+const runtime_transport = @import("../entrypoints/runtime_io.zig");
 const kitty = @import("../../graphics/root.zig").kitty;
 const pace = @import("../../presentation/root.zig").pace;
 

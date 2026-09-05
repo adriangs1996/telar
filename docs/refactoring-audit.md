@@ -38,7 +38,15 @@ remain constraints, not targets for consolidation.
 
 ## Remaining items
 
-4. Frontend transport/event coordination boundary.
+## 4. Frontend transport boundary
+
+- Transport state no longer imports Client, controllers or runtime entrypoints.
+- The runtime I/O entrypoint owns cross-resource coordination; transport owns
+  read reservations, bounded buffers and send preparation/cancellation.
+- Input chunk limits belong to the input capability, not an application handler.
+- Proof: isolated read reservation/failure test plus existing backpressure,
+  graphics-credit and socket tests. `zig build test --summary all` passed.
+
 5. History inspection geometry independent of widgets.
 6. Git observation reservation protocol.
 7. Provider session-file adapters.

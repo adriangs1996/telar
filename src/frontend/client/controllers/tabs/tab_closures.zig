@@ -11,7 +11,7 @@ const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
 const Client = @import("../../client.zig");
 const close_tab = tabs_application.close_tab;
-const runtime_transport = @import("../../connection/runtime_transport.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const schema = core.schema;
 const tab_removal_delivery = tabs_application.tab_removal_delivery;
 const tab_snapshot_recovery = tabs_application.tab_snapshot_recovery;

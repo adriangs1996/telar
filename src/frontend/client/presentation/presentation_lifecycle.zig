@@ -8,7 +8,7 @@ const diagnostics = core.diagnostics;
 const Client = @import("../client.zig");
 const presentation_application = @import("../application/presentation/root.zig");
 const presentation_projection = @import("presentation_projection.zig");
-const runtime_transport = @import("../connection/runtime_transport.zig");
+const runtime_transport = @import("../entrypoints/runtime_io.zig");
 
 const presentation_delivery = presentation_application.presentation_delivery;
 

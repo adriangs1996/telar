@@ -8,7 +8,7 @@ const pane_geometry = @import("pane_geometry.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
 const Client = @import("../../client.zig");
-const runtime_transport = @import("../../connection/runtime_transport.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const schema = core.schema;
 const split_pane = panes_application.split_pane;
 const split_confirmation_delivery = panes_application.pane_split_confirmation_delivery;
