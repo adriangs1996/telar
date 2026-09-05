@@ -36,8 +36,6 @@ remain constraints, not targets for consolidation.
 - Proof: exact-generation, duplicate reservation and retry tests, plus the full
   suite: `zig build test --summary all` passed.
 
-## Remaining items
-
 ## 4. Frontend transport boundary
 
 - Transport state no longer imports Client, controllers or runtime entrypoints.
@@ -177,4 +175,18 @@ remain constraints, not targets for consolidation.
 - Added every-split boundary coverage with an empty frame and reserved stream
   bit; existing relay/transcoding regressions pass with `zig build test --summary all`.
 
-18. Per-command CLI grammars and argument cursor.
+## 18. CLI grammars
+
+- CLI dispatch selects a command; separate grammar modules own run, server,
+  history, notification, agent, pane, workspace, config, plugins and integration
+  options. Shared target/value conversions have no dependency on dispatch.
+- A borrowed argument cursor centralizes option-value consumption without
+  changing each grammar's error vocabulary or rejecting option-shaped values.
+- Existing command grammar regressions and the new cursor boundary/error test
+  pass with `zig build test --summary all`.
+
+## Final validation
+
+- `zig build test --summary all`: 82/82 steps, 3455/3455 tests passed.
+- `zig build`: passed.
+- The refactor worktree is isolated from the original checkout's local changes.
