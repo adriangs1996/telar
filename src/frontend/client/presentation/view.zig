@@ -719,8 +719,8 @@ pub const State = struct {
         const current_modal_area = if (attachment_snapshot.modal != null)
             widgets.attachment_preview.modalArea(application_area)
         else if (picker_prompt) |prompt|
-            if (prompt.target == .history)
-                widgets.history_browser.modalArea(application_area, .{ .count = input.history.len, .inspecting = prompt.inspecting })
+            if (prompt.target() == .history)
+                widgets.history_browser.modalArea(application_area, .{ .count = input.history.len, .inspecting = prompt.inspecting() })
             else
                 widgets.goto_picker.modalArea(application_area)
         else
@@ -867,7 +867,7 @@ pub const State = struct {
 fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
     const current = prompt orelse return .rename_tab;
 
-    return switch (current.target) {
+    return switch (current.target()) {
         .rename_tab, .goto, .history, .suggest => .rename_tab,
         .create_workspace => .create_workspace,
         .rename_workspace => .rename_workspace,
@@ -880,7 +880,7 @@ fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
 
 fn pickerPrompt(prompt: ?*name_prompt.Prompt) ?*name_prompt.Prompt {
     const current = prompt orelse return null;
-    return switch (current.target) {
+    return switch (current.target()) {
         .goto, .history, .suggest => current,
         else => null,
     };
@@ -888,7 +888,7 @@ fn pickerPrompt(prompt: ?*name_prompt.Prompt) ?*name_prompt.Prompt {
 
 fn promptField(prompt: ?*name_prompt.Prompt) ?*widgets.tab_rename.Field {
     const current = prompt orelse return null;
-    return switch (current.target) {
+    return switch (current.target()) {
         .goto, .history, .suggest => null,
         else => &current.field,
     };
@@ -913,17 +913,17 @@ fn renderGotoPicker(context: *widgets.Context, application: ui.Rect, sources: Pi
         .workspaces = sources.workspaces,
         .tabs = sources.tabs,
     };
-    if (sources.prompt.target == .suggest) {
+    if (sources.prompt.target() == .suggest) {
         return renderSuggestPalette(context, application, sources);
     }
-    if (sources.prompt.target != .goto) {
+    if (sources.prompt.target() != .goto) {
         return renderHistoryPalette(context, application, sources);
     }
 
     goto_picker_model.collect(match_sources, sources.prompt.field.text(), &results);
 
     const total: u16 = results.len;
-    const selected: u16 = if (total == 0) 0 else @min(sources.prompt.selection, total - 1);
+    const selected: u16 = if (total == 0) 0 else @min(sources.prompt.selection(), total - 1);
     const window: u16 = @min(@as(u16, widgets.goto_picker.max_rows), total);
     const start: u16 = if (selected + 1 > window) selected + 1 - window else 0;
 
@@ -969,10 +969,10 @@ fn renderHistoryPalette(context: *widgets.Context, application: ui.Rect, sources
     return widgets.history_browser.render(context, application, .{
         .field = &sources.prompt.field,
         .entries = rows[0..entries.len],
-        .selection = sources.prompt.selection,
+        .selection = sources.prompt.selection(),
         .scope = @tagName(sources.history.effective_scope),
-        .inspecting = sources.prompt.inspecting,
-        .detail_scroll = sources.prompt.detail_scroll,
+        .inspecting = sources.prompt.inspecting(),
+        .detail_scroll = sources.prompt.detailScroll(),
         .now_ms = sources.history.now_ms,
         .enter_runs = sources.history.enter_runs,
         .match_fuzzy = sources.history.match_fuzzy,

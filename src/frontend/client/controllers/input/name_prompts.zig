@@ -161,15 +161,15 @@ const ListSnapshot = struct {
 
 fn listSnapshot(client: *Client) ListSnapshot {
     const prompt = client.model.name_prompt.currentConst() orelse return .{};
-    var snapshot: ListSnapshot = switch (prompt.target) {
+    var snapshot: ListSnapshot = switch (prompt.target()) {
         .goto => .{ .kind = .goto },
         .history => .{ .kind = .history },
         .suggest => .{ .kind = .suggest },
         else => return .{},
     };
 
-    snapshot.selection = prompt.selection;
-    snapshot.scope = prompt.scope;
+    snapshot.selection = prompt.selection();
+    snapshot.scope = prompt.scope();
     const text = prompt.field.text();
     snapshot.len = @intCast(text.len);
     @memcpy(snapshot.text[0..text.len], text);
@@ -204,12 +204,12 @@ fn finishListSubmission(client: *Client, before: ListSnapshot) !void {
 /// changed, so selection moves and pastes stay local.
 fn refreshHistoryQuery(client: *Client, before: ListSnapshot) !void {
     const prompt = client.model.name_prompt.currentConst() orelse return;
-    if (prompt.target != .history) {
+    if (prompt.target() != .history) {
         return;
     }
 
     const text = prompt.field.text();
-    if (before.kind == .history and before.scope == prompt.scope and
+    if (before.kind == .history and before.scope == prompt.scope() and
         std.mem.eql(u8, before.textSlice(), text))
     {
         return;
@@ -222,7 +222,7 @@ fn refreshHistoryQuery(client: *Client, before: ListSnapshot) !void {
 /// the next Enter asks again instead of pasting a stale answer.
 fn discardEditedSuggestion(client: *Client, before: ListSnapshot) void {
     const prompt = client.model.name_prompt.currentConst() orelse return;
-    if (prompt.target != .suggest or before.kind != .suggest) {
+    if (prompt.target() != .suggest or before.kind != .suggest) {
         return;
     }
 
@@ -236,12 +236,12 @@ fn discardEditedSuggestion(client: *Client, before: ListSnapshot) void {
 /// Keeps the picker selection inside the deterministic result set the
 /// renderer and the submit path both derive from the current query.
 fn clampPickerSelection(client: *Client) void {
-    const prompt = client.model.name_prompt.current() orelse return;
-    if (prompt.selection == 0) {
+    const prompt = client.model.name_prompt.currentConst() orelse return;
+    if (prompt.selection() == 0) {
         return;
     }
 
-    const count: u16 = switch (prompt.target) {
+    const count: u16 = switch (prompt.target()) {
         .goto => blk: {
             var results: goto_picker.Results = .{};
             goto_picker.collect(pickerSources(client), prompt.field.text(), &results);
@@ -251,10 +251,7 @@ fn clampPickerSelection(client: *Client) void {
         .suggest => 1,
         else => return,
     };
-    const limit: u16 = if (count == 0) 0 else count - 1;
-    if (prompt.selection > limit) {
-        prompt.selection = limit;
-    }
+    client.model.name_prompt.constrainSelection(count);
 }
 
 fn pickerSources(client: *Client) goto_picker.Sources {
@@ -328,7 +325,7 @@ fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
         // `finishListSubmission` once the prompt no longer owns input.
         .history => blk: {
             const prompt = client.model.name_prompt.currentConst() orelse break :blk false;
-            if (!history_palettes.canSubmit(client, prompt.selection)) {
+            if (!history_palettes.canSubmit(client, prompt.selection())) {
                 break :blk false;
             }
 

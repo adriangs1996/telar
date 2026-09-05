@@ -25,7 +25,7 @@ test "history input preserves search through inspection and pages past the first
     const results = try schema.encodeHistoryResults(&buffer, .{ .request_id = query.request_id, .entries = &.{entry}, .snapshot_id = 20, .has_more = true });
     _ = try server.handleServerMessage(client, try schema.decodeServer(results));
     _ = try prompts.handleInput(client, "\x0f");
-    try std.testing.expect(client.model.name_prompt.currentConst().?.inspecting);
+    try std.testing.expect(client.model.name_prompt.currentConst().?.inspecting());
     try harness.settle();
     const read = (try harness.nextClientMessage(&buffer)).read_history_output;
     try std.testing.expectEqual(entry.id, read.id);
@@ -34,10 +34,10 @@ test "history input preserves search through inspection and pages past the first
     try std.testing.expectEqualStrings("done", client.model.history_palette.outputSlice());
 
     _ = try prompts.handleInput(client, "\x1b[6~");
-    try std.testing.expectEqual(@as(u32, 0), client.model.name_prompt.currentConst().?.detail_scroll);
+    try std.testing.expectEqual(@as(u32, 0), client.model.name_prompt.currentConst().?.detailScroll());
 
     _ = try prompts.handleInput(client, "\x1b");
-    try std.testing.expect(!client.model.name_prompt.currentConst().?.inspecting);
+    try std.testing.expect(!client.model.name_prompt.currentConst().?.inspecting());
     try std.testing.expectEqualStrings("", client.model.name_prompt.currentConst().?.field.text());
     _ = try prompts.handleInput(client, "\x1b[5~");
     try harness.settle();
@@ -71,19 +71,19 @@ test "history scope labels follow the effective runtime query" {
     const workspace_query = (try harness.nextClientMessage(&buffer)).query_history;
     try std.testing.expect(workspace_query.scope == .global);
     try std.testing.expect(client.model.history_palette.effective_scope == .global);
-    try std.testing.expect(client.model.name_prompt.currentConst().?.scope == .workspace);
+    try std.testing.expect(client.model.name_prompt.currentConst().?.scope() == .workspace);
 
     _ = try prompts.handleInput(client, "\t");
     try harness.settle();
     _ = try harness.nextClientMessage(&buffer);
-    try std.testing.expect(client.model.name_prompt.currentConst().?.scope == .cwd);
+    try std.testing.expect(client.model.name_prompt.currentConst().?.scope() == .cwd);
 
     _ = try prompts.handleInput(client, "\t");
     try harness.settle();
     const query = (try harness.nextClientMessage(&buffer)).query_history;
     try std.testing.expect(query.scope == .pane);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, query.pane_id);
-    try std.testing.expect(client.model.name_prompt.currentConst().?.scope == .pane);
+    try std.testing.expect(client.model.name_prompt.currentConst().?.scope() == .pane);
 }
 
 test "history submission sends a complete command longer than its preview" {

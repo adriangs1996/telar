@@ -110,18 +110,71 @@ pub const Transition = union(enum) {
     submitted: Submission,
 };
 
-pub const Prompt = struct {
-    target: Target,
-    field: Field,
-    pasting: bool = false,
-    /// Goto-picker list selection; the renderer and the submit path clamp it
-    /// against the same deterministic result set.
+pub const History = struct {
     selection: u16 = 0,
-    /// History-palette search scope, cycled with Tab.
     scope: HistoryScope = .global,
     inspecting: bool = false,
     detail_scroll: u32 = 0,
     page_requested: enum { none, older, newer } = .none,
+};
+
+pub const Prompt = struct {
+    mode: union(enum) {
+        rename_tab: schema.TabId,
+        create_workspace,
+        rename_workspace: schema.WorkspaceLocation,
+        copy_search: copy_mode.Direction,
+        goto: struct { selection: u16 = 0 },
+        history: History,
+        suggest,
+    },
+    field: Field,
+    pasting: bool = false,
+
+    /// Example: `switch (prompt.target()) { ... }`.
+    pub fn target(prompt: *const Prompt) Target {
+        return switch (prompt.mode) {
+            .rename_tab => |id| .{ .rename_tab = id },
+            .create_workspace => .create_workspace,
+            .rename_workspace => |location| .{ .rename_workspace = location },
+            .copy_search => |direction| .{ .copy_search = direction },
+            .goto => .goto,
+            .history => .history,
+            .suggest => .suggest,
+        };
+    }
+
+    /// Example: `const selected = prompt.selection();`.
+    pub fn selection(prompt: *const Prompt) u16 {
+        return switch (prompt.mode) {
+            .goto => |picker| picker.selection,
+            .history => |history| history.selection,
+            else => 0,
+        };
+    }
+
+    /// Example: `const scope = prompt.mode.history.scope();`.
+    pub fn scope(prompt: *const Prompt) HistoryScope {
+        return if (prompt.mode == .history) prompt.mode.history.scope else .global;
+    }
+
+    /// Example: `if (prompt.mode.history.inspecting()) renderDetails();`.
+    pub fn inspecting(prompt: *const Prompt) bool {
+        return prompt.mode == .history and prompt.mode.history.inspecting;
+    }
+
+    /// Example: `const scroll = prompt.detailScroll();`.
+    pub fn detailScroll(prompt: *const Prompt) u32 {
+        return if (prompt.mode == .history) prompt.mode.history.detail_scroll else 0;
+    }
+
+    fn setSelection(prompt: *Prompt, selected: u16) void {
+        switch (prompt.mode) {
+            .goto => |*picker| picker.selection = selected,
+            .history => |*history| history.selection = selected,
+            else => {},
+        }
+    }
 };
 
 pub const State = struct {
@@ -131,42 +184,53 @@ pub const State = struct {
     /// Reconciles search scope, selection and scroll after a history transition.
     /// Example: `state.updateHistory(.{ .selection = 0, .reset_scroll = true });`.
     pub fn updateHistory(state: *State, update: struct { scope: ?HistoryScope = null, selection: ?u16 = null, reset_scroll: bool = false, scroll_limit: ?u32 = null }) void {
-        const prompt = state.current() orelse return;
-        if (prompt.target != .history) {
+        const prompt = state.mutable() orelse return;
+        if (prompt.mode != .history) {
             return;
         }
 
+        const history = &prompt.mode.history;
+        const before = history.*;
         if (update.scope) |scope| {
-            prompt.scope = scope;
+            history.scope = scope;
         }
 
-        if (update.selection) |selection| {
-            prompt.selection = selection;
+        if (update.selection) |selected| {
+            history.selection = selected;
         }
 
         if (update.reset_scroll) {
-            prompt.detail_scroll = 0;
+            history.detail_scroll = 0;
         }
 
         if (update.scroll_limit) |limit| {
-            if (prompt.detail_scroll <= limit) {
-                return;
-            }
-
-            prompt.detail_scroll = limit;
+            history.detail_scroll = @min(history.detail_scroll, limit);
         }
 
-        state.revision +%= 1;
+        if (!std.meta.eql(before, history.*)) {
+            state.revision +%= 1;
+        }
     }
 
-    pub fn takeHistoryPage(state: *State) @FieldType(Prompt, "page_requested") {
-        const prompt = state.current() orelse return .none;
-        if (prompt.target != .history) {
+    /// Clamps the selected result and commits a revision only when it changes.
+    /// Example: `state.constrainSelection(result_count);`.
+    pub fn constrainSelection(state: *State, count: u16) void {
+        const prompt = state.mutable() orelse return;
+        const selected = @min(prompt.selection(), count -| 1);
+        if (selected != prompt.selection()) {
+            prompt.setSelection(selected);
+            state.revision +%= 1;
+        }
+    }
+
+    pub fn takeHistoryPage(state: *State) @FieldType(History, "page_requested") {
+        const prompt = state.mutable() orelse return .none;
+        if (prompt.target() != .history) {
             return .none;
         }
 
-        const requested = prompt.page_requested;
-        prompt.page_requested = .none;
+        const requested = prompt.mode.history.page_requested;
+        prompt.mode.history.page_requested = .none;
         return requested;
     }
 
@@ -178,31 +242,31 @@ pub const State = struct {
     pub fn begin(state: *State, command: Begin) void {
         state.value = switch (command) {
             .rename_tab => |rename| .{
-                .target = .{ .rename_tab = rename.tab_id },
+                .mode = .{ .rename_tab = rename.tab_id },
                 .field = .init(rename.label),
             },
             .create_workspace => .{
-                .target = .create_workspace,
+                .mode = .create_workspace,
                 .field = .init(""),
             },
             .rename_workspace => |rename| .{
-                .target = .{ .rename_workspace = rename.workspace },
+                .mode = .{ .rename_workspace = rename.workspace },
                 .field = .init(if (rename.name.len <= schema.max_tab_label_bytes) rename.name else ""),
             },
             .copy_search => |direction| .{
-                .target = .{ .copy_search = direction },
+                .mode = .{ .copy_search = direction },
                 .field = .init(""),
             },
             .goto_picker => .{
-                .target = .goto,
+                .mode = .{ .goto = .{} },
                 .field = .init(""),
             },
             .history_palette => .{
-                .target = .history,
+                .mode = .{ .history = .{} },
                 .field = .init(""),
             },
             .suggest_palette => .{
-                .target = .suggest,
+                .mode = .suggest,
                 .field = .init(""),
             },
         };
@@ -218,12 +282,7 @@ pub const State = struct {
         return state.value != null;
     }
 
-    /// Returns the mutable prompt used by the renderer and input adapter.
-    ///
-    /// ```zig
-    /// const current = prompt.current() orelse return;
-    /// ```
-    pub fn current(state: *State) ?*Prompt {
+    fn mutable(state: *State) ?*Prompt {
         return if (state.value) |*value| value else null;
     }
 
@@ -252,7 +311,7 @@ pub const State = struct {
     /// const transition = prompt.apply(.backspace);
     /// ```
     pub fn apply(state: *State, command: Command) Transition {
-        const prompt = state.current() orelse return .unchanged;
+        const prompt = state.mutable() orelse return .unchanged;
         switch (command) {
             .paste_start => {
                 if (prompt.pasting) {
@@ -274,19 +333,19 @@ pub const State = struct {
                 if (prompt.pasting) {
                     return state.editField(.{ .insert = " " });
                 }
-                if (prompt.field.text().len == 0 and !selects(prompt.target)) {
+                if (prompt.field.text().len == 0 and !selects(prompt.target())) {
                     return .unchanged;
                 }
 
                 return .{ .submitted = .{
-                    .target = prompt.target,
+                    .target = prompt.target(),
                     .name = prompt.field.text(),
                     .alternate = command == .submit_alternate,
                 } };
             },
             .cancel => {
-                if (prompt.target == .history and prompt.inspecting) {
-                    prompt.inspecting = false;
+                if (prompt.target() == .history and prompt.mode.history.inspecting) {
+                    prompt.mode.history.inspecting = false;
                     state.revision +%= 1;
                     return .changed;
                 }
@@ -296,82 +355,82 @@ pub const State = struct {
                 return .cancelled;
             },
             .move_up => {
-                if (prompt.target == .history) {
-                    prompt.selection +|= 1;
-                    prompt.detail_scroll = 0;
+                if (prompt.target() == .history) {
+                    prompt.setSelection(prompt.selection() +| 1);
+                    prompt.mode.history.detail_scroll = 0;
                     state.revision +%= 1;
                     return .changed;
                 }
 
-                if (!selects(prompt.target) or prompt.selection == 0) {
+                if (!selects(prompt.target()) or prompt.selection() == 0) {
                     return .unchanged;
                 }
 
-                prompt.selection -= 1;
+                prompt.setSelection(prompt.selection() - 1);
                 state.revision +%= 1;
                 return .changed;
             },
             .move_down => {
-                if (prompt.target == .history) {
-                    if (prompt.selection == 0) {
-                        prompt.page_requested = .newer;
+                if (prompt.target() == .history) {
+                    if (prompt.selection() == 0) {
+                        prompt.mode.history.page_requested = .newer;
                     }
 
-                    prompt.selection -|= 1;
-                    prompt.detail_scroll = 0;
+                    prompt.setSelection(prompt.selection() -| 1);
+                    prompt.mode.history.detail_scroll = 0;
                     state.revision +%= 1;
                     return .changed;
                 }
 
-                if (!selects(prompt.target)) {
+                if (!selects(prompt.target())) {
                     return .unchanged;
                 }
 
-                prompt.selection +|= 1;
+                prompt.setSelection(prompt.selection() +| 1);
                 state.revision +%= 1;
                 return .changed;
             },
             .cycle_scope => {
-                if (prompt.target != .history) {
+                if (prompt.target() != .history) {
                     return .unchanged;
                 }
 
-                prompt.scope = prompt.scope.next();
-                prompt.selection = 0;
+                prompt.mode.history.scope = prompt.mode.history.scope.next();
+                prompt.setSelection(0);
                 state.revision +%= 1;
                 return .changed;
             },
             .toggle_inspection => {
-                if (prompt.target != .history or prompt.pasting) {
+                if (prompt.target() != .history or prompt.pasting) {
                     return .unchanged;
                 }
 
-                prompt.inspecting = !prompt.inspecting;
-                prompt.detail_scroll = 0;
+                prompt.mode.history.inspecting = !prompt.mode.history.inspecting;
+                prompt.mode.history.detail_scroll = 0;
                 state.revision +%= 1;
                 return .changed;
             },
             .page_up, .page_down => {
-                if (prompt.target != .history) {
+                if (prompt.target() != .history) {
                     return .unchanged;
                 }
 
-                if (prompt.inspecting) {
-                    prompt.detail_scroll = if (command == .page_up) prompt.detail_scroll -| 10 else prompt.detail_scroll +| 10;
+                if (prompt.mode.history.inspecting) {
+                    prompt.mode.history.detail_scroll = if (command == .page_up) prompt.mode.history.detail_scroll -| 10 else prompt.mode.history.detail_scroll +| 10;
                 } else {
-                    prompt.page_requested = if (command == .page_up) .older else .newer;
+                    prompt.mode.history.page_requested = if (command == .page_up) .older else .newer;
                 }
 
                 state.revision +%= 1;
                 return .changed;
             },
             .remove_entry => {
-                if (prompt.target != .history) {
+                if (prompt.target() != .history) {
                     return .unchanged;
                 }
 
                 state.revision +%= 1;
-                return .{ .removed = prompt.selection };
+                return .{ .removed = prompt.selection() };
             },
             .insert,
             .backspace,
@@ -391,7 +450,7 @@ pub const State = struct {
     /// ```
     pub fn finish(state: *State, target: Target) bool {
         const prompt = state.currentConst() orelse return false;
-        if (!std.meta.eql(prompt.target, target)) {
+        if (!std.meta.eql(prompt.target(), target)) {
             return false;
         }
 
@@ -401,7 +460,7 @@ pub const State = struct {
     }
 
     fn editField(state: *State, command: Command) Transition {
-        const prompt = state.current() orelse return .unchanged;
+        const prompt = state.mutable() orelse return .unchanged;
         const before: FieldPosition = .capture(&prompt.field);
         switch (command) {
             .insert => |bytes| prompt.field.insert(bytes),
@@ -417,8 +476,8 @@ pub const State = struct {
             return .unchanged;
         }
 
-        if (selects(prompt.target) and before.len != prompt.field.len) {
-            prompt.selection = 0;
+        if (selects(prompt.target()) and before.len != prompt.field.len) {
+            prompt.setSelection(0);
         }
         state.revision +%= 1;
         return .changed;
@@ -450,6 +509,30 @@ const FieldPosition = struct {
     }
 };
 
+test "selection clamping and combined history updates publish exactly one revision" {
+    var state: State = .{};
+    state.begin(.goto_picker);
+    _ = state.apply(.move_down);
+    const selected_revision = state.version();
+    state.constrainSelection(1);
+    try std.testing.expectEqual(@as(u16, 0), state.currentConst().?.selection());
+    try std.testing.expectEqual(selected_revision + 1, state.version());
+    state.constrainSelection(0);
+    try std.testing.expectEqual(selected_revision + 1, state.version());
+
+    state.begin(.history_palette);
+    const before = state.version();
+    state.updateHistory(.{ .scope = .cwd, .scroll_limit = 0 });
+    try std.testing.expectEqual(before + 1, state.version());
+    try std.testing.expectEqual(HistoryScope.cwd, state.currentConst().?.scope());
+    state.updateHistory(.{ .scope = .cwd, .scroll_limit = 0 });
+    try std.testing.expectEqual(before + 1, state.version());
+    state.begin(.create_workspace);
+    try std.testing.expect(state.currentConst().?.mode == .create_workspace);
+    state.updateHistory(.{ .scope = .pane });
+    try std.testing.expectEqual(HistoryScope.global, state.currentConst().?.scope());
+}
+
 test "prompt opening owns target text and one revision" {
     var state: State = .{};
     const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
@@ -460,7 +543,7 @@ test "prompt opening owns target text and one revision" {
     } });
 
     const prompt = state.currentConst().?;
-    try std.testing.expectEqualDeep(Target{ .rename_workspace = workspace }, prompt.target);
+    try std.testing.expectEqualDeep(Target{ .rename_workspace = workspace }, prompt.target());
     try std.testing.expectEqualStrings("telar", prompt.field.text());
     try std.testing.expectEqual(@as(u64, 1), state.version());
 }
@@ -516,10 +599,10 @@ test "goto picker submits empty queries and tracks a resettable selection" {
     try std.testing.expect(state.apply(.move_up) == .unchanged);
     try std.testing.expect(state.apply(.move_down) == .changed);
     try std.testing.expect(state.apply(.move_down) == .changed);
-    try std.testing.expectEqual(@as(u16, 2), state.currentConst().?.selection);
+    try std.testing.expectEqual(@as(u16, 2), state.currentConst().?.selection());
 
     try std.testing.expect(state.apply(.{ .insert = "a" }) == .changed);
-    try std.testing.expectEqual(@as(u16, 0), state.currentConst().?.selection);
+    try std.testing.expectEqual(@as(u16, 0), state.currentConst().?.selection());
 
     const submitted = state.apply(.submit).submitted;
     try std.testing.expectEqualStrings("a", submitted.name);
@@ -545,13 +628,13 @@ test "the history palette cycles scope with Tab and only there" {
 
     try std.testing.expect(state.apply(.cycle_scope) == .changed);
     const prompt = state.currentConst().?;
-    try std.testing.expectEqual(HistoryScope.workspace, prompt.scope);
-    try std.testing.expectEqual(@as(u16, 0), prompt.selection);
+    try std.testing.expectEqual(HistoryScope.workspace, prompt.mode.history.scope);
+    try std.testing.expectEqual(@as(u16, 0), prompt.selection());
 
     _ = state.apply(.cycle_scope);
     _ = state.apply(.cycle_scope);
     try std.testing.expect(state.apply(.cycle_scope) == .changed);
-    try std.testing.expectEqual(HistoryScope.global, state.currentConst().?.scope);
+    try std.testing.expectEqual(HistoryScope.global, state.currentConst().?.scope());
 
     const submitted = state.apply(.submit_alternate).submitted;
     try std.testing.expect(submitted.alternate);
@@ -563,7 +646,7 @@ test "the history palette cycles scope with Tab and only there" {
 test "the suggestion palette submits empty fields and ignores history-only commands" {
     var state: State = .{};
     state.begin(.suggest_palette);
-    try std.testing.expectEqual(Target.suggest, state.currentConst().?.target);
+    try std.testing.expectEqual(Target.suggest, state.currentConst().?.target());
 
     try std.testing.expect(state.apply(.cycle_scope) == .unchanged);
     try std.testing.expect(state.apply(.remove_entry) == .unchanged);
@@ -582,10 +665,10 @@ test "history inspection preserves query and selection and escape returns before
     _ = state.apply(.move_up);
     _ = state.apply(.toggle_inspection);
     _ = state.apply(.page_down);
-    try std.testing.expectEqual(@as(u16, 10), state.currentConst().?.detail_scroll);
-    try std.testing.expectEqual(@as(u16, 1), state.currentConst().?.selection);
+    try std.testing.expectEqual(@as(u16, 10), state.currentConst().?.detailScroll());
+    try std.testing.expectEqual(@as(u16, 1), state.currentConst().?.selection());
     try std.testing.expectEqualStrings("zig", state.currentConst().?.field.text());
     try std.testing.expect(state.apply(.cancel) == .changed);
-    try std.testing.expect(!state.currentConst().?.inspecting);
+    try std.testing.expect(!state.currentConst().?.inspecting());
     try std.testing.expect(state.apply(.cancel) == .cancelled);
 }

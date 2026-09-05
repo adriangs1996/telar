@@ -75,11 +75,11 @@ fn sendPage(client: *Client, query: []const u8) !void {
 
 fn applyScope(client: *Client, owned: *connection_outbox.OwnedHistoryQuery) void {
     const prompt = client.model.name_prompt.currentConst() orelse return;
-    if (prompt.target != .history) {
+    if (prompt.target() != .history) {
         return;
     }
 
-    switch (prompt.scope) {
+    switch (prompt.scope()) {
         .global => {},
         .workspace => {
             const location = client.model.workspaceLocation() orelse return;

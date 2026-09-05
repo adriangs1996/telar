@@ -60,7 +60,7 @@ pub const Handler = struct {
 
         palette.acceptPage(.{ .snapshot_id = page.snapshot_id, .has_more = page.has_more, .now_ms = page.now_ms });
         if (handler.model.name_prompt.currentConst()) |prompt| {
-            const selection = if (palette.page_offset < previous_offset) palette.len -| 1 else @min(prompt.selection, palette.len -| 1);
+            const selection = if (palette.page_offset < previous_offset) palette.len -| 1 else @min(prompt.selection(), palette.len -| 1);
             handler.model.name_prompt.updateHistory(.{ .selection = selection, .reset_scroll = true });
         }
 
@@ -72,12 +72,12 @@ pub const Handler = struct {
     pub fn navigate(handler: Handler) bool {
         const prompt = handler.model.name_prompt.currentConst() orelse return false;
         const palette = &handler.model.history_palette;
-        if (prompt.target != .history) {
+        if (prompt.target() != .history) {
             return false;
         }
 
         const requested = handler.model.name_prompt.takeHistoryPage();
-        if (!palette.page(if (requested == .older or prompt.selection >= palette.len)
+        if (!palette.page(if (requested == .older or prompt.selection() >= palette.len)
             .older
         else if (requested == .newer)
             .newer
@@ -98,22 +98,22 @@ pub const Handler = struct {
     pub fn nextRead(handler: Handler) ?Read {
         const palette = &handler.model.history_palette;
         const prompt = handler.model.name_prompt.currentConst();
-        if (prompt == null or prompt.?.target != .history or palette.phase != .ready or palette.len == 0) {
+        if (prompt == null or prompt.?.target() != .history or palette.phase != .ready or palette.len == 0) {
             palette.clearOutput();
             return null;
         }
 
-        if (!prompt.?.inspecting) {
+        if (!prompt.?.inspecting()) {
             palette.clearOutput();
         }
 
-        const selection = @min(prompt.?.selection, palette.len - 1);
+        const selection = @min(prompt.?.selection(), palette.len - 1);
         const entry = &palette.slice()[selection];
         if (!entry.captured_truncated and palette.commandAt(selection) == null and palette.full_id != entry.id) {
             return .{ .id = entry.id, .kind = .command };
         }
 
-        if (prompt.?.inspecting and palette.output_id != entry.id) {
+        if (prompt.?.inspecting() and palette.output_id != entry.id) {
             return .{ .id = entry.id, .kind = .output };
         }
 
@@ -172,7 +172,7 @@ pub const Handler = struct {
         }
 
         const prompt = handler.model.name_prompt.currentConst() orelse return false;
-        return prompt.target == .history;
+        return prompt.target() == .history;
     }
 };
 
@@ -186,10 +186,10 @@ test "inspection constraints change semantic scroll only when it exceeds the bou
     _ = state.name_prompt.apply(.page_down);
     const handler: Handler = .{ .model = state };
     handler.constrainInspection(2);
-    try std.testing.expectEqual(@as(u32, 2), state.name_prompt.currentConst().?.detail_scroll);
+    try std.testing.expectEqual(@as(u32, 2), state.name_prompt.currentConst().?.detailScroll());
     const revision = state.version();
     handler.constrainInspection(2);
     try std.testing.expectEqualDeep(revision, state.version());
     handler.constrainInspection(0);
-    try std.testing.expectEqual(@as(u32, 0), state.name_prompt.currentConst().?.detail_scroll);
+    try std.testing.expectEqual(@as(u32, 0), state.name_prompt.currentConst().?.detailScroll());
 }

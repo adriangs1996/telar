@@ -190,14 +190,14 @@ test "OpenNamePromptHandler copies every canonical opening target" {
     var handler = capture.handler(testing.model);
 
     try std.testing.expect(handler.execute(.create_workspace));
-    try std.testing.expect(testing.model.name_prompt.currentConst().?.target == .create_workspace);
+    try std.testing.expect(testing.model.name_prompt.currentConst().?.target() == .create_workspace);
     try std.testing.expectEqualStrings("", testing.model.name_prompt.currentConst().?.field.text());
     try cancelPrompt(testing.model);
 
     try std.testing.expect(handler.execute(.rename_workspace));
     try std.testing.expectEqualDeep(
         name_prompt.Target{ .rename_workspace = testing.workspace },
-        testing.model.name_prompt.currentConst().?.target,
+        testing.model.name_prompt.currentConst().?.target(),
     );
     try std.testing.expectEqualStrings("project", testing.model.name_prompt.currentConst().?.field.text());
     try cancelPrompt(testing.model);
@@ -205,7 +205,7 @@ test "OpenNamePromptHandler copies every canonical opening target" {
     try std.testing.expect(handler.execute(.rename_active_tab));
     try std.testing.expectEqualDeep(
         name_prompt.Target{ .rename_tab = testing.first.tab_id },
-        testing.model.name_prompt.currentConst().?.target,
+        testing.model.name_prompt.currentConst().?.target(),
     );
     try std.testing.expectEqualStrings("main", testing.model.name_prompt.currentConst().?.field.text());
     try cancelPrompt(testing.model);
@@ -213,7 +213,7 @@ test "OpenNamePromptHandler copies every canonical opening target" {
     try std.testing.expect(handler.execute(.{ .rename_tab = testing.second.tab_id }));
     try std.testing.expectEqualDeep(
         name_prompt.Target{ .rename_tab = testing.second.tab_id },
-        testing.model.name_prompt.currentConst().?.target,
+        testing.model.name_prompt.currentConst().?.target(),
     );
     try std.testing.expectEqualStrings("logs", testing.model.name_prompt.currentConst().?.field.text());
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
@@ -305,8 +305,8 @@ test "OpenNamePromptHandler opens the goto picker without extra gates" {
 
     try std.testing.expect(handler.execute(.goto_picker));
     const prompt = testing.model.name_prompt.currentConst().?;
-    try std.testing.expect(prompt.target == .goto);
+    try std.testing.expect(prompt.target() == .goto);
     try std.testing.expectEqualStrings("", prompt.field.text());
-    try std.testing.expectEqual(@as(u16, 0), prompt.selection);
+    try std.testing.expectEqual(@as(u16, 0), prompt.selection());
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
 }

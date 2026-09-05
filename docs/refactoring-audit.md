@@ -147,7 +147,17 @@ remain constraints, not targets for consolidation.
 - Added allocation-failure/ownership coverage; existing fuzzy, filtering,
   pagination, payload and persistence tests pass with `zig build test --summary all`.
 
-15. Modal-specific prompt state and semantic selection.
+## 15. Modal-specific prompt state
+
+- One tagged modal owns target-specific values; history scope/inspection/paging
+  cannot inhabit a naming or goto prompt. The common editor remains shared.
+- Callers receive immutable prompt projections. Selection clamping is a semantic
+  state operation that advances its revision only on an actual change.
+- Combined history updates compare the complete transition; an unchanged scroll
+  bound no longer hides a changed scope from presentation.
+- Added clamp/no-op/combined-update regressions; prompt and browser integration
+  tests pass with `zig build test --summary all`.
+
 16. Atomic history page request/result transitions.
 17. Shared incremental HTTP/2 framing.
 18. Per-command CLI grammars and argument cursor.

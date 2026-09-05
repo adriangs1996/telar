@@ -8,13 +8,13 @@ const widget = @import("../../widgets/root.zig").history_browser;
 pub fn scrollLimit(state: *const model.Model) ?u32 {
     const prompt = state.name_prompt.currentConst() orelse return null;
     const palette = &state.history_palette;
-    if (prompt.target != .history or !prompt.inspecting or prompt.detail_scroll == 0 or
+    if (prompt.target() != .history or !prompt.inspecting() or prompt.detailScroll() == 0 or
         palette.phase != .ready or palette.len == 0)
     {
         return null;
     }
 
-    const selection = @min(prompt.selection, palette.len - 1);
+    const selection = @min(prompt.selection(), palette.len - 1);
     const entry = &palette.slice()[selection];
     const size = state.hostSize();
     return widget.inspectionScrollLimit(.{ .w = size.cols, .h = size.rows }, .{
