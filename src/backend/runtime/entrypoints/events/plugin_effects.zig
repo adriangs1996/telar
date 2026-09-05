@@ -1,6 +1,7 @@
 //! Runtime boundary for authorized effects returned by tap workers.
 
 const std = @import("std");
+const agent_identity = @import("../../application/coordinators/root.zig").agent_identity;
 const core = @import("telar-core");
 const agent_mod = @import("../../../agent/root.zig");
 const pane_mod = @import("../../../pane/root.zig");
@@ -113,7 +114,7 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
             };
 
             return adapter.resources.agents.observeScreen(.{
-                .identity = agent_mod.Identity.fromPane(pane),
+                .identity = agent_identity.fromPane(pane),
                 .signal = .{
                     .status = status,
                     .confidence = switch (evidence.confidence) {

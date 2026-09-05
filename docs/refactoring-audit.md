@@ -73,7 +73,18 @@ remain constraints, not targets for consolidation.
 - Existing transcript append/rewrite/missing-file and database-title tests moved
   with the supported reader boundary. `zig build test --summary all` passed.
 
-8. Agent observation values independent of producers.
+## 8. Agent observation values
+
+- Reused the existing core manifest signal values directly, eliminating the
+  unnecessary dependency through history detection.
+- Agent observations own their wire-dialect vocabulary and inference policy;
+  the proxy detector implements that contract. No backend-only value moves
+  into core.
+- Runtime composition translates panes into Identity; Identity no longer reads
+  PTY/process resources. All production callers and their tests use that adapter.
+- Proof: dialect policy and existing identity/evidence integration tests.
+  `zig build test --summary all` passed.
+
 9. Client submodels and revisions.
 10. Pane media ownership and dependency cycle.
 11. Kitty codec, sidebar rendering and transmission transitions.

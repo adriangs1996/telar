@@ -2,13 +2,20 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const detection = @import("../history/root.zig").detection;
-const dialect_mod = @import("../proxy/provider/dialect.zig");
 const pane_mod = @import("../pane/root.zig");
 
 const schema = core.schema;
-const Pane = pane_mod.Pane;
 const PaneKey = pane_mod.PaneKey;
+
+test "agent policy interprets neutral wire dialects without importing a proxy adapter" {
+    var observation: ProxyObservation = undefined;
+    observation.dialect = .anthropic_messages;
+    try std.testing.expectEqual(schema.AgentProvider.claude, observation.impliedProvider());
+    observation.dialect = .openai_responses;
+    try std.testing.expectEqual(schema.AgentProvider.codex, observation.impliedProvider());
+    observation.dialect = .unknown;
+    try std.testing.expectEqual(schema.AgentProvider.unknown, observation.impliedProvider());
+}
 
 pub const max_records = schema.max_agent_snapshot_entries;
 pub const working_expiry_ms: i64 = 2 * 60 * 1000;
@@ -16,27 +23,19 @@ pub const settled_expiry_ms: i64 = 30 * 60 * 1000;
 pub const activity_refresh_ms: i64 = 5 * 1000;
 pub const max_active_proxy_requests = 128;
 
-pub const ScreenStatus = detection.Status;
-pub const ScreenSignal = detection.Signal;
-pub const ApiDialect = dialect_mod.ApiDialect;
+pub const ScreenStatus = core.agent_manifest.Status;
+pub const ScreenSignal = core.agent_manifest.Signal;
+/// Wire vocabulary accepted by agent observations, not a process identity.
+pub const ApiDialect = enum(u8) {
+    unknown = 0,
+    anthropic_messages = 1,
+    openai_responses = 2,
+};
 
 pub const Identity = struct {
     key: PaneKey,
     process_id: u32,
     session_id: [16]u8,
-
-    /// Captures the pane generation and process identity owned by one agent.
-    ///
-    /// ```zig
-    /// const identity = Identity.fromPane(pane);
-    /// ```
-    pub fn fromPane(pane: *const Pane) Identity {
-        return .{
-            .key = pane.key(),
-            .process_id = std.math.cast(u32, pane.session.processId()) orelse 0,
-            .session_id = pane.history_session_id,
-        };
-    }
 };
 
 pub const ProcessObservation = struct {
@@ -164,7 +163,7 @@ pub const ProxyObservation = struct {
     observed_at_ms: i64,
 
     /// The built-in agent implied by the wire dialect. It is an identity only
-    /// while no process has claimed the pane; see `ApiDialect.impliedAgent`.
+    /// while no process has claimed the pane.
     ///
     /// ```zig
     /// if (observation.impliedProvider() == evidence.provider) {
@@ -172,7 +171,11 @@ pub const ProxyObservation = struct {
     /// }
     /// ```
     pub fn impliedProvider(observation: *const ProxyObservation) schema.AgentProvider {
-        return observation.dialect.impliedAgent();
+        return switch (observation.dialect) {
+            .unknown => .unknown,
+            .anthropic_messages => .claude,
+            .openai_responses => .codex,
+        };
     }
 
     /// Reports whether this observation carries response bytes without closing

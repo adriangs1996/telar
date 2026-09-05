@@ -1,6 +1,7 @@
 //! Vertical and application tests for the runtime pane-input flow.
 
 const std = @import("std");
+const agent_identity = @import("../application/coordinators/root.zig").agent_identity;
 const core = @import("telar-core");
 const agent_mod = @import("../../agent/root.zig");
 const pane_mod = @import("../../pane/root.zig");
@@ -83,7 +84,7 @@ fn handlerFor(fixture: *PaneFixture, capture: *ScheduleCapture, observe_agent_in
 }
 
 fn trackAgent(fixture: *PaneFixture) !agent_mod.Identity {
-    const identity = agent_mod.Identity.fromPane(fixture.pane);
+    const identity = agent_identity.fromPane(fixture.pane);
     try std.testing.expect(identity.process_id != 0);
     try std.testing.expect(fixture.agents.observeProcess(.{
         .identity = identity,

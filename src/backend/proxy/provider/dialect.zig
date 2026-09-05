@@ -7,30 +7,7 @@
 //! evidence first. The proxy only says what protocol it saw.
 
 const std = @import("std");
-const core = @import("telar-core");
-
-pub const ApiDialect = enum(u8) {
-    unknown = 0,
-    /// Anthropic Messages API: `POST /v1/messages` answered as SSE.
-    anthropic_messages = 1,
-    /// OpenAI Responses API, including the ChatGPT backend route Codex uses.
-    openai_responses = 2,
-
-    /// The built-in agent that speaks this dialect natively. The runtime uses
-    /// it as an agent identity only while no process has claimed the pane;
-    /// once a process is known, its exchanges count whatever the host says.
-    ///
-    /// ```zig
-    /// const provider = dialect.impliedAgent();
-    /// ```
-    pub fn impliedAgent(dialect: ApiDialect) core.schema.AgentProvider {
-        return switch (dialect) {
-            .unknown => .unknown,
-            .anthropic_messages => .claude,
-            .openai_responses => .codex,
-        };
-    }
-};
+pub const ApiDialect = @import("../../agent/root.zig").ApiDialect;
 
 /// Identifies the dialect that owns an authenticated CONNECT target. Matching
 /// is ASCII case-insensitive and requires a DNS label boundary.
@@ -77,10 +54,4 @@ test "dialect identification requires a DNS label boundary" {
     }) |host| {
         try std.testing.expectEqual(ApiDialect.unknown, identify(host));
     }
-}
-
-test "each dialect implies the built-in agent that speaks it" {
-    try std.testing.expectEqual(core.schema.AgentProvider.claude, ApiDialect.anthropic_messages.impliedAgent());
-    try std.testing.expectEqual(core.schema.AgentProvider.codex, ApiDialect.openai_responses.impliedAgent());
-    try std.testing.expectEqual(core.schema.AgentProvider.unknown, ApiDialect.unknown.impliedAgent());
 }

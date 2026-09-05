@@ -1,6 +1,7 @@
 //! Runtime anti-corruption layer from proxy events to agent observations.
 
 const std = @import("std");
+const agent_identity = @import("../../application/coordinators/root.zig").agent_identity;
 const core = @import("telar-core");
 const agent_mod = @import("../../../agent/root.zig");
 const pane_mod = @import("../../../pane/root.zig");
@@ -99,7 +100,7 @@ fn translate(event: proxy_mod.Observation, pane: *const Pane) ?agent_mod.ProxyOb
     };
 
     return .{
-        .identity = agent_mod.Identity.fromPane(pane),
+        .identity = agent_identity.fromPane(pane),
         .dialect = event.dialect,
         .phase = phase,
         .exchange = .{
@@ -238,7 +239,7 @@ test "every proxy protocol and inference phase translates without losing identit
                 .upgraded => .upgraded,
             };
 
-            try std.testing.expectEqualDeep(agent_mod.Identity.fromPane(fixture.support.pane), translated.identity);
+            try std.testing.expectEqualDeep(agent_identity.fromPane(fixture.support.pane), translated.identity);
             try std.testing.expectEqual(agent_mod.ApiDialect.openai_responses, translated.dialect);
             try std.testing.expectEqual(expected_phase, translated.phase);
             try std.testing.expectEqual(expected_protocol, translated.exchange.protocol);

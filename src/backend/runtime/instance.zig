@@ -1,6 +1,7 @@
 //! Composition root for one long-lived backend runtime.
 
 const std = @import("std");
+const agent_identity = @import("application/coordinators/root.zig").agent_identity;
 const core = @import("telar-core");
 const workspace_mod = @import("../workspace/root.zig");
 const agent_mod = @import("../agent/root.zig");
@@ -396,11 +397,11 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     const pane_id = pane.id;
     const pane_generation = pane.generation;
     try std.testing.expect(first.application.model.agents.observeSessionReference(
-        agent_mod.Identity.fromPane(pane),
+        agent_identity.fromPane(pane),
         try agent_mod.SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1_000),
     ));
     try std.testing.expect(first.application.model.agents.observeProcess(.{
-        .identity = agent_mod.Identity.fromPane(pane),
+        .identity = agent_identity.fromPane(pane),
         .provider = .claude,
         .process_id = 99,
         .observed_at_ms = 1_000,
@@ -431,7 +432,7 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
         restored.input_queue.nextChunk().?,
     );
     try std.testing.expect(second.application.model.agents.observeProcess(.{
-        .identity = agent_mod.Identity.fromPane(restored),
+        .identity = agent_identity.fromPane(restored),
         .provider = .claude,
         .process_id = 100,
         .observed_at_ms = 2_000,

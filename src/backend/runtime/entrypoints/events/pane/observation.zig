@@ -1,6 +1,7 @@
 //! Coordination for asynchronous pane history and agent observation.
 
 const std = @import("std");
+const agent_identity = @import("../../../application/coordinators/root.zig").agent_identity;
 const core = @import("telar-core");
 const agent_mod = @import("../../../../agent/root.zig");
 const history = @import("../../../../history/root.zig");
@@ -163,7 +164,7 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
 
             if (reconciliation.probe.cache.provider != .unknown) {
                 _ = coordinator.resources.agents.observeProcess(.{
-                    .identity = agent_mod.Identity.fromPane(reconciliation.pane),
+                    .identity = agent_identity.fromPane(reconciliation.pane),
                     .provider = reconciliation.probe.cache.provider,
                     .process_id = reconciliation.probe.cache.process_group_id.?,
                     .observed_at_ms = coordinator.nowMs(),
@@ -205,7 +206,7 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
                 return;
             }
 
-            const identity = agent_mod.Identity.fromPane(reconciliation.pane);
+            const identity = agent_identity.fromPane(reconciliation.pane);
             const previous_status = coordinator.resources.agents.projectedStatus(identity.key);
             const changed = coordinator.resources.agents.observeScreen(.{
                 .identity = identity,
@@ -426,7 +427,7 @@ test "shell foreground removes the agent and ignores screen readiness" {
     try beginFixtureObservation(&fixture, &panes);
     var capture: Capture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
-    const identity = agent_mod.Identity.fromPane(fixture.pane);
+    const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
     try std.testing.expect(fixture.agents.observeProcess(.{
         .identity = identity,
@@ -503,7 +504,7 @@ test "working to ready screen evidence publishes one generation-safe sound" {
     try beginFixtureObservation(&fixture, &panes);
     var capture: Capture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
-    const identity = agent_mod.Identity.fromPane(fixture.pane);
+    const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
     try std.testing.expect(fixture.agents.observeProcess(.{
         .identity = identity,
@@ -553,7 +554,7 @@ test "a delayed screen completion cannot settle a newer Codex Stop or publish a 
     try beginFixtureObservation(&fixture, &panes);
     var capture: Capture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
-    const identity = agent_mod.Identity.fromPane(fixture.pane);
+    const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
     _ = fixture.agents.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = process_id, .observed_at_ms = 100 });
     _ = fixture.agents.observeReport(.{ .identity = identity, .state = .settling, .observed_at_ms = 300 });
@@ -581,7 +582,7 @@ test "Codex PTY frames and continuing Stop hooks publish exactly one final compl
     try panes.insert(fixture.pane);
     var capture: Capture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
-    const identity = agent_mod.Identity.fromPane(fixture.pane);
+    const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
     _ = fixture.agents.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = process_id, .observed_at_ms = 50 });
 

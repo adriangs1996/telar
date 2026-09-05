@@ -2,6 +2,7 @@
 //! carries.
 
 const std = @import("std");
+const agent_identity = @import("../coordinators/root.zig").agent_identity;
 const core = @import("telar-core");
 const agent_mod = @import("../../../agent/root.zig");
 const pane_mod = @import("../../../pane/root.zig");
@@ -38,7 +39,7 @@ pub const ReportAgentTitleHandler = struct {
             return .pane_not_found;
         }
 
-        const identity = agent_mod.Identity.fromPane(pane);
+        const identity = agent_identity.fromPane(pane);
         const changed = handler.agents.reportTitle(identity, command.title) catch return .invalid_title;
 
         return if (changed) .recorded else .unchanged;

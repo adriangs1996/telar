@@ -1,6 +1,7 @@
 //! Vertical tests for text sent to a pane by a control client.
 
 const std = @import("std");
+const agent_identity = @import("../application/coordinators/root.zig").agent_identity;
 const core = @import("telar-core");
 const agent_mod = @import("../../agent/root.zig");
 const pane_mod = @import("../../pane/root.zig");
@@ -78,7 +79,7 @@ const Harness = struct {
 };
 
 fn blockAgent(harness: *Harness) !void {
-    const identity = agent_mod.Identity.fromPane(harness.fixture.pane);
+    const identity = agent_identity.fromPane(harness.fixture.pane);
     try std.testing.expect(harness.fixture.agents.observeProcess(.{
         .identity = identity,
         .provider = .claude,

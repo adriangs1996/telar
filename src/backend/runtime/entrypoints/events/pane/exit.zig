@@ -1,6 +1,7 @@
 //! Coordination for one completed pane child wait.
 
 const std = @import("std");
+const agent_identity = @import("../../../application/coordinators/root.zig").agent_identity;
 const agent_mod = @import("../../../../agent/root.zig");
 const pane_mod = @import("../../../../pane/root.zig");
 const pty = @import("../../../../pty/root.zig");
@@ -174,7 +175,7 @@ test "a running pane exit retires agent and credential before lifecycle effects"
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureExit(&fixture, &panes);
-    const identity = agent_mod.Identity.fromPane(fixture.pane);
+    const identity = agent_identity.fromPane(fixture.pane);
     const shell_id = std.math.cast(u32, fixture.pane.session.processId()).?;
     const process_id = if (shell_id == std.math.maxInt(u32)) shell_id - 1 else shell_id + 1;
     try std.testing.expect(fixture.agents.observeProcess(.{

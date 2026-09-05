@@ -2,6 +2,7 @@
 //! hooks.
 
 const std = @import("std");
+const agent_identity = @import("../coordinators/root.zig").agent_identity;
 const core = @import("telar-core");
 const agent_mod = @import("../../../agent/root.zig");
 const pane_mod = @import("../../../pane/root.zig");
@@ -46,7 +47,7 @@ pub const ReportAgentHandler = struct {
             null
         else
             agent_mod.SessionReference.init(command.session, command.now_ms) catch return .{ .outcome = .invalid_session };
-        const identity = agent_mod.Identity.fromPane(pane);
+        const identity = agent_identity.fromPane(pane);
         const previous = handler.agents.projectedStatus(identity.key);
         const had_session = handler.agents.sessionReference(identity.key) != null;
 
