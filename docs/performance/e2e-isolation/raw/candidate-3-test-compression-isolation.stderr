@@ -1,0 +1,6 @@
+test-compression-isolation
++- run test w
+PERF compression_max_turn n=20 p50_ns=55042 p95_ns=66541 p99_ns=68042
+PERF compression_total n=20 p50_ns=1620584 p95_ns=1665250 p99_ns=1672667
+failed command: ./.zig-cache/o/2ea3b15a94d17b2961dca25090d2889c/test --cache-dir=./.zig-cache --seed=0xb77d436a --listen=-
+

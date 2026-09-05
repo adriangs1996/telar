@@ -1,0 +1,504 @@
+--- a/build.zig
++++ b/build.zig
+@@ -189,6 +189,12 @@
+     else
+         optimize;
+     const bench_lua_api = addLua(b, .{ .target = target, .optimize = bench_optimize, .name = "lua-bench" });
++    const bench_lua = b.createModule(.{
++        .root_source_file = b.path("src/lua/root.zig"),
++        .target = target,
++        .optimize = bench_optimize,
++    });
++    bench_lua.addImport("lua-api", bench_lua_api);
+     const bench_unicode = b.createModule(.{
+         .root_source_file = b.path("src/core/unicode.zig"),
+         .target = target,
+@@ -210,6 +216,7 @@
+     bench_backend.addImport("telar-core", bench_core);
+     bench_backend.addImport("ghostty-vt", ghostty_vt);
+     bench_backend.addImport("tls", tls);
++    bench_backend.addImport("telar-lua", bench_lua);
+     bench_backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
+     bench_backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
+     bench_backend.linkSystemLibrary("nghttp2", .{});
+@@ -226,6 +233,7 @@
+     const bench_freetype = addFreeType(b, .{ .target = target, .optimize = bench_optimize, .disable_coverage = false });
+     bench_frontend.addImport("telar-core", bench_core);
+     bench_frontend.addImport("lua-api", bench_lua_api);
++    bench_frontend.addImport("telar-lua", bench_lua);
+     bench_frontend.addImport("freetype", bench_freetype);
+ 
+     const benchmarks = b.addExecutable(.{
+@@ -383,6 +391,17 @@
+         "test-backend-proxy",
+         "Run the runtime observation proxy tests",
+     );
++    const isolation_tests = b.addTest(.{ .root_module = backend, .filters = &.{"performance probe"} });
++    const isolation_step = b.step("test-isolation", "Measure bounded search, graphics staging and history query work");
++    const isolation_run = b.addRunArtifact(isolation_tests);
++    isolation_run.has_side_effects = true;
++    isolation_step.dependOn(&isolation_run.step);
++    const compression_tests = b.addTest(.{ .root_module = frontend, .filters = &.{"performance probe"} });
++    const compression_run = b.addRunArtifact(compression_tests);
++    compression_run.has_side_effects = true;
++    const compression_step = b.step("test-compression-isolation", "Measure compression work outside presentation turns");
++    compression_step.dependOn(&compression_run.step);
++
+     const transport_test_step = b.step("test-transport", "Run the local transport tests");
+     const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
+     const frontend_test_step = b.step("test-frontend", "Run the frontend package tests");
+--- a/benchmarks/main.zig
++++ b/benchmarks/main.zig
+@@ -710,14 +710,11 @@
+ 
+     fn init(gpa: std.mem.Allocator, io: Io) !LuaCallbackContext {
+         var diagnostic: frontend.config.Diagnostic = .{};
+-        const generation = try frontend.config.Generation.loadSource(
+-            gpa,
+-            io,
+-            "local t=require('telar'); return { api_version=2, client={ keybindings={ t.bind_global({'escape'}, function(ctx) return t.action.toggle_sidebar() end) } } }",
+-            "@benchmark.lua",
+-            1,
+-            &diagnostic,
+-        );
++        const generation = try frontend.config.Generation.loadSource(.{ .gpa = gpa, .io = io, .diagnostic = &diagnostic }, .{
++            .source = "local t=require('telar'); return { api_version=2, client={ keybindings={ t.bind_global({'escape'}, function(ctx) return t.action.toggle_sidebar() end) } } }",
++            .source_name = "@benchmark.lua",
++            .number = 1,
++        });
+         return .{
+             .generation = generation,
+             .reference = generation.snapshot.bindings[0].action.lua_callback,
+@@ -732,17 +729,16 @@
+ fn runLuaCallback(context: *LuaCallbackContext, iterations: usize) !u64 {
+     var checksum: u64 = 0;
+     for (0..iterations) |_| {
+-        const batch = try context.generation.invokeCallback(
+-            context.reference,
+-            .{
++        const batch = try context.generation.invokeCallback(.{
++            .reference = context.reference,
++            .context = .{
+                 .sidebar_visible = true,
+                 .tab_count = 8,
+                 .active_tab_index = 3,
+                 .pane_count = 4,
+                 .focused_pane_id = 7,
+             },
+-            &context.diagnostic,
+-        );
++        }, &context.diagnostic);
+         checksum +%= batch.len;
+     }
+     return checksum;
+@@ -777,11 +773,11 @@
+         var tabs = frontend.tabs.Model.init(gpa);
+         errdefer tabs.deinit();
+         const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+-        try tabs.bootstrap(
+-            @enumFromInt(1),
+-            .{ .workspace = workspace, .tab_id = @enumFromInt(1) },
+-            .{ .cols = cols - sidebar_width, .rows = rows - 2 },
+-        );
++        try tabs.bootstrap(.{
++            .pane_id = @enumFromInt(1),
++            .location = .{ .workspace = workspace, .tab_id = @enumFromInt(1) },
++            .size = .{ .cols = cols - sidebar_width, .rows = rows - 2 },
++        });
+         for (1..tab_count) |index| {
+             var label_buffer: [schema.max_tab_label_bytes]u8 = undefined;
+             const label = try std.fmt.bufPrint(&label_buffer, "tab-{d}", .{index + 1});
+@@ -853,9 +849,9 @@
+     for (0..iterations) |_| {
+         if (context.pacer.waitUntil(context.now_ns)) |deadline_ns| {
+             context.now_ns = deadline_ns + 2 * std.time.ns_per_ms;
+-            context.pacer.record(context.now_ns, deadline_ns, 1);
++            context.pacer.record(.{ .now = context.now_ns, .scheduled_deadline = deadline_ns, .absorbed = 1 });
+         } else {
+-            context.pacer.record(context.now_ns, null, 1);
++            context.pacer.record(.{ .now = context.now_ns, .scheduled_deadline = null, .absorbed = 1 });
+         }
+         checksum +%= context.pacer.anchor_ns.?;
+     }
+@@ -869,9 +865,9 @@
+     fn init() !LayoutContext {
+         var context: LayoutContext = .{};
+         try context.layout.addRoot(@enumFromInt(1));
+-        try context.layout.split(@enumFromInt(1), @enumFromInt(2), .horizontal);
+-        try context.layout.split(@enumFromInt(1), @enumFromInt(3), .vertical);
+-        try context.layout.split(@enumFromInt(2), @enumFromInt(4), .vertical);
++        try context.layout.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .axis = .horizontal });
++        try context.layout.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(3), .axis = .vertical });
++        try context.layout.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(4), .axis = .vertical });
+         return context;
+     }
+ };
+@@ -909,14 +905,14 @@
+             .workspace = .{ .workspace = @enumFromInt(1) },
+             .tab_id = @enumFromInt(1),
+         };
+-        try model.addRoot(@enumFromInt(1), location, .{ .cols = cols, .rows = rows });
++        try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = cols, .rows = rows } });
+         const area: core.ui.Rect = .{ .w = cols, .h = rows };
+-        try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
+-        try model.split(@enumFromInt(1), @enumFromInt(3), location, .vertical, area);
+-        try model.split(@enumFromInt(2), @enumFromInt(4), location, .vertical, area);
++        try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
++        try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(3), .location = location, .axis = .vertical, .area = area });
++        try model.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(4), .location = location, .axis = .vertical, .area = area });
+         for (&model.panes) |*slot| {
+             const pane = if (slot.*) |*value| value else continue;
+-            pane.buffer.setCell(0, 0, "x", 1, .{});
++            pane.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x" });
+         }
+         const screen = try frontend.term.Screen.init(gpa, cols, rows);
+         return .{ .model = model, .screen = screen, .compositor = .init(gpa) };
+@@ -952,7 +948,7 @@
+             .workspace = .{ .workspace = @enumFromInt(1) },
+             .tab_id = @enumFromInt(1),
+         };
+-        try model.addRoot(@enumFromInt(1), location, .{ .cols = cols, .rows = rows });
++        try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = cols, .rows = rows } });
+         var screen = try frontend.term.Screen.init(gpa, cols, rows);
+         errdefer screen.deinit();
+         var compositor = frontend.multiplexer.Compositor.init(gpa);
+@@ -999,10 +995,11 @@
+         var model = frontend.multiplexer.Model.init(gpa);
+         errdefer model.deinit();
+         const pane_id: schema.PaneId = @enumFromInt(1);
+-        try model.addRoot(pane_id, .{
+-            .workspace = .{ .workspace = @enumFromInt(1) },
+-            .tab_id = @enumFromInt(1),
+-        }, .{ .cols = cols, .rows = rows });
++        try model.addRoot(.{
++            .pane_id = pane_id,
++            .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
++            .size = .{ .cols = cols, .rows = rows },
++        });
+         const metadata: core.graphics.Image = .{
+             .key = .{ .image_id = 1, .generation = 1 },
+             .format = .rgba,
+@@ -1098,10 +1095,11 @@
+         var model = frontend.multiplexer.Model.init(gpa);
+         errdefer model.deinit();
+         const pane_id: schema.PaneId = @enumFromInt(1);
+-        try model.addRoot(pane_id, .{
+-            .workspace = .{ .workspace = @enumFromInt(1) },
+-            .tab_id = @enumFromInt(1),
+-        }, .{ .cols = cols, .rows = rows });
++        try model.addRoot(.{
++            .pane_id = pane_id,
++            .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
++            .size = .{ .cols = cols, .rows = rows },
++        });
+ 
+         // Browser-frame shape: flat fills, a gradient, and a text-like band
+         // of sparse noise. Pure random would defeat the zlib variant, pure
+@@ -1484,9 +1482,9 @@
+     };
+     var checksum: u64 = 0;
+     for (0..iterations) |_| {
+-        checksum +%= try context.rasterizer.drawText(surface, 20, 18, "Build complete", color, 420);
+-        checksum +%= try context.rasterizer.drawText(surface, 20, 38, "Open the rendered result", color, 420);
+-        checksum +%= try context.rasterizer.drawText(surface, 20, 58, "click to open", color, 420);
++        checksum +%= try context.rasterizer.drawText(.{ .surface = surface, .origin = .{ .x = 20, .y = 18 }, .text = "Build complete", .color = color, .max_width = 420 });
++        checksum +%= try context.rasterizer.drawText(.{ .surface = surface, .origin = .{ .x = 20, .y = 38 }, .text = "Open the rendered result", .color = color, .max_width = 420 });
++        checksum +%= try context.rasterizer.drawText(.{ .surface = surface, .origin = .{ .x = 20, .y = 58 }, .text = "click to open", .color = color, .max_width = 420 });
+     }
+     return checksum +% context.pixels[context.pixels.len / 2];
+ }
+--- a/src/backend/runtime/tests/root.zig
++++ b/src/backend/runtime/tests/root.zig
+@@ -22,6 +22,7 @@
+     _ = @import("pane_viewport_test.zig");
+     _ = @import("read_pane_test.zig");
+     _ = @import("search_pane_test.zig");
++    _ = @import("performance_isolation_test.zig");
+     _ = @import("send_pane_text_test.zig");
+     _ = @import("shared_frame_test.zig");
+     _ = @import("rename_tab_test.zig");
+--- /dev/null
++++ b/src/backend/runtime/tests/performance_isolation_test.zig
+@@ -0,0 +1,214 @@
++//! Paired mechanism probes; timings are diagnostic, never correctness thresholds.
++const std = @import("std");
++const core = @import("telar-core");
++const pane_mod = @import("../../pane/root.zig");
++const history = @import("../../history/root.zig");
++const attachment_mod = @import("../attachment/root.zig");
++const support = @import("support.zig");
++const io = std.testing.io;
++
++fn now() i96 {
++    return std.Io.Clock.awake.now(io).nanoseconds;
++}
++
++fn elapsed(start: i96) u64 {
++    return @intCast(now() - start);
++}
++
++fn report(name: []const u8, values: []u64) void {
++    std.mem.sort(u64, values, {}, std.sort.asc(u64));
++    std.debug.print("PERF {s} n={d} p50_ns={d} p95_ns={d} p99_ns={d}\n", .{
++        name, values.len, values[values.len / 2], values[(values.len * 95 + 99) / 100 - 1], values[values.len - 1],
++    });
++}
++
++test "performance probe measures bounded search turns against the complete query" {
++    var fixture: support.PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++    try fixture.pane.resize(.{ .cols = 128, .rows = 5 });
++    const row = ([_]u8{'a'} ** 127) ++ "\r\n";
++    for (0..1000) |_| {
++        _ = try fixture.pane.ingest(io, row);
++    }
++    const needle = ([_]u8{'a'} ** 63) ++ "b";
++    var matches: [core.schema.max_search_matches]core.schema.SearchMatch = undefined;
++    var complete_times: [20]u64 = undefined;
++    for (&complete_times) |*time| {
++        const started = now();
++        const found = fixture.pane.searchText(needle, &matches);
++        time.* = elapsed(started);
++        try std.testing.expectEqual(@as(u8, 0), found.count);
++    }
++    report("search_complete", &complete_times);
++
++    if (comptime @hasDecl(pane_mod, "TextSearch")) {
++        var total_times: [20]u64 = undefined;
++        var turn_times: [20]u64 = undefined;
++        for (&total_times, &turn_times) |*total, *turn_max| {
++            var cursor = pane_mod.TextSearch.init(needle);
++            turn_max.* = 0;
++            const started = now();
++            while (true) {
++                const turn = now();
++                const done = try cursor.advance(fixture.pane);
++                turn_max.* = @max(turn_max.*, elapsed(turn));
++                if (done) {
++                    break;
++                }
++            }
++
++            total.* = elapsed(started);
++            try std.testing.expectEqual(@as(u8, 0), cursor.count);
++        }
++        report("search_incremental_total", &total_times);
++        report("search_max_turn", &turn_times);
++    }
++}
++
++test "performance probe measures runtime staging of a 4K RGBA transfer" {
++    var fixture: support.PaneFixture = .{};
++    try fixture.init();
++    defer fixture.deinit();
++    const pane = fixture.pane;
++    const media = pane.media_allocator.allocator();
++    const pixels = try media.alloc(u8, 3840 * 2160 * 4);
++    @memset(pixels, 127);
++    const screen = pane.media.terminal.screens.active;
++    try screen.kitty_images.addImage(io, media, screen, .{
++        .id = 7,
++        .width = 3840,
++        .height = 2160,
++        .format = .rgba,
++        .data = .{ .complete = pixels },
++    });
++    pane.refreshGraphicsProjection();
++    const attachment = fixture.attachments.find(pane.id).?;
++    var stage_times: [20]u64 = undefined;
++    var total_times: [20]u64 = undefined;
++    for (&stage_times, &total_times) |*stage, *total| {
++        attachment.graphics.credit = core.graphics.max_image_bytes_per_pane;
++        const started = now();
++        const result = try attachment_mod.stageNextTransfer(attachment, core.graphics.max_image_bytes_global);
++        stage.* = elapsed(started);
++        if (result == .blocked) {
++            const borrow = pane.beginMediaProcessing().?;
++            var stats: @import("../../media/root.zig").Stats = .{};
++            pane.processMedia(borrow.current_size, &stats);
++            pane.completeMediaProcessing();
++            const adoption_started = now();
++            try std.testing.expectEqual(attachment_mod.StageResult.staged, try attachment_mod.stageNextTransfer(attachment, core.graphics.max_image_bytes_global));
++            stage.* = @max(stage.*, elapsed(adoption_started));
++        }
++        total.* = elapsed(started);
++        try std.testing.expectEqualSlices(u8, pixels, attachment.graphics.transfer.?.pixels);
++        attachment.graphics.freeTransfer();
++    }
++    report("graphics_runtime_stage_4k", &stage_times);
++    report("graphics_total_prepare_4k", &total_times);
++}
++
++const MetricsCapture = struct {
++    const metrics = @import("../observability/system_metrics.zig");
++    reads: usize = 0,
++    jobs: usize = 0,
++    pumps: usize = 0,
++
++    fn rearm(_: *MetricsCapture) !void {}
++
++    fn sample(capture: *MetricsCapture, _: *metrics.Sampler) void {
++        capture.reads += 1;
++    }
++
++    fn schedule(capture: *MetricsCapture, _: metrics.Sampler) !void {
++        capture.jobs += 1;
++    }
++
++    fn pump(capture: *MetricsCapture) void {
++        capture.pumps += 1;
++    }
++};
++
++test "performance probe counts work while host sampling is blocked or unchanged" {
++    const metrics = @import("../observability/system_metrics.zig");
++    const coordinator = @import("../observability/system_metrics_coordinator.zig");
++    const asynchronous = @hasDecl(metrics, "sampleOwned");
++    const port: coordinator.RuntimePort(MetricsCapture) = if (asynchronous)
++        .{ .rearm_tick = MetricsCapture.rearm, .schedule = MetricsCapture.schedule, .pump_clients = MetricsCapture.pump }
++    else
++        .{ .rearm_tick = MetricsCapture.rearm, .sample = MetricsCapture.sample, .pump_clients = MetricsCapture.pump };
++    var sampler: metrics.Sampler = .{};
++    var capture: MetricsCapture = .{};
++    var pending = false;
++    const resources: coordinator.Resources = if (asynchronous)
++        .{ .sampler = &sampler, .pending = &pending }
++    else
++        .{ .sampler = &sampler };
++    var handler = coordinator.Coordinator(MetricsCapture, port).init(&capture, resources);
++    for (0..100) |_| {
++        try handler.handle({});
++    }
++    std.debug.print("PERF metrics_ticks ticks=100 inline_reads={d} scheduled_jobs={d} client_pumps={d}\n", .{ capture.reads, capture.jobs, capture.pumps });
++}
++
++const CountedRelay = struct {
++    const Fake = @import("../../proxy/http/test_support.zig").FakeSession;
++    const Side = @import("../../proxy/tls.zig").Session.Side;
++    fake: Fake,
++    writes: usize = 0,
++
++    /// Example: `const count = counted.read(.origin, buffer);`.
++    pub fn read(relay: *CountedRelay, side: Side, bytes: []u8) ?usize {
++        return relay.fake.read(side, bytes);
++    }
++
++    /// Example: `const forwarded = counted.writeAll(.child, bytes);`.
++    pub fn writeAll(relay: *CountedRelay, side: Side, bytes: []const u8) bool {
++        relay.writes += 1;
++        return relay.fake.writeAll(side, bytes);
++    }
++
++    /// Example: `counted.observe(fragment);`.
++    pub fn observe(_: *CountedRelay, _: @import("../../proxy/http/body.zig").Fragment) void {}
++};
++
++test "performance probe counts TLS-facing writes without changing chunk framing" {
++    const encoded = "100\r\n" ++ ([_]u8{'x'} ** 256) ++ "\r\n0\r\nX-T: done\r\n\r\n";
++    var counted: CountedRelay = .{ .fake = .{ .origin_input = encoded } };
++    try std.testing.expect(@import("../../proxy/http/body.zig").relay(&counted, .{ .from = .origin, .to = .child, .framing = .chunked }, &counted));
++    try std.testing.expectEqualStrings(encoded, counted.fake.childOutput());
++    std.debug.print("PERF chunk_framing wire_bytes={d} tls_facing_writes={d}\n", .{ encoded.len, counted.writes });
++}
++
++test "performance probe executes a queued history burst and preserves every correlation" {
++    var service = try history.Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
++    defer service.deinit(io);
++    for (1..33) |id| {
++        const query = try history.Query.init(.{
++            .request_id = @enumFromInt(id),
++            .origin = .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
++            .text = "needle",
++        });
++        try std.testing.expect(service.query(io, query));
++    }
++    const started = now();
++    var worker = try io.concurrent(history.Service.run, .{ &service, io });
++    defer {
++        service.stop(io);
++        worker.await(io) catch {};
++    }
++    for (1..33) |id| {
++        const response = try service.receiveResponse(io);
++        defer history.model.deinitResponse(response, std.testing.allocator);
++        const request_id = switch (response) {
++            .failed => |failure| failure.request_id,
++            .query_result => |result| result.request_id,
++            else => return error.UnexpectedResponse,
++        };
++        try std.testing.expectEqual(@as(core.schema.RequestId, @enumFromInt(id)), request_id);
++        if (id == 32) {
++            try std.testing.expect(response == .query_result);
++        }
++    }
++    std.debug.print("PERF history_burst queued=32 sqlite_queries={d} elapsed_ns={d}\n", .{ service.statsSnapshot().sqlite_queries, elapsed(started) });
++}
+--- a/src/frontend/graphics/kitty.zig
++++ b/src/frontend/graphics/kitty.zig
+@@ -2052,6 +2052,65 @@
+     try std.testing.expectEqual(@as(u64, 0), graphics_writer.stats.compressed_images);
+ }
+ 
++test "performance probe measures compression work outside the presentation turn" {
++    const pixels = try std.testing.allocator.alloc(u8, TransmissionFixture.metadata.byte_len);
++    defer std.testing.allocator.free(pixels);
++    var prng = std.Random.DefaultPrng.init(9);
++    for (pixels, 0..) |*byte, index| {
++        byte.* = if (index % 16 == 3) prng.random().int(u8) else 0x30;
++    }
++    var turns: [20]u64 = undefined;
++    var totals: [20]u64 = undefined;
++    for (&turns, &totals) |*turn, *total| {
++        var fixture = try TransmissionFixture.init(pixels);
++        defer fixture.deinit();
++        var scheduler: TestCompressionScheduler = .{};
++        fixture.store.host_zlib = true;
++        if (comptime @hasField(Store, "compression_scheduler")) {
++            fixture.store.compression_scheduler = .{ .context = &scheduler, .start = TestCompressionScheduler.schedule };
++        }
++        const image = fixture.store.images.getPtr(identity(@enumFromInt(1), TransmissionFixture.metadata.key)).?;
++        turn.* = 0;
++        const started = Io.Clock.awake.now(std.testing.io).nanoseconds;
++        while (true) {
++            var budget: usize = compression_slice_per_frame;
++            const before = Io.Clock.awake.now(std.testing.io).nanoseconds;
++            const done = fixture.store.advanceCompression(image, &budget);
++            turn.* = @max(turn.*, @as(u64, @intCast(Io.Clock.awake.now(std.testing.io).nanoseconds - before)));
++            if (comptime @hasField(Store, "compression_scheduler")) {
++                scheduler.complete(&fixture.store);
++            }
++            if (done) {
++                break;
++            }
++        }
++        total.* = @intCast(Io.Clock.awake.now(std.testing.io).nanoseconds - started);
++        const inflated = try inflateExact(std.testing.allocator, image.compressed.?, pixels.len);
++        defer std.testing.allocator.free(inflated);
++        try std.testing.expectEqualSlices(u8, pixels, inflated);
++    }
++    for ([_][]u64{ &turns, &totals }, [_][]const u8{ "compression_max_turn", "compression_total" }) |values, name| {
++        std.mem.sort(u64, values, {}, std.sort.asc(u64));
++        std.debug.print("PERF {s} n=20 p50_ns={d} p95_ns={d} p99_ns={d}\n", .{ name, values[10], values[18], values[19] });
++    }
++}
++
++const TestCompressionScheduler = struct {
++    pending: ?*Compression = null,
++
++    fn schedule(context: *anyopaque, job: *Compression) anyerror!void {
++        const scheduler: *TestCompressionScheduler = @ptrCast(@alignCast(context));
++        try std.testing.expect(scheduler.pending == null);
++        scheduler.pending = job;
++    }
++
++    fn complete(scheduler: *TestCompressionScheduler, store: *Store) void {
++        const job = scheduler.pending orelse return;
++        store.completeCompression(Compression.run(job));
++        scheduler.pending = null;
++    }
++};
++
+ test "a zlib host ships a deflated stream that inflates to the pixels" {
+     const pixels = try std.testing.allocator.alloc(u8, TransmissionFixture.metadata.byte_len);
+     defer std.testing.allocator.free(pixels);

@@ -1,0 +1,12 @@
+test-isolation
++- run test w
+PERF search_complete n=20 p50_ns=466709 p95_ns=584958 p99_ns=604917
+PERF search_incremental_total n=20 p50_ns=425875 p95_ns=432666 p99_ns=435333
+PERF search_max_turn n=20 p50_ns=15750 p95_ns=19250 p99_ns=24792
+PERF graphics_runtime_stage_4k n=20 p50_ns=1542 p95_ns=7541 p99_ns=14875
+PERF graphics_total_prepare_4k n=20 p50_ns=2728708 p95_ns=3358875 p99_ns=9260291
+PERF metrics_ticks ticks=100 inline_reads=0 scheduled_jobs=1 client_pumps=0
+PERF chunk_framing wire_bytes=279 tls_facing_writes=6
+PERF history_burst queued=32 sqlite_queries=1 elapsed_ns=263750
+failed command: ./.zig-cache/o/7e63807bc2016032eee99b4828069ac0/test --cache-dir=./.zig-cache --seed=0x420c4cf1 --listen=-
+
