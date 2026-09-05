@@ -21,6 +21,18 @@ class Oracle:
 
 
 class EchoToolsTest(unittest.TestCase):
+    def test_binary_pairs_remain_adjacent_and_alternate_with_or_without_controls(self):
+        controls = [(name, None) for name in ['direct', 'one', 'two']]
+        binaries = [('baseline', '/base'), ('candidate', '/candidate')]
+        for count in range(4):
+            for repetition in range(8):
+                order = echo_path.ordered_specs(controls[:count] + binaries, repetition)
+                names = [name for name, _ in order]
+                first = names.index('candidate' if repetition % 2 else 'baseline')
+                second = names.index('baseline' if repetition % 2 else 'candidate')
+                self.assertEqual(second, first + 1)
+                self.assertEqual(set(order), set(controls[:count] + binaries))
+
     def test_old_repaint_and_uncommitted_change_do_not_complete_echo(self):
         chunks = [b'old repaint', b'new but synchronized', b'commit']
         oracle = Oracle([(1, False), (2, True), (2, False)])

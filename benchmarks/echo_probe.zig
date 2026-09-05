@@ -101,11 +101,49 @@ fn oracle(init: std.process.Init, size: struct { cols: u16, rows: u16 }) !void {
     }
 }
 
+fn foregroundBatch(io: std.Io, session: *const backend.pty.Session, direct: bool) !u64 {
+    const Libc = struct {
+        extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
+    };
+    const started = std.Io.Clock.awake.now(io).nanoseconds;
+    for (0..10000) |_| {
+        const group = if (direct) session.foregroundProcessGroup() orelse return error.NoForeground else Libc.tcgetpgrp(session.master);
+        if (group != session.processId()) {
+            return error.UnexpectedForeground;
+        }
+    }
+
+    return @intCast(@divTrunc(std.Io.Clock.awake.now(io).nanoseconds - started, 10000));
+}
+
+fn foregroundBenchmark(init: std.process.Init) !void {
+    const command = try backend.pty.Command.fromArgv(&.{"/bin/cat"});
+    var session = try backend.pty.Session.spawn(&command, .{ .cols = 80, .rows = 24 });
+    defer session.deinit();
+    var buffer: [256]u8 = undefined;
+    _ = try foregroundBatch(init.io, &session, false);
+    _ = try foregroundBatch(init.io, &session, true);
+
+    for (0..40) |index| {
+        var values: [2]u64 = undefined;
+        for (0..2) |position| {
+            const kind = (position + index) % 2;
+            values[kind] = try foregroundBatch(init.io, &session, kind == 1);
+        }
+
+        try writeAll(1, try std.fmt.bufPrint(&buffer, "{{\"batch\":{d},\"operations\":10000,\"libc_ns_per_op\":{d},\"direct_ns_per_op\":{d}}}\n", .{ index, values[0], values[1] }));
+    }
+}
+
 /// Example: `echo-probe screen 160 40` or `echo-probe one /bin/cat`.
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();
     const mode = args.next() orelse return error.MissingMode;
+    if (std.mem.eql(u8, mode, "foreground")) {
+        return foregroundBenchmark(init);
+    }
+
     if (std.mem.eql(u8, mode, "screen")) {
         const cols = try std.fmt.parseInt(u16, args.next() orelse return error.MissingColumns, 10);
         const rows = try std.fmt.parseInt(u16, args.next() orelse return error.MissingRows, 10);

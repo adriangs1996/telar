@@ -86,7 +86,9 @@ def measure(spec, directory, args):
     env = perf_e2e.isolated_environment(directory)
     shell = directory / 'shell'
     command = f'{shlex.quote(args.probe)} app' if args.application else '/bin/cat'
-    shell.write_text('#!/bin/sh\nexec ' + command + '\n')
+    shell.write_text('#!/bin/sh\nexec ' + ('/bin/sh' if args.floods else command) + '\n')
+    if args.floods:
+        env.update(ENV='/dev/null', BASH_ENV='/dev/null', PS1='')
     shell.chmod(0o700)
     env['SHELL'] = str(shell)
     if args.trace:
@@ -123,6 +125,11 @@ def measure(spec, directory, args):
         for channel in sockets:
             channel.close()
         consume(master, oracle, 2)
+        if args.floods:
+            perf_e2e.load_latency.open_telar_floods(master, args.floods,
+                                                  lambda fd, seconds: consume(fd, oracle, seconds))
+            os.write(master, ('exec ' + command + '\r').encode())
+            consume(master, oracle, 2)
         initial = oracle.count
         samples = []
         # Verified erase, not a timed assumption, separates every sample.
@@ -179,6 +186,15 @@ def measure(spec, directory, args):
         oracle.close()
 
 
+def ordered_specs(specs, repetition):
+    groups = [[spec] for spec in specs if spec[1] is None]
+    binaries = [spec for spec in specs if spec[1] is not None]
+    if binaries:
+        groups.append(list(reversed(binaries)) if repetition % 2 else binaries)
+    offset = repetition % len(groups)
+    return [spec for group in groups[offset:] + groups[:offset] for spec in group]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--probe', required=True)
@@ -190,6 +206,7 @@ def main():
     parser.add_argument('--gap', type=float, default=.05)
     parser.add_argument('--application', action='store_true')
     parser.add_argument('--trace', action='store_true')
+    parser.add_argument('--floods', type=int, choices=[0, 1, 2], default=0)
     parser.add_argument('--controls', nargs='*', default=['direct', 'one', 'two'], choices=['direct', 'one', 'two'])
     args = parser.parse_args()
     if args.samples <= 0 or args.repetitions <= 0 or not math.isfinite(args.gap) or args.gap < 0:
@@ -198,6 +215,10 @@ def main():
         parser.error('select at least one control or binary')
     if args.trace and args.samples > 200:
         parser.error('traced fixtures are limited to 200 samples')
+    if args.floods and (args.controls or args.trace):
+        parser.error('floods require --controls with no names, and cannot use the single-pane tracer')
+    if len(set(args.controls)) != len(args.controls):
+        parser.error('controls must be unique')
     args.probe = str(Path(args.probe).resolve())
     args.output = args.output.resolve()
     args.output.mkdir()
@@ -207,19 +228,19 @@ def main():
     paths = dict(probe=args.probe, **{name: binary for name, binary in specs if binary})
     metadata = dict(platform=platform.platform(), python=platform.python_version(),
                     samples=args.samples, repetitions=args.repetitions, gap=args.gap,
-                    application=args.application, trace=args.trace, controls=args.controls,
+                    application=args.application, trace=args.trace, floods=args.floods, controls=args.controls,
                     binaries={name: dict(path=path, sha256=hashlib.sha256(Path(path).read_bytes()).hexdigest())
-                              for name, path in paths.items()})
+                              for name, path in paths.items()},
+                    tools={name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
+                           for name in ['echo_path.py', 'echo_latency.py', 'perf_e2e.py', 'load_latency.py']},
+                    order=[[name for name, _ in ordered_specs(specs, repetition)]
+                           for repetition in range(args.repetitions)])
     (args.output / 'metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
     records = []
     for repetition in range(args.repetitions):
-        # Rotate controls as well as alternating the production binaries.
-        order = specs[repetition % len(specs):] + specs[:repetition % len(specs)]
-        if repetition % 2:
-            order = list(reversed(order))
-        for spec in order:
+        for spec in ordered_specs(specs, repetition):
             record = measure(spec, args.output / f'{spec[0]}-{repetition}', args)
-            record.update(repetition=repetition, application=args.application, gap=args.gap)
+            record.update(repetition=repetition, application=args.application, gap=args.gap, floods=args.floods)
             records.append(record)
             (args.output / 'results.json').write_text(json.dumps(records, indent=2) + '\n')
             print(json.dumps({k: v for k, v in record.items() if k != 'samples'}), flush=True)
