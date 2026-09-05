@@ -33,6 +33,31 @@ pub const Session = struct {
     last_input_sequence: u64 = 0,
     pending_pane_focus: ?PendingPaneFocus = null,
 
+    /// Reserves one correlated focus exchange before its command is delivered.
+    /// Example: `try session.reserveFocus(pending);`.
+    pub fn reserveFocus(session: *Session, pending: PendingPaneFocus) !void {
+        if (session.pending_pane_focus != null) {
+            return error.FocusAlreadyPending;
+        }
+
+        session.pending_pane_focus = pending;
+    }
+
+    /// Retires a completed or undeliverable focus exchange.
+    /// Example: `session.releaseFocus();`.
+    pub fn releaseFocus(session: *Session) void {
+        session.pending_pane_focus = null;
+    }
+
+    /// Checks all correlation fields without consuming an unrelated completion.
+    /// Example: `if (!session.acceptsFocusCompletion(sender, reply)) return;`.
+    pub fn acceptsFocusCompletion(session: *const Session, sender: Key, reply: core.schema.CompletePaneFocus) bool {
+        const pending = session.pending_pane_focus orelse return false;
+
+        return std.meta.eql(pending.target, sender) and pending.request_id == reply.request_id and
+            pending.pane_id == reply.pane_id and pending.pane_generation == reply.pane_generation;
+    }
+
     /// Allocates the bounded receive and delivery buffers for one connection.
     /// The returned session owns neither `gpa` nor `connection` until the
     /// caller retains the successful result.
@@ -100,6 +125,31 @@ pub const Read = struct {
     connection: *core.transport.SocketChannel,
     buffer: []u8,
 };
+
+test "focus exchange rejects duplicate reservations and stale UI completions" {
+    var session: Session = undefined;
+    session.pending_pane_focus = null;
+    const target: Key = .{ .id = 2, .generation = 3 };
+    const pending: PendingPaneFocus = .{ .request_id = @enumFromInt(4), .pane_id = @enumFromInt(5), .pane_generation = 6, .target = target };
+    try session.reserveFocus(pending);
+    try std.testing.expectError(error.FocusAlreadyPending, session.reserveFocus(pending));
+    var reply: core.schema.CompletePaneFocus = .{
+        .requester = .{ .id = 1, .generation = 1 },
+        .request_id = pending.request_id,
+        .pane_id = pending.pane_id,
+        .pane_generation = pending.pane_generation,
+        .outcome = .focused,
+        .focused_pane_id = @enumFromInt(7),
+    };
+    try std.testing.expect(session.acceptsFocusCompletion(target, reply));
+    try std.testing.expect(!session.acceptsFocusCompletion(.{ .id = 2, .generation = 4 }, reply));
+    reply.pane_generation += 1;
+    try std.testing.expect(!session.acceptsFocusCompletion(target, reply));
+    session.releaseFocus();
+    try std.testing.expect(!session.acceptsFocusCompletion(target, reply));
+    try session.reserveFocus(pending);
+    session.releaseFocus();
+}
 
 test "Session keeps its bounded buffers outside client store storage" {
     const session = try Session.create(

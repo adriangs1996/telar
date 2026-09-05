@@ -41,6 +41,12 @@ runtime correlates the reply to the waiting control connection. A target UI
 disconnect turns the pending request into a failure instead of leaving the CLI
 waiting forever.
 
+The runtime request dispatcher only composes
+`runtime/entrypoints/requests/pane_focus.zig`. This protocol controller borrows
+pane/client stores and a delivery port, never the entire application.
+`client/session.zig` owns reservation, correlation and retirement of the
+pending exchange. This is connection state, not a runtime-owned focus model.
+
 ## Multi-client rule
 
 The geometry lease never participates in focus routing. The last input origin

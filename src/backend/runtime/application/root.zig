@@ -458,7 +458,7 @@ pub const Application = struct {
                 continue;
             }
 
-            requester.pending_pane_focus = null;
+            requester.releaseFocus();
             requester.delivery.responses.push(.{ .request_failed = .{
                 .request_id = pending.request_id,
                 .code = .invalid_request,

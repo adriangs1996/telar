@@ -234,17 +234,7 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
     };
 }
 
-pub fn soundForTransition(previous: ?schema.AgentStatus, current: ?schema.AgentStatus) ?schema.AgentSound {
-    if (previous != .working) {
-        return null;
-    }
-
-    return switch (current orelse return null) {
-        .ready, .done => .ready,
-        .blocked => .needs_input,
-        .unknown, .working, .failed => null,
-    };
-}
+pub const soundForTransition = agent_mod.soundForTransition;
 
 const Step = enum {
     sound,

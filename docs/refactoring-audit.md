@@ -25,9 +25,19 @@ remain constraints, not targets for consolidation.
 - Proof: injected scheduler failure, retry, duplicate completion, debounce and
   disk-failure tests. `zig build test --summary all` passed.
 
+## 3. Request composition and focus exchange
+
+- Extracted the focus protocol controller with explicit pane/client stores,
+  metrics and delivery dependencies. The dispatcher no longer implements the
+  exchange; connection state exposes reservation/correlation/retirement methods.
+- Moved audible transition policy from the PTY entrypoint to the agent capability.
+- Checkpoint publication follows committed workspace events; rejected requests
+  no longer mark persistence dirty. Pane closure is captured by lifecycle events.
+- Proof: exact-generation, duplicate reservation and retry tests, plus the full
+  suite: `zig build test --summary all` passed.
+
 ## Remaining items
 
-3. Request dispatcher and pane-focus transaction.
 4. Frontend transport/event coordination boundary.
 5. History inspection geometry independent of widgets.
 6. Git observation reservation protocol.

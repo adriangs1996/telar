@@ -28,7 +28,8 @@ const report_agent_command_commands = @import("commands/report_agent_command.zig
 const report_agent_command_controller = @import("../entrypoints/requests/report_agent_command.zig");
 const report_agent_title_commands = @import("commands/report_agent_title.zig");
 const report_agent_title_controller = @import("../entrypoints/requests/report_agent_title.zig");
-const pane_observation_events = @import("../entrypoints/events/pane/observation.zig");
+const pane_focus = @import("../entrypoints/requests/pane_focus.zig");
+const agent_capability = @import("../../agent/root.zig");
 const close_tab_commands = @import("commands/close_tab.zig");
 const close_tab_controller = @import("../entrypoints/requests/close_tab.zig");
 const close_pane_commands = @import("commands/close_pane.zig");
@@ -256,135 +257,33 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeRequestPaneFocus(request: *ClientRequestContext, focus: schema.RequestPaneFocus) !void {
-            if (request.session.role != .control) {
-                return error.InvalidClientRole;
-            }
-
-            const application = request.application;
-            const source_key: pane_mod.PaneKey = .{
-                .id = focus.pane_id,
-                .generation = focus.pane_generation,
-            };
-            const pane = application.model.panes.resolve(source_key) orelse {
-                try request.session.delivery.responses.push(.{ .request_failed = .{
-                    .request_id = focus.request_id,
-                    .code = .pane_not_found,
-                    .message = "pane not found or its generation is stale",
-                } });
-                request.session.delivery.close_after_reply = true;
-                return;
-            };
-            if (pane.exit != null) {
-                try request.session.delivery.responses.push(.{ .request_failed = .{
-                    .request_id = focus.request_id,
-                    .code = .pane_exited,
-                    .message = "pane already exited",
-                } });
-                request.session.delivery.close_after_reply = true;
-                return;
-            }
-            if (request.session.pending_pane_focus != null) {
-                try request.session.delivery.responses.push(.{ .request_failed = .{
-                    .request_id = focus.request_id,
-                    .code = .invalid_request,
-                    .message = "one pane focus request is already pending",
-                } });
-                request.session.delivery.close_after_reply = true;
-                return;
-            }
-
-            const target = paneFocusOrigin(application, source_key) orelse {
-                try request.session.delivery.responses.push(.{ .request_failed = .{
-                    .request_id = focus.request_id,
-                    .code = .invalid_request,
-                    .message = "no active UI client originated input for this pane",
-                } });
-                request.session.delivery.close_after_reply = true;
-                return;
-            };
-            request.session.pending_pane_focus = .{
-                .request_id = focus.request_id,
-                .pane_id = focus.pane_id,
-                .pane_generation = focus.pane_generation,
-                .target = target.key,
-            };
-            target.delivery.responses.push(.{ .pane_focus_command = .{
-                .requester = .{ .id = request.session.key.id, .generation = request.session.key.generation },
-                .request_id = focus.request_id,
-                .pane_id = focus.pane_id,
-                .pane_generation = focus.pane_generation,
-                .direction = focus.direction,
-            } }) catch |err| {
-                request.session.pending_pane_focus = null;
-                return err;
-            };
-            try application.pump(target);
+            var controller = paneFocusController(request.application);
+            try controller.requestFocus(request.session, focus);
         }
 
         fn routeCompletePaneFocus(request: *ClientRequestContext, completion: schema.CompletePaneFocus) !void {
-            if (request.session.role != .ui) {
-                return error.InvalidClientRole;
-            }
-
-            const requester_key: ClientKey = .{
-                .id = completion.requester.id,
-                .generation = completion.requester.generation,
-            };
-            const requester = request.application.clients.resolve(requester_key) orelse return;
-            const pending = requester.pending_pane_focus orelse return;
-
-            if (requester.role != .control or !std.meta.eql(pending.target, request.session.key) or
-                pending.request_id != completion.request_id or pending.pane_id != completion.pane_id or
-                pending.pane_generation != completion.pane_generation)
-            {
-                request.application.metrics.stale_client_messages += 1;
-                return;
-            }
-
-            try requester.delivery.responses.push(.{ .pane_focus_result = .{
-                .request_id = completion.request_id,
-                .outcome = completion.outcome,
-                .focused_pane_id = completion.focused_pane_id,
-            } });
-            requester.pending_pane_focus = null;
-            requester.delivery.close_after_reply = true;
-            try request.application.pump(requester);
+            var controller = paneFocusController(request.application);
+            try controller.completeFocus(request.session, completion);
         }
 
         fn notePaneInput(application: *Application, session: *ClientSession, pane_id: schema.PaneId) void {
-            application.input_sequence +%= 1;
-            if (application.input_sequence == 0) {
-                for (&application.clients.items) |*slot| {
-                    const client = slot.* orelse continue;
-                    client.last_input_sequence = 0;
-                }
-                application.input_sequence = 1;
-            }
-
-            session.last_input_pane = pane_id;
-            session.last_input_sequence = application.input_sequence;
+            var controller = paneFocusController(application);
+            controller.notePaneInput(session, pane_id);
         }
 
-        fn paneFocusOrigin(application: *Application, pane_key: pane_mod.PaneKey) ?*ClientSession {
-            var found: ?*ClientSession = null;
-            var sequence: u64 = 0;
-            for (&application.clients.items) |*slot| {
-                const client = slot.* orelse continue;
-                if (!client.active() or client.role != .ui or client.last_input_pane != pane_key.id or
-                    client.last_input_sequence <= sequence)
-                {
-                    continue;
-                }
+        fn paneFocusController(application: *Application) pane_focus.Controller {
+            return .{
+                .panes = &application.model.panes,
+                .clients = application.clients,
+                .metrics = &application.metrics,
+                .input_sequence = &application.input_sequence,
+                .delivery = .{ .context = application, .pump = pumpFocusClient },
+            };
+        }
 
-                const attachment = client.attachments.find(pane_key.id) orelse continue;
-                if (!std.meta.eql(attachment.pane.key(), pane_key)) {
-                    continue;
-                }
-
-                found = client;
-                sequence = client.last_input_sequence;
-            }
-            return found;
+        fn pumpFocusClient(context: *anyopaque, session: *ClientSession) !void {
+            const application: *Application = @ptrCast(@alignCast(context));
+            try application.pump(session);
         }
 
         fn routePaneResize(request: *ClientRequestContext, resize: schema.PaneResize) !void {
@@ -508,7 +407,6 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeClosePane(request: *ClientRequestContext, close: schema.ClosePane) !void {
-            request.application.noteSessionChange();
             var handler: close_pane_commands.ClosePaneHandler = .{
                 .panes = .{
                     .context = &request.session.attachments,
@@ -666,7 +564,6 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeCreateTab(request: *ClientRequestContext, create: schema.CreateTabView) !void {
-            request.application.noteSessionChange();
             const application = request.application;
             const session = request.session;
             var client_context: ClientLaunchContext = .{ .application = application, .session = session };
@@ -696,7 +593,6 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeRenameTab(request: *ClientRequestContext, rename: schema.RenameTab) !void {
-            request.application.noteSessionChange();
             const application = request.application;
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = request.session.key };
             var handler: rename_tab_commands.RenameTabHandler = .{
@@ -712,7 +608,6 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeCloseTab(request: *ClientRequestContext, close: schema.CloseTab) !void {
-            request.application.noteSessionChange();
             const application = request.application;
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = request.session.key };
             var handler: close_tab_commands.CloseTabHandler = .{
@@ -732,7 +627,6 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeMoveTab(request: *ClientRequestContext, move: schema.MoveTab) !void {
-            request.application.noteSessionChange();
             const application = request.application;
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = request.session.key };
             var handler: move_tab_commands.MoveTabHandler = .{
@@ -781,7 +675,6 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeUpdateClientLayout(request: *ClientRequestContext, update: schema.ClientLayoutUpdateView) !void {
-            request.application.noteSessionChange();
             const identity = request.session.delivery.client_identity;
             if (identity == .invalid) {
                 return error.ClientLayoutNotSubscribed;
@@ -795,10 +688,10 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
                     .workspaces = request.workspaces.reader(),
                 },
             });
+            request.application.noteSessionChange();
         }
 
         fn routeCreateWorkspace(request: *ClientRequestContext, create: schema.CreateWorkspaceView) !void {
-            request.application.noteSessionChange();
             const application = request.application;
             const session = request.session;
             var client_context: ClientLaunchContext = .{ .application = application, .session = session };
@@ -833,7 +726,6 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeRenameWorkspace(request: *ClientRequestContext, rename: schema.RenameWorkspace) !void {
-            request.application.noteSessionChange();
             var event_context: WorkspaceEventContext = .{
                 .application = request.application,
                 .origin = request.session.key,
@@ -932,7 +824,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
                 return;
             }
 
-            const sound = pane_observation_events.soundForTransition(result.previous, result.current) orelse return;
+            const sound = agent_capability.soundForTransition(result.previous, result.current) orelse return;
             application.publishAgentSound(.{
                 .pane_id = report.pane_id,
                 .pane_generation = report.pane_generation,
@@ -1291,11 +1183,13 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
 
         fn publishTabCreated(context: *anyopaque, event: workspace_mod.TabCreated) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
+            publication.application.noteSessionChange();
             publication.application.notifyWorkspaceChanged(publication.origin, event.location.workspace);
         }
 
         fn publishTabRenamed(context: *anyopaque, event: workspace_mod.TabRenamed) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
+            publication.application.noteSessionChange();
 
             publication.application.model.agents.touch();
             publication.application.notifyWorkspaceChanged(publication.origin, event.location.workspace);
@@ -1303,11 +1197,13 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
 
         fn publishTabMoved(context: *anyopaque, event: workspace_mod.TabMoved) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
+            publication.application.noteSessionChange();
             publication.application.notifyWorkspaceChanged(publication.origin, event.location.workspace);
         }
 
         fn publishWorkspaceRenamed(context: *anyopaque, event: workspace_mod.WorkspaceRenamed) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
+            publication.application.noteSessionChange();
 
             publication.application.model.agents.touch();
             publication.application.notifyWorkspaceChanged(publication.origin, event.location);
@@ -1315,6 +1211,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
 
         fn publishWorkspaceCreated(context: *anyopaque, event: workspace_mod.WorkspaceCreated) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
+            publication.application.noteSessionChange();
             publication.application.notifyWorkspaceChanged(publication.origin, event.location.workspace);
         }
 
@@ -1330,6 +1227,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
 
         fn publishTabRemoved(context: *anyopaque, event: workspace_mod.TabRemoved) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
+            publication.application.noteSessionChange();
 
             if (event.workspace_removed) {
                 publication.application.notifyWorkspaceClosed(.{
