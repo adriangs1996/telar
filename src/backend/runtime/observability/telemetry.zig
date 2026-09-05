@@ -185,6 +185,8 @@ pub const RuntimeMetrics = struct {
     media_failures: u64 = 0,
     /// One media actor batch: shared frame folding, mapping and decoding.
     media_ingest: diagnostics.Timing = .{},
+    system_sample: diagnostics.Timing = .{},
+    system_sample_last_ns: u64 = 0,
     decode: diagnostics.Timing = .{},
     ingest: diagnostics.Timing = .{},
     encode: diagnostics.Timing = .{},
@@ -480,6 +482,11 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
             metrics.media_ingest.max_ns / std.time.ns_per_us,
         },
     );
+    try output.print("\"system_sample_avg_us\":{d},\"system_sample_max_us\":{d},\"system_sample_age_ms\":{d},", .{
+        metrics.system_sample.average() / std.time.ns_per_us,
+        metrics.system_sample.max_ns / std.time.ns_per_us,
+        if (metrics.system_sample_last_ns == 0) @as(u64, 0) else diagnostics.elapsed(metrics.system_sample_last_ns, now_ns) / std.time.ns_per_ms,
+    });
     try output.print("\"history_captured\":{d},\"history_dropped\":{d}," ++
         "\"history_candidate_input_bytes\":{d},\"history_input_dropped\":{d}," ++
         "\"history_prompt_markers\":{d},\"history_input_markers\":{d}," ++

@@ -46,6 +46,12 @@ pub fn Dispatcher(comptime Application: type) type {
         /// ```zig
         /// try RuntimeEvents.schedulePaneInput(&application, pane);
         /// ```
+        /// Starts a queued transfer preparation on the pane's media actor.
+        /// Example: `try RuntimeEvents.schedulePaneMedia(application, pane);`.
+        pub fn schedulePaneMedia(application: *Application, pane: *Pane) !void {
+            try PaneEvents.Projection.scheduleMedia(application, pane);
+        }
+
         pub fn schedulePaneInput(application: *Application, pane: *Pane) !void {
             return PaneEvents.Io.scheduleInput(application, pane);
         }
@@ -92,6 +98,7 @@ pub fn Dispatcher(comptime Application: type) type {
                 .metrics_tick => |result| {
                     try ObservabilityEvents.handleMetricsTick(application, result);
                 },
+                .metrics_sampled => |sample| ObservabilityEvents.handleMetricsSample(application, sample),
                 .pane_input_written => |value| {
                     try PaneEvents.Io.handleInputWritten(application, value);
                 },
@@ -109,6 +116,9 @@ pub fn Dispatcher(comptime Application: type) type {
                 },
                 .pane_media => |value| {
                     try PaneEvents.Projection.handleMedia(application, value);
+                },
+                .pane_search => |value| {
+                    try @import("../pane_search.zig").advance(application, value);
                 },
                 .pane_exit => |value| {
                     try PaneEvents.Pipeline.handleExit(application, value);

@@ -428,7 +428,7 @@ fn stop(init: std.process.Init, connector: *const RuntimeConnector) !void {
 
     var receive_buffer: [2048]u8 = undefined;
     switch (try core.schema.decodeServer(try connection.receive(init.io, &receive_buffer))) {
-        .runtime_stopping => try File.stdout().writeStreamingAll(init.io, "telar runtime stopped\n"),
+        .runtime_stopping => try File.stdout().writeStreamingAll(init.io, "telar runtime is stopping\n"),
         .request_failed => |failure| {
             std.debug.print("telar runtime: {s}\n", .{failure.message});
             return error.RuntimeRequestFailed;

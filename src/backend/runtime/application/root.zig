@@ -118,6 +118,7 @@ pub const Application = struct {
     geometry_leases: [max_workspaces]?GeometryLease = @splat(null),
     model: RuntimeModel,
     system_metrics: observability.system_metrics.Sampler = .{},
+    system_metrics_pending: bool = false,
     metrics: RuntimeMetrics,
     session: session_checkpoint.State = .{},
     session_name_probe_in_flight: bool = false,
@@ -766,7 +767,7 @@ pub const Application = struct {
             return;
         }
 
-        const prepared = (try session.delivery.prepare(.{
+        const pending = try session.delivery.prepare(.{
             .io = application.io,
             .attachments = &session.attachments,
             .sources = .{
@@ -782,11 +783,20 @@ pub const Application = struct {
                 .client_layouts = &application.model.client_layouts,
             },
             .metrics = &application.metrics,
-        })) orelse return;
-        Operations.startSessionSend(application, session, prepared.payload) catch |err| {
+        });
+        errdefer if (pending) |prepared| {
             session.delivery.abort(prepared);
-            return err;
         };
+
+        for (0..attachment_mod.AttachmentStore.capacity) |index| {
+            const attachment = session.attachments.at(index) orelse continue;
+            if (attachment.pane.media.hasPending()) {
+                try RuntimeEvents.schedulePaneMedia(application, attachment.pane);
+            }
+        }
+
+        const prepared = pending orelse return;
+        try Operations.startSessionSend(application, session, prepared.payload);
         session.delivery.commit(.{
             .prepared = prepared,
             .attachments = &session.attachments,

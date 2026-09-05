@@ -72,16 +72,35 @@ pub const Worker = struct {
     /// try worker.run(.{ .io = io, .channel = channel, .metrics = metrics });
     /// ```
     pub fn run(worker: *Worker, context: Context) anyerror!void {
+        var items: [64]model.Request = undefined;
         while (true) {
-            const request = context.channel.receiveRequest(context.io, context.metrics) catch |err| switch (err) {
+            const count = context.channel.receiveBatch(context.io, .{ .items = &items, .metrics = context.metrics }) catch |err| switch (err) {
                 error.Closed => return,
                 else => |other| return other,
             };
+            var next: usize = 0;
+            defer for (items[next..count]) |request| {
+                model.deinitRequest(request, worker.gpa);
+            };
+
             const path = diagnostics.enter(.observation);
             defer path.restore();
 
-            if (try worker.execute(context, request) == .stop) {
-                return;
+            while (next < count) {
+                const request = items[next];
+                next += 1;
+                if (superseded(request, items[next..count])) {
+                    try context.channel.sendResponse(context.io, .{ .failed = .{
+                        .request_id = request.query.request_id,
+                        .origin = request.query.origin,
+                        .message = "History query superseded",
+                    } });
+                    continue;
+                }
+
+                if (try worker.execute(context, request) == .stop) {
+                    return;
+                }
             }
         }
     }
@@ -305,6 +324,59 @@ pub const Worker = struct {
         return .continue_running;
     }
 };
+
+test "query replacement stops at writes and preserves clients, pages and CLI replies" {
+    const query = try model.Query.init(.{ .request_id = @enumFromInt(1), .origin = .{
+        .client = .{ .id = 1, .generation = 1 },
+        .close_after_reply = false,
+    }, .text = "g" });
+    var newer = query;
+    newer.request_id = @enumFromInt(2);
+    try std.testing.expect(superseded(.{ .query = query }, &.{.{ .query = newer }}));
+    const barrier: model.Request = .{ .session_finished = .{ .id = @splat(0), .finished_at_ms = 1 } };
+    try std.testing.expect(!superseded(.{ .query = query }, &.{ barrier, .{ .query = newer } }));
+
+    newer.origin.client.generation = 2;
+    try std.testing.expect(!superseded(.{ .query = query }, &.{.{ .query = newer }}));
+    newer.origin = query.origin;
+    newer.offset = 20;
+    try std.testing.expect(!superseded(.{ .query = query }, &.{.{ .query = newer }}));
+    newer.offset = 0;
+    newer.entry_id = 4;
+    try std.testing.expect(!superseded(.{ .query = query }, &.{.{ .query = newer }}));
+    newer.entry_id = 0;
+    newer.snapshot_id = 5;
+    try std.testing.expect(!superseded(.{ .query = query }, &.{.{ .query = newer }}));
+    newer.snapshot_id = 0;
+    newer.origin.close_after_reply = true;
+    try std.testing.expect(!superseded(.{ .query = query }, &.{.{ .query = newer }}));
+}
+
+fn superseded(request: model.Request, later: []const model.Request) bool {
+    const query = switch (request) {
+        .query => |query| query,
+        else => return false,
+    };
+    if (query.origin.close_after_reply or query.offset != 0 or query.snapshot_id != 0 or query.entry_id != 0) {
+        return false;
+    }
+
+    for (later) |candidate| {
+        const newer = switch (candidate) {
+            .query => |value| value,
+            // Writes and other requests are ordering barriers.
+            else => break,
+        };
+        if (!newer.origin.close_after_reply and newer.offset == 0 and newer.snapshot_id == 0 and newer.entry_id == 0 and
+            std.meta.eql(query.origin.client, newer.origin.client) and query.distinct == newer.distinct and
+            query.request_id != newer.request_id)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 fn unavailableResponse(request_id: model.schema.RequestId, origin: model.QueryOrigin) model.Response {
     return .{ .failed = .{

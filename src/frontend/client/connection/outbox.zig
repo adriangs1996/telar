@@ -350,6 +350,21 @@ pub const Outbox = struct {
         switch (message) {
             .pane_resize => |resize| return outbox.pushResize(resize),
             .frame_ack => |ack| return outbox.pushAck(ack),
+            .query_history => |query| {
+                if (query.offset == 0 and query.snapshot_id == 0 and query.entry_id == 0) {
+                    if (outbox.mutableTailIndex()) |index| {
+                        switch (outbox.items[index]) {
+                            .query_history => |old| {
+                                if (old.offset == 0 and old.snapshot_id == 0 and old.entry_id == 0) {
+                                    outbox.items[index] = message;
+                                    return;
+                                }
+                            },
+                            else => {},
+                        }
+                    }
+                }
+            },
             .pane_input, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout => unreachable,
             else => {},
         }
@@ -980,6 +995,29 @@ test "pending launch cwd storage has an explicit bound" {
         .size = .{ .cols = 20, .rows = 10 },
         .launch = .{ .cwd = "/work", .arguments = &.{"/bin/sh"} },
     } }));
+}
+
+test "history replaces only unsent first-page queries" {
+    var outbox: Outbox = .{};
+    var query: OwnedHistoryQuery = .{ .request_id = @enumFromInt(1), .limit = 20 };
+    try outbox.push(.{ .query_history = query });
+    query.request_id = @enumFromInt(2);
+    try outbox.push(.{ .query_history = query });
+    try std.testing.expectEqual(@as(u8, 1), outbox.len);
+    var buffer: [2048]u8 = undefined;
+    const sent = (try schema.decodeClient((try outbox.beginSend(&buffer)).?)).query_history;
+    try std.testing.expectEqual(query.request_id, sent.request_id);
+
+    query.request_id = @enumFromInt(3);
+    try outbox.push(.{ .query_history = query });
+    try std.testing.expectEqual(@as(u8, 2), outbox.len);
+    query.offset = 20;
+    try outbox.push(.{ .query_history = query });
+    try std.testing.expectEqual(@as(u8, 3), outbox.len);
+    query.offset = 0;
+    query.entry_id = 7;
+    try outbox.push(.{ .query_history = query });
+    try std.testing.expectEqual(@as(u8, 4), outbox.len);
 }
 
 test "input never coalesces into a message already in flight" {

@@ -198,7 +198,12 @@ pub const Session = struct {
         defer session.unlockLifecycle();
 
         if (!session.reaped.load(.acquire)) {
+            native.terminateForeground(session.master);
+
             native.terminate(session.pid);
+            // Discard queued terminal I/O before joining the wait actor.
+            // The master stays open until all descriptor borrows finish.
+            native.flushPty(session.master);
         }
     }
 

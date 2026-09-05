@@ -70,6 +70,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
         .connection = connection,
         .input_file = input_file,
         .writer = writer,
+        .async_output = true,
         .host_size = host_resizes.initialSize(host_platform_size),
         .window_width_px = host_platform_size.width_px,
         .window_height_px = host_platform_size.height_px,

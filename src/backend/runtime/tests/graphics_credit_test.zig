@@ -148,6 +148,14 @@ test "returned credit lets the next delivery pump stage a blocked image" {
     var controller = GraphicsCreditController.init(&fixture.metrics, &handler);
     try controller.graphicsCredit(.{ .pane_id = fixture.pane.id, .bytes = 1 });
 
+    try std.testing.expect(try delivery.prepare(.{
+        .io = std.testing.io,
+        .attachments = &fixture.attachments,
+        .sources = sources,
+        .metrics = &fixture.metrics,
+    }) == null);
+    fixture.processMedia();
+
     const prepared = (try delivery.prepare(.{
         .io = std.testing.io,
         .attachments = &fixture.attachments,

@@ -310,21 +310,6 @@ pub const TitleState = struct {
     }
 };
 
-fn matchesAt(row: []const u21, needle: []const u21, fold: bool) bool {
-    for (row, needle) |have, want| {
-        if (have == want) {
-            continue;
-        }
-        if (!fold or have >= 0x80 or want >= 0x80) {
-            return false;
-        }
-        if (std.ascii.toLower(@intCast(have)) != std.ascii.toLower(@intCast(want))) {
-            return false;
-        }
-    }
-    return true;
-}
-
 fn sanitizeTitle(storage: *[schema.max_pane_title_bytes]u8, raw: []const u8) usize {
     var len: usize = 0;
     var view = std.unicode.Utf8View.initUnchecked(raw);
@@ -398,8 +383,9 @@ pub const LaunchRecord = struct {
     }
 };
 
-pub const max_search_rows = 10_000;
-pub const max_search_cols = 512;
+pub const TextSearch = @import("text_search.zig").Cursor;
+pub const max_search_rows = @import("text_search.zig").max_rows;
+pub const max_search_cols = @import("text_search.zig").max_cols;
 
 pub const SearchResult = struct {
     count: u8,
@@ -471,6 +457,7 @@ pub const Pane = struct {
     dirty: bool = true,
     render_pending: bool = true,
     cell_revision: u64 = 1,
+    search_revision: u64 = 1,
     output_pending: bool = false,
     ingest_pending: bool = false,
     actor_count: u8 = 0,
@@ -734,73 +721,12 @@ pub const Pane = struct {
     /// const result = pane.searchText("error", &matches);
     /// ```
     pub fn searchText(pane: *const Pane, needle: []const u8, storage: []schema.SearchMatch) SearchResult {
-        var needle_codepoints: [schema.max_search_needle_bytes]u21 = undefined;
-        var needle_len: usize = 0;
-        var fold = true;
-        var view = std.unicode.Utf8View.initUnchecked(needle);
-        var iterator = view.iterator();
-        while (iterator.nextCodepoint()) |codepoint| {
-            if (needle_len == needle_codepoints.len) {
-                break;
-            }
-            if (codepoint < 0x80 and std.ascii.isUpper(@intCast(codepoint))) {
-                fold = false;
-            }
-            needle_codepoints[needle_len] = codepoint;
-            needle_len += 1;
-        }
-        if (needle_len == 0) {
-            return .{ .count = 0, .truncated = false };
-        }
-
-        const screen: *const vt.Screen = pane.terminal.screens.active;
-        const pages = &screen.pages;
-        const total = pages.total_rows;
-        const first_row: usize = total -| max_search_rows;
-        var count: u8 = 0;
-        var truncated = first_row != 0;
-        var row_codepoints: [max_search_cols]u21 = undefined;
-        var row_columns: [max_search_cols]u16 = undefined;
-
-        var y: usize = first_row;
-        while (y < total) : (y += 1) {
-            const pin = pages.pin(.{ .screen = .{ .x = 0, .y = @intCast(y) } }) orelse continue;
-            const cells = pin.cells(.all);
-            var row_len: usize = 0;
-            for (cells, 0..) |*cell, x| {
-                if (row_len == row_codepoints.len) {
-                    truncated = true;
-                    break;
-                }
-                if (cell.wide == .spacer_tail or cell.wide == .spacer_head) {
-                    continue;
-                }
-                row_codepoints[row_len] = if (cell.hasText()) cell.codepoint() else ' ';
-                row_columns[row_len] = @intCast(x);
-                row_len += 1;
-            }
-
-            var start: usize = 0;
-            while (start + needle_len <= row_len) : (start += 1) {
-                if (!matchesAt(row_codepoints[start .. start + needle_len], needle_codepoints[0..needle_len], fold)) {
-                    continue;
-                }
-                if (count == storage.len) {
-                    return .{ .count = count, .truncated = true };
-                }
-
-                const last_column = row_columns[start + needle_len - 1];
-                storage[count] = .{
-                    .x = row_columns[start],
-                    .y = @intCast(y),
-                    .len = last_column - row_columns[start] + 1,
-                };
-                count += 1;
-                start += needle_len - 1;
-            }
-        }
-
-        return .{ .count = count, .truncated = truncated };
+        std.debug.assert(!pane.ingest_pending);
+        var cursor = TextSearch.init(needle);
+        while (!(cursor.advance(pane) catch unreachable)) {}
+        const count = @min(storage.len, cursor.count);
+        @memcpy(storage[0..count], cursor.matches[0..count]);
+        return .{ .count = @intCast(count), .truncated = cursor.truncated or cursor.count > count };
     }
 
     pub fn key(pane: *const Pane) PaneKey {
@@ -896,6 +822,7 @@ pub const Pane = struct {
         pane.render_state.deinit(gpa);
         pane.history_observer.deinit();
         pane.media_ingestion.prepared_transfers.discardAll(&pane.media_allocator);
+        pane.media_ingestion.transfer_preparation.deinit(&pane.media_allocator);
         pane.media.deinit();
         pane.stream.deinit();
         pane.media_allocator.detach();
@@ -905,6 +832,7 @@ pub const Pane = struct {
     }
 
     pub fn ingest(pane: *Pane, io: Io, bytes: []const u8) !u64 {
+        pane.search_revision +%= 1;
         const started = diagnostics.now(io);
         {
             const terminal_allocations = diagnostics.enterTerminalAllocations();
@@ -1558,6 +1486,7 @@ pub const Pane = struct {
 
     pub fn applyPendingResize(pane: *Pane) !void {
         const size = pane.pending_size orelse return;
+        pane.search_revision +%= 1;
         {
             const terminal_allocations = diagnostics.enterTerminalAllocations();
             defer terminal_allocations.restore();

@@ -1,7 +1,7 @@
 //! Host health sampling for the runtime.
 //!
-//! The sampler runs on the runtime's metrics tick, well off the interactive
-//! path. It keeps only the latest values plus the previous cpu tick counters,
+//! A single-flight observation actor samples an owned copy. It keeps only
+//! the latest values plus the previous cpu tick counters,
 //! allocates nothing, and bumps a revision only when a value the user can see
 //! actually changed, so `pump` stays level-triggered like the agent snapshot.
 //!
@@ -29,6 +29,22 @@ const Raw = struct {
     memory_used_bytes: u64,
     battery_percent: ?u8,
 };
+
+pub const Sample = struct {
+    sampler: Sampler,
+    duration_ns: u64,
+    captured_ns: u64,
+};
+
+/// Samples a value-owned copy without borrowing runtime state.
+/// Example: `const result = sampleOwned(io, previous);`.
+pub fn sampleOwned(io: std.Io, previous: Sampler) Sample {
+    const started = std.Io.Clock.awake.now(io).nanoseconds;
+    var sampler = previous;
+    sampler.sample();
+    const finished = std.Io.Clock.awake.now(io).nanoseconds;
+    return .{ .sampler = sampler, .duration_ns = @intCast(finished - started), .captured_ns = @intCast(finished) };
+}
 
 pub const Sampler = struct {
     revision: u64 = 1,

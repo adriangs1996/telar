@@ -106,11 +106,36 @@ const PixelAllocation = struct {
 /// In-progress deflate of one image's pixels. Heap-allocated and never moved,
 /// because the compressor holds pointers into the allocating writer and the
 /// window buffer.
-const Compression = struct {
+pub const Compression = struct {
+    input: []u8 = &.{},
+    input_len: usize = 0,
+    finish_after: bool = false,
+    failed: bool = false,
     allocating: Io.Writer.Allocating,
     window: [std.compress.flate.max_window_len]u8,
     compress: std.compress.flate.Compress,
     offset: usize,
+
+    /// Compresses only copied input; no store, image or mutable model is borrowed.
+    /// Example: `const completed = Compression.run(job);`.
+    pub fn run(job: *Compression) *Compression {
+        job.compress.writer.writeAll(job.input[0..job.input_len]) catch {
+            job.failed = true;
+            return job;
+        };
+        if (job.finish_after) {
+            job.compress.finish() catch {
+                job.failed = true;
+            };
+        }
+
+        return job;
+    }
+};
+
+pub const CompressionScheduler = struct {
+    context: *anyopaque,
+    start: *const fn (*anyopaque, *Compression) anyerror!void,
 };
 
 const ImageEntry = struct {
@@ -224,6 +249,10 @@ pub const Store = struct {
     /// The host answered the `o=z` capability probe, so inline transmissions
     /// may ship a zlib stream instead of raw pixels.
     host_zlib: bool = false,
+    compression_scheduler: ?CompressionScheduler = null,
+    pending_compression: ?*Compression = null,
+    orphan_compression: bool = false,
+    compression_input: []u8 = &.{},
     /// Incremented once per writer pass; shared-name emissions stamp it so
     /// the consume deadline needs no clock.
     pass_counter: u64 = 0,
@@ -292,8 +321,14 @@ pub const Store = struct {
     }
 
     pub fn deinit(store: *Store) void {
+        // The client joins its compression actor before destroying the store.
+        if (store.pending_compression) |job| {
+            store.completeCompression(job);
+        }
+
         var images = store.images.iterator();
         while (images.next()) |entry| store.freePixels(entry.value_ptr);
+        store.gpa.free(store.compression_input);
         store.images.deinit(store.gpa);
         store.placements.deinit(store.gpa);
         store.revisions.deinit(store.gpa);
@@ -402,14 +437,33 @@ pub const Store = struct {
 
     fn freeCompression(store: *Store, entry: *ImageEntry) void {
         if (entry.compression) |state| {
-            state.allocating.deinit();
-            store.gpa.destroy(state);
+            if (store.pending_compression == state) {
+                store.orphan_compression = true;
+            } else {
+                state.allocating.deinit();
+                store.gpa.destroy(state);
+            }
+
             entry.compression = null;
         }
         if (entry.compressed) |bytes| {
             store.gpa.free(bytes);
             entry.compressed = null;
         }
+    }
+
+    /// Ends the worker borrow before publishing compression readiness.
+    /// Example: `store.completeCompression(job);`.
+    pub fn completeCompression(store: *Store, job: *Compression) void {
+        std.debug.assert(store.pending_compression == job);
+        store.pending_compression = null;
+        if (store.orphan_compression) {
+            job.allocating.deinit();
+            store.gpa.destroy(job);
+            store.orphan_compression = false;
+        }
+
+        store.damage = true;
     }
 
     /// Advances one image's deflate by at most `budget` raw bytes. Returns
@@ -428,6 +482,10 @@ pub const Store = struct {
         if (budget.* == 0) {
             return false;
         }
+        if (store.pending_compression != null) {
+            return false;
+        }
+
         const state = entry.compression orelse create: {
             const state = store.gpa.create(Compression) catch {
                 entry.incompressible = true;
@@ -441,6 +499,10 @@ pub const Store = struct {
                 return true;
             };
             state.offset = 0;
+            state.input = &.{};
+            state.input_len = 0;
+            state.finish_after = false;
+            state.failed = false;
             state.compress = std.compress.flate.Compress.init(
                 &state.allocating.writer,
                 &state.window,
@@ -455,22 +517,57 @@ pub const Store = struct {
             entry.compression = state;
             break :create state;
         };
-        const take = @min(budget.*, entry.pixels.len - state.offset);
-        state.compress.writer.writeAll(entry.pixels[state.offset..][0..take]) catch {
-            store.freeCompression(entry);
-            entry.incompressible = true;
-            return true;
-        };
-        state.offset += take;
-        budget.* -= take;
-        if (state.offset < entry.pixels.len) {
-            return false;
+        if (store.compression_scheduler) |scheduler| {
+            if (state.failed) {
+                store.freeCompression(entry);
+                entry.incompressible = true;
+                return true;
+            }
+            if (state.offset < entry.pixels.len) {
+                if (store.compression_input.len == 0) {
+                    store.compression_input = store.gpa.alloc(u8, compression_slice_per_frame) catch {
+                        store.freeCompression(entry);
+                        entry.incompressible = true;
+                        return true;
+                    };
+                }
+
+                state.input = store.compression_input;
+                const take = @min(budget.*, @min(state.input.len, entry.pixels.len - state.offset));
+                @memcpy(state.input[0..take], entry.pixels[state.offset..][0..take]);
+                state.input_len = take;
+                state.offset += take;
+                state.finish_after = state.offset == entry.pixels.len;
+                budget.* -= take;
+                store.pending_compression = state;
+                scheduler.start(scheduler.context, state) catch {
+                    store.pending_compression = null;
+                    store.freeCompression(entry);
+                    entry.incompressible = true;
+                    return true;
+                };
+
+                return false;
+            }
+        } else {
+            const take = @min(budget.*, entry.pixels.len - state.offset);
+            state.compress.writer.writeAll(entry.pixels[state.offset..][0..take]) catch {
+                store.freeCompression(entry);
+                entry.incompressible = true;
+                return true;
+            };
+            state.offset += take;
+            budget.* -= take;
+            if (state.offset < entry.pixels.len) {
+                return false;
+            }
+
+            state.compress.finish() catch {
+                store.freeCompression(entry);
+                entry.incompressible = true;
+                return true;
+            };
         }
-        state.compress.finish() catch {
-            store.freeCompression(entry);
-            entry.incompressible = true;
-            return true;
-        };
         const compressed = state.allocating.toOwnedSlice() catch {
             store.freeCompression(entry);
             entry.incompressible = true;
@@ -2050,6 +2147,125 @@ test "a large explicit budget transmits and places a frame in one pass" {
     try std.testing.expectEqual(@as(u64, 1), graphics_writer.stats.inline_images);
     try std.testing.expectEqual(@as(u64, 1), graphics_writer.stats.transmission_passes);
     try std.testing.expectEqual(@as(u64, 0), graphics_writer.stats.compressed_images);
+}
+
+test "performance probe measures compression work outside the presentation turn" {
+    const pixels = try std.testing.allocator.alloc(u8, TransmissionFixture.metadata.byte_len);
+    defer std.testing.allocator.free(pixels);
+    var prng = std.Random.DefaultPrng.init(9);
+    for (pixels, 0..) |*byte, index| {
+        byte.* = if (index % 16 == 3) prng.random().int(u8) else 0x30;
+    }
+    var turns: [20]u64 = undefined;
+    var totals: [20]u64 = undefined;
+    for (&turns, &totals) |*turn, *total| {
+        var fixture = try TransmissionFixture.init(pixels);
+        defer fixture.deinit();
+        var scheduler: TestCompressionScheduler = .{};
+        fixture.store.host_zlib = true;
+        if (comptime @hasField(Store, "compression_scheduler")) {
+            fixture.store.compression_scheduler = .{ .context = &scheduler, .start = TestCompressionScheduler.schedule };
+        }
+        const image = fixture.store.images.getPtr(identity(@enumFromInt(1), TransmissionFixture.metadata.key)).?;
+        turn.* = 0;
+        const started = Io.Clock.awake.now(std.testing.io).nanoseconds;
+        while (true) {
+            var budget: usize = compression_slice_per_frame;
+            const before = Io.Clock.awake.now(std.testing.io).nanoseconds;
+            const done = fixture.store.advanceCompression(image, &budget);
+            turn.* = @max(turn.*, @as(u64, @intCast(Io.Clock.awake.now(std.testing.io).nanoseconds - before)));
+            if (comptime @hasField(Store, "compression_scheduler")) {
+                scheduler.complete(&fixture.store);
+            }
+            if (done) {
+                break;
+            }
+        }
+        total.* = @intCast(Io.Clock.awake.now(std.testing.io).nanoseconds - started);
+        const inflated = try inflateExact(std.testing.allocator, image.compressed.?, pixels.len);
+        defer std.testing.allocator.free(inflated);
+        try std.testing.expectEqualSlices(u8, pixels, inflated);
+    }
+    for ([_][]u64{ &turns, &totals }, [_][]const u8{ "compression_max_turn", "compression_total" }) |values, name| {
+        std.mem.sort(u64, values, {}, std.sort.asc(u64));
+        std.debug.print("PERF {s} n=20 p50_ns={d} p95_ns={d} p99_ns={d}\n", .{ name, values[10], values[18], values[19] });
+    }
+}
+
+const TestCompressionScheduler = struct {
+    pending: ?*Compression = null,
+
+    fn schedule(context: *anyopaque, job: *Compression) anyerror!void {
+        const scheduler: *TestCompressionScheduler = @ptrCast(@alignCast(context));
+        try std.testing.expect(scheduler.pending == null);
+        scheduler.pending = job;
+    }
+
+    fn complete(scheduler: *TestCompressionScheduler, store: *Store) void {
+        const job = scheduler.pending orelse return;
+        store.completeCompression(Compression.run(job));
+        scheduler.pending = null;
+    }
+};
+
+test "async compression owns its input and emits the same pixels" {
+    const pixels = try std.testing.allocator.alloc(u8, TransmissionFixture.metadata.byte_len);
+    defer std.testing.allocator.free(pixels);
+    @memset(pixels, 0x30);
+    var fixture = try TransmissionFixture.init(pixels);
+    defer fixture.deinit();
+    var scheduler: TestCompressionScheduler = .{};
+    fixture.store.host_zlib = true;
+    fixture.store.compression_scheduler = .{ .context = &scheduler, .start = TestCompressionScheduler.schedule };
+    var graphics_writer = fixture.writer(transmission_budget_per_frame);
+    var collected: Io.Writer.Allocating = .init(std.testing.allocator);
+    defer collected.deinit();
+    const buffer = try std.testing.allocator.alloc(u8, transmission_budget_per_frame * 2);
+    defer std.testing.allocator.free(buffer);
+    var turns: usize = 0;
+    while (fixture.store.damage) {
+        turns += 1;
+        try std.testing.expect(turns < 32);
+        var writer = Io.Writer.fixed(buffer);
+        _ = try graphics_writer.write(&writer);
+        try collected.writer.writeAll(writer.buffered());
+        if (scheduler.pending) |job| {
+            if (turns == 1) {
+                try std.testing.expectEqual(@as(usize, 2), job.allocating.written().len);
+            }
+            const image = fixture.store.images.getPtr(identity(@enumFromInt(1), TransmissionFixture.metadata.key)).?;
+            try std.testing.expect(job.input.ptr != image.pixels.ptr);
+            try std.testing.expect(job.input_len <= compression_slice_per_frame);
+            scheduler.complete(&fixture.store);
+        }
+    }
+    const compressed = try decodeTransmissionPayloads(std.testing.allocator, collected.written());
+    defer std.testing.allocator.free(compressed);
+    const inflated = try inflateExact(std.testing.allocator, compressed, pixels.len);
+    defer std.testing.allocator.free(inflated);
+    try std.testing.expectEqualSlices(u8, pixels, inflated);
+    try std.testing.expectEqual(@as(u64, 1), graphics_writer.stats.compressed_images);
+}
+
+test "an image deleted during compression releases its orphan only after completion" {
+    const pixels = try std.testing.allocator.alloc(u8, TransmissionFixture.metadata.byte_len);
+    defer std.testing.allocator.free(pixels);
+    @memset(pixels, 0x30);
+    var fixture = try TransmissionFixture.init(pixels);
+    defer fixture.deinit();
+    var scheduler: TestCompressionScheduler = .{};
+    fixture.store.host_zlib = true;
+    fixture.store.compression_scheduler = .{ .context = &scheduler, .start = TestCompressionScheduler.schedule };
+    const image_key = identity(@enumFromInt(1), TransmissionFixture.metadata.key);
+    const image = fixture.store.images.getPtr(image_key).?;
+    var budget: usize = compression_slice_per_frame;
+    try std.testing.expect(!fixture.store.advanceCompression(image, &budget));
+    try std.testing.expect(scheduler.pending != null);
+    fixture.store.removeImageData(image_key);
+    try std.testing.expect(fixture.store.orphan_compression);
+    scheduler.complete(&fixture.store);
+    try std.testing.expect(fixture.store.pending_compression == null);
+    try std.testing.expect(!fixture.store.orphan_compression);
 }
 
 test "a zlib host ships a deflated stream that inflates to the pixels" {

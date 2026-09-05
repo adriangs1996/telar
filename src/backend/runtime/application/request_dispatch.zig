@@ -20,8 +20,7 @@ const send_pane_text_commands = @import("commands/send_pane_text.zig");
 const send_pane_text_controller = @import("../entrypoints/requests/send_pane_text.zig");
 const report_agent_session_commands = @import("commands/report_agent_session.zig");
 const report_agent_session_controller = @import("../entrypoints/requests/report_agent_session.zig");
-const search_pane_commands = @import("commands/search_pane.zig");
-const search_pane_controller = @import("../entrypoints/requests/search_pane.zig");
+const pane_search = @import("pane_search.zig");
 const report_agent_commands = @import("commands/report_agent.zig");
 const report_agent_controller = @import("../entrypoints/requests/report_agent.zig");
 const report_agent_command_commands = @import("commands/report_agent_command.zig");
@@ -105,7 +104,6 @@ const ReportAgentSessionController = report_agent_session_controller.Controller(
 const ReportAgentController = report_agent_controller.Controller(*report_agent_commands.ReportAgentHandler);
 const ReportAgentCommandController = report_agent_command_controller.Controller(*report_agent_command_commands.ReportAgentCommandHandler);
 const ReportAgentTitleController = report_agent_title_controller.Controller(*report_agent_title_commands.ReportAgentTitleHandler);
-const SearchPaneController = search_pane_controller.Controller(*search_pane_commands.SearchPaneHandler);
 const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
 const FrameAckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
 const GraphicsConfigurationController = graphics_configuration_controller.Controller(*graphics_configuration_commands.ConfigureGraphicsHandler);
@@ -857,12 +855,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
         }
 
         fn routeSearchPane(request: *ClientRequestContext, search: schema.SearchPane) !void {
-            var handler: search_pane_commands.SearchPaneHandler = .{
-                .attachments = &request.session.attachments,
-            };
-            var controller = SearchPaneController.init(&request.session.delivery.responses, &handler);
-
-            try controller.searchPane(search);
+            try pane_search.start(request.application, request.session, search);
         }
 
         fn routeCopySelection(request: *ClientRequestContext, selection: schema.CopySelection) !void {

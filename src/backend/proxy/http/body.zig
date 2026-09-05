@@ -140,20 +140,55 @@ fn relayLine(session: anytype, direction: Direction, buffer: []u8) ?usize {
     var len: usize = 0;
 
     while (len < buffer.len) {
-        const read_len = session.read(direction.from, buffer[len..][0..1]) orelse return null;
+        const read_len = session.read(direction.from, buffer[len..][0..1]) orelse {
+            if (len != 0) {
+                _ = session.writeAll(direction.to, buffer[0..len]);
+            }
 
-        if (read_len != 1 or !session.writeAll(direction.to, buffer[len..][0..1])) {
+            return null;
+        };
+
+        if (read_len != 1) {
             return null;
         }
 
         len += 1;
 
         if (len >= 2 and std.mem.eql(u8, buffer[len - 2 .. len], "\r\n")) {
-            return len;
+            return if (session.writeAll(direction.to, buffer[0..len])) len else null;
         }
     }
 
+    // Preserve the consumed prefix even when framing fails at its bound.
+    _ = session.writeAll(direction.to, buffer[0..len]);
     return null;
+}
+
+test "chunk lines use one write each and preserve single-byte input boundaries" {
+    const FakeSession = @import("test_support.zig").FakeSession;
+    const encoded = "1\r\nx\r\n0\r\n\r\n";
+    var fake: FakeSession = .{ .origin_input = encoded, .max_read_bytes = 1 };
+    var activity: Activity = .{};
+    try std.testing.expect(relay(&fake, testRoute(.origin, .child, .chunked), &activity));
+    try std.testing.expectEqualStrings(encoded, fake.childOutput());
+    try std.testing.expectEqual(@as(usize, 6), fake.write_calls);
+    try std.testing.expectEqualStrings("x", activity.payload[0..activity.payload_len]);
+
+    for (0..6) |failure| {
+        fake = .{ .origin_input = encoded, .max_read_bytes = 1, .fail_write_at = failure };
+        activity = .{};
+        try std.testing.expect(!relay(&fake, testRoute(.origin, .child, .chunked), &activity));
+        try std.testing.expectEqual(failure + 1, fake.write_calls);
+    }
+}
+
+test "an incomplete chunk line forwards its prefix once" {
+    const FakeSession = @import("test_support.zig").FakeSession;
+    var fake: FakeSession = .{ .origin_input = "123\r" };
+    var activity: Activity = .{};
+    try std.testing.expect(!relay(&fake, testRoute(.origin, .child, .chunked), &activity));
+    try std.testing.expectEqualStrings("123\r", fake.childOutput());
+    try std.testing.expectEqual(@as(usize, 1), fake.write_calls);
 }
 
 const Activity = struct {
