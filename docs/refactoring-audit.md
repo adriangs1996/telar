@@ -85,7 +85,17 @@ remain constraints, not targets for consolidation.
 - Proof: dialect policy and existing identity/evidence integration tests.
   `zig build test --summary all` passed.
 
-9. Client submodels and revisions.
+## 9. Client submodel ownership
+
+- Host state now owns capability/geometry validation and both host revisions.
+  Model only propagates a committed geometry change into the tab collection.
+- Plugin execution and clipboard capture each own their reservation, identifier
+  exhaustion and stale-completion checks. Configuration selection remains in
+  Model, which supplies the generation rather than exposing itself to a child.
+- Public Model operations remain compatible; existing exhaustive host and
+  asynchronous-ownership tests exercise the new owners.
+- `zig build test --summary all` passed.
+
 10. Pane media ownership and dependency cycle.
 11. Kitty codec, sidebar rendering and transmission transitions.
 12. Attachment capture, markers and presentation.

@@ -136,6 +136,9 @@ pub const WorkspaceReconciliation = model_types.WorkspaceReconciliation;
 
 pub const Model = struct {
     workspace: tabs_mod.Model,
+    clipboard: @import("clipboard_capture.zig").State = .{},
+    plugins: @import("plugin_execution.zig").State = .{},
+    host: @import("host.zig").State,
     name_prompt: name_prompt.State = .{},
     history_palette: history_palette_mod.State = .{},
     suggestion: suggestion_mod.State = .{},
@@ -146,14 +149,6 @@ pub const Model = struct {
     configuration_revision: u64 = 0,
     client_diagnostic: lua_config.Diagnostic = .{},
     diagnostic_revision: u64 = 0,
-    plugin_execution: ?PluginExecution = null,
-    next_plugin_execution_id: u64 = 1,
-    clipboard_capture: ?ClipboardCapture = null,
-    next_clipboard_capture_id: u64 = 1,
-    host_size: schema.TerminalSize,
-    host_revision: u64 = 0,
-    host_capabilities: HostCapabilities,
-    host_capabilities_revision: u64 = 0,
     workspace_list_snapshot: workspace_list_mod.Snapshot = .{},
     workspace_list_revision: u64 = 0,
     agent_snapshot: agents.Snapshot = .{},
@@ -233,8 +228,7 @@ pub const Model = struct {
             .workspace = workspace,
             .configuration_generation = initial.configuration_generation,
             .bars = .init(initial.bars),
-            .host_size = initial.host_size,
-            .host_capabilities = initial.host_capabilities,
+            .host = .{ .host_size = initial.host_size, .host_capabilities = initial.host_capabilities },
             .sidebar_width = @max(frontend_ui.sidebar.minimum_width, initial.sidebar_width),
         };
     }
@@ -259,8 +253,8 @@ pub const Model = struct {
             .workspace = model.workspace_revision,
             .configuration = model.configuration_revision,
             .diagnostic = model.diagnostic_revision,
-            .host = model.host_revision,
-            .host_capabilities = model.host_capabilities_revision,
+            .host = model.host.host_revision,
+            .host_capabilities = model.host.host_capabilities_revision,
             .workspace_list = model.workspace_list_revision,
             .agents = model.agent_revision,
             .sidebar_animation = model.sidebar_animation_revision,
@@ -435,7 +429,7 @@ pub const Model = struct {
     /// }
     /// ```
     pub fn pluginExecution(model: *const Model) ?PluginExecution {
-        return model.plugin_execution;
+        return model.plugins.pluginExecution();
     }
 
     /// Reserves one plugin execution against the current configuration.
@@ -444,21 +438,7 @@ pub const Model = struct {
     /// const execution = try model.beginPluginExecution() orelse return;
     /// ```
     pub fn beginPluginExecution(model: *Model) !?PluginExecution {
-        if (model.plugin_execution != null) {
-            return null;
-        }
-        if (model.next_plugin_execution_id == 0) {
-            return error.PluginExecutionIdExhausted;
-        }
-
-        const execution: PluginExecution = .{
-            .id = @enumFromInt(model.next_plugin_execution_id),
-            .configuration_generation = model.configuration_generation,
-        };
-        model.next_plugin_execution_id +%= 1;
-        model.plugin_execution = execution;
-
-        return execution;
+        return model.plugins.beginPluginExecution(model.configuration_generation);
     }
 
     /// Finishes only the matching plugin execution and preserves newer work.
@@ -467,13 +447,7 @@ pub const Model = struct {
     /// const execution = model.finishPluginExecution(id) orelse return;
     /// ```
     pub fn finishPluginExecution(model: *Model, id: PluginExecutionId) ?PluginExecution {
-        const execution = model.plugin_execution orelse return null;
-        if (execution.id != id) {
-            return null;
-        }
-
-        model.plugin_execution = null;
-        return execution;
+        return model.plugins.finishPluginExecution(id);
     }
 
     /// Returns the single clipboard capture currently owned by the client.
@@ -482,7 +456,7 @@ pub const Model = struct {
     /// const capture = model.clipboardCapture() orelse return;
     /// ```
     pub fn clipboardCapture(model: *const Model) ?ClipboardCapture {
-        return model.clipboard_capture;
+        return model.clipboard.clipboardCapture();
     }
 
     /// Reserves one capture identity for the focused attachment target.
@@ -491,22 +465,7 @@ pub const Model = struct {
     /// const capture = try model.beginClipboardCapture(target) orelse return;
     /// ```
     pub fn beginClipboardCapture(model: *Model, target: attachments.Target) !?ClipboardCapture {
-        if (model.clipboard_capture != null) {
-            return null;
-        }
-        if (model.next_clipboard_capture_id == 0) {
-            return error.ClipboardCaptureIdExhausted;
-        }
-
-        try target.validate();
-        const capture: ClipboardCapture = .{
-            .id = @enumFromInt(model.next_clipboard_capture_id),
-            .target = target,
-        };
-        model.next_clipboard_capture_id +%= 1;
-        model.clipboard_capture = capture;
-
-        return capture;
+        return model.clipboard.beginClipboardCapture(target);
     }
 
     /// Finishes only the matching capture and preserves a newer reservation.
@@ -515,13 +474,7 @@ pub const Model = struct {
     /// const capture = model.finishClipboardCapture(id) orelse return;
     /// ```
     pub fn finishClipboardCapture(model: *Model, id: ClipboardCaptureId) ?ClipboardCapture {
-        const capture = model.clipboard_capture orelse return null;
-        if (capture.id != id) {
-            return null;
-        }
-
-        model.clipboard_capture = null;
-        return capture;
+        return model.clipboard.finishClipboardCapture(id);
     }
 
     /// Cancels only a capture owned by the prompt that has just been sent.
@@ -532,13 +485,7 @@ pub const Model = struct {
     /// _ = model.cancelClipboardCapture(target);
     /// ```
     pub fn cancelClipboardCapture(model: *Model, target: attachments.Target) bool {
-        const capture = model.clipboard_capture orelse return false;
-        if (!std.meta.eql(capture.target, target)) {
-            return false;
-        }
-
-        model.clipboard_capture = null;
-        return true;
+        return model.clipboard.cancelClipboardCapture(target);
     }
 
     /// Returns the pane-gap preference used by current and future tabs.
@@ -556,7 +503,7 @@ pub const Model = struct {
     /// const host_size = model.hostSize();
     /// ```
     pub fn hostSize(model: *const Model) schema.TerminalSize {
-        return model.host_size;
+        return model.host.hostSize();
     }
 
     /// Returns the host features and raw pixel measurements observed so far.
@@ -565,7 +512,7 @@ pub const Model = struct {
     /// const capabilities = model.hostCapabilities();
     /// ```
     pub fn hostCapabilities(model: *const Model) HostCapabilities {
-        return model.host_capabilities;
+        return model.host.hostCapabilities();
     }
 
     /// Atomically reconciles raw host capabilities and resolved geometry.
@@ -574,37 +521,7 @@ pub const Model = struct {
     /// const commit = try model.reconcileHost(update) orelse return;
     /// ```
     pub fn reconcileHost(model: *Model, update: HostUpdate) !?HostCommit {
-        try update.size.validate();
-        const cell_size = update.capabilities.cellSize(update.size.cols, update.size.rows);
-        if (update.size.cell_width_px != cell_size.width or
-            update.size.cell_height_px != cell_size.height)
-        {
-            return error.InconsistentHostGeometry;
-        }
-
-        const capabilities_changed = !std.meta.eql(model.host_capabilities, update.capabilities);
-        const size_changed = !std.meta.eql(model.host_size, update.size);
-        if (!capabilities_changed and !size_changed) {
-            return null;
-        }
-
-        const capabilities = if (capabilities_changed) changed: {
-            const previous = model.host_capabilities;
-            model.host_capabilities = update.capabilities;
-            model.host_capabilities_revision +%= 1;
-
-            break :changed HostCapabilitiesChange{
-                .previous = previous,
-                .current = update.capabilities,
-                .host_capabilities_revision = model.host_capabilities_revision,
-            };
-        } else null;
-        const resize = if (size_changed) model.commitHostResize(update.size) else null;
-
-        return .{
-            .capabilities = capabilities,
-            .resize = resize,
-        };
+        return model.applyHostCommit(try model.host.reconcileHost(update));
     }
 
     /// Commits one semantic capability observation and its resolved geometry.
@@ -613,15 +530,7 @@ pub const Model = struct {
     /// const commit = try model.observeHostCapability(observation) orelse return;
     /// ```
     pub fn observeHostCapability(model: *Model, observation: HostCapabilityObservation) !?HostCommit {
-        const capabilities = model.host_capabilities.withObservation(observation);
-        if (std.meta.eql(model.host_capabilities, capabilities)) {
-            return null;
-        }
-
-        return model.reconcileHost(.{
-            .capabilities = capabilities,
-            .size = model.resolveHostSize(capabilities),
-        });
+        return model.applyHostCommit(try model.host.observeHostCapability(observation));
     }
 
     /// Settles every unanswered support probe as unsupported.
@@ -630,42 +539,17 @@ pub const Model = struct {
     /// const commit = try model.expireHostCapabilities() orelse return;
     /// ```
     pub fn expireHostCapabilities(model: *Model) !?HostCommit {
-        const capabilities = model.host_capabilities.withExpiredProbes();
-        if (std.meta.eql(model.host_capabilities, capabilities)) {
-            return null;
+        return model.applyHostCommit(try model.host.expireHostCapabilities());
+    }
+
+    fn applyHostCommit(model: *Model, commit: ?HostCommit) ?HostCommit {
+        if (commit) |change| {
+            if (change.resize) |resize| {
+                model.workspace.setCellSize(resize.current.cell_width_px, resize.current.cell_height_px);
+            }
         }
 
-        return model.reconcileHost(.{
-            .capabilities = capabilities,
-            .size = model.resolveHostSize(capabilities),
-        });
-    }
-
-    fn resolveHostSize(model: *const Model, capabilities: HostCapabilities) schema.TerminalSize {
-        const cell_size = capabilities.cellSize(model.host_size.cols, model.host_size.rows);
-
-        return .{
-            .cols = model.host_size.cols,
-            .rows = model.host_size.rows,
-            .cell_width_px = cell_size.width,
-            .cell_height_px = cell_size.height,
-        };
-    }
-
-    fn commitHostResize(model: *Model, size: schema.TerminalSize) HostResizeCommit {
-        const previous = model.host_size;
-        model.workspace.setCellSize(size.cell_width_px, size.cell_height_px);
-        model.host_size = size;
-        model.host_revision +%= 1;
-
-        return .{
-            .previous = previous,
-            .current = size,
-            .grid_changed = previous.cols != size.cols or previous.rows != size.rows,
-            .cell_size_changed = previous.cell_width_px != size.cell_width_px or
-                previous.cell_height_px != size.cell_height_px,
-            .host_revision = model.host_revision,
-        };
+        return commit;
     }
 
     /// Atomically adopts one newer configuration's semantic client settings.
@@ -794,7 +678,7 @@ pub const Model = struct {
     /// const change = model.setSidebarWidth(70) orelse return;
     /// ```
     pub fn setSidebarWidth(model: *Model, requested_width: u16) ?SidebarLayout {
-        const width = frontend_ui.sidebar.clampInteractive(model.host_size.cols, requested_width);
+        const width = frontend_ui.sidebar.clampInteractive(model.host.host_size.cols, requested_width);
 
         return model.commitSidebarLayout(model.sidebar_visible, width);
     }
@@ -805,7 +689,7 @@ pub const Model = struct {
     /// const change = model.stepSidebarWidth(.wider) orelse return;
     /// ```
     pub fn stepSidebarWidth(model: *Model, direction: frontend_ui.sidebar.Direction) ?SidebarLayout {
-        const width = frontend_ui.sidebar.step(model.host_size.cols, model.sidebar_width, direction);
+        const width = frontend_ui.sidebar.step(model.host.host_size.cols, model.sidebar_width, direction);
 
         return model.commitSidebarLayout(model.sidebar_visible, width);
     }

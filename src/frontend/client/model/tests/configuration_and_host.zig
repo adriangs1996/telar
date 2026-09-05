@@ -192,7 +192,7 @@ test "plugin execution retains its launch generation across configuration reload
 test "plugin execution identity exhaustion cannot publish a partial reservation" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    model.next_plugin_execution_id = std.math.maxInt(u64);
+    model.plugins.next_plugin_execution_id = std.math.maxInt(u64);
 
     const last = (try model.beginPluginExecution()).?;
 
@@ -243,7 +243,7 @@ test "clipboard capture validation and identity exhaustion leave no reservation"
     }));
     try std.testing.expect(model.clipboardCapture() == null);
 
-    model.next_clipboard_capture_id = std.math.maxInt(u64);
+    model.clipboard.next_clipboard_capture_id = std.math.maxInt(u64);
     const last = (try model.beginClipboardCapture(.{
         .pane_id = @enumFromInt(4),
         .pane_generation = 2,
