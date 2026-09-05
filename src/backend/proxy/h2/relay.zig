@@ -15,7 +15,8 @@ const c = @cImport({
     @cInclude("nghttp2/nghttp2.h");
 });
 
-pub const frame_header_len = 9;
+const framing = @import("framing.zig");
+pub const frame_header_len = framing.header_bytes;
 pub const client_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 pub const max_header_block_bytes = 128 * 1024;
 pub const max_tracked_streams = stream_state.max_tracked_streams;
@@ -129,14 +130,7 @@ const Observer = struct {
     dialect: provider.ApiDialect,
     direction: Direction,
 
-    header: [frame_header_len]u8 = undefined,
-    header_len: u8 = 0,
-    payload_len: usize = 0,
-    payload_left: usize = 0,
-    payload_offset: usize = 0,
-    frame_type: u8 = 0,
-    flags: u8 = 0,
-    stream_id: u32 = 0,
+    framing: framing.Reader = .{},
     padding: usize = 0,
 
     continuation_stream: u32 = 0,
@@ -169,72 +163,59 @@ const Observer = struct {
     }
 
     fn observe(observer: *Observer, input: []const u8, sink: anytype) void {
-        var offset: usize = 0;
-        while (offset < input.len) {
-            if (observer.header_len < frame_header_len) {
-                const take = @min(frame_header_len - observer.header_len, input.len - offset);
-                @memcpy(observer.header[observer.header_len..][0..take], input[offset..][0..take]);
-                observer.header_len += @intCast(take);
-                offset += take;
-                if (observer.header_len != frame_header_len) {
-                    continue;
-                }
-                observer.beginFrame();
-                if (observer.payload_left == 0) {
-                    observer.finishFrame(sink);
-                }
-                continue;
+        const Receiver = struct {
+            owner: *Observer,
+            port: @TypeOf(sink),
+
+            pub fn beginFrame(receiver: *@This()) bool {
+                receiver.owner.beginFrame();
+                return true;
             }
 
-            const take = @min(observer.payload_left, input.len - offset);
-            const payload = input[offset..][0..take];
-            observer.observePayload(payload, sink);
-            observer.payload_offset += take;
-            observer.payload_left -= take;
-            offset += take;
-            if (observer.payload_left == 0) {
-                observer.finishFrame(sink);
+            pub fn payload(receiver: *@This(), bytes: []const u8) bool {
+                receiver.owner.observePayload(bytes, receiver.port);
+                return true;
             }
-        }
+
+            pub fn finishFrame(receiver: *@This()) bool {
+                receiver.owner.finishFrame(receiver.port);
+                return true;
+            }
+        };
+        var receiver: Receiver = .{ .owner = observer, .port = sink };
+        _ = observer.framing.feed(input, &receiver);
     }
 
     fn beginFrame(observer: *Observer) void {
-        observer.payload_len = (@as(usize, observer.header[0]) << 16) |
-            (@as(usize, observer.header[1]) << 8) | observer.header[2];
-        observer.payload_left = observer.payload_len;
-        observer.payload_offset = 0;
-        observer.frame_type = observer.header[3];
-        observer.flags = observer.header[4];
-        observer.stream_id = streamId(&observer.header);
         observer.padding = 0;
 
-        if (observer.frame_type == frame_headers or observer.frame_type == frame_push_promise) {
-            observer.block_end_stream = observer.flags & flag_end_stream != 0;
+        if (observer.framing.frame_type == frame_headers or observer.framing.frame_type == frame_push_promise) {
+            observer.block_end_stream = observer.framing.flags & flag_end_stream != 0;
         }
 
         if (observer.failed) {
-            if (observer.frame_type == frame_headers and observer.continuation_stream == 0) {
-                observer.block_stream = observer.stream_id;
+            if (observer.framing.frame_type == frame_headers and observer.continuation_stream == 0) {
+                observer.block_stream = observer.framing.stream_id;
                 observer.block_kind = .headers;
             }
             return;
         }
-        switch (observer.frame_type) {
+        switch (observer.framing.frame_type) {
             frame_headers, frame_push_promise => {
-                if (observer.continuation_stream != 0 or observer.stream_id == 0) {
+                if (observer.continuation_stream != 0 or observer.framing.stream_id == 0) {
                     observer.fail();
                     return;
                 }
                 observer.block_len = 0;
-                observer.block_stream = observer.stream_id;
-                observer.block_kind = if (observer.frame_type == frame_headers)
+                observer.block_stream = observer.framing.stream_id;
+                observer.block_kind = if (observer.framing.frame_type == frame_headers)
                     .headers
                 else
                     .push_promise;
             },
             frame_continuation => {
                 if (observer.continuation_stream == 0 or
-                    observer.continuation_stream != observer.stream_id)
+                    observer.continuation_stream != observer.framing.stream_id)
                 {
                     observer.fail();
                 }
@@ -244,12 +225,12 @@ const Observer = struct {
     }
 
     fn observePayload(observer: *Observer, payload: []const u8, sink: anytype) void {
-        if (observer.frame_type == frame_data and payload.len != 0) {
+        if (observer.framing.frame_type == frame_data and payload.len != 0) {
             if (observer.direction == .response) {
                 sink.emit(.{ .lifecycle = .{
                     .phase = .response_activity,
-                    .stream_id = observer.stream_id,
-                    .status_code = observer.streams.status(observer.stream_id),
+                    .stream_id = observer.framing.stream_id,
+                    .status_code = observer.streams.status(observer.framing.stream_id),
                 } });
             }
 
@@ -257,13 +238,13 @@ const Observer = struct {
                 if (fragment.len != 0) {
                     switch (observer.direction) {
                         .request => sink.emit(.{ .request_body = .{
-                            .stream_id = observer.stream_id,
+                            .stream_id = observer.framing.stream_id,
                             .bytes = fragment,
                         } }),
                         .response => sink.emit(.{ .response_body = .{
-                            .stream_id = observer.stream_id,
-                            .status_code = observer.streams.status(observer.stream_id),
-                            .sse_body = observer.hasObservableSseBody(observer.stream_id),
+                            .stream_id = observer.framing.stream_id,
+                            .status_code = observer.streams.status(observer.framing.stream_id),
+                            .sse_body = observer.hasObservableSseBody(observer.framing.stream_id),
                             .bytes = fragment,
                         } }),
                     }
@@ -271,11 +252,11 @@ const Observer = struct {
             }
         }
 
-        if (observer.failed or !isHeaderFrame(observer.frame_type)) {
+        if (observer.failed or !isHeaderFrame(observer.framing.frame_type)) {
             return;
         }
 
-        if (observer.flags & flag_padded != 0 and observer.payload_offset == 0) {
+        if (observer.framing.flags & flag_padded != 0 and observer.framing.payload_offset == 0) {
             if (payload.len == 0) {
                 return;
             }
@@ -285,12 +266,12 @@ const Observer = struct {
             observer.fail();
             return;
         };
-        if (observer.padding > observer.payload_len - prefix) {
+        if (observer.padding > observer.framing.payload_len - prefix) {
             observer.fail();
             return;
         }
-        const fragment_end = observer.payload_len - observer.padding;
-        const input_start = observer.payload_offset;
+        const fragment_end = observer.framing.payload_len - observer.padding;
+        const input_start = observer.framing.payload_offset;
         const input_end = input_start + payload.len;
         const copy_start = @max(input_start, prefix);
         const copy_end = @min(input_end, fragment_end);
@@ -307,9 +288,9 @@ const Observer = struct {
     }
 
     fn finishFrame(observer: *Observer, sink: anytype) void {
-        const completed_type = observer.frame_type;
-        const completed_flags = observer.flags;
-        const completed_stream = observer.stream_id;
+        const completed_type = observer.framing.frame_type;
+        const completed_flags = observer.framing.flags;
+        const completed_stream = observer.framing.stream_id;
 
         if (isHeaderFrame(completed_type)) {
             if (completed_flags & flag_end_headers != 0) {
@@ -400,17 +381,12 @@ const Observer = struct {
             sink.emit(.{ .request_finished = .{ .stream_id = completed_stream } });
             observer.streams.finishRequest(completed_stream);
         }
-
-        observer.header_len = 0;
-        observer.payload_len = 0;
-        observer.payload_left = 0;
-        observer.payload_offset = 0;
     }
 
     fn dataBodyFragment(observer: *Observer, payload: []const u8) ?[]const u8 {
-        const prefix: usize = @intFromBool(observer.flags & flag_padded != 0);
+        const prefix: usize = @intFromBool(observer.framing.flags & flag_padded != 0);
 
-        if (prefix != 0 and observer.payload_offset == 0) {
+        if (prefix != 0 and observer.framing.payload_offset == 0) {
             if (payload.len == 0) {
                 return "";
             }
@@ -418,12 +394,12 @@ const Observer = struct {
             observer.padding = payload[0];
         }
 
-        if (observer.padding > observer.payload_len -| prefix) {
+        if (observer.padding > observer.framing.payload_len -| prefix) {
             return null;
         }
 
-        const body_end = observer.payload_len - observer.padding;
-        const input_start = observer.payload_offset;
+        const body_end = observer.framing.payload_len - observer.padding;
+        const input_start = observer.framing.payload_offset;
         const input_end = input_start + payload.len;
         const fragment_start = @max(input_start, prefix);
         const fragment_end = @min(input_end, body_end);
@@ -436,14 +412,14 @@ const Observer = struct {
     }
 
     fn headerPrefixLength(observer: *const Observer) ?usize {
-        var prefix: usize = if (observer.flags & flag_padded != 0) 1 else 0;
-        prefix += switch (observer.frame_type) {
-            frame_headers => if (observer.flags & flag_priority != 0) 5 else 0,
+        var prefix: usize = if (observer.framing.flags & flag_padded != 0) 1 else 0;
+        prefix += switch (observer.framing.frame_type) {
+            frame_headers => if (observer.framing.flags & flag_priority != 0) 5 else 0,
             frame_push_promise => 4,
             frame_continuation => 0,
             else => return null,
         };
-        if (prefix > observer.payload_len) {
+        if (prefix > observer.framing.payload_len) {
             return null;
         }
         return prefix;
@@ -596,14 +572,7 @@ const Transcoder = struct {
     applied_table_size: u32 = 4096,
     applied_inflate_table_size: u32 = max_header_block_bytes,
 
-    header: [frame_header_len]u8 = undefined,
-    header_len: u8 = 0,
-    payload_len: usize = 0,
-    payload_left: usize = 0,
-    payload_offset: usize = 0,
-    frame_type: u8 = 0,
-    flags: u8 = 0,
-    stream_id: u32 = 0,
+    framing: framing.Reader = .{},
 
     continuation_stream: u32 = 0,
     block_type: u8 = 0,
@@ -650,84 +619,55 @@ const Transcoder = struct {
     }
 
     fn process(transcoder: *Transcoder, input: []const u8, port: anytype) bool {
-        var offset: usize = 0;
-        while (offset < input.len and !transcoder.failed) {
-            if (transcoder.header_len < frame_header_len) {
-                const take = @min(frame_header_len - transcoder.header_len, input.len - offset);
-                @memcpy(
-                    transcoder.header[transcoder.header_len..][0..take],
-                    input[offset..][0..take],
-                );
-                transcoder.header_len += @intCast(take);
-                offset += take;
-                if (transcoder.header_len != frame_header_len) {
-                    continue;
-                }
+        const Receiver = struct {
+            owner: *Transcoder,
+            port: @TypeOf(port),
 
-                if (!transcoder.beginFrame(port)) {
-                    return false;
-                }
-
-                if (transcoder.payload_left == 0 and !transcoder.finishFrame(port)) {
-                    return false;
-                }
-
-                continue;
+            pub fn beginFrame(receiver: *@This()) bool {
+                return !receiver.owner.failed and receiver.owner.beginFrame(receiver.port);
             }
 
-            const take = @min(transcoder.payload_left, input.len - offset);
-            const payload = input[offset..][0..take];
-            if (!transcoder.processPayload(payload, port)) {
-                return false;
+            pub fn payload(receiver: *@This(), bytes: []const u8) bool {
+                return !receiver.owner.failed and receiver.owner.processPayload(bytes, receiver.port);
             }
 
-            transcoder.payload_offset += take;
-            transcoder.payload_left -= take;
-            offset += take;
-
-            if (transcoder.payload_left == 0 and !transcoder.finishFrame(port)) {
-                return false;
+            pub fn finishFrame(receiver: *@This()) bool {
+                return receiver.owner.finishFrame(receiver.port);
             }
-        }
-        return !transcoder.failed;
+        };
+        var receiver: Receiver = .{ .owner = transcoder, .port = port };
+        return transcoder.framing.feed(input, &receiver) and !transcoder.failed;
     }
 
     fn beginFrame(transcoder: *Transcoder, port: anytype) bool {
-        transcoder.payload_len = (@as(usize, transcoder.header[0]) << 16) |
-            (@as(usize, transcoder.header[1]) << 8) | transcoder.header[2];
-        transcoder.payload_left = transcoder.payload_len;
-        transcoder.payload_offset = 0;
-        transcoder.frame_type = transcoder.header[3];
-        transcoder.flags = transcoder.header[4];
-        transcoder.stream_id = streamId(&transcoder.header);
         transcoder.setting_len = 0;
         transcoder.frame_padding = 0;
 
         if (transcoder.continuation_stream != 0) {
-            if (transcoder.frame_type != frame_continuation or
-                transcoder.stream_id != transcoder.continuation_stream)
+            if (transcoder.framing.frame_type != frame_continuation or
+                transcoder.framing.stream_id != transcoder.continuation_stream)
             {
                 transcoder.failed = true;
                 return false;
             }
             return true;
         }
-        if (transcoder.frame_type == frame_continuation) {
+        if (transcoder.framing.frame_type == frame_continuation) {
             transcoder.failed = true;
             return false;
         }
-        if (transcoder.frame_type == frame_headers or
-            transcoder.frame_type == frame_push_promise)
+        if (transcoder.framing.frame_type == frame_headers or
+            transcoder.framing.frame_type == frame_push_promise)
         {
-            if (transcoder.stream_id == 0) {
+            if (transcoder.framing.stream_id == 0) {
                 transcoder.failed = true;
                 return false;
             }
-            transcoder.block_type = transcoder.frame_type;
-            transcoder.block_flags = transcoder.flags;
-            transcoder.block_stream = transcoder.stream_id;
-            transcoder.block_prefix_len = switch (transcoder.frame_type) {
-                frame_headers => if (transcoder.flags & flag_priority != 0) 5 else 0,
+            transcoder.block_type = transcoder.framing.frame_type;
+            transcoder.block_flags = transcoder.framing.flags;
+            transcoder.block_stream = transcoder.framing.stream_id;
+            transcoder.block_prefix_len = switch (transcoder.framing.frame_type) {
+                frame_headers => if (transcoder.framing.flags & flag_priority != 0) 5 else 0,
                 frame_push_promise => 4,
                 else => unreachable,
             };
@@ -735,7 +675,7 @@ const Transcoder = struct {
             transcoder.compressed_len = 0;
             return true;
         }
-        if (!port.writeAll(transcoder.configuration.to, &transcoder.header)) {
+        if (!port.writeAll(transcoder.configuration.to, &transcoder.framing.header)) {
             transcoder.failed = true;
             return false;
         }
@@ -743,12 +683,12 @@ const Transcoder = struct {
     }
 
     fn processPayload(transcoder: *Transcoder, payload: []const u8, port: anytype) bool {
-        if (!isHeaderFrame(transcoder.frame_type)) {
+        if (!isHeaderFrame(transcoder.framing.frame_type)) {
             // Publish peer limits before the last SETTINGS byte reaches the
             // peer. Its next header block may use the newly advertised HPACK
             // table or frame size immediately.
-            if (transcoder.frame_type == c.NGHTTP2_SETTINGS and
-                transcoder.flags & c.NGHTTP2_FLAG_ACK == 0)
+            if (transcoder.framing.frame_type == c.NGHTTP2_SETTINGS and
+                transcoder.framing.flags & c.NGHTTP2_FLAG_ACK == 0)
             {
                 transcoder.observeSettings(payload, transcoder.configuration.source_settings);
             }
@@ -756,12 +696,12 @@ const Transcoder = struct {
                 transcoder.failed = true;
                 return false;
             }
-            if (transcoder.frame_type == frame_data and payload.len != 0) {
+            if (transcoder.framing.frame_type == frame_data and payload.len != 0) {
                 if (transcoder.configuration.direction == .response) {
                     port.emit(.{ .lifecycle = .{
                         .phase = .response_activity,
-                        .stream_id = transcoder.stream_id,
-                        .status_code = transcoder.streams.status(transcoder.stream_id),
+                        .stream_id = transcoder.framing.stream_id,
+                        .status_code = transcoder.streams.status(transcoder.framing.stream_id),
                     } });
                 }
 
@@ -769,13 +709,13 @@ const Transcoder = struct {
                     if (fragment.len != 0) {
                         switch (transcoder.configuration.direction) {
                             .request => port.emit(.{ .request_body = .{
-                                .stream_id = transcoder.stream_id,
+                                .stream_id = transcoder.framing.stream_id,
                                 .bytes = fragment,
                             } }),
                             .response => port.emit(.{ .response_body = .{
-                                .stream_id = transcoder.stream_id,
-                                .status_code = transcoder.streams.status(transcoder.stream_id),
-                                .sse_body = transcoder.hasObservableSseBody(transcoder.stream_id),
+                                .stream_id = transcoder.framing.stream_id,
+                                .status_code = transcoder.streams.status(transcoder.framing.stream_id),
+                                .sse_body = transcoder.hasObservableSseBody(transcoder.framing.stream_id),
                                 .bytes = fragment,
                             } }),
                         }
@@ -785,10 +725,10 @@ const Transcoder = struct {
             return true;
         }
 
-        var input_start = transcoder.payload_offset;
+        var input_start = transcoder.framing.payload_offset;
         var slice = payload;
-        if (transcoder.frame_type != frame_continuation and
-            transcoder.flags & flag_padded != 0 and input_start == 0)
+        if (transcoder.framing.frame_type != frame_continuation and
+            transcoder.framing.flags & flag_padded != 0 and input_start == 0)
         {
             if (slice.len == 0) {
                 return true;
@@ -798,7 +738,7 @@ const Transcoder = struct {
             input_start += 1;
         }
 
-        if (transcoder.frame_type != frame_continuation and
+        if (transcoder.framing.frame_type != frame_continuation and
             transcoder.block_prefix_seen < transcoder.block_prefix_len)
         {
             const take = @min(
@@ -814,8 +754,8 @@ const Transcoder = struct {
             input_start += take;
         }
 
-        const padding_start = transcoder.payload_len -| transcoder.frame_padding;
-        if (transcoder.frame_padding > transcoder.payload_len or
+        const padding_start = transcoder.framing.payload_len -| transcoder.frame_padding;
+        if (transcoder.frame_padding > transcoder.framing.payload_len or
             padding_start < transcoder.headerPayloadPrefixLength())
         {
             transcoder.failed = true;
@@ -838,9 +778,9 @@ const Transcoder = struct {
     }
 
     fn finishFrame(transcoder: *Transcoder, port: anytype) bool {
-        const completed_type = transcoder.frame_type;
-        const completed_flags = transcoder.flags;
-        const completed_stream = transcoder.stream_id;
+        const completed_type = transcoder.framing.frame_type;
+        const completed_flags = transcoder.framing.flags;
+        const completed_stream = transcoder.framing.stream_id;
 
         if (isHeaderFrame(completed_type)) {
             if (completed_flags & flag_end_headers == 0) {
@@ -862,10 +802,6 @@ const Transcoder = struct {
             }, port);
         }
 
-        transcoder.header_len = 0;
-        transcoder.payload_len = 0;
-        transcoder.payload_left = 0;
-        transcoder.payload_offset = 0;
         return true;
     }
 
@@ -1161,9 +1097,9 @@ const Transcoder = struct {
     }
 
     fn dataBodyFragment(transcoder: *Transcoder, payload: []const u8) ?[]const u8 {
-        const prefix: usize = @intFromBool(transcoder.flags & flag_padded != 0);
+        const prefix: usize = @intFromBool(transcoder.framing.flags & flag_padded != 0);
 
-        if (prefix != 0 and transcoder.payload_offset == 0) {
+        if (prefix != 0 and transcoder.framing.payload_offset == 0) {
             if (payload.len == 0) {
                 return "";
             }
@@ -1171,12 +1107,12 @@ const Transcoder = struct {
             transcoder.frame_padding = payload[0];
         }
 
-        if (transcoder.frame_padding > transcoder.payload_len -| prefix) {
+        if (transcoder.frame_padding > transcoder.framing.payload_len -| prefix) {
             return null;
         }
 
-        const body_end = transcoder.payload_len - transcoder.frame_padding;
-        const input_start = transcoder.payload_offset;
+        const body_end = transcoder.framing.payload_len - transcoder.frame_padding;
+        const input_start = transcoder.framing.payload_offset;
         const input_end = input_start + payload.len;
         const fragment_start = @max(input_start, prefix);
         const fragment_end = @min(input_end, body_end);
@@ -1189,7 +1125,7 @@ const Transcoder = struct {
     }
 
     fn headerPayloadPrefixLength(transcoder: *const Transcoder) usize {
-        if (transcoder.frame_type == frame_continuation) {
+        if (transcoder.framing.frame_type == frame_continuation) {
             return 0;
         }
         return @as(usize, transcoder.block_prefix_len) +
@@ -1240,7 +1176,7 @@ pub fn relay(session: anytype, route: Route, sink: anytype) Stats {
         }
     }
     if ((route.direction == .request and preface_offset != client_preface.len) or
-        observer.header_len != 0 or observer.payload_left != 0 or
+        observer.framing.header_len != 0 or observer.framing.payload_left != 0 or
         observer.continuation_stream != 0)
     {
         observer.fail();
@@ -1292,7 +1228,7 @@ pub fn relayTransformed(session: anytype, transformed_route: TransformedRoute, s
         }
     }
     if ((route.direction == .request and preface_offset != client_preface.len) or
-        transcoder.header_len != 0 or transcoder.payload_left != 0 or
+        transcoder.framing.header_len != 0 or transcoder.framing.payload_left != 0 or
         transcoder.continuation_stream != 0)
     {
         transcoder.failed = true;

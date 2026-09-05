@@ -168,5 +168,13 @@ remain constraints, not targets for consolidation.
 - Added metadata/revision replay regression; full suite passes with
   `zig build test --summary all`.
 
-17. Shared incremental HTTP/2 framing.
+## 17. Shared HTTP/2 framing
+
+- One non-allocating reader owns fragmented headers, payload offsets and empty
+  frame boundaries. It borrows payload slices and stops on receiver rejection.
+- Observer retains best-effort observation policy; Transcoder retains strict
+  validation, HPACK rewriting and output policy through separate receivers.
+- Added every-split boundary coverage with an empty frame and reserved stream
+  bit; existing relay/transcoding regressions pass with `zig build test --summary all`.
+
 18. Per-command CLI grammars and argument cursor.
