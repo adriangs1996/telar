@@ -2,7 +2,8 @@
 
 const std = @import("std");
 const model = @import("../model.zig");
-const core_fuzzy = @import("telar-core").fuzzy;
+const policy = @import("../search_policy.zig");
+const Accumulator = @import("../query_result.zig").Accumulator;
 
 const entry_columns = "id, pane_id, started_at_ms, duration_ns, exit_code, status, command, cwd, workspace_path, author, origin, provider, command_truncated";
 
@@ -514,22 +515,11 @@ pub const Store = struct {
     /// requested page of subsequence matches. Only IDs and scores are retained
     /// while ranking; full entries are allocated for the resulting page.
     fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const model.Query) !*model.QueryResult {
-        const max_candidates = 1000;
+        const max_candidates = policy.FuzzyPage.max_candidates;
         var sql_buffer: [1024]u8 = undefined;
         var sql = std.Io.Writer.fixed(&sql_buffer);
         try sql.writeAll("SELECT " ++ entry_columns ++ " FROM command WHERE id <= ?");
-        if (request.failed_only) {
-            try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
-        }
-        if (request.author != .all) {
-            try sql.writeAll(" AND author = ?");
-        }
-        switch (request.scope) {
-            .global => {},
-            .cwd => try sql.writeAll(" AND cwd = ?"),
-            .workspace => try sql.writeAll(" AND workspace_path = ?"),
-            .pane => try sql.writeAll(" AND pane_id = ?"),
-        }
+        try appendQueryFilters(&sql, request);
         try sql.writeAll(" ORDER BY started_at_ms DESC, id DESC LIMIT ?;");
 
         const stmt = try prepare(store.db, sql.buffered());
@@ -537,32 +527,10 @@ pub const Store = struct {
         var parameter: c_int = 1;
         _ = c.sqlite3_bind_int64(stmt, parameter, @intCast(request.snapshot_id));
         parameter += 1;
-        if (request.author != .all) {
-            const author: model.schema.HistoryAuthor = if (request.author == .human) .human else .agent;
-            _ = c.sqlite3_bind_int(stmt, parameter, @intFromEnum(author));
-            parameter += 1;
-        }
-        switch (request.scope) {
-            .global => {},
-            .cwd, .workspace => {
-                bindText(stmt, parameter, request.scopeSlice());
-                parameter += 1;
-            },
-            .pane => {
-                _ = c.sqlite3_bind_int64(
-                    stmt,
-                    parameter,
-                    @intCast(model.schema.id.raw(request.pane_id)),
-                );
-                parameter += 1;
-            },
-        }
+        bindQueryFilters(stmt, &parameter, request);
         _ = c.sqlite3_bind_int(stmt, parameter, max_candidates);
 
-        const Scored = struct { score: u32, id: i64 };
-        var best: [max_candidates]Scored = undefined;
-        var count: usize = 0;
-        const wanted: usize = @intCast(@min(@as(u64, request.offset) + request.limit + 1, max_candidates));
+        var ranking = policy.FuzzyPage.init(request);
         var seen: std.AutoHashMapUnmanaged(u64, void) = .empty;
         defer seen.deinit(gpa);
 
@@ -577,22 +545,10 @@ pub const Store = struct {
                     try seen.put(gpa, hash, {});
                 }
 
-                const command = columnSlice(stmt, 6);
-                const score = core_fuzzy.score(command, request.textSlice()) orelse continue;
-                if (count == wanted and score <= best[count - 1].score) {
-                    continue;
-                }
-
-                var index: usize = count;
-                if (count == wanted) {
-                    index = count - 1;
-                } else {
-                    count += 1;
-                }
-                while (index > 0 and best[index - 1].score < score) : (index -= 1) {
-                    best[index] = best[index - 1];
-                }
-                best[index] = .{ .score = score, .id = c.sqlite3_column_int64(stmt, 0) };
+                ranking.consider(.{
+                    .id = c.sqlite3_column_int64(stmt, 0),
+                    .command = columnSlice(stmt, 6),
+                }, request.textSlice());
             },
             c.SQLITE_DONE => break,
             else => return error.HistoryQueryFailed,
@@ -600,47 +556,23 @@ pub const Store = struct {
 
         const detail = try prepare(store.db, "SELECT " ++ entry_columns ++ " FROM command WHERE id = ?;");
         defer _ = c.sqlite3_finalize(detail);
-        var entries: std.ArrayList(model.Entry) = .empty;
-        errdefer {
-            for (entries.items) |*entry| entry.deinit(gpa);
-            entries.deinit(gpa);
-        }
-
-        const start = @min(request.offset, count);
-        const end = @min(start + request.limit, count);
-        var encoded_bytes: usize = model.encoded_result_header_bytes;
-        for (best[start..end]) |scored| {
+        var accumulator: Accumulator = .{ .gpa = gpa, .limit = request.limit };
+        defer accumulator.deinit();
+        const start = @min(request.offset, ranking.count);
+        const end = @min(start + request.limit, ranking.count);
+        for (ranking.best[start..end]) |scored| {
             reset(detail);
             _ = c.sqlite3_bind_int64(detail, 1, scored.id);
             if (c.sqlite3_step(detail) != c.SQLITE_ROW) {
                 return error.HistoryQueryFailed;
             }
 
-            var entry = try readEntry(gpa, detail);
-            const bytes = model.encoded_entry_overhead_bytes + entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
-            if (bytes > model.max_result_payload_bytes - encoded_bytes) {
-                entry.deinit(gpa);
+            if (!try accumulator.append(try readEntry(gpa, detail))) {
                 break;
             }
-
-            encoded_bytes += bytes;
-            entries.append(gpa, entry) catch |err| {
-                entry.deinit(gpa);
-                return err;
-            };
         }
 
-        const result = try gpa.create(model.QueryResult);
-        errdefer gpa.destroy(result);
-        result.* = .{
-            .request_id = request.request_id,
-            .origin = request.origin,
-            .has_more = start + entries.items.len < count,
-            .snapshot_id = request.snapshot_id,
-            .entries = try entries.toOwnedSlice(gpa),
-            .gpa = gpa,
-        };
-        return result;
+        return accumulator.finish(request, start + accumulator.entries.items.len < ranking.count);
     }
 
     /// Aggregates totals, distinct commands, and the top command groups in
@@ -868,18 +800,7 @@ pub const Store = struct {
                 try sql.writeAll(" AND instr(lower(command), lower(?)) > 0");
             }
         }
-        if (request.failed_only) {
-            try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
-        }
-        if (request.author != .all) {
-            try sql.writeAll(" AND author = ?");
-        }
-        switch (request.scope) {
-            .global => {},
-            .cwd => try sql.writeAll(" AND cwd = ?"),
-            .workspace => try sql.writeAll(" AND workspace_path = ?"),
-            .pane => try sql.writeAll(" AND pane_id = ?"),
-        }
+        try appendQueryFilters(&sql, request);
         try sql.writeAll(" ORDER BY started_at_ms DESC, id DESC LIMIT ? OFFSET ?;");
 
         const stmt = try prepare(store.db, sql.buffered());
@@ -898,38 +819,14 @@ pub const Store = struct {
                 request.textSlice());
             parameter += 1;
         }
-        if (request.author != .all) {
-            const author: model.schema.HistoryAuthor = if (request.author == .human) .human else .agent;
-            _ = c.sqlite3_bind_int(stmt, parameter, @intFromEnum(author));
-            parameter += 1;
-        }
-        switch (request.scope) {
-            .global => {},
-            .cwd, .workspace => {
-                bindText(stmt, parameter, request.scopeSlice());
-                parameter += 1;
-            },
-            .pane => {
-                _ = c.sqlite3_bind_int64(
-                    stmt,
-                    parameter,
-                    @intCast(model.schema.id.raw(request.pane_id)),
-                );
-                parameter += 1;
-            },
-        }
+        bindQueryFilters(stmt, &parameter, request);
         _ = c.sqlite3_bind_int(stmt, parameter, @as(c_int, request.limit) + 1);
         _ = c.sqlite3_bind_int64(stmt, parameter + 1, request.offset);
 
-        var entries: std.ArrayList(model.Entry) = .empty;
-        var encoded_bytes: usize = model.encoded_result_header_bytes;
-        var has_more = false;
+        var accumulator: Accumulator = .{ .gpa = gpa, .limit = request.limit };
+        defer accumulator.deinit();
         var seen: std.AutoHashMapUnmanaged(u64, void) = .empty;
         defer seen.deinit(gpa);
-        errdefer {
-            for (entries.items) |*entry| entry.deinit(gpa);
-            entries.deinit(gpa);
-        }
         while (true) switch (c.sqlite3_step(stmt)) {
             c.SQLITE_ROW => {
                 if (request.distinct) {
@@ -939,39 +836,19 @@ pub const Store = struct {
                     try seen.put(gpa, commandHash(stmt), {});
                 }
 
-                if (entries.items.len == request.limit) {
-                    has_more = true;
+                if (accumulator.entries.items.len == request.limit) {
+                    accumulator.has_more = true;
                     break;
                 }
 
-                var entry = try readEntry(gpa, stmt);
-                const entry_bytes = model.encoded_entry_overhead_bytes +
-                    entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
-                if (entry_bytes > model.max_result_payload_bytes - encoded_bytes) {
-                    entry.deinit(gpa);
-                    has_more = true;
+                if (!try accumulator.append(try readEntry(gpa, stmt))) {
                     break;
                 }
-                encoded_bytes += entry_bytes;
-                entries.append(gpa, entry) catch |err| {
-                    entry.deinit(gpa);
-                    return err;
-                };
             },
             c.SQLITE_DONE => break,
             else => return error.HistoryQueryFailed,
         };
-        const result = try gpa.create(model.QueryResult);
-        errdefer gpa.destroy(result);
-        result.* = .{
-            .request_id = request.request_id,
-            .origin = request.origin,
-            .entries = try entries.toOwnedSlice(gpa),
-            .gpa = gpa,
-            .snapshot_id = request.snapshot_id,
-            .has_more = has_more,
-        };
-        return result;
+        return accumulator.finish(request, false);
     }
 };
 
@@ -1231,36 +1108,9 @@ fn bindStatsFilters(stmt: *c.sqlite3_stmt, request: *const model.StatsQuery) voi
     }
 }
 
-const stats_subcommand_leaders = [_][]const u8{
-    "git", "docker", "kubectl", "cargo", "zig", "npm", "pnpm", "yarn", "make", "brew", "systemctl",
-};
-
 /// Grouping key for stats: skips a leading `sudo`, keeps two tokens for
 /// known multi-word tools, one token otherwise.
-fn statsGroupKey(command: []const u8) []const u8 {
-    var rest = std.mem.trimStart(u8, command, " ");
-    if (std.mem.startsWith(u8, rest, "sudo ")) {
-        rest = std.mem.trimStart(u8, rest["sudo ".len..], " ");
-    }
-
-    const start = rest;
-    const first_end = std.mem.indexOfScalar(u8, rest, ' ') orelse return start;
-    const first = rest[0..first_end];
-    for (stats_subcommand_leaders) |leader| {
-        if (!std.mem.eql(u8, first, leader)) {
-            continue;
-        }
-        const after = std.mem.trimStart(u8, rest[first_end..], " ");
-        if (after.len == 0 or after[0] == '-') {
-            break;
-        }
-        const second_end = std.mem.indexOfScalar(u8, after, ' ') orelse after.len;
-        const total_len = (after.ptr + second_end) - start.ptr;
-        return start[0..total_len];
-    }
-
-    return first;
-}
+const statsGroupKey = policy.statsGroupKey;
 
 fn columnText(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt, column: c_int) ![]u8 {
     const len: usize = @intCast(c.sqlite3_column_bytes(stmt, column));
@@ -1880,4 +1730,42 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
     defer exact.deinit();
     try std.testing.expectEqual(@as(usize, 1), exact.entries.len);
     try std.testing.expectEqual(second.entries[0].id, exact.entries[0].id);
+}
+
+fn appendQueryFilters(sql: *std.Io.Writer, request: *const model.Query) !void {
+    if (request.failed_only) {
+        try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
+    }
+    if (request.author != .all) {
+        try sql.writeAll(" AND author = ?");
+    }
+    switch (request.scope) {
+        .global => {},
+        .cwd => try sql.writeAll(" AND cwd = ?"),
+        .workspace => try sql.writeAll(" AND workspace_path = ?"),
+        .pane => try sql.writeAll(" AND pane_id = ?"),
+    }
+}
+
+fn bindQueryFilters(stmt: *c.sqlite3_stmt, parameter: *c_int, request: *const model.Query) void {
+    if (request.author != .all) {
+        const author: model.schema.HistoryAuthor = if (request.author == .human) .human else .agent;
+        _ = c.sqlite3_bind_int(stmt, parameter.*, @intFromEnum(author));
+        parameter.* += 1;
+    }
+    switch (request.scope) {
+        .global => {},
+        .cwd, .workspace => {
+            bindText(stmt, parameter.*, request.scopeSlice());
+            parameter.* += 1;
+        },
+        .pane => {
+            _ = c.sqlite3_bind_int64(
+                stmt,
+                parameter.*,
+                @intCast(model.schema.id.raw(request.pane_id)),
+            );
+            parameter.* += 1;
+        },
+    }
 }

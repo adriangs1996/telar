@@ -138,7 +138,15 @@ remain constraints, not targets for consolidation.
 - Added oversized-root regression; containment, escaping symlinks, reload and
   bar parsing tests pass with `zig build test --summary all`.
 
-14. History search policies and bounded result accumulation.
+## 14. History query policy and result ownership
+
+- Fuzzy ranking and command grouping are independent of SQLite.
+- Query paths share SQL scope/author filters and bindings.
+- One accumulator owns entry cleanup, count/payload bounds and result transfer
+  for both fuzzy and indexed queries.
+- Added allocation-failure/ownership coverage; existing fuzzy, filtering,
+  pagination, payload and persistence tests pass with `zig build test --summary all`.
+
 15. Modal-specific prompt state and semantic selection.
 16. Atomic history page request/result transitions.
 17. Shared incremental HTTP/2 framing.
