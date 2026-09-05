@@ -101,9 +101,14 @@ pub fn handleMediaTick(client: *Client, result: anyerror!void) !void {
 
 /// Starts one host write without lending model or presentation state.
 /// Example: `try pumpOutput(client);`.
-pub fn pumpOutput(client: *Client) !void {
+pub fn pumpOutput(client: *Client) anyerror!void {
     const output = if (client.output) |*output| output else return;
-    const work = output.begin() orelse return;
+    const work = try output.tryWrite(output.begin() orelse return);
+    if (work.bytes.len == 0) {
+        try handleWritten(client, {});
+        return;
+    }
+
     try client.select.concurrent(.host_written, @import("../resources/host_output.zig").Output.write, .{work});
 }
 

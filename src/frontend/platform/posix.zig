@@ -41,6 +41,43 @@ fn fallbackLocalTime() LocalTime {
 
 // Unix: termios for the mode, an ioctl for the size, SIGWINCH for the change.
 
+pub const FastWriter = struct {
+    fd: std.c.fd_t,
+
+    /// Opens an independent nonblocking description of the controlling tty.
+    /// Example: `var fast = FastWriter.open() orelse return;`.
+    pub fn open() ?FastWriter {
+        const fd = std.posix.openat(std.posix.AT.FDCWD, "/dev/tty", .{
+            .ACCMODE = .WRONLY,
+            .NONBLOCK = true,
+            .NOCTTY = true,
+            .CLOEXEC = true,
+        }, 0) catch return null;
+        return .{ .fd = fd };
+    }
+
+    /// Attempts one bounded write. A full tty queue falls back to the actor.
+    /// Example: `const count = try FastWriter.writeOpaque(&fast, bytes);`.
+    pub fn writeOpaque(context: *anyopaque, bytes: []const u8) !usize {
+        const fast: *FastWriter = @ptrCast(@alignCast(context));
+        const result = std.c.write(fast.fd, bytes.ptr, @min(bytes.len, 4096));
+        if (result >= 0) {
+            return @intCast(result);
+        }
+
+        return switch (std.posix.errno(result)) {
+            .AGAIN, .INTR => 0,
+            else => error.WriteFailed,
+        };
+    }
+
+    /// Closes after the client has joined its host-output actor.
+    /// Example: `fast.deinit();`.
+    pub fn deinit(fast: *FastWriter) void {
+        _ = std.c.close(fast.fd);
+    }
+};
+
 pub const Tty = struct {
     fd: std.c.fd_t,
     original: std.posix.termios,
@@ -192,6 +229,24 @@ fn onFatalSignal(signal: std.posix.SIG) callconv(.c) void {
     // RESETHAND already restored the default disposition; re-raising delivers
     // the original signal to it once the handler returns.
     _ = std.c.raise(signal);
+}
+
+test "fast output attempts at most 4 KiB and yields on a full descriptor" {
+    var fds: [2]std.c.fd_t = undefined;
+    try std.testing.expect(std.c.pipe(&fds) == 0);
+    defer _ = std.c.close(fds[0]);
+    var fast: FastWriter = .{ .fd = fds[1] };
+    defer fast.deinit();
+    const flags = std.posix.O{ .NONBLOCK = true };
+    try std.testing.expect(std.c.fcntl(fast.fd, std.posix.F.SETFL, @as(c_int, @bitCast(flags))) == 0);
+    const bytes = [_]u8{0x34} ** 8192;
+    try std.testing.expectEqual(@as(usize, 4096), try FastWriter.writeOpaque(&fast, &bytes));
+    for (0..1024) |_| {
+        if (try FastWriter.writeOpaque(&fast, &bytes) == 0) {
+            return;
+        }
+    }
+    return error.PipeNeverReachedBackpressure;
 }
 
 test "emergency restore is armed, idempotent, and disarmable" {

@@ -3,6 +3,11 @@ const std = @import("std");
 const presenter = @import("../presentation/presenter.zig");
 const Io = std.Io;
 
+pub const FastWrite = struct {
+    context: *anyopaque,
+    write: *const fn (*anyopaque, []const u8) anyerror!usize,
+};
+
 pub const Output = struct {
     allocator: std.mem.Allocator,
     target: *Io.Writer,
@@ -13,6 +18,7 @@ pub const Output = struct {
     delivery: ?presenter.Delivery = null,
     draw_deferred: bool = false,
     media_deferred: bool = false,
+    fast_write: ?FastWrite = null,
 
     pub const Work = struct {
         target: *Io.Writer,
@@ -59,6 +65,19 @@ pub const Output = struct {
         return .{ .target = output.target, .bytes = bytes };
     }
 
+    /// Attempts one nonblocking prefix before handing the remaining bytes off.
+    /// Example: `const remaining = try output.tryWrite(work);`.
+    pub fn tryWrite(output: *Output, work: Work) !Work {
+        std.debug.assert(output.pending);
+        const fast = output.fast_write orelse return work;
+        const written = try fast.write(fast.context, work.bytes);
+        if (written > work.bytes.len) {
+            return error.InvalidWriteCount;
+        }
+
+        return .{ .target = work.target, .bytes = work.bytes[written..] };
+    }
+
     /// Ends the borrow before propagating failure. Failed writes never ACK.
     /// Example: `const delivery = try output.complete(result);`.
     pub fn complete(output: *Output, result: anyerror!void) !?presenter.Delivery {
@@ -85,6 +104,40 @@ pub const Output = struct {
         try work.target.flush();
     }
 };
+
+const PrefixWriter = struct {
+    writer: *Io.Writer,
+    limit: usize,
+
+    fn write(context: *anyopaque, bytes: []const u8) !usize {
+        const prefix: *PrefixWriter = @ptrCast(@alignCast(context));
+        const count = @min(prefix.limit, bytes.len);
+        try prefix.writer.writeAll(bytes[0..count]);
+        return count;
+    }
+};
+
+test "a nonblocking prefix and the output actor transmit each byte exactly once" {
+    for ([_]usize{ 0, 2, 5 }) |limit| {
+        var bytes: [64]u8 = undefined;
+        var target: Io.Writer = .fixed(&bytes);
+        var prefix: PrefixWriter = .{ .writer = &target, .limit = limit };
+        var output = try Output.init(std.testing.allocator, &target);
+        defer output.deinit();
+        output.fast_write = .{ .context = &prefix, .write = PrefixWriter.write };
+        output.delivery = .{ .frame_acks = .{}, .commit = .{}, .media_pending = false };
+        try output.writer.writeAll("frame");
+        const remaining = try output.tryWrite(output.begin().?);
+        try std.testing.expectEqualStrings("frame"[limit..], remaining.bytes);
+        try std.testing.expect(output.pending);
+        try std.testing.expect(output.delivery != null);
+        if (remaining.bytes.len != 0) {
+            try Output.write(remaining);
+        }
+        try std.testing.expect(try output.complete({}) != null);
+        try std.testing.expectEqualStrings("frame", target.buffered());
+    }
+}
 
 test "sealed bytes stay immutable while sideband output accumulates" {
     var bytes: [64]u8 = undefined;

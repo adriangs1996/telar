@@ -128,6 +128,7 @@ const Params = struct {
     input_file: File,
     writer: *Io.Writer,
     async_output: bool = false,
+    fast_output: ?host_output.FastWrite = null,
     /// Host terminal geometry measured by the platform adapter.
     host_size: schema.TerminalSize,
     window_width_px: u32 = 0,
@@ -245,6 +246,9 @@ pub fn init(params: Params) !*Client {
         .sequence_timeout_ns = params.options.input_sequence_timeout_ns,
     });
     var output: ?host_output.Output = if (params.async_output) try .init(gpa, params.writer) else null;
+    if (output) |*value| {
+        value.fast_write = params.fast_output;
+    }
     errdefer if (output) |*value| {
         value.deinit();
     };

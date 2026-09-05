@@ -63,6 +63,11 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
     var watcher = try platform.ResizeWatcher.init(&tty);
     defer watcher.deinit();
 
+    var fast_output = platform.FastWriter.open();
+    defer if (fast_output) |*fast| {
+        fast.deinit();
+    };
+
     const host_platform_size = tty.size();
     const client = try Client.init(.{
         .gpa = gpa,
@@ -71,6 +76,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
         .input_file = input_file,
         .writer = writer,
         .async_output = true,
+        .fast_output = if (fast_output) |*fast| .{ .context = fast, .write = platform.FastWriter.writeOpaque } else null,
         .host_size = host_resizes.initialSize(host_platform_size),
         .window_width_px = host_platform_size.width_px,
         .window_height_px = host_platform_size.height_px,
