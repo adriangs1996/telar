@@ -407,9 +407,10 @@ test "description command succeeds, rejects invalid output, times out, and may b
         .query = undefined,
         .query_len = 0,
     };
+    // Consume the prompt so output validation does not race stdin closure.
     const success = generate(std.testing.io, std.testing.allocator, .{
         .command = .{
-            .arguments = &.{ "/bin/sh", "-c", "printf 'Improve agent sidebar\\n'" },
+            .arguments = &.{ "/bin/sh", "-c", "/bin/cat >/dev/null; printf 'Improve agent sidebar\\n'" },
             .timeout_ms = 1000,
         },
         .job = job,
@@ -419,7 +420,7 @@ test "description command succeeds, rejects invalid output, times out, and may b
 
     const invalid = generate(std.testing.io, std.testing.allocator, .{
         .command = .{
-            .arguments = &.{ "/bin/sh", "-c", "printf 'first\\nsecond\\n'" },
+            .arguments = &.{ "/bin/sh", "-c", "/bin/cat >/dev/null; printf 'first\\nsecond\\n'" },
             .timeout_ms = 1000,
         },
         .job = job,

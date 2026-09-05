@@ -835,9 +835,10 @@ pub const Pane = struct {
     /// continuation, wrapping, style migration, hyperlink or grapheme cleanup
     /// can enter this path. Ghostty still performs the actual interpretation.
     /// Call only while holding the VT borrow, before starting its actor.
-    /// Example: `if (pane.canInlineOutput(bytes)) finishIngestInline();`.
+    /// Example: `if (pane.canInlineOutput(bytes)) { finishIngestInline(); }`.
     pub fn canInlineOutput(pane: *const Pane, bytes: []const u8) bool {
         std.debug.assert(pane.ingest_pending);
+
         if (bytes.len == 0 or bytes.len > 32 or !pane.stream.ground()) {
             return false;
         }
@@ -845,6 +846,7 @@ pub const Pane = struct {
         const terminal = &pane.terminal;
         const screen = terminal.screens.active;
         const cursor = &screen.cursor;
+
         if (terminal.status_display != .main or terminal.modes.get(.insert) or
             !terminal.modes.get(.wraparound) or cursor.pending_wrap or cursor.hyperlink_id != 0 or
             screen.charset.single_shift != null or @as(usize, cursor.x) + bytes.len > terminal.scrolling_region.right)
@@ -858,6 +860,7 @@ pub const Pane = struct {
         }
 
         const cells: [*]const vt.Cell = @ptrCast(cursor.page_cell);
+
         for (bytes, cells[0..bytes.len]) |byte, cell| {
             if (byte < 0x20 or byte > 0x7e or cell.content_tag != .codepoint or
                 cell.wide != .narrow or cell.hyperlink or cell.style_id != cursor.style_id)
@@ -2379,6 +2382,7 @@ test "inline output admits only a bounded simple row run without allocation" {
         try std.testing.expect(pane.canInlineOutput("~" ** 32));
         pane.stream.nextSlice("~" ** 32);
     }
+
     try std.testing.expect(!failing.has_induced_failure);
     try std.testing.expectEqual(@as(u21, '~'), pane.terminal.screens.active.cursorCellLeft(1).codepoint());
 }

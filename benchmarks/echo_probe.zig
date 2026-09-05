@@ -148,6 +148,8 @@ fn foregroundBenchmark(init: std.process.Init) !void {
 }
 
 /// Example: `echo-probe screen 160 40` or `echo-probe one /bin/cat`.
+/// Runs native echo controls, a VT oracle, or the foreground-query experiment.
+/// Example: `echo-probe screen 160 40`.
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.next();

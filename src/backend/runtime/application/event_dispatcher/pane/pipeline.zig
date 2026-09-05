@@ -48,6 +48,7 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
             var context: OutputRuntime = .{ .application = application, .ingest_gate = ingest_gate };
             var pipeline = paneOutputPipeline(&context);
             try pipeline.handle(event);
+
             if (context.inline_ingest) |result| {
                 try handleIngested(application, result);
             }
@@ -117,6 +118,7 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
         fn startOutputIngest(context: *OutputRuntime, ingest: pane_output_pipeline.Ingest) !void {
             core.echo_trace.mark(ingest.io, .vt_queued);
             const task: PaneIngestTask = .{ .ingest = ingest, .gate = context.ingest_gate };
+
             if (context.ingest_gate == null and ingest.pane.canInlineOutput(ingest.bytes)) {
                 context.inline_ingest = ingestPane(task);
                 return;
@@ -149,6 +151,7 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
         fn ingestPane(task: PaneIngestTask) PaneIngestEvent {
             core.echo_trace.mark(task.ingest.io, .vt_start);
             defer core.echo_trace.mark(task.ingest.io, .vt_done);
+
             const path = diagnostics.enter(.interactive);
             defer path.restore();
 
