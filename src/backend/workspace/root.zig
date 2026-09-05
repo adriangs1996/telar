@@ -9,6 +9,7 @@ const repository = @import("repository.zig");
 const state = @import("state.zig");
 const workspace = @import("workspace.zig");
 
+pub const GitProbe = @import("git_observation.zig").Probe;
 pub const State = state.State;
 pub const Repository = repository.Repository;
 pub const Workspace = workspace.Workspace;

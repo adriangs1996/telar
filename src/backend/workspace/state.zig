@@ -8,6 +8,7 @@ pub const max_workspaces = 64;
 pub const State = struct {
     items: [max_workspaces]?workspace.Workspace = [_]?workspace.Workspace{null} ** max_workspaces,
     count: usize = 0,
+    git_probe: ?@import("telar-core").schema.WorkspaceId = null,
     next_workspace_id: u64 = 1,
     next_tab_id: u64 = 1,
     revision: u64 = 1,

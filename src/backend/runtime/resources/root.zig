@@ -13,6 +13,8 @@ const attachment = @import("../attachment/root.zig");
 const proxy_runtime = @import("proxy.zig");
 const telemetry = @import("../observability/root.zig").telemetry;
 
+pub const git_probe = @import("git_probe.zig");
+
 const Io = std.Io;
 const diagnostics = core.diagnostics;
 

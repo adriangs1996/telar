@@ -55,7 +55,16 @@ remain constraints, not targets for consolidation.
 - Proof: clamp/no-op revision test and existing browser integration tests.
   `zig build test --summary all` passed.
 
-6. Git observation reservation protocol.
+## 6. Git observation ownership
+
+- The workspace repository owns the single outstanding probe and returns an
+  owned path, with semantic reserve/cancel/complete operations.
+- Aggregate completion commits observation time and Git status together.
+- Removed duplicated pending flags from Application and Workspace; filesystem
+  and process access live in the runtime's Git resource adapter.
+- Proof: stale results, cancellation, due ordering and workspace removal while
+  probing. `zig build test --summary all` passed.
+
 7. Provider session-file adapters.
 8. Agent observation values independent of producers.
 9. Client submodels and revisions.

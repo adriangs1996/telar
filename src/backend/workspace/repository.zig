@@ -4,10 +4,41 @@ const std = @import("std");
 const core = @import("telar-core");
 const state_mod = @import("state.zig");
 const workspace_mod = @import("workspace.zig");
+const git = @import("git_observation.zig");
+const ProbeSchedule = struct { now_ms: i64, interval_ms: i64 };
 
 const schema = core.schema;
 const State = state_mod.State;
 const Workspace = workspace_mod.Workspace;
+
+test "Git probes reserve one workspace, reject stale results and recover after removal" {
+    var state: State = .{};
+    var repository = Repository.init(&state, std.testing.allocator);
+    defer repository.deinit();
+    const first = try repository.insert(.{ .path = "/first" });
+    _ = try repository.insert(.{ .path = "/second" });
+    const due: ProbeSchedule = .{ .now_ms = 5000, .interval_ms = 5000 };
+    const probe = repository.reserveGitProbe(due).?;
+    try std.testing.expectEqualStrings("/first", probe.pathSlice());
+    try std.testing.expect(repository.reserveGitProbe(due) == null);
+    repository.cancelGitProbe(@enumFromInt(999));
+    try std.testing.expect(repository.reserveGitProbe(due) == null);
+    repository.cancelGitProbe(probe.workspace);
+    _ = repository.reserveGitProbe(due).?;
+    const observation: git.Observation = .{ .workspace = probe.workspace, .branch = "main", .dirty = true, .checked_at_ms = 5000 };
+    try std.testing.expect(repository.completeGitProbe(observation));
+    const revision = repository.reader().revision();
+    try std.testing.expect(!repository.completeGitProbe(observation));
+    try std.testing.expectEqual(revision, repository.reader().revision());
+
+    const second = repository.reserveGitProbe(due).?;
+    try std.testing.expectEqualStrings("/second", second.pathSlice());
+    try std.testing.expect(repository.remove(second.workspace));
+    try std.testing.expect(!repository.completeGitProbe(.{ .workspace = second.workspace, .branch = "main", .dirty = false, .checked_at_ms = 5000 }));
+    try std.testing.expect(repository.reserveGitProbe(due) == null);
+    try std.testing.expectEqual(first.workspace.workspace, repository.reserveGitProbe(.{ .now_ms = 10000, .interval_ms = 5000 }).?.workspace);
+    repository.cancelGitProbe(probe.workspace);
+}
 
 pub const Ensured = struct {
     location: schema.TabLocation,
@@ -284,6 +315,58 @@ pub const Reader = struct {
 pub const Repository = struct {
     state: *State,
     gpa: std.mem.Allocator,
+
+    /// Reserves the stalest due workspace and copies its path for the worker.
+    /// Example: `const probe = repository.reserveGitProbe(.{ .now_ms = now, .interval_ms = 5000 }) orelse return;`.
+    pub fn reserveGitProbe(repository: *Repository, request: ProbeSchedule) ?git.Probe {
+        if (repository.state.git_probe != null) {
+            return null;
+        }
+
+        var stalest: ?*Workspace = null;
+        for (&repository.state.items) |*slot| {
+            const workspace = if (slot.*) |*value| value else continue;
+            if (request.now_ms -| workspace.git_checked_at_ms < request.interval_ms) {
+                continue;
+            }
+
+            if (stalest == null or workspace.git_checked_at_ms < stalest.?.git_checked_at_ms) {
+                stalest = workspace;
+            }
+        }
+
+        const workspace = stalest orelse return null;
+        const path = workspace.pathSlice();
+        var probe: git.Probe = .{ .workspace = workspace.id, .path_len = @intCast(path.len) };
+        @memcpy(probe.path[0..path.len], path);
+        repository.state.git_probe = workspace.id;
+        return probe;
+    }
+
+    /// Cancels only the matching observation, including a removed workspace.
+    /// Example: `repository.cancelGitProbe(probe.workspace);`.
+    pub fn cancelGitProbe(repository: *Repository, workspace: schema.WorkspaceId) void {
+        if (repository.state.git_probe == workspace) {
+            repository.state.git_probe = null;
+        }
+    }
+
+    /// Retires the reservation and publishes a changed projection exactly once.
+    /// Example: `if (repository.completeGitProbe(observation)) pumpClients();`.
+    pub fn completeGitProbe(repository: *Repository, observation: git.Observation) bool {
+        if (repository.state.git_probe != observation.workspace) {
+            return false;
+        }
+
+        repository.cancelGitProbe(observation.workspace);
+        const workspace = repository.find(.{ .workspace = observation.workspace }) orelse return false;
+        if (!workspace.completeGitProbe(observation)) {
+            return false;
+        }
+
+        repository.recordListChange();
+        return true;
+    }
 
     pub fn init(state: *State, gpa: std.mem.Allocator) Repository {
         return .{ .state = state, .gpa = gpa };

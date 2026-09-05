@@ -51,7 +51,6 @@ pub const Workspace = struct {
     git_branch_len: u8 = 0,
     git_dirty: bool = false,
     git_checked_at_ms: i64 = 0,
-    git_probe_pending: bool = false,
 
     pub fn init(options: Init) !Workspace {
         if (options.path.len == 0 or options.path.len > schema.max_cwd_bytes or std.mem.indexOfScalar(u8, options.path, 0) != null) {
@@ -90,6 +89,13 @@ pub const Workspace = struct {
 
     pub fn gitBranch(workspace: *const Workspace) []const u8 {
         return workspace.git_branch[0..workspace.git_branch_len];
+    }
+
+    /// Commits observation time and visible Git state together.
+    /// Example: `_ = workspace.completeGitProbe(observation);`.
+    pub fn completeGitProbe(workspace: *Workspace, observation: @import("git_observation.zig").Observation) bool {
+        workspace.git_checked_at_ms = observation.checked_at_ms;
+        return workspace.applyGitStatus(observation.branch, observation.dirty);
     }
 
     /// Stores one git observation and reports whether the projection changed.
