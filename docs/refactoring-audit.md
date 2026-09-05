@@ -47,7 +47,14 @@ remain constraints, not targets for consolidation.
 - Proof: isolated read reservation/failure test plus existing backpressure,
   graphics-credit and socket tests. `zig build test --summary all` passed.
 
-5. History inspection geometry independent of widgets.
+## 5. History inspection dependency direction
+
+- Read planning no longer imports a widget or constructs rendering-specific rows.
+- An immutable presentation projection computes the scroll bound; the controller
+  delivers that value through a semantic application operation.
+- Proof: clamp/no-op revision test and existing browser integration tests.
+  `zig build test --summary all` passed.
+
 6. Git observation reservation protocol.
 7. Provider session-file adapters.
 8. Agent observation values independent of producers.

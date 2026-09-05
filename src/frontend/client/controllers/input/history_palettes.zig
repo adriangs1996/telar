@@ -14,6 +14,7 @@ const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const Client = @import("../../client.zig");
 const schema = core.schema;
 const history_application = @import("../../application/input/root.zig").history_browser;
+const inspection = @import("../../presentation/root.zig").history_inspection;
 
 fn handler(client: *Client) history_application.Handler {
     return .{ .model = &client.model };
@@ -155,7 +156,12 @@ pub fn apply(client: *Client, view: schema.HistoryResultsView) !bool {
 /// Example: `try refreshInspection(client);`.
 pub fn refreshInspection(client: *Client) !void {
     for (0..2) |_| {
-        const read = handler(client).nextRead() orelse return;
+        const next = handler(client).nextRead();
+        if (inspection.scrollLimit(&client.model)) |limit| {
+            handler(client).constrainInspection(limit);
+        }
+
+        const read = next orelse return;
         const request_id = try request_lifecycle.nextId(client);
         if (!handler(client).requestRead(schema.id.raw(request_id), read)) {
             return;

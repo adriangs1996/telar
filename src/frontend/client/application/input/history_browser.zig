@@ -1,10 +1,10 @@
 //! Coordinates disposable history search, paging and inspection state.
 //! Controllers own wire decoding and delivery; bounded model APIs own storage.
 
+const std = @import("std");
 const core = @import("telar-core");
 const model = @import("../../model/root.zig");
 const schema = core.schema;
-const widget = @import("../../../widgets/root.zig").history_browser;
 
 pub const Handler = struct {
     model: *model.Model,
@@ -109,16 +109,6 @@ pub const Handler = struct {
 
         const selection = @min(prompt.?.selection, palette.len - 1);
         const entry = &palette.slice()[selection];
-        if (prompt.?.inspecting and prompt.?.detail_scroll != 0) {
-            const size = handler.model.hostSize();
-            const limit = widget.inspectionScrollLimit(.{ .w = size.cols, .h = size.rows }, .{
-                .entry = .{ .id = entry.id, .command = palette.commandAt(selection) orelse entry.commandSlice(), .cwd = entry.cwdSlice(), .pane_id = entry.pane_id, .started_at_ms = entry.started_at_ms, .duration_ns = entry.duration_ns, .exit_code = entry.exit_code, .status = entry.status, .author = entry.author },
-                .output = palette.outputSlice(),
-                .output_hint = palette.outputHint(),
-            });
-            handler.model.name_prompt.updateHistory(.{ .scroll_limit = limit });
-        }
-
         if (!entry.captured_truncated and palette.commandAt(selection) == null and palette.full_id != entry.id) {
             return .{ .id = entry.id, .kind = .command };
         }
@@ -128,6 +118,12 @@ pub const Handler = struct {
         }
 
         return null;
+    }
+
+    /// Applies a presentation-provided bound without depending on inspector geometry.
+    /// Example: `handler.constrainInspection(limit);`.
+    pub fn constrainInspection(handler: Handler, limit: u32) void {
+        handler.model.name_prompt.updateHistory(.{ .scroll_limit = limit });
     }
 
     /// Correlates each admitted detail request with its selected history entry.
@@ -179,3 +175,21 @@ pub const Handler = struct {
         return prompt.target == .history;
     }
 };
+
+test "inspection constraints change semantic scroll only when it exceeds the bound" {
+    const state = try std.testing.allocator.create(model.Model);
+    defer std.testing.allocator.destroy(state);
+    state.* = model.Model.init(std.testing.allocator, true);
+    defer state.deinit();
+    state.name_prompt.begin(.history_palette);
+    _ = state.name_prompt.apply(.toggle_inspection);
+    _ = state.name_prompt.apply(.page_down);
+    const handler: Handler = .{ .model = state };
+    handler.constrainInspection(2);
+    try std.testing.expectEqual(@as(u32, 2), state.name_prompt.currentConst().?.detail_scroll);
+    const revision = state.version();
+    handler.constrainInspection(2);
+    try std.testing.expectEqualDeep(revision, state.version());
+    handler.constrainInspection(0);
+    try std.testing.expectEqual(@as(u32, 0), state.name_prompt.currentConst().?.detail_scroll);
+}
