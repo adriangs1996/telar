@@ -128,7 +128,16 @@ remain constraints, not targets for consolidation.
 - Capture ownership, marker/deletion, generation-scoping and preview regression
   tests pass with `zig build test --summary all`.
 
-13. Configuration generation, parsing and module loading.
+## 13. Configuration parsing and local modules
+
+- The local-module loader owns its Lua closure context, cache, canonical roots
+  and dependency fingerprints, without borrowing Generation.
+- Bar value parsing reuses lua_value independently of generation/callback state.
+- Loader construction now checks the actual root-buffer capacity before copying;
+  an oversized root is rejected with cleanup rather than exceeding the buffer.
+- Added oversized-root regression; containment, escaping symlinks, reload and
+  bar parsing tests pass with `zig build test --summary all`.
+
 14. History search policies and bounded result accumulation.
 15. Modal-specific prompt state and semantic selection.
 16. Atomic history page request/result transitions.

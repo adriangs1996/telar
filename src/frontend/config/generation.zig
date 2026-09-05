@@ -7,6 +7,14 @@ const agents_config = @import("agents.zig");
 const input = @import("../input/root.zig");
 const action_mod = input.action;
 const bars = @import("../bars/root.zig");
+const bar_values = @import("bar_values.zig");
+const parseBarInterval = bar_values.parseBarInterval;
+const parseBarContent = bar_values.parseBarContent;
+const parseBarSegment = bar_values.parseBarSegment;
+const parseBarColor = bar_values.parseBarColor;
+const parseBarIcon = bar_values.parseBarIcon;
+const normalizedNameEql = bar_values.normalizedNameEql;
+
 const commands_config = @import("commands.zig");
 const config_model = @import("model.zig");
 const client_history_config = @import("client_history.zig");
@@ -53,7 +61,7 @@ pub const max_callback_effects = config_model.max_callback_effects;
 pub const max_expression_keys = config_model.max_expression_keys;
 pub const max_expression_paste_bytes = config_model.max_expression_paste_bytes;
 pub const max_config_bytes = 1024 * 1024;
-pub const max_local_modules = 64;
+pub const max_local_modules = @import("local_modules.zig").max_local_modules;
 pub const max_plugins = config_model.max_plugins;
 pub const max_plugin_path_bytes = config_model.max_plugin_path_bytes;
 pub const max_profile_name_bytes = 64;
@@ -147,22 +155,13 @@ pub const Generation = struct {
     callback_count: u16 = 0,
     bar_callbacks: [max_bar_callbacks]BarCallback = undefined,
     bar_callback_count: u8 = 0,
-    config_dir: [std.fs.max_path_bytes]u8 = undefined,
-    config_dir_len: u16 = 0,
-    module_cache_ref: c_int = lua.LUA_NOREF,
-    dependencies: [max_local_modules][std.fs.max_path_bytes]u8 = undefined,
-    dependency_lens: [max_local_modules]u16 = undefined,
-    dependency_mtimes: [max_local_modules]i128 = undefined,
-    dependency_count: u8 = 0,
+    modules: @import("local_modules.zig").State,
     profile_bytes: [max_profile_name_bytes]u8 = undefined,
     profile_len: u8 = 0,
 
     /// Compiles configuration source within the supplied loading environment.
     /// For example: `Generation.loadSource(context, .{ .source = bytes, .source_name = "@config.lua", .number = 1 })`.
     pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
-        if (spec.config_dir.len > std.math.maxInt(u16)) {
-            return error.NameTooLong;
-        }
         if (spec.profile) |name| {
             if (!validProfileName(name)) {
                 context.diagnostic.set("invalid profile name '{s}'", .{name});
@@ -179,14 +178,14 @@ pub const Generation = struct {
                 .instructions = config_model.default_load_instruction_limit,
                 .deadline_after_ns = (config_model.Limits{}).deadline_after_ns,
             }),
-            .config_dir_len = @intCast(spec.config_dir.len),
+            .modules = undefined,
         };
-        @memcpy(generation.config_dir[0..spec.config_dir.len], spec.config_dir);
+        errdefer generation.vm.deinit();
+        generation.modules = try .init(generation.vm, spec.config_dir);
         if (spec.profile) |name| {
             @memcpy(generation.profile_bytes[0..name.len], name);
             generation.profile_len = @intCast(name.len);
         }
-        errdefer generation.vm.deinit();
 
         generation.openEnvironment() catch |err| {
             context.diagnostic.set("failed to initialize Lua: {s}", .{@errorName(err)});
@@ -243,22 +242,15 @@ pub const Generation = struct {
     }
 
     pub fn dependencyPath(generation: *const Generation, index: usize) ?[]const u8 {
-        if (index >= generation.dependency_count) {
-            return null;
-        }
-        return generation.dependencies[index][0..generation.dependency_lens[index]];
+        return generation.modules.dependencyPath(index);
     }
 
     pub fn watchFingerprint(generation: *const Generation, io: Io, config_path: []const u8) i128 {
-        var hasher = std.hash.Wyhash.init(0x74656c61722d6c75);
-        updatePathFingerprint(&hasher, io, config_path);
-        for (0..generation.dependency_count) |index|
-            updatePathFingerprint(&hasher, io, generation.dependencyPath(index).?);
-        return @intCast(hasher.final());
+        return generation.modules.watchFingerprint(io, config_path);
     }
 
     pub fn configDir(generation: *const Generation) []const u8 {
-        return generation.config_dir[0..generation.config_dir_len];
+        return generation.modules.configDir();
     }
 
     pub fn pluginSlice(generation: *const Generation) []const PluginSpec {
@@ -266,12 +258,7 @@ pub const Generation = struct {
     }
 
     fn installRequire(generation: *Generation) void {
-        const state = generation.vm.state;
-        lua.lua_createtable(state, 0, max_local_modules);
-        generation.module_cache_ref = lua.luaL_ref(state, lua.LUA_REGISTRYINDEX);
-        lua.lua_pushlightuserdata(state, generation);
-        lua.lua_pushcclosure(state, requireLocal, 1);
-        lua.lua_setglobal(state, "require");
+        return generation.modules.installRequire();
     }
 
     /// Runs an action callback against one immutable client snapshot.
@@ -1496,360 +1483,12 @@ pub const Generation = struct {
 
 const bootstrap = @embedFile("bootstrap.lua");
 
-fn requireLocal(state: ?*lua.lua_State) callconv(.c) c_int {
-    const lua_state = state.?;
-    const context_ptr = lua.lua_touserdata(lua_state, lua.lua_upvalueindex(1)) orelse
-        return raiseLua(lua_state, "missing Telar require context");
-    const generation: *Generation = @ptrCast(@alignCast(context_ptr));
-    const name = string(lua_state, 1) orelse
-        return raiseLua(lua_state, "require expects a module name");
-    if (std.mem.eql(u8, name, "telar")) {
-        _ = lua.lua_getglobal(lua_state, "telar");
-        return 1;
-    }
-    if (!validModuleName(name)) {
-        return raiseLua(lua_state, "module names may contain letters, digits, '_', '-', and '.' only");
-    }
-
-    _ = lua.lua_rawgeti(lua_state, lua.LUA_REGISTRYINDEX, generation.module_cache_ref);
-    _ = lua.lua_pushlstring(lua_state, name.ptr, name.len);
-    _ = lua.lua_rawget(lua_state, -2);
-    if (lua.lua_type(lua_state, -1) != lua.LUA_TNIL) {
-        lua.lua_remove(lua_state, -2);
-        return 1;
-    }
-    pop(lua_state, 1);
-
-    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    var cursor: usize = 0;
-    const config_dir = generation.config_dir[0..generation.config_dir_len];
-    if (config_dir.len != 0 and !std.mem.eql(u8, config_dir, ".")) {
-        if (config_dir.len + 1 > path_buffer.len) {
-            return raiseLua(lua_state, "module path is too long");
-        }
-        @memcpy(path_buffer[0..config_dir.len], config_dir);
-        cursor = config_dir.len;
-        path_buffer[cursor] = std.fs.path.sep;
-        cursor += 1;
-    }
-    if (name.len + ".lua".len > path_buffer.len - cursor) {
-        return raiseLua(lua_state, "module path is too long");
-    }
-    for (name) |byte| {
-        path_buffer[cursor] = if (byte == '.') std.fs.path.sep else byte;
-        cursor += 1;
-    }
-    @memcpy(path_buffer[cursor..][0..".lua".len], ".lua");
-    cursor += ".lua".len;
-    if (cursor == path_buffer.len) {
-        return raiseLua(lua_state, "module path is too long");
-    }
-    path_buffer[cursor] = 0;
-    var resolved_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const resolved_len = Io.Dir.cwd().realPathFile(
-        generation.vm.io,
-        path_buffer[0..cursor],
-        &resolved_buffer,
-    ) catch return raiseLua(lua_state, "cannot resolve local configuration module");
-    const resolved = resolved_buffer[0..resolved_len];
-    if (!pathInside(generation.configDir(), resolved)) {
-        return raiseLua(lua_state, "local configuration module escapes the configuration directory");
-    }
-    if (resolved_len == resolved_buffer.len) {
-        return raiseLua(lua_state, "module path is too long");
-    }
-    resolved_buffer[resolved_len] = 0;
-    const path_z: [*:0]const u8 = @ptrCast(resolved_buffer[0..resolved_len :0]);
-
-    if (lua.luaL_loadfilex(lua_state, path_z, "t") != lua.LUA_OK) {
-        return lua.lua_error(lua_state);
-    }
-    if (lua.lua_pcallk(lua_state, 0, 1, 0, 0, null) != lua.LUA_OK) {
-        return lua.lua_error(lua_state);
-    }
-    if (lua.lua_type(lua_state, -1) == lua.LUA_TNIL) {
-        pop(lua_state, 1);
-        lua.lua_pushboolean(lua_state, 1);
-    }
-
-    if (generation.dependency_count == max_local_modules) {
-        return raiseLua(lua_state, "configuration requires too many local modules");
-    }
-    const dependency_index = generation.dependency_count;
-    @memcpy(generation.dependencies[dependency_index][0..resolved_len], resolved);
-    generation.dependency_lens[dependency_index] = @intCast(resolved_len);
-    const stat = Io.Dir.cwd().statFile(generation.vm.io, resolved, .{}) catch
-        return raiseLua(lua_state, "cannot stat loaded configuration module");
-    generation.dependency_mtimes[dependency_index] = stat.mtime.nanoseconds;
-    generation.dependency_count += 1;
-
-    _ = lua.lua_pushlstring(lua_state, name.ptr, name.len);
-    lua.lua_pushvalue(lua_state, -2);
-    lua.lua_rawset(lua_state, -4);
-    lua.lua_remove(lua_state, -2);
-    return 1;
-}
-
-fn validModuleName(name: []const u8) bool {
-    if (name.len == 0 or name[0] == '.' or name[name.len - 1] == '.') {
-        return false;
-    }
-    var previous_dot = false;
-    for (name) |byte| {
-        if (byte == '.') {
-            if (previous_dot) {
-                return false;
-            }
-            previous_dot = true;
-            continue;
-        }
-        previous_dot = false;
-        if (!std.ascii.isAlphanumeric(byte) and byte != '_' and byte != '-') {
-            return false;
-        }
-    }
-    return true;
-}
-
-fn pathInside(root: []const u8, candidate: []const u8) bool {
-    if (!std.mem.startsWith(u8, candidate, root)) {
-        return false;
-    }
-    return candidate.len == root.len or
-        (candidate.len > root.len and candidate[root.len] == std.fs.path.sep);
-}
-
-fn updatePathFingerprint(hasher: *std.hash.Wyhash, io: Io, path: []const u8) void {
-    hasher.update(path);
-    const stat = Io.Dir.cwd().statFile(io, path, .{}) catch {
-        hasher.update("\x00missing");
-        return;
-    };
-    hasher.update(std.mem.asBytes(&stat.kind));
-    hasher.update(std.mem.asBytes(&stat.size));
-    hasher.update(std.mem.asBytes(&stat.mtime.nanoseconds));
-}
-
 fn validProfileName(name: []const u8) bool {
     if (name.len == 0 or name.len > max_profile_name_bytes) {
         return false;
     }
     for (name) |byte|
         if (!std.ascii.isAlphanumeric(byte) and byte != '_' and byte != '-') return false;
-    return true;
-}
-
-fn parseBarInterval(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !u64 {
-    const absolute = lua.lua_absindex(state, index);
-    _ = lua.lua_getfield(state, absolute, "every_ms");
-    defer pop(state, 1);
-    const value = if (lua.lua_type(state, -1) == lua.LUA_TNIL)
-        1_000
-    else
-        integer(state, -1) orelse {
-            diagnostic.set("bar every_ms must be an integer", .{});
-            return error.InvalidConfig;
-        };
-    if (value < bars.min_interval_ms or value > bars.max_interval_ms) {
-        diagnostic.set(
-            "bar every_ms must be in {d}..{d}",
-            .{ bars.min_interval_ms, bars.max_interval_ms },
-        );
-        return error.InvalidConfig;
-    }
-
-    return @as(u64, @intCast(value)) * std.time.ns_per_ms;
-}
-
-fn parseBarContent(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !bars.Content {
-    const absolute = lua.lua_absindex(state, index);
-    var content: bars.Content = .{};
-    if (lua.lua_type(state, absolute) == lua.LUA_TNIL) {
-        return content;
-    }
-    if (string(state, absolute)) |value| {
-        content.append(.{ .text = value }) catch |err| {
-            diagnostic.set("invalid bar text: {s}", .{@errorName(err)});
-            return error.InvalidBarContent;
-        };
-        return content;
-    }
-    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
-        diagnostic.set("bar render must return nil, text, a segment, or an array of segments", .{});
-        return error.InvalidBarContent;
-    }
-
-    _ = lua.lua_getfield(state, absolute, "text");
-    const has_text = lua.lua_type(state, -1) != lua.LUA_TNIL;
-    pop(state, 1);
-    _ = lua.lua_getfield(state, absolute, "icon");
-    const has_icon = lua.lua_type(state, -1) != lua.LUA_TNIL;
-    pop(state, 1);
-    if (has_text or has_icon) {
-        const segment = try parseBarSegment(state, absolute, diagnostic);
-        content.append(.{ .text = segment.text, .icon = segment.icon, .style = segment.style }) catch |err| {
-            diagnostic.set("invalid bar segment: {s}", .{@errorName(err)});
-            return error.InvalidBarContent;
-        };
-        return content;
-    }
-
-    const count = lua.lua_rawlen(state, absolute);
-    if (count > bars.max_segments) {
-        diagnostic.set("bar content exceeds {d} segments", .{bars.max_segments});
-        return error.InvalidBarContent;
-    }
-    try ensureArrayOnly(state, .{ .index = absolute, .count = count, .path = "bar content" }, diagnostic);
-    for (0..count) |segment_index| {
-        _ = lua.lua_geti(state, absolute, @intCast(segment_index + 1));
-        const segment = parseBarSegment(state, -1, diagnostic) catch |err| {
-            pop(state, 1);
-            return err;
-        };
-        content.append(.{ .text = segment.text, .icon = segment.icon, .style = segment.style }) catch |err| {
-            pop(state, 1);
-            diagnostic.set("invalid bar segment {d}: {s}", .{ segment_index + 1, @errorName(err) });
-            return error.InvalidBarContent;
-        };
-        pop(state, 1);
-    }
-
-    return content;
-}
-
-const ParsedBarSegment = struct {
-    text: []const u8,
-    icon: ?icons.Icon,
-    style: bars.Style,
-};
-
-fn parseBarSegment(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !ParsedBarSegment {
-    const absolute = lua.lua_absindex(state, index);
-    if (string(state, absolute)) |value| {
-        return .{ .text = value, .icon = null, .style = .{} };
-    }
-    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
-        diagnostic.set("bar segment must be text or a table", .{});
-        return error.InvalidBarContent;
-    }
-
-    try ensureOnlyFields(state, .{
-        .index = absolute,
-        .allowed = &.{ "text", "icon", "fg", "bg", "bold", "italic", "faint", "underline", "strikethrough" },
-        .path = "bar segment",
-    }, diagnostic);
-    _ = lua.lua_getfield(state, absolute, "text");
-    const text_value = if (lua.lua_type(state, -1) == lua.LUA_TNIL)
-        ""
-    else
-        string(state, -1) orelse {
-            pop(state, 1);
-            diagnostic.set("bar segment text must be a string", .{});
-            return error.InvalidBarContent;
-        };
-    pop(state, 1);
-
-    _ = lua.lua_getfield(state, absolute, "icon");
-    const icon_value: ?icons.Icon = if (lua.lua_type(state, -1) == lua.LUA_TNIL)
-        null
-    else icon: {
-        const name = string(state, -1) orelse {
-            pop(state, 1);
-            diagnostic.set("bar segment icon must be a string", .{});
-            return error.InvalidBarContent;
-        };
-        break :icon parseBarIcon(name) orelse {
-            diagnostic.set("unknown bar icon '{s}'", .{name});
-            pop(state, 1);
-            return error.InvalidBarContent;
-        };
-    };
-    pop(state, 1);
-
-    var style: bars.Style = .{};
-    inline for (.{ .{ "fg", "foreground" }, .{ "bg", "background" } }) |field| {
-        _ = lua.lua_getfield(state, absolute, field[0]);
-        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
-            @field(style, field[1]) = try parseBarColor(state, -1, diagnostic);
-        }
-        pop(state, 1);
-    }
-    inline for (.{ "bold", "italic", "faint", "underline", "strikethrough" }) |field| {
-        _ = lua.lua_getfield(state, absolute, field);
-        if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
-            if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
-                pop(state, 1);
-                diagnostic.set("bar segment {s} must be a boolean", .{field});
-                return error.InvalidBarContent;
-            }
-            @field(style, field) = lua.lua_toboolean(state, -1) != 0;
-        }
-        pop(state, 1);
-    }
-
-    return .{ .text = text_value, .icon = icon_value, .style = style };
-}
-
-fn parseBarColor(state: *lua.lua_State, index: c_int, diagnostic: *Diagnostic) !bars.Color {
-    if (integer(state, index)) |value| {
-        if (value < 0 or value > 255) {
-            diagnostic.set("bar color index must be in 0..255", .{});
-            return error.InvalidBarContent;
-        }
-
-        return .{ .value = .{ .indexed = @intCast(value) } };
-    }
-
-    const name = string(state, index) orelse {
-        diagnostic.set("bar color must be a palette name, #RRGGBB, default, or an index", .{});
-        return error.InvalidBarContent;
-    };
-    if (std.ascii.eqlIgnoreCase(name, "default")) {
-        return .{ .value = .default };
-    }
-    inline for (std.meta.fields(bars.PaletteColor)) |field| {
-        if (normalizedNameEql(name, field.name)) {
-            return .{ .palette = @enumFromInt(field.value) };
-        }
-    }
-    if (name.len == 7 and name[0] == '#') {
-        const value = std.fmt.parseInt(u24, name[1..], 16) catch {
-            diagnostic.set("bar color '{s}' is not #RRGGBB", .{name});
-            return error.InvalidBarContent;
-        };
-        return .{ .value = .{ .rgb = .{
-            @intCast((value >> 16) & 0xff),
-            @intCast((value >> 8) & 0xff),
-            @intCast(value & 0xff),
-        } } };
-    }
-
-    diagnostic.set("unknown bar color '{s}'", .{name});
-    return error.InvalidBarContent;
-}
-
-fn parseBarIcon(name: []const u8) ?icons.Icon {
-    inline for (std.meta.fields(icons.Icon)) |field| {
-        if (normalizedNameEql(name, field.name)) {
-            return @enumFromInt(field.value);
-        }
-    }
-
-    return null;
-}
-
-fn normalizedNameEql(left: []const u8, right: []const u8) bool {
-    if (left.len != right.len) {
-        return false;
-    }
-    for (left, right) |left_byte, right_byte| {
-        const normalized_left = if (left_byte == '-') '_' else std.ascii.toLower(left_byte);
-        const normalized_right = if (right_byte == '-') '_' else std.ascii.toLower(right_byte);
-        if (normalized_left != normalized_right) {
-            return false;
-        }
-    }
-
     return true;
 }
 
@@ -2025,6 +1664,20 @@ fn parseInputDecision(state: *lua.lua_State, input_decision: DecisionInput, diag
     }
     diagnostic.set("unknown input decision '{s}'", .{kind});
     return error.InvalidExpressionResult;
+}
+
+test "local module loader rejects oversized roots before copying" {
+    var diagnostic: Diagnostic = .{};
+    try std.testing.expectError(error.NameTooLong, Generation.loadSource(.{
+        .gpa = std.testing.allocator,
+        .io = std.testing.io,
+        .diagnostic = &diagnostic,
+    }, .{
+        .source = "return {}",
+        .source_name = "@test.lua",
+        .number = 1,
+        .config_dir = "a" ** (std.fs.max_path_bytes + 1),
+    }));
 }
 
 test "client config compiles theme, bindings, and callbacks" {
@@ -2911,7 +2564,7 @@ test "local modules are contained and participate in reload fingerprints" {
         .diagnostic = &diagnostic,
     }, .{ .path = config_path, .number = 1 });
     defer generation.deinit();
-    try std.testing.expectEqual(@as(u8, 1), generation.dependency_count);
+    try std.testing.expectEqual(@as(u8, 1), generation.modules.dependency_count);
     try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     const before = generation.watchFingerprint(io, config_path);
     {
