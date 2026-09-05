@@ -200,7 +200,7 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
         }
 
         fn reconcileScreen(coordinator: *Self, reconciliation: ScreenReconciliation) void {
-            const signal = reconciliation.stats.agent_signal orelse return;
+            const observation = reconciliation.stats.agent_observation orelse return;
             if (reconciliation.shell_foreground) {
                 return;
             }
@@ -209,8 +209,9 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
             const previous_status = coordinator.resources.agents.projectedStatus(identity.key);
             const changed = coordinator.resources.agents.observeScreen(.{
                 .identity = identity,
-                .signal = signal,
-                .observed_at_ms = coordinator.nowMs(),
+                .signal = observation.signal,
+                .observed_at_ms = observation.observed_at_ms,
+                .observed_at_ns = observation.observed_at_ns,
             });
             if (!changed) {
                 return;
@@ -447,13 +448,13 @@ test "shell foreground removes the agent and ignores screen readiness" {
 
     try coordinator.handle(.{
         .pane = fixture.pane.key(),
-        .stats = .{ .agent_signal = .{
+        .stats = .{ .agent_observation = .{ .observed_at_ms = 3, .signal = .{
             .provider = .codex,
             .status = .ready,
             .confidence = 100,
             .identity_confirmed = true,
             .ready_confirmed = true,
-        } },
+        } } },
         .process_probe = .{
             .cache = processCache(.unknown, shell_id, "sh"),
             .changed = true,
@@ -533,13 +534,13 @@ test "working to ready screen evidence publishes one generation-safe sound" {
 
     try coordinator.handle(.{
         .pane = fixture.pane.key(),
-        .stats = .{ .agent_signal = .{
+        .stats = .{ .agent_observation = .{ .observed_at_ms = 3, .signal = .{
             .provider = .codex,
             .status = .ready,
             .confidence = 100,
             .identity_confirmed = true,
             .ready_confirmed = true,
-        } },
+        } } },
         .process_probe = .{
             .cache = processCache(.codex, process_id, "Codex"),
         },
@@ -552,6 +553,76 @@ test "working to ready screen evidence publishes one generation-safe sound" {
         .pane_generation = identity.key.generation,
         .sound = .ready,
     }, capture.sound.?);
+}
+
+test "a delayed screen completion cannot settle a newer Codex Stop or publish a sound" {
+    var fixture: test_support.PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var panes: PaneStore = .{};
+    try beginFixtureObservation(&fixture, &panes);
+    var capture: Capture = .{};
+    var coordinator = testCoordinator(&capture, &fixture, &panes);
+    const identity = agent_mod.Identity.fromPane(fixture.pane);
+    const process_id = nonShellProcessId(fixture.pane);
+    _ = fixture.agents.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = process_id, .observed_at_ms = 100 });
+    _ = fixture.agents.observeReport(.{ .identity = identity, .state = .settling, .observed_at_ms = 300 });
+
+    try coordinator.handle(.{
+        .pane = fixture.pane.key(),
+        .stats = .{ .agent_observation = .{
+            .observed_at_ms = 200,
+            .signal = .{ .provider = .codex, .status = .ready, .confidence = 94, .ready_confirmed = true },
+        } },
+        .process_probe = .{ .cache = processCache(.codex, process_id, "Codex") },
+    });
+
+    try std.testing.expectEqual(schema.AgentStatus.working, fixture.agents.projectedStatus(identity.key).?);
+    try std.testing.expect(capture.sound == null);
+}
+
+test "Codex PTY frames and continuing Stop hooks publish exactly one final completion sound" {
+    var fixture: test_support.PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    const size: schema.TerminalSize = .{ .cols = 100, .rows = 16 };
+    fixture.pane.history_observer.queueResize(size);
+    var panes: PaneStore = .{};
+    try panes.insert(fixture.pane);
+    var capture: Capture = .{};
+    var coordinator = testCoordinator(&capture, &fixture, &panes);
+    const identity = agent_mod.Identity.fromPane(fixture.pane);
+    const process_id = nonShellProcessId(fixture.pane);
+    _ = fixture.agents.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = process_id, .observed_at_ms = 50 });
+
+    const cases = [_]struct {
+        report: ?schema.AgentReportState,
+        now_ms: i64,
+        output: []const u8,
+        status: schema.AgentStatus,
+        sound: bool = false,
+    }{
+        .{ .report = .working, .now_ms = 100, .output = "\x1b[1;1HWorking (1s)\x1b[4;1H\xe2\x80\xba Ask Codex to do anything\x1b[4;3H", .status = .working },
+        .{ .report = .settling, .now_ms = 200, .output = "\x1b[?2026h\x1b[1;1H\x1b[2K\x1b[4;3H", .status = .working },
+        .{ .report = .working, .now_ms = 300, .output = "\x1b[1;1HWorking (2s)\x1b[4;3H\x1b[?2026l", .status = .working },
+        .{ .report = .settling, .now_ms = 400, .output = "\x1b[?2026h\x1b[2J\x1b[1;1HThe quote is Working (2s, esc to interrupt).\r\n\xe2\x94\x80 Worked for 2s\r\n\r\n\xe2\x80\xba a drafted follow-up\x1b[4;3H\x1b[?2026l", .status = .done, .sound = true },
+        .{ .report = null, .now_ms = 500, .output = "\x1b[4;3H", .status = .done },
+    };
+
+    for (cases) |case| {
+        capture = .{};
+        if (case.report) |state| {
+            _ = fixture.agents.observeReport(.{ .identity = identity, .state = state, .observed_at_ms = case.now_ms });
+        }
+
+        fixture.pane.queueHistoryOutput(.{ .bytes = case.output, .shell_foreground = false, .clock = .{ .real_ms = case.now_ms + 1, .awake_ns = @intCast(case.now_ms * 1_000_000) } });
+        try std.testing.expect(fixture.pane.beginHistoryObservation() != null);
+        var stats: history.observer.Stats = .{};
+        fixture.pane.processHistoryObservation(.{ .size = size, .provider = .codex }, &stats);
+        try coordinator.handle(.{ .pane = fixture.pane.key(), .stats = stats, .process_probe = .{ .cache = processCache(.codex, process_id, "Codex") } });
+        try std.testing.expectEqual(case.status, fixture.agents.projectedStatus(identity.key).?);
+        try std.testing.expectEqual(case.sound, capture.sound != null);
+    }
 }
 
 test "pending history is rearmed after description scheduling" {

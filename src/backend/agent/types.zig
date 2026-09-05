@@ -50,6 +50,8 @@ pub const ScreenObservation = struct {
     identity: Identity,
     signal: ScreenSignal,
     observed_at_ms: i64,
+    /// Monotonic PTY-read time; non-PTY observation producers may omit it.
+    observed_at_ns: ?i64 = null,
 };
 
 /// An agent's own session identifier as reported through the control API,
@@ -118,6 +120,8 @@ pub const ReportObservation = struct {
     identity: Identity,
     state: schema.AgentReportState,
     observed_at_ms: i64,
+    /// Monotonic runtime-ingress time, used to order same-millisecond frames.
+    observed_at_ns: ?i64 = null,
     session: ?SessionReference = null,
     /// Present when the hook knows where the agent records its session.
     session_file: SessionFile = .{},

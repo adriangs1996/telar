@@ -79,6 +79,7 @@ proxy: ProxyState = .{},
 screen: ?Evidence = null,
 /// Official lifecycle report; outranks every other evidence while valid.
 report: ?Evidence = null,
+report_settling: bool = false,
 title: Title = .{},
 /// False from a completed turn until a client acknowledges it; the projection
 /// reports `done` instead of `ready` while unseen.
@@ -197,6 +198,14 @@ pub fn applyProxy(agent: *Agent, observation: ProxyObservation) bool {
         .evidence_replaced => {},
     }
 
+    if (providers.of(established_provider).ready_prompt_settles_report and observation.phase == .request_started) {
+        if (agent.screen) |screen| {
+            if (screen.status == .ready and screen.observed_at_ms <= observation.observed_at_ms) {
+                agent.screen = null;
+            }
+        }
+    }
+
     if (agent.authority == .obscured and
         (observation.phase == .request_started or observation.phase == .response_activity))
     {
@@ -231,6 +240,17 @@ pub fn applyReport(agent: *Agent, observation: ReportObservation) bool {
 
         agent.report = null;
         return true;
+    }
+
+    agent.report_settling = observation.state == .settling;
+    if (providers.of(agent.provider()).ready_prompt_settles_report and observation.state == .working) {
+        // A prompt from before this tool or turn cannot become completion
+        // evidence later, when the report expires.
+        if (agent.screen) |screen| {
+            if (screen.status == .ready) {
+                agent.screen = null;
+            }
+        }
     }
 
     agent.report = Evidence.fromReport(agent.provider(), &observation);
@@ -277,9 +297,27 @@ pub fn applyScreen(agent: *Agent, observation: ScreenObservation) bool {
         return false;
     }
 
-    if (providers.of(signal.provider).ready_prompt_settles_report and signal.status == .ready and signal.ready_confirmed) {
+    if (providers.of(known_provider).ready_prompt_settles_report) {
+        if (agent.screen) |screen| {
+            if (screenOrder(observation, screen) == .lt) {
+                return false;
+            }
+        }
+
         if (agent.report) |report| {
-            if (report.status == .working and observation.observed_at_ms > report.observed_at_ms) {
+            if (screenOrder(observation, report) != .gt) {
+                return false;
+            }
+
+            if (signal.status == .ready) {
+                if (!signal.ready_confirmed or (report.status == .working and !agent.report_settling and !report.isExpired(observation.observed_at_ms))) {
+                    return false;
+                }
+
+                agent.report = null;
+            } else if (report.status == .ready) {
+                // SessionStart and Interrupt describe a moment, not a
+                // permanent veto of later visible activity.
                 agent.report = null;
             }
         }
@@ -714,6 +752,21 @@ fn chooseEvidence(agent: *const Agent, now_ms: i64) ?Evidence {
     }
 
     if (proxy) |value| {
+        if (value.status == .ready and process != null and providers.of(process.?.provider).completion_requires_agent_signal) {
+            // A model response can be followed by local tools or another
+            // model request. The agent must confirm its own turn completion.
+            var working = value;
+            working.status = .working;
+            working.expires_at_ms = value.observed_at_ms + types.working_expiry_ms;
+            if (working.isExpired(now_ms)) {
+                var unknown = process.?;
+                unknown.status = .unknown;
+                return unknown;
+            }
+
+            return working;
+        }
+
         return value;
     }
 
@@ -721,7 +774,25 @@ fn chooseEvidence(agent: *const Agent, now_ms: i64) ?Evidence {
         return value;
     }
 
+    if (process) |value| {
+        if (providers.of(value.provider).completion_requires_agent_signal) {
+            var unknown = value;
+            unknown.status = .unknown;
+            return unknown;
+        }
+    }
+
     return process;
+}
+
+fn screenOrder(observation: ScreenObservation, evidence: Evidence) std.math.Order {
+    if (observation.observed_at_ns) |observed| {
+        if (evidence.observed_at_ns) |previous| {
+            return std.math.order(observed, previous);
+        }
+    }
+
+    return std.math.order(observation.observed_at_ms, evidence.observed_at_ms);
 }
 
 /// A turn that finished while the previous projection was `working` stays

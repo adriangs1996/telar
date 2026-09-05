@@ -26,10 +26,12 @@ pub const Capabilities = struct {
     /// that separates them from the reference. `null` means the agent cannot
     /// be resumed by Telar; only this table can ever produce a resume command.
     resume_prefix: ?[]const u8 = null,
-    /// The agent reports `working` from its `Stop` hook before other hooks may
-    /// continue the turn, so only its own newer input prompt proves that the
-    /// report has ended.
+    /// The agent's `settling` report still needs a newer idle composer.
+    /// Active work cannot be settled by a prompt, and process or model
+    /// completion alone does not establish readiness.
     ready_prompt_settles_report: bool = false,
+    /// Process presence and model response completion do not prove an idle agent.
+    completion_requires_agent_signal: bool = false,
 };
 
 pub const default: Capabilities = .{};

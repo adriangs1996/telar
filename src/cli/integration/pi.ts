@@ -16,7 +16,8 @@ type Event =
   | "agent_settled"
   | "ui_prompt_start"
   | "ui_prompt_end"
-  | "session_shutdown";
+  | "session_shutdown"
+  | "state_snapshot";
 
 type ToolEvent = "tool_execution_start" | "tool_execution_end";
 
@@ -25,17 +26,62 @@ export default function (pi: ExtensionAPI) {
     return;
   }
 
-  // One short-lived `telar hook pi` per event; it exits 0 whatever happens
-  // so Pi is never affected by a missing or unreachable runtime.
-  const send = (payload: Record<string, unknown>) => {
+  // Serialize delivery: separate hook processes can otherwise report an old
+  // ready event after a newer start. Bound retained payloads and child lifetime;
+  // a saturated queue drops the oldest pending observation, never Pi's work.
+  const queue: string[] = [];
+  let sending = false;
+  const drain = () => {
+    if (sending || queue.length === 0) return;
+    const payload = queue.shift()!;
+    sending = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      sending = false;
+      drain();
+    };
     try {
       const child = spawn(TELAR, ["hook", "pi"], { stdio: ["pipe", "ignore", "ignore"] });
-      child.on("error", () => {});
+      child.once("error", finish);
+      child.once("close", finish);
       child.stdin.on("error", () => {});
-      child.stdin.end(JSON.stringify(payload));
+      timer = setTimeout(() => child.kill("SIGKILL"), 2000);
+      timer.unref();
+      child.stdin.end(payload);
     } catch {
-      // Telar is absent; nothing to report to.
+      finish();
     }
+  };
+  const send = (payload: Record<string, unknown>) => {
+    let bytes: string;
+    try {
+      bytes = JSON.stringify(payload);
+    } catch {
+      return;
+    }
+    if (Buffer.byteLength(bytes) > 64 * 1024) return;
+    if (queue.length === 32) queue.shift();
+    queue.push(bytes);
+    drain();
+  };
+
+  let refresh: ReturnType<typeof setInterval> | undefined;
+  let promptDepth = 0;
+  const stopRefresh = () => {
+    clearInterval(refresh);
+    refresh = undefined;
+  };
+  const keepCurrent = (ctx: ExtensionContext) => {
+    stopRefresh();
+    refresh = setInterval(() => {
+      report("state_snapshot", ctx);
+      if (ctx.isIdle() && promptDepth === 0) stopRefresh();
+    }, 30_000);
+    refresh.unref();
   };
 
   const report = (event: Event, ctx: ExtensionContext, idle?: boolean) =>
@@ -43,6 +89,7 @@ export default function (pi: ExtensionAPI) {
       event,
       session_id: ctx.sessionManager.getSessionId(),
       idle: idle ?? ctx.isIdle(),
+      blocked: promptDepth > 0,
       name: ctx.sessionManager.getSessionName() || undefined,
     });
 
@@ -66,12 +113,34 @@ export default function (pi: ExtensionAPI) {
       exit_code: exitCode,
     });
 
-  pi.on("session_start", async (_event, ctx) => report("session_start", ctx, true));
-  pi.on("agent_start", async (_event, ctx) => report("agent_start", ctx, false));
-  pi.on("agent_settled", async (_event, ctx) => report("agent_settled", ctx, true));
-  pi.on("ui_prompt_start", async (_event, ctx) => report("ui_prompt_start", ctx));
-  pi.on("ui_prompt_end", async (_event, ctx) => report("ui_prompt_end", ctx));
-  pi.on("session_shutdown", async (_event, ctx) => report("session_shutdown", ctx));
+  pi.on("session_start", async (_event, ctx) => {
+    promptDepth = 0;
+    stopRefresh();
+    report("session_start", ctx);
+    if (!ctx.isIdle()) keepCurrent(ctx);
+  });
+  pi.on("agent_start", async (_event, ctx) => {
+    report("agent_start", ctx, false);
+    keepCurrent(ctx);
+  });
+  pi.on("agent_settled", async (_event, ctx) => {
+    report("agent_settled", ctx);
+    if (ctx.isIdle() && promptDepth === 0) stopRefresh();
+  });
+  pi.on("ui_prompt_start", async (_event, ctx) => {
+    promptDepth++;
+    report("ui_prompt_start", ctx);
+    keepCurrent(ctx);
+  });
+  pi.on("ui_prompt_end", async (_event, ctx) => {
+    promptDepth = Math.max(0, promptDepth - 1);
+    report("ui_prompt_end", ctx);
+    if (ctx.isIdle() && promptDepth === 0) stopRefresh();
+  });
+  pi.on("session_shutdown", async (_event, ctx) => {
+    stopRefresh();
+    report("session_shutdown", ctx);
+  });
   pi.on("session_info_changed", async (event, ctx) => reportName(event.name, ctx));
   pi.on("tool_execution_start", async (event, ctx) => {
     pendingTools.set(event.toolCallId, { toolName: event.toolName, args: event.args });

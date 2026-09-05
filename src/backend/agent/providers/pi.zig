@@ -6,6 +6,7 @@ const std = @import("std");
 const root = @import("root.zig");
 
 pub const capabilities: root.Capabilities = .{
+    .completion_requires_agent_signal = true,
     .resume_prefix = "pi --session ",
 };
 

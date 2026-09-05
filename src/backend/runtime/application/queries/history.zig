@@ -19,6 +19,9 @@ pub const Request = struct {
     match: schema.HistoryMatch,
     distinct: bool,
     limit: u16,
+    offset: u32 = 0,
+    snapshot_id: u64 = 0,
+    entry_id: u64 = 0,
 };
 
 pub const ServicePort = struct {
@@ -73,6 +76,9 @@ pub const Handler = struct {
             .match = request.match,
             .distinct = request.distinct,
             .limit = request.limit,
+            .offset = request.offset,
+            .snapshot_id = request.snapshot_id,
+            .entry_id = request.entry_id,
         }) catch {
             return error.InvalidHistoryQuery;
         };

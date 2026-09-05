@@ -139,6 +139,9 @@ pub const OwnedHistoryQuery = struct {
     author: schema.HistoryAuthorFilter = .all,
     match: schema.HistoryMatch = .fts,
     limit: u16,
+    offset: u32 = 0,
+    snapshot_id: u64 = 0,
+    entry_id: u64 = 0,
 
     fn view(value: *const OwnedHistoryQuery) schema.QueryHistory {
         return .{
@@ -150,8 +153,11 @@ pub const OwnedHistoryQuery = struct {
             .failed_only = false,
             .author = value.author,
             .match = value.match,
-            .distinct = true,
+            .distinct = false,
             .limit = value.limit,
+            .offset = value.offset,
+            .snapshot_id = value.snapshot_id,
+            .entry_id = value.entry_id,
         };
     }
 };
@@ -264,6 +270,7 @@ pub const Message = union(enum) {
     search_pane: OwnedSearch,
     query_history: OwnedHistoryQuery,
     delete_history: schema.DeleteHistory,
+    read_history_output: schema.ReadHistoryOutput,
     suggest_command: OwnedSuggestion,
     complete_pane_focus: schema.CompletePaneFocus,
 };
@@ -375,6 +382,26 @@ pub const Outbox = struct {
             .len = @intCast(bytes.len),
         } };
         @memcpy(outbox.input_bytes[index][0..bytes.len], bytes);
+    }
+
+    /// Reserves a whole bounded paste before copying any chunk into the queue.
+    /// Example: `try outbox.pushInputBatch(pane_id, encoded_paste);`.
+    pub fn pushInputBatch(outbox: *Outbox, pane_id: schema.PaneId, bytes: []const u8) !void {
+        if (bytes.len == 0 or bytes.len > schema.max_history_command_bytes + 13) {
+            return error.InvalidInputLength;
+        }
+
+        const count = (bytes.len + max_input_bytes - 1) / max_input_bytes;
+        if (outbox.availableCapacity() < count) {
+            return error.ClientOutboxFull;
+        }
+
+        var offset: usize = 0;
+        while (offset < bytes.len) {
+            const end = @min(offset + max_input_bytes, bytes.len);
+            try outbox.pushInput(pane_id, bytes[offset..end]);
+            offset = end;
+        }
     }
 
     pub fn pushRename(outbox: *Outbox, rename: schema.RenameTab) !void {
@@ -602,6 +629,7 @@ pub const Outbox = struct {
             .search_pane => |*value| schema.encodeSearchPane(buffer, value.view()),
             .query_history => |*value| schema.encodeQueryHistory(buffer, value.view()),
             .delete_history => |value| schema.encodeDeleteHistory(buffer, value),
+            .read_history_output => |value| schema.encodeReadHistoryOutput(buffer, value),
             .suggest_command => |*value| schema.encodeSuggestCommand(buffer, value.view()),
             .complete_pane_focus => |value| schema.encodeCompletePaneFocus(buffer, value),
         };
@@ -758,6 +786,37 @@ test "adjacent input for one pane is folded without allocation" {
     var buffer: [64]u8 = undefined;
     const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("abcdef", decoded.pane_input.bytes);
+}
+
+test "a long paste reserves all chunks before mutating the outbox" {
+    var outbox: Outbox = .{};
+    const command = "x" ** (max_input_bytes + 128);
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    while (outbox.availableCapacity() > 1) {
+        try outbox.push(.{ .delete_history = .{ .request_id = @enumFromInt(outbox.len + 1), .id = 1 } });
+    }
+
+    const before = outbox.len;
+    try std.testing.expectError(error.ClientOutboxFull, outbox.pushInputBatch(pane_id, command));
+    try std.testing.expectEqual(before, outbox.len);
+    var drain_buffer: [256]u8 = undefined;
+    while (try outbox.beginSend(&drain_buffer)) |_| {
+        try outbox.finishSend({});
+    }
+
+    try outbox.pushInputBatch(pane_id, command);
+    var buffer: [max_input_bytes + 64]u8 = undefined;
+    var offset: usize = 0;
+    while (try outbox.beginSend(&buffer)) |encoded| {
+        const message = try schema.decodeClient(encoded);
+        const input = message.pane_input;
+        try std.testing.expectEqual(pane_id, input.pane_id);
+        try std.testing.expectEqualStrings(command[offset..][0..input.bytes.len], input.bytes);
+        offset += input.bytes.len;
+        try outbox.finishSend({});
+    }
+
+    try std.testing.expectEqual(command.len, offset);
 }
 
 test "queue metadata stays small when input storage grows" {

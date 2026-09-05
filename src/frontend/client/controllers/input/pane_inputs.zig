@@ -48,6 +48,15 @@ pub fn expressionPaste(client: *Client, text: []const u8) !?pane_input.Delivery 
     return record(client, started, try use_case.executePaste(.focused, text));
 }
 
+/// Delivers one history command, with execution outside bracketed paste framing.
+/// Example: `_ = try historyPaste(client, .{ .text = command, .run = false });`.
+pub fn historyPaste(client: *Client, request: struct { text: []const u8, run: bool }) !?pane_input.Delivery {
+    const started = diagnostics.now(client.io);
+    var use_case = handler(client);
+
+    return record(client, started, try use_case.executeHistoryPaste(.{ .target = .focused, .text = request.text, .run = request.run }));
+}
+
 /// Delivers one explicit marker for an exact model-owned paste session.
 ///
 /// ```zig

@@ -61,6 +61,7 @@ pub const PiHookInput = struct {
     session_id: []const u8 = "",
     /// Whether Pi had no run in progress when the event fired.
     idle: ?bool = null,
+    blocked: bool = false,
     tool_name: []const u8 = "",
     tool_call_id: []const u8 = "",
     tool_input: std.json.Value = .null,
@@ -152,21 +153,23 @@ pub fn mapPiHook(input: PiHookInput) ?Report {
     const event = input.event;
     const session = if (schema.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
 
-    if (std.mem.eql(u8, event, "session_start")) {
-        return .{ .state = .ready, .session = session };
+    if (std.mem.eql(u8, event, "session_start") or
+        std.mem.eql(u8, event, "agent_settled") or
+        std.mem.eql(u8, event, "ui_prompt_end") or
+        std.mem.eql(u8, event, "state_snapshot"))
+    {
+        const idle = input.idle orelse (std.mem.eql(u8, event, "session_start") or std.mem.eql(u8, event, "agent_settled"));
+        return .{ .state = if (input.blocked) .blocked else if (idle) .ready else .working, .session = session };
     }
+
     if (std.mem.eql(u8, event, "agent_start")) {
         return .{ .state = .working, .session = session };
     }
-    if (std.mem.eql(u8, event, "agent_settled")) {
-        return .{ .state = .ready, .session = session };
-    }
+
     if (std.mem.eql(u8, event, "ui_prompt_start")) {
         return .{ .state = .blocked, .session = session };
     }
-    if (std.mem.eql(u8, event, "ui_prompt_end")) {
-        return .{ .state = if (input.idle == true) .ready else .working, .session = session };
-    }
+
     if (std.mem.eql(u8, event, "session_shutdown")) {
         return .{ .state = .exited };
     }
@@ -304,8 +307,8 @@ fn stateVersion(name: []const u8) ?u32 {
 }
 
 /// Maps one Codex hook event to a report. Subagent events are ignored. A
-/// compacted session and `Stop` remain working because neither event proves
-/// that Codex returned to its input prompt.
+/// compacted session remains working; `Stop` starts settlement, which still
+/// needs a newer idle composer before it can announce completion.
 ///
 /// ```zig
 /// const report = mapCodexHook(input) orelse return;
@@ -330,7 +333,7 @@ pub fn mapCodexHook(input: CodexHookInput) ?Report {
         return .{ .state = .blocked, .session = session, .session_file = file, .session_file_kind = .codex_state };
     }
     if (std.mem.eql(u8, event, "Stop")) {
-        return .{ .state = .working, .session = session, .session_file = file, .session_file_kind = .codex_state };
+        return .{ .state = .settling, .session = session, .session_file = file, .session_file_kind = .codex_state };
     }
 
     if (std.mem.eql(u8, event, "Interrupt")) {
@@ -571,7 +574,7 @@ test "Codex hook events map to reports and subagents are ignored" {
     try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "UserPromptSubmit" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.blocked, mapCodexHook(.{ .hook_event_name = "PermissionRequest" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "PostToolUse" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "Stop" }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.settling, mapCodexHook(.{ .hook_event_name = "Stop" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.ready, mapCodexHook(.{ .hook_event_name = "Interrupt" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.exited, mapCodexHook(.{ .hook_event_name = "SessionEnd" }).?.state);
     try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "PreToolUse" }).?.state);
@@ -648,4 +651,12 @@ test "installed harness payloads map shell tools through manifests" {
         .session = subagent.session_id,
         .exit_code = null,
     }) == null);
+}
+
+test "Pi snapshots preserve active runs and nested prompts" {
+    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "state_snapshot", .idle = false }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.ready, mapPiHook(.{ .event = "state_snapshot", .idle = true }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.blocked, mapPiHook(.{ .event = "ui_prompt_end", .idle = true, .blocked = true }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "agent_settled", .idle = false }).?.state);
+    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "session_start", .idle = false }).?.state);
 }

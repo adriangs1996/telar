@@ -140,6 +140,29 @@ pub const PaneInputHandler = struct {
         });
     }
 
+    pub const HistoryPaste = struct {
+        target: client_model.PaneInputTarget,
+        text: []const u8,
+        run: bool,
+    };
+
+    /// Frames a complete history command and puts execution after the paste boundary.
+    /// The send port must atomically reserve the resulting bounded input batch.
+    /// Example: `_ = try handler.executeHistoryPaste(.{ .target = .focused, .text = command, .run = false });`.
+    pub fn executeHistoryPaste(handler: *PaneInputHandler, request: HistoryPaste) !?Delivery {
+        const plan = handler.model.planPaneInput(request.target) orelse return null;
+        try validateHistoryText(request.text, plan.input_modes.bracketed_paste);
+        var encoded: [schema.max_history_command_bytes + 13]u8 = undefined;
+        const paste = try host_input.encodePaste(&encoded, request.text, plan.input_modes);
+        var len = paste.len;
+        if (request.run) {
+            encoded[len] = '\r';
+            len += 1;
+        }
+
+        return try handler.deliver(plan, .{ .source = .paste, .bytes = encoded[0..len], .limit = encoded.len });
+    }
+
     /// Delivers one explicit streamed-paste marker to an already captured
     /// session. Framing policy belongs to the pane-paste use case.
     ///
@@ -164,11 +187,12 @@ pub const PaneInputHandler = struct {
         source: Source,
         bytes: []const u8,
         restore_viewport: bool = true,
+        limit: usize = max_bytes,
         empty_is_noop: bool = false,
     };
 
     fn deliver(handler: *PaneInputHandler, plan: client_model.PaneInputPlan, prepared: Prepared) !Delivery {
-        if (prepared.bytes.len == 0 or prepared.bytes.len > max_bytes) {
+        if (prepared.bytes.len == 0 or prepared.bytes.len > prepared.limit) {
             return error.InvalidInputLength;
         }
 
@@ -195,6 +219,39 @@ pub const PaneInputHandler = struct {
         };
     }
 };
+
+/// Rejects terminal controls and unframed multiline text before history can send input.
+/// Example: `try validateHistoryText(command, modes.bracketed_paste);`.
+pub fn validateHistoryText(text: []const u8, bracketed_paste: bool) !void {
+    if (text.len == 0 or text.len > schema.max_history_command_bytes) {
+        return error.InvalidInputLength;
+    }
+
+    const view = std.unicode.Utf8View.init(text) catch return error.UnsafeHistoryText;
+    var iterator = view.iterator();
+    while (iterator.nextCodepoint()) |codepoint| {
+        if (codepoint == '\n' or codepoint == '\t') {
+            if (!bracketed_paste) {
+                return error.UnframedHistoryText;
+            }
+
+            continue;
+        }
+
+        if (codepoint < 0x20 or (codepoint >= 0x7f and codepoint <= 0x9f)) {
+            return error.UnsafeHistoryText;
+        }
+    }
+}
+
+test "history paste cannot smuggle terminal keys or escape its bracketed boundary" {
+    try validateHistoryText("echo café", false);
+    try validateHistoryText("echo first\necho second", true);
+    try std.testing.expectError(error.UnframedHistoryText, validateHistoryText("echo first\necho second", false));
+    try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo x\x1b[201~\r", true));
+    try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo x\x03", false));
+    try std.testing.expectError(error.UnsafeHistoryText, validateHistoryText("echo \xc2\x9b", true));
+}
 
 const TestingModel = struct {
     model: *client_model.Model,
@@ -436,6 +493,16 @@ test "PaneInputHandler frames expression paste inside the application boundary" 
     try std.testing.expectEqualStrings("\x1b[200~pasted\x1b[201~", capture.input[0..capture.input_len]);
     try std.testing.expectEqual(@as(usize, 18), delivery.byte_count);
     try std.testing.expectEqual(Source.paste, delivery.source);
+}
+
+test "history execution sends Enter after the bracketed paste terminator" {
+    var testing = try TestingModel.init();
+    defer testing.deinit();
+    testing.model.workspace.findPane(testing.pane_id).?.input_modes.bracketed_paste = true;
+    var capture: EffectsCapture = .{ .model = testing.model };
+    var handler: PaneInputHandler = .{ .model = testing.model, .effects = capture.port() };
+    _ = try handler.executeHistoryPaste(.{ .target = .focused, .text = "echo hello", .run = true });
+    try std.testing.expectEqualStrings("\x1b[200~echo hello\x1b[201~\r", capture.input[0..capture.input_len]);
 }
 
 test "PaneInputHandler delivers an explicit paste marker independently of current mode" {

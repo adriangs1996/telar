@@ -921,7 +921,10 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             var controller = ReportAgentController.init(&request.session.delivery.responses, &handler);
             const now_ms = Io.Timestamp.now(application.io, .real).toMilliseconds();
 
-            const result = try controller.reportAgent(report, now_ms);
+            const result = try controller.reportAgent(report, .{
+                .real_ms = now_ms,
+                .awake_ns = @intCast(Io.Timestamp.now(application.io, .awake).toNanoseconds()),
+            });
             if (result.session_recorded) {
                 application.noteSessionChange();
             }

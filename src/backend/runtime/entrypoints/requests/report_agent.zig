@@ -6,6 +6,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const delivery_mod = @import("../../delivery/root.zig");
 const report_commands = @import("../../application/commands/report_agent.zig");
+const history = @import("../../../history/root.zig");
 
 const schema = core.schema;
 const ResponseQueue = delivery_mod.ResponseQueue;
@@ -30,15 +31,16 @@ pub fn Controller(comptime Executor: type) type {
         /// the command result for transition effects.
         ///
         /// ```zig
-        /// const result = try controller.reportAgent(request, now_ms);
+        /// const result = try controller.reportAgent(request, clock);
         /// ```
-        pub fn reportAgent(controller: *Self, request: schema.ReportAgent, now_ms: i64) !report_commands.ReportAgentResult {
+        pub fn reportAgent(controller: *Self, request: schema.ReportAgent, clock: history.Clock) !report_commands.ReportAgentResult {
             const result = controller.executor.execute(.{
                 .pane = .{ .id = request.pane_id, .generation = request.pane_generation },
                 .state = request.state,
                 .session = request.session,
                 .session_file = .{ .kind = request.session_file_kind, .path = request.session_file },
-                .now_ms = now_ms,
+                .now_ms = clock.real_ms,
+                .now_ns = clock.awake_ns,
             });
 
             switch (result.outcome) {
@@ -81,11 +83,12 @@ test "Controller confirms applied reports and fails unknown panes" {
         .state = .blocked,
     };
 
-    _ = try controller.reportAgent(request, 10);
+    _ = try controller.reportAgent(request, .{ .real_ms = 10, .awake_ns = 123 });
+    try std.testing.expectEqual(@as(i64, 123), stub.command.?.now_ns.?);
     try std.testing.expectEqual(schema.AgentReportState.blocked, stub.command.?.state);
     try std.testing.expect(responses.items[0] == .request_completed);
 
     stub.result = .{ .outcome = .pane_not_found };
-    _ = try controller.reportAgent(request, 10);
+    _ = try controller.reportAgent(request, .{ .real_ms = 10, .awake_ns = 124 });
     try std.testing.expectEqual(schema.FailureCode.pane_not_found, responses.items[1].request_failed.code);
 }

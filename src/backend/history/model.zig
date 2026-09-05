@@ -8,8 +8,8 @@ pub const schema = core.schema;
 pub const max_query_bytes = schema.max_history_query_bytes;
 pub const max_results = schema.max_history_results;
 pub const max_result_payload_bytes = core.transport.max_frame_size;
-pub const encoded_result_header_bytes = 11;
-pub const encoded_entry_overhead_bytes = 49;
+pub const encoded_result_header_bytes = 20;
+pub const encoded_entry_overhead_bytes = 51;
 
 pub const SessionId = [16]u8;
 
@@ -194,6 +194,9 @@ pub const Query = struct {
         match: schema.HistoryMatch = .fts,
         distinct: bool = false,
         limit: u16 = 20,
+        offset: u32 = 0,
+        snapshot_id: u64 = 0,
+        entry_id: u64 = 0,
     };
 
     request_id: schema.RequestId,
@@ -209,6 +212,9 @@ pub const Query = struct {
     match: schema.HistoryMatch = .fts,
     distinct: bool = false,
     limit: u16 = 20,
+    offset: u32 = 0,
+    snapshot_id: u64 = 0,
+    entry_id: u64 = 0,
 
     /// Copies a validated query into fixed storage so it can cross the
     /// asynchronous history queue without borrowing request-buffer bytes.
@@ -221,6 +227,10 @@ pub const Query = struct {
     /// });
     /// ```
     pub fn init(input: Input) !Query {
+        if (input.snapshot_id > std.math.maxInt(i64) or input.entry_id > std.math.maxInt(i64)) {
+            return error.InvalidHistoryId;
+        }
+
         if (input.text.len > max_query_bytes) {
             return error.QueryTooLong;
         }
@@ -251,6 +261,9 @@ pub const Query = struct {
             .match = input.match,
             .distinct = input.distinct,
             .limit = input.limit,
+            .offset = input.offset,
+            .snapshot_id = input.snapshot_id,
+            .entry_id = input.entry_id,
         };
         @memcpy(query.text[0..input.text.len], input.text);
         query.text_len = @intCast(input.text.len);
@@ -591,6 +604,7 @@ pub const Entry = struct {
     cwd: []u8,
     workspace_path: []u8,
     provider: []u8 = &.{},
+    command_truncated: bool = false,
 
     pub fn deinit(entry: *Entry, gpa: std.mem.Allocator) void {
         gpa.free(entry.command);
@@ -605,6 +619,8 @@ pub const QueryResult = struct {
     origin: QueryOrigin,
     entries: []Entry,
     gpa: std.mem.Allocator,
+    snapshot_id: u64 = 0,
+    has_more: bool = false,
 
     pub fn deinit(result: *QueryResult) void {
         for (result.entries) |*entry| entry.deinit(result.gpa);

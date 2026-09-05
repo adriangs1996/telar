@@ -53,6 +53,9 @@ pub const Controller = struct {
             .match = request.match,
             .distinct = request.distinct,
             .limit = request.limit,
+            .offset = request.offset,
+            .snapshot_id = request.snapshot_id,
+            .entry_id = request.entry_id,
         }) catch |err| switch (err) {
             error.InvalidHistoryQuery => {
                 try controller.queueFailure(.{

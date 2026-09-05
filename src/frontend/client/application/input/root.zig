@@ -6,6 +6,7 @@ pub const clipboard_image = @import("clipboard_image.zig");
 pub const clipboard_image_delivery = @import("clipboard_image_delivery.zig");
 pub const copy_mode = @import("copy_mode.zig");
 pub const copy_mode_pointer = @import("copy_mode_pointer.zig");
+pub const history_browser = @import("history_browser.zig");
 pub const key_routing = @import("key_routing.zig");
 pub const lua_action = @import("lua_action.zig");
 pub const name_prompt = @import("name_prompt.zig");
@@ -28,6 +29,7 @@ test {
     _ = clipboard_image_delivery;
     _ = copy_mode;
     _ = copy_mode_pointer;
+    _ = history_browser;
     _ = key_routing;
     _ = lua_action;
     _ = name_prompt;

@@ -179,7 +179,12 @@ pub fn enqueue(client: *Client, message: Message) !void {
 /// try runtime_transport.enqueueInput(client, pane_id, bytes);
 /// ```
 pub fn enqueueInput(client: *Client, pane_id: schema.PaneId, bytes: []const u8) !void {
-    try client.runtime_transport.outbox.pushInput(pane_id, bytes);
+    if (bytes.len > max_input_bytes) {
+        try client.runtime_transport.outbox.pushInputBatch(pane_id, bytes);
+    } else {
+        try client.runtime_transport.outbox.pushInput(pane_id, bytes);
+    }
+
     try pump(client);
 }
 

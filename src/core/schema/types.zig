@@ -312,6 +312,7 @@ pub const HistoryEntry = struct {
     command: []const u8,
     cwd: []const u8,
     workspace_path: []const u8,
+    command_truncated: bool = false,
 };
 
 /// Agent vocabulary published by the runtime. These values describe evidence,
@@ -393,6 +394,9 @@ pub const AgentReportState = enum(u8) {
     blocked = 1,
     ready = 2,
     exited = 3,
+    /// A Stop hook ran, but the agent may still continue. A newer idle
+    /// composer must confirm completion before the runtime announces it.
+    settling = 4,
 };
 
 pub const AgentAuthority = enum(u8) {

@@ -3,6 +3,7 @@
 //! newest reply lands, and Enter pastes the selected command.
 
 const core = @import("telar-core");
+const std = @import("std");
 const history_palette = @import("../../model/history_palette.zig");
 const name_prompts = @import("name_prompts.zig");
 const pane_inputs = @import("pane_inputs.zig");
@@ -12,6 +13,11 @@ const runtime_transport = @import("../../connection/runtime_transport.zig");
 
 const Client = @import("../../client.zig");
 const schema = core.schema;
+const history_application = @import("../../application/input/root.zig").history_browser;
+
+fn handler(client: *Client) history_application.Handler {
+    return .{ .model = &client.model };
+}
 
 /// Opens the palette and requests the unfiltered newest history.
 ///
@@ -23,7 +29,7 @@ pub fn begin(client: *Client) !bool {
         return false;
     }
 
-    client.model.history_palette.begin();
+    handler(client).begin(.{ .enter_runs = client.history_enter_runs, .match_fuzzy = !client.history_match_fts });
     try sendQuery(client, "");
     return true;
 }
@@ -36,19 +42,34 @@ pub fn begin(client: *Client) !bool {
 /// try sendQuery(client, prompt.field.text());
 /// ```
 pub fn sendQuery(client: *Client, query: []const u8) !void {
+    handler(client).restart();
+    try sendPage(client, query);
+}
+
+fn sendPage(client: *Client, query: []const u8) !void {
     const request_id = try request_lifecycle.nextId(client);
+
     var owned: connection_outbox.OwnedHistoryQuery = .{
         .request_id = request_id,
         .query_len = @intCast(@min(query.len, connection_outbox.OwnedHistoryQuery.max_query_bytes)),
         .author = if (client.history_show_agent_commands) .all else .human,
         .match = if (client.history_match_fts) .fts else .fuzzy,
         .limit = history_palette.max_entries,
+        .offset = client.model.history_palette.pending_offset,
+        .snapshot_id = client.model.history_palette.snapshot_id,
     };
     @memcpy(owned.query[0..owned.query_len], query[0..owned.query_len]);
     applyScope(client, &owned);
+    if (!handler(client).requestPage(schema.id.raw(request_id), owned.scope)) {
+        return;
+    }
 
-    client.model.history_palette.expect(schema.id.raw(request_id));
-    try runtime_transport.enqueue(client, .{ .query_history = owned });
+    runtime_transport.enqueue(client, .{ .query_history = owned }) catch |err| {
+        _ = failed(client, .{ .request_id = request_id, .code = .resource_limit, .message = "History request queue is full; retry" });
+        if (err != error.ClientOutboxFull) {
+            return err;
+        }
+    };
 }
 
 fn applyScope(client: *Client, owned: *connection_outbox.OwnedHistoryQuery) void {
@@ -116,7 +137,90 @@ pub fn apply(client: *Client, view: schema.HistoryResultsView) !bool {
         count += 1;
     }
 
-    return client.model.history_palette.apply(schema.id.raw(view.request_id), storage[0..count]);
+    const changed = handler(client).apply(.{
+        .request_id = schema.id.raw(view.request_id),
+        .entries = storage[0..count],
+        .snapshot_id = view.snapshot_id,
+        .has_more = view.has_more,
+        .now_ms = @intCast(std.Io.Timestamp.now(client.io, .real).toMilliseconds()),
+    });
+    if (changed) {
+        try refreshInspection(client);
+    }
+
+    return changed;
+}
+
+/// Loads selected detail only on demand and contains expected queue saturation.
+/// Example: `try refreshInspection(client);`.
+pub fn refreshInspection(client: *Client) !void {
+    for (0..2) |_| {
+        const read = handler(client).nextRead() orelse return;
+        const request_id = try request_lifecycle.nextId(client);
+        if (!handler(client).requestRead(schema.id.raw(request_id), read)) {
+            return;
+        }
+
+        const message: connection_outbox.Message = switch (read.kind) {
+            .command => .{ .query_history = .{ .request_id = request_id, .entry_id = read.id, .limit = 1 } },
+            .output => .{ .read_history_output = .{ .request_id = request_id, .id = read.id } },
+        };
+        try enqueue(client, message, request_id);
+    }
+}
+
+/// Pages in bounded batches while retaining the first query's insertion boundary.
+/// Example: `try navigatePage(client);`.
+pub fn navigatePage(client: *Client) !void {
+    if (handler(client).navigate()) {
+        try sendPage(client, client.model.name_prompt.currentConst().?.field.text());
+    }
+}
+
+/// Delivers output through the history application boundary.
+/// Example: `_ = output(client, reply);`.
+pub fn output(client: *Client, reply: schema.HistoryOutput) bool {
+    return handler(client).output(reply);
+}
+
+/// Consumes owned failures, including stale history requests.
+/// Example: `if (failed(client, failure)) return;`.
+pub fn failed(client: *Client, failure: schema.RequestFailed) bool {
+    return handler(client).fail(failure);
+}
+
+fn enqueue(client: *Client, message: connection_outbox.Message, request_id: schema.RequestId) !void {
+    runtime_transport.enqueue(client, message) catch |err| {
+        _ = failed(client, .{ .request_id = request_id, .code = .resource_limit, .message = "History queue is full; change selection or retry" });
+        if (err != error.ClientOutboxFull) {
+            return err;
+        }
+    };
+}
+
+/// Blocks incomplete or oversized pastes while keeping the browser open.
+/// Example: `if (!canSubmit(client, selection)) return;`.
+pub fn canSubmit(client: *Client, selection: u16) bool {
+    const palette = &client.model.history_palette;
+    const command = palette.commandAt(selection) orelse {
+        handler(client).reject(if (palette.phase == .loading) "Searching..." else "Command unavailable or capture truncated; cannot paste");
+        return false;
+    };
+    const active = client.model.workspace.activeConst() orelse return false;
+    const pane = active.model.focusedPaneConst() orelse return false;
+    const pane_input = @import("../../application/input/root.zig").pane_input;
+    pane_input.validateHistoryText(command, pane.input_modes.bracketed_paste) catch |err| {
+        handler(client).reject(if (err == error.UnframedHistoryText) "Multiline/tab paste requires shell bracketed-paste support" else "Command contains terminal controls; cannot paste");
+        return false;
+    };
+
+    const slots = (command.len + 13 + connection_outbox.max_input_bytes - 1) / connection_outbox.max_input_bytes;
+    if (runtime_transport.availableCapacity(client) < slots + 1) {
+        handler(client).reject("Input is busy; retry the command");
+        return false;
+    }
+
+    return true;
 }
 
 /// Pastes the selected command into the focused pane, optionally running it
@@ -134,16 +238,8 @@ pub fn pasteSelection(client: *Client, request: PasteRequest) !void {
     }
 
     const index = @min(request.selection, @as(u16, palette.len) - 1);
-    const command = palette.slice()[index].commandSlice();
-    if (!request.run) {
-        _ = try pane_inputs.expressionPaste(client, command);
-        return;
-    }
-
-    var storage: [history_palette.max_command_bytes + 1]u8 = undefined;
-    @memcpy(storage[0..command.len], command);
-    storage[command.len] = '\r';
-    _ = try pane_inputs.expressionPaste(client, storage[0 .. command.len + 1]);
+    const command = palette.commandAt(index) orelse return;
+    _ = try pane_inputs.historyPaste(client, .{ .text = command, .run = request.run });
 }
 
 pub const PasteRequest = struct {
@@ -159,17 +255,9 @@ pub const PasteRequest = struct {
 /// try deleteSelected(client, selection);
 /// ```
 pub fn deleteSelected(client: *Client, selection: u16) !void {
-    const palette = &client.model.history_palette;
-    if (palette.len == 0) {
-        return;
-    }
-
-    const index = @min(selection, @as(u16, palette.len) - 1);
     const request_id = try request_lifecycle.nextId(client);
-    try runtime_transport.enqueue(client, .{ .delete_history = .{
-        .request_id = request_id,
-        .id = palette.slice()[index].id,
-    } });
+    const id = handler(client).requestDelete(schema.id.raw(request_id), selection) orelse return;
+    try enqueue(client, .{ .delete_history = .{ .request_id = request_id, .id = id } }, request_id);
 }
 
 /// Requeries the palette after the runtime confirmed a deletion.
@@ -178,12 +266,10 @@ pub fn deleteSelected(client: *Client, selection: u16) !void {
 /// _ = try pruned(client, confirmation);
 /// ```
 pub fn pruned(client: *Client, confirmation: schema.HistoryPruned) !bool {
-    _ = confirmation;
-    const prompt = client.model.name_prompt.currentConst() orelse return false;
-    if (prompt.target != .history) {
+    if (!handler(client).pruned(schema.id.raw(confirmation.request_id))) {
         return false;
     }
 
-    try sendQuery(client, prompt.field.text());
+    try sendQuery(client, client.model.name_prompt.currentConst().?.field.text());
     return true;
 }

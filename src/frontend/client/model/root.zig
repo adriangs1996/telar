@@ -245,6 +245,7 @@ pub const Model = struct {
     /// defer model.deinit();
     /// ```
     pub fn deinit(model: *Model) void {
+        model.history_palette.deinit();
         model.workspace.deinit();
     }
 

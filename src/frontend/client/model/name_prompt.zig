@@ -76,6 +76,9 @@ pub const Command = union(enum) {
     move_down,
     cycle_scope,
     remove_entry,
+    toggle_inspection,
+    page_up,
+    page_down,
     submit,
     submit_alternate,
     cancel,
@@ -116,11 +119,56 @@ pub const Prompt = struct {
     selection: u16 = 0,
     /// History-palette search scope, cycled with Tab.
     scope: HistoryScope = .global,
+    inspecting: bool = false,
+    detail_scroll: u32 = 0,
+    page_requested: enum { none, older, newer } = .none,
 };
 
 pub const State = struct {
     value: ?Prompt = null,
     revision: u64 = 0,
+
+    /// Reconciles search scope, selection and scroll after a history transition.
+    /// Example: `state.updateHistory(.{ .selection = 0, .reset_scroll = true });`.
+    pub fn updateHistory(state: *State, update: struct { scope: ?HistoryScope = null, selection: ?u16 = null, reset_scroll: bool = false, scroll_limit: ?u32 = null }) void {
+        const prompt = state.current() orelse return;
+        if (prompt.target != .history) {
+            return;
+        }
+
+        if (update.scope) |scope| {
+            prompt.scope = scope;
+        }
+
+        if (update.selection) |selection| {
+            prompt.selection = selection;
+        }
+
+        if (update.reset_scroll) {
+            prompt.detail_scroll = 0;
+        }
+
+        if (update.scroll_limit) |limit| {
+            if (prompt.detail_scroll <= limit) {
+                return;
+            }
+
+            prompt.detail_scroll = limit;
+        }
+
+        state.revision +%= 1;
+    }
+
+    pub fn takeHistoryPage(state: *State) @FieldType(Prompt, "page_requested") {
+        const prompt = state.current() orelse return .none;
+        if (prompt.target != .history) {
+            return .none;
+        }
+
+        const requested = prompt.page_requested;
+        prompt.page_requested = .none;
+        return requested;
+    }
 
     /// Opens or replaces the prompt and records one visible transition.
     ///
@@ -237,11 +285,24 @@ pub const State = struct {
                 } };
             },
             .cancel => {
+                if (prompt.target == .history and prompt.inspecting) {
+                    prompt.inspecting = false;
+                    state.revision +%= 1;
+                    return .changed;
+                }
+
                 state.value = null;
                 state.revision +%= 1;
                 return .cancelled;
             },
             .move_up => {
+                if (prompt.target == .history) {
+                    prompt.selection +|= 1;
+                    prompt.detail_scroll = 0;
+                    state.revision +%= 1;
+                    return .changed;
+                }
+
                 if (!selects(prompt.target) or prompt.selection == 0) {
                     return .unchanged;
                 }
@@ -251,6 +312,17 @@ pub const State = struct {
                 return .changed;
             },
             .move_down => {
+                if (prompt.target == .history) {
+                    if (prompt.selection == 0) {
+                        prompt.page_requested = .newer;
+                    }
+
+                    prompt.selection -|= 1;
+                    prompt.detail_scroll = 0;
+                    state.revision +%= 1;
+                    return .changed;
+                }
+
                 if (!selects(prompt.target)) {
                     return .unchanged;
                 }
@@ -266,6 +338,30 @@ pub const State = struct {
 
                 prompt.scope = prompt.scope.next();
                 prompt.selection = 0;
+                state.revision +%= 1;
+                return .changed;
+            },
+            .toggle_inspection => {
+                if (prompt.target != .history or prompt.pasting) {
+                    return .unchanged;
+                }
+
+                prompt.inspecting = !prompt.inspecting;
+                prompt.detail_scroll = 0;
+                state.revision +%= 1;
+                return .changed;
+            },
+            .page_up, .page_down => {
+                if (prompt.target != .history) {
+                    return .unchanged;
+                }
+
+                if (prompt.inspecting) {
+                    prompt.detail_scroll = if (command == .page_up) prompt.detail_scroll -| 10 else prompt.detail_scroll +| 10;
+                } else {
+                    prompt.page_requested = if (command == .page_up) .older else .newer;
+                }
+
                 state.revision +%= 1;
                 return .changed;
             },
@@ -315,7 +411,7 @@ pub const State = struct {
             .move_right => |extend| prompt.field.moveRight(extend),
             .home => |extend| prompt.field.home(extend),
             .end => |extend| prompt.field.end(extend),
-            .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .cycle_scope, .remove_entry => unreachable,
+            .paste_start, .paste_end, .submit, .submit_alternate, .cancel, .move_up, .move_down, .cycle_scope, .remove_entry, .toggle_inspection, .page_up, .page_down => unreachable,
         }
         if (!before.changed(&prompt.field)) {
             return .unchanged;
@@ -477,4 +573,19 @@ test "the suggestion palette submits empty fields and ignores history-only comma
     try std.testing.expectEqualStrings("list files", submitted.name);
     try std.testing.expect(state.finish(.suggest));
     try std.testing.expect(!state.active());
+}
+
+test "history inspection preserves query and selection and escape returns before closing" {
+    var state: State = .{};
+    state.begin(.history_palette);
+    _ = state.apply(.{ .insert = "zig" });
+    _ = state.apply(.move_up);
+    _ = state.apply(.toggle_inspection);
+    _ = state.apply(.page_down);
+    try std.testing.expectEqual(@as(u16, 10), state.currentConst().?.detail_scroll);
+    try std.testing.expectEqual(@as(u16, 1), state.currentConst().?.selection);
+    try std.testing.expectEqualStrings("zig", state.currentConst().?.field.text());
+    try std.testing.expect(state.apply(.cancel) == .changed);
+    try std.testing.expect(!state.currentConst().?.inspecting);
+    try std.testing.expect(state.apply(.cancel) == .cancelled);
 }

@@ -224,6 +224,7 @@ pub fn init(params: Params) !*Client {
         .sidebar_width = client_view.sidebar_width,
     });
     errdefer model.deinit();
+    try model.history_palette.prepare(gpa);
     _ = model.setSidebarVisible(params.options.sidebar_visible);
     var graphics_store = if (params.options.host_shared_memory)
         kitty.Store.initSharedMemory(gpa)

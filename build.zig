@@ -277,6 +277,23 @@ pub fn build(b: *std.Build) void {
     run_sidebar.step.dependOn(b.getInstallStep());
     b.step("sidebar", "Run the example").dependOn(&run_sidebar.step);
 
+    const history_preview = b.addExecutable(.{
+        .name = "history-preview",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/history_browser.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    history_preview.root_module.addImport("telar-frontend", frontend);
+    const run_history_preview = b.addRunArtifact(history_preview);
+    if (b.args) |args| {
+        run_history_preview.addArgs(args);
+    }
+
+    b.step("history-preview", "Render the real history widget as SVG for visual review").dependOn(&run_history_preview.step);
+
     const terminal_browser_pane = b.addExecutable(.{
         .name = "terminal-browser-pane",
         .root_module = b.createModule(.{

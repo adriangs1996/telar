@@ -718,8 +718,11 @@ pub const State = struct {
         const application_area = context.buffer.area();
         const current_modal_area = if (attachment_snapshot.modal != null)
             widgets.attachment_preview.modalArea(application_area)
-        else if (picker_prompt != null)
-            widgets.goto_picker.modalArea(application_area)
+        else if (picker_prompt) |prompt|
+            if (prompt.target == .history)
+                widgets.history_browser.modalArea(application_area, .{ .count = input.history.len, .inspecting = prompt.inspecting })
+            else
+                widgets.goto_picker.modalArea(application_area)
         else
             ui.Rect{};
         const graphical_modal = state.graphicalModalCovers(current_modal_area);
@@ -945,39 +948,40 @@ fn renderGotoPicker(context: *widgets.Context, application: ui.Rect, sources: Pi
     });
 }
 
-/// Renders the history palette through the same list modal, with rows taken
-/// from the palette model instead of the fuzzy matcher.
+/// Projects owned history into the specialized compact browser.
 fn renderHistoryPalette(context: *widgets.Context, application: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
     const entries = sources.history.slice();
-    const total: u16 = @intCast(entries.len);
-    const selected: u16 = if (total == 0) 0 else @min(sources.prompt.selection, total - 1);
-    const window: u16 = @min(@as(u16, widgets.goto_picker.max_rows), total);
-    const start: u16 = if (selected + 1 > window) selected + 1 - window else 0;
-
-    var rows: [widgets.goto_picker.max_rows]widgets.goto_picker.Row = undefined;
-    for (0..window) |offset| {
-        const index = start + offset;
-        const entry = &entries[index];
-        var row: widgets.goto_picker.Row = .{ .selected = index == selected };
-        var len: usize = @min(entry.command_len, widgets.goto_picker.max_row_bytes);
-        @memcpy(row.text[0..len], entry.commandSlice()[0..len]);
-        const suffix = "  [agent]";
-        if (entry.author == .agent and len + suffix.len <= widgets.goto_picker.max_row_bytes) {
-            @memcpy(row.text[len .. len + suffix.len], suffix);
-            len += suffix.len;
-        }
-        row.len = @intCast(len);
-        rows[offset] = row;
+    var rows: [history_palette_state.max_entries]widgets.history_browser.Entry = undefined;
+    for (entries, 0..) |*entry, index| {
+        rows[index] = .{
+            .command = sources.history.commandAt(@intCast(index)) orelse entry.commandSlice(),
+            .cwd = entry.cwdSlice(),
+            .id = entry.id,
+            .pane_id = entry.pane_id,
+            .started_at_ms = entry.started_at_ms,
+            .duration_ns = entry.duration_ns,
+            .exit_code = entry.exit_code,
+            .status = entry.status,
+            .author = entry.author,
+        };
     }
 
-    var hint_storage: [24]u8 = undefined;
-    const hint = std.fmt.bufPrint(&hint_storage, "scope: {s}", .{sources.prompt.scope.label()}) catch "";
-    return widgets.goto_picker.render(context, application, .{
-        .title = "history",
+    return widgets.history_browser.render(context, application, .{
         .field = &sources.prompt.field,
-        .rows = rows[0..window],
-        .total = total,
-        .hint = hint,
+        .entries = rows[0..entries.len],
+        .selection = sources.prompt.selection,
+        .scope = @tagName(sources.history.effective_scope),
+        .inspecting = sources.prompt.inspecting,
+        .detail_scroll = sources.prompt.detail_scroll,
+        .now_ms = sources.history.now_ms,
+        .enter_runs = sources.history.enter_runs,
+        .match_fuzzy = sources.history.match_fuzzy,
+        .loading = sources.history.phase == .loading,
+        .page_offset = sources.history.page_offset,
+        .has_more = sources.history.has_more,
+        .error_text = sources.history.errorSlice(),
+        .output = sources.history.outputSlice(),
+        .output_hint = sources.history.outputHint(),
         .graphical_frame = sources.graphical_frame,
     });
 }

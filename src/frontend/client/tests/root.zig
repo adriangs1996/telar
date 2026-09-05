@@ -11,6 +11,7 @@ test {
     _ = @import("pane_updates.zig");
     _ = @import("notifications_and_agents.zig");
     _ = @import("graphics_and_clipboard.zig");
+    _ = @import("history_browser.zig");
     _ = @import("configuration.zig");
     _ = @import("host_interaction.zig");
     _ = @import("renaming_and_telemetry.zig");

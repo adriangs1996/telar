@@ -12,6 +12,7 @@ pub const Evidence = struct {
     source: schema.AgentSource,
     confidence: u8,
     observed_at_ms: i64,
+    observed_at_ns: ?i64 = null,
     expires_at_ms: i64,
 
     /// Converts one foreground-process observation into authoritative evidence.
@@ -74,6 +75,7 @@ pub const Evidence = struct {
             .source = .screen,
             .confidence = observation.signal.confidence,
             .observed_at_ms = observation.observed_at_ms,
+            .observed_at_ns = observation.observed_at_ns,
             .expires_at_ms = observation.observed_at_ms + switch (observation.signal.status) {
                 .working => types.working_expiry_ms,
                 .blocked, .ready => types.settled_expiry_ms,
@@ -91,7 +93,7 @@ pub const Evidence = struct {
     pub fn fromReport(provider: schema.AgentProvider, observation: *const types.ReportObservation) Evidence {
         std.debug.assert(observation.state != .exited);
         const status: schema.AgentStatus = switch (observation.state) {
-            .working => .working,
+            .working, .settling => .working,
             .blocked => .blocked,
             .ready => .ready,
             .exited => unreachable,
@@ -103,6 +105,7 @@ pub const Evidence = struct {
             .source = .lifecycle_report,
             .confidence = 100,
             .observed_at_ms = observation.observed_at_ms,
+            .observed_at_ns = observation.observed_at_ns,
             .expires_at_ms = observation.observed_at_ms + if (status == .working)
                 types.working_expiry_ms
             else

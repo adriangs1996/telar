@@ -45,17 +45,24 @@ pub const QueryHistory = struct {
     match: HistoryMatch = .fts,
     distinct: bool = false,
     limit: u16 = 20,
+    offset: u32 = 0,
+    snapshot_id: u64 = 0,
+    entry_id: u64 = 0,
 };
 
 pub const HistoryResults = struct {
     request_id: RequestId,
     entries: []const HistoryEntry,
+    snapshot_id: u64 = 0,
+    has_more: bool = false,
 };
 
 pub const HistoryResultsView = struct {
     request_id: RequestId,
     entry_count: u16,
     encoded_entries: []const u8,
+    snapshot_id: u64 = 0,
+    has_more: bool = false,
 
     pub fn entries(results: HistoryResultsView) HistoryEntryIterator {
         return .{
@@ -255,6 +262,9 @@ pub fn encodeQueryHistory(buffer: []u8, message: QueryHistory) ![]const u8 {
     try encoder.writeByte(@intFromEnum(message.match));
     try encoder.writeByte(@intFromBool(message.distinct));
     try encoder.writeInt(u16, message.limit);
+    try encoder.writeInt(u32, message.offset);
+    try encoder.writeInt(u64, message.snapshot_id);
+    try encoder.writeInt(u64, message.entry_id);
     return encoder.finish();
 }
 
@@ -294,6 +304,9 @@ pub fn decodeQueryHistory(decoder: *wire.Decoder) !QueryHistory {
         .match = match,
         .distinct = distinct,
         .limit = limit,
+        .offset = try decoder.readInt(u32),
+        .snapshot_id = try decoder.readInt(u64),
+        .entry_id = try decoder.readInt(u64),
     };
 }
 
@@ -306,6 +319,8 @@ pub fn encodeHistoryResults(buffer: []u8, message: HistoryResults) ![]const u8 {
     try encoder.writeByte(@intFromEnum(ServerTag.history_results));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u16, @intCast(message.entries.len));
+    try encoder.writeInt(u64, message.snapshot_id);
+    try encoder.writeByte(@intFromBool(message.has_more));
     for (message.entries) |entry| try encodeHistoryEntry(&encoder, entry);
     return encoder.finish();
 }
@@ -316,12 +331,16 @@ pub fn decodeHistoryResults(decoder: *wire.Decoder) !HistoryResultsView {
     if (entry_count > types.max_history_results) {
         return error.TooManyHistoryResults;
     }
+    const snapshot_id = try decoder.readInt(u64);
+    const has_more = try decoder.readBool();
     const entries_start = decoder.index;
     for (0..entry_count) |_| try skipHistoryEntry(decoder);
     return .{
         .request_id = request_id,
         .entry_count = entry_count,
         .encoded_entries = decoder.consumed(entries_start),
+        .snapshot_id = snapshot_id,
+        .has_more = has_more,
     };
 }
 
@@ -608,6 +627,7 @@ fn encodeHistoryEntry(encoder: *wire.Encoder, entry: HistoryEntry) !void {
     try encoder.writeSized32(entry.command);
     try encoder.writeSized16(entry.cwd);
     try encoder.writeSized16(entry.workspace_path);
+    try encoder.writeByte(@intFromBool(entry.command_truncated));
 }
 
 fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
@@ -648,6 +668,7 @@ fn decodeHistoryEntry(decoder: *wire.Decoder) !HistoryEntry {
         .command = command,
         .cwd = cwd,
         .workspace_path = workspace_path,
+        .command_truncated = try decoder.readBool(),
     };
 }
 
@@ -676,4 +697,21 @@ fn skipHistoryEntry(decoder: *wire.Decoder) !void {
     if ((try decoder.readSized16()).len > types.max_cwd_bytes) {
         return error.InvalidByteString;
     }
+    _ = try decoder.readBool();
+}
+
+test "history page and exact-entry requests preserve their fields" {
+    var buffer: [128]u8 = undefined;
+    const request: QueryHistory = .{ .request_id = @enumFromInt(7), .offset = 200, .snapshot_id = 900, .entry_id = 42, .limit = 1 };
+    const encoded = try encodeQueryHistory(&buffer, request);
+    var decoder = wire.Decoder.init(encoded[1..]);
+    const decoded = try decodeQueryHistory(&decoder);
+    try std.testing.expectEqual(request.offset, decoded.offset);
+    try std.testing.expectEqual(request.snapshot_id, decoded.snapshot_id);
+    try std.testing.expectEqual(request.entry_id, decoded.entry_id);
+    const reply = try encodeHistoryResults(&buffer, .{ .request_id = request.request_id, .entries = &.{}, .snapshot_id = 900, .has_more = true });
+    decoder = wire.Decoder.init(reply[1..]);
+    const result = try decodeHistoryResults(&decoder);
+    try std.testing.expectEqual(@as(u64, 900), result.snapshot_id);
+    try std.testing.expect(result.has_more);
 }

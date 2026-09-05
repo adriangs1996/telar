@@ -75,7 +75,7 @@ that row in place. A finish without an open row inserts a completed row.
 | `UserPromptSubmit` | `working` |
 | `PermissionRequest` | `blocked` |
 | `PreToolUse`, `PostToolUse` | `working`; a mapped shell call is also recorded |
-| `Stop` | `working`; a confirmed input prompt closes the turn |
+| `Stop` | `settling`, projected as `working` until a newer idle composer confirms completion |
 | `Interrupt` | `ready` |
 | `SessionEnd` | `exited`: the report is withdrawn, weaker evidence decides |
 | any event with `agent_id` (subagent) | ignored |
@@ -100,15 +100,27 @@ schema.report_agent or schema.report_agent_command
 
 | Pi event | Report |
 | --- | --- |
-| `session_start` | `ready` + session reference; the session name, when set, as title |
+| `session_start` | current idle/working state + session reference; the session name, when set, as title |
 | `session_info_changed` | the new session name as title; a cleared name as an empty title |
 | `agent_start` | `working` |
-| `agent_settled` | `ready` (projected as `done` until seen) |
+| `agent_settled` | current idle/working state (`ready` projects as `done` until seen) |
 | `ui_prompt_start` | `blocked` |
-| `ui_prompt_end` | `ready` when Pi was idle, else `working` |
+| `ui_prompt_end` | `blocked` while another dialog remains, otherwise current idle/working state |
+| `state_snapshot` | renews current idle/working/blocked state every 30 seconds while active |
 | `tool_execution_start` | mapped shell tool opens a running command row |
 | `tool_execution_end` | matching command row is completed |
 | `session_shutdown` | `exited` |
+
+Pi delivery is serialized through one child at a time, with a two-second child
+limit and 32 pending payloads of at most 64 KiB each. Saturation drops the oldest
+pending observation; renewal repairs missed state. There is no idle timer:
+settlement and shutdown cancel it. Long runs and nested extension dialogs renew
+their reports before expiry. Reinstall the extension after updating Telar and
+reload it in Pi to activate changes in already running sessions.
+
+A foreground Pi or Codex process establishes identity, not readiness. A model
+response may precede local tools or another model request. Without fresh agent
+completion evidence, expired work becomes `unknown`, never a completion sound.
 
 Pi is the only agent whose rename reaches its hooks: `/name` fires
 `session_info_changed`. Claude Code's `/rename` fires no hook and Codex has no
@@ -129,15 +141,42 @@ an unreachable runtime it exits 0, so the agent is unaffected. It sends at
 most one bounded lifecycle request and one bounded command request, then exits.
 
 The runtime keeps the report as `Agent.report`, the first evidence
-`chooseEvidence` consults while it is valid. A `working` report expires with
+`chooseEvidence` consults while it is valid. A `working` or `settling` report expires with
 `working_expiry_ms`, other states with `settled_expiry_ms`; `applyProcess`
 clears it when a different process takes the pane. Sounds follow the same
 transition rule as screen evidence.
 
-Codex runs every matching `Stop` hook before it decides whether another hook
-will continue the turn. A `Stop` report therefore keeps the agent `working`.
-A newer, explicit Codex input prompt withdraws that report and projects
-`done`; a continuation produces no prompt and no premature notification.
+Codex runs matching `Stop` hooks before deciding whether a hook continues the
+turn. `settling` preserves this distinction from active tool work while still
+projecting `working`. A newer idle composer can settle `Stop`, but cannot
+settle an unexpired `UserPromptSubmit`, `PreToolUse`, or `PostToolUse` report.
+A continuation replaces pending settlement with active work.
+
+Screen observation retains the PTY read's wall and monotonic timestamps across
+worker delivery. Monotonic order distinguishes a final frame from a preceding
+Stop even within one millisecond. An older screen cannot cancel a newer report.
+The observer reconsiders unchanged Codex ready screens on actual output,
+because the previous sample may have been rejected before Stop arrived.
+Input or resize alone cannot renew screen evidence.
+
+`history.codex_screen` scans at most 32 bottom rows with a fixed 1024-byte row
+buffer. It anchors readiness to the live `›` composer and its cursor, accepts
+drafts, and checks structured status clocks above the composer. A completion
+separator excludes transcript quotes. An absent or obscured composer provides
+no readiness proof. Incomplete VT sequences and synchronized frames provide
+no observation until parsing completes. If output never completes, evidence
+expires; observation never blocks PTY traffic or polls idle panes. After queue
+loss, a partial composer cannot prove readiness until a fresh working status
+reestablishes the screen observation.
+
+For Codex, process presence and model-response completion cannot announce a
+finished agent turn. Starting work discards previous ready-screen evidence;
+expiry without fresh proof falls back to unknown rather than notifying done.
+Claude retains its lifecycle mappings and screen detection policy. Pi uses
+its ordered, renewed lifecycle reports as described above.
+
+The current schema includes the `settling` report. Client, runtime, and hook
+executable must use the matching schema; older peers are rejected at handshake.
 
 The command field is data, not harness-specific branching. Built-in manifests
 map Claude Code `Bash.command`, current Codex `Bash.command`, compatibility

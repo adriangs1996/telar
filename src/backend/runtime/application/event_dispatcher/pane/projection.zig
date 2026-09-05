@@ -119,7 +119,7 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
                 .previous = work.process_cache,
                 .manifests = work.pane.manifests,
             });
-            work.pane.processHistoryObservation(work.current_size, &stats);
+            work.pane.processHistoryObservation(.{ .size = work.current_size, .provider = process_probe.cache.provider }, &stats);
             return .{ .pane = work.pane.key(), .stats = stats, .process_probe = process_probe };
         }
 

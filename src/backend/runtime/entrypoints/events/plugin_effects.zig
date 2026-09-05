@@ -118,7 +118,7 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
                 return false;
             }
             const status: agent_mod.ScreenStatus = switch (evidence.state) {
-                .working => .working,
+                .working, .settling => .working,
                 .blocked => .blocked,
                 .ready => .ready,
                 .exited => return false,

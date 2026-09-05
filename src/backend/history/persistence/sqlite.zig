@@ -4,6 +4,8 @@ const std = @import("std");
 const model = @import("../model.zig");
 const core_fuzzy = @import("telar-core").fuzzy;
 
+const entry_columns = "id, pane_id, started_at_ms, duration_ns, exit_code, status, command, cwd, workspace_path, author, origin, provider, command_truncated";
+
 const c = @cImport({
     @cInclude("sqlite3.h");
 });
@@ -509,16 +511,13 @@ pub const Store = struct {
     }
 
     /// Fuzzy path: scans the newest candidates in scope and keeps the best
-    /// `limit` subsequence matches. Distinct always applies here, because
-    /// repeated commands would otherwise crowd out every other match.
+    /// requested page of subsequence matches. Only IDs and scores are retained
+    /// while ranking; full entries are allocated for the resulting page.
     fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const model.Query) !*model.QueryResult {
         const max_candidates = 1000;
         var sql_buffer: [1024]u8 = undefined;
         var sql = std.Io.Writer.fixed(&sql_buffer);
-        try sql.writeAll(
-            "SELECT id, pane_id, started_at_ms, duration_ns, exit_code, status, " ++
-                "command, cwd, workspace_path, author, origin, provider FROM command WHERE 1=1",
-        );
+        try sql.writeAll("SELECT " ++ entry_columns ++ " FROM command WHERE id <= ?");
         if (request.failed_only) {
             try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
         }
@@ -536,6 +535,8 @@ pub const Store = struct {
         const stmt = try prepare(store.db, sql.buffered());
         defer _ = c.sqlite3_finalize(stmt);
         var parameter: c_int = 1;
+        _ = c.sqlite3_bind_int64(stmt, parameter, @intCast(request.snapshot_id));
+        parameter += 1;
         if (request.author != .all) {
             const author: model.schema.HistoryAuthor = if (request.author == .human) .human else .agent;
             _ = c.sqlite3_bind_int(stmt, parameter, @intFromEnum(author));
@@ -558,30 +559,32 @@ pub const Store = struct {
         }
         _ = c.sqlite3_bind_int(stmt, parameter, max_candidates);
 
-        const Scored = struct { score: u32, entry: model.Entry };
-        var best: [model.max_results]Scored = undefined;
+        const Scored = struct { score: u32, id: i64 };
+        var best: [max_candidates]Scored = undefined;
         var count: usize = 0;
+        const wanted: usize = @intCast(@min(@as(u64, request.offset) + request.limit + 1, max_candidates));
         var seen: std.AutoHashMapUnmanaged(u64, void) = .empty;
         defer seen.deinit(gpa);
-        errdefer for (best[0..count]) |*scored| scored.entry.deinit(gpa);
 
         while (true) switch (c.sqlite3_step(stmt)) {
             c.SQLITE_ROW => {
                 const hash = commandHash(stmt);
-                if (seen.contains(hash)) {
-                    continue;
-                }
-                try seen.put(gpa, hash, {});
-                const command = columnSlice(stmt, 6);
-                const score = core_fuzzy.score(command, request.textSlice()) orelse continue;
-                if (count == request.limit and score <= best[count - 1].score) {
+                if (request.distinct and seen.contains(hash)) {
                     continue;
                 }
 
-                var entry = try readEntry(gpa, stmt);
+                if (request.distinct) {
+                    try seen.put(gpa, hash, {});
+                }
+
+                const command = columnSlice(stmt, 6);
+                const score = core_fuzzy.score(command, request.textSlice()) orelse continue;
+                if (count == wanted and score <= best[count - 1].score) {
+                    continue;
+                }
+
                 var index: usize = count;
-                if (count == request.limit) {
-                    best[count - 1].entry.deinit(gpa);
+                if (count == wanted) {
                     index = count - 1;
                 } else {
                     count += 1;
@@ -589,34 +592,52 @@ pub const Store = struct {
                 while (index > 0 and best[index - 1].score < score) : (index -= 1) {
                     best[index] = best[index - 1];
                 }
-                best[index] = .{ .score = score, .entry = entry };
-                entry = undefined;
+                best[index] = .{ .score = score, .id = c.sqlite3_column_int64(stmt, 0) };
             },
             c.SQLITE_DONE => break,
             else => return error.HistoryQueryFailed,
         };
 
+        const detail = try prepare(store.db, "SELECT " ++ entry_columns ++ " FROM command WHERE id = ?;");
+        defer _ = c.sqlite3_finalize(detail);
+        var entries: std.ArrayList(model.Entry) = .empty;
+        errdefer {
+            for (entries.items) |*entry| entry.deinit(gpa);
+            entries.deinit(gpa);
+        }
+
+        const start = @min(request.offset, count);
+        const end = @min(start + request.limit, count);
         var encoded_bytes: usize = model.encoded_result_header_bytes;
-        var kept: usize = 0;
-        while (kept < count) : (kept += 1) {
-            const entry = &best[kept].entry;
-            const entry_bytes = model.encoded_entry_overhead_bytes +
-                entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
-            if (entry_bytes > model.max_result_payload_bytes - encoded_bytes) {
+        for (best[start..end]) |scored| {
+            reset(detail);
+            _ = c.sqlite3_bind_int64(detail, 1, scored.id);
+            if (c.sqlite3_step(detail) != c.SQLITE_ROW) {
+                return error.HistoryQueryFailed;
+            }
+
+            var entry = try readEntry(gpa, detail);
+            const bytes = model.encoded_entry_overhead_bytes + entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
+            if (bytes > model.max_result_payload_bytes - encoded_bytes) {
+                entry.deinit(gpa);
                 break;
             }
-            encoded_bytes += entry_bytes;
+
+            encoded_bytes += bytes;
+            entries.append(gpa, entry) catch |err| {
+                entry.deinit(gpa);
+                return err;
+            };
         }
-        for (best[kept..count]) |*scored| scored.entry.deinit(gpa);
 
         const result = try gpa.create(model.QueryResult);
         errdefer gpa.destroy(result);
-        const entries = try gpa.alloc(model.Entry, kept);
-        for (best[0..kept], 0..) |scored, index| entries[index] = scored.entry;
         result.* = .{
             .request_id = request.request_id,
             .origin = request.origin,
-            .entries = entries,
+            .has_more = start + entries.items.len < count,
+            .snapshot_id = request.snapshot_id,
+            .entries = try entries.toOwnedSlice(gpa),
             .gpa = gpa,
         };
         return result;
@@ -810,17 +831,29 @@ pub const Store = struct {
     /// ```zig
     /// const result = try store.query(gpa, &request);
     /// ```
-    pub fn query(store: *Store, gpa: std.mem.Allocator, request: *const model.Query) !*model.QueryResult {
-        if (request.match == .fuzzy and request.text_len != 0) {
+    pub fn query(store: *Store, gpa: std.mem.Allocator, original: *const model.Query) !*model.QueryResult {
+        var bounded = original.*;
+        if (bounded.snapshot_id == 0) {
+            const boundary = try prepare(store.db, "SELECT COALESCE(MAX(id), 0) FROM command;");
+            defer _ = c.sqlite3_finalize(boundary);
+            if (c.sqlite3_step(boundary) != c.SQLITE_ROW) {
+                return error.HistoryQueryFailed;
+            }
+
+            bounded.snapshot_id = @intCast(c.sqlite3_column_int64(boundary, 0));
+        }
+
+        const request = &bounded;
+        if (request.match == .fuzzy and request.text_len != 0 and request.entry_id == 0) {
             return store.queryFuzzy(gpa, request);
         }
 
         var sql_buffer: [1024]u8 = undefined;
         var sql = std.Io.Writer.fixed(&sql_buffer);
-        try sql.writeAll(
-            "SELECT id, pane_id, started_at_ms, duration_ns, exit_code, status, " ++
-                "command, cwd, workspace_path, author, origin, provider FROM command WHERE 1=1",
-        );
+        try sql.writeAll("SELECT " ++ entry_columns ++ " FROM command WHERE id <= ?");
+        if (request.entry_id != 0) {
+            try sql.writeAll(" AND id = ?");
+        }
         // The trigram index probes instead of scanning the whole table, and
         // is case-insensitive like the fallback. Trigram matching needs at
         // least three characters; shorter queries take the scan.
@@ -847,11 +880,17 @@ pub const Store = struct {
             .workspace => try sql.writeAll(" AND workspace_path = ?"),
             .pane => try sql.writeAll(" AND pane_id = ?"),
         }
-        try sql.writeAll(" ORDER BY started_at_ms DESC, id DESC LIMIT ?;");
+        try sql.writeAll(" ORDER BY started_at_ms DESC, id DESC LIMIT ? OFFSET ?;");
 
         const stmt = try prepare(store.db, sql.buffered());
         defer _ = c.sqlite3_finalize(stmt);
         var parameter: c_int = 1;
+        _ = c.sqlite3_bind_int64(stmt, parameter, @intCast(request.snapshot_id));
+        parameter += 1;
+        if (request.entry_id != 0) {
+            _ = c.sqlite3_bind_int64(stmt, parameter, @intCast(request.entry_id));
+            parameter += 1;
+        }
         if (request.text_len != 0) {
             bindText(stmt, parameter, if (use_index)
                 ftsQuote(request.textSlice(), &match_buffer)
@@ -879,10 +918,12 @@ pub const Store = struct {
                 parameter += 1;
             },
         }
-        _ = c.sqlite3_bind_int(stmt, parameter, request.limit);
+        _ = c.sqlite3_bind_int(stmt, parameter, @as(c_int, request.limit) + 1);
+        _ = c.sqlite3_bind_int64(stmt, parameter + 1, request.offset);
 
         var entries: std.ArrayList(model.Entry) = .empty;
         var encoded_bytes: usize = model.encoded_result_header_bytes;
+        var has_more = false;
         var seen: std.AutoHashMapUnmanaged(u64, void) = .empty;
         defer seen.deinit(gpa);
         errdefer {
@@ -898,15 +939,24 @@ pub const Store = struct {
                     try seen.put(gpa, commandHash(stmt), {});
                 }
 
+                if (entries.items.len == request.limit) {
+                    has_more = true;
+                    break;
+                }
+
                 var entry = try readEntry(gpa, stmt);
                 const entry_bytes = model.encoded_entry_overhead_bytes +
                     entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
                 if (entry_bytes > model.max_result_payload_bytes - encoded_bytes) {
                     entry.deinit(gpa);
+                    has_more = true;
                     break;
                 }
                 encoded_bytes += entry_bytes;
-                try entries.append(gpa, entry);
+                entries.append(gpa, entry) catch |err| {
+                    entry.deinit(gpa);
+                    return err;
+                };
             },
             c.SQLITE_DONE => break,
             else => return error.HistoryQueryFailed,
@@ -918,6 +968,8 @@ pub const Store = struct {
             .origin = request.origin,
             .entries = try entries.toOwnedSlice(gpa),
             .gpa = gpa,
+            .snapshot_id = request.snapshot_id,
+            .has_more = has_more,
         };
         return result;
     }
@@ -1131,6 +1183,7 @@ fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !model.Entry {
             else => return error.InvalidHistoryOrigin,
         },
         .command = command,
+        .command_truncated = c.sqlite3_column_int(stmt, 12) != 0,
         .cwd = cwd,
         .workspace_path = workspace_path,
         .provider = provider,
@@ -1782,4 +1835,49 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
     defer collapsed.deinit();
     try std.testing.expectEqual(@as(usize, 4), collapsed.entries.len);
     try std.testing.expectEqualStrings("ls", collapsed.entries[0].command);
+
+    for (0..205) |index| {
+        value.sequence = 100 + index;
+        value.started_at_ms = @intCast(10000 + index);
+        value.command = @constCast("zig build test");
+        _ = try store.insertCommand(&value);
+    }
+
+    var page_query = try model.Query.init(.{ .request_id = @enumFromInt(3), .origin = origin, .text = "zig", .match = .fuzzy, .limit = 100 });
+    const first = try store.query(std.testing.allocator, &page_query);
+    defer first.deinit();
+    try std.testing.expectEqual(@as(usize, 100), first.entries.len);
+    try std.testing.expect(first.has_more);
+
+    value.sequence = 999;
+    value.started_at_ms = 999999;
+    _ = try store.insertCommand(&value);
+    page_query.snapshot_id = first.snapshot_id;
+    page_query.offset = 100;
+    const second = try store.query(std.testing.allocator, &page_query);
+    defer second.deinit();
+    try std.testing.expectEqual(@as(usize, 100), second.entries.len);
+    try std.testing.expect(second.has_more);
+    for (first.entries) |left| {
+        for (second.entries) |right| {
+            try std.testing.expect(left.id != right.id);
+        }
+    }
+
+    page_query.offset = 200;
+    const third = try store.query(std.testing.allocator, &page_query);
+    defer third.deinit();
+    try std.testing.expectEqual(@as(usize, 7), third.entries.len);
+    try std.testing.expect(!third.has_more);
+    page_query.match = .fts;
+    const fts_page = try store.query(std.testing.allocator, &page_query);
+    defer fts_page.deinit();
+    try std.testing.expectEqual(@as(usize, 7), fts_page.entries.len);
+    try std.testing.expect(!fts_page.has_more);
+
+    const exact_query = try model.Query.init(.{ .request_id = @enumFromInt(4), .origin = origin, .entry_id = second.entries[0].id, .limit = 1 });
+    const exact = try store.query(std.testing.allocator, &exact_query);
+    defer exact.deinit();
+    try std.testing.expectEqual(@as(usize, 1), exact.entries.len);
+    try std.testing.expectEqual(second.entries[0].id, exact.entries[0].id);
 }

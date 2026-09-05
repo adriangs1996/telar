@@ -11,6 +11,7 @@ const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 const agent_detection = @import("agent_detection.zig");
+const codex_screen = @import("codex_screen.zig");
 const prompt_scan = @import("prompt_scan.zig");
 const terminal_history = @import("terminal.zig");
 
@@ -30,7 +31,11 @@ pub const Stats = struct {
     dropped: u64 = 0,
     reset: bool = false,
     failed: bool = false,
-    agent_signal: ?agent_detection.Signal = null,
+    agent_observation: ?struct {
+        signal: agent_detection.Signal,
+        observed_at_ms: i64,
+        observed_at_ns: ?i64 = null,
+    } = null,
 };
 
 pub const Initialization = struct {
@@ -58,6 +63,7 @@ pub const Processing = struct {
     cwd: ?[]const u8,
     current_size: schema.TerminalSize,
     stats: *Stats,
+    provider: schema.AgentProvider = .unknown,
 };
 
 const Input = struct {
@@ -135,6 +141,7 @@ pub const Observer = struct {
     manifests: *const agent_detection.Table = &core.agent_manifest.builtin_table,
     last_signal: ?agent_detection.Signal = null,
     last_signal_ms: i64 = 0,
+    codex_screen_lost: bool = false,
 
     /// Initializes the disposable history emulator and its bounded event
     /// buffers for one pane.
@@ -174,6 +181,7 @@ pub const Observer = struct {
         observer.manifests = initialization.manifests;
         observer.last_signal = null;
         observer.last_signal_ms = 0;
+        observer.codex_screen_lost = false;
     }
 
     pub fn deinit(observer: *Observer) void {
@@ -273,7 +281,7 @@ pub const Observer = struct {
 
         const index = observer.worker orelse return;
         const batch = &observer.batches[index];
-        var latest_ms: ?i64 = null;
+        var latest_clock: ?terminal_history.Clock = null;
         if (batch.reset_before) {
             const reset_cwd = cwd orelse if (observer.enabled)
                 observer.tracker.currentCwd()
@@ -305,7 +313,7 @@ pub const Observer = struct {
             },
             .output => |output| {
                 const start: usize = output.offset;
-                latest_ms = output.clock.real_ms;
+                latest_clock = output.clock;
                 observer.observeOutput(.{
                     .bytes = batch.bytes[start..][0..output.len],
                     .clock = output.clock,
@@ -322,17 +330,47 @@ pub const Observer = struct {
             }, sink),
             .interrupt => |clock| observer.tracker.interrupt(clock, sink),
         };
+        // Input, resize, and a worker's delivery time cannot make an old
+        // screen newer than a lifecycle report. Nor is a partial VT frame a
+        // completion: Codex temporarily erases its status while repainting.
+        const clock = latest_clock orelse return;
+        if (!observer.stream.ground() or observer.terminal.modes.get(.synchronized_output)) {
+            return;
+        }
+
         observer.sample.capture(&observer.terminal);
         const phrase_signal = observer.sample.signal(observer.manifests);
-        const prompt_signal = prompt_scan.scanReadyPrompt(&observer.terminal);
-        const signal = mergeSignals(observer.manifests, phrase_signal, prompt_signal);
-        stats.agent_signal = observer.publishSignal(signal, latest_ms);
+        const codex = codex_screen.scan(&observer.terminal, observer.manifests);
+        const signal = if (processing.provider == .codex or
+            (processing.provider == .unknown and codex != null and codex.?.identity_confirmed))
+            codex
+        else if (processing.provider == .unknown and phrase_signal != null and phrase_signal.?.provider == .codex)
+            null
+        else
+            mergeSignals(observer.manifests, phrase_signal, prompt_scan.scanReadyPrompt(&observer.terminal));
+        if (signal) |candidate| {
+            if (candidate.provider == .codex) {
+                if (candidate.status == .working) {
+                    observer.codex_screen_lost = false;
+                } else if (observer.codex_screen_lost) {
+                    // A dropped status row must not turn an incremental
+                    // composer repaint into proof of completion.
+                    return;
+                }
+            }
+        }
+
+        if (observer.publishSignal(signal, clock.real_ms)) |published| {
+            stats.agent_observation = .{ .signal = published, .observed_at_ms = clock.real_ms, .observed_at_ns = clock.awake_ns };
+        }
     }
 
     /// Hands one screen signal to the runtime when it differs from the last
     /// one handed over, or when that one is old enough to need a refresh.
     /// An unchanged screen stays quiet in between, so a repainting spinner
-    /// does not republish the projection on every batch.
+    /// does not republish the projection on every batch. Codex's ready screen
+    /// is reconsidered on output: the prior sample may have preceded Stop and
+    /// been rejected by the runtime. Input alone never refreshes this proof.
     fn publishSignal(observer: *Observer, signal: ?agent_detection.Signal, now_ms: ?i64) ?agent_detection.Signal {
         const current = signal orelse {
             observer.last_signal = null;
@@ -340,7 +378,7 @@ pub const Observer = struct {
         };
 
         if (observer.last_signal) |previous| {
-            if (std.meta.eql(previous, current)) {
+            if (std.meta.eql(previous, current) and !(current.provider == .codex and current.ready_confirmed)) {
                 const clock = now_ms orelse return null;
 
                 if (clock - observer.last_signal_ms < signal_refresh_ms) {
@@ -413,6 +451,9 @@ pub const Observer = struct {
         observer.tracker.deinit(&observer.terminal);
         observer.stream.deinit();
         observer.enabled = false;
+        observer.last_signal = null;
+        observer.last_signal_ms = 0;
+        observer.codex_screen_lost = true;
         observer.terminal.fullReset();
         var handler = observer.terminal.vtHandler();
         handler.apc_handler.enable(.kitty, false);
@@ -579,5 +620,116 @@ fn agentSignalForOutput(output: []const u8, size: schema.TerminalSize) !?agent_d
     var stats: Stats = .{};
     observer.processSealed(.{ .cwd = null, .current_size = size, .stats = &stats }, &noop);
     observer.finishSealed();
-    return stats.agent_signal;
+    return if (stats.agent_observation) |observation| observation.signal else null;
+}
+
+test "Codex transcript quotes do not keep the idle composer working or blocked" {
+    for ([_][]const u8{
+        "The output contains Working (12s, esc to interrupt).",
+        "Do you want to proceed? Yes, and don't ask again.",
+    }) |quote| {
+        var bytes: [1024]u8 = undefined;
+        const output = try std.fmt.bufPrint(&bytes, "{s}\r\n\r\n\xe2\x94\x80 Worked for 12s \xe2\x94\x80\r\n\r\n\xe2\x80\xba Ask Codex to do anything\x1b[3G", .{quote});
+        const signal = (try agentSignalForOutput(output, codex_test_size)).?;
+        try std.testing.expectEqual(schema.AgentProvider.codex, signal.provider);
+        try std.testing.expectEqual(agent_detection.Status.ready, signal.status);
+        try std.testing.expect(signal.ready_confirmed);
+    }
+}
+
+const codex_test_size: schema.TerminalSize = .{ .cols = 100, .rows = 16, .cell_width_px = 0, .cell_height_px = 0 };
+
+const CodexTestSink = struct {
+    pub fn emit(_: *@This(), _: terminal_history.Command) void {}
+};
+
+fn codexTestBatch(observer: *Observer, bytes: []const u8, now_ms: i64) !Stats {
+    observer.queueOutput(.{ .bytes = bytes, .shell_foreground = false, .clock = .{ .real_ms = now_ms, .awake_ns = @intCast(now_ms * 1_000_000) } });
+    try std.testing.expect(observer.seal());
+    var stats: Stats = .{};
+    var sink: CodexTestSink = .{};
+    observer.processSealed(.{ .cwd = null, .current_size = codex_test_size, .stats = &stats, .provider = .codex }, &sink);
+    observer.finishSealed();
+    return stats;
+}
+
+test "Codex synchronized repaint never publishes its intermediate idle prompt" {
+    var observer: Observer = undefined;
+    try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = codex_test_size });
+    defer observer.deinit();
+
+    _ = try codexTestBatch(&observer, "\x1b[1;1HWorking (1s, esc to interrupt)\x1b[4;1H\xe2\x80\xba Ask Codex to do anything\x1b[4;3H", 100);
+    const partial = try codexTestBatch(&observer, "\x1b[?2026h\x1b[1;1H\x1b[2K\x1b[4;3H", 200);
+    try std.testing.expect(partial.agent_observation == null);
+
+    const complete = try codexTestBatch(&observer, "\x1b[1;1HWorking (2s, esc to interrupt)\x1b[4;3H\x1b[?2026l", 201);
+    if (complete.agent_observation) |observation| {
+        try std.testing.expectEqual(agent_detection.Status.working, observation.signal.status);
+    }
+}
+
+test "Codex repaints preserve the PTY timestamp and reconsider an unchanged ready screen" {
+    var observer: Observer = undefined;
+    try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = codex_test_size });
+    defer observer.deinit();
+
+    const first = try codexTestBatch(&observer, "\xe2\x80\xba Ask Codex to do anything\x1b[3G", 100);
+    try std.testing.expectEqual(@as(i64, 100), first.agent_observation.?.observed_at_ms);
+    const repeated = try codexTestBatch(&observer, "\x1b[3G", 101);
+    try std.testing.expectEqual(@as(i64, 101), repeated.agent_observation.?.observed_at_ms);
+
+    observer.queueInput(.{ .bytes = "next turn\r", .shell_foreground = false, .clock = .{ .real_ms = 20_000, .awake_ns = 20_000_000_000 } });
+    try std.testing.expect(observer.seal());
+    var stats: Stats = .{};
+    var sink: CodexTestSink = .{};
+    observer.processSealed(.{ .cwd = null, .current_size = codex_test_size, .stats = &stats, .provider = .codex }, &sink);
+    observer.finishSealed();
+    try std.testing.expect(stats.agent_observation == null);
+}
+
+test "every byte boundary of a Codex synchronized redraw preserves working until completion" {
+    const initial = "\x1b[1;1HWorking (1s)\x1b[4;1H\xe2\x80\xba Ask Codex to do anything\x1b[4;3H";
+    const repaint = "\x1b[?2026h\x1b[1;1H\x1b[2K\x1b[4;3H\x1b[1;1H\xe2\x80\xa2 Thinking (2s)\x1b[4;3H\x1b[?2026l";
+    for (0..repaint.len + 1) |split| {
+        var observer: Observer = undefined;
+        try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = codex_test_size });
+        defer observer.deinit();
+        _ = try codexTestBatch(&observer, initial, 100);
+
+        const first = try codexTestBatch(&observer, repaint[0..split], 200);
+        const second = try codexTestBatch(&observer, repaint[split..], 201);
+        for ([_]Stats{ first, second }) |stats| {
+            if (stats.agent_observation) |observation| {
+                try std.testing.expectEqual(agent_detection.Status.working, observation.signal.status);
+            }
+        }
+
+        const idle = try codexTestBatch(&observer, "\x1b[?2026h\x1b[1;1H\x1b[2K\x1b[4;3H\x1b[?2026l", 300);
+        try std.testing.expect(idle.agent_observation.?.signal.ready_confirmed);
+    }
+}
+
+test "Codex transcript placeholders without a live composer never prove readiness" {
+    for ([_][]const u8{
+        "The placeholder is Ask Codex to do anything.",
+        "\xe2\x80\xba Ask Codex to do anything\r\nThis is a quoted transcript.",
+    }) |output| {
+        try std.testing.expect(try agentSignalForOutput(output, codex_test_size) == null);
+    }
+}
+
+test "observation loss cannot manufacture an idle Codex screen from a partial repaint" {
+    var observer: Observer = undefined;
+    try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = codex_test_size });
+    defer observer.deinit();
+    const flood: [batch_bytes]u8 = @splat('x');
+    observer.queueOutput(.{ .bytes = &flood, .shell_foreground = false, .clock = .{ .real_ms = 100, .awake_ns = 100_000_000 } });
+    const lost = try codexTestBatch(&observer, "\x1b[4;1H\xe2\x80\xba Ask Codex to do anything\x1b[4;3H", 200);
+    try std.testing.expect(lost.reset);
+    try std.testing.expect(lost.agent_observation == null);
+
+    const recovered = try codexTestBatch(&observer, "\x1b[1;1HWorking (2s)\x1b[4;3H", 300);
+    try std.testing.expectEqual(agent_detection.Status.working, recovered.agent_observation.?.signal.status);
+    const idle = try codexTestBatch(&observer, "\x1b[1;1H\x1b[2K\x1b[4;3H", 400);
+    try std.testing.expect(idle.agent_observation.?.signal.ready_confirmed);
 }

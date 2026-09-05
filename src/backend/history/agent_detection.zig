@@ -5,7 +5,9 @@
 //! client that repaints only the cells that changed, as Codex and Claude Code
 //! do, can emit its idle prompt in one batch without the status line that is
 //! still drawn above it. The screen holds both, and `Table.detect` ranks a
-//! visible blocked or working phrase above the prompt.
+//! visible blocked or working phrase above the prompt. Codex uses the separate
+//! `codex_screen` scan in Observer, because its transcript can quote these
+//! phrases and its live composer also accepts nonempty drafts.
 //!
 //! These patterns are presentation hints only. They may mark a pane as busy or
 //! visibly blocked; they never grant permission or generate input.

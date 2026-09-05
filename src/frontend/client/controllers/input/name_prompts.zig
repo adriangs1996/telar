@@ -129,8 +129,10 @@ pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
 
     const before = listSnapshot(client);
     const outcome = try dispatchInput(&use_case, bytes);
-    clampPickerSelection(client);
     try refreshHistoryQuery(client, before);
+    try history_palettes.navigatePage(client);
+    clampPickerSelection(client);
+    try history_palettes.refreshInspection(client);
     discardEditedSuggestion(client, before);
     if (outcome == .finished) {
         var submission = before;
@@ -324,7 +326,16 @@ fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
         },
         // List targets only close here; the picked entry is applied by
         // `finishListSubmission` once the prompt no longer owns input.
-        .goto, .history => blk: {
+        .history => blk: {
+            const prompt = client.model.name_prompt.currentConst() orelse break :blk false;
+            if (!history_palettes.canSubmit(client, prompt.selection)) {
+                break :blk false;
+            }
+
+            client.list_submission_alternate = submission.alternate;
+            break :blk true;
+        },
+        .goto => blk: {
             client.list_submission_alternate = submission.alternate;
             break :blk true;
         },
@@ -385,6 +396,8 @@ fn dispatchInput(use_case: *name_prompt.NamePromptHandler, bytes: []const u8) !n
                 .right => .{ .move_right = key.mods.shift },
                 .up => .move_up,
                 .down => .move_down,
+                .page_up => .page_up,
+                .page_down => .page_down,
                 .tab => .cycle_scope,
                 .home => .{ .home = key.mods.shift },
                 .end => .{ .end = key.mods.shift },
@@ -392,6 +405,8 @@ fn dispatchInput(use_case: *name_prompt.NamePromptHandler, bytes: []const u8) !n
                     .{ .insert = char.slice() }
                 else if (key.mods.ctrl and !key.mods.alt and char.slice().len == 1 and char.slice()[0] == 'd')
                     .remove_entry
+                else if (key.mods.ctrl and !key.mods.alt and char.slice().len == 1 and char.slice()[0] == 'o')
+                    .toggle_inspection
                 else
                     null,
                 else => null,

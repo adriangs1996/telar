@@ -16,6 +16,7 @@ pub const ReportAgent = struct {
     session: []const u8,
     session_file: agent_mod.SessionFile = .{},
     now_ms: i64,
+    now_ns: ?i64 = null,
 };
 
 pub const ReportAgentResult = struct {
@@ -53,6 +54,7 @@ pub const ReportAgentHandler = struct {
             .identity = identity,
             .state = command.state,
             .observed_at_ms = command.now_ms,
+            .observed_at_ns = command.now_ns,
             .session = session,
             .session_file = command.session_file,
         });

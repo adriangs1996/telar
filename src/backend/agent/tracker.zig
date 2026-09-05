@@ -744,7 +744,7 @@ test "Codex Stop stays working until a newer input prompt confirms completion" {
 
     try std.testing.expect(tracker.observeReport(.{
         .identity = identity,
-        .state = .working,
+        .state = .settling,
         .observed_at_ms = 300,
     }));
     try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
@@ -765,6 +765,94 @@ test "Codex Stop stays working until a newer input prompt confirms completion" {
     const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentStatus.done, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
+}
+
+test "Codex active tool reports cannot be settled by a repainted composer" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    _ = tracker.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = 42, .observed_at_ms = 100 });
+    _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 200 });
+    _ = tracker.observeScreen(.{
+        .identity = identity,
+        .signal = .{ .provider = .codex, .status = .ready, .confidence = 94, .ready_confirmed = true },
+        .observed_at_ms = 201,
+    });
+    try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
+}
+
+test "a continuing Codex hook cancels pending settlement and only the final Stop can complete" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    _ = tracker.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = 42, .observed_at_ms = 100 });
+    _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 200 });
+    _ = tracker.observeReport(.{ .identity = identity, .state = .settling, .observed_at_ms = 300 });
+    _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 400 });
+
+    const ready: types.ScreenSignal = .{ .provider = .codex, .status = .ready, .confidence = 94, .ready_confirmed = true };
+    _ = tracker.observeScreen(.{ .identity = identity, .signal = ready, .observed_at_ms = 401 });
+    try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
+    _ = tracker.observeReport(.{ .identity = identity, .state = .settling, .observed_at_ms = 500 });
+
+    for ([_]i64{ 300, 499, 500 }) |stale| {
+        _ = tracker.observeScreen(.{ .identity = identity, .signal = ready, .observed_at_ms = stale });
+        try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
+    }
+
+    _ = tracker.observeScreen(.{ .identity = identity, .signal = ready, .observed_at_ms = 501 });
+    try std.testing.expectEqual(schema.AgentStatus.done, tracker.projectedStatus(identity.key).?);
+    _ = tracker.acknowledge(identity.key, 502);
+    _ = tracker.observeScreen(.{ .identity = identity, .signal = ready, .observed_at_ms = 503 });
+    try std.testing.expectEqual(schema.AgentStatus.ready, tracker.projectedStatus(identity.key).?);
+}
+
+test "Codex evidence expiration cannot turn an old prompt into a completion" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    _ = tracker.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = 42, .observed_at_ms = 100 });
+    const ready: types.ScreenSignal = .{ .provider = .codex, .status = .ready, .confidence = 94, .ready_confirmed = true };
+    _ = tracker.observeScreen(.{ .identity = identity, .signal = ready, .observed_at_ms = 101 });
+    _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 200 });
+    _ = tracker.observeScreen(.{ .identity = identity, .signal = ready, .observed_at_ms = 150 });
+    _ = tracker.expire(200 + types.working_expiry_ms);
+    try std.testing.expectEqual(schema.AgentStatus.unknown, tracker.projectedStatus(identity.key).?);
+}
+
+test "new Codex activity supersedes an older SessionStart or Interrupt ready report" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    _ = tracker.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = 42, .observed_at_ms = 100 });
+    _ = tracker.observeReport(.{ .identity = identity, .state = .ready, .observed_at_ms = 200 });
+    _ = tracker.observeScreen(.{
+        .identity = identity,
+        .signal = .{ .provider = .codex, .status = .working, .confidence = 94 },
+        .observed_at_ms = 201,
+    });
+    try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
+}
+
+test "a Codex model response never completes the agent turn without a new composer" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    _ = tracker.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = 42, .observed_at_ms = 100 });
+    const ready: types.ScreenSignal = .{ .provider = .codex, .status = .ready, .confidence = 94, .ready_confirmed = true };
+    _ = tracker.observeScreen(.{ .identity = identity, .signal = ready, .observed_at_ms = 101 });
+    _ = observeTestProxy(&tracker, identity, testProxy(.openai_responses, .request_started, 200));
+    _ = observeTestProxy(&tracker, identity, testProxy(.openai_responses, .provider_turn_completed, 300));
+    try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
+    _ = tracker.observeScreen(.{ .identity = identity, .signal = ready, .observed_at_ms = 301 });
+    try std.testing.expectEqual(schema.AgentStatus.done, tracker.projectedStatus(identity.key).?);
+}
+
+test "Codex settlement orders events within one millisecond by the monotonic clock" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    _ = tracker.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = 42, .observed_at_ms = 100 });
+    _ = tracker.observeReport(.{ .identity = identity, .state = .settling, .observed_at_ms = 200, .observed_at_ns = 2_000_000 });
+    const ready: types.ScreenSignal = .{ .provider = .codex, .status = .ready, .confidence = 94, .ready_confirmed = true };
+    _ = tracker.observeScreen(.{ .identity = identity, .signal = ready, .observed_at_ms = 200, .observed_at_ns = 1_999_999 });
+    try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
+    _ = tracker.observeScreen(.{ .identity = identity, .signal = ready, .observed_at_ms = 200, .observed_at_ns = 2_000_001 });
+    try std.testing.expectEqual(schema.AgentStatus.done, tracker.projectedStatus(identity.key).?);
 }
 
 test "an older Codex prompt cannot overrule current lifecycle work" {
@@ -1042,7 +1130,7 @@ test "new foreground process replaces prior session evidence" {
     var entries: [max_records]schema.AgentSnapshotEntry = undefined;
     const snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentProvider.codex, snapshot[0].provider);
-    try std.testing.expectEqual(schema.AgentStatus.ready, snapshot[0].status);
+    try std.testing.expectEqual(schema.AgentStatus.unknown, snapshot[0].status);
     try std.testing.expectEqual(schema.AgentSource.foreground_process, snapshot[0].source);
     try std.testing.expectEqual(schema.AgentAuthority.active, snapshot[0].authority);
     try std.testing.expectEqual(@as(u32, 85), snapshot[0].process_id);
@@ -1636,4 +1724,37 @@ test "lifecycle reports outrank screen and proxy evidence until they expire" {
     _ = tracker.expire(600 + types.working_expiry_ms + 1);
     snapshot = tracker.snapshot(&entries);
     try std.testing.expectEqual(schema.AgentSource.screen, snapshot[0].source);
+}
+
+test "Pi report renewal keeps a long tool working and loss cannot announce completion" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    _ = tracker.observeProcess(.{ .identity = identity, .provider = .pi, .process_id = 42, .observed_at_ms = 100 });
+    try std.testing.expectEqual(schema.AgentStatus.unknown, tracker.projectedStatus(identity.key).?);
+    _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 200 });
+
+    for (1..11) |tick| {
+        const now: i64 = 200 + @as(i64, @intCast(tick)) * 30_000;
+        _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = now });
+        _ = tracker.expire(now + 29_999);
+        try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
+    }
+
+    _ = tracker.expire(300_200 + types.working_expiry_ms);
+    try std.testing.expectEqual(schema.AgentStatus.unknown, tracker.projectedStatus(identity.key).?);
+    _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = 500_000 });
+    _ = tracker.observeReport(.{ .identity = identity, .state = .ready, .observed_at_ms = 500_001 });
+    try std.testing.expectEqual(schema.AgentStatus.done, tracker.projectedStatus(identity.key).?);
+}
+
+test "Pi model completion followed by local tools is not an agent completion" {
+    var tracker: Tracker = .{};
+    const identity = try testIdentity();
+    _ = tracker.observeProcess(.{ .identity = identity, .provider = .pi, .process_id = 42, .observed_at_ms = 100 });
+    const exchange: types.ProxyExchange = .{ .protocol = .h2, .connection_id = 1, .stream_id = 1 };
+    _ = tracker.observeProxy(.{ .identity = identity, .dialect = .openai_responses, .phase = .request_started, .exchange = exchange, .observed_at_ms = 200 });
+    _ = tracker.observeProxy(.{ .identity = identity, .dialect = .openai_responses, .phase = .provider_turn_completed, .exchange = exchange, .observed_at_ms = 300 });
+    try std.testing.expectEqual(schema.AgentStatus.working, tracker.projectedStatus(identity.key).?);
+    _ = tracker.expire(300 + types.working_expiry_ms);
+    try std.testing.expectEqual(schema.AgentStatus.unknown, tracker.projectedStatus(identity.key).?);
 }

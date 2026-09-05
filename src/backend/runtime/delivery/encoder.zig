@@ -175,6 +175,7 @@ fn encodeHistoryResult(buffer: []u8, result: *const history.model.QueryResult, s
             .origin = entry.origin,
             .provider = entry.provider,
             .command = entry.command,
+            .command_truncated = entry.command_truncated,
             .cwd = entry.cwd,
             .workspace_path = entry.workspace_path,
         };
@@ -182,6 +183,8 @@ fn encodeHistoryResult(buffer: []u8, result: *const history.model.QueryResult, s
     return schema.encodeHistoryResults(buffer, .{
         .request_id = result.request_id,
         .entries = storage[0..result.entries.len],
+        .snapshot_id = result.snapshot_id,
+        .has_more = result.has_more,
     });
 }
 

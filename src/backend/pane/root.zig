@@ -1758,16 +1758,17 @@ pub const Pane = struct {
     /// commands against its current session.
     ///
     /// ```zig
-    /// pane.processHistoryObservation(size, &stats);
+    /// pane.processHistoryObservation(.{ .size = size, .provider = provider }, &stats);
     /// ```
-    pub fn processHistoryObservation(pane: *Pane, current_size: schema.TerminalSize, stats: *history.observer.Stats) void {
+    pub fn processHistoryObservation(pane: *Pane, context: struct { size: schema.TerminalSize, provider: schema.AgentProvider }, stats: *history.observer.Stats) void {
         var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const cwd = agent_process.cwd(pane.session.processId(), &cwd_buffer);
         var capture_context: CaptureContext = .{ .pane = pane, .observation_stats = stats };
         pane.history_observer.processSealed(.{
             .cwd = cwd,
-            .current_size = current_size,
+            .current_size = context.size,
             .stats = stats,
+            .provider = context.provider,
         }, &capture_context);
     }
 

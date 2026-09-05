@@ -56,7 +56,11 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .pane_matches => |found| _ = try copy_modes.matches(client, found),
         .pane_clipboard => |clipboard| try pane_clipboards.apply(client, clipboard),
         .pane_exited => |exited| _ = try pane_closures.applyExit(client, exited),
-        .request_failed => |failure| _ = try request_failures.apply(client, failure),
+        .request_failed => |failure| {
+            if (!history_palettes.failed(client, failure)) {
+                _ = try request_failures.apply(client, failure);
+            }
+        },
         .notification => |notification| _ = try notifications.applyRuntime(client, notification),
         .notification_shown => |shown| _ = try notifications.applyDeliveryReport(client, shown),
         .agent_sound => |sound| _ = try agent_sounds.apply(client, sound),
@@ -69,8 +73,9 @@ pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 
         .runtime_stopping => return 0,
         .history_results => |results| _ = try history_palettes.apply(client, results),
         .history_pruned => |confirmation| _ = try history_palettes.pruned(client, confirmation),
+        .history_output => |output| _ = history_palettes.output(client, output),
         .command_suggestion => |suggested| _ = try suggestions.apply(client, suggested),
-        .pane_text, .request_completed, .history_output, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
+        .pane_text, .request_completed, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,
         .proxy_status => |status| _ = try proxy_status.apply(client, status),
         .agent_snapshot => |snapshot| _ = try agent_snapshots.apply(client, snapshot),
         .system_metrics => |metrics| _ = try system_metrics.apply(client, metrics),

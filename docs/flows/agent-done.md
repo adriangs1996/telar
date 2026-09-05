@@ -73,6 +73,22 @@ silent.
 
 ## Proof
 
+- `src/backend/history/observer.zig` replays quoted status text, every byte
+  boundary of a synchronized Codex redraw, unchanged ready repaints, and
+  input-only batches.
+- `src/backend/history/codex_screen.zig` covers drafts, cursor ownership,
+  remapped interrupt keys, and disabled animations without consulting colors.
+- `src/backend/runtime/entrypoints/events/pane/observation.zig` combines PTY
+  frames with continuing Stop hooks and proves exactly one final sound. It
+  also rejects a delayed ready result older than the current report.
+- `src/backend/agent/tracker.zig` covers active work versus settlement,
+  monotonic ordering within a millisecond, stale evidence expiry, and model
+  responses that finish before the agent turn, including Pi tools running
+  beyond the report lifetime.
+- `node --test src/cli/integration/pi.test.mjs` exercises serialized delivery,
+  long-run renewal, nested dialogs, hung hooks, queue saturation, missed
+  settlement and shutdown.
+
 - `src/backend/agent/agent.zig` proves the unseen window and its reset.
 - `src/backend/runtime/tests/acknowledge_agent_test.zig` proves the
   controller-to-tracker path, idempotence, stale generations and re-arming
