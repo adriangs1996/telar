@@ -1,0 +1,24 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "python": "3.14.7",
+  "samples": 100,
+  "repetitions": 5,
+  "gap": 0.0,
+  "application": false,
+  "trace": true,
+  "controls": [],
+  "binaries": {
+    "probe": {
+      "path": "/private/tmp/telar-echo/verified-probe/bin/echo-probe",
+      "sha256": "69df381d22e25fa3aaacfeee083ff094448102f5b33e2de5c37f9abf41d800d1"
+    },
+    "baseline": {
+      "path": "/private/tmp/telar-echo/verified-baseline-trace/bin/telar",
+      "sha256": "a6e4aceb3c0b8b6754a6b351bdea428a84fea57176db354a128c87247fcd9e5c"
+    },
+    "candidate": {
+      "path": "/private/tmp/telar-echo/verified-trace/bin/telar",
+      "sha256": "248e78043ee469e17dee48481eaf88852877e54da7510d182d7c3178d9d6b797"
+    }
+  }
+}

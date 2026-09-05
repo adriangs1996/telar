@@ -1,0 +1,53 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "python": "3.14.7",
+  "samples": 200,
+  "repetitions": 5,
+  "gap": 0.05,
+  "application": false,
+  "trace": true,
+  "floods": 0,
+  "controls": [],
+  "binaries": {
+    "probe": {
+      "path": "/private/tmp/telar-echo/final-probe/bin/echo-probe",
+      "sha256": "c26e50c5d6a6776ccd49a50cbcb0800047322cf282b226d55356bfc4a6dbeda1"
+    },
+    "baseline": {
+      "path": "/private/tmp/telar-echo/verified-baseline-trace/bin/telar",
+      "sha256": "a6e4aceb3c0b8b6754a6b351bdea428a84fea57176db354a128c87247fcd9e5c"
+    },
+    "candidate": {
+      "path": "/private/tmp/telar-echo/vt-final-trace/bin/telar",
+      "sha256": "cf9a09968f4d5f663e19038c4799b32c205120ebccfe439143de525b87c2c63e"
+    }
+  },
+  "tools": {
+    "echo_path.py": "9493fcf1b26c06b9ef4cdf3a3f2c5d96e9b145fc8d83004020b5d6e488173b2d",
+    "echo_latency.py": "295cd102afb4ea0ab82ed60cf28227b824c861367410af3226ab58a915691350",
+    "perf_e2e.py": "0a9d2627b6bccf31a23a926610a09db385d289999d8d297f470f29e0820d26fc",
+    "load_latency.py": "2b67e67f135abf3692b6324d27ec5057b303afea7929ce20f51b1ede51642004"
+  },
+  "order": [
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ]
+  ]
+}

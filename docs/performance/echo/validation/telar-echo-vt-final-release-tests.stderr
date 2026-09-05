@@ -1,0 +1,463 @@
+test
++- run test
+   +- run parallel test prerequisites
+      +- run test w
+PERF compression_max_turn n=20 p50_ns=87625 p95_ns=150166 p99_ns=173542
+PERF compression_total n=20 p50_ns=1766583 p95_ns=3292458 p99_ns=3612375
+failed command: ./.zig-cache/o/788a12c50f0c0c6aff6b563b3ecfdb95/test --cache-dir=./.zig-cache --seed=0xf0c95fe1 --listen=-
+
+test
++- run test
+   +- run parallel test prerequisites
+      +- run test w
+PERF search_complete n=20 p50_ns=402500 p95_ns=417625 p99_ns=452250
+PERF search_incremental_total n=20 p50_ns=374917 p95_ns=379833 p99_ns=381458
+PERF search_max_turn n=20 p50_ns=12917 p95_ns=13875 p99_ns=15125
+PERF graphics_runtime_stage_4k n=20 p50_ns=1250 p95_ns=1958 p99_ns=3917
+PERF graphics_total_prepare_4k n=20 p50_ns=2373000 p95_ns=2910459 p99_ns=3072666
+PERF metrics_ticks ticks=100 inline_reads=0 scheduled_jobs=1 client_pumps=0
+PERF chunk_framing wire_bytes=279 tls_facing_writes=6
+PERF history_burst queued=32 sqlite_queries=1 elapsed_ns=177708
+failed command: ./.zig-cache/o/2958908b714525cdaf9d2d2acb369d6d/test --cache-dir=./.zig-cache --seed=0xf0c95fe1 --listen=-
+
+Build Summary: 82/82 steps succeeded; 3487/3487 tests passed
+test success
++- run test 35 pass (35 total) 7ms MaxRSS:3M
+|  +- compile test ReleaseFast native cached 61ms MaxRSS:35M
++- run test 28 pass (28 total) 3s MaxRSS:117M
+   +- compile test ReleaseFast native success 37s MaxRSS:1G
+   |  +- WriteFile cached
+   |  +- compile lib lua ReleaseFast native cached 45ms MaxRSS:34M
+   |  +- compile lib lua ReleaseFast native (reused)
+   |  +- WriteFile  cached
+   |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 cached 51ms MaxRSS:34M
+   |  |  +- WriteFile libc.txt cached
+   |  +- WriteFile hwy cached
+   |  +- compile lib highway ReleaseFast aarch64-macos.13.0 cached 55ms MaxRSS:35M
+   |  |  +- WriteFile libc.txt (reused)
+   |  +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- options cached
+   |  +- options cached
+   |  +- WriteFile props.zig cached
+   |  |  +- run exe props-unigen cached
+   |  |  |  +- compile exe props-unigen Debug native cached 77ms MaxRSS:35M
+   |  |  |     +- run exe uucode_generate (tables.zig) cached
+   |  |  |        +- compile exe uucode_generate Debug native cached 53ms MaxRSS:35M
+   |  |  +- run exe symbols-unigen cached
+   |  |     +- compile exe symbols-unigen Debug native cached 76ms MaxRSS:35M
+   |  |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+   +- run parallel test prerequisites success
+      +- run test 29 pass (29 total) 56ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 110ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 43 pass (43 total) 24ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 109ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 6 pass (6 total) 37ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 166ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 2 pass (2 total) 14ms MaxRSS:8M
+      |  +- compile test ReleaseFast native cached 203ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 8 pass (8 total) 11ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 88ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 5 pass (5 total) 10ms MaxRSS:8M
+      |  +- compile test ReleaseFast native cached 96ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 4 pass (4 total) 9ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 65ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 91 pass (91 total) 22ms MaxRSS:17M
+      |  +- compile test ReleaseFast native cached 80ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 3 pass (3 total) 8ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 72ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 30 pass (30 total) 16ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 217ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 1344 pass (1344 total) 5s MaxRSS:52M
+      |  +- compile test ReleaseFast native cached 244ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 1 pass (1 total) 25ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 125ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 6 pass (6 total) 9ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 98ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 3 pass (3 total) 29ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 78ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 4 pass (4 total) 15ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 121ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 508 pass (508 total) 957ms MaxRSS:35M
+      |  +- compile test ReleaseFast native success 43s MaxRSS:1G
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 20 pass (20 total) 57ms MaxRSS:10M
+      |  +- compile test ReleaseFast native cached 67ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 6 pass (6 total) 12ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 86ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 76 pass (76 total) 50ms MaxRSS:18M
+      |  +- compile test ReleaseFast native cached 84ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 29 pass (29 total) 557ms MaxRSS:10M
+      |  +- compile test ReleaseFast native success 6s MaxRSS:487M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 1058 pass (1058 total) 1s MaxRSS:172M
+      |  +- compile test ReleaseFast native success 59s MaxRSS:2G
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 4 pass (4 total) 27ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 105ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 104 pass (104 total) 332ms MaxRSS:10M
+      |  +- compile test ReleaseFast native success 17s MaxRSS:862M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 35 pass (35 total) 16ms MaxRSS:9M
+      |  +- compile test ReleaseFast native cached 125ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 2 pass (2 total) 332ms MaxRSS:10M
+      |  +- compile test ReleaseFast native success 14s MaxRSS:795M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- compile lib lua ReleaseFast native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseFast aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 3 pass (3 total) 10ms MaxRSS:1M
+      |  +- compile test ReleaseFast native cached 59ms MaxRSS:35M
+      +- cross cached
+         +- compile obj platform-windows Debug x86_64-windows cached 54ms MaxRSS:35M
+         +- compile lib text-rasterizer-windows Debug x86_64-windows cached 75ms MaxRSS:36M
+         +- compile test Debug x86_64-windows cached 46ms MaxRSS:35M
+         +- compile obj platform-linux Debug x86_64-linux-gnu cached 44ms MaxRSS:34M
+         +- compile lib text-rasterizer-linux Debug x86_64-linux-gnu cached 64ms MaxRSS:35M
+         +- compile test Debug x86_64-linux-gnu cached 54ms MaxRSS:35M
+         +- compile obj local-transport-linux Debug x86_64-linux-gnu cached 52ms MaxRSS:35M
+

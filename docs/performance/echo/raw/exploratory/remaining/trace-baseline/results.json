@@ -1,0 +1,514 @@
+[
+  {
+    "name": "baseline",
+    "samples": [
+      {
+        "us": 809.333,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 787.709,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 741.167,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 696.417,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 682.167,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 685.75,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 491.875,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 609.667,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 783.459,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 320.667,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 876.042,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 865.25,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 602.417,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 298.792,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 481.167,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 691.208,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 297.958,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 673.625,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 709.542,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 636.292,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 271.875,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 659.584,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 723.666,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 810.375,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 872.75,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 650.5,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 641.125,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 840.958,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 1228.625,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 621.958,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 299.292,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 595.041,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 445.125,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 431.833,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 492.542,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 237.458,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 235.0,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 385.125,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 693.209,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 789.083,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 277.334,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 769.791,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 629.708,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 354.5,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 790.875,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 665.084,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 252.458,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 743.333,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 545.5,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 249.667,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 228.917,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 638.542,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 315.875,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 194.667,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 149.833,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 233.791,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 239.166,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 976.208,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 955.209,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 666.417,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 201.916,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 817.375,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 652.583,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 679.084,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 236.334,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 718.666,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 217.833,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 219.208,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 372.667,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 268.417,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 600.333,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 308.917,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 887.042,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 673.458,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 586.875,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 729.584,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 626.042,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 582.875,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 637.459,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 765.875,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 685.0,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 496.0,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 697.333,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 206.584,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 624.334,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 240.834,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 205.209,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 743.959,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 581.125,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 217.666,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 770.25,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 792.5,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 750.875,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 488.875,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 756.584,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 655.875,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 641.958,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 1421.625,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 678.917,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 716.833,
+        "wire_bytes": 45,
+        "reads": 1
+      }
+    ],
+    "p50_us": 638.0005,
+    "p95_us": 876.592,
+    "p99_us": 1230.555000000001,
+    "min_us": 149.833,
+    "repetition": 0,
+    "application": false,
+    "gap": 0.05
+  }
+]

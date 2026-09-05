@@ -1,0 +1,228 @@
+[
+  {
+    "name": "baseline",
+    "samples": [
+      {
+        "us": 554.875,
+        "wire_bytes": 693,
+        "reads": 1
+      },
+      {
+        "us": 586.542,
+        "wire_bytes": 503,
+        "reads": 1
+      },
+      {
+        "us": 400.875,
+        "wire_bytes": 503,
+        "reads": 1
+      },
+      {
+        "us": 168.333,
+        "wire_bytes": 732,
+        "reads": 2
+      },
+      {
+        "us": 523.625,
+        "wire_bytes": 444,
+        "reads": 1
+      },
+      {
+        "us": 540.291,
+        "wire_bytes": 605,
+        "reads": 1
+      },
+      {
+        "us": 462.666,
+        "wire_bytes": 512,
+        "reads": 1
+      },
+      {
+        "us": 530.25,
+        "wire_bytes": 663,
+        "reads": 1
+      },
+      {
+        "us": 421.167,
+        "wire_bytes": 564,
+        "reads": 1
+      },
+      {
+        "us": 630.083,
+        "wire_bytes": 722,
+        "reads": 1
+      },
+      {
+        "us": 527.209,
+        "wire_bytes": 500,
+        "reads": 1
+      },
+      {
+        "us": 508.792,
+        "wire_bytes": 482,
+        "reads": 1
+      },
+      {
+        "us": 318.5,
+        "wire_bytes": 539,
+        "reads": 1
+      },
+      {
+        "us": 560.958,
+        "wire_bytes": 557,
+        "reads": 1
+      },
+      {
+        "us": 431.666,
+        "wire_bytes": 533,
+        "reads": 1
+      },
+      {
+        "us": 528.084,
+        "wire_bytes": 1186,
+        "reads": 5
+      },
+      {
+        "us": 514.583,
+        "wire_bytes": 526,
+        "reads": 1
+      },
+      {
+        "us": 474.416,
+        "wire_bytes": 840,
+        "reads": 3
+      },
+      {
+        "us": 478.125,
+        "wire_bytes": 873,
+        "reads": 3
+      },
+      {
+        "us": 471.958,
+        "wire_bytes": 602,
+        "reads": 1
+      }
+    ],
+    "p50_us": 511.6875,
+    "p95_us": 588.71905,
+    "p99_us": 621.8102099999999,
+    "min_us": 168.333,
+    "repetition": 0,
+    "application": false,
+    "gap": 0.05,
+    "floods": 2
+  },
+  {
+    "name": "candidate",
+    "samples": [
+      {
+        "us": 467.667,
+        "wire_bytes": 488,
+        "reads": 1
+      },
+      {
+        "us": 514.417,
+        "wire_bytes": 973,
+        "reads": 4
+      },
+      {
+        "us": 329.041,
+        "wire_bytes": 525,
+        "reads": 1
+      },
+      {
+        "us": 650.959,
+        "wire_bytes": 1126,
+        "reads": 5
+      },
+      {
+        "us": 514.542,
+        "wire_bytes": 488,
+        "reads": 1
+      },
+      {
+        "us": 185.125,
+        "wire_bytes": 469,
+        "reads": 1
+      },
+      {
+        "us": 223.5,
+        "wire_bytes": 582,
+        "reads": 3
+      },
+      {
+        "us": 411.959,
+        "wire_bytes": 724,
+        "reads": 1
+      },
+      {
+        "us": 381.0,
+        "wire_bytes": 500,
+        "reads": 1
+      },
+      {
+        "us": 431.167,
+        "wire_bytes": 527,
+        "reads": 1
+      },
+      {
+        "us": 420.291,
+        "wire_bytes": 629,
+        "reads": 1
+      },
+      {
+        "us": 420.0,
+        "wire_bytes": 715,
+        "reads": 1
+      },
+      {
+        "us": 427.25,
+        "wire_bytes": 581,
+        "reads": 3
+      },
+      {
+        "us": 478.167,
+        "wire_bytes": 504,
+        "reads": 1
+      },
+      {
+        "us": 431.708,
+        "wire_bytes": 488,
+        "reads": 1
+      },
+      {
+        "us": 399.417,
+        "wire_bytes": 566,
+        "reads": 3
+      },
+      {
+        "us": 333.167,
+        "wire_bytes": 605,
+        "reads": 1
+      },
+      {
+        "us": 502.125,
+        "wire_bytes": 1295,
+        "reads": 4
+      },
+      {
+        "us": 331.584,
+        "wire_bytes": 802,
+        "reads": 4
+      },
+      {
+        "us": 453.5,
+        "wire_bytes": 1086,
+        "reads": 4
+      }
+    ],
+    "p50_us": 423.77049999999997,
+    "p95_us": 521.3628500000001,
+    "p99_us": 625.0397699999997,
+    "min_us": 185.125,
+    "repetition": 0,
+    "application": false,
+    "gap": 0.05,
+    "floods": 2
+  }
+]

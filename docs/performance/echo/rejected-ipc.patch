@@ -1,0 +1,374 @@
+diff --git a/src/backend/runtime/application/event_dispatcher/client.zig b/src/backend/runtime/application/event_dispatcher/client.zig
+index cfa7d26..6a1e0ff 100644
+--- a/src/backend/runtime/application/event_dispatcher/client.zig
++++ b/src/backend/runtime/application/event_dispatcher/client.zig
+@@ -62,6 +62,7 @@ pub fn Dispatcher(comptime Application: type) type {
+         /// const should_stop = try ClientEvents.handleMessage(&application, event);
+         /// ```
+         pub fn handleMessage(application: *Application, event: ClientMessageEvent) !bool {
++            core.echo_trace.mark(application.io, .runtime_dispatch);
+             const session = application.clients.resolve(event.client) orelse {
+                 application.metrics.stale_client_messages += 1;
+                 return false;
+@@ -136,15 +137,23 @@ pub fn Dispatcher(comptime Application: type) type {
+         pub fn startSend(application: *Application, session: *ClientSession, payload: []const u8) !void {
+             std.debug.assert(!session.send_pending);
+             session.send_pending = true;
+-            application.select.concurrent(.client_sent, sendSession, .{SessionWrite{
++            errdefer session.send_pending = false;
++            core.echo_trace.mark(application.io, .runtime_send_start);
++            const remaining = try session.connection.trySend(.{ .payload = payload });
++            if (remaining.complete()) {
++                core.echo_trace.mark(application.io, .runtime_send_done);
++                const event: @import("../../event.zig").Event = .{ .client_sent = .{ .client = session.key, .result = {} } };
++                if (try application.select.queue.put(application.io, &.{event}, 0) == 1) {
++                    return;
++                }
++            }
++            try application.select.concurrent(.client_sent, sendSession, .{SessionWrite{
+                 .io = application.io,
+                 .key = session.key,
+                 .connection = &session.connection,
+                 .payload = payload,
+-            }}) catch |err| {
+-                session.send_pending = false;
+-                return err;
+-            };
++                .sent = remaining.sent,
++            }});
+         }
+ 
+         const AdmissionRuntime = struct {
+@@ -336,11 +345,15 @@ pub fn Dispatcher(comptime Application: type) type {
+         }
+ 
+         fn receiveSession(read: SessionRead) ClientMessageEvent {
+-            return .{ .client = read.key, .result = read.connection.receive(read.io, read.buffer) };
++            const result = read.connection.receive(read.io, read.buffer);
++            core.echo_trace.mark(read.io, .runtime_read);
++            return .{ .client = read.key, .result = result };
+         }
+ 
+         fn sendSession(write: SessionWrite) ClientSentEvent {
+-            return .{ .client = write.key, .result = write.connection.send(write.io, write.payload) };
++            core.echo_trace.mark(write.io, .runtime_send_start);
++            defer core.echo_trace.mark(write.io, .runtime_send_done);
++            return .{ .client = write.key, .result = write.connection.sendRemaining(write.io, .{ .payload = write.payload, .sent = write.sent }) };
+         }
+     };
+ }
+diff --git a/src/backend/runtime/client/session.zig b/src/backend/runtime/client/session.zig
+index 3874dcf..1360683 100644
+--- a/src/backend/runtime/client/session.zig
++++ b/src/backend/runtime/client/session.zig
+@@ -119,6 +119,7 @@ pub const Write = struct {
+     key: Key,
+     connection: *core.transport.SocketChannel,
+     payload: []const u8,
++    sent: usize = 0,
+ };
+ 
+ pub const Read = struct {
+diff --git a/src/core/transport/root.zig b/src/core/transport/root.zig
+index e3cb97c..6d3a012 100644
+--- a/src/core/transport/root.zig
++++ b/src/core/transport/root.zig
+@@ -15,7 +15,40 @@ pub const length_prefix_size = @sizeOf(u32);
+ /// `frame.max_cell_size` assumes.
+ pub const max_frame_size = 4 * 1024 * 1024;
+ 
+-pub const WriteFrameError = Io.Writer.Error || error{ FrameTooLarge, ConnectionClosed };
++pub const WriteFrameError = Io.Writer.Error || error{ FrameTooLarge, ConnectionClosed, InvalidWriteProgress };
++
++pub const Write = struct {
++    payload: []const u8,
++    sent: usize = 0,
++
++    /// Example: `if (write.complete()) releaseSendBorrow();`.
++    pub fn complete(write: Write) bool {
++        return write.sent == length_prefix_size + write.payload.len;
++    }
++
++    fn validate(write: Write) WriteFrameError!void {
++        if (write.payload.len > max_frame_size) {
++            return error.FrameTooLarge;
++        }
++        if (write.sent > length_prefix_size + write.payload.len) {
++            return error.InvalidWriteProgress;
++        }
++    }
++
++    fn finish(write: Write, writer: *Io.Writer) WriteFrameError!void {
++        try write.validate();
++        if (write.complete()) {
++            return;
++        }
++        var prefix: [length_prefix_size]u8 = undefined;
++        std.mem.writeInt(u32, &prefix, @intCast(write.payload.len), .little);
++        const header = prefix[@min(write.sent, length_prefix_size)..];
++        const payload = write.payload[write.sent -| length_prefix_size ..];
++        var parts = [2][]const u8{ header, payload };
++        try writer.writeVecAll(&parts);
++        try writer.flush();
++    }
++};
+ 
+ pub const ReadFrameError = Io.Reader.Error || error{
+     ConnectionClosed,
+@@ -27,17 +60,7 @@ pub const ReadFrameError = Io.Reader.Error || error{
+ /// Writes one complete frame. No bytes are written when the payload is too
+ /// large, so callers can recover from that local programming error.
+ pub fn writeFrame(writer: *Io.Writer, payload: []const u8) WriteFrameError!void {
+-    if (payload.len > max_frame_size) {
+-        return error.FrameTooLarge;
+-    }
+-
+-    var prefix: [length_prefix_size]u8 = undefined;
+-    std.mem.writeInt(u32, &prefix, @intCast(payload.len), .little);
+-    // One vectored write instead of two: this path carries per-keystroke
+-    // messages, so the prefix must not cost its own syscall.
+-    var parts = [2][]const u8{ &prefix, payload };
+-    try writer.writeVecAll(&parts);
+-    try writer.flush();
++    return (Write{ .payload = payload }).finish(writer);
+ }
+ 
+ /// Reads one complete frame into caller-owned memory. Any error after the
+@@ -102,11 +125,53 @@ pub const SocketChannel = struct {
+     }
+ 
+     pub fn send(channel: *SocketChannel, io: Io, payload: []const u8) WriteFrameError!void {
++        return channel.sendRemaining(io, .{ .payload = payload });
++    }
++
++    /// Attempts one nonblocking small frame without changing socket flags.
++    /// The caller retains the payload and exclusive writer slot until completion.
++    /// Example: `const remaining = try channel.trySend(.{ .payload = bytes });`.
++    pub fn trySend(channel: *SocketChannel, write: Write) WriteFrameError!Write {
++        try write.validate();
++        if (!channel.isActive()) {
++            return error.ConnectionClosed;
++        }
++        if (comptime @import("builtin").os.tag != .linux and @import("builtin").os.tag != .macos) {
++            return write;
++        }
++        var buffer: [4096]u8 = undefined;
++        const total = length_prefix_size + write.payload.len;
++        if (total > buffer.len or write.complete()) {
++            return write;
++        }
++        std.mem.writeInt(u32, buffer[0..4], @intCast(write.payload.len), .little);
++        @memcpy(buffer[4..total], write.payload);
++        const count = std.c.send(channel.stream.socket.handle, buffer[write.sent..total].ptr, total - write.sent,
++            std.posix.MSG.DONTWAIT | std.posix.MSG.NOSIGNAL);
++        if (count < 0) {
++            return switch (std.posix.errno(count)) {
++                .AGAIN, .INTR => write,
++                else => error.WriteFailed,
++            };
++        }
++        if (count == 0) {
++            return error.ConnectionClosed;
++        }
++        return .{ .payload = write.payload, .sent = write.sent + @as(usize, @intCast(count)) };
++    }
++
++    /// Resumes after any short prefix or payload write, on the output actor.
++    /// Example: `try channel.sendRemaining(io, remaining);`.
++    pub fn sendRemaining(channel: *SocketChannel, io: Io, write: Write) WriteFrameError!void {
++        try write.validate();
++        if (write.complete()) {
++            return;
++        }
+         if (!channel.isActive()) {
+             return error.ConnectionClosed;
+         }
+         var stream_writer = channel.stream.writer(io, &.{});
+-        try writeFrame(&stream_writer.interface, payload);
++        try write.finish(&stream_writer.interface);
+     }
+ 
+     pub fn receive(channel: *SocketChannel, io: Io, buffer: []u8) ReadFrameError![]u8 {
+@@ -163,6 +228,28 @@ test "frame encoding uses a little-endian length prefix" {
+     try std.testing.expectEqualStrings("telar", bytes[4..writer.end]);
+ }
+ 
++test "partial sends resume at every prefix and payload boundary" {
++    const payload = "one pane";
++    var expected: [32]u8 = undefined;
++    var encoded = Io.Writer.fixed(&expected);
++    try writeFrame(&encoded, payload);
++
++    for (0..encoded.end + 1) |sent| {
++        var buffer: [32]u8 = undefined;
++        var resumed = Io.Writer.fixed(&buffer);
++        try resumed.writeAll(encoded.buffered()[0..sent]);
++        try (Write{ .payload = payload, .sent = sent }).finish(&resumed);
++        try std.testing.expectEqualSlices(u8, encoded.buffered(), resumed.buffered());
++    }
++}
++
++test "invalid send progress writes nothing" {
++    var buffer: [16]u8 = undefined;
++    var writer = Io.Writer.fixed(&buffer);
++    try std.testing.expectError(error.InvalidWriteProgress, (Write{ .payload = "", .sent = 5 }).finish(&writer));
++    try std.testing.expectEqual(@as(usize, 0), writer.end);
++}
++
+ test "frames round trip without allocation" {
+     var encoded: [64]u8 = undefined;
+     var writer = Io.Writer.fixed(&encoded);
+diff --git a/src/frontend/client/connection/runtime_transport.zig b/src/frontend/client/connection/runtime_transport.zig
+index 8c714c3..f63ef1d 100644
+--- a/src/frontend/client/connection/runtime_transport.zig
++++ b/src/frontend/client/connection/runtime_transport.zig
+@@ -69,9 +69,9 @@ pub const State = struct {
+     }
+ 
+     /// Sends the reserved frame without knowing the client event protocol.
+-    /// Example: `try state.send(io, bytes);`.
+-    pub fn send(state: *State, io: Io, bytes: []const u8) !void {
+-        try state.connection.send(io, bytes);
++    /// Example: `try state.send(io, write);`.
++    pub fn send(state: *State, io: Io, write: core.transport.Write) !void {
++        try state.connection.sendRemaining(io, write);
+     }
+ 
+     /// Allocates the bounded frame buffers around one connected channel.
+@@ -174,6 +174,83 @@ test "runtime transport releases every partial frame allocation" {
+     );
+ }
+ 
++test "small socket sends preserve flags and emit the frame exactly once" {
++    const io = std.testing.io;
++    var channels = try testingSocketPair();
++    defer channels[0].deinit(io);
++    defer channels[1].deinit(io);
++    const fd = channels[0].stream.socket.handle;
++    const before = std.c.fcntl(fd, std.c.F.GETFL);
++    try std.testing.expect(before >= 0);
++
++    const write = try channels[0].trySend(.{ .payload = "echo" });
++    try std.testing.expect(write.complete());
++    try channels[0].sendRemaining(io, write);
++    try std.testing.expectEqual(before, std.c.fcntl(fd, std.c.F.GETFL));
++    var buffer: [32]u8 = undefined;
++    try std.testing.expectEqualStrings("echo", try channels[1].receive(io, &buffer));
++
++    const oversized: [4093]u8 = undefined;
++    const deferred = try channels[0].trySend(.{ .payload = &oversized });
++    try std.testing.expectEqual(@as(usize, 0), deferred.sent);
++    const remaining = std.c.recv(channels[1].stream.socket.handle, &buffer, buffer.len, std.posix.MSG.DONTWAIT);
++    try std.testing.expect(remaining < 0 and std.posix.errno(remaining) == .AGAIN);
++}
++
++test "a full socket defers without blocking and resumes the exact wire stream" {
++    const io = std.testing.io;
++    var channels = try testingSocketPair();
++    defer channels[0].deinit(io);
++    defer channels[1].deinit(io);
++    const fd = channels[0].stream.socket.handle;
++    const size: c_int = 4096;
++    try std.testing.expectEqual(@as(c_int, 0), std.c.setsockopt(fd, std.c.SOL.SOCKET, std.c.SO.SNDBUF, @ptrCast(&size), @sizeOf(c_int)));
++    const before = std.c.fcntl(fd, std.c.F.GETFL);
++    const payload = "~" ** 64;
++    var pending: core.transport.Write = undefined;
++    var accepted: usize = 0;
++    var buffer: [65536]u8 = undefined;
++
++    while (true) {
++        pending = try channels[0].trySend(.{ .payload = payload });
++        accepted += pending.sent;
++        try std.testing.expect(accepted + payload.len + 4 < buffer.len);
++        if (!pending.complete()) {
++            break;
++        }
++    }
++    try std.testing.expect(accepted > 0);
++    try std.testing.expectEqual(before, std.c.fcntl(fd, std.c.F.GETFL));
++
++    var received: usize = 0;
++    while (received < accepted) {
++        const count = std.c.recv(channels[1].stream.socket.handle, buffer[received..].ptr, accepted - received, std.posix.MSG.DONTWAIT);
++        try std.testing.expect(count > 0);
++        received += @intCast(count);
++    }
++    try channels[0].sendRemaining(io, pending);
++    const total = accepted + payload.len + 4 - pending.sent;
++    while (received < total) {
++        const count = std.c.recv(channels[1].stream.socket.handle, buffer[received..].ptr, total - received, std.posix.MSG.DONTWAIT);
++        try std.testing.expect(count > 0);
++        received += @intCast(count);
++    }
++    var reader = Io.Reader.fixed(buffer[0..total]);
++    var decoded: [64]u8 = undefined;
++    for (0..total / 68) |_| {
++        try std.testing.expectEqualStrings(payload, try core.transport.readFrame(&reader, &decoded));
++    }
++    try std.testing.expectEqual(@as(usize, 0), reader.bufferedLen());
++}
++
++test "a closed socket peer fails without SIGPIPE" {
++    const io = std.testing.io;
++    var channels = try testingSocketPair();
++    defer channels[0].deinit(io);
++    channels[1].deinit(io);
++    try std.testing.expectError(error.WriteFailed, channels[0].trySend(.{ .payload = "echo" }));
++}
++
+ test "runtime bootstrap emits graphics and identity before asynchronous reads" {
+     const io = std.testing.io;
+     var channels = try testingSocketPair();
+diff --git a/src/frontend/client/entrypoints/runtime_io.zig b/src/frontend/client/entrypoints/runtime_io.zig
+index 01dd0be..3a4aa04 100644
+--- a/src/frontend/client/entrypoints/runtime_io.zig
++++ b/src/frontend/client/entrypoints/runtime_io.zig
+@@ -59,6 +59,7 @@ pub fn scheduleRead(client: *Client) !void {
+ /// if (try runtime_transport.handleRead(client, result)) |status| return status;
+ /// ```
+ pub fn handleRead(client: *Client, result: anyerror![]u8) !?u8 {
++    core.echo_trace.mark(client.io, .client_frame);
+     const payload = try client.runtime_transport.completeRead(result);
+     const decode_started = diagnostics.now(client.io);
+     const message = try schema.decodeServer(payload);
+@@ -196,23 +197,28 @@ pub fn flushGraphicsCredits(client: *Client) !void {
+ fn pump(client: *Client) !void {
+     const state = &client.runtime_transport;
+     const payload = try state.prepareSend() orelse return;
+-    client.select.concurrent(.sent, send, .{
+-        client.io,
+-        state,
+-        payload,
+-    }) catch |err| {
+-        state.cancelSend();
+-
+-        return err;
+-    };
++    errdefer state.cancelSend();
++    core.echo_trace.mark(client.io, .client_send_start);
++    const write = try state.connection.trySend(.{ .payload = payload });
++    if (write.complete()) {
++        core.echo_trace.mark(client.io, .client_send_done);
++        if (try client.select.queue.put(client.io, &.{.{ .sent = {} }}, 0) == 1) {
++            return;
++        }
++    }
++    try client.select.concurrent(.sent, send, .{ client.io, state, write });
+ }
+ 
+ fn receive(io: Io, state: *State) anyerror![]u8 {
+-    return state.read(io);
++    const bytes = try state.read(io);
++    core.echo_trace.mark(io, .client_read);
++    return bytes;
+ }
+ 
+-fn send(io: Io, state: *State, payload: []const u8) anyerror!void {
+-    return state.send(io, payload);
++fn send(io: Io, state: *State, write: core.transport.Write) anyerror!void {
++    core.echo_trace.mark(io, .client_send_start);
++    defer core.echo_trace.mark(io, .client_send_done);
++    return state.send(io, write);
+ }
+ 
+ const DecodedObservation = struct {
