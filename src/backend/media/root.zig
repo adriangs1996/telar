@@ -11,7 +11,13 @@ const builtin = @import("builtin");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
 
-const shared_transfer = @import("../pane/shared_transfer.zig");
+pub const shared_transfer = @import("shared_transfer.zig");
+pub const GraphicsLimits = @import("allocator.zig").GraphicsLimits;
+pub const GraphicsBudget = @import("allocator.zig").GraphicsBudget;
+pub const ParkingMutex = @import("allocator.zig").ParkingMutex;
+pub const PaneMediaAllocator = @import("allocator.zig").PaneMediaAllocator;
+pub const Ingestion = @import("ingestion.zig").State;
+pub const Processor = @import("ingestion.zig").Processor;
 
 const Io = std.Io;
 const schema = core.schema;
@@ -315,6 +321,12 @@ pub const Pipeline = struct {
         std.debug.assert(pipeline.batches[pipeline.active].event_count == 0);
         pipeline.worker = sealed;
         return true;
+    }
+
+    /// Reports whether ingestion state must be reset before replaying the seal.
+    /// Example: `if (pipeline.sealedRequiresReset()) resetIngestion();`.
+    pub fn sealedRequiresReset(pipeline: *const Pipeline) bool {
+        return pipeline.batches[pipeline.worker.?].reset_before;
     }
 
     pub fn finishSealed(pipeline: *Pipeline) void {

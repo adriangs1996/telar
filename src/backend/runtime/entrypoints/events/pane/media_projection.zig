@@ -55,12 +55,12 @@ pub fn synchronize(pane: *Pane, stores: []const *AttachmentStore, media_reset: b
 /// or holds that very generation frozen. Keeping them would pin pane quota
 /// until the next generation replaced them.
 fn discardUnwanted(pane: *Pane, stores: []const *AttachmentStore) void {
-    for (pane.prepared_transfers.items) |slot| {
+    for (pane.media_ingestion.prepared_transfers.items) |slot| {
         const parked = slot orelse continue;
         if (wanted(parked.metadata.key, pane.id, stores)) {
             continue;
         }
-        pane.prepared_transfers.discard(parked.metadata.key, &pane.media_allocator);
+        pane.media_ingestion.prepared_transfers.discard(parked.metadata.key, &pane.media_allocator);
     }
 }
 
@@ -102,13 +102,13 @@ test "shared transport clients are counted on the pane for the media actor" {
     try fixture.init();
     defer fixture.deinit();
 
-    try std.testing.expectEqual(@as(u8, 0), fixture.pane.shared_transport_clients.load(.acquire));
+    try std.testing.expectEqual(@as(u8, 0), fixture.pane.media_ingestion.shared_transport_clients.load(.acquire));
     _ = fixture.attachments.configureGraphics(true);
-    try std.testing.expectEqual(@as(u8, 1), fixture.pane.shared_transport_clients.load(.acquire));
+    try std.testing.expectEqual(@as(u8, 1), fixture.pane.media_ingestion.shared_transport_clients.load(.acquire));
     _ = fixture.attachments.configureGraphics(true);
-    try std.testing.expectEqual(@as(u8, 1), fixture.pane.shared_transport_clients.load(.acquire));
+    try std.testing.expectEqual(@as(u8, 1), fixture.pane.media_ingestion.shared_transport_clients.load(.acquire));
     _ = fixture.attachments.configureGraphics(false);
-    try std.testing.expectEqual(@as(u8, 0), fixture.pane.shared_transport_clients.load(.acquire));
+    try std.testing.expectEqual(@as(u8, 0), fixture.pane.media_ingestion.shared_transport_clients.load(.acquire));
 }
 
 test "a generation the media actor froze is adopted without a runtime-thread copy" {
@@ -126,7 +126,7 @@ test "a generation the media actor froze is adopted without a runtime-thread cop
     fixture.pane.prepareSharedTransfers(&stats);
 
     try std.testing.expectEqual(@as(u64, 1), stats.prepared_frames);
-    try std.testing.expect(fixture.pane.prepared_transfers.holds(key));
+    try std.testing.expect(fixture.pane.media_ingestion.prepared_transfers.holds(key));
     const used_before = fixture.pane.media_allocator.used;
     fixture.pane.refreshGraphicsProjection();
     const stores = [_]*AttachmentStore{&fixture.attachments};
@@ -141,7 +141,7 @@ test "a generation the media actor froze is adopted without a runtime-thread cop
     try std.testing.expect(objectExists(transfer.shared_name.?));
     try std.testing.expectEqual(@as(u32, 1), attachment.graphics.adopted);
     try std.testing.expectEqual(@as(u64, 0), attachment.graphics.freeze.count);
-    try std.testing.expect(!fixture.pane.prepared_transfers.holds(key));
+    try std.testing.expect(!fixture.pane.media_ingestion.prepared_transfers.holds(key));
     // The actor's reservation moved to the transfer instead of doubling.
     try std.testing.expectEqual(used_before, fixture.pane.media_allocator.used);
 
@@ -163,8 +163,8 @@ test "a replaced generation releases the object the actor parked for it" {
     var first: media_mod.Stats = .{};
     fixture.pane.prepareSharedTransfers(&first);
     const first_key = liveKey(&fixture, 7);
-    const first_name = fixture.pane.prepared_transfers.take(first_key).?.name;
-    try std.testing.expect(fixture.pane.prepared_transfers.put(.{
+    const first_name = fixture.pane.media_ingestion.prepared_transfers.take(first_key).?.name;
+    try std.testing.expect(fixture.pane.media_ingestion.prepared_transfers.put(.{
         .metadata = .{ .key = first_key, .format = .rgba, .width = 1, .height = 1, .byte_len = 4 },
         .name = first_name,
         .reserved_len = 4,
@@ -179,8 +179,8 @@ test "a replaced generation releases the object the actor parked for it" {
     try std.testing.expect(second_key.generation != first_key.generation);
     try std.testing.expectEqual(@as(u64, 1), second.prepared_frames);
     try std.testing.expect(!objectExists(first_name));
-    try std.testing.expect(!fixture.pane.prepared_transfers.holds(first_key));
-    try std.testing.expect(fixture.pane.prepared_transfers.holds(second_key));
+    try std.testing.expect(!fixture.pane.media_ingestion.prepared_transfers.holds(first_key));
+    try std.testing.expect(fixture.pane.media_ingestion.prepared_transfers.holds(second_key));
     try std.testing.expectEqual(used_before, fixture.pane.media_allocator.used);
 }
 
@@ -201,14 +201,14 @@ test "parked generations every client already knows are released at synchronizat
     const used_before = fixture.pane.media_allocator.used;
     var stats: media_mod.Stats = .{};
     fixture.pane.prepareSharedTransfers(&stats);
-    const parked_name = fixture.pane.prepared_transfers.items[0].?.name;
+    const parked_name = fixture.pane.media_ingestion.prepared_transfers.items[0].?.name;
     const stores = [_]*AttachmentStore{&fixture.attachments};
 
     const projection = synchronize(fixture.pane, &stores, false);
 
     try std.testing.expectEqual(@as(u64, 0), projection.staged);
     try std.testing.expect(!attachment.hasFrozenGraphics());
-    try std.testing.expect(!fixture.pane.prepared_transfers.holds(key));
+    try std.testing.expect(!fixture.pane.media_ingestion.prepared_transfers.holds(key));
     try std.testing.expect(!objectExists(parked_name));
     try std.testing.expectEqual(used_before, fixture.pane.media_allocator.used);
 }

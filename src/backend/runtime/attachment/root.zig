@@ -979,7 +979,7 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
         // The media actor may already have frozen this generation with the
         // pixels hot; adopting it costs the runtime thread nothing.
         if (attachment.graphics.shared_transport) {
-            if (pane.prepared_transfers.take(key)) |prepared| {
+            if (pane.media_ingestion.prepared_transfers.take(key)) |prepared| {
                 transfer.shared_name = prepared.name;
                 transfer.reserved_len = prepared.reserved_len;
                 attachment.graphics.adopted +|= 1;

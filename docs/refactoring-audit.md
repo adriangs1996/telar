@@ -96,7 +96,17 @@ remain constraints, not targets for consolidation.
   asynchronous-ownership tests exercise the new owners.
 - `zig build test --summary all` passed.
 
-10. Pane media ownership and dependency cycle.
+## 10. Pane media protocol
+
+- Media owns budget accounting, mapped image allocations and shared transfers;
+  the media-to-pane import cycle is removed.
+- An ingestion state owns framing, chunk counts, prepared transfers and shared
+  consumers. Its processor receives explicit emulator/allocator/response borrows,
+  never a Pane. Pane retains actor lifetime and projection revision commits.
+- Pipeline exposes reset semantics instead of requiring batch-array inspection.
+- Existing quota, shared/file-frame, preparation and actor-lifecycle tests pass:
+  `zig build test --summary all` (3347 tests).
+
 11. Kitty codec, sidebar rendering and transmission transitions.
 12. Attachment capture, markers and presentation.
 13. Configuration generation, parsing and module loading.

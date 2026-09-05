@@ -152,8 +152,8 @@ test "a shared frame is copied once into the object that becomes emulator storag
     const used_after_first = fixture.pane.media_allocator.used;
 
     const key: core.graphics.ImageKey = .{ .image_id = 7, .generation = image.generation };
-    try std.testing.expect(fixture.pane.prepared_transfers.holds(key));
-    const parked = fixture.pane.prepared_transfers.items[0].?;
+    try std.testing.expect(fixture.pane.media_ingestion.prepared_transfers.holds(key));
+    const parked = fixture.pane.media_ingestion.prepared_transfers.items[0].?;
     try std.testing.expectEqual(@as(usize, 0), parked.reserved_len);
     var contents: [pixels.len]u8 = undefined;
     try readObject(parked.name.sliceZ(), &contents);
@@ -185,7 +185,7 @@ test "replacing a direct frame unmaps the previous object and keeps quota flat" 
     try first.publish(2, &first_pixels);
     defer _ = std.c.shm_unlink(first.name());
     _ = try ingest(&fixture, first.bytes());
-    const first_parked = fixture.pane.prepared_transfers.items[0].?.name;
+    const first_parked = fixture.pane.media_ingestion.prepared_transfers.items[0].?.name;
     const used_after_first = fixture.pane.media_allocator.used;
 
     var second: Frame = .{};
@@ -352,7 +352,7 @@ test "without a shared-transport client the frame still loads with one copy and 
 
     try std.testing.expectEqual(@as(u64, 1), stats.direct_frames);
     try std.testing.expectEqual(@as(u64, 0), stats.prepared_frames);
-    for (fixture.pane.prepared_transfers.items) |slot| try std.testing.expect(slot == null);
+    for (fixture.pane.media_ingestion.prepared_transfers.items) |slot| try std.testing.expect(slot == null);
     const image = fixture.pane.media.terminal.screens.active.kitty_images.imageById(7) orelse
         return error.ImageMissing;
     try std.testing.expectEqualSlices(u8, &pixels, fixture.pane.media_allocator.imagePixels(image.data.bytes()).?);

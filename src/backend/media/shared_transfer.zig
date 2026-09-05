@@ -11,7 +11,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("telar-core");
-const pane_mod = @import("root.zig");
+const pane_mod = @import("allocator.zig");
 
 const Io = std.Io;
 const PaneMediaAllocator = pane_mod.PaneMediaAllocator;
@@ -308,7 +308,7 @@ pub const PreparedTransfers = struct {
     /// object and its reservation moves to the caller.
     ///
     /// ```zig
-    /// if (pane.prepared_transfers.take(key)) |frozen| adopt(frozen);
+    /// if (pane.media_ingestion.prepared_transfers.take(key)) |frozen| adopt(frozen);
     /// ```
     pub fn take(prepared: *PreparedTransfers, key: core.graphics.ImageKey) ?PreparedTransfer {
         for (&prepared.items) |*slot| {
@@ -336,7 +336,7 @@ pub const PreparedTransfers = struct {
     /// Releases every parked object and reservation.
     ///
     /// ```zig
-    /// pane.prepared_transfers.discardAll(&pane.media_allocator);
+    /// pane.media_ingestion.prepared_transfers.discardAll(&pane.media_allocator);
     /// ```
     pub fn discardAll(prepared: *PreparedTransfers, media: *PaneMediaAllocator) void {
         for (&prepared.items) |*slot| {
