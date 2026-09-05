@@ -221,7 +221,7 @@ def main():
         parser.error('controls must be unique')
     args.probe = str(Path(args.probe).resolve())
     args.output = args.output.resolve()
-    args.output.mkdir()
+    args.output.mkdir(parents=True)
     specs = [(name, None) for name in args.controls]
     specs += [(name, str(Path(binary).resolve())) for name, binary in
               [('baseline', args.baseline), ('candidate', args.candidate)] if binary]

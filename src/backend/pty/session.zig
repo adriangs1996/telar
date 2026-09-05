@@ -527,10 +527,6 @@ test "wait reaps a real child once and shutdown after the reap is harmless" {
     session.deinit();
 }
 
-const LibcForTesting = struct {
-    extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
-};
-
 test "foreground inspection identifies the session leader" {
     const io = std.testing.io;
     const args = [_][*:0]const u8{ "/bin/sh", "-c", "printf 'ready\\n'; exec /bin/sleep 60" };
@@ -542,7 +538,6 @@ test "foreground inspection identifies the session leader" {
     _ = try readUntil(&session, io, .{ .buffer = &output_buffer, .suffix = "ready\r\n" });
 
     try std.testing.expectEqual(session.processId(), session.foregroundProcessGroup().?);
-    try std.testing.expectEqual(LibcForTesting.tcgetpgrp(session.master), session.foregroundProcessGroup().?);
     try std.testing.expect(session.shellForeground().?);
 
     session.shutdown();
@@ -560,7 +555,6 @@ test "foreground inspection follows a foreground job rather than its shell" {
     _ = try readUntil(&session, io, .{ .buffer = &output_buffer, .suffix = "ready\r\n" });
     const foreground = session.foregroundProcessGroup().?;
     try std.testing.expect(foreground != session.processId());
-    try std.testing.expectEqual(LibcForTesting.tcgetpgrp(session.master), foreground);
     try std.testing.expect(!session.shellForeground().?);
 
     session.shutdown();

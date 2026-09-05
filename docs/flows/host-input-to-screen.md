@@ -476,9 +476,6 @@ captures an immutable `presentation_projection` and calls
 - The `inline output` tests in `src/backend/pane/root.zig` prove admission bounds,
   allocation-free simple runs and fallback for parser continuations, wrapping,
   styles, charsets, hyperlinks, graphemes and wide cells.
-- `foreground inspection follows a foreground job rather than its shell` in
-  `src/backend/pty/session.zig` compares the direct PTY query with libc and
-  proves that removing redundant validation does not substitute a cached group.
 - `PTY input remains live while the bounded ingest actor is occupied` in
   `src/transport_integration_test.zig` proves that input does not wait for VT
   ingestion.

@@ -107,7 +107,19 @@ fn foregroundBatch(io: std.Io, session: *const backend.pty.Session, direct: bool
     };
     const started = std.Io.Clock.awake.now(io).nanoseconds;
     for (0..10000) |_| {
-        const group = if (direct) session.foregroundProcessGroup() orelse return error.NoForeground else Libc.tcgetpgrp(session.master);
+        const group = if (direct) query: {
+            const request: c_int = switch (@import("builtin").os.tag) {
+                .macos => 0x40047477,
+                .linux => @intCast(std.c.T.IOCGPGRP),
+                else => return error.UnsupportedPlatform,
+            };
+            var observed_group: std.c.pid_t = 0;
+            if (std.c.ioctl(session.master, request, &observed_group) != 0) {
+                return error.NoForeground;
+            }
+
+            break :query observed_group;
+        } else Libc.tcgetpgrp(session.master);
         if (group != session.processId()) {
             return error.UnexpectedForeground;
         }

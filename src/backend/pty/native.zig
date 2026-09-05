@@ -6,13 +6,11 @@ const Exit = @import("exit.zig").Exit;
 
 const TIOC = switch (builtin.os.tag) {
     .macos => struct {
-        const GPGRP: c_int = 0x40047477;
         const SWINSZ: c_int = @bitCast(@as(u32, 0x80087467));
         const SCTTY: c_int = 0x20007461;
         const FLUSH: c_int = @bitCast(@as(u32, 0x80047410));
     },
     .linux => struct {
-        const GPGRP: c_int = @intCast(std.c.T.IOCGPGRP);
         const SWINSZ: c_int = 0x5414;
         const SCTTY: c_int = 0x540E;
         const FLUSH: c_int = 0x540B;
@@ -50,6 +48,7 @@ extern "c" fn waitid(idtype: c_int, id: c_uint, infop: *std.c.siginfo_t, options
 extern "c" fn openpty(amaster: *std.c.fd_t, aslave: *std.c.fd_t, name: ?[*]u8, termp: ?*const std.posix.termios, winp: ?*const std.posix.winsize) c_int;
 extern "c" fn _NSGetEnviron() *[*:null]?[*:0]u8;
 extern "c" var environ: [*:null]?[*:0]u8;
+extern "c" fn tcgetpgrp(fd: std.c.fd_t) std.c.pid_t;
 
 pub const Pair = struct {
     master: std.c.fd_t,
@@ -110,23 +109,9 @@ pub fn acquireControllingTerminal(slave: std.c.fd_t) c_int {
     return std.c.ioctl(slave, TIOC.SCTTY, @as(c_int, 0));
 }
 
-/// Queries the known PTY directly. Darwin's tcgetpgrp first calls isatty,
-/// which adds redundant terminal ioctls on this per-input/per-output path.
-/// Example: `const group = native.foregroundProcessGroup(session.master);`.
 pub fn foregroundProcessGroup(master: std.c.fd_t) ?std.c.pid_t {
-    var foreground: std.c.pid_t = 0;
-    if (std.c.ioctl(master, TIOC.GPGRP, &foreground) != 0) {
-        return null;
-    }
-
+    const foreground = tcgetpgrp(master);
     return if (foreground > 0) foreground else null;
-}
-
-test "foreground query rejects invalid and non-terminal descriptors" {
-    try std.testing.expectEqual(@as(?std.c.pid_t, null), foregroundProcessGroup(-1));
-    const file = try std.Io.Dir.openFileAbsolute(std.testing.io, "/dev/null", .{});
-    defer file.close(std.testing.io);
-    try std.testing.expectEqual(@as(?std.c.pid_t, null), foregroundProcessGroup(file.handle));
 }
 
 pub fn setWindowSize(master: std.c.fd_t, window: *const std.posix.winsize) !void {
