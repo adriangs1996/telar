@@ -16,9 +16,17 @@ remain constraints, not targets for consolidation.
   the observation terminal uninitialized to verify that it is never accessed.
 - Validation: `zig build test --summary all` passed.
 
+## 2. Checkpoint ownership
+
+- Pending checkpoint state owns its buffer and allocator as one optional value.
+- Scheduling transfers ownership before starting the worker; both startup failure
+  and completion release it through the same idempotent transition.
+- Removed the application's separate buffer field and the duplicate free path.
+- Proof: injected scheduler failure, retry, duplicate completion, debounce and
+  disk-failure tests. `zig build test --summary all` passed.
+
 ## Remaining items
 
-2. Checkpoint buffer ownership and scheduler failure.
 3. Request dispatcher and pane-focus transaction.
 4. Frontend transport/event coordination boundary.
 5. History inspection geometry independent of widgets.

@@ -120,7 +120,6 @@ pub const Application = struct {
     system_metrics: observability.system_metrics.Sampler = .{},
     metrics: RuntimeMetrics,
     session: session_checkpoint.State = .{},
-    session_write_buffer: ?[]u8 = null,
     git_probe_in_flight: bool = false,
     session_name_probe_in_flight: bool = false,
     input_sequence: u64 = 0,

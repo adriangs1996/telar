@@ -26,7 +26,7 @@ pub const State = struct {
     /// Type the agent's resume command into a restored pane's shell.
     resume_agents: bool = true,
     dirty: bool = false,
-    in_flight: bool = false,
+    pending: ?OwnedWrite = null,
     last_change_ns: u64 = 0,
     writes: u64 = 0,
     failures: u64 = 0,
@@ -61,14 +61,20 @@ pub const State = struct {
     /// if (state.due(now_ns)) startWrite();
     /// ```
     pub fn due(state: *const State, now_ns: u64) bool {
-        return state.enabled() and state.dirty and !state.in_flight and
+        return state.enabled() and state.dirty and state.pending == null and
             now_ns -| state.last_change_ns >= debounce_ns;
     }
 
-    pub fn beginWrite(state: *State) void {
-        std.debug.assert(!state.in_flight);
-        state.in_flight = true;
+    /// Takes ownership before scheduling and releases it on startup failure.
+    /// Example: `try state.startWrite(owned, select);`.
+    pub fn startWrite(state: *State, owned: OwnedWrite, scheduler: anytype) !void {
+        std.debug.assert(state.pending == null);
+        state.pending = owned;
         state.dirty = false;
+        scheduler.concurrent(.checkpoint_written, writeFile, .{owned.job}) catch |err| {
+            state.completeWrite(err);
+            return err;
+        };
     }
 
     /// Completes one write. A failure keeps the checkpoint dirty so the next
@@ -78,7 +84,10 @@ pub const State = struct {
     /// state.completeWrite(result);
     /// ```
     pub fn completeWrite(state: *State, result: anyerror!void) void {
-        state.in_flight = false;
+        const owned = state.pending orelse return;
+        state.pending = null;
+        owned.allocator.free(owned.job.buffer);
+
         if (result) |_| {
             state.writes += 1;
         } else |_| {
@@ -88,7 +97,12 @@ pub const State = struct {
     }
 };
 
-/// Owned bytes handed to the write worker.
+pub const OwnedWrite = struct {
+    allocator: std.mem.Allocator,
+    job: WriteJob,
+};
+
+/// Bytes borrowed by the write worker until the owning state receives completion.
 pub const WriteJob = struct {
     io: Io,
     path: []const u8,
@@ -161,17 +175,14 @@ pub fn Checkpointer(comptime Application: type) type {
             }
             const path = application.session.path.?;
 
-            const buffer = try application.gpa.alloc(u8, snapshot_bytes);
-            errdefer application.gpa.free(buffer);
-            const len = try encode(application, buffer);
-            const job: WriteJob = .{ .io = application.io, .path = path, .buffer = buffer, .len = len };
-            application.session.beginWrite();
-            application.select.concurrent(.checkpoint_written, writeJob, .{job}) catch |err| {
-                application.session.completeWrite(err);
-                application.gpa.free(buffer);
-                return err;
+            const job: WriteJob = prepared: {
+                const buffer = try application.gpa.alloc(u8, snapshot_bytes);
+                errdefer application.gpa.free(buffer);
+                const len = try encode(application, buffer);
+
+                break :prepared .{ .io = application.io, .path = path, .buffer = buffer, .len = len };
             };
-            application.session_write_buffer = buffer;
+            try application.session.startWrite(.{ .allocator = application.gpa, .job = job }, application.select);
         }
 
         /// Completes the in-flight write and releases its buffer.
@@ -181,10 +192,6 @@ pub fn Checkpointer(comptime Application: type) type {
         /// ```
         pub fn handleWritten(application: *Application, result: anyerror!void) void {
             application.session.completeWrite(result);
-            if (application.session_write_buffer) |buffer| {
-                application.gpa.free(buffer);
-                application.session_write_buffer = null;
-            }
         }
 
         /// Writes the current shape synchronously. Used at shutdown, after
@@ -195,7 +202,7 @@ pub fn Checkpointer(comptime Application: type) type {
         /// ```
         pub fn writeNow(application: *Application) void {
             const path = application.session.path orelse return;
-            if (application.session.in_flight) {
+            if (application.session.pending != null) {
                 return;
             }
             const buffer = application.gpa.alloc(u8, snapshot_bytes) catch return;
@@ -478,10 +485,6 @@ pub fn Checkpointer(comptime Application: type) type {
             return (try encoder.finish()).len;
         }
 
-        fn writeJob(job: WriteJob) anyerror!void {
-            return writeFile(job);
-        }
-
         fn nowNs(application: *Application) u64 {
             return @intCast(Io.Timestamp.now(application.io, .awake).toNanoseconds());
         }
@@ -551,14 +554,15 @@ test "checkpoint state debounces, coalesces and retries after failure" {
     try std.testing.expect(!state.due(1_000 + debounce_ns - 1));
     try std.testing.expect(state.due(1_000 + debounce_ns));
 
-    state.beginWrite();
+    var scheduler: TestingScheduler = .{};
+    try state.startWrite(try testingWrite(), &scheduler);
     try std.testing.expect(!state.due(std.math.maxInt(u64)));
     state.noteChange(2_000);
     state.completeWrite({});
     try std.testing.expect(state.dirty);
     try std.testing.expectEqual(@as(u64, 1), state.writes);
 
-    state.beginWrite();
+    try state.startWrite(try testingWrite(), &scheduler);
     state.completeWrite(error.DiskFull);
     try std.testing.expect(state.dirty);
     try std.testing.expectEqual(@as(u64, 1), state.failures);
@@ -567,6 +571,45 @@ test "checkpoint state debounces, coalesces and retries after failure" {
     var disabled: State = .{};
     disabled.noteChange(5);
     try std.testing.expect(!disabled.dirty);
+}
+
+const TestingScheduler = struct {
+    fail: bool = false,
+
+    // The signature implements std.Io.Select.concurrent for failure injection.
+    // codestyle: allow(maximum-parameter-count)
+    fn concurrent(scheduler: *TestingScheduler, tag: anytype, function: anytype, args: anytype) !void {
+        _ = tag;
+        _ = function;
+        _ = args;
+        if (scheduler.fail) {
+            return error.SchedulerUnavailable;
+        }
+    }
+};
+
+fn testingWrite() !OwnedWrite {
+    return .{
+        .allocator = std.testing.allocator,
+        .job = .{ .io = std.testing.io, .path = "/unused", .buffer = try std.testing.allocator.alloc(u8, 1), .len = 1 },
+    };
+}
+
+test "checkpoint startup failure releases ownership once and permits retry" {
+    var state: State = .{ .path = "/unused", .dirty = true };
+    var scheduler: TestingScheduler = .{ .fail = true };
+    try std.testing.expectError(error.SchedulerUnavailable, state.startWrite(try testingWrite(), &scheduler));
+    try std.testing.expect(state.pending == null);
+    try std.testing.expect(state.dirty);
+    try std.testing.expectEqual(@as(u64, 1), state.failures);
+    state.completeWrite(error.SchedulerUnavailable);
+    try std.testing.expectEqual(@as(u64, 1), state.failures);
+
+    scheduler.fail = false;
+    try state.startWrite(try testingWrite(), &scheduler);
+    state.completeWrite({});
+    try std.testing.expect(!state.dirty);
+    try std.testing.expectEqual(@as(u64, 1), state.writes);
 }
 
 test "writeFile replaces the checkpoint atomically and keeps it private" {
