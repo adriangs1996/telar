@@ -107,7 +107,16 @@ remain constraints, not targets for consolidation.
 - Existing quota, shared/file-frame, preparation and actor-lifecycle tests pass:
   `zig build test --summary all` (3347 tests).
 
-11. Kitty codec, sidebar rendering and transmission transitions.
+## 11. Kitty presentation responsibilities
+
+- Stateless KGP encoding lives in a codec with no store or layout dependency.
+- Sidebar assets/rasterization and their tests live outside the pane image store.
+- Store operations own presentation-clock advancement, successful inline/shared
+  transmission commits and delete-overflow recovery. Writers commit these only
+  after the corresponding encoding succeeds.
+- Wire, paced/compressed/shared transmission, overflow and sidebar regression
+  tests pass with `zig build test --summary all`.
+
 12. Attachment capture, markers and presentation.
 13. Configuration generation, parsing and module loading.
 14. History search policies and bounded result accumulation.
