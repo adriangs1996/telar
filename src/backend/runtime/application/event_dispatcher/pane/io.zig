@@ -80,10 +80,13 @@ pub fn Dispatcher(comptime Application: type) type {
         }
 
         fn startPaneInputWrite(application: *Application, write: pane_input_pump.Write) !void {
+            core.echo_trace.mark(application.io, .pty_write_queued);
             try application.select.concurrent(.pane_input_written, writePaneInput, .{write});
         }
 
         fn writePaneInput(write: pane_input_pump.Write) PaneInputEvent {
+            core.echo_trace.mark(write.io, .pty_write_start);
+            defer core.echo_trace.mark(write.io, .pty_write_done);
             const path = diagnostics.enter(.interactive);
             defer path.restore();
 

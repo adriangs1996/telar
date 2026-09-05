@@ -48,7 +48,7 @@ Pane input queue -> writePaneInput -> child PTY
       v
 application.handle(.pane_output) -> PaneEvents.Pipeline -> Pane.ingest
       |
-application.handle(.pane_ingested) -> pane ingest Coordinator -> Application.pump
+inline result or .pane_ingested -> pane ingest Coordinator -> Application.pump
       |
 Attachment.prepareNextCells -> cell.Sync.prepare -> schema.pane_frame -> socket
       |
@@ -351,14 +351,26 @@ There is no assumption that one key produces one frame.
 
 1. marks EOF or failure as completed output;
 2. feeds copies to the observation and media queues;
-3. schedules `ingestPane` on the interactive ingest actor.
+3. acquires the VT borrow and runs `ingestPane` inline only when
+   `Pane.canInlineOutput` admits the entire fragment; otherwise it schedules
+   the interactive ingest actor.
+
+Inline admission allows at most 32 printable ASCII bytes. Ghostty must be at
+parser and UTF-8 ground, with no pending wrap, insertion, alternate charset,
+active hyperlink, style migration or complex target cells. The run must fit
+strictly before the right margin on the cursor's resident row. This bounds
+both validation and mutation without permitting escape completion, scrolling,
+decompression of retained pages, or grapheme cleanup. Tests reject partial
+sequences at every byte and exercise admitted writes with allocation disabled.
 
 `ingestPane` calls `Pane.ingest` in `src/backend/pane/root.zig`. The pane feeds
 the bytes to its `vt.Terminal`, snapshots child input modes and marks its cell
 projection dirty. VT is the only component that interprets child escape
 sequences.
 
-The `.pane_ingested` completion delegates to `Coordinator` in
+The inline result enters the same completion handler after the output pipeline
+returns, without queuing an event or exposing the VT mid-ingest. The actor
+still reports `.pane_ingested`. Both delegate to `Coordinator` in
 `src/backend/runtime/entrypoints/events/pane/ingest.zig`. It applies deferred
 resize state, schedules terminal responses and the next PTY read, then calls
 `Application.pumpAll`.
@@ -461,6 +473,12 @@ captures an immutable `presentation_projection` and calls
   `src/transport_integration_test.zig` proves that a real child can enable
   Kitty flags 7, switch to modifyOtherKeys and return to legacy mode while
   receiving the corresponding bytes.
+- The `inline output` tests in `src/backend/pane/root.zig` prove admission bounds,
+  allocation-free simple runs and fallback for parser continuations, wrapping,
+  styles, charsets, hyperlinks, graphemes and wide cells.
+- `foreground inspection follows a foreground job rather than its shell` in
+  `src/backend/pty/session.zig` compares the direct PTY query with libc and
+  proves that removing redundant validation does not substitute a cached group.
 - `PTY input remains live while the bounded ingest actor is occupied` in
   `src/transport_integration_test.zig` proves that input does not wait for VT
   ingestion.

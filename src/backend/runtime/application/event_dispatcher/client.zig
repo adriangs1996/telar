@@ -62,6 +62,7 @@ pub fn Dispatcher(comptime Application: type) type {
         /// const should_stop = try ClientEvents.handleMessage(&application, event);
         /// ```
         pub fn handleMessage(application: *Application, event: ClientMessageEvent) !bool {
+            core.echo_trace.mark(application.io, .runtime_dispatch);
             const session = application.clients.resolve(event.client) orelse {
                 application.metrics.stale_client_messages += 1;
                 return false;
@@ -336,10 +337,14 @@ pub fn Dispatcher(comptime Application: type) type {
         }
 
         fn receiveSession(read: SessionRead) ClientMessageEvent {
-            return .{ .client = read.key, .result = read.connection.receive(read.io, read.buffer) };
+            const result = read.connection.receive(read.io, read.buffer);
+            core.echo_trace.mark(read.io, .runtime_read);
+            return .{ .client = read.key, .result = result };
         }
 
         fn sendSession(write: SessionWrite) ClientSentEvent {
+            core.echo_trace.mark(write.io, .runtime_send_start);
+            defer core.echo_trace.mark(write.io, .runtime_send_done);
             return .{ .client = write.key, .result = write.connection.send(write.io, write.payload) };
         }
     };

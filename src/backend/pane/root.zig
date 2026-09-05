@@ -831,6 +831,44 @@ pub const Pane = struct {
         gpa.destroy(pane);
     }
 
+    /// Admits at most 32 ASCII cells on the cursor's resident row. No parser
+    /// continuation, wrapping, style migration, hyperlink or grapheme cleanup
+    /// can enter this path. Ghostty still performs the actual interpretation.
+    /// Call only while holding the VT borrow, before starting its actor.
+    /// Example: `if (pane.canInlineOutput(bytes)) finishIngestInline();`.
+    pub fn canInlineOutput(pane: *const Pane, bytes: []const u8) bool {
+        std.debug.assert(pane.ingest_pending);
+        if (bytes.len == 0 or bytes.len > 32 or !pane.stream.ground()) {
+            return false;
+        }
+
+        const terminal = &pane.terminal;
+        const screen = terminal.screens.active;
+        const cursor = &screen.cursor;
+        if (terminal.status_display != .main or terminal.modes.get(.insert) or
+            !terminal.modes.get(.wraparound) or cursor.pending_wrap or cursor.hyperlink_id != 0 or
+            screen.charset.single_shift != null or @as(usize, cursor.x) + bytes.len > terminal.scrolling_region.right)
+        {
+            return false;
+        }
+
+        switch (screen.charset.charsets.get(screen.charset.gl)) {
+            .ascii, .utf8 => {},
+            else => return false,
+        }
+
+        const cells: [*]const vt.Cell = @ptrCast(cursor.page_cell);
+        for (bytes, cells[0..bytes.len]) |byte, cell| {
+            if (byte < 0x20 or byte > 0x7e or cell.content_tag != .codepoint or
+                cell.wide != .narrow or cell.hyperlink or cell.style_id != cursor.style_id)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     pub fn ingest(pane: *Pane, io: Io, bytes: []const u8) !u64 {
         pane.search_revision +%= 1;
         const started = diagnostics.now(io);
@@ -2317,6 +2355,69 @@ test "a child's synchronized-output block holds frames until it closes or expire
     pane.terminal.modes.set(.synchronized_output, false);
     try std.testing.expect(!pane.holdFrames(io));
     try std.testing.expectEqual(@as(?u64, null), pane.sync_hold_started_ns);
+}
+
+test "inline output admits only a bounded simple row run without allocation" {
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+    const gpa = failing.allocator();
+    var pane: Pane = undefined;
+    pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 80, .rows = 4 });
+    defer pane.terminal.deinit(gpa);
+    pane.stream = pane.terminal.vtStream();
+    defer pane.stream.deinit();
+    pane.ingest_pending = true;
+
+    try std.testing.expect(pane.canInlineOutput("~"));
+    for ([_][]const u8{ "", "x" ** 33, "\n", "\x08 \x08", "\x1b[2J", "é" }) |bytes| {
+        try std.testing.expect(!pane.canInlineOutput(bytes));
+    }
+
+    failing.fail_index = failing.alloc_index;
+    failing.resize_fail_index = failing.resize_index;
+    for (0..1000) |_| {
+        pane.stream.nextSlice("\x1b[H");
+        try std.testing.expect(pane.canInlineOutput("~" ** 32));
+        pane.stream.nextSlice("~" ** 32);
+    }
+    try std.testing.expect(!failing.has_induced_failure);
+    try std.testing.expectEqual(@as(u21, '~'), pane.terminal.screens.active.cursorCellLeft(1).codepoint());
+}
+
+test "inline output never completes a partial control or UTF-8 sequence" {
+    const gpa = std.testing.allocator;
+    const sequences = [_][]const u8{ "\x1b[31m", "\x1b]2;title\x1b\\", "\x1b_Ga=d\x1b\\", "\xf0\x9f\x98\x80" };
+    for (sequences) |sequence| {
+        for (1..sequence.len) |split| {
+            var pane: Pane = undefined;
+            pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 80, .rows = 4 });
+            defer pane.terminal.deinit(gpa);
+            pane.stream = pane.terminal.vtStream();
+            defer pane.stream.deinit();
+            pane.ingest_pending = true;
+            pane.stream.nextSlice(sequence[0..split]);
+            try std.testing.expect(!pane.canInlineOutput("~"));
+        }
+    }
+}
+
+test "inline output defers wrapping and complex terminal state to its actor" {
+    const gpa = std.testing.allocator;
+    const sequences = [_][]const u8{
+        "\x1b[80G",                          "\x1b[80Gx",                                          "\x1b[4h",     "\x1b[?7l", "\x1b(0",
+        "\x1bN",                             "\x1b[31m",                                           "e\xcc\x81\r",
+        "界\r",
+        "\x1b]8;;https://example.com\x1b\\", "\x1b]8;;https://example.com\x1b\\x\x1b]8;;\x1b\\\r",
+    };
+    for (sequences) |sequence| {
+        var pane: Pane = undefined;
+        pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 80, .rows = 4 });
+        defer pane.terminal.deinit(gpa);
+        pane.stream = pane.terminal.vtStream();
+        defer pane.stream.deinit();
+        pane.ingest_pending = true;
+        pane.stream.nextSlice(sequence);
+        try std.testing.expect(!pane.canInlineOutput("~"));
+    }
 }
 
 test "pane input modes expose child focus reporting" {

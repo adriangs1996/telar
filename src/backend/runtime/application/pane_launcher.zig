@@ -314,6 +314,7 @@ const OwnedCommand = struct {
 pub fn readPane(io: Io, pane: *Pane) PaneOutputEvent {
     const len = pane.session.read(io, &pane.output_buffer) catch |err|
         return .{ .pane = pane.key(), .result = err };
+    core.echo_trace.mark(io, .pty_read);
     return .{ .pane = pane.key(), .result = @intCast(len) };
 }
 

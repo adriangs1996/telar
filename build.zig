@@ -167,6 +167,7 @@ pub fn build(b: *std.Build) void {
     ) orelse false;
     const exe_options = b.addOptions();
     exe_options.addOption(bool, "diagnostics", diagnostics_enabled);
+    exe_options.addOption(bool, "echo_trace", b.option(bool, "echo-trace", "Record bounded echo phase timestamps until shutdown") orelse false);
     exe.root_module.addOptions("build_options", exe_options);
     b.installArtifact(exe);
 
@@ -248,6 +249,22 @@ pub fn build(b: *std.Build) void {
     benchmarks.root_module.addImport("telar-core", bench_core);
     benchmarks.root_module.addImport("telar-backend", bench_backend);
     benchmarks.root_module.addImport("telar-frontend", bench_frontend);
+
+    const echo_probe = b.addExecutable(.{
+        .name = "echo-probe",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("benchmarks/echo_probe.zig"),
+            .target = target,
+            .optimize = bench_optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "ghostty-vt", .module = ghostty_vt },
+                .{ .name = "telar-backend", .module = bench_backend },
+                .{ .name = "telar-frontend", .module = bench_frontend },
+            },
+        }),
+    });
+    b.step("echo-probe", "Build the echo VT oracle and minimal interposition controls").dependOn(&b.addInstallArtifact(echo_probe, .{}).step);
     benchmarks.root_module.addImport("ghostty-vt", ghostty_vt);
     const run_benchmarks = b.addRunArtifact(benchmarks);
     if (b.args) |args| {

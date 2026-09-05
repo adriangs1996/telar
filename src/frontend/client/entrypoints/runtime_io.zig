@@ -59,6 +59,7 @@ pub fn scheduleRead(client: *Client) !void {
 /// if (try runtime_transport.handleRead(client, result)) |status| return status;
 /// ```
 pub fn handleRead(client: *Client, result: anyerror![]u8) !?u8 {
+    core.echo_trace.mark(client.io, .client_frame);
     const payload = try client.runtime_transport.completeRead(result);
     const decode_started = diagnostics.now(client.io);
     const message = try schema.decodeServer(payload);
@@ -208,10 +209,14 @@ fn pump(client: *Client) !void {
 }
 
 fn receive(io: Io, state: *State) anyerror![]u8 {
-    return state.read(io);
+    const bytes = try state.read(io);
+    core.echo_trace.mark(io, .client_read);
+    return bytes;
 }
 
 fn send(io: Io, state: *State, payload: []const u8) anyerror!void {
+    core.echo_trace.mark(io, .client_send_start);
+    defer core.echo_trace.mark(io, .client_send_done);
     return state.send(io, payload);
 }
 

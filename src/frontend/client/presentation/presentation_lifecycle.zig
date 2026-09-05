@@ -40,6 +40,7 @@ pub fn handleDraw(client: *Client, result: anyerror!void) !void {
 /// try presentation_lifecycle.presentNow(client);
 /// ```
 pub fn presentNow(client: *Client) !void {
+    core.echo_trace.mark(client.io, .compose_start);
     if (client.output) |*output| {
         if (output.pending) {
             output.draw_deferred = true;
@@ -103,7 +104,9 @@ pub fn handleMediaTick(client: *Client, result: anyerror!void) !void {
 /// Example: `try pumpOutput(client);`.
 pub fn pumpOutput(client: *Client) anyerror!void {
     const output = if (client.output) |*output| output else return;
-    const work = try output.tryWrite(output.begin() orelse return);
+    const pending = output.begin() orelse return;
+    core.echo_trace.mark(client.io, .host_flush_start);
+    const work = try output.tryWrite(pending);
     if (work.bytes.len == 0) {
         try handleWritten(client, {});
         return;
@@ -115,6 +118,7 @@ pub fn pumpOutput(client: *Client) anyerror!void {
 /// Commits only the presentation whose bytes reached the host, then folds work.
 /// Example: `try handleWritten(client, result);`.
 pub fn handleWritten(client: *Client, result: anyerror!void) !void {
+    core.echo_trace.mark(client.io, .host_flush_done);
     const output = if (client.output) |*output| output else unreachable;
     if (try output.complete(result)) |delivery| {
         try deliver(client, delivery);

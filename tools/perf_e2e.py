@@ -63,6 +63,27 @@ def session_members(sessions):
     return members
 
 
+def cleanup_sessions(sessions):
+    if sessions & {os.getsid(0), os.getsid(os.getppid())}:
+        raise RuntimeError('refusing to clean the runner session')
+    if not sessions:
+        return
+    for pid in session_members(sessions):
+        if pid in (os.getpid(), os.getppid()):
+            raise RuntimeError('refusing to signal the runner or its parent')
+        try:
+            if os.getsid(pid) in sessions:
+                os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    deadline = time.perf_counter() + 2
+    while session_members(sessions) and time.perf_counter() < deadline:
+        time.sleep(.05)
+    remaining = session_members(sessions)
+    if remaining:
+        raise RuntimeError(f'isolated processes survived cleanup: {remaining}')
+
+
 def stop_runtime(binary, env):
     pids = runtime_pids(env['TELAR_SOCKET_PATH'])
     sessions = owned_sessions(descendants(pids))
@@ -84,20 +105,8 @@ def stop_runtime(binary, env):
     survivors = session_members(sessions)
     result['children_exited'] = not [pid for pid in survivors if pid not in pids]
     result['socket_removed'] = not Path(env['TELAR_SOCKET_PATH']).exists()
-    for pid in survivors:
-        if pid in (os.getpid(), os.getppid()):
-            raise RuntimeError('refusing to signal the runner or its parent')
-        try:
-            if os.getsid(pid) in sessions:
-                os.kill(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-    cleanup_deadline = time.perf_counter() + 2
-    while session_members(sessions) and time.perf_counter() < cleanup_deadline:
-        time.sleep(.05)
-    result['cleanup_complete'] = not session_members(sessions)
-    if not result['cleanup_complete']:
-        raise RuntimeError(f'isolated processes survived cleanup: {session_members(sessions)}')
+    cleanup_sessions(sessions)
+    result['cleanup_complete'] = True
     return result
 
 
@@ -137,7 +146,7 @@ def slow_host(binary, directory, env):
         os.close(master)
 
 
-def measure(binary, directory, case, samples):
+def isolated_environment(directory):
     directory.mkdir(mode=0o700, parents=True)
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(('TELAR_', 'TMUX', 'HERDR'))}
@@ -148,6 +157,11 @@ def measure(binary, directory, case, samples):
                XDG_CONFIG_HOME=str(directory / 'config'),
                XDG_CACHE_HOME=str(directory / 'cache'),
                TELAR_SOCKET_PATH=str(directory / 'runtime.sock'))
+    return env
+
+
+def measure(binary, directory, case, samples):
+    env = isolated_environment(directory)
     previous = os.getcwd()
     os.chdir(directory)
     try:
