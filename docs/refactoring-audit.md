@@ -117,7 +117,17 @@ remain constraints, not targets for consolidation.
 - Wire, paced/compressed/shared transmission, overflow and sidebar regression
   tests pass with `zig build test --summary all`.
 
-12. Attachment capture, markers and presentation.
+## 12. Attachment boundaries
+
+- The clipboard adapter owns native capture and source validation independently
+  of Store, graphics or marker parsing.
+- Pure marker scanning/navigation consumes cells and marker identities, not
+  Slots or Store. Aggregate pairing and retirement remain one bounded mutation.
+- Preview placement geometry/output state is separate from capture and identity
+  reconciliation, reusing the existing path-marker implementation.
+- Capture ownership, marker/deletion, generation-scoping and preview regression
+  tests pass with `zig build test --summary all`.
+
 13. Configuration generation, parsing and module loading.
 14. History search policies and bounded result accumulation.
 15. Modal-specific prompt state and semantic selection.
