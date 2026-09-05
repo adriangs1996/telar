@@ -40,16 +40,32 @@ def descendants(roots):
         owned |= children
 
 
-def surviving(owned):
-    current = process_table()
-    # PPID can change on orphaning; creation time and command must still match.
-    return [pid for pid, identity in owned.items()
-            if pid in current and current[pid][1:] == identity[1:]]
+def owned_sessions(owned):
+    sessions = set()
+    for pid in owned:
+        try:
+            sessions.add(os.getsid(pid))
+        except ProcessLookupError:
+            pass
+    if sessions & {os.getsid(0), os.getsid(os.getppid())}:
+        raise RuntimeError('isolated runtime shares the runner session')
+    return sessions
+
+
+def session_members(sessions):
+    members = []
+    for pid in process_table():
+        try:
+            if os.getsid(pid) in sessions:
+                members.append(pid)
+        except ProcessLookupError:
+            pass
+    return members
 
 
 def stop_runtime(binary, env):
     pids = runtime_pids(env['TELAR_SOCKET_PATH'])
-    owned = descendants(pids)
+    sessions = owned_sessions(descendants(pids))
     started = time.perf_counter()
     try:
         command = subprocess.run([binary, 'server', 'stop'], env=env,
@@ -64,22 +80,24 @@ def stop_runtime(binary, env):
     remaining = runtime_pids(env['TELAR_SOCKET_PATH'])
     result = dict(elapsed_ms=(time.perf_counter() - started) * 1000,
                   exited=not remaining, returncode=code, reply=reply, pids=pids)
-    survivors = surviving(owned)
+    # Session membership survives exec, reparenting and foreground-job changes.
+    survivors = session_members(sessions)
     result['children_exited'] = not [pid for pid in survivors if pid not in pids]
     result['socket_removed'] = not Path(env['TELAR_SOCKET_PATH']).exists()
     for pid in survivors:
         if pid in (os.getpid(), os.getppid()):
             raise RuntimeError('refusing to signal the runner or its parent')
         try:
-            os.kill(pid, signal.SIGKILL)
+            if os.getsid(pid) in sessions:
+                os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
     cleanup_deadline = time.perf_counter() + 2
-    while surviving(owned) and time.perf_counter() < cleanup_deadline:
+    while session_members(sessions) and time.perf_counter() < cleanup_deadline:
         time.sleep(.05)
-    result['cleanup_complete'] = not surviving(owned)
+    result['cleanup_complete'] = not session_members(sessions)
     if not result['cleanup_complete']:
-        raise RuntimeError(f'isolated processes survived cleanup: {surviving(owned)}')
+        raise RuntimeError(f'isolated processes survived cleanup: {session_members(sessions)}')
     return result
 
 
