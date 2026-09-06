@@ -67,6 +67,7 @@ pub const Pane = struct {
     cursor: schema.frame.Cursor = .{},
     mouse: schema.frame.Mouse = .{},
     input_modes: schema.frame.InputModes = .{},
+    pointer_shape: schema.frame.PointerShape = .default,
     scroll: schema.frame.Scroll,
     applied_frame_id: u64 = 0,
     pending_frame_id: u64 = 0,
@@ -1100,6 +1101,7 @@ pub const Model = struct {
         const applied = try frame_apply.applyBuffer(&pane.buffer, &pane.cursor, frame);
         pane.mouse = frame.mouse;
         pane.input_modes = frame.input_modes;
+        pane.pointer_shape = frame.pointer_shape;
         pane.scroll = frame.scroll;
         if (replacement_damage) |rows| {
             @memset(rows, .{});

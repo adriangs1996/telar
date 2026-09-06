@@ -39,11 +39,18 @@ pub fn build(b: *std.Build) void {
     else
         optimize;
 
-    const ghostty_vt = b.dependency("ghostty_vt", .{
+    const ghostty_dep = b.dependency("ghostty_vt", .{
         .target = target,
         .optimize = vt_optimize,
-    }).module("ghostty-vt");
+    });
+    const ghostty_vt = ghostty_dep.module("ghostty-vt");
+    const wuffs_dep = ghostty_dep.builder.lazyDependency("wuffs", .{
+        .target = target,
+        .optimize = vt_optimize,
+    }) orelse return;
+    const wuffs = wuffs_dep.module("wuffs");
     coverage.excludeCSourceCoverage(b, ghostty_vt);
+    coverage.excludeCSourceCoverage(b, wuffs);
 
     const lua_api = addLua(b, .{ .target = target, .optimize = optimize, .name = "lua" });
     coverage.instrumentModule(lua_api);
@@ -121,6 +128,7 @@ pub fn build(b: *std.Build) void {
     backend.addImport("telar-lua", telar_lua);
     backend.addImport("lua-api", lua_api);
     backend.addImport("ghostty-vt", ghostty_vt);
+    backend.addImport("wuffs", wuffs);
     backend.addImport("tls", tls);
     backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
     backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
@@ -227,6 +235,7 @@ pub fn build(b: *std.Build) void {
     });
     bench_backend.addImport("telar-core", bench_core);
     bench_backend.addImport("ghostty-vt", ghostty_vt);
+    bench_backend.addImport("wuffs", wuffs);
     bench_backend.addImport("tls", tls);
     bench_backend.addImport("telar-lua", bench_lua);
     bench_backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
@@ -438,6 +447,8 @@ pub fn build(b: *std.Build) void {
         "test-backend-proxy",
         "Run the runtime observation proxy tests",
     );
+    const media_tests = b.addTest(.{ .root_module = backend, .filters = &.{"PNG"} });
+    b.step("test-png", "Run PNG decoding and pane ingestion tests").dependOn(&b.addRunArtifact(media_tests).step);
     const isolation_tests = b.addTest(.{ .root_module = backend, .filters = &.{"performance probe"} });
     const isolation_step = b.step("test-isolation", "Measure bounded search, graphics staging and history query work");
     const isolation_run = b.addRunArtifact(isolation_tests);
@@ -514,6 +525,7 @@ pub fn build(b: *std.Build) void {
         .tls = tls,
         .freetype = freetype,
         .ghostty_vt = ghostty_vt,
+        .wuffs = wuffs,
         .nghttp2_prefix = nghttp2_prefix,
         .brotli_prefix = brotli_prefix,
         .target = target,
@@ -758,6 +770,7 @@ const SuiteModules = struct {
     tls: *std.Build.Module,
     freetype: *std.Build.Module,
     ghostty_vt: *std.Build.Module,
+    wuffs: *std.Build.Module,
     nghttp2_prefix: []const u8,
     brotli_prefix: []const u8,
     target: std.Build.ResolvedTarget,
@@ -782,6 +795,7 @@ const SuiteModules = struct {
         tests.root_module.addImport("telar-lua", modules.telar_lua);
         tests.root_module.addImport("tls", modules.tls);
         tests.root_module.addImport("freetype", modules.freetype);
+        tests.root_module.addImport("wuffs", modules.wuffs);
         tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "include" }) });
         tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "lib" }) });
         tests.root_module.linkSystemLibrary("nghttp2", .{});

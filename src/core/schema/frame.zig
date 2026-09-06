@@ -10,7 +10,7 @@ pub const max_span_count = 4096;
 pub const cell_header_size = 1;
 pub const max_style_size = 14;
 pub const max_cell_size = cell_header_size + max_style_size + ui.Cell.max_bytes;
-pub const body_header_size = 54;
+pub const body_header_size = 55;
 pub const span_header_size = 12;
 pub const max_body_size = transport.max_frame_size - 1;
 pub const max_cell_count: u32 = @intCast(
@@ -21,6 +21,44 @@ pub const Cursor = struct {
     visible: bool = false,
     x: u16 = 0,
     y: u16 = 0,
+};
+
+/// Canonical OSC 22 shapes. Wire values are independent of the VT's enum ABI.
+pub const PointerShape = enum(u8) {
+    default = 0,
+    context_menu = 1,
+    help = 2,
+    pointer = 3,
+    progress = 4,
+    wait = 5,
+    cell = 6,
+    crosshair = 7,
+    text = 8,
+    vertical_text = 9,
+    alias = 10,
+    copy = 11,
+    move = 12,
+    no_drop = 13,
+    not_allowed = 14,
+    grab = 15,
+    grabbing = 16,
+    all_scroll = 17,
+    col_resize = 18,
+    row_resize = 19,
+    n_resize = 20,
+    e_resize = 21,
+    s_resize = 22,
+    w_resize = 23,
+    ne_resize = 24,
+    nw_resize = 25,
+    se_resize = 26,
+    sw_resize = 27,
+    ew_resize = 28,
+    ns_resize = 29,
+    nesw_resize = 30,
+    nwse_resize = 31,
+    zoom_in = 32,
+    zoom_out = 33,
 };
 
 pub const MouseTracking = enum(u8) {
@@ -80,6 +118,7 @@ pub const Frame = struct {
     cursor: Cursor = .{},
     mouse: Mouse = .{},
     input_modes: InputModes = .{},
+    pointer_shape: PointerShape = .default,
     scroll: Scroll,
     spans: []const Span,
 };
@@ -93,6 +132,7 @@ pub const FrameView = struct {
     cursor: Cursor,
     mouse: Mouse,
     input_modes: InputModes,
+    pointer_shape: PointerShape = .default,
     scroll: Scroll,
     span_count: u16,
     encoded_spans: []const u8,
@@ -197,6 +237,7 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
     try encoder.writeByte(@intFromBool(frame.input_modes.alternate_screen));
     try encoder.writeByte(frame.input_modes.kitty_keyboard_flags);
     try encoder.writeByte(@intFromBool(frame.input_modes.modify_other_keys_2));
+    try encoder.writeByte(@intFromEnum(frame.pointer_shape));
     try encoder.writeInt(u32, frame.scroll.total_rows);
     try encoder.writeInt(u32, frame.scroll.offset);
     try encoder.writeInt(u16, @intCast(frame.spans.len));
@@ -254,6 +295,8 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
             return error.InvalidKeyboardFlags,
         .modify_other_keys_2 = try decoder.readBool(),
     };
+    const pointer_shape = std.enums.fromInt(PointerShape, try decoder.readByte()) orelse
+        return error.InvalidPointerShape;
     const scroll: Scroll = .{
         .total_rows = try decoder.readInt(u32),
         .offset = try decoder.readInt(u32),
@@ -317,6 +360,7 @@ pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
         .cursor = .{ .visible = cursor_visible, .x = cursor_x, .y = cursor_y },
         .mouse = mouse,
         .input_modes = input_modes,
+        .pointer_shape = pointer_shape,
         .scroll = scroll,
         .span_count = span_count,
         .encoded_spans = decoder.consumed(spans_start),

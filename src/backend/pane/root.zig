@@ -449,6 +449,7 @@ pub const Pane = struct {
     cursor: schema.frame.Cursor = .{},
     mouse: schema.frame.Mouse = .{},
     input_modes: schema.frame.InputModes = .{},
+    pointer_shape: schema.frame.PointerShape = .default,
     foreground_override: ?vt.color.RGB = null,
     background_override: ?vt.color.RGB = null,
     semantic_colors_dirty: bool = false,
@@ -606,6 +607,7 @@ pub const Pane = struct {
         pane.background_override = pane.terminal.colors.background.override;
         pane.mouse = pane.mouseState();
         pane.input_modes = pane.inputModeState();
+        pane.pointer_shape = pane.pointerShape();
         try pane.render(true);
 
         // Spawn last. Once the child exists, Pane.create cannot fail and
@@ -802,6 +804,12 @@ pub const Pane = struct {
         pane.actorFinished();
     }
 
+    fn pointerShape(pane: *const Pane) schema.frame.PointerShape {
+        return switch (pane.terminal.mouse_shape) {
+            inline else => |shape| @field(schema.frame.PointerShape, @tagName(shape)),
+        };
+    }
+
     pub fn inputModeState(pane: *const Pane) schema.frame.InputModes {
         const modes = &pane.terminal.modes;
         return .{
@@ -887,6 +895,7 @@ pub const Pane = struct {
         const background = pane.terminal.colors.background.override;
         pane.mouse = pane.mouseState();
         pane.input_modes = pane.inputModeState();
+        pane.pointer_shape = pane.pointerShape();
         _ = pane.title.observe(pane.terminal.getTitle() orelse "");
         if (!std.meta.eql(pane.foreground_override, foreground) or
             !std.meta.eql(pane.background_override, background))
@@ -2514,6 +2523,47 @@ test "pane input modes expose child focus reporting" {
     try std.testing.expect(!pane.inputModeState().focus_events);
     pane.terminal.modes.set(.focus_event, true);
     try std.testing.expect(pane.inputModeState().focus_events);
+}
+
+test "pane pointer shapes follow every VT shape across every OSC read boundary" {
+    var allocator = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+    const gpa = allocator.allocator();
+    var pane: Pane = undefined;
+    pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 2, .rows = 1 });
+    defer pane.terminal.deinit(gpa);
+    var stream = pane.terminal.vtStream();
+    defer stream.deinit();
+    try std.testing.expectEqual(schema.frame.PointerShape.text, pane.pointerShape());
+    allocator.fail_index = allocator.alloc_index;
+    allocator.resize_fail_index = allocator.resize_index;
+
+    for (std.meta.tags(schema.frame.PointerShape)) |shape| {
+        var buffer: [64]u8 = undefined;
+        const command = try std.fmt.bufPrint(&buffer, "\x1b]22;{s}\x1b\\", .{@tagName(shape)});
+        for (command) |*byte| {
+            if (byte.* == '_') {
+                byte.* = '-';
+            }
+        }
+
+        for (0..command.len + 1) |split| {
+            stream.nextSlice("\x1b]22;default\x1b\\");
+            stream.nextSlice(command[0..split]);
+            if (split < command.len - 1) {
+                try std.testing.expectEqual(schema.frame.PointerShape.default, pane.pointerShape());
+            }
+
+            stream.nextSlice(command[split..]);
+            try std.testing.expectEqual(shape, pane.pointerShape());
+        }
+    }
+
+    stream.nextSlice("\x1b]22;hand\x07");
+    try std.testing.expectEqual(schema.frame.PointerShape.pointer, pane.pointerShape());
+    stream.nextSlice("\x1b]22;not-a-cursor\x1b\\");
+    try std.testing.expectEqual(schema.frame.PointerShape.pointer, pane.pointerShape());
+    stream.nextSlice("\x1b]22;default\x1b\\");
+    try std.testing.expectEqual(schema.frame.PointerShape.default, pane.pointerShape());
 }
 
 test "pane keyboard modes follow VT negotiation and screen-local stacks" {

@@ -206,7 +206,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
-        presentation.pointer.Shape.horizontal_resize,
+        presentation.pointer.Shape.ew_resize,
         client.presenter.screen.presented_mouse_pointer.?,
     );
 
@@ -221,6 +221,45 @@ test "host pointer shape follows semantic hover through paced presentation" {
         presentation.pointer.Shape.default,
         client.presenter.screen.presented_mouse_pointer.?,
     );
+
+    var payload: [128]u8 = undefined;
+    const cells = [_]core.ui.Cell{.{}};
+    for ([_]schema.frame.PointerShape{ .text, .wait, .zoom_in }, 0..) |shape, index| {
+        const encoded = try schema.encodePaneFrame(&payload, .{
+            .pane_id = TestHarness.bootstrap_pane,
+            .frame_id = index + 1,
+            .base_frame_id = index,
+            .cols = 1,
+            .rows = 1,
+            .pointer_shape = shape,
+            .scroll = .{ .total_rows = 1, .offset = 0 },
+            .spans = if (index == 0) &.{.{ .start = 0, .cells = &cells }} else &.{},
+        });
+        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(encoded));
+        try presentation_lifecycle.observe(client);
+        try harness.settleModelPresentation();
+        try std.testing.expectEqual(shape, client.presenter.screen.presented_mouse_pointer.?);
+    }
+
+    try handler.mouse(.{ .x = client.view.regions.top.x, .y = client.view.regions.top.y, .kind = .move });
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(presentation.pointer.Shape.pointer, client.presenter.screen.presented_mouse_pointer.?);
+
+    _ = try client_actions.apply(client, .enter_copy_mode);
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+    try handler.mouse(.{ .x = client.view.regions.workbench.x, .y = client.view.regions.workbench.y, .kind = .move });
+    try handler.key(.plain(.escape));
+    try std.testing.expect(!client.model.copyModeActive());
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(presentation.pointer.Shape.default, client.presenter.screen.presented_mouse_pointer.?);
+
+    try handler.mouse(.{ .x = client.view.regions.workbench.x, .y = client.view.regions.workbench.y, .kind = .move });
+    try presentation_lifecycle.observe(client);
+    try harness.settleModelPresentation();
+    try std.testing.expectEqual(presentation.pointer.Shape.zoom_in, client.presenter.screen.presented_mouse_pointer.?);
 }
 
 test "presentation flushes an explicit empty model before bootstrap" {

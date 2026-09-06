@@ -208,16 +208,21 @@ notifications.
 
 During the resulting draw, the view maps semantic hover to one bounded mouse
 pointer shape. Clickable chrome uses `pointer`, the sidebar separator and its
-active drag use `ew-resize`, and pane content or passive chrome restore the
-terminal default. Copy mode also restores the default because it owns every
-pointer event before the view. The default is emitted explicitly rather than as
+active drag use `ew-resize`, and passive chrome and pane borders restore the
+terminal default. Over attached pane content, it uses that pane's canonical
+OSC 22 shape, regardless of keyboard focus. Copy mode and active prompts restore
+the default because they own pointer input before the view. Attachment-modal
+hits retain their own shape and never inherit an underlying pane's shape. The default is emitted explicitly rather than as
 an empty reset so terminals implementing only CSS shape names restore it too.
 `presentation.Screen` emits OSC 22 in the synchronized frame only when that
 shape differs from the last successful flush.
 A failed flush marks it unknown so recovery re-emits it, while the platform
 leave sequence restores the default before leaving the alternate screen.
-Unsupported terminals ignore the OSC sequence. This state is per client,
-fixed-size and allocation-free.
+Unsupported terminals ignore the OSC sequence. Physical pointer state is per
+client, fixed-size and allocation-free. The runtime publishes the child's shape
+in `pane_frame.pointer_shape`, including pointer-only updates and recovery
+snapshots. See [Pane pointer shape](pane-pointer-shape.md) for protocol bounds,
+stationary-pointer updates, UI priority and proofs.
 
 `view_interactions.apply` wires that command to
 `DispatchViewInteractionHandler`. The application handler applies the semantic

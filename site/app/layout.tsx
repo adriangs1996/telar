@@ -39,7 +39,16 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${martian.variable} ${instrument.variable} ${serif.variable}`}>
-      <body className="desk">{children}</body>
+      <body className="desk">
+        {/* Apply the stored theme before the first paint so a returning visitor never sees Vesper flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{var t=localStorage.getItem("telar.theme");if(t&&/^(vesper|catppuccin|tokyo-night|terminal)$/.test(t))document.documentElement.dataset.theme=t}catch(e){}',
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

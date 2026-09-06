@@ -25,6 +25,7 @@ pub const Sync = struct {
     acknowledged_cursor: schema.frame.Cursor = .{},
     acknowledged_mouse: schema.frame.Mouse = .{},
     acknowledged_input_modes: schema.frame.InputModes = .{},
+    acknowledged_pointer_shape: schema.frame.PointerShape = .default,
     acknowledged_scroll: schema.frame.Scroll = .{ .total_rows = 1, .offset = 0 },
     projected: core.ui.Buffer,
     projected_damage: []bool,
@@ -262,9 +263,10 @@ pub const Sync = struct {
             pane.input_modes,
             sync.acknowledged_input_modes,
         );
+        const pointer_changed = pane.pointer_shape != sync.acknowledged_pointer_shape;
         const scroll_changed = !std.meta.eql(projection.scroll, sync.acknowledged_scroll);
         if (!snapshot and span_count == 0 and !cursor_changed and !mouse_changed and
-            !input_modes_changed and !scroll_changed)
+            !input_modes_changed and !pointer_changed and !scroll_changed)
         {
             sync.observeProjection(pane, projection);
 
@@ -295,6 +297,7 @@ pub const Sync = struct {
             .cursor = projection.cursor,
             .mouse = pane.mouse,
             .input_modes = pane.input_modes,
+            .pointer_shape = pane.pointer_shape,
             .scroll = projection.scroll,
             .spans = span_storage[0..span_count],
         });
@@ -309,6 +312,7 @@ pub const Sync = struct {
         sync.acknowledged_cursor = projection.cursor;
         sync.acknowledged_mouse = pane.mouse;
         sync.acknowledged_input_modes = pane.input_modes;
+        sync.acknowledged_pointer_shape = pane.pointer_shape;
         sync.acknowledged_scroll = projection.scroll;
         sync.observeProjection(pane, projection);
         sync.outstanding = .{ .frame_id = frame_id, .sent_ns = diagnostics.now(io) };

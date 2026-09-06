@@ -1,6 +1,7 @@
 import CopyCommand from "@/components/CopyCommand";
 import Loom from "@/components/Loom";
 import Tiles from "@/components/Tiles";
+import Weave from "@/components/Weave";
 
 const HEADLINE: (string | { em: string })[][] = [
   ["Your", "agents", "run", { em: "inside" }, "it."],
@@ -14,11 +15,13 @@ export default function Hero() {
   let index = 0;
 
   return (
-    <section id="top" data-loom className="rails relative overflow-hidden">
-      <div className="loom-mask pointer-events-none absolute inset-y-0 right-0 hidden w-[62%] lg:block lg:pointer-events-auto">
-        <Loom />
-      </div>
+    <section id="top" className="relative">
       <Tiles />
+      <Weave />
+      <div data-loom className="rails relative overflow-hidden">
+        <div className="loom-mask pointer-events-none absolute inset-y-0 right-0 hidden w-[62%] lg:block lg:pointer-events-auto">
+          <Loom />
+        </div>
 
       <div className="relative px-5 pt-20 pb-16 md:px-8 md:pt-28 md:pb-20">
         <p className="eyebrow rise" style={{ ["--delay" as string]: "0ms" }}>
@@ -62,8 +65,9 @@ export default function Hero() {
             </div>
           </div>
 
-          <div data-loom-word aria-hidden="true" className="pointer-events-none hidden min-h-[16rem] lg:mr-36 lg:block" />
+          <div data-loom-word aria-hidden="true" className="pointer-events-none hidden min-h-[16rem] lg:mr-12 lg:block" />
         </div>
+      </div>
       </div>
     </section>
   );

@@ -210,3 +210,69 @@ _Avoid_: Running agent, busy process
 **Ready agent**:
 An open agent waiting for user input with no current work in progress.
 _Avoid_: Idle process
+
+## Threads and agent mode
+
+**Project**:
+A git repository identified by its common directory, so every worktree of
+that repository belongs to the same project. A directory that is not a
+repository is its own project, keyed by path.
+_Avoid_: Repo, workspace path
+
+**Thread**:
+The durable record of one agent conversation: provider, the agent's own
+session reference, project, titles, status history and where its transcript
+lives. It outlives its pane and has zero or one open agent.
+_Avoid_: Session, conversation, hilo (prose only)
+
+**Thread item**:
+One normalized entry of a thread's transcript, such as a user prompt, an
+assistant message, a tool call, its result or a compaction boundary. telar
+indexes it with a preview; the text stays in the agent's file.
+_Avoid_: Message, turn record
+
+**Thread registry**:
+The runtime-owned collection of threads, live and closed, that both client
+modes read.
+_Avoid_: Session list, history of agents
+
+**Blocked reason**:
+What a blocked agent is asking for, as an official hook reported it. Screen
+evidence never provides one.
+_Avoid_: Permission text, prompt text
+
+**Multiplexer mode**:
+The client projection organized by workspace, tab and pane.
+_Avoid_: Trama mode, normal mode
+
+**Agent mode**:
+The client projection organized by project, thread and attention, with a
+thread view and a composer. It never owns runtime state.
+_Avoid_: Hilos mode, dashboard, thread mode
+
+**Browse focus**:
+The agent-mode input owner where host input drives the thread list, the
+projects and the views.
+_Avoid_: Navigate mode, list mode
+
+**Interact focus**:
+The agent-mode input owner where host input reaches the selected thread's
+pane, as it does in multiplexer mode.
+_Avoid_: Terminal mode, attached
+
+**Composer**:
+The client widget where the user writes a prompt for a thread, chooses the
+provider of a new thread and configures that provider's options.
+_Avoid_: Prompt box, chat input, editor
+
+**Provider option**:
+A configurable value a provider's manifest declares, such as model, effort or
+permission mode, together with the flag that sets it at launch and the live
+command that changes it on a running agent.
+_Avoid_: Setting, flag, trait
+
+**Live command**:
+The agent's own command, typed into its input on the user's behalf, that
+changes a provider option on a running agent. Its effect is confirmed only by
+the transcript.
+_Avoid_: Slash command, remote setting

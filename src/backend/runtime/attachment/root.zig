@@ -1184,6 +1184,55 @@ test "attachment store reports and commits workspace departure on the last pane"
     try std.testing.expect(!store.observes(workspace));
 }
 
+test "pointer-only frames coalesce independently and survive snapshot recovery" {
+    const support = @import("../tests/support.zig");
+    var fixture: support.PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var first = try Attachment.init(std.testing.allocator, fixture.pane);
+    defer first.deinit();
+    var second = try Attachment.init(std.testing.allocator, fixture.pane);
+    defer second.deinit();
+    var buffer: [4096]u8 = undefined;
+    const preparation: Attachment.CellPreparation = .{ .io = std.testing.io, .buffer = &buffer, .metrics = &fixture.metrics };
+
+    const initial = (try schema.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(schema.frame.PointerShape.text, initial.pointer_shape);
+    _ = first.acknowledgeFrame(initial.frame_id, 0);
+    const slow = (try schema.decodeServer((try second.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    const slow_id = slow.frame_id;
+    _ = try fixture.pane.ingest(std.testing.io, "\x1b]22;pointer\x1b\\");
+    const changed = (try schema.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(schema.frame.PointerShape.pointer, changed.pointer_shape);
+    try std.testing.expectEqual(@as(u16, 0), changed.span_count);
+    try std.testing.expectEqual(initial.frame_id, changed.base_frame_id);
+    _ = first.acknowledgeFrame(changed.frame_id, 0);
+    try std.testing.expect((try first.prepareNextCells(preparation)) == null);
+    try std.testing.expect((try second.prepareNextCells(preparation)) == null);
+
+    _ = try fixture.pane.ingest(std.testing.io, "\x1b]22;wait\x1b\\\x1b]22;zoom-in\x1b\\");
+    const latest = (try schema.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(schema.frame.PointerShape.zoom_in, latest.pointer_shape);
+    try std.testing.expectEqual(@as(u16, 0), latest.span_count);
+    _ = first.acknowledgeFrame(latest.frame_id, 0);
+    try std.testing.expect((try second.prepareNextCells(preparation)) == null);
+    _ = second.acknowledgeFrame(slow_id, 0);
+    const caught_up = (try schema.decodeServer((try second.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(schema.frame.PointerShape.zoom_in, caught_up.pointer_shape);
+    try std.testing.expectEqual(@as(u16, 0), caught_up.span_count);
+    try std.testing.expectEqual(slow_id, caught_up.base_frame_id);
+
+    first.requestCellSnapshot();
+    const recovered = (try schema.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(schema.frame.PointerShape.zoom_in, recovered.pointer_shape);
+    try std.testing.expect(recovered.isSnapshot());
+    var reconnected = try Attachment.init(std.testing.allocator, fixture.pane);
+    defer reconnected.deinit();
+    const restored = (try schema.decodeServer((try reconnected.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(schema.frame.PointerShape.zoom_in, restored.pointer_shape);
+    try std.testing.expect(restored.isSnapshot());
+}
+
 test "attachments keep independent scrollback viewports" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;

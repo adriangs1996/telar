@@ -2627,7 +2627,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
     const arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "stty raw -echo; while IFS= read -r line; do printf '%s\\r\\n' \"$line\"; done",
+        "stty raw -echo; while IFS= read -r line; do printf '\\033]22;crosshair\\033\\\\%s\\r\\n' \"$line\"; done",
     };
     try first.send(io, try schema.encodeOpenPane(&first_send, .{
         .request_id = @enumFromInt(1),
@@ -2702,6 +2702,9 @@ test "two clients observe one pane with independent frame acknowledgement" {
         .pane_frame => |frame| {
             try applyFrameCells(&first_cells, frame);
             first_saw_shared = rowContains(&first_cells, "BOTH_CLIENTS");
+            if (first_saw_shared) {
+                try std.testing.expectEqual(schema.frame.PointerShape.crosshair, frame.pointer_shape);
+            }
             try first.send(io, try schema.encodeFrameAck(&first_send, .{
                 .pane_id = frame.pane_id,
                 .frame_id = frame.frame_id,
@@ -2715,6 +2718,9 @@ test "two clients observe one pane with independent frame acknowledgement" {
         .pane_frame => |frame| {
             try applyFrameCells(&second_cells, frame);
             second_saw_shared = rowContains(&second_cells, "BOTH_CLIENTS");
+            if (second_saw_shared) {
+                try std.testing.expectEqual(schema.frame.PointerShape.crosshair, frame.pointer_shape);
+            }
             try second.send(io, try schema.encodeFrameAck(&second_send, .{
                 .pane_id = frame.pane_id,
                 .frame_id = frame.frame_id,

@@ -2,7 +2,18 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AGENT_SCRIPT, INITIAL_AGENTS, type Agent, type ToastKind } from "@/lib/agents";
-import type { ThemeName } from "@/lib/themes";
+import { THEMES, type ThemeName } from "@/lib/themes";
+
+const THEME_KEY = "telar.theme";
+
+function storedTheme(): ThemeName | null {
+  try {
+    const value = window.localStorage.getItem(THEME_KEY);
+    return THEMES.some((theme) => theme.id === value) ? (value as ThemeName) : null;
+  } catch {
+    return null;
+  }
+}
 
 export type Toast = { id: number; kind: ToastKind; title: string; body: string };
 
@@ -17,6 +28,7 @@ type DemoState = {
   toasts: Toast[];
   runtime: Runtime;
   focusAgent: (id: string) => void;
+  focusTab: (tab: string) => void;
   step: (delta: number) => void;
   setTheme: (theme: ThemeName) => void;
   detach: () => void;
@@ -46,6 +58,7 @@ export default function DemoProvider({ children }: { children: React.ReactNode }
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [runtime, setRuntime] = useState<Runtime>({ pid: 4812, bytes: 184_320, turns: 12, since: 0 });
   const toastSeq = useRef(0);
+  const themeChosen = useRef(false);
 
   const pushToast = useCallback((kind: ToastKind, title: string, body: string) => {
     const id = ++toastSeq.current;
@@ -54,6 +67,18 @@ export default function DemoProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const focusAgent = useCallback((id: string) => setFocused(id), []);
+
+  // A tab with no agent in it stays a tab: focus lands on its first agent
+  // when there is one, and otherwise the sidebar keeps its selection.
+  const focusTab = useCallback(
+    (tab: string) => {
+      const first = agents.find((agent) => agent.tab === tab);
+      if (first) {
+        setFocused(first.id);
+      }
+    },
+    [agents]
+  );
 
   const step = useCallback(
     (delta: number) => {
@@ -66,7 +91,10 @@ export default function DemoProvider({ children }: { children: React.ReactNode }
     [agents, focused]
   );
 
-  const setTheme = useCallback((next: ThemeName) => setThemeState(next), []);
+  const setTheme = useCallback((next: ThemeName) => {
+    themeChosen.current = true;
+    setThemeState(next);
+  }, []);
 
   const detach = useCallback(() => {
     setToasts([]);
@@ -79,9 +107,22 @@ export default function DemoProvider({ children }: { children: React.ReactNode }
     setAttached(true);
   }, []);
 
-  // Theme reaches the window chrome through one attribute on the root.
+  // The theme reaches the whole page through one attribute on the root, and
+  // survives a reload. Until the visitor picks one, a stored choice wins over
+  // the default, and nothing is written until that choice has been adopted.
   useEffect(() => {
+    const stored = storedTheme();
+    if (stored && stored !== theme && !themeChosen.current) {
+      setThemeState(stored);
+      return;
+    }
+
     document.documentElement.dataset.theme = theme;
+    try {
+      window.localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      // Private mode or blocked storage: the theme still applies for this visit.
+    }
   }, [theme]);
 
   // The runtime keeps counting whether or not a client is attached.
@@ -130,8 +171,8 @@ export default function DemoProvider({ children }: { children: React.ReactNode }
   }, [focused, agents]);
 
   const value = useMemo<DemoState>(
-    () => ({ agents, focused, attached, epoch, theme, toasts, runtime, focusAgent, step, setTheme, detach, attach }),
-    [agents, focused, attached, epoch, theme, toasts, runtime, focusAgent, step, setTheme, detach, attach]
+    () => ({ agents, focused, attached, epoch, theme, toasts, runtime, focusAgent, focusTab, step, setTheme, detach, attach }),
+    [agents, focused, attached, epoch, theme, toasts, runtime, focusAgent, focusTab, step, setTheme, detach, attach]
   );
 
   return <DemoContext.Provider value={value}>{children}</DemoContext.Provider>;

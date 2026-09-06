@@ -56,7 +56,7 @@ export default function Wire() {
               <span className="text-text">Split proxy buffers</span>
               <span className={`shrink-0 ${TONE[status]}`}>{status === "working" ? "◐ working" : "✓ ready"}</span>
             </div>
-            <div className="mt-1 text-subtext">telar › proxy › pane 1</div>
+            <div className="mt-1 text-subtext">telar › agents › pane 1</div>
             <div className="text-overlay-0">Claude Code · ~/sandbox/telar</div>
           </div>
         </div>

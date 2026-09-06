@@ -1838,14 +1838,14 @@ test "mouse pointer changes fold until a shape or recovery changes" {
     try testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b]22;") == null);
 
     writer = .fixed(&out);
-    screen.mouse_pointer = .horizontal_resize;
+    screen.mouse_pointer = .ew_resize;
     _ = try screen.flush(&writer);
-    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.horizontal_resize)) != null);
+    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.ew_resize)) != null);
 
     writer = .fixed(&out);
     screen.invalidate();
     _ = try screen.flush(&writer);
-    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.horizontal_resize)) != null);
+    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.ew_resize)) != null);
 }
 
 test "no byte is lost when a read does not fit in what is left" {

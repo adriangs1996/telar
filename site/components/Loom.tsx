@@ -23,7 +23,41 @@ type Move =
 
 const GAP = 18;
 const THREAD_WIDTH = 1.5;
-const THREAD = "#343434";
+
+// Colors come from the page theme. `readPalette` resolves them from the root
+// element; the loom re-reads them whenever `data-theme` changes.
+type Palette = { thread: string; shades: string[]; fresh: string; steel: string; edge: string; ink: [number, number, number] };
+
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.trim().replace("#", "");
+  const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function mix(a: [number, number, number], b: [number, number, number], t: number): string {
+  const c = a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function readPalette(): Palette {
+  const style = getComputedStyle(document.documentElement);
+  const read = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback;
+  const accent = hexToRgb(read("--accent", "#ffc799"));
+  const soft = hexToRgb(read("--accent-soft", "#ffd1a8"));
+  const ink = hexToRgb(read("--ink", "#101010"));
+  const text = hexToRgb(read("--text", "#ffffff"));
+  const line = hexToRgb(read("--line", "#2c2c2c"));
+  const overlay = hexToRgb(read("--overlay-1", "#7e7e7e"));
+  return {
+    thread: mix(line, text, 0.05),
+    shades: [mix(accent, ink, 0), mix(accent, ink, 0.1), mix(accent, soft, 1)],
+    fresh: mix(accent, text, 0.6),
+    steel: mix(text, ink, 0.14),
+    edge: mix(overlay, ink, 0.1),
+    ink,
+  };
+}
 const TENSION_UNTIL = 1000;
 const LETTER_TIME = 1000;
 const HOP_TIME = 220;
@@ -31,10 +65,7 @@ const LETTER_REST = 220;
 const SPACING = 0.14;
 const FRESH = 14;
 
-const SHADES = ["#ffc799", "#f4b98a", "#ffd2a8"];
-const FRESH_SHADE = "#fff1df";
-const NEEDLE_STEEL = "#dcdcdc";
-const NEEDLE_EDGE = "#8c8c8c";
+const SHADE_COUNT = 3;
 
 function easeOutBack(t: number): number {
   const c = 1.70158;
@@ -125,7 +156,7 @@ function stitch(points: Pt[], width: number, pitch: number, seed: number): Strok
     stitches.push({
       a: { x: cx - nx * half, y: cy - ny * half },
       b: { x: cx + nx * half, y: cy + ny * half },
-      shade: Math.floor(noise(seed * 7 + i) * SHADES.length),
+      shade: Math.floor(noise(seed * 7 + i) * SHADE_COUNT),
     });
   }
 
@@ -148,6 +179,14 @@ export default function Loom({ className = "" }: { className?: string }) {
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const start = performance.now();
+    let palette = readPalette();
+    const themeWatch = new MutationObserver(() => {
+      palette = readPalette();
+      if (reduced) {
+        draw(start + 1e6);
+      }
+    });
+    themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     // The box the word is embroidered in, when the hero marks one with
     // `data-loom-word`. Without it the word takes the upper half of the canvas.
     const box = canvas.closest("[data-loom]")?.querySelector<HTMLElement>("[data-loom-word]") ?? null;
@@ -250,7 +289,7 @@ export default function Loom({ className = "" }: { className?: string }) {
       } else {
         ctx.bezierCurveTo(thread.x + sway, drawn * 0.33, thread.x - sway * 0.6, drawn * 0.66, thread.x, drawn);
       }
-      ctx.strokeStyle = THREAD;
+      ctx.strokeStyle = palette.thread;
       ctx.lineWidth = THREAD_WIDTH;
       ctx.lineCap = "round";
       ctx.stroke();
@@ -259,7 +298,7 @@ export default function Loom({ className = "" }: { className?: string }) {
     const drawStitches = (stroke: Stroke, count: number, fresh: number) => {
       ctx.lineWidth = pitch * 1.1;
       ctx.lineCap = "round";
-      for (let shade = 0; shade < SHADES.length; shade++) {
+      for (let shade = 0; shade < SHADE_COUNT; shade++) {
         ctx.beginPath();
         for (let i = 0; i < count - fresh; i++) {
           const s = stroke.stitches[i];
@@ -269,7 +308,7 @@ export default function Loom({ className = "" }: { className?: string }) {
           ctx.moveTo(s.a.x, s.a.y);
           ctx.lineTo(s.b.x, s.b.y);
         }
-        ctx.strokeStyle = SHADES[shade];
+        ctx.strokeStyle = palette.shades[shade];
         ctx.stroke();
       }
 
@@ -280,7 +319,7 @@ export default function Loom({ className = "" }: { className?: string }) {
           ctx.moveTo(s.a.x, s.a.y);
           ctx.lineTo(s.b.x, s.b.y);
         }
-        ctx.strokeStyle = FRESH_SHADE;
+        ctx.strokeStyle = palette.fresh;
         ctx.stroke();
       }
     };
@@ -305,9 +344,9 @@ export default function Loom({ className = "" }: { className?: string }) {
       ctx.lineTo(px + ux * length - vx * 1.3, py + uy * length - vy * 1.3);
       ctx.lineTo(px + ux * mid - vx * 1.8, py + uy * mid - vy * 1.8);
       ctx.closePath();
-      ctx.fillStyle = NEEDLE_STEEL;
+      ctx.fillStyle = palette.steel;
       ctx.fill();
-      ctx.strokeStyle = NEEDLE_EDGE;
+      ctx.strokeStyle = palette.edge;
       ctx.lineWidth = 0.6;
       ctx.stroke();
 
@@ -317,7 +356,7 @@ export default function Loom({ className = "" }: { className?: string }) {
       ctx.rotate(Math.atan2(uy, ux));
       ctx.beginPath();
       ctx.ellipse(0, 0, 2.6, 0.9, 0, 0, Math.PI * 2);
-      ctx.fillStyle = "#101010";
+      ctx.fillStyle = `rgb(${palette.ink.join(",")})`;
       ctx.fill();
       ctx.restore();
 
@@ -326,7 +365,7 @@ export default function Loom({ className = "" }: { className?: string }) {
         ctx.beginPath();
         ctx.moveTo(eye.x, eye.y);
         ctx.quadraticCurveTo((eye.x + threadFrom.x) / 2, Math.max(eye.y, threadFrom.y) + sag, threadFrom.x, threadFrom.y);
-        ctx.strokeStyle = SHADES[0];
+        ctx.strokeStyle = palette.shades[0];
         ctx.lineWidth = 1.6;
         ctx.lineCap = "round";
         ctx.stroke();
@@ -399,8 +438,8 @@ export default function Loom({ className = "" }: { className?: string }) {
       drawWord(now);
 
       const fade = ctx.createLinearGradient(0, 0, 0, height * 0.18);
-      fade.addColorStop(0, "rgba(16,16,16,0.85)");
-      fade.addColorStop(1, "rgba(16,16,16,0)");
+      fade.addColorStop(0, `rgba(${palette.ink.join(",")},0.85)`);
+      fade.addColorStop(1, `rgba(${palette.ink.join(",")},0)`);
       ctx.fillStyle = fade;
       ctx.fillRect(0, 0, width, height * 0.18);
     };
@@ -459,6 +498,7 @@ export default function Loom({ className = "" }: { className?: string }) {
     return () => {
       running = false;
       cancelAnimationFrame(frame);
+      themeWatch.disconnect();
       visibility.disconnect();
       observer.disconnect();
       canvas.removeEventListener("pointermove", onMove);

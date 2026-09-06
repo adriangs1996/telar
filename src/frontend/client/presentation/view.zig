@@ -106,6 +106,10 @@ pub const State = struct {
     sidebar_preferred_width: u16 = sidebar_width,
     sidebar_resize_active: bool = false,
     hovered: ?Action = null,
+    pointer_position: ?core.ui.Point = null,
+    // Last projected content bounds distinguish border crossings without
+    // invalidating chrome for every mouse move within the same pane.
+    pointer_content: ui.Rect = .{},
     sidebar: widgets.sidebar.State = .{},
     workspace_list_collapsed: bool = false,
     dirty: bool = true,
@@ -257,7 +261,11 @@ pub const State = struct {
     /// view.clearHover();
     /// ```
     pub fn clearHover(state: *State) void {
-        if (state.hovered == null) {
+        const had_pointer = state.pointer_position != null;
+        state.pointer_position = null;
+        state.pointer_content = .{};
+
+        if (state.hovered == null and !had_pointer) {
             return;
         }
 
@@ -514,8 +522,14 @@ pub const State = struct {
         if (state.attachment_store.hasModal()) {
             result.consumed = true;
         }
+        const crossed_content = if (state.pointer_position) |previous|
+            state.pointer_content.contains(previous.x, previous.y) != state.pointer_content.contains(mouse.x, mouse.y)
+        else
+            false;
+        state.pointer_position = .{ .x = mouse.x, .y = mouse.y };
         const hovered = state.hits.at(mouse.x, mouse.y);
-        if (!optionalActionEql(state.hovered, hovered)) {
+
+        if (!optionalActionEql(state.hovered, hovered) or crossed_content) {
             state.hovered = hovered;
             state.recordInteraction();
         }
@@ -640,7 +654,9 @@ pub const State = struct {
     }
 
     pub fn render(state: *State, screen: *term.Screen, input: RenderInput) !RenderStats {
-        screen.mouse_pointer = state.mousePointerShape(input.copy_mode_active);
+        // Resolve against rebuilt hits on chrome/layout changes, and against
+        // current pane metadata even when cell/chrome rendering is a no-op.
+        defer screen.mouse_pointer = state.mousePointerShape(input);
         // The banner must survive every present — pane composition may have
         // repainted the bottom row — so it lands on both exit paths.
         defer state.renderDiagnosticBanner(screen, input.diagnostic);
@@ -835,18 +851,21 @@ pub const State = struct {
         return stats;
     }
 
-    fn mousePointerShape(state: *const State, copy_mode_active: bool) pointer.Shape {
-        if (copy_mode_active) {
+    fn mousePointerShape(state: *State, input: RenderInput) pointer.Shape {
+        state.pointer_content = .{};
+
+        if (input.copy_mode_active or input.prompt != null) {
             return .default;
         }
 
         if (state.sidebar_resize_active) {
-            return .horizontal_resize;
+            return .ew_resize;
         }
 
-        const hovered = state.hovered orelse return .default;
+        const position = state.pointer_position orelse return .default;
+        const hovered = state.hits.at(position.x, position.y) orelse return .default;
         return switch (hovered) {
-            .resize_sidebar => .horizontal_resize,
+            .resize_sidebar => .ew_resize,
             .toggle_sidebar,
             .select_tab,
             .select_workspace,
@@ -859,8 +878,37 @@ pub const State = struct {
             .attachment_dismiss,
             .attachment_modal_close,
             => .pointer,
-            .focus_pane, .active_workspace, .attachment_shelf_hold, .attachment_modal_hold => .default,
+            .focus_pane => |pane_id| state.panePointerShape(input, pane_id),
+            .active_workspace, .attachment_shelf_hold, .attachment_modal_hold => .default,
         };
+    }
+
+    fn panePointerShape(state: *State, input: RenderInput, pane_id: schema.PaneId) pointer.Shape {
+        if (state.attachment_store.hasModal()) {
+            return .default;
+        }
+
+        const pane = input.model.findConst(pane_id) orelse return .default;
+        if (!pane.attached) {
+            return .default;
+        }
+
+        var fallback: workspace_capability.layout.Snapshot = .{};
+        const layout = if (input.compositor) |compositor|
+            compositor.layoutSnapshot()
+        else layout: {
+            input.model.layout.snapshot(state.workbench(), &fallback);
+            _ = fallback.reserveBelowPane(state.attachmentReservation());
+            break :layout &fallback;
+        };
+        const view = layout.find(pane_id) orelse return .default;
+        state.pointer_content = view.content;
+        const position = state.pointer_position orelse return .default;
+        if (!view.content.contains(position.x, position.y)) {
+            return .default;
+        }
+
+        return pane.pointer_shape;
     }
 };
 
@@ -1096,19 +1144,25 @@ test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
     var state = try State.init(std.testing.allocator, 80, 24);
     defer state.deinit();
 
-    state.hovered = .toggle_sidebar;
-    try std.testing.expectEqual(pointer.Shape.pointer, state.mousePointerShape(false));
-    try std.testing.expectEqual(pointer.Shape.default, state.mousePointerShape(true));
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    const area: ui.Rect = .{ .w = 1, .h = 1 };
+    state.pointer_position = .{ .x = 0, .y = 0 };
+    state.hits.add(area, .toggle_sidebar);
+    try std.testing.expectEqual(pointer.Shape.pointer, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(pointer.Shape.default, state.mousePointerShape(.{ .model = &model, .copy_mode_active = true }));
 
-    state.hovered = .{ .focus_pane = @enumFromInt(7) };
-    try std.testing.expectEqual(pointer.Shape.default, state.mousePointerShape(false));
+    state.hits.clear();
+    state.hits.add(area, .{ .focus_pane = @enumFromInt(7) });
+    try std.testing.expectEqual(pointer.Shape.default, state.mousePointerShape(.{ .model = &model }));
 
-    state.hovered = .resize_sidebar;
-    try std.testing.expectEqual(pointer.Shape.horizontal_resize, state.mousePointerShape(false));
+    state.hits.clear();
+    state.hits.add(area, .resize_sidebar);
+    try std.testing.expectEqual(pointer.Shape.ew_resize, state.mousePointerShape(.{ .model = &model }));
 
-    state.hovered = null;
+    state.pointer_position = null;
     state.sidebar_resize_active = true;
-    try std.testing.expectEqual(pointer.Shape.horizontal_resize, state.mousePointerShape(false));
+    try std.testing.expectEqual(pointer.Shape.ew_resize, state.mousePointerShape(.{ .model = &model }));
 }
 
 test "narrow clients hide the sidebar without forgetting user intent" {
@@ -1238,6 +1292,55 @@ test "workbench clicks return focus intent without mutating pane layout" {
     try std.testing.expectEqual(revision, model.layout.currentRevision());
     try std.testing.expectEqual(interaction_revision, state.interactionVersion());
     try std.testing.expect(!state.dirty);
+
+    model.find(first).?.pointer_shape = .crosshair;
+    model.find(second).?.pointer_shape = .text;
+    const input: RenderInput = .{ .model = &model, .compositor = &compositor };
+    _ = try state.render(&screen, input);
+    try std.testing.expectEqual(pointer.Shape.text, screen.mouse_pointer);
+    try std.testing.expectEqual(first, model.layout.focused().?);
+
+    inline for (std.meta.tags(pointer.Shape)) |shape| {
+        model.find(second).?.pointer_shape = shape;
+        const stats = try state.render(&screen, input);
+        try std.testing.expectEqual(@as(usize, 0), stats.scanned);
+        try std.testing.expectEqual(shape, screen.mouse_pointer);
+    }
+
+    model.find(second).?.pointer_shape = .text;
+    _ = try state.render(&screen, .{ .model = &model, .copy_mode_active = true });
+    try std.testing.expectEqual(pointer.Shape.default, screen.mouse_pointer);
+    var prompt: name_prompt.Prompt = .{ .mode = .create_workspace, .field = .{} };
+    _ = try state.render(&screen, .{ .model = &model, .prompt = &prompt });
+    try std.testing.expectEqual(pointer.Shape.default, screen.mouse_pointer);
+    _ = try state.render(&screen, input);
+    try std.testing.expectEqual(pointer.Shape.text, screen.mouse_pointer);
+
+    const before_border = state.interactionVersion();
+    _ = state.handleMouse(.{ .x = second_view.outer.x, .y = point.y, .kind = .move });
+    try std.testing.expectEqual(before_border + 1, state.interactionVersion());
+    _ = try state.render(&screen, input);
+    try std.testing.expectEqual(pointer.Shape.default, screen.mouse_pointer);
+    _ = state.handleMouse(point);
+    _ = try state.render(&screen, input);
+    try std.testing.expectEqual(pointer.Shape.text, screen.mouse_pointer);
+
+    const before_move = state.interactionVersion();
+    _ = state.handleMouse(.{ .x = point.x + 1, .y = point.y, .kind = .move });
+    try std.testing.expectEqual(before_move, state.interactionVersion());
+    state.sidebar_resize_active = true;
+    _ = try state.render(&screen, input);
+    try std.testing.expectEqual(pointer.Shape.ew_resize, screen.mouse_pointer);
+    state.sidebar_resize_active = false;
+    model.find(second).?.attached = false;
+    _ = try state.render(&screen, input);
+    try std.testing.expectEqual(pointer.Shape.default, screen.mouse_pointer);
+
+    try std.testing.expect(model.removePane(second));
+    _ = try state.render(&screen, input);
+    try std.testing.expectEqual(pointer.Shape.default, screen.mouse_pointer);
+    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    try std.testing.expectEqual(pointer.Shape.crosshair, screen.mouse_pointer);
 }
 
 test "sidebar agent snapshots version changed hover only once" {
@@ -1390,6 +1493,11 @@ test "focused agent image preview reserves space below its pane and opens a moda
     });
     try std.testing.expectEqual(ui.Rect{ .x = 10, .y = 3, .w = 80, .h = 24 }, state.graphics_plan.modal_area);
     try std.testing.expect(!sidebar_before_modal.eqlPublic(screen.back.at(20, 4).?));
+
+    model.find(first_pane).?.pointer_shape = .crosshair;
+    _ = state.handleMouse(.{ .x = first_view.content.x, .y = first_view.content.y, .kind = .move });
+    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor });
+    try std.testing.expectEqual(pointer.Shape.pointer, screen.mouse_pointer);
 
     const modal_scroll = state.handleMouse(.{
         .x = state.regions.workbench.x,

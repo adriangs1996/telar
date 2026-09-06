@@ -504,6 +504,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
                 .kitty_keyboard_flags = 5,
                 .modify_other_keys_2 = true,
             },
+            .pointer_shape = .pointer,
             .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = &frame_spans,
         }),
@@ -969,7 +970,7 @@ const golden = struct {
     pub const pane_title = "a20500000000000000030076696d";
     pub const pane_progress = "aa0500000000000000012a";
     pub const pane_opened = "8105000000000000000c00000000000000000200000000000000040000000000000001";
-    pub const pane_frame = "82040000000000000001000000000000000000000000000000020001000101000000000000000000010000050101000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
+    pub const pane_frame = "8204000000000000000100000000000000000000000000000002000100010100000000000000000001000005010301000000000000000100000000000200000012000000a1000000000020a101030201020301040078";
     pub const pane_exited = "830c000000000000000007000000";
     pub const request_failed = "840500000000000000010070616e6520313220646f6573206e6f74206578697374";
     pub const runtime_stopping = "85";
@@ -1738,6 +1739,22 @@ test "pane frames use the server envelope" {
     var span_iterator = decoded.spans();
     var cell_iterator = ((try span_iterator.next()).?).cells();
     try std.testing.expectEqualDeep(cells[0], (try cell_iterator.next()).?);
+}
+
+test "pane frames preserve every pointer shape and reject unknown wire values" {
+    var buffer: [256]u8 = undefined;
+    const payload = try std.fmt.hexToBytes(&buffer, golden.pane_frame);
+    const pointer_offset = 1 + 24 + 4 + 5 + 3 + 8;
+
+    for (0..256) |value| {
+        payload[pointer_offset] = @intCast(value);
+        if (std.enums.fromInt(frame.PointerShape, @as(u8, @intCast(value)))) |shape| {
+            const decoded = (try schema.decodeServer(payload)).pane_frame;
+            try std.testing.expectEqual(shape, decoded.pointer_shape);
+        } else {
+            try std.testing.expectError(error.InvalidPointerShape, schema.decodeServer(payload));
+        }
+    }
 }
 
 test "pane frames reject unsupported keyboard flags" {

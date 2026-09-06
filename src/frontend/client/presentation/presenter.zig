@@ -356,7 +356,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     if (agents_changed) {
         resources.view.resetSidebarScroll();
     }
-    if (prompt_changed) {
+    if (prompt_changed or copy_status_changed) {
         resources.view.clearHover();
     }
     if (workspace_changed or configuration_changed or diagnostic_changed or host_changed or
