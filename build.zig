@@ -665,6 +665,7 @@ pub fn build(b: *std.Build) void {
     for ([_]std.Target.Query{
         .{ .os_tag = .windows, .cpu_arch = .x86_64 },
         .{ .os_tag = .linux, .cpu_arch = .x86_64, .abi = .gnu },
+        .{ .os_tag = .linux, .cpu_arch = .aarch64, .abi = .gnu },
     }) |query| {
         const cross_target = b.resolveTargetQuery(query);
         const cross_unicode = b.createModule(.{
@@ -679,7 +680,7 @@ pub fn build(b: *std.Build) void {
         });
         cross_core.addImport("unicode", cross_unicode);
         const check = b.addObject(.{
-            .name = b.fmt("platform-{s}", .{@tagName(query.os_tag.?)}),
+            .name = b.fmt("platform-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/frontend/platform/root.zig"),
                 .target = cross_target,
@@ -688,7 +689,7 @@ pub fn build(b: *std.Build) void {
         });
         cross_step.dependOn(&check.step);
         const raster_check = b.addLibrary(.{
-            .name = b.fmt("text-rasterizer-{s}", .{@tagName(query.os_tag.?)}),
+            .name = b.fmt("text-rasterizer-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/frontend/graphics/rasterizer.zig"),
                 .target = cross_target,
@@ -716,8 +717,10 @@ pub fn build(b: *std.Build) void {
         }
         cross_step.dependOn(&sound_check.step);
         if (query.os_tag.? == .linux) {
-            const local_transport_check = b.addObject(.{
-                .name = "local-transport-linux",
+            // Compile the tests so their calls analyze listener bodies too.
+            // An object containing only unused public functions misses errors.
+            const local_transport_check = b.addTest(.{
+                .name = b.fmt("local-transport-linux-{s}", .{@tagName(query.cpu_arch.?)}),
                 .root_module = b.createModule(.{
                     .root_source_file = b.path("src/backend/transport/local.zig"),
                     .target = cross_target,

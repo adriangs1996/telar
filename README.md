@@ -17,14 +17,44 @@ See the [capability map](docs/capabilities.md), the
 [flow index](docs/flows/README.md), and the
 [engineering invariants](docs/engineering-invariants.md).
 
-The runtime links system SQLite and libnghttp2. On macOS with Homebrew:
+The runtime links system SQLite, libnghttp2 and Brotli. On macOS with Homebrew:
 
 ```sh
-brew install sqlite libnghttp2
+brew install sqlite libnghttp2 brotli
 ```
+
+On Arch Linux or Arch Linux ARM, install the libraries and libc development
+headers before building with Zig 0.16.0:
+
+```sh
+sudo pacman -Syu --needed base-devel sqlite libnghttp2 brotli
+zig build
+zig build test
+```
+
+Filesystem metadata calls import the target's `sys/stat.h` declarations so
+Linux and macOS use their own libc ABI. No Linux-specific source patch is
+needed. `zig build cross` also compiles the local transport tests for Linux
+x86_64 and aarch64, without running those foreign binaries.
 
 Use `zig build -Dnghttp2=/path/to/prefix` when libnghttp2 is installed under a
 different prefix.
+
+## Remote runtime
+
+Run the client on your machine and keep the runtime and child processes on an
+SSH host. Install matching Telar builds on both machines, then verify that SSH
+can find the remote binary without an interactive shell:
+
+```sh
+ssh dev@box 'command -v telar; telar --version'
+./zig-out/bin/telar --no-config --remote dev@box
+```
+
+The client discovers the remote home and shell and forwards the runtime's Unix
+socket over SSH. Ctrl-b followed by `d` detaches without stopping the remote
+processes; the same command reconnects. No Telar TCP listener is exposed.
+See [remote attach](docs/flows/remote-attach.md) for requirements and ownership.
 
 ## Configuration and plugins
 

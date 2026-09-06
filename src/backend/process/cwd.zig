@@ -49,12 +49,21 @@ fn readLinux(pid: std.c.pid_t, buffer: []u8) ?[]const u8 {
 
     var path_buffer: [64]u8 = undefined;
     const path = std.fmt.bufPrintZ(&path_buffer, "/proc/{d}/cwd", .{pid}) catch return null;
-    const result = std.c.readlinkat(std.posix.AT.FDCWD, path.ptr, buffer.ptr, buffer.len);
-    if (result < 0) {
+    // readlinkat returns the buffer length on truncation, not an error.
+    // Read into scratch space so an exact-fit caller buffer remains valid.
+    var target_buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
+    const result = std.c.readlinkat(std.posix.AT.FDCWD, path.ptr, &target_buffer, target_buffer.len);
+    if (result <= 0) {
         return null;
     }
 
-    return buffer[0..@intCast(result)];
+    const len: usize = @intCast(result);
+    if (len >= target_buffer.len or len > buffer.len) {
+        return null;
+    }
+
+    @memcpy(buffer[0..len], target_buffer[0..len]);
+    return buffer[0..len];
 }
 
 test "reads the current process working directory" {
@@ -66,8 +75,15 @@ test "reads the current process working directory" {
     try std.testing.expectEqualStrings(expected_buffer[0..expected_len], actual);
 }
 
-test "rejects a buffer that cannot hold the working directory" {
-    var buffer: [1]u8 = undefined;
+test "accepts exactly enough space for the working directory and rejects every shorter buffer" {
+    var expected_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const len = try std.process.currentPath(std.testing.io, &expected_buffer);
+    var actual_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const actual = read(std.c.getpid(), actual_buffer[0..len]) orelse return error.WorkingDirectoryUnavailable;
 
-    try std.testing.expectEqual(@as(?[]const u8, null), read(std.c.getpid(), &buffer));
+    try std.testing.expectEqualStrings(expected_buffer[0..len], actual);
+
+    for (0..len) |capacity| {
+        try std.testing.expectEqual(@as(?[]const u8, null), read(std.c.getpid(), actual_buffer[0..capacity]));
+    }
 }

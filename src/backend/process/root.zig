@@ -356,9 +356,10 @@ fn appendLinuxChildren(pid: u32, pending: *[max_group_processes]u32, count: *usi
 }
 
 fn readSmallFile(path: []const u8, buffer: []u8) ?[]const u8 {
-    const file = std.fs.openFileAbsolute(path, .{}) catch return null;
-    defer file.close();
-    const len = file.read(buffer) catch return null;
+    const file = std.posix.openat(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0) catch return null;
+    defer _ = std.posix.system.close(file);
+
+    const len = std.posix.read(file, buffer) catch return null;
     return buffer[0..len];
 }
 
@@ -465,6 +466,22 @@ fn endsWithAsciiInsensitive(value: []const u8, suffix: []const u8) bool {
         return false;
     }
     return std.ascii.eqlIgnoreCase(value[value.len - suffix.len ..], suffix);
+}
+
+test "process file reads are bounded and missing files return null" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    try temp.dir.writeFile(io, .{ .sub_path = "sample", .data = "abc\x00def" });
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/sample", .{directory_buffer[0..directory_len]});
+    var buffer: [4]u8 = undefined;
+
+    try std.testing.expectEqualStrings("abc\x00", readSmallFile(path, &buffer).?);
+    try temp.dir.deleteFile(io, "sample");
+    try std.testing.expectEqual(@as(?[]const u8, null), readSmallFile(path, &buffer));
 }
 
 test "identifies direct agent executables" {

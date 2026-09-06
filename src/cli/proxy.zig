@@ -1,6 +1,9 @@
 //! Explicit, reversible installation of Telar's short-lived system-trust CA.
 
 const std = @import("std");
+const native = @cImport({
+    @cInclude("sys/stat.h");
+});
 const backend = @import("telar-backend");
 const parser = @import("parser.zig");
 
@@ -597,11 +600,12 @@ fn validateDirectoryOwner(io: Io, directory: []const u8) !void {
 
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch return error.NameTooLong;
-    var native_stat: std.c.Stat = undefined;
-    if (std.c.fstatat(std.c.AT.FDCWD, path_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
+    var native_stat: native.struct_stat = undefined;
+    if (native.fstatat(std.c.AT.FDCWD, path_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
         return error.InvalidProxyDirectory;
     }
-    if (native_stat.uid != std.c.getuid()) {
+
+    if (native_stat.st_uid != std.c.getuid()) {
         return error.WrongOwner;
     }
 }

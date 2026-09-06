@@ -16,7 +16,7 @@ const RunOptions = parser.RunOptions;
 const RuntimeConnector = runtime_connection.RuntimeConnector;
 const max_args = backend.pty.max_args;
 
-/// Connects to the local runtime, prepares the selected client configuration
+/// Connects to the selected runtime, prepares the local client configuration
 /// and transfers its owned resources into the frontend client lifecycle.
 ///
 /// ```zig
@@ -46,6 +46,7 @@ pub fn run(init: std.process.Init, options: RunOptions) !u8 {
         .process = init,
         .options = &options,
         .endpoint = connector.endpointPath(),
+        .remote_defaults = if (forward) |*owned| owned.discovery.launchDefaults() else null,
     });
     defer launch.deinit();
 
@@ -58,6 +59,7 @@ const Preparation = struct {
     process: std.process.Init,
     options: *const RunOptions,
     endpoint: []const u8,
+    remote_defaults: ?remote.LaunchDefaults = null,
 };
 
 const Launch = struct {
@@ -86,10 +88,7 @@ const Launch = struct {
         };
         errdefer launch.deinit();
 
-        while (preparation.options.command.argv[launch.argument_count]) |argument| : (launch.argument_count += 1) {
-            launch.argument_storage[launch.argument_count] = std.mem.span(argument);
-        }
-        launch.cwd_len = try Io.Dir.cwd().realPathFile(preparation.process.io, ".", &launch.cwd_buffer);
+        try launch.prepareChild(preparation.remote_defaults);
         launch.generation = try config.loadGeneration(preparation.process, .{
             .path = preparation.options.config,
             .disabled = preparation.options.no_config,
@@ -109,6 +108,28 @@ const Launch = struct {
 
         if (launch.generation) |generation| {
             try launch.preparePlugins(generation);
+        }
+    }
+
+    fn prepareChild(launch: *Launch, defaults: ?remote.LaunchDefaults) !void {
+        if (defaults) |remote_launch| {
+            if (remote_launch.cwd.len > launch.cwd_buffer.len) {
+                return error.NameTooLong;
+            }
+
+            @memcpy(launch.cwd_buffer[0..remote_launch.cwd.len], remote_launch.cwd);
+            launch.cwd_len = remote_launch.cwd.len;
+            if (!launch.options.command_set) {
+                launch.argument_storage[0] = remote_launch.shell;
+                launch.argument_count = 1;
+                return;
+            }
+        } else {
+            launch.cwd_len = try Io.Dir.cwd().realPathFile(launch.process.io, ".", &launch.cwd_buffer);
+        }
+
+        while (launch.options.command.argv[launch.argument_count]) |argument| : (launch.argument_count += 1) {
+            launch.argument_storage[launch.argument_count] = std.mem.span(argument);
         }
     }
 
@@ -217,6 +238,29 @@ fn supportsHostSharedMemory(environ: std.process.Environ) bool {
 
 fn configuredEditor(environ: std.process.Environ) []const u8 {
     return environ.getPosix("EDITOR") orelse "";
+}
+
+test "remote launch uses remote home and shell rather than client paths" {
+    var environment = try TestEnvironment.init(&.{.{ "SHELL", "/opt/homebrew/bin/local-shell" }});
+    defer environment.deinit();
+    const options = try RunOptions.parse(&.{ "--remote", "box" }, .{ .block = environment.block });
+    var launch: Launch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
+    try launch.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
+
+    try std.testing.expectEqualStrings("/home/remote-user", launch.cwd_buffer[0..launch.cwd_len]);
+    try std.testing.expectEqual(@as(usize, 1), launch.argument_count);
+    try std.testing.expectEqualStrings("/bin/remote-shell", launch.argument_storage[0]);
+}
+
+test "remote launch preserves explicit commands while keeping the remote home" {
+    const options = try RunOptions.parse(&.{ "--remote", "box", "/bin/bash", "-l" }, .empty);
+    var launch: Launch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
+    try launch.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
+
+    try std.testing.expectEqualStrings("/home/remote-user", launch.cwd_buffer[0..launch.cwd_len]);
+    try std.testing.expectEqual(@as(usize, 2), launch.argument_count);
+    try std.testing.expectEqualStrings("/bin/bash", launch.argument_storage[0]);
+    try std.testing.expectEqualStrings("-l", launch.argument_storage[1]);
 }
 
 test "local Ghostty clients may use host shared memory" {

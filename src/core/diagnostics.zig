@@ -373,9 +373,10 @@ fn rssLinux() u64 {
         return 0;
     }
     var buffer: [128]u8 = undefined;
-    const file = std.fs.openFileAbsolute("/proc/self/statm", .{}) catch return 0;
-    defer file.close();
-    const read = file.read(&buffer) catch return 0;
+    const file = std.posix.openat(std.posix.AT.FDCWD, "/proc/self/statm", .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0) catch return 0;
+    defer _ = std.posix.system.close(file);
+
+    const read = std.posix.read(file, &buffer) catch return 0;
     var tokens = std.mem.tokenizeScalar(u8, buffer[0..read], ' ');
     _ = tokens.next() orelse return 0;
     const resident = tokens.next() orelse return 0;

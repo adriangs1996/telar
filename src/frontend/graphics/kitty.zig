@@ -1,6 +1,9 @@
 //! Client-side Kitty graphics resource storage and host-protocol emission.
 
 const std = @import("std");
+const native = @cImport({
+    @cInclude("sys/stat.h");
+});
 const codec = @import("kitty_codec.zig");
 const sidebar = @import("kitty_sidebar.zig");
 pub const transmission_budget_per_frame = codec.transmission_budget_per_frame;
@@ -782,11 +785,12 @@ pub const Store = struct {
             return error.SharedMemoryUnavailable;
         }
         defer _ = std.c.close(fd);
-        var stat: std.c.Stat = undefined;
-        if (std.c.fstat(fd, &stat) != 0) {
+        var stat: native.struct_stat = undefined;
+        if (native.fstat(fd, &stat) != 0) {
             return error.SharedMemoryUnavailable;
         }
-        if (stat.size < 0 or @as(u64, @intCast(stat.size)) < byte_len) {
+
+        if (stat.st_size < 0 or @as(u64, @intCast(stat.st_size)) < byte_len) {
             return error.SharedMemoryUnavailable;
         }
         const map = std.posix.mmap(
@@ -3197,6 +3201,38 @@ fn testCreateSharedObject(name: [:0]const u8, pixels: []const u8) !void {
     );
     defer std.posix.munmap(map);
     @memcpy(map[0..pixels.len], pixels);
+}
+
+test "an undersized runtime shared object is rejected and unlinked" {
+    if (comptime !supportsSharedMemory()) {
+        return error.SkipZigTest;
+    }
+
+    var store = Store.initSharedMemory(std.testing.allocator);
+    defer store.deinit();
+    var name_buffer: [64]u8 = undefined;
+    const name = try graphics.ShmName.init(try std.fmt.bufPrint(&name_buffer, "/tlrtest-short-{d}", .{std.c.getpid()}));
+    _ = std.c.shm_unlink(name.sliceZ());
+    defer _ = std.c.shm_unlink(name.sliceZ());
+    try testCreateSharedObject(name.sliceZ(), "RGBA");
+    // Exceed Darwin's page-rounded shared object size as well as Linux's size.
+    const height = std.heap.pageSize() / 512 + 1;
+
+    try std.testing.expectError(error.GraphicsSharedMappingFailed, store.applySharedImage(.{
+        .pane_id = @enumFromInt(1),
+        .revision = 1,
+        .image = .{
+            .key = .{ .image_id = 7, .generation = 1 },
+            .format = .rgba,
+            .width = 128,
+            .height = @intCast(height),
+            .byte_len = 512 * height,
+        },
+        .name = name,
+    }));
+    try std.testing.expectEqual(@as(usize, 0), store.images.count());
+    try std.testing.expectEqual(@as(c_int, -1), std.c.shm_unlink(name.sliceZ()));
+    try std.testing.expectEqual(std.posix.E.NOENT, std.posix.errno(-1));
 }
 
 test "a runtime-named image maps without copying and hands the host its name" {

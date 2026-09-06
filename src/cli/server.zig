@@ -1,6 +1,9 @@
 //! Composition of the long-lived runtime process selected by `telar server`.
 
 const std = @import("std");
+const native = @cImport({
+    @cInclude("sys/stat.h");
+});
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
@@ -502,11 +505,12 @@ fn prepareProxyDirectory(io: Io, directory: []const u8) !void {
 
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch return error.NameTooLong;
-    var native_stat: std.c.Stat = undefined;
-    if (std.c.fstatat(std.c.AT.FDCWD, path_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
+    var native_stat: native.struct_stat = undefined;
+    if (native.fstatat(std.c.AT.FDCWD, path_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
         return error.InvalidProxyDirectory;
     }
-    try checkDirectoryOwner(native_stat.uid, std.c.getuid());
+
+    try checkDirectoryOwner(native_stat.st_uid, std.c.getuid());
     try Io.Dir.cwd().setFilePermissions(io, directory, permissions, .{ .follow_symlinks = false });
 }
 

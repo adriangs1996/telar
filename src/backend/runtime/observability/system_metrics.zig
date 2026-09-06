@@ -223,9 +223,10 @@ fn readLinuxBattery() ?u8 {
 }
 
 fn readSmallFile(path: []const u8, buffer: []u8) ?[]const u8 {
-    const file = std.fs.openFileAbsolute(path, .{}) catch return null;
-    defer file.close();
-    const read = file.read(buffer) catch return null;
+    const file = std.posix.openat(std.posix.AT.FDCWD, path, .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0) catch return null;
+    defer _ = std.posix.system.close(file);
+
+    const read = std.posix.read(file, buffer) catch return null;
     return buffer[0..read];
 }
 
@@ -245,6 +246,17 @@ fn meminfoValue(content: []const u8, key: []const u8) ?u64 {
         return std.fmt.parseInt(u64, value, 10) catch null;
     }
     return null;
+}
+
+test "Linux system metrics read the live proc filesystem" {
+    if (@import("builtin").os.tag != .linux) {
+        return error.SkipZigTest;
+    }
+
+    const raw = readLinux() orelse return error.SystemMetricsUnavailable;
+    try std.testing.expect(raw.total_ticks > 0);
+    try std.testing.expect(raw.busy_ticks <= raw.total_ticks);
+    try std.testing.expect(raw.memory_used_bytes > 0);
 }
 
 test "cpu percentage comes from tick deltas, never the since-boot average" {

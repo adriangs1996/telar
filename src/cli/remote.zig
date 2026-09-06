@@ -11,6 +11,8 @@ const runtime_connection = @import("runtime_connection.zig");
 
 const Io = std.Io;
 const RuntimeConnector = runtime_connection.RuntimeConnector;
+pub const Discovery = @import("remote_discovery.zig").Discovery;
+pub const LaunchDefaults = @import("remote_discovery.zig").LaunchDefaults;
 
 pub const connect_attempts = 100;
 pub const connect_interval_ms = 100;
@@ -23,6 +25,7 @@ const endpoint_timeout: Io.Timeout = .{
 /// the local socket file.
 pub const Forward = struct {
     child: std.process.Child,
+    discovery: Discovery,
     local_path: [std.fs.max_path_bytes:0]u8 = undefined,
     local_path_len: usize = 0,
 
@@ -41,23 +44,23 @@ pub const Forward = struct {
     }
 };
 
-/// Discovers the remote runtime's socket over SSH, starts one `ssh -N -L`
-/// forward to a private local socket and waits until it is connectable.
+/// Discovers the remote home, shell and runtime socket over SSH, then starts
+/// one `ssh -N -L` forward and waits until its private socket is connectable.
 ///
 /// ```zig
 /// var forward = try establish(process_init, "dev@build-box");
 /// defer forward.stop(process_init.io);
 /// ```
 pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
-    var remote_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const remote_path = try remoteEndpoint(init, destination, &remote_buffer);
+    try validateDestination(destination);
+    const discovery = try remoteEndpoint(init, destination);
 
     // The forwarded socket lives in telar's managed, owner-only directory.
     const connector = try RuntimeConnector.init(init, null);
     try connector.prepareServerDirectory();
     const local_directory = std.fs.path.dirname(connector.endpointPath()) orelse return error.InvalidRuntimeDirectory;
 
-    var forward: Forward = .{ .child = undefined };
+    var forward: Forward = .{ .child = undefined, .discovery = discovery };
     const local_path = try std.fmt.bufPrint(forward.local_path[0..std.fs.max_path_bytes], "{s}/remote-{x}.sock", .{
         local_directory,
         destinationHash(destination),
@@ -66,7 +69,7 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
     Io.Dir.deleteFileAbsolute(init.io, local_path) catch {};
 
     var forward_spec_buffer: [2 * std.fs.max_path_bytes + 1]u8 = undefined;
-    const forward_spec = try std.fmt.bufPrint(&forward_spec_buffer, "{s}:{s}", .{ local_path, remote_path });
+    const forward_spec = try std.fmt.bufPrint(&forward_spec_buffer, "{s}:{s}", .{ local_path, forward.discovery.endpoint() });
     forward.child = try std.process.spawn(init.io, .{
         .argv = &.{
             "ssh",
@@ -79,6 +82,7 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
             "StreamLocalBindUnlink=yes",
             "-L",
             forward_spec,
+            "--",
             destination,
         },
         .stdin = .ignore,
@@ -113,10 +117,11 @@ pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnect
     return error.RemoteRuntimeUnavailable;
 }
 
-fn remoteEndpoint(init: std.process.Init, destination: []const u8, buffer: []u8) ![]const u8 {
+fn remoteEndpoint(init: std.process.Init, destination: []const u8) !Discovery {
+    const command = "/bin/sh -c 'printf \"%s\\n\" \"$HOME\" \"${SHELL:-/bin/sh}\"; exec telar server endpoint'";
     const result = std.process.run(init.gpa, init.io, .{
-        .argv = &.{ "ssh", "-o", "BatchMode=yes", destination, "telar", "server", "endpoint" },
-        .stdout_limit = .limited(4096),
+        .argv = &.{ "ssh", "-T", "-o", "BatchMode=yes", "--", destination, command },
+        .stdout_limit = .limited(Discovery.max_output_bytes),
         .stderr_limit = .limited(16 * 1024),
         .timeout = endpoint_timeout,
     }) catch return error.RemoteEndpointUnavailable;
@@ -127,15 +132,19 @@ fn remoteEndpoint(init: std.process.Init, destination: []const u8, buffer: []u8)
         return error.RemoteEndpointUnavailable;
     }
 
-    const path = std.mem.trim(u8, result.stdout, " \r\n");
-    if (path.len == 0 or path.len > buffer.len or !std.fs.path.isAbsolute(path) or
-        std.mem.indexOfScalar(u8, path, '\n') != null)
-    {
-        return error.RemoteEndpointUnavailable;
+    return Discovery.parse(result.stdout);
+}
+
+fn validateDestination(destination: []const u8) !void {
+    if (destination.len == 0 or destination[0] == '-') {
+        return error.InvalidRemoteDestination;
     }
 
-    @memcpy(buffer[0..path.len], path);
-    return buffer[0..path.len];
+    for (destination) |byte| {
+        if (byte <= 0x20 or byte == 0x7f) {
+            return error.InvalidRemoteDestination;
+        }
+    }
 }
 
 fn waitForSocket(io: Io, path: []const u8) !void {
@@ -160,6 +169,18 @@ pub fn destinationHash(destination: []const u8) u64 {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(destination, &digest, .{});
     return std.mem.readInt(u64, digest[0..8], .little);
+}
+
+test "SSH destinations cannot inject options or control bytes" {
+    try validateDestination("dev@box");
+    try validateDestination("telar-linux-native");
+    for ([_][]const u8{ "", "-oProxyCommand=bad", "host\ncommand", "host alias" }) |destination| {
+        try std.testing.expectError(error.InvalidRemoteDestination, validateDestination(destination));
+    }
+}
+
+test {
+    _ = @import("remote_discovery.zig");
 }
 
 test "destination hashes are stable and distinct" {

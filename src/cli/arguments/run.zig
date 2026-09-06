@@ -9,6 +9,7 @@ const Cursor = @import("cursor.zig").Cursor;
 
 pub const RunOptions = struct {
     command: pty.Command,
+    command_set: bool = false,
     theme: frontend.theme.Theme = frontend.theme.default_theme,
     theme_set: bool = false,
     sidebar_rendering: frontend.kitty.SidebarRendering = .automatic,
@@ -191,6 +192,7 @@ pub const RunOptions = struct {
             options.command = try defaultShell(environ);
         } else {
             options.command = try pty.Command.fromArgv(args[command_start..]);
+            options.command_set = true;
         }
 
         if (options.no_config and options.profile != null) {

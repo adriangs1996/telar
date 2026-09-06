@@ -6,6 +6,7 @@ const Io = std.Io;
 const core = @import("telar-core");
 const c = @cImport({
     @cInclude("sys/socket.h");
+    @cInclude("sys/stat.h");
     @cInclude("unistd.h");
 });
 
@@ -179,36 +180,12 @@ fn validateEndpointDirectory(path: []const u8) !void {
 }
 
 fn directoryTrust(path: [:0]const u8) !DirectoryTrust {
-    switch (builtin.os.tag) {
-        .linux => {
-            var stat: std.os.linux.Stat = undefined;
-            if (std.os.linux.stat(path, &stat) != 0) {
-                return error.InvalidEndpoint;
-            }
-            return classifyEndpointDirectory(
-                @intCast(stat.mode),
-                @intCast(stat.uid),
-                @intCast(std.os.linux.geteuid()),
-            );
-        },
-        else => {
-            // `std.c` exposes no plain `stat`; go through a descriptor.
-            const fd = std.c.open(path, .{});
-            if (fd < 0) {
-                return error.InvalidEndpoint;
-            }
-            defer _ = std.c.close(fd);
-            var stat: std.c.Stat = undefined;
-            if (std.c.fstat(fd, &stat) != 0) {
-                return error.InvalidEndpoint;
-            }
-            return classifyEndpointDirectory(
-                @intCast(stat.mode),
-                @intCast(stat.uid),
-                @intCast(std.c.geteuid()),
-            );
-        },
+    var stat: c.struct_stat = undefined;
+    if (c.fstatat(std.c.AT.FDCWD, path, &stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
+        return error.InvalidEndpoint;
     }
+
+    return classifyEndpointDirectory(@intCast(stat.st_mode), @intCast(stat.st_uid), @intCast(std.c.geteuid()));
 }
 
 fn localAddress(path: []const u8) !Io.net.UnixAddress {
@@ -326,6 +303,21 @@ test "a listener refuses a directory another account could rewrite" {
         error.EndpointDirectoryWritable,
         LocalListener.listen(io, path),
     );
+}
+
+test "a listener refuses a symlink as its endpoint directory" {
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    try temp.dir.createDir(io, "real", Io.File.Permissions.fromMode(0o700));
+    try temp.dir.symLink(io, "real", "alias", .{ .is_directory = true });
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "{s}/alias/runtime.sock", .{directory_buffer[0..directory_len]});
+
+    try std.testing.expectError(error.InvalidEndpoint, LocalListener.listen(io, path));
 }
 
 test "a listener reclaims a socket left behind by a crashed process" {

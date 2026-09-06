@@ -9,6 +9,9 @@
 //! before the object exists.
 
 const std = @import("std");
+const native = @cImport({
+    @cInclude("sys/stat.h");
+});
 const builtin = @import("builtin");
 const core = @import("telar-core");
 const pane_mod = @import("allocator.zig");
@@ -130,11 +133,12 @@ pub fn mapChildObject(encoded_name: []const u8, byte_len: usize) ?ChildObject {
         return null;
     }
     defer _ = std.c.close(fd);
-    var stat: std.c.Stat = undefined;
-    if (std.c.fstat(fd, &stat) != 0) {
+    var stat: native.struct_stat = undefined;
+    if (native.fstat(fd, &stat) != 0) {
         return null;
     }
-    if (stat.size < 0 or @as(u64, @intCast(stat.size)) < byte_len) {
+
+    if (stat.st_size < 0 or @as(u64, @intCast(stat.st_size)) < byte_len) {
         return null;
     }
     const pixels = std.posix.mmap(null, byte_len, .{ .READ = true }, std.c.MAP{ .TYPE = .SHARED }, fd, 0) catch
@@ -170,11 +174,11 @@ fn openChildFile(encoded_path: []const u8, byte_len: usize) ?std.c.fd_t {
     if (fd < 0) {
         return null;
     }
-    var stat: std.c.Stat = undefined;
-    const acceptable = std.c.fstat(fd, &stat) == 0 and
-        std.c.S.ISREG(@intCast(stat.mode)) and
-        stat.uid == std.c.getuid() and
-        stat.size >= 0 and @as(u64, @intCast(stat.size)) >= byte_len;
+    var stat: native.struct_stat = undefined;
+    const acceptable = native.fstat(fd, &stat) == 0 and
+        std.c.S.ISREG(@intCast(stat.st_mode)) and
+        stat.st_uid == std.c.getuid() and
+        stat.st_size >= 0 and @as(u64, @intCast(stat.st_size)) >= byte_len;
     if (!acceptable) {
         _ = std.c.close(fd);
         return null;
@@ -436,6 +440,58 @@ fn objectExists(name: core.graphics.ShmName) bool {
     }
     _ = std.c.close(fd);
     return true;
+}
+
+test "child file metadata rejects undersized files, directories, symlinks and missing paths" {
+    if (comptime !shm_supported) {
+        return error.SkipZigTest;
+    }
+
+    const io = std.testing.io;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    try temp.dir.writeFile(io, .{ .sub_path = "pixels", .data = "RGBA" });
+    try temp.dir.createDir(io, "directory", Io.File.Permissions.fromMode(0o700));
+    try temp.dir.symLink(io, "pixels", "alias", .{});
+    var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const directory_len = try temp.dir.realPath(io, &directory_buffer);
+
+    for ([_][]const u8{ "pixels", "directory", "alias", "missing" }, 0..) |leaf, index| {
+        var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ directory_buffer[0..directory_len], leaf });
+        var encoded_buffer: [std.base64.standard.Encoder.calcSize(std.fs.max_path_bytes)]u8 = undefined;
+        const encoded = std.base64.standard.Encoder.encode(&encoded_buffer, path);
+
+        try std.testing.expectEqual(index == 0, validateChildFile(encoded, 4));
+        try std.testing.expect(!validateChildFile(encoded, 5));
+    }
+}
+
+test "child shared memory validates size before mapping and unlinking" {
+    if (comptime !shm_supported) {
+        return error.SkipZigTest;
+    }
+
+    const name = freezeSharedPixels("RGBA") orelse return error.SharedMemoryUnavailable;
+    defer _ = std.c.shm_unlink(name.sliceZ());
+    var encoded_buffer: [std.base64.standard.Encoder.calcSize(std.fs.max_path_bytes)]u8 = undefined;
+    const encoded = std.base64.standard.Encoder.encode(&encoded_buffer, name.sliceZ());
+
+    // Darwin reports shared-memory sizes rounded up to the host page size.
+    const oversized = mapChildObject(encoded, std.heap.pageSize() + 1);
+    defer {
+        if (oversized) |object| {
+            object.close();
+        }
+    }
+
+    try std.testing.expectEqual(@as(?ChildObject, null), oversized);
+    try std.testing.expect(objectExists(name));
+    const mapped = mapChildObject(encoded, 4) orelse return error.SharedMemoryUnavailable;
+    defer mapped.close();
+
+    try std.testing.expectEqualStrings("RGBA", mapped.pixels);
+    try std.testing.expect(!objectExists(name));
 }
 
 test "a newer generation replaces the parked object of its image" {

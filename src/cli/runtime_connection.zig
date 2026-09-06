@@ -1,6 +1,9 @@
 //! Discovery and authenticated connection to the local Telar runtime.
 
 const std = @import("std");
+const native = @cImport({
+    @cInclude("sys/stat.h");
+});
 const core = @import("telar-core");
 const frontend = @import("telar-frontend");
 
@@ -67,11 +70,12 @@ pub const RuntimeConnector = struct {
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const directory_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch
             return error.NameTooLong;
-        var native_stat: std.c.Stat = undefined;
-        if (std.c.fstatat(std.c.AT.FDCWD, directory_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
+        var native_stat: native.struct_stat = undefined;
+        if (native.fstatat(std.c.AT.FDCWD, directory_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
             return error.InvalidRuntimeDirectory;
         }
-        try checkRuntimeDirectoryOwner(native_stat.uid, std.c.getuid());
+
+        try checkRuntimeDirectoryOwner(native_stat.st_uid, std.c.getuid());
 
         try Io.Dir.cwd().setFilePermissions(connector.process.io, directory, permissions, .{ .follow_symlinks = false });
     }
