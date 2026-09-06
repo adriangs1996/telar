@@ -14,7 +14,7 @@ no-ops.
 ## Normal input
 
 ```text
-mouse wheel or pane input
+mouse wheel, focused scroll action or pane input
         |
 InputHandler
         |
@@ -34,8 +34,11 @@ graphics visibility, then set_pane_viewport
 ```
 
 `PaneViewportCommand` supports an absolute row, a relative movement and the
-bottom of retained history. `PaneMouseHandler` selects relative mouse-wheel
-movement, and `pane_mouse_inputs` applies it through the viewport adapter.
+bottom of retained history. `PaneMouseHandler` selects relative wheel
+movement for both physical pointer commands and focused `scroll_pane` actions,
+and `pane_mouse_inputs` applies it through the viewport adapter. Focused scroll
+reuses the mouse source for child reports and alternate-screen keys, so the
+keyboard binding itself does not reset the viewport to live output.
 `PaneInputHandler` composes the same use case with a `.bottom` intent before
 keyboard and paste delivery. None of these callers clamps offsets, changes
 scroll state, hides graphics, sends viewport protocol messages or requests a

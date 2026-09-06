@@ -3,7 +3,6 @@
 const std = @import("std");
 const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
-const presentation = @import("../../../presentation/root.zig");
 const workspace_capability = @import("../../../workspace/root.zig");
 const input_application = @import("../../application/input/root.zig");
 const pane_inputs = @import("pane_inputs.zig");
@@ -13,7 +12,6 @@ const Client = @import("../../client.zig");
 const mouse_protocol = input_capability.mouse_protocol;
 const multiplexer = workspace_capability.multiplexer;
 const pane_mouse = input_application.pane_mouse;
-const term = presentation.screen;
 const ui = core.ui;
 
 pub const Command = pane_mouse.Command;
@@ -25,8 +23,8 @@ const Context = struct {
     area: ui.Rect,
 };
 
-/// Resolves and applies one pane-local pointer event without exposing pane
-/// storage or child mouse modes to the caller.
+/// Resolves a pointer event or focused scroll without exposing pane storage
+/// or child mouse modes to the caller.
 ///
 /// ```zig
 /// _ = try apply(client, model, command);
@@ -51,10 +49,34 @@ pub fn apply(client: *Client, model: *multiplexer.Model, command: Command) !Outc
     return use_case.execute(command);
 }
 
-fn resolve(raw_context: *anyopaque, event: term.Event.Mouse) ?multiplexer.PaneMousePlan {
+fn resolve(raw_context: *anyopaque, command: Command) ?pane_mouse.Resolved {
     const context: *Context = @ptrCast(@alignCast(raw_context));
 
-    return context.model.planPaneMouse(event, context.area);
+    return switch (command) {
+        .pointer => |pointer| .{
+            .plan = context.model.planPaneMouse(pointer.event, context.area) orelse return null,
+            .pointer = pointer,
+        },
+        .focused_scroll => |direction| focused: {
+            const plan = context.model.planFocusedPaneMouse(context.area) orelse return null;
+            const host_size = context.client.model.hostSize();
+
+            break :focused .{
+                .plan = plan,
+                .pointer = .{
+                    .event = .{
+                        .x = plan.content.x,
+                        .y = plan.content.y,
+                        .kind = if (direction == .up) .scroll_up else .scroll_down,
+                        .button = if (direction == .up) 64 else 65,
+                    },
+                    .exterior_pixels = false,
+                    .cell_width_px = host_size.cell_width_px,
+                    .cell_height_px = host_size.cell_height_px,
+                },
+            };
+        },
+    };
 }
 
 fn applyEffect(raw_context: *anyopaque, effect: pane_mouse.Effect) !void {

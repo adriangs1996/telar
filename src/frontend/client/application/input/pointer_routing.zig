@@ -3,11 +3,11 @@
 const std = @import("std");
 const pane_mouse = @import("pane_mouse.zig");
 
-pub const Command = pane_mouse.Command;
+pub const PointerCommand = pane_mouse.PointerCommand;
 
 pub const Authority = union(enum) {
     unavailable,
-    available: Command,
+    available: PointerCommand,
 };
 
 pub const ViewOutcome = struct {
@@ -25,10 +25,10 @@ pub const Outcome = enum {
 
 pub const Effects = struct {
     context: *anyopaque,
-    copy_mode: *const fn (*anyopaque, Command) anyerror!bool,
-    view: *const fn (*anyopaque, Command) anyerror!ViewOutcome,
-    link: *const fn (*anyopaque, Command) anyerror!bool,
-    pane: *const fn (*anyopaque, Command) anyerror!void,
+    copy_mode: *const fn (*anyopaque, PointerCommand) anyerror!bool,
+    view: *const fn (*anyopaque, PointerCommand) anyerror!ViewOutcome,
+    link: *const fn (*anyopaque, PointerCommand) anyerror!bool,
+    pane: *const fn (*anyopaque, PointerCommand) anyerror!void,
 };
 
 pub const PointerRoutingHandler = struct {
@@ -104,7 +104,7 @@ const Capture = struct {
         capture.event_count += 1;
     }
 
-    fn copyMode(raw_context: *anyopaque, command: Command) !bool {
+    fn copyMode(raw_context: *anyopaque, command: PointerCommand) !bool {
         const capture: *Capture = @ptrCast(@alignCast(raw_context));
         _ = command;
         capture.record(.copy_mode);
@@ -116,7 +116,7 @@ const Capture = struct {
         return capture.copy_consumed;
     }
 
-    fn view(raw_context: *anyopaque, command: Command) !ViewOutcome {
+    fn view(raw_context: *anyopaque, command: PointerCommand) !ViewOutcome {
         const capture: *Capture = @ptrCast(@alignCast(raw_context));
         _ = command;
         capture.record(.view);
@@ -128,7 +128,7 @@ const Capture = struct {
         return capture.view_outcome;
     }
 
-    fn pane(raw_context: *anyopaque, command: Command) !void {
+    fn pane(raw_context: *anyopaque, command: PointerCommand) !void {
         const capture: *Capture = @ptrCast(@alignCast(raw_context));
         _ = command;
         capture.record(.pane);
@@ -138,7 +138,7 @@ const Capture = struct {
         }
     }
 
-    fn link(raw_context: *anyopaque, command: Command) !bool {
+    fn link(raw_context: *anyopaque, command: PointerCommand) !bool {
         const capture: *Capture = @ptrCast(@alignCast(raw_context));
         _ = command;
         capture.record(.link);
@@ -151,7 +151,7 @@ const Capture = struct {
     }
 };
 
-fn testingCommand() Command {
+fn testingCommand() PointerCommand {
     return .{
         .event = .{ .x = 4, .y = 7, .kind = .press },
         .exterior_pixels = false,

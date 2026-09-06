@@ -422,7 +422,7 @@ global sequences; prefixed sequences do not expire.
 
 `telar.bind` and `telar.bind_global` accept a semantic built-in action, a
 constructor such as `split_pane`, `focus_pane`, `select_tab`,
-`resize_pane`, `resize_sidebar`, `select_tab_offset`, `move_tab`, or `plugin`, or a Lua callback. The
+`resize_pane`, `resize_sidebar`, `scroll_pane`, `select_tab_offset`, `move_tab`, or `plugin`, or a Lua callback. The
 `telar.bind_expr` variants require a Lua callback. Built-in action names are
 stable configuration API; Lua never emits terminal bytes or calls internal Zig
 state.
@@ -439,6 +439,33 @@ bindings are `prefix`, then `alt+left` or `alt+right`. Dragging the sidebar's
 rightmost column selects an exact width. Telar always reserves at least 42
 columns for the sidebar and 20 for the workbench; a narrower host temporarily
 hides or clamps the sidebar without discarding its preferred width.
+
+`telar.action.scroll_pane({ direction = ... })` accepts `"up"` or `"down"` and
+applies one wheel step to the focused pane without entering copy mode. The
+default bindings are `prefix`, then `-` to scroll up, and `prefix`, then `=`
+to scroll down. Each step requires the prefix again. Global bindings allow
+repeated scrolling without a prefix:
+
+```lua
+telar.bind_global({ "alt+up" }, telar.action.scroll_pane({ direction = "up" }))
+telar.bind_global({ "alt+down" }, telar.action.scroll_pane({ direction = "down" }))
+```
+
+The action follows the same policy as the wheel: send an SGR wheel report when
+the application tracks it, send three cursor keys at the live bottom when
+alternate-screen scroll is enabled, or move the retained viewport by three
+rows otherwise. The application decides how far an SGR wheel report scrolls.
+The target is always Telar's focused pane, never the pane under the pointer.
+Synthetic reports use the first content cell, buttons 64/65 and no modifiers;
+pixel reports use that cell's center. Neither the pointer nor the terminal
+cursor chooses the position, so this does not target an application's focused
+internal split. Missing targets and unchanged viewport offsets have no effects.
+Normal typing or paste returns a scrolled viewport to live output.
+
+Like other native actions, invoking `scroll_pane` from copy mode first exits
+copy mode and restores its entry viewport, then applies the wheel step. The
+action is available to client Lua bindings and callbacks, but plugin worker
+effects reject it.
 
 `telar.action.copy_mode()` enters the focused pane's scrollback. Its default
 binding is `prefix`, then `[`. In copy mode, the mouse wheel scrolls three rows

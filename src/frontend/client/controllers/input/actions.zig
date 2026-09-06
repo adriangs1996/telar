@@ -25,6 +25,7 @@ const tab_creations = @import("../tabs/tab_creations.zig");
 const tab_moves = @import("../tabs/tab_moves.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
+const pane_mouse_input = @import("pane_mouse_inputs.zig");
 
 const Action = input.action.Action;
 const keybind = input.keybind;
@@ -72,6 +73,7 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     switch (value) {
+        .scroll_pane => |direction| try scrollPane(client, direction),
         .split_pane => |direction| try beginSplit(client, switch (direction) {
             .horizontal => .horizontal,
             .vertical => .vertical,
@@ -169,6 +171,16 @@ fn navigationKey(direction: input.action.Direction) keybind.Key {
         .up => ctrl_k,
         .down => ctrl_j,
     };
+}
+
+fn scrollPane(client: *Client, direction: input.action.ScrollDirection) !void {
+    const model = client.model.activeTabModel() orelse return;
+
+    _ = try pane_mouse_input.apply(
+        client,
+        model,
+        .{ .focused_scroll = direction },
+    );
 }
 
 fn beginSplit(client: *Client, axis: layout.Axis) !void {
