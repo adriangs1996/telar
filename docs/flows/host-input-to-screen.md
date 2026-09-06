@@ -288,6 +288,21 @@ The runtime reads keyboard flags from the pane's VT and publishes them in
 - xterm modifyOtherKeys mode 2 preserves modifiers in its numeric encoding.
 - A child with neither mode active receives the legacy Enter encoding.
 
+For CSI-u character reports, a child requesting Kitty flag 16 also receives
+associated text. The encoder uses the same UTF-8 or shifted-alternate character
+as legacy text output, never the physical/base key. It emits one report, not a
+report plus raw text. Ctrl/Alt shortcuts, control characters, Kitty functional
+key codepoints and releases carry no associated text. Children not requesting
+that flag retain their existing encoding; bracketed paste is unchanged.
+
+This is a client-owned, allocation-free interactive operation. It reads the
+acknowledged pane modes, adds at most one Unicode scalar and ten bytes to the
+existing bounded encoding buffer, and retains no state across events. Buffer
+exhaustion returns an encoding error before viewport or delivery effects. It
+changes neither host negotiation nor IPC. Host flags 7 do not carry a separate
+associated-text field; supporting host reports with multi-codepoint text would
+require a separate parser and semantic-event change.
+
 The application decides whether Shift+Enter inserts a newline. Telar does not
 infer this from agent detection or inject a paste. A host that sends the same CR
 for Enter and Shift+Enter provides no modifier to preserve.
@@ -474,9 +489,18 @@ captures an immutable `presentation_projection` and calls
   malformed reports and every byte boundary. The encoder tests cover modifier
   combinations, physical lifecycles, alternate key codes, legacy release
   suppression, protocol precedence, plain Enter, LF and bounded output.
-- `host Enter variants use the keyboard modes received in a pane frame` in
+- `host keys use the keyboard modes received in a pane frame` in
   `src/frontend/client/tests/input.zig` proves frame decoding, normal key
-  routing and the outgoing `pane_input` bytes.
+  routing and the outgoing `pane_input` bytes, including associated text,
+  repeat/release and Ctrl+C under Kitty flags 27, flags 7 and legacy modes.
+- The associated-text encoder tests cover ASCII, shifted symbols, Unicode,
+  every flag combination for plain characters, shortcut modifiers, controls,
+  functional keys, repeats, releases, paste and every insufficient output size.
+- `tools/verify_terminal_browser.py` types through macOS System Events into
+  the fixture's focused input. It requires Accessibility permission. A DOM key
+  event alone or pasted text cannot pass: the input must report `insertText`
+  and retain exactly `a` on completion. `tools/test_verify_terminal_browser.py`
+  checks rejection of those false positives, duplicate text and incomplete runs.
 - `releasing the physical prefix preserves its logical sequence through client routing`
   in the same file proves the complete host-parser-to-action lease path.
 - `modified Enter follows the compatibility profile and child keyboard negotiation through the PTY` in

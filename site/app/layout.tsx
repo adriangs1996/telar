@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Instrument_Sans, Martian_Mono } from "next/font/google";
+import { Instrument_Sans, Instrument_Serif, Martian_Mono } from "next/font/google";
 import "./globals.css";
 
 const martian = Martian_Mono({
@@ -16,22 +16,30 @@ const instrument = Instrument_Sans({
   display: "swap",
 });
 
+const serif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: ["400"],
+  style: ["italic"],
+  variable: "--font-instrument-serif",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "telar",
   description:
-    "A terminal runtime for coding agents. Close the lid, kill the client, and your agents are still working when you come back. This page is laid out like a telar session.",
+    "A terminal runtime for coding agents. It owns the pty, the TLS path and the history of every agent you start. Close the lid, kill the client, come back: the runtime kept the work.",
   metadataBase: new URL("https://telar.dev"),
   openGraph: {
     title: "telar",
-    description: "A terminal runtime for coding agents.",
+    description: "A terminal runtime for coding agents. Your agents run inside it, not beside it.",
     type: "website",
   },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${martian.variable} ${instrument.variable}`}>
-      <body>{children}</body>
+    <html lang="en" className={`${martian.variable} ${instrument.variable} ${serif.variable}`}>
+      <body className="desk">{children}</body>
     </html>
   );
 }

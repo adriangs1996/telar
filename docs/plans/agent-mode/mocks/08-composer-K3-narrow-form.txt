@@ -1,0 +1,7 @@
+ ❯ Fix the failing proxy tests in src/backend/proxy, keep the relay untouched.          
+   /effort hi▌                                                                          
+   ┌ /effort high   · low  · medium  ● high  · xhigh  · max  · ultrathink              ┐
+   │ /model   opus  sonnet  haiku          /mode   supervised  accept-edits  full      │
+   └───────────────────────────────────────────────────────────────────────────────────┘
+ claude · opus · high · supervised   ctx 38%   ready                                    
+  enter send   alt+enter newline   / commands   @ files   ^e $EDITOR   esc              

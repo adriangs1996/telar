@@ -1,32 +1,26 @@
-import Chrome from "@/components/client/Chrome";
-import ClientProvider from "@/components/client/ClientProvider";
-import Screens from "@/components/client/Screens";
-import Config from "@/components/sections/Config";
-import Glossary from "@/components/sections/Glossary";
+import Nav from "@/components/Nav";
+import DemoProvider from "@/components/demo/DemoProvider";
+import Compare from "@/components/sections/Compare";
+import Demo from "@/components/sections/Demo";
+import Features from "@/components/sections/Features";
+import Footer from "@/components/sections/Footer";
 import Hero from "@/components/sections/Hero";
-import History from "@/components/sections/History";
 import Install from "@/components/sections/Install";
-import Paths from "@/components/sections/Paths";
-import Server from "@/components/sections/Server";
-import SidebarStory from "@/components/sections/SidebarStory";
+import Proof from "@/components/sections/Proof";
 
 export default function Page() {
   return (
-    <ClientProvider>
-      <Chrome>
-        <Screens
-          panes={{
-            hero: <Hero />,
-            sidebar: <SidebarStory />,
-            server: <Server />,
-            paths: <Paths />,
-            history: <History />,
-            config: <Config />,
-            install: <Install />,
-            glossary: <Glossary />,
-          }}
-        />
-      </Chrome>
-    </ClientProvider>
+    <DemoProvider>
+      <Nav />
+      <main>
+        <Hero />
+        <Proof />
+        <Demo />
+        <Features />
+        <Compare />
+        <Install />
+      </main>
+      <Footer />
+    </DemoProvider>
   );
 }

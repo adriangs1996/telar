@@ -1,0 +1,8 @@
+«ac:┌─ fix proxy tests »«dm:─────────────────────────────────────────»«dm:┬»«dm:─────────────────────────»«dm:┐» 
+«dm:│»«wh:  Fix the failing proxy tests in src/backend/proxy,»         «dm:│»  provider  «wh:claude»       «dm:│»
+«dm:│»«wh:  keep the relay untouched.»«ac:▌»                                «dm:│»  model     «sel:opus ▾»       «dm:│»
+«dm:│»                                                            «dm:│»  effort    «sel:high ▾»       «dm:│»
+«dm:│»                                                            «dm:│»  mode      «sel:supervised ▾» «dm:│»
+«dm:│»                                                            «dm:│»  context   «gr:▮▮▮▯▯▯▯▯ 38%» «dm:│»
+«dm:└»«dm:────────────────────────────────────────────────────────────»«dm:┴»«dm:─────────────────────────»«dm:┘»
+«dm:  enter send   alt+enter newline   tab settings   ^e $EDITOR   esc   (<120 cols: K3)»    

@@ -1,0 +1,8 @@
+«ac:┌─ fix proxy tests »«dm:────────────────────────────────────────────────────────────────────»«dm:┐»
+«dm:│»  provider «sel: claude ▾ »   model «sel: opus ▾ »   effort «sel: high ▾ »   mode «sel: supervised ▾ »        «dm:│»
+«dm:├»«dm:──────────────────────────────────────────────────────────────────────────────────────»«dm:┤»
+«dm:│»«wh:  Fix the failing proxy tests in src/backend/proxy, keep the relay untouched.»         «dm:│»
+«dm:│»«wh:  Start with the HTTP/2 observer; the HTTP/1.1 path is fine.»«ac:▌»                         «dm:│»
+«dm:│»                                                                                      «dm:│»
+«dm:└»«dm:──────────────────────────────────────────────────────────────────────────────────────»«dm:┘»
+«dm:  ctrl+enter send   tab next field   ctrl+e $EDITOR   esc»                               

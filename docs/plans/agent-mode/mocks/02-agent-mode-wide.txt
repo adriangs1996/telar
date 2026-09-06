@@ -1,0 +1,13 @@
+ telar ▸ agents                                                      CX 5h:12%  CL 5h:40%  proxy on 
+ PROJECTS        │ NEEDS YOU 2                      │ fix proxy tests      * claude  blocked · hook
+ ● telar     2/5 │ ● fix proxy tests    claude   3m │ telar › agents › pane 2   on proxy-fix   3m  
+   gwagent   1/2 │ ● migrate schema     codex    8m │ ▸ terminal   conversation   changes          
+   site      0/1 │ DONE 1                           │──────────────────────────────────────────────
+   archived   14 │ ✓ add asteroids      pi      12m │ Do you want to run `zig build test`?         
+                 │ WORKING 2                        │   1. Yes                                     
+                 │ ◐ lua bars           claude      │   2. Yes, and don't ask again                
+                 │ ◐ perf gate          codex       │ ❯ 3. No, tell Claude what to do differently  
+                 │ READY 1                          │                                              
+                 │ · scratch            pi          │                                              
+                 │                                  │                                              
+ j/k move  enter open  i interact  tab view  g next needs-you  n new  a archive  / find  ^s a mux   

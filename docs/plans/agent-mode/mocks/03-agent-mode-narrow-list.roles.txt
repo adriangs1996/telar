@@ -1,0 +1,12 @@
+«bar: agents   telar 2/5  gwagent 1/2  site +1     »
+«rd: NEEDS YOU »«dm:2»                                  
+«sel: ● fix proxy tests        claude   3m »        
+«rd: ● »migrate schema         codex    8m         
+«gr: DONE »«dm:1»                                       
+«gr: ✓ »add asteroids          pi      12m         
+«tl: WORKING »«dm:2»                                    
+«tl: ◐ »lua bars               claude              
+«tl: ◐ »perf gate              codex               
+«dm: READY 1»                                      
+«dm: · »scratch                pi                  
+«bar: j/k  enter open  1-9 project  / find  n new  »

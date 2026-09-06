@@ -1,0 +1,8 @@
+┌─ fix proxy tests ────────────────────────────────────────────────────────────────────┐
+│  Fix the failing proxy tests in src/backend/proxy, keep the relay untouched.         │
+│  Start with the HTTP/2 observer; the HTTP/1.1 path is fine.▌                         │
+│                                                                                      │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│  * claude · opus ▾   effort high ▾   supervised ▾                 ctx 38%    ⏎ send  │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+  enter send   alt+enter newline   ^m model   ^r effort   ^p mode   ^e $EDITOR   esc    

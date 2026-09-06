@@ -1,0 +1,8 @@
+┌─ fix proxy tests   ● blocked · hook ──────────────────────┬─────────────────────────┐ 
+│  wants  Bash  zig build test      waiting since 13:05      │  provider  claude       │
+│  editor disabled until you answer                          │  model     opus         │
+│                                                            │  effort    high         │
+│  y approve   a session   n decline   i terminal            │  context   ▮▮▮▯▯▯▯▯ 41% │
+│                                                            │   ■ stop                │
+└────────────────────────────────────────────────────────────┴─────────────────────────┘
+  keys forward the agent's own answer; only with hook authority, otherwise i            

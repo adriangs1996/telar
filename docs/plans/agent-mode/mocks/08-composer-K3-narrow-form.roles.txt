@@ -1,0 +1,7 @@
+«ac: ❯ »«wh:Fix the failing proxy tests in src/backend/proxy, keep the relay untouched.»          
+   «wh:/effort hi»«ac:▌»                                                                          
+«dm:   ┌ »«mv:/effort »«wh:high»«dm:   · low  · medium  »«ac:● high»«dm:  · xhigh  · max  · ultrathink»              «dm:┐»
+«dm:   │ »«mv:/model»«dm:   opus  sonnet  haiku»          «mv:/mode»«dm:   supervised  accept-edits  full»      «dm:│»
+«dm:   └»«dm:───────────────────────────────────────────────────────────────────────────────────»«dm:┘»
+«sb: claude · opus · high · supervised»   ctx «gr:38%»«gr:   ready»                                    
+«dm:  enter send   alt+enter newline   / commands   @ files   ^e $EDITOR   esc»              

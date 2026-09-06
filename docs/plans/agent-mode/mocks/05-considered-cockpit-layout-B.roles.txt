@@ -1,0 +1,16 @@
+«bar: telar ▸ agents   telar 2/5   gwagent 1/2   site 0/1   archived 14                         proxy on »
+«rd: NEEDS YOU »«dm:2»                «dm:│»«wh: fix proxy tests»   claude   «rd:blocked · hook»               on «mv:proxy-fix »
+«sel: ● fix proxy tests   3m »    «dm:│»«dm:──────────────────────────────────────────────────────────────────────»
+«rd: ● »migrate schema    8m     «dm:│» Do you want to run `zig build test`?                                 
+«gr: DONE »«dm:1»                     «dm:│»   1. Yes                                                             
+«gr: ✓ »add asteroids    12m     «dm:│»   2. Yes, and don't ask again                                        
+«tl: WORKING »«dm:2»                  «dm:│»«ac: ❯ »3. No, tell Claude what to do differently                          
+«tl: ◐ »lua bars                 «dm:│»                                                                      
+«tl: ◐ »perf gate                «dm:│»                                                                      
+«dm: READY »«dm:1»                    «dm:│»«dm:┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈»
+«dm: · »scratch                  «dm:│»«ac: ▸ conversation»«dm:   changes»                         «dm:{ } prompts  ▸ tail »
+                            «dm:│»«ac: ▌ »«wh:you»  Fix the failing proxy tests in src/backend/proxy, keep the …  
+                            «dm:│»«mv:   » Bash»   zig build test-backend-proxy                    «rd:→ 1»«dm:  4.2s »
+                            «dm:│»«mv:   » Edit»   src/backend/proxy/service.zig   «gr:+6» «rd:-2»                     
+                            «dm:│»«rd:   ! permission»  Bash  zig build test   «dm:(waiting since 13:05)»         
+«bar: j/k move  enter open  i interact  tab drawer  g next needs-you  n new  a archive  / find  ^s a mux »

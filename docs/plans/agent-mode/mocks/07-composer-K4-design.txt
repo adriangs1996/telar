@@ -1,0 +1,8 @@
+┌─ fix proxy tests ─────────────────────────────────────────┬─────────────────────────┐ 
+│  Fix the failing proxy tests in src/backend/proxy,         │  provider  claude       │
+│  keep the relay untouched.▌                                │  model     opus ▾       │
+│                                                            │  effort    high ▾       │
+│                                                            │  mode      supervised ▾ │
+│                                                            │  context   ▮▮▮▯▯▯▯▯ 38% │
+└────────────────────────────────────────────────────────────┴─────────────────────────┘
+  enter send   alt+enter newline   tab settings   ^e $EDITOR   esc   (<120 cols: K3)    

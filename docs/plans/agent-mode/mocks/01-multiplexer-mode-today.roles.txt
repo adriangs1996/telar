@@ -1,0 +1,13 @@
+«bar: telar  gwagent  site                                                CX 5h:12%  CL 5h:40%  proxy on »
+«hdr: agents»                     «dm:│»«dm:┌ pane 1 ──────────────────────────────»«dm:│»«dm:┌ pane 2 ────────────────────» 
+«wh: inbox»             «dm:2 open»   «dm:│»«sb: ~/sandbox/telar» $ nvim src/backend    «dm:│»«ac: * »Claude Code                
+                            «dm:│»                                       «dm:│»                              
+«ac: ▌»«wh:fix proxy tests»  «rd:● blocked»«dm:│»  fn observe(...)                      «dm:│» Do you want to run           
+«ac: ▌»telar › agents › pane 2   «dm:│»      if (frame.len == 0) {            «dm:│» `zig build test`?            
+«ac: ▌»«dm:claude  ~/s/telar»         «dm:│»          return;                      «dm:│»   1. Yes                     
+                            «dm:│»      }                                «dm:│»«ac: ❯ »2. No                      
+  «wh:migrate schema»   «tl:◐ working»«dm:│»                                       «dm:│»                              
+  gwagent › api › pane 1    «dm:│»                                       «dm:│»                              
+«dm:  codex   ~/s/gwagent»       «dm:│»                                       «dm:│»                              
+                            «dm:│»«dm:└──────────────────────────────────────»«dm:│»«dm:└─────────────────────────────»
+«bar: cpu 38%  mem 12.3G                                                 agents ▸ tests   logs   review  »

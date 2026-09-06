@@ -151,17 +151,12 @@ fn navigatePane(client: *Client, direction: input.action.Direction) !void {
         return;
     }
 
-    const changed = try focusPane(client, .{ .direction = switch (direction) {
+    _ = try focusPane(client, .{ .direction = switch (direction) {
         .left => .left,
         .right => .right,
         .up => .up,
         .down => .down,
     } });
-    if (changed) {
-        return;
-    }
-
-    _ = try pane_inputs.send(client, .{ .target = .focused, .source = .host, .payload = .{ .key = key } });
 }
 
 fn navigationKey(direction: input.action.Direction) keybind.Key {

@@ -1,0 +1,8 @@
+«tl:┌─ fix proxy tests   ◐ working »«dm:─────────────────────────────»«dm:┬»«dm:─────────────────────────»«dm:┐» 
+«dm:│»«wh:  Also add a regression test for the split DATA frame.»«ac:▌»     «dm:│»  provider  «wh:claude»       «dm:│»
+«dm:│»                                                            «dm:│»  model     «sel:opus ▾»       «dm:│»
+«dm:│»                                                            «dm:│»  effort    «sel:high ▾»       «dm:│»
+«dm:│»                                                            «dm:│»  context   «gr:▮▮▮▯▯▯▯▯ 41%» «dm:│»
+«dm:│»                                                            «dm:│»  «sel: ⏎ queue » «rd: ■ stop »     «dm:│»
+«dm:└»«dm:────────────────────────────────────────────────────────────»«dm:┴»«dm:─────────────────────────»«dm:┘»
+«dm:  enter queues in the agent's own input   ^x stop sends the manifest's interrupt key»    

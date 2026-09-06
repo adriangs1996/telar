@@ -1,0 +1,8 @@
+┌─ fix proxy tests   ◐ working ─────────────────────────────┬─────────────────────────┐ 
+│  ▌                                                         │  provider  claude       │
+│                                                            │  model     sonnet ▾     │
+│                                                            │            (pending)    │
+│                                                            │  effort    high ▾       │
+│                                                            │   ⏎ send   ■ stop       │
+└────────────────────────────────────────────────────────────┴─────────────────────────┘
+  /model sonnet typed into the agent; pending until the reader sees the change          

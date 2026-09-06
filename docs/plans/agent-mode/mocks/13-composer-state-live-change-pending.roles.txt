@@ -1,0 +1,8 @@
+«tl:┌─ fix proxy tests   ◐ working »«dm:─────────────────────────────»«dm:┬»«dm:─────────────────────────»«dm:┐» 
+«dm:│»«wh:  »«ac:▌»                                                         «dm:│»  provider  «wh:claude»       «dm:│»
+«dm:│»                                                            «dm:│»  model     «sel:sonnet ▾»     «dm:│»
+«dm:│»                                                            «dm:│»            «mv:(pending)»    «dm:│»
+«dm:│»                                                            «dm:│»  effort    «sel:high ▾»       «dm:│»
+«dm:│»                                                            «dm:│»  «sel: ⏎ send » «rd: ■ stop »      «dm:│»
+«dm:└»«dm:────────────────────────────────────────────────────────────»«dm:┴»«dm:─────────────────────────»«dm:┘»
+«dm:  /model sonnet typed into the agent; pending until the reader sees the change»          

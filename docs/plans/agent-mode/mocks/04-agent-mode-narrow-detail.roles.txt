@@ -1,0 +1,12 @@
+«bar: ◂ inbox  fix proxy tests  claude  blocked    »
+«ac: ▸ terminal»«dm:  conversation  changes»            
+«dm:──────────────────────────────────────────────»
+ Do you want to run `zig build test`?         
+   1. Yes                                     
+   2. Yes, and don't ask again                
+«ac: ❯ »3. No, tell Claude what to do differently  
+                                              
+                                              
+                                              
+                                              
+«bar: esc list  i interact  tab view  ^alt+j/k     »

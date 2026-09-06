@@ -1,0 +1,13 @@
+«bar: telar ▸ agents                                                      CX 5h:12%  CL 5h:40%  proxy on »
+«hdr: PROJECTS»        «dm:│»«rd: NEEDS YOU »«dm:2»                      «dm:│»«wh: fix proxy tests»      «ac:* claude»«rd:  blocked · hook»
+«ac: ● »«wh:telar»     «rd:2»/5 «dm:│»«sel: ● fix proxy tests    claude   3m »«dm:│»«sb: telar › agents › pane 2»   on «mv:proxy-fix»«dm:   3m»  
+   gwagent   «rd:1»/2 «dm:│»«rd: ● »migrate schema     codex    8m «dm:│»«ac: ▸ terminal»«dm:   conversation   changes»          
+   site      0/1 «dm:│»«gr: DONE »«dm:1»                           «dm:│»«dm:──────────────────────────────────────────────»
+«dm:   archived   14» «dm:│»«gr: ✓ »add asteroids      pi      12m «dm:│» Do you want to run `zig build test`?         
+                 «dm:│»«tl: WORKING »«dm:2»                        «dm:│»   1. Yes                                     
+                 «dm:│»«tl: ◐ »lua bars           claude      «dm:│»   2. Yes, and don't ask again                
+                 «dm:│»«tl: ◐ »perf gate          codex       «dm:│»«ac: ❯ »3. No, tell Claude what to do differently  
+                 «dm:│»«dm: READY »«dm:1»                          «dm:│»                                              
+                 «dm:│»«dm: · »scratch            pi          «dm:│»                                              
+                 «dm:│»                                  «dm:│»                                              
+«bar: j/k move  enter open  i interact  tab view  g next needs-you  n new  a archive  / find  ^s a mux   »

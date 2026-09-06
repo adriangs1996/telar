@@ -315,8 +315,9 @@ test "a Pi path removed by a word deletion retires its preview on the next frame
     try std.testing.expectEqual(@as(u8, 0), client.view.kittyAttachments().snapshot().len);
 }
 
-test "host Enter variants use the keyboard modes received in a pane frame" {
-    const cases = [_]struct { modes: schema.frame.InputModes, expected: []const u8 }{
+test "host keys use the keyboard modes received in a pane frame" {
+    const lifecycle = "\x1b[97u\x1b[97;1:2u\x1b[97;1:3u\x1b[99;5u\x1b[99;1:3u";
+    const cases = [_]struct { modes: schema.frame.InputModes, expected: []const u8, host: []const u8 = "\x1b[13;2u\x1b[27;2;13~\r\n" }{
         .{
             .modes = .{ .kitty_keyboard_flags = 7 },
             .expected = "\x1b[13;2u\x1b[13;2u\r\x1b[106;5u",
@@ -326,6 +327,17 @@ test "host Enter variants use the keyboard modes received in a pane frame" {
             .expected = "\x1b[27;2;13~\x1b[27;2;13~\r\n",
         },
         .{ .modes = .{}, .expected = "\r\r\r\n" },
+        .{
+            .modes = .{ .kitty_keyboard_flags = 27 },
+            .host = lifecycle,
+            .expected = "\x1b[97;1;97u\x1b[97;1:2;97u\x1b[97;1:3u\x1b[99;5u\x1b[99;1:3u",
+        },
+        .{
+            .modes = .{ .kitty_keyboard_flags = 7 },
+            .host = lifecycle,
+            .expected = "\x1b[97u\x1b[97;1:2u\x1b[97;1:3u\x1b[99;5u\x1b[99;1:3u",
+        },
+        .{ .modes = .{}, .host = lifecycle, .expected = "aa\x03" },
     };
     for (cases) |case| {
         var harness: TestHarness = undefined;
@@ -348,14 +360,14 @@ test "host Enter variants use the keyboard modes received in a pane frame" {
         _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(snapshot));
         try presentation_lifecycle.observe(harness.client);
         try harness.settleModelPresentation();
-        const host_bytes = "\x1b[13;2u\x1b[27;2;13~\r\n";
+        const host_bytes = case.host;
         var chunk: InputChunk = .{};
         @memcpy(chunk.bytes[0..host_bytes.len], host_bytes);
-        chunk.len = host_bytes.len;
+        chunk.len = @intCast(host_bytes.len);
         try std.testing.expect(!try host_inputs.handleRead(harness.client, chunk));
         try harness.settle();
 
-        var received: [32]u8 = undefined;
+        var received: [128]u8 = undefined;
         var received_len: usize = 0;
         var buffer: [256]u8 = undefined;
         while (received_len < case.expected.len) {

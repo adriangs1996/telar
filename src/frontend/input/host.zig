@@ -122,33 +122,72 @@ fn encodeText(writer: *std.Io.Writer, key: Key, encoding: Encoding) !bool {
         return true;
     }
 
+    const text = try textCharacter(key, char);
+    try writer.writeAll(text.slice());
+
+    return true;
+}
+
+fn textCharacter(key: Key, char: term.Event.Char) !term.Event.Char {
     if (key.mods.shift) {
         if (key.kitty) |codepoints| {
             if (codepoints.shifted) |shifted| {
                 var bytes: [4]u8 = undefined;
                 const scalar = std.math.cast(u21, shifted) orelse return error.UnencodableKey;
                 const len = std.unicode.utf8Encode(scalar, &bytes) catch return error.UnencodableKey;
-                try writer.writeAll(bytes[0..len]);
 
-                return true;
+                return .init(bytes[0..len]);
             }
         }
     }
 
-    try writer.writeAll(char.slice());
+    return char;
+}
 
-    return true;
+// Host flags 7 deliver text as UTF-8 or a shifted alternate, not as a Kitty
+// associated-text field. Reuse the legacy text choice, never the physical key.
+fn associatedCodepoint(key: Key, encoding: Encoding) !?u21 {
+    if (encoding.kitty_flags & 0b10000 == 0 or key.phase == .release or key.mods.ctrl or key.mods.alt) {
+        return null;
+    }
+
+    const char = switch (key.code) {
+        .char => |value| value,
+        else => return null,
+    };
+
+    if (key.kitty) |codepoints| {
+        if (codepoints.primary >= 57344 and codepoints.primary <= 63743) {
+            return null;
+        }
+    }
+
+    const text = try textCharacter(key, char);
+    const codepoint = std.unicode.utf8Decode(text.slice()) catch return error.UnencodableKey;
+    if (codepoint < 32 or (codepoint >= 127 and codepoint <= 159)) {
+        return null;
+    }
+
+    return codepoint;
 }
 
 fn encodeKitty(writer: *std.Io.Writer, key: Key, encoding: Encoding) !void {
+    const text = try associatedCodepoint(key, encoding);
     try writer.writeAll("\x1b[");
     try encodeKittyCodepoints(writer, key, encoding.kitty_flags);
-    if (encoding.modifier != 1 or encoding.event != null) {
+
+    if (encoding.modifier != 1 or encoding.event != null or text != null) {
         try writer.print(";{d}", .{encoding.modifier});
     }
+
     if (encoding.event) |event| {
         try writer.print(":{d}", .{event});
     }
+
+    if (text) |codepoint| {
+        try writer.print(";{d}", .{codepoint});
+    }
+
     try writer.writeByte('u');
 }
 
@@ -414,6 +453,92 @@ test "report-all mode encodes plain key lifecycles" {
     try std.testing.expectEqualStrings("\x1b[120;1:2u", try encodeKey(&buffer, key, modes));
     key.phase = .release;
     try std.testing.expectEqualStrings("\x1b[120;1:3u", try encodeKey(&buffer, key, modes));
+}
+
+test "Kitty associated text follows the produced character rather than the physical key" {
+    var buffer: [64]u8 = undefined;
+    const cases = [_]struct { host: []const u8, expected: []const u8 }{
+        .{ .host = "a", .expected = "\x1b[97;1;97u" },
+        .{ .host = "A", .expected = "\x1b[65;1;65u" },
+        .{ .host = " ", .expected = "\x1b[32;1;32u" },
+        .{ .host = "ñ", .expected = "\x1b[241;1;241u" },
+        .{ .host = "界", .expected = "\x1b[30028;1;30028u" },
+        .{ .host = "😀", .expected = "\x1b[128512;1;128512u" },
+        .{ .host = "\x1b[97:65:113;2u", .expected = "\x1b[97;2;65u" },
+        .{ .host = "\x1b[47:63:47;2:2u", .expected = "\x1b[47;2:2;63u" },
+        .{ .host = "\x1b[97;1:2u", .expected = "\x1b[97;1:2;97u" },
+        .{ .host = "\x1b[97;1:3u", .expected = "\x1b[97;1:3u" },
+    };
+
+    for (cases) |case| {
+        const key = term.parse(case.host).?.event.key;
+        try std.testing.expectEqualStrings(case.expected, try encodeKey(&buffer, key, .{ .kitty_keyboard_flags = 27 }));
+    }
+
+    const shifted = term.parse("\x1b[97:65:113;2u").?.event.key;
+    try std.testing.expectEqualStrings("\x1b[97:65:113;2;65u", try encodeKey(&buffer, shifted, .{ .kitty_keyboard_flags = 31 }));
+    try std.testing.expectEqualStrings("\x1b[97;2;65u", try encodeKey(&buffer, shifted, .{ .kitty_keyboard_flags = 19 }));
+    try std.testing.expectEqualStrings("A", try encodeKey(&buffer, shifted, .{}));
+}
+
+test "Kitty associated text never turns shortcuts controls or releases into text" {
+    var buffer: [64]u8 = undefined;
+    var baseline_buffer: [64]u8 = undefined;
+    const non_text = [_][]const u8{
+        "\x03",        "\x1ba",        "\r",              "\t",       "\x7f",      "\x1b",
+        "\x1b[A",      "\x1b[3~",      "\x1b[0u",         "\x1b[31u", "\x1b[128u", "\x1b[159u",
+        "\x1b[57441u", "\x1b[97;1:3u", "\x1b[97:65;2:3u",
+    };
+
+    for (1..16) |bits| {
+        const flags: u5 = @intCast(bits);
+
+        for (non_text) |host| {
+            const key = term.parse(host).?.event.key;
+            const baseline = try encodeKey(&baseline_buffer, key, .{ .kitty_keyboard_flags = flags });
+            try std.testing.expectEqualStrings(baseline, try encodeKey(&buffer, key, .{ .kitty_keyboard_flags = flags | 16 }));
+        }
+
+        for (0..8) |mods_bits| {
+            const mods: Key.Mods = @bitCast(@as(u3, @intCast(mods_bits)));
+            if (!mods.ctrl and !mods.alt) {
+                continue;
+            }
+
+            for ([_]Key.Phase{ .press, .repeat, .release }) |phase| {
+                const key: Key = .{ .code = .{ .char = .init("c") }, .mods = mods, .phase = phase };
+                const baseline = try encodeKey(&baseline_buffer, key, .{ .kitty_keyboard_flags = flags });
+                try std.testing.expectEqualStrings(baseline, try encodeKey(&buffer, key, .{ .kitty_keyboard_flags = flags | 16 }));
+            }
+        }
+    }
+}
+
+test "associated text preserves legacy text and paste and requires its own flag" {
+    var buffer: [64]u8 = undefined;
+    const key = term.parse("a").?.event.key;
+
+    for (0..32) |bits| {
+        const flags: u5 = @intCast(bits);
+        const expected = if (flags & 8 == 0) "a" else if (flags & 16 == 0) "\x1b[97u" else "\x1b[97;1;97u";
+        try std.testing.expectEqualStrings(expected, try encodeKey(&buffer, key, .{ .kitty_keyboard_flags = flags }));
+        try std.testing.expectEqualStrings("a", try encodePaste(&buffer, "a", .{ .kitty_keyboard_flags = flags }));
+        try std.testing.expectEqualStrings("\x1b[200~a\x1b[201~", try encodePaste(&buffer, "a", .{
+            .kitty_keyboard_flags = flags,
+            .bracketed_paste = true,
+        }));
+    }
+}
+
+test "associated text respects the output buffer bound" {
+    const key = term.parse("a").?.event.key;
+    var buffer: [10]u8 = undefined;
+
+    for (0..buffer.len) |len| {
+        try std.testing.expectError(error.WriteFailed, encodeKey(buffer[0..len], key, .{ .kitty_keyboard_flags = 27 }));
+    }
+
+    try std.testing.expectEqualStrings("\x1b[97;1;97u", try encodeKey(&buffer, key, .{ .kitty_keyboard_flags = 27 }));
 }
 
 test "modified Enter encoding reports insufficient output space" {

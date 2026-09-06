@@ -1,0 +1,8 @@
+«rd:┌─ fix proxy tests   ● blocked · hook »«dm:──────────────────────»«dm:┬»«dm:─────────────────────────»«dm:┐» 
+«dm:│»«rd:  wants  »«wh:Bash  zig build test»      «dm:waiting since 13:05»      «dm:│»  provider  «wh:claude»       «dm:│»
+«dm:│»«dm:  editor disabled until you answer»                          «dm:│»  model     «sb:opus»         «dm:│»
+«dm:│»                                                            «dm:│»  effort    «sb:high»         «dm:│»
+«dm:│» «gr: y approve » «gr: a session » «rd: n decline » «sel: i terminal »           «dm:│»  context   «gr:▮▮▮▯▯▯▯▯ 41%» «dm:│»
+«dm:│»                                                            «dm:│»  «rd: ■ stop »               «dm:│»
+«dm:└»«dm:────────────────────────────────────────────────────────────»«dm:┴»«dm:─────────────────────────»«dm:┘»
+«dm:  keys forward the agent's own answer; only with hook authority, otherwise i»            

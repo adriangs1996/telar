@@ -148,9 +148,9 @@ export default function Loom({ className = "" }: { className?: string }) {
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const start = performance.now();
-    // The copy block below the word, when the hero marks one: the word keeps
-    // clear of it and lines up with its left edge.
-    const copy = canvas.closest("[data-loom]")?.querySelector<HTMLElement>("[data-loom-copy]") ?? null;
+    // The box the word is embroidered in, when the hero marks one with
+    // `data-loom-word`. Without it the word takes the upper half of the canvas.
+    const box = canvas.closest("[data-loom]")?.querySelector<HTMLElement>("[data-loom-word]") ?? null;
     let threads: Thread[] = [];
     let moves: Move[] = [];
     let strokeWidth = 20;
@@ -164,13 +164,16 @@ export default function Loom({ className = "" }: { className?: string }) {
     // Lay the word out for this size and rebuild the needle's schedule. The
     // schedule keeps its timing across resizes; only the geometry moves.
     const layoutWord = () => {
-      const padding = copy ? parseFloat(getComputedStyle(copy).paddingLeft) || 24 : 24;
-      const copyTop = copy ? height - copy.offsetHeight : height * 0.55;
-      const top = height * 0.1;
-      const bottom = copyTop - 36;
+      const canvasRect = canvas.getBoundingClientRect();
+      const rect = box?.getBoundingClientRect();
+      const left = rect ? rect.left - canvasRect.left : 24;
+      const right = rect ? rect.right - canvasRect.left - 28 : width - 24;
+      const top = rect ? rect.top - canvasRect.top : height * 0.1;
+      const bottom = rect ? rect.bottom - canvasRect.top : height * 0.55;
       const room = Math.max(80, bottom - top);
       const advance = WORD.length + (WORD.length - 1) * SPACING;
-      const unit = Math.min((width - padding * 2) / advance, (room / 1.42) * 0.8);
+      const unit = Math.min(Math.max(40, right - left) / advance, (room / 1.42) * 0.8);
+      const padding = left + (right - left - advance * unit) / 2;
       const baseline = (top + bottom) / 2 + unit * 0.71;
       strokeWidth = Math.max(6, unit * 0.16);
       pitch = Math.max(2.2, strokeWidth * 0.085);
@@ -443,8 +446,8 @@ export default function Loom({ className = "" }: { className?: string }) {
 
     const observer = new ResizeObserver(layout);
     observer.observe(canvas);
-    if (copy) {
-      observer.observe(copy);
+    if (box) {
+      observer.observe(box);
     }
     layout();
     if (!reduced) {

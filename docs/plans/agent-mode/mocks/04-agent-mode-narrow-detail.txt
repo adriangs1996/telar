@@ -1,0 +1,12 @@
+ ◂ inbox  fix proxy tests  claude  blocked    
+ ▸ terminal  conversation  changes            
+──────────────────────────────────────────────
+ Do you want to run `zig build test`?         
+   1. Yes                                     
+   2. Yes, and don't ask again                
+ ❯ 3. No, tell Claude what to do differently  
+                                              
+                                              
+                                              
+                                              
+ esc list  i interact  tab view  ^alt+j/k     

@@ -1,47 +1,70 @@
+import CopyCommand from "@/components/CopyCommand";
 import Loom from "@/components/Loom";
-import PaneLink from "@/components/client/PaneLink";
+import Tiles from "@/components/Tiles";
 
+const HEADLINE: (string | { em: string })[][] = [
+  ["Your", "agents", "run", { em: "inside" }, "it."],
+  ["Not", "beside", "it."],
+];
+
+// The loom's threads span the right of the hero behind everything. The word
+// is embroidered only inside the empty box beside the copy, under the
+// headline, so the two never overlap.
 export default function Hero() {
+  let index = 0;
+
   return (
-    <div data-loom className="relative flex h-full min-h-[30rem] flex-col overflow-hidden">
-      <div className="absolute inset-0">
+    <section id="top" data-loom className="rails relative overflow-hidden">
+      <div className="loom-mask pointer-events-none absolute inset-y-0 right-0 hidden w-[62%] lg:block lg:pointer-events-auto">
         <Loom />
       </div>
+      <Tiles />
 
-      <div className="relative mt-auto">
-        <div className="pointer-events-none absolute inset-x-0 -top-24 bottom-0 bg-gradient-to-t from-ink via-ink/85 to-transparent" />
-        <div data-loom-copy className="relative px-6 pt-10 pb-10 md:px-10 lg:px-12 lg:pb-12">
-          <h1 className="display-sm max-w-[24ch] text-[clamp(1.5rem,2.5vw,2.25rem)] rise" style={{ ["--delay" as string]: "200ms" }}>
-            A terminal runtime for coding agents.
-          </h1>
+      <div className="relative px-5 pt-20 pb-16 md:px-8 md:pt-28 md:pb-20">
+        <p className="eyebrow rise" style={{ ["--delay" as string]: "0ms" }}>
+          a terminal runtime for coding agents
+        </p>
 
-          <p className="prose-measure mt-5 text-[17px] leading-relaxed text-subtext rise md:text-[19px]" style={{ ["--delay" as string]: "520ms" }}>
-            Telar holds every agent session under tension, like threads on a loom. Close the lid, kill the client,
-            come back tomorrow. The runtime kept the work.
-          </p>
+        <h1 className="display relative z-10 mt-8 text-[clamp(2.75rem,7.4vw,6.6rem)]">
+          {HEADLINE.map((line, row) => (
+            <span key={row} className="block">
+              {line.map((word) => {
+                const style = { ["--w" as string]: index++ };
+                return typeof word === "string" ? (
+                  <span key={`${row}-${word}`} className="word mr-[0.22em]" style={style}>
+                    {word}
+                  </span>
+                ) : (
+                  <em key={`${row}-${word.em}`} className="word mr-[0.22em]" style={style}>
+                    {word.em}
+                  </em>
+                );
+              })}
+            </span>
+          ))}
+        </h1>
 
-          <div className="mt-8 flex flex-wrap items-center gap-5 rise" style={{ ["--delay" as string]: "760ms" }}>
-            <PaneLink
-              to="install"
-              className="inline-flex items-center rounded-sm bg-peach px-5 py-3 font-mono text-[14px] font-medium text-ink transition-colors hover:bg-mauve"
-            >
-              Install telar
-            </PaneLink>
-            <a
-              href="https://github.com/adriangs1996/telar"
-              className="font-mono text-[14px] text-subtext underline decoration-line underline-offset-6 transition-colors hover:text-text hover:decoration-overlay-1"
-            >
-              Read the source
-            </a>
+        <div className="mt-8 lg:grid lg:grid-cols-[minmax(0,38rem)_1fr] lg:gap-16">
+          <div>
+            <p className="measure rise text-[17px] leading-relaxed text-subtext md:text-[19px]" style={{ ["--delay" as string]: "700ms" }}>
+              telar owns the pty, the TLS path and the history of every coding agent you start. Close the lid, kill the
+              client, come back tomorrow. The runtime kept the work, and it can tell you what happened while you were away.
+            </p>
+
+            <div className="rise mt-10" style={{ ["--delay" as string]: "900ms" }}>
+              <CopyCommand command="git clone https://github.com/adriangs1996/telar && cd telar && zig build run" />
+              <p className="mt-3 font-mono text-[11.5px] tracking-[0.06em] text-overlay-1">
+                macOS · Linux · MIT · Zig 0.16 · built from source, no binary release yet ·{" "}
+                <a href="#install" className="text-subtext underline decoration-line underline-offset-4 transition-colors hover:text-text">
+                  full install →
+                </a>
+              </p>
+            </div>
           </div>
 
-          <p className="prose-measure mt-10 hidden font-mono text-[12.5px] leading-relaxed text-overlay-1 rise lg:block" style={{ ["--delay" as string]: "1200ms" }}>
-            This page is one telar window. Scroll, or press <kbd className="rounded-sm border border-line px-1 text-subtext">j</kbd>{" "}
-            and <kbd className="rounded-sm border border-line px-1 text-subtext">k</kbd>, to move between its panes.{" "}
-            <kbd className="rounded-sm border border-line px-1 text-subtext">?</kbd> lists the keys.
-          </p>
+          <div data-loom-word aria-hidden="true" className="pointer-events-none hidden min-h-[16rem] lg:mr-36 lg:block" />
         </div>
       </div>
-    </div>
+    </section>
   );
 }

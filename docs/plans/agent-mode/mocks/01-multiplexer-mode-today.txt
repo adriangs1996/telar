@@ -1,0 +1,13 @@
+ telar  gwagent  site                                                CX 5h:12%  CL 5h:40%  proxy on 
+ agents                     │┌ pane 1 ──────────────────────────────│┌ pane 2 ──────────────────── 
+ inbox             2 open   │ ~/sandbox/telar $ nvim src/backend    │ * Claude Code                
+                            │                                       │                              
+ ▌fix proxy tests  ● blocked│  fn observe(...)                      │ Do you want to run           
+ ▌telar › agents › pane 2   │      if (frame.len == 0) {            │ `zig build test`?            
+ ▌claude  ~/s/telar         │          return;                      │   1. Yes                     
+                            │      }                                │ ❯ 2. No                      
+  migrate schema   ◐ working│                                       │                              
+  gwagent › api › pane 1    │                                       │                              
+  codex   ~/s/gwagent       │                                       │                              
+                            │└──────────────────────────────────────│└─────────────────────────────
+ cpu 38%  mem 12.3G                                                 agents ▸ tests   logs   review  

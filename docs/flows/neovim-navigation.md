@@ -14,8 +14,8 @@ The `navigate_pane` action handles a canonical directional key:
    to the pane. Neovim and `smart-splits.nvim` get the first chance to move.
 2. For any other process, the client asks its existing `FocusPaneHandler` for a
    neighbor in that direction.
-3. If no Telar neighbor exists, the client forwards the original key. This
-   preserves shell behavior such as `ctrl+l` and `ctrl+h` at an outer edge.
+3. If no Telar neighbor exists, the client consumes the binding without sending
+   input to the pane. An unavailable navigation action must not edit shell input.
 
 This path uses the cached foreground projection and the existing bounded input
 outbox. It performs no filesystem access, process spawn, Lua evaluation, or
@@ -59,7 +59,7 @@ generation-safe client session selected for the pending request.
 - The schema golden corpus pins all four navigation messages and bumps the
   handshake fingerprint.
 - Client integration tests prove Neovim receives the canonical key, a shell at
-  an outer Telar edge keeps the key, and external focus commands report a
+  an outer Telar edge receives no input in any direction, and external focus commands report a
   directionless layout.
 - The headless Neovim test proves command construction, JSON decoding, and the
   one-shot pane identity used by `smart-splits.nvim`.

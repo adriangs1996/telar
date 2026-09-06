@@ -6,6 +6,24 @@ generation, pixels and placement facts. The disposable client owns mapped
 resources, host identifiers, clipping, visibility, transmission and the cell
 fallback used when Kitty graphics are unavailable.
 
+## PNG ingestion
+
+A child's `a=T,f=100` command enters through its PTY output. The interactive
+terminal ignores graphics APCs; the pane queues the same bytes for the media
+actor. `media.Processor.processMedia` feeds Ghostty's stream, which owns base64
+chunk assembly, command semantics, replies and placements. The media pipeline
+installs `sys.decode_png` once before parsing, and the callback delegates PNG
+decoding to Wuffs with the supplied quota allocator. It returns RGBA pixels,
+not a second graphics protocol representation.
+
+Decoded resources follow the existing `graphics_image`, pixel transfer and
+`graphics_placement` messages. No IPC format changes. Images and placements
+survive client disconnection; snapshot recovery rebuilds their client replica.
+Malformed PNGs and allocation failures leave no committed image and follow
+Ghostty's normal error replies, including `q=2` suppression. Decoder buffers
+and partial output are freed on failure. Media queue overflow retains the
+existing reset policy rather than blocking PTY input.
+
 ## Client boundary
 
 ```text
@@ -118,6 +136,13 @@ separates ownership and scheduling policy; moving bulk ingestion behind a
 dedicated media queue is a separate scheduling change.
 
 ## Proof
+
+- `src/backend/media/png.zig` checks decoder allocation failures, quotas,
+  malformed data and pixel conversion.
+- `src/backend/media/png_test.zig` exercises PNG commands through the media
+  processor with fragmented PTY input and Pi's chunk sizes.
+- `src/transport_integration_test.zig` verifies a real child PNG transmission
+  reaches the client as RGBA and survives snapshot resynchronization.
 
 - `src/frontend/graphics/kitty.zig` proves quotas, revision recovery, stale
   suppression, snapshot validation and exact ingress versions.

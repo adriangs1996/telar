@@ -159,7 +159,7 @@ test "pane focus commits before reports resize and presentation" {
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
-test "navigation forwards the canonical key through Neovim and at a Telar edge" {
+test "navigation forwards the canonical key only to Neovim at a Telar edge" {
     for ([_][]const u8{ "nvim", "zsh" }) |foreground_name| {
         var harness: TestHarness = undefined;
         try harness.init();
@@ -172,6 +172,17 @@ test "navigation forwards the canonical key through Neovim and at a Telar edge" 
             .name = foreground_name,
         });
         _ = try server_messages.handleServerMessage(harness.client, try schema.decodeServer(foreground));
+
+        if (!std.mem.eql(u8, foreground_name, "nvim")) {
+            const version = harness.client.model.version();
+            for (std.enums.values(input_capability.action.Direction)) |direction| {
+                _ = try client_actions.apply(harness.client, .{ .navigate_pane = direction });
+                try std.testing.expectEqualDeep(version, harness.client.model.version());
+                try std.testing.expectEqual(@as(usize, 0), harness.client.runtime_transport.outbox.len);
+            }
+
+            continue;
+        }
 
         _ = try client_actions.apply(harness.client, .{ .navigate_pane = .left });
         try harness.settle();

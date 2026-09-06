@@ -49,7 +49,10 @@ and `kitty-full` return `KittyGraphicsUnsupported` when the probe fails.
 
 ## Implemented child subset
 
-- RGB (`f=24`) and RGBA (`f=32`).
+- RGB (`f=24`), RGBA (`f=32`), and PNG (`f=100`). PNG is decoded to
+  straight-alpha RGBA on the media actor through Ghostty's `sys.decode_png`
+  callback, using the Wuffs dependency pinned by Ghostty. Decoder state,
+  workspace, and pixels all use the pane/global quota allocator.
 - Direct transmission (`t=d`) with independently base64-encoded chunks.
 - POSIX shared-memory transmission (`t=s`) for local RGB and RGBA frames. A
   complete frame is copied once by the media actor into the runtime-owned
@@ -78,8 +81,10 @@ an absolute path with no symlink at the leaf, a regular file owned by the
 runtime's user, at least as long as the declared pixels, and within the screen
 cap. The file is mapped read-only for one copy and never written, kept open or
 deleted; anything else is answered `EBADF` or dropped as unavailable.
-Temporary file media (`t=t`) stays rejected. PNG is not decoded. Unicode
-virtual placements are not emitted because the pinned Ghostty VT does not
+Temporary file media (`t=t`) stays rejected. PNG uses the emulator's bounded
+loading path, including direct base64 chunks; the complete-file fast path
+still accepts only raw RGB/RGBA. Unicode virtual placements are not emitted
+because the pinned Ghostty VT does not
 expose them with enough information to preserve pane clipping and lifecycle.
 
 ## Runtime-client flow control
@@ -219,6 +224,13 @@ transparent and never places it.
 
 ## Verification
 
+`zig build test-png` exercises PNG decoding, allocation-failure cleanup,
+malformed input, oversized dimensions, screen quotas, RGB/grayscale conversion,
+alpha preservation, every PTY split, Pi-style 4096-character chunks, quiet
+errors, replacement and deletion. `zig build test-transport` also sends PNG
+through a real child PTY and checks the decoded pixels before and after a
+runtime graphics snapshot.
+
 The automated suite covers exact query and command encoding, APC parsing at
 every input split, RGB/RGBA chunking, zlib success and invalid sizes, unsupported
 media replies, overflow and quota checks, exterior ID isolation, clipping at
@@ -277,7 +289,7 @@ inside the browser image, confirming that the visible frame had not frozen.
 
 ## Remaining limitations
 
-- No PNG, temporary-file, or Unicode-placeholder transport. File transport
+- No temporary-file or Unicode-placeholder transport. File transport
   covers complete frames and queries only; chunked or cropped file commands
   are refused.
 - Pixel mouse precision is limited to cell centers when the exterior terminal

@@ -1,0 +1,17 @@
+«bar: fix proxy tests   claude   blocked · hook                      terminal   ▸ conversation   changes »
+«ac: ▌ »«wh:you»«dm:  13:02»                                                                                       
+«ac: ▌ »Fix the failing proxy tests in src/backend/proxy, keep the relay untouched.                      
+                                                                                                    
+«sb:   claude»«dm:  13:02 · 1.2k tokens»                                                                      
+   I'll start by running the suite to see which tests fail.                                         
+«mv:   » »«mv:Bash  »zig build test-backend-proxy                           «rd:→ 1»   «dm:4.2s»    «dm:▸»                   
+«mv:   » »«mv:Read  »src/backend/proxy/service.zig                                «dm:»        «dm:▸»                   
+   The failure is in the HTTP/2 observer: a DATA frame split across two reads                       
+   loses its offset. Fixing the slice.                                                              
+«mv:   » »«mv:Edit  »src/backend/proxy/service.zig   +6 -2                        «dm:»        «ac:▾»                   
+«rd:     -    const payload = frame.payload;»                                                            
+«gr:     +    const payload = frame.payloadSlice(offset);»                                               
+«mv:   » »«mv:Bash  »zig build test-backend-proxy                           «gr:→ 0»   «dm:4.0s»    «dm:▸»                   
+«rd:   ! permission»  Bash  zig build test   «dm:(waiting since 13:05)»                                       
+«dm: ─ ─ ─  compacted at 12:40 · 84k → 12k tokens  ─ ─ ─»                                                
+«bar: j/k scroll  enter expand  { } prompt  t thinking  y copy  / find                ▸ follows the tail »

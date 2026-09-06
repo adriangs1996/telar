@@ -10,6 +10,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
+const png = @import("png.zig");
+
+test {
+    _ = @import("png_test.zig");
+}
 
 pub const shared_transfer = @import("shared_transfer.zig");
 pub const GraphicsLimits = @import("allocator.zig").GraphicsLimits;
@@ -240,6 +245,8 @@ pub const Pipeline = struct {
     /// try pipeline.init(.{ .io = io, .allocator = allocator, .size = size, .storage_limit = storage_limit, .payload_limit = payload_limit, .write_pty = write_pty });
     /// ```
     pub fn init(pipeline: *Pipeline, initialization: Initialization) !void {
+        png.install();
+
         const io = initialization.io;
         const allocator = initialization.allocator;
         const size = initialization.size;

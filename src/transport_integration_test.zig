@@ -2284,6 +2284,21 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
 }
 
 test "runtime terminates KGP, replies to the child, and resynchronizes graphics" {
+    try expectGraphicsRoundtrip("printf '\\033_Ga=T,f=32,o=z,s=1,v=1,t=d,i=7,q=2,C=1,c=2,r=2;eAFjZGL+DwABEwEG\\033\\\\'; ");
+}
+
+test "runtime decodes PNG from a real PTY and resynchronizes RGBA pixels" {
+    const base64 = comptime encoded: {
+        const png = @embedFile("backend/media/testdata/rgba.png");
+        var buffer: [std.base64.standard.Encoder.calcSize(png.len)]u8 = undefined;
+        _ = std.base64.standard.Encoder.encode(&buffer, png);
+        break :encoded buffer;
+    };
+    try expectGraphicsRoundtrip("printf '\\033_Ga=T,f=100,i=7,q=2,C=1,c=2,r=2,m=1;" ++ base64[0..48] ++
+        "\\033\\\\'; printf '\\033_Gm=0;" ++ base64[48..] ++ "\\033\\\\'; ");
+}
+
+fn expectGraphicsRoundtrip(comptime transmission: []const u8) !void {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
     const schema = core.schema;
@@ -2312,7 +2327,7 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
     defer connection.deinit(io);
     const script =
         "stty raw -echo; " ++
-        "printf '\\033_Ga=T,f=32,o=z,s=1,v=1,t=d,i=7,q=2,C=1,c=2,r=2;eAFjZGL+DwABEwEG\\033\\\\'; " ++
+        transmission ++
         "printf '\\033_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\\033\\\\'; " ++
         "trap 'printf \"KGP_CHILD_TIMEOUT\\n\"; exit 1' TERM; " ++
         "(sleep 4; kill -TERM 0) & watchdog=$!; " ++
@@ -2404,6 +2419,8 @@ test "runtime terminates KGP, replies to the child, and resynchronizes graphics"
         if (snapshot_complete) {
             try std.testing.expectEqual(@as(usize, 1), store.images.count());
             try std.testing.expectEqual(@as(usize, 1), store.placements.count());
+            var images = store.images.iterator();
+            try std.testing.expectEqualSlices(u8, &.{ 1, 2, 3, 255 }, images.next().?.value_ptr.pixels);
             return;
         }
     }

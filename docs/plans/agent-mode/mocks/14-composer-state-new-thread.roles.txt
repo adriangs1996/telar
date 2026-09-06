@@ -1,0 +1,11 @@
+«ac:┌─ new thread »«dm:──────────────────────────────────────────────»«dm:┬»«dm:─────────────────────────»«dm:┐» 
+«dm:│»«dm:  What should this thread do? Title from the first prompt.»  «dm:│»  project   «sel:telar ▾»      «dm:│»
+«dm:│»«wh:  »«ac:▌»                                                         «dm:│»  worktree  «sel:new ▾»        «dm:│»
+«dm:│»                                                            «dm:│»  base      «sel:main ▾»       «dm:│»
+«dm:│»                                                            «dm:│»  branch    «mv:proxy-fix»    «dm:│»
+«dm:│»                                                            «dm:│»  provider  «sel:claude ▾»     «dm:│»
+«dm:│»                                                            «dm:│»  model     «sel:opus ▾»       «dm:│»
+«dm:│»                                                            «dm:│»  effort    «sel:high ▾»       «dm:│»
+«dm:│»                                                            «dm:│»  «sel: ⏎ create »             «dm:│»
+«dm:└»«dm:────────────────────────────────────────────────────────────»«dm:┴»«dm:─────────────────────────»«dm:┘»
+«dm:  lands in telar › new tab; the provider locks once the thread starts, as in T3»         

@@ -1,0 +1,12 @@
+ agents   telar 2/5  gwagent 1/2  site +1     
+ NEEDS YOU 2                                  
+ ● fix proxy tests        claude   3m         
+ ● migrate schema         codex    8m         
+ DONE 1                                       
+ ✓ add asteroids          pi      12m         
+ WORKING 2                                    
+ ◐ lua bars               claude              
+ ◐ perf gate              codex               
+ READY 1                                      
+ · scratch                pi                  
+ j/k  enter open  1-9 project  / find  n new  

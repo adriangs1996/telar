@@ -1,0 +1,11 @@
+┌─ new thread ──────────────────────────────────────────────┬─────────────────────────┐ 
+│  What should this thread do? Title from the first prompt.  │  project   telar ▾      │
+│  ▌                                                         │  worktree  new ▾        │
+│                                                            │  base      main ▾       │
+│                                                            │  branch    proxy-fix    │
+│                                                            │  provider  claude ▾     │
+│                                                            │  model     opus ▾       │
+│                                                            │  effort    high ▾       │
+│                                                            │   ⏎ create              │
+└────────────────────────────────────────────────────────────┴─────────────────────────┘
+  lands in telar › new tab; the provider locks once the thread starts, as in T3         

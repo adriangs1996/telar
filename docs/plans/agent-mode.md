@@ -20,6 +20,43 @@ composer lets the user pick the provider and configure its model, effort and
 mode, the way T3 Code does. That is the "Provider independence and the
 composer" section.
 
+Status: closed on 2026-09-06 after six review rounds. Implement from this
+document and the reference files below; the review page is kept only as a
+visual record.
+
+## Reference files
+
+| File | What it is |
+| --- | --- |
+| `docs/plans/agent-mode.md` | This specification. The appendices at the end carry the keymap, wire messages, DDL, manifest schema, composer and KGP specifications, the invariants exception and the session-reader mapping. |
+| `docs/plans/agent-mode/mocks/NN-*.txt` | Cell-exact mockups, one file per screen or state, padded to their width. Column positions are normative. |
+| `docs/plans/agent-mode/mocks/NN-*.roles.txt` | The same mockups with every styled run tagged `«role:text»`; the role legend maps to `theme.Palette` in `mocks/README.md`. |
+| `docs/plans/agent-mode/mocks/README.md` | Widths, roles, glyph set. |
+| `docs/plans/agent-mode/review.html` | The self-contained review page: the KGP looks (hybrid composer, rasterized composer, hybrid conversation, canvas) are rendered there as HTML mockups, and the T3 Code facts are cited with file paths. Open it in a browser. |
+| `docs/adr/0009-agent-mode-is-a-client-projection-of-one-runtime.md` | Why agent mode owns no runtime state and why provider knowledge lives in manifests and readers. |
+| `docs/adr/0010-index-agent-transcripts-instead-of-copying-them.md` | Why transcripts are read from the agent's files and only indexed. |
+| `docs/adr/0011-rasterize-the-composer-editor-behind-a-latency-gate.md` | Why the composer editor may cross the media path, and the gate. |
+| `CONTEXT.md`, section "Threads and agent mode" | The vocabulary: project, thread, thread item, registry, blocked reason, the two modes, browse and interact focus, composer, provider option, live command. Code, docs and UI use these words. |
+| `~/sandbox/t3code` (external, 2026-07-07) | T3 Code's composer, the reference for the composer's behavior: `apps/web/src/components/chat/ChatComposer.tsx`, `ProviderModelPicker.tsx`, `TraitsPicker.tsx`, `ComposerPrimaryActions.tsx`, `ChatView.logic.ts` (`deriveLockedProvider`). |
+
+## Decision log
+
+All taken by Adrian in the review of 2026-09-06.
+
+| # | Decision |
+| --- | --- |
+| 1 | The mode is **agent mode** and the unit a **thread** in code, config, wire and CLI; hilo and trama stay README prose. Domain code lives under `threads/` namespaces because `thread` collides with `std.Thread` in grep. |
+| 2 | Opening a thread whose pane lives in another workspace uses the existing handoff in P0. Attaching across workspaces is not planned. |
+| 3 | Transcripts are indexed with 512-byte previews; text is read on demand from the agent's file; nothing is copied. |
+| 4 | The quick prompt ships in P1, inside the composer. |
+| 5 | Layout **A**: three columns, conversation as a view tab. B (cockpit) rejected. |
+| 6 | Target look **C**: KGP chrome under cell text. D (canvas) only as a later experiment on the conversation view. |
+| 7 | The composer is a built-in multi-line widget, not the name prompt. |
+| 8 | A new thread lands as one tab per thread in the project's workspace. |
+| 9 | Model and effort can change on a running thread from the composer through the manifest's live command, with a pending state until the transcript confirms. |
+| 10 | Composer layout **K4** (settings column on the right) on 120 columns or more, **K3** (status line and commands) below. K1 and K2 rejected. |
+| 11 | The composer editor is **rasterized** as the target, behind the latency gate; the hybrid cell composer ships first and stays as the fallback. |
+
 Naming note: `thread` collides with `std.Thread` in grep. Domain code lives
 under a `threads` capability namespace (`src/backend/threads/`,
 `src/frontend/threads/`) so a search for `threads.` finds the domain and a
@@ -247,9 +284,11 @@ Verified in the tree at `79f0506`.
   and telar's), timestamps, last known status, where its transcript lives.
   A thread outlives its pane. It is runtime-owned and persisted in the
   history database.
-- **Session**: the live half of a thread, the pane generation currently
-  running its process. This is today's agent aggregate. A thread has zero or
-  one session.
+- **Agent** (the live half): the pane generation currently running a
+  thread's process, which is today's agent aggregate and `CONTEXT.md`'s
+  "Agent". A thread has zero or one open agent. T3 Code calls this half a
+  "session"; telar keeps that word for the agent's own session reference
+  and files, never for the live half.
 - **Multiplexer mode**: today's client. **Agent mode**: the projection
   described here. Both are views of one runtime; the mode is client state.
 
@@ -529,7 +568,8 @@ Decided in review: **K4** is the design, with **K3** as its form under
   composer. Below 120 columns it becomes K3. Two layouts to keep, which is
   the accepted cost.
 
-States, drawn on K4 in the review page: running (the action becomes
+States, fixed by `mocks/11-composer-state-working.txt` through
+`14-composer-state-new-thread.txt`: running (the action becomes
 "queue", stop appears and sends the manifest's interrupt key), pending
 approval (editor replaced by the question, `y`/`a`/`n` forward the agent's
 own answer, only with hook authority; screen evidence offers only `i`),
@@ -540,9 +580,9 @@ file mentions come after P1: the image strip hands files to the agent
 through its manifest attachment scheme, and `@` completes from a bounded
 `git ls-files` in a worker.
 
-**KGP in the composer.** The review asked that the composer not be text
-only; it gets the hybrid layer from the start, in P1, as the first bounded
-use of the C pipeline. Cells keep the text, cursor, selection, hit targets
+**KGP in the composer.** Decided in review, in two steps: the hybrid layer
+ships in P1 as the first bounded use of the C pipeline, and the editor
+itself is rasterized as the target (phase P2r below). Cells keep the text, cursor, selection, hit targets
 and the host font. KGP paints under them: the rounded frame (T3 draws a
 22 px gradient frame), each chip's fill with the provider mark from the
 atlas, the context ring (T3 draws a donut), thumbnails of pasted images,
@@ -554,9 +594,40 @@ border, the attachment preview shelf that already decodes and plans
 thumbnails on the media worker. Bounds: one frame, at most eight chips, one
 ring, at most eight 64 px thumbnails, keyed by content; a freshly opened
 composer fits inside the 256 KiB per-frame budget. Without KGP it is K4 in
-cells. Rasterizing the editor itself (proportional type, markdown preview)
-is the D experiment applied to the composer and is not planned unless the
-review asks for it.
+cells.
+
+**The rasterized editor (P2r).** Decided: the prompt text is drawn as an
+image, with proportional type, minimal markdown (bold, italic, code spans in
+JetBrains Mono, lists; no tables), inline thumbnails, telar's own caret and
+selection, copy through OSC 52. What it is made of:
+
+- One model, two renderers. `input/text_area.zig` owns the buffer (8 KiB),
+  the cursor by grapheme cluster, the selection and the history. The cell
+  renderer is K4 and stays as the fallback. The raster renderer
+  (`graphics/text_layout.zig`, `graphics/composer_raster.zig`) shapes with
+  HarfBuzz, breaks lines at spaces and hard breaks to the editor's pixel
+  width, and draws one image per visual line, so a keystroke re-rasters one
+  line and scrolling or caret blink are placement changes.
+- A second embedded face for prose (an OFL proportional font, about 300 KB)
+  beside JetBrains Mono for code. The font seam with the agent's pane is
+  accepted: the composer is meant to look different, as it does in T3.
+- Input: the terminal cursor is hidden while composing and the caret is an
+  image; IME composition text arrives already composed, so there is no
+  preedit rendering; mouse maps pixels to clusters with mode 1016 and falls
+  back to cell centers without it.
+- Transport: only local or shared-memory clients get the raster editor;
+  remote clients over SSH receive pixels in 1 MiB chunks and stay on K4.
+- Budget: an editor of 60 columns by 6 lines is about 316 KB of RGBA in
+  full and about 50 KB per line; a keystroke transmits one compressed line.
+  At most 64 visual lines.
+
+This is the first place where the visible echo of a keystroke passes
+through the media path, which the invariants forbid today. It is recorded
+as an explicit exception in `docs/engineering-invariants.md` with a gate:
+the benchmark must show a one-line echo at p99 under one pacer interval
+(16.7 ms) on the local transport, and a session that misses it falls back
+to the cell renderer while the pane never waits. The gate is P2r's
+completion criterion; if it fails, the composer stays hybrid.
 
 The widget itself: `input/text_area.zig`, a bounded multi-line editor (8 KiB,
 the `send_pane_text` chunk size) with cursor movement, word wrap inside the
@@ -758,7 +829,9 @@ the width it needs when the view tab is `terminal`.
 - Screen scraping for conversations. The screen stays a lifecycle fallback.
 - Copying assistant and tool text into telar's database.
 - Grids of simultaneous chats, kanban boards, embedded browsers, containers
-  per task, synthetic approve buttons.
+  per task, and approve keys for a `blocked` that only screen evidence
+  reported: the composer forwards `y`/`a`/`n` to the agent only behind a
+  hook report.
 
 ## Ownership, budgets and bounds
 
@@ -773,7 +846,8 @@ the width it needs when the view tab is `terminal`.
 | Resume, new thread, fork | runtime launch transaction | observation | allowlisted argv, validated references |
 | Composer | client `text_area` widget, transient `$EDITOR` tab | interactive | 8 KiB buffer, 32 history entries per thread, 8 options per thread, 64 B per free-text value |
 | Changes list and diff | runtime git observer, transient pane | observation | 256 files, user's diff command |
-| Composer KGP layer | client media path | media | one frame, ≤ 8 chips, one ring, ≤ 8 thumbnails of 64 px, keyed by content; K4 in cells without KGP |
+| Composer KGP layer (hybrid) | client media path | media | one frame, ≤ 8 chips, one ring, ≤ 8 thumbnails of 64 px, keyed by content; K4 in cells without KGP |
+| Rasterized composer editor | client media path, gated | media, explicit exception | one image per visual line, ≤ 64 lines, ~50 KB RGBA per line; echo p99 < 16.7 ms or fallback; local or shared-memory transport only |
 | Graphical chrome (C, D) | client media path | media | 256 KiB encoded per frame, raster keyed per card or message |
 
 Lifecycle: a thread is created on the first session reference, updated on
@@ -794,7 +868,8 @@ Ordered by dependency. Each phase ends with tests, a flow document under
 ```text
 P0 agent mode, client only ──┐
                              ├─> P2 conversation view ──> P4 views, search, look
-P1 registry, resume, new ────┘
+P1 registry, resume, new ────┤
+                             └─> P2r rasterized composer editor (latency gate)
 P3 changes view (independent after P0)
 ```
 
@@ -884,6 +959,25 @@ bumps the fingerprint like every layout extension before it.
   interleaved `event_msg`, Pi branches; widget snapshot; paging under
   concurrent appends; outline jumps.
 
+### P2r. Rasterized composer editor
+
+- `graphics/text_layout.zig`: HarfBuzz shaping over the embedded faces,
+  line breaking to a pixel width, cluster-to-pixel and pixel-to-cluster
+  maps; `graphics/composer_raster.zig`: one image per visual line, caret
+  and selection as placements, raster keys by line content and width.
+- Second embedded proportional face (OFL) and its attribution in
+  `src/frontend/assets/README.md`.
+- `text_area` gains a renderer-independent model API; the cell renderer of
+  P1 stays wired as the fallback; transport and KGP capability select the
+  renderer per client.
+- Benchmark `frontend.composer.echo` in `zig build bench`: one-line raster
+  plus encode plus placement; the gate is p99 under 16.7 ms locally.
+- Invariants: record the exception and the fallback rule.
+- Tests: layout against fixtures (wrapping, clusters, RTL-free assumption
+  stated), caret and selection mapping, fallback when KGP is lost
+  mid-session, remote client never receives the raster editor, draft kept
+  across the fallback.
+
 ### P3. Changes view
 
 - Git observer file list; `changes_list` in the workspace snapshot or a
@@ -907,14 +1001,339 @@ bumps the fingerprint like every layout extension before it.
 
 ## Open decisions
 
-1. Which options each built-in exposes by default. Proposed: claude model,
-   effort, permission mode; codex model, reasoning effort, sandbox,
-   approval; pi provider, model, thinking. Anything else is one manifest
-   entry away.
-2. Whether a screen-only `blocked` should ever show a reason text, or only
-   hook-reported ones (proposed).
-3. Whether the hybrid KGP layer is enough for the composer, or the editor
-   itself should be rasterized later as a spike (hybrid proposed).
+None block implementation. Two defaults are settled here unless the
+implementation finds a reason not to:
+
+1. Built-in options: claude exposes model, effort and permission mode; codex
+   exposes model, reasoning effort, sandbox and approval; pi exposes
+   provider, model and thinking. Anything else is one manifest entry.
+2. A screen-only `blocked` shows no reason text; only hook reports do.
+
+
+## Appendix A. Keymap
+
+Every binding below is a default in `config/default_bindings.zig` and
+rebindable through `client.keybindings` like every other action. Actions are
+stable names in `src/frontend/input/action.zig`.
+
+Multiplexer mode and agent mode:
+
+| Keys | Action | Notes |
+| --- | --- | --- |
+| `prefix` `a` | `toggle_agent_mode` | Client state; travels in `update_client_layout`. |
+| `prefix` `g` | `goto_picker` | Gains threads, archived included, in P1. |
+
+Agent mode, browse focus (the browse owner consumes these before the pane):
+
+| Keys | Action | Notes |
+| --- | --- | --- |
+| `j` `k` | `thread_next`, `thread_prev` | Inside the inbox; wraps across sections. |
+| `Enter` | `agent_mode_open` | Opens the selected thread in the view; a second `Enter` or `i` enters interact. |
+| `i` | `agent_mode_interact` | |
+| `Tab` | `agent_mode_view { next }` | Cycles terminal, conversation, changes. |
+| `h` `l` | `agent_mode_column { prev, next }` | Projects, inbox, view. |
+| `1`…`9` | `agent_mode_select_project { u8 }` | |
+| `g` | `thread_next_attention` | Next thread in NEEDS YOU, then DONE. |
+| `/` | `agent_mode_filter` | Name-prompt editor; prefixes `@` needs you, `!` working, `#` ready. |
+| `n` | `thread_new` | Opens the composer in new-thread form. |
+| `p` | `composer_focus` | Focuses the composer on the selected thread. |
+| `r` | `thread_rename` | telar title only. |
+| `a` | `thread_archive` | Asks when the thread is live. |
+| `R` | `thread_resume` | Archived threads. |
+| `f` | `thread_fork` | Manifest fork flag; relation `fork`. |
+| `x` | `thread_kill` | Asks; closes the pane, thread stays unarchived. |
+| `z` | `agent_mode_zoom` | View column over the other two. |
+| `Esc` | leaves filter, zoom or the composer, in that order | |
+
+Agent mode, interact focus (everything else goes to the pane):
+
+| Keys | Action | Notes |
+| --- | --- | --- |
+| `prefix` `Esc` | `agent_mode_browse` | Back to browse. |
+| `ctrl+alt+j` `ctrl+alt+k` | `thread_next`, `thread_prev` | Without leaving interact; global chords. |
+
+Conversation view (browse focus, view = conversation):
+
+| Keys | Action |
+| --- | --- |
+| `j` `k` | scroll one line |
+| `{` `}` | previous / next user prompt |
+| `[` `]` | previous / next tool call |
+| `Enter` | expand or collapse the tool call under the cursor (`read_thread_item`) |
+| `o` | outline on / off; `Enter` jumps |
+| `/` | search the loaded page |
+| `t` | show / hide thinking |
+| `y` | copy the message under the cursor through OSC 52 |
+| `G` | jump to the tail and follow it |
+| `gg` | top |
+| `Tab` | switch to the terminal of the same thread |
+
+Composer (focused):
+
+| Keys | Action |
+| --- | --- |
+| `Enter` | send (`send_pane_text`, prompt mode) or create |
+| `alt+Enter` | newline (Shift+Enter needs the kitty keyboard protocol and is accepted when reported) |
+| `Tab` / `shift+Tab` | next / previous field in the settings column (K4) |
+| `ctrl+m` `ctrl+r` `ctrl+p` | open the model, effort, mode pickers (K3 uses `/model`, `/effort`, `/mode`) |
+| `ctrl+e` | edit the draft in `$EDITOR` in a transient command tab; the text comes back on exit |
+| `ctrl+x` | stop: sends the manifest's interrupt key |
+| `up` `down` on the first / last line | prompt history, 32 entries per thread |
+| `y` `a` `n` `i` while blocked with hook authority | approve once, approve for session, decline, answer in the terminal |
+| `Esc` | back to browse, draft kept |
+
+## Appendix B. Wire messages
+
+All new messages follow `src/core/schema` conventions: fixed tags, bounded
+fields, fingerprint bump, corpus entry in `schema_contract_test.zig`.
+Byte caps are maxima; every string is length-prefixed and UTF-8 validated.
+
+| Message | Direction | Fields | Bounds |
+| --- | --- | --- | --- |
+| `update_client_layout` (extended) | client → runtime | `+ mode: u8 { multiplexer=0, agent=1 }`, `+ agent_mode: { focus: u8, project_key_hash: u64, selected_thread: ?ThreadKey, view: u8 }` | existing message, new fields |
+| `query_threads` | client → runtime | `request_id`, `project_key: ?[]u8 ≤ 1 KiB`, `statuses: bitset`, `archived: enum { exclude, include, only }`, `text ≤ 256 B`, `cursor: u64`, `limit ≤ 100` | one page |
+| `thread_list` | runtime → client | `request_id`, `entries[≤100]`, `next_cursor: u64` | entry below |
+| `ThreadEntry` | | `id: u64`, `provider: AgentProvider`, `provider_name ≤ 32 B`, `session_ref ≤ 64 B`, `project_key_hash`, `project_path ≤ 1 KiB`, `branch ≤ 64 B`, `title ≤ 96 B`, `title_source`, `status: AgentStatus`, `blocked_reason ≤ 256 B`, `model ≤ 64 B`, `started_at_ms`, `last_change_ms`, `archived: bool`, `pane: ?{pane_id, generation}`, `parent: ?u64`, `relation: u8` | |
+| `archive_thread` / `unarchive_thread` | client → runtime | `thread_id` | answered by `request_completed` or `request_failed` |
+| `rename_thread` | client → runtime | `thread_id`, `title ≤ 96 B` | |
+| `resume_thread` | client → runtime | `thread_id`, `workspace: ?WorkspaceId` | allowlisted argv reconstructed in the runtime |
+| `fork_thread` | client → runtime | `thread_id` | manifest fork flag; new thread with relation `fork` |
+| `create_thread` | client → runtime | `project_path ≤ 1 KiB`, `provider`, `options[≤8] { key ≤ 32 B, value ≤ 64 B }`, `worktree: ?{ branch ≤ 64 B, base ≤ 64 B }`, `prompt ≤ 8 KiB` | one transaction under ADR 0001 |
+| `thread_created` | runtime → client | `request_id`, `thread_id`, `workspace_id`, `tab_id`, `pane_id`, `generation` | |
+| `query_thread_items` | client → runtime | `thread_id`, `cursor: u64`, `limit ≤ 100`, `direction: u8` | |
+| `thread_items` | runtime → client | `thread_id`, `items[≤100]`, `next_cursor`, `prev_cursor`, `live: bool` | item below |
+| `ThreadItem` | | `seq: u64`, `kind: u8 { user, assistant, thought, tool_call, tool_result, compaction, title, subagent, system }`, `tool_id ≤ 64 B`, `tool_kind: u8 { read, edit, delete, move, search, execute, think, fetch, other }`, `status: u8 { pending, in_progress, completed, failed }`, `preview ≤ 512 B`, `byte_len: u32`, `ts_ms`, `tokens: ?u32` | |
+| `read_thread_item` | client → runtime | `thread_id`, `seq` | |
+| `thread_item_text` | runtime → client | `thread_id`, `seq`, `text ≤ 64 KiB`, `truncated: bool` | late-bound like `pane_text` |
+| `set_thread_option` | client → runtime | `thread_id`, `key ≤ 32 B`, `value ≤ 64 B` | runtime types the manifest's live command through `send_pane_text`; refused while blocked |
+| `thread_option_confirmed` | runtime → client | `thread_id`, `key`, `value` | emitted when the reader sees the change |
+
+`send_pane_text` keeps its shape; the composer uses `mode = prompt`.
+
+## Appendix C. Registry DDL
+
+`user_version` moves from 5 to 6. Migrations are additive; there is no
+downgrade path, like the existing history migrations.
+
+```sql
+CREATE TABLE thread (
+  id INTEGER PRIMARY KEY,
+  provider INTEGER NOT NULL,
+  session_ref TEXT NOT NULL,
+  project_key TEXT NOT NULL,
+  project_path TEXT NOT NULL,
+  cwd TEXT NOT NULL,
+  branch TEXT,
+  title_agent TEXT,
+  title_telar TEXT,
+  title_source INTEGER NOT NULL DEFAULT 0,
+  transcript_path TEXT,
+  transcript_kind INTEGER,
+  started_at_ms INTEGER NOT NULL,
+  ended_at_ms INTEGER,
+  last_status INTEGER NOT NULL,
+  last_change_ms INTEGER NOT NULL,
+  blocked_reason TEXT,
+  model TEXT,
+  options TEXT,               -- JSON array of [key, value], validated on write
+  archived INTEGER NOT NULL DEFAULT 0,
+  pane_id INTEGER,
+  pane_generation INTEGER,
+  parent_id INTEGER REFERENCES thread(id),
+  relation INTEGER NOT NULL DEFAULT 0,  -- 0 none, 1 resume, 2 fork, 3 subagent, 4 handoff
+  UNIQUE (provider, session_ref)
+);
+CREATE INDEX thread_project ON thread (project_key, archived, last_change_ms DESC);
+CREATE INDEX thread_status ON thread (last_status, last_change_ms DESC);
+
+CREATE TABLE thread_item (
+  thread_id INTEGER NOT NULL REFERENCES thread(id),
+  seq INTEGER NOT NULL,
+  kind INTEGER NOT NULL,
+  tool_id TEXT,
+  tool_kind INTEGER,
+  status INTEGER,
+  preview TEXT NOT NULL,      -- <= 512 bytes, secrets filtered like commands
+  file_offset INTEGER NOT NULL,
+  byte_len INTEGER NOT NULL,
+  ts_ms INTEGER,
+  tokens INTEGER,
+  PRIMARY KEY (thread_id, seq)
+);
+CREATE VIRTUAL TABLE thread_item_fts USING fts5(preview, content='thread_item', content_rowid='rowid');
+-- Only kind = user rows are inserted into the FTS index (trigger with a WHERE).
+```
+
+Row bounds enforced before the worker writes: `session_ref` 64 bytes,
+`project_path`, `cwd` and `transcript_path` 1 KiB, titles 96 bytes,
+`blocked_reason` 256 bytes, `model` 64 bytes, `options` 8 pairs.
+
+## Appendix D. Manifest additions
+
+`runtime.agents` entries gain three optional fields. `launch` is accepted
+only for the shipped names (`claude`, `codex`, `pi`), like `resume`; a
+configured agent may extend `options[].values` and `defaults` but may not
+add flags.
+
+```lua
+{
+  name = "claude",
+  launch = { argv = { "claude" } },
+  options = {
+    { key = "model", label = "model", kind = "choice",
+      values = { "opus", "sonnet", "haiku" }, free = true,   -- free: any 64-byte token without a leading '-'
+      flag = "--model", live = "/model {value}" },
+    { key = "effort", label = "effort", kind = "choice",
+      values = { "low", "medium", "high", "xhigh", "max" }, flag = "--effort" },
+    { key = "mode", label = "permissions", kind = "choice",
+      values = { "default", "acceptEdits", "plan", "bypassPermissions" }, flag = "--permission-mode" },
+  },
+  title_flag = "-n",            -- the thread title is passed at launch when known
+  interrupt = "esc",            -- key sent by ctrl+x
+  fork_flag = "--fork-session", -- used by thread_fork together with resume
+}
+```
+
+Codex: `launch = { argv = { "codex" } }`, options `model` (`-m`), `effort`
+(`-c model_reasoning_effort="{value}"` as one argv element), `sandbox`
+(`-s`), `approval` (`-a`), `profile` (`-p`, free text); live `/model {value}`;
+interrupt `esc`. Pi: `launch = { argv = { "pi" } }`, options `provider`
+(`--provider`, free), `model` (`--model`, free), `thinking` (`--thinking`,
+values off, minimal, low, medium, high, xhigh, max); live `/model`;
+interrupt `esc`. Flags verified against `--help` on 2026-09-06 for claude
+2.1.263, codex 0.153.4 and pi 0.85.1.
+
+Client defaults:
+
+```lua
+client = {
+  agent_mode = {
+    defaults = { claude = { model = "opus", effort = "high" }, codex = { effort = "high" } },
+    diff_command = { "git", "diff", "--" },
+    views = { { name = "focus", filter = { status = { "blocked", "done" } }, sort = { "attention", "last_change" } } },
+  },
+}
+```
+
+Validation at config load: `key` and `values[]` are 1..64 bytes of
+`[A-Za-z0-9._:/@+-]`, never starting with `-`; at most 16 options per
+manifest and 16 values per option; `flag` must start with `-` and contain
+no spaces; `live` is a template with exactly one `{value}`.
+
+## Appendix E. Composer specification
+
+Model (`src/frontend/input/text_area.zig`): a fixed 8 KiB UTF-8 buffer, a
+cursor and an anchor as byte offsets on grapheme boundaries, `insert`,
+`deleteBackward`, `deleteForward`, `moveLeft/Right/Up/Down/Home/End`,
+`selectAll`, `lineCount(width)`, `visualLines(width)` yielding byte ranges,
+a 32-entry ring of previous prompts per thread, `takeText`. No allocation
+after init; wrapping is computed per render from the width.
+
+State (`src/frontend/client/model/composer.zig`):
+
+```text
+Composer {
+  form: new_thread | thread(ThreadKey),
+  provider: AgentProvider,             -- locked in form thread
+  options: [8]{ key, value, pending: bool },
+  project: ?ProjectKey, worktree: none | { branch, base },
+  text: text_area.Model,
+  history_cursor: ?u8,
+  focus: editor | field(u8),
+  layout: k4 | k3,                       -- from the view column width
+  renderer: cells | raster,              -- from KGP capability, transport and the gate
+}
+```
+
+Widget (`src/frontend/widgets/agent_mode/composer.zig`): K4 geometry is
+the view column minus one border; the settings column is 25 cells wide and
+holds, in order, provider, model, effort, mode, context, and the action row;
+in new-thread form it holds project, worktree, base, branch, provider,
+options and create. Below 120 columns the K3 form draws the editor, the
+command popup and the status line. Mockups `07`, `08`, `11` to `14` are
+normative for glyphs and columns.
+
+Actions: `Enter` → `send_pane_text { mode = prompt }` after any pending
+`set_thread_option`; refused with a footer message when the thread is
+`blocked`; while `working` the action label reads `queue`. `ctrl+x` sends
+the manifest's interrupt key. In new-thread form `Enter` → `create_thread`.
+
+Renderers: the cell renderer draws into the buffer; the raster renderer
+(P2r) draws one image per visual line with the caret and selection as
+placements and is selected only when KGP is negotiated, the transport is
+local or shared memory, and the echo gate has not tripped in this session.
+
+Drafts: per thread, in the client, 8 KiB each, at most 16; lost with the
+client (T3 keeps them in localStorage; telar's equivalent is a later
+addition to the client layout replica if the loss annoys).
+
+## Appendix F. KGP layer of agent mode
+
+Hybrid rules apply everywhere in agent mode: cells own text, cursor,
+selection, hit targets; KGP images sit below cells (negative z-index, as
+the sidebar card) except thumbnails, which sit above their reserved cells.
+Every image has a raster key; a change of key re-rasters, anything else is
+a placement update. Media failure deletes every agent-mode placement and
+leaves the cell chrome complete.
+
+| Image | Key | Size | Where |
+| --- | --- | --- | --- |
+| Composer frame | width, height, theme, state (normal, blocked, pending) | view column × composer rows | under the composer |
+| Option chip | label, value, provider mark, pending, theme, cell size | 23 × 1 cells | settings column rows |
+| Context ring | percent (rounded to 2), theme, cell size | 2 × 1 cells | context row |
+| Thumbnail | image identity, cell size | 8 × 3 cells | under the editor |
+| Approval band | theme | editor width × 3 rows | blocked state |
+| Model popover border | modal geometry | modal | as the goto picker's KGP border |
+| Thread card (inbox) | selected, status, theme, width | inbox width × 1 row | under the selected row, as the sidebar card |
+| Message bubble (conversation, P4) | role, width, theme | message width × rows | under each message |
+| Tool gutter (conversation, P4) | kind, status, theme | 1 × rows | left of tool lines |
+
+Per-frame budget stays at 256 KiB encoded; the composer's set fits in one
+frame at 60 Hz on a 1400×900 terminal (measured sizes in the phase's
+benchmark). The raster editor of P2r adds one image per visual line (≤ 64)
+and is subject to the gate.
+
+## Appendix G. Invariants exception (text for `docs/engineering-invariants.md`)
+
+Add under "Three paths › Interactive", after the Lua binding rules:
+
+> The agent-mode composer may render its own editor as media-path images
+> (ADR 0011). This is the only place where a keystroke's visible echo
+> crosses the media path. The composer model still commits on the
+> interactive path with no allocation; only the raster and its transfer are
+> media work. A one-line echo must present within one pacer interval at
+> p99 on the local transport; a session that misses the gate switches the
+> composer to its cell renderer for the rest of the session and reports the
+> switch in telemetry. Remote clients never use the raster renderer. The
+> pane's own path is unaffected.
+
+## Appendix H. Session reader normalization
+
+| Provider record | Item kind | Preview | Notes |
+| --- | --- | --- | --- |
+| Claude `user` with text | `user` | text | anchors; `isCompactSummary` becomes `compaction` |
+| Claude `assistant` text block | `assistant` | text | `usage` → tokens; `message.model` → thread `model` |
+| Claude `assistant` thinking block | `thought` | first 512 B | hidden by default |
+| Claude `assistant` tool_use | `tool_call` | name + summarized input | `tool_kind` from name: Bash → execute, Read → read, Edit/Write → edit, Grep/Glob → search, WebFetch → fetch, Agent → other + `subagent` link |
+| Claude `user` tool_result | `tool_result` | first 512 B | paired by `tool_use_id`; exit code parsed from Bash results when present |
+| Claude `system` compact_boundary | `compaction` | trigger, pre tokens | |
+| Claude `ai-title`, `custom-title` | `title` | title | feeds the thread title with the existing precedence |
+| Codex `response_item/message` | `user` or `assistant` by role | text | developer role → `system` |
+| Codex `response_item/reasoning` | `thought` | first 512 B | |
+| Codex `custom_tool_call` / `_output` | `tool_call` / `tool_result` | name + args / output | paired by `call_id` |
+| Codex `turn_context` | (updates thread `model`) | | |
+| Codex `compacted` | `compaction` | | |
+| Codex `event_msg/task_started|complete` | (status evidence only) | | |
+| Pi `message` role user / assistant | `user` / `assistant` | text | `parentId` tree: the reader follows the branch the session header points to |
+| Pi `message` role toolResult / bashExecution | `tool_result` | output | paired by `toolCallId` |
+| Pi `model_change` | (updates thread `model`) | | |
+| Pi `session_info` | `title` | name | |
+| any line over 256 KiB | the kind inferred from its prefix, preview `[N KB omitted]` | | never parsed |
+
+Readers keep `file_offset` per item and a per-file `last_offset`; a file
+shorter than `last_offset` is re-read from zero (rotation or rewrite). One
+probe in flight per runtime, one second cadence for followed files, at most
+16 followed files.
 
 ## Sources
 

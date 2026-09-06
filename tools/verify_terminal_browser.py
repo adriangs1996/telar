@@ -118,6 +118,8 @@ end run
 
 
 def inject_ghostty_input(terminal_id: str) -> None:
+    # Ghostty's scripted send-key lacks text; pasted input bypasses key encoding.
+    # System Events exercises native text entry and requires Accessibility access.
     script = r'''
 on run argv
   set targetId to item 1 of argv
@@ -126,14 +128,14 @@ on run argv
       repeat with tb in tabs of w
         repeat with term in terminals of tb
           if (id of term) as text is targetId then
+            activate
             focus term
+            delay 0.3
+            tell application "System Events" to keystroke "a"
+            delay 0.2
             send mouse position x 1200 y 500 to term
             send mouse button left button action press to term
             send mouse button left button action release to term
-            delay 0.2
-            send key "a" action press to term
-            send key "a" action release to term
-            input text "a" to term
             return "sent"
           end if
         end repeat
@@ -148,6 +150,18 @@ end run
     ).strip()
     if result != "sent":
         raise RuntimeError(f"Ghostty input target disappeared: {terminal_id}")
+
+
+def keyboard_text_inserted(events: list[dict[str, object]]) -> bool:
+    return any(
+        event.get("event") == "input"
+        and event.get("input_type") == "insertText"
+        and event.get("value") == "a"
+        for event in events
+    ) and any(
+        event.get("event") == "completed" and event.get("keyboard_value") == "a"
+        for event in events
+    )
 
 
 def main() -> int:
@@ -339,9 +353,7 @@ def main() -> int:
         "pinned_revision": revision == PINNED_REVISION,
         "page_loaded": any(event.get("event") == "page-loaded" for event in events),
         "page_completed": completed,
-        "keyboard_reached_chromium": any(
-            event.get("event") in {"key", "text-input"} for event in events
-        ),
+        "keyboard_reached_chromium": keyboard_text_inserted(events),
         "mouse_reached_chromium": any(event.get("event") == "pointer" for event in events),
         "hybrid_sidebar_emitted": any(
             int(sample.get("sidebar_graphics_flushed_bytes", 0)) > 0 for sample in client_samples

@@ -1,0 +1,8 @@
+┌─ fix proxy tests   ◐ working ─────────────────────────────┬─────────────────────────┐ 
+│  Also add a regression test for the split DATA frame.▌     │  provider  claude       │
+│                                                            │  model     opus ▾       │
+│                                                            │  effort    high ▾       │
+│                                                            │  context   ▮▮▮▯▯▯▯▯ 41% │
+│                                                            │   ⏎ queue   ■ stop      │
+└────────────────────────────────────────────────────────────┴─────────────────────────┘
+  enter queues in the agent's own input   ^x stop sends the manifest's interrupt key    

@@ -1,0 +1,16 @@
+ telar ▸ agents   telar 2/5   gwagent 1/2   site 0/1   archived 14                         proxy on 
+ NEEDS YOU 2                │ fix proxy tests   claude   blocked · hook               on proxy-fix 
+ ● fix proxy tests   3m     │──────────────────────────────────────────────────────────────────────
+ ● migrate schema    8m     │ Do you want to run `zig build test`?                                 
+ DONE 1                     │   1. Yes                                                             
+ ✓ add asteroids    12m     │   2. Yes, and don't ask again                                        
+ WORKING 2                  │ ❯ 3. No, tell Claude what to do differently                          
+ ◐ lua bars                 │                                                                      
+ ◐ perf gate                │                                                                      
+ READY 1                    │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+ · scratch                  │ ▸ conversation   changes                         { } prompts  ▸ tail 
+                            │ ▌ you  Fix the failing proxy tests in src/backend/proxy, keep the …  
+                            │   » Bash   zig build test-backend-proxy                    → 1  4.2s 
+                            │   » Edit   src/backend/proxy/service.zig   +6 -2                     
+                            │   ! permission  Bash  zig build test   (waiting since 13:05)         
+ j/k move  enter open  i interact  tab drawer  g next needs-you  n new  a archive  / find  ^s a mux 
