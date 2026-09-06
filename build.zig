@@ -94,6 +94,13 @@ pub fn build(b: *std.Build) void {
     unicode.addImport("ghostty-vt", ghostty_vt);
     coverage.instrumentModule(unicode);
 
+    const kitty_protocol = b.addModule("kitty_protocol", .{
+        .root_source_file = b.path("src/kitty_protocol/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    coverage.instrumentModule(kitty_protocol);
+
     // These module edges are the process boundary in code before IPC exists.
     // Both sides may import core. They cannot import each other.
     const core = b.addModule("telar-core", .{
@@ -132,6 +139,7 @@ pub fn build(b: *std.Build) void {
     });
     const freetype = addFreeType(b, .{ .target = target, .optimize = optimize, .disable_coverage = coverage.enabled });
     frontend.addImport("telar-core", core);
+    frontend.addImport("kitty_protocol", kitty_protocol);
     frontend.addImport("telar-lua", telar_lua);
     frontend.addImport("lua-api", lua_api);
     frontend.addImport("freetype", freetype);
@@ -217,6 +225,11 @@ pub fn build(b: *std.Build) void {
     bench_backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ brotli_prefix, "lib" }) });
     bench_backend.linkSystemLibrary("brotlidec", .{});
     bench_backend.linkSystemLibrary("sqlite3", .{});
+    const bench_kitty_protocol = b.createModule(.{
+        .root_source_file = b.path("src/kitty_protocol/root.zig"),
+        .target = target,
+        .optimize = bench_optimize,
+    });
     const bench_frontend = b.createModule(.{
         .root_source_file = b.path("src/frontend/root.zig"),
         .target = target,
@@ -225,6 +238,7 @@ pub fn build(b: *std.Build) void {
     });
     const bench_freetype = addFreeType(b, .{ .target = target, .optimize = bench_optimize, .disable_coverage = false });
     bench_frontend.addImport("telar-core", bench_core);
+    bench_frontend.addImport("kitty_protocol", bench_kitty_protocol);
     bench_frontend.addImport("lua-api", bench_lua_api);
     bench_frontend.addImport("freetype", bench_freetype);
 
@@ -323,6 +337,19 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(frame_source);
 
+    const asteroids = b.addExecutable(.{
+        .name = "asteroids",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/games/asteroids/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    asteroids.root_module.addImport("kitty_protocol", kitty_protocol);
+    const run_asteroids = b.addRunArtifact(asteroids);
+    b.step("asteroids", "Run the Asteroids example").dependOn(&run_asteroids.step);
+
     const run_terminal_browser_pane = b.addRunArtifact(terminal_browser_pane);
     run_terminal_browser_pane.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
@@ -397,6 +424,8 @@ pub fn build(b: *std.Build) void {
     release_step.dependOn(b.getInstallStep());
 
     const suites = [_]Suite{
+        .{ .path = "src/kitty_protocol/root.zig" },
+        .{ .path = "examples/games/asteroids/main.zig", .libc = true },
         .{ .path = "src/core/ui/root.zig" },
         .{ .path = "src/core/select.zig" },
         // Only referenced through non-pub imports elsewhere, so their tests
@@ -440,6 +469,7 @@ pub fn build(b: *std.Build) void {
         .core = core,
         .backend = backend,
         .frontend = frontend,
+        .kitty_protocol = kitty_protocol,
         .lua_api = lua_api,
         .telar_lua = telar_lua,
         .tls = tls,
@@ -680,6 +710,7 @@ const SuiteModules = struct {
     core: *std.Build.Module,
     backend: *std.Build.Module,
     frontend: *std.Build.Module,
+    kitty_protocol: *std.Build.Module,
     lua_api: *std.Build.Module,
     telar_lua: *std.Build.Module,
     tls: *std.Build.Module,
@@ -704,6 +735,7 @@ const SuiteModules = struct {
         tests.root_module.addImport("telar-core", modules.core);
         tests.root_module.addImport("telar-backend", modules.backend);
         tests.root_module.addImport("telar-frontend", modules.frontend);
+        tests.root_module.addImport("kitty_protocol", modules.kitty_protocol);
         tests.root_module.addImport("lua-api", modules.lua_api);
         tests.root_module.addImport("telar-lua", modules.telar_lua);
         tests.root_module.addImport("tls", modules.tls);
