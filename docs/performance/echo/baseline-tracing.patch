@@ -1,0 +1,491 @@
+--- a/build.zig
++++ b/build.zig
+@@ -167,6 +167,7 @@
+     ) orelse false;
+     const exe_options = b.addOptions();
+     exe_options.addOption(bool, "diagnostics", diagnostics_enabled);
++    exe_options.addOption(bool, "echo_trace", b.option(bool, "echo-trace", "Record bounded echo phase timestamps until shutdown") orelse false);
+     exe.root_module.addOptions("build_options", exe_options);
+     b.installArtifact(exe);
+ 
+@@ -248,6 +249,22 @@
+     benchmarks.root_module.addImport("telar-core", bench_core);
+     benchmarks.root_module.addImport("telar-backend", bench_backend);
+     benchmarks.root_module.addImport("telar-frontend", bench_frontend);
++
++    const echo_probe = b.addExecutable(.{
++        .name = "echo-probe",
++        .root_module = b.createModule(.{
++            .root_source_file = b.path("benchmarks/echo_probe.zig"),
++            .target = target,
++            .optimize = bench_optimize,
++            .link_libc = true,
++            .imports = &.{
++                .{ .name = "ghostty-vt", .module = ghostty_vt },
++                .{ .name = "telar-backend", .module = bench_backend },
++                .{ .name = "telar-frontend", .module = bench_frontend },
++            },
++        }),
++    });
++    b.step("echo-probe", "Build the echo VT oracle and minimal interposition controls").dependOn(&b.addInstallArtifact(echo_probe, .{}).step);
+     benchmarks.root_module.addImport("ghostty-vt", ghostty_vt);
+     const run_benchmarks = b.addRunArtifact(benchmarks);
+     if (b.args) |args| {
+--- /dev/null
++++ b/benchmarks/echo_probe.zig
+@@ -0,0 +1,140 @@
++//! Measurement-only VT oracle and minimal interposition controls, not a multiplexer.
++const std = @import("std");
++const vt = @import("ghostty-vt");
++const backend = @import("telar-backend");
++const frontend = @import("telar-frontend");
++
++const Link = struct { input: std.c.fd_t, output: std.c.fd_t };
++
++fn writeAll(fd: std.c.fd_t, bytes: []const u8) !void {
++    var offset: usize = 0;
++    while (offset < bytes.len) {
++        const count = std.c.write(fd, bytes[offset..].ptr, bytes.len - offset);
++        if (count <= 0) {
++            if (count < 0 and std.posix.errno(count) == .INTR) {
++                continue;
++            }
++            return error.WriteFailed;
++        }
++        offset += @intCast(count);
++    }
++}
++
++fn readExact(fd: std.c.fd_t, bytes: []u8) !bool {
++    var offset: usize = 0;
++    while (offset < bytes.len) {
++        const count = std.c.read(fd, bytes[offset..].ptr, bytes.len - offset);
++        if (count == 0) {
++            if (offset == 0) {
++                return false;
++            }
++            return error.TruncatedInput;
++        }
++        if (count < 0) {
++            if (std.posix.errno(count) == .INTR) {
++                continue;
++            }
++            return error.ReadFailed;
++        }
++        offset += @intCast(count);
++    }
++    return true;
++}
++
++fn relay(links: [2]Link) !void {
++    var polling = [2]std.c.pollfd{
++        .{ .fd = links[0].input, .events = std.posix.POLL.IN, .revents = 0 },
++        .{ .fd = links[1].input, .events = std.posix.POLL.IN, .revents = 0 },
++    };
++    var bytes: [16 * 1024]u8 = undefined;
++    while (true) {
++        const ready = std.c.poll(&polling, polling.len, -1);
++        if (ready < 0) {
++            if (std.posix.errno(ready) == .INTR) {
++                continue;
++            }
++            return error.PollFailed;
++        }
++        for (polling, links) |item, link| {
++            if (item.revents == 0) {
++                continue;
++            }
++            const count = std.c.read(link.input, &bytes, bytes.len);
++            if (count <= 0) {
++                return;
++            }
++            try writeAll(link.output, bytes[0..@intCast(count)]);
++        }
++    }
++}
++
++fn oracle(init: std.process.Init, size: struct { cols: u16, rows: u16 }) !void {
++    var terminal = try vt.Terminal.init(init.io, init.gpa, .{ .cols = size.cols, .rows = size.rows, .max_scrollback_bytes = 0 });
++    defer terminal.deinit(init.gpa);
++    var stream = vt.TerminalStream.init(.{ .allocator = init.gpa, .handler = terminal.vtHandler() });
++    defer stream.deinit();
++    var bytes: [64 * 1024]u8 = undefined;
++    var header: [4]u8 = undefined;
++    while (try readExact(0, &header)) {
++        const length = std.mem.readInt(u32, &header, .little);
++        if (length > bytes.len) {
++            return error.FrameTooLarge;
++        }
++        if (!try readExact(0, bytes[0..length])) {
++            return error.TruncatedInput;
++        }
++        stream.nextSlice(bytes[0..length]);
++        var count: u32 = 0;
++        const pages = &terminal.screens.active.pages;
++        for (0..size.rows) |y| {
++            const pin = pages.pin(.{ .active = .{ .x = 0, .y = @intCast(y) } }) orelse continue;
++            for (pin.cells(.all)) |cell| {
++                if (cell.hasText() and cell.codepoint() == '~') {
++                    count += 1;
++                }
++            }
++        }
++        var response: [8]u8 = undefined;
++        std.mem.writeInt(u32, response[0..4], count, .little);
++        std.mem.writeInt(u32, response[4..8], @intFromBool(terminal.modes.get(.synchronized_output)), .little);
++        try writeAll(1, &response);
++    }
++}
++
++pub fn main(init: std.process.Init) !void {
++    var args = init.minimal.args.iterate();
++    _ = args.next();
++    const mode = args.next() orelse return error.MissingMode;
++    if (std.mem.eql(u8, mode, "screen")) {
++        const cols = try std.fmt.parseInt(u16, args.next() orelse return error.MissingColumns, 10);
++        const rows = try std.fmt.parseInt(u16, args.next() orelse return error.MissingRows, 10);
++        return oracle(init, .{ .cols = cols, .rows = rows });
++    }
++    if (std.mem.eql(u8, mode, "app")) {
++        var tty = try frontend.platform.Tty.open();
++        defer tty.deinit();
++        var byte: [1]u8 = undefined;
++        while (try readExact(0, &byte)) {
++            try writeAll(1, if (byte[0] == 0x7f) "\x08 \x08" else &byte);
++        }
++        return;
++    }
++    const socket = if (std.mem.eql(u8, mode, "one")) @as(c_int, 0) else try std.fmt.parseInt(c_int, args.next() orelse return error.MissingSocket, 10);
++    if (std.mem.eql(u8, mode, "client")) {
++        var tty = try frontend.platform.Tty.open();
++        defer tty.deinit();
++        return relay(.{ .{ .input = 0, .output = socket }, .{ .input = socket, .output = 1 } });
++    }
++    if (!std.mem.eql(u8, mode, "one") and !std.mem.eql(u8, mode, "server")) {
++        return error.InvalidMode;
++    }
++    var tty: ?frontend.platform.Tty = if (socket == 0) try frontend.platform.Tty.open() else null;
++    defer if (tty) |*value| {
++        value.deinit();
++    };
++    const shell = args.next() orelse "/bin/cat";
++    const command = try backend.pty.Command.fromArgv(&.{shell.ptr});
++    var session = try backend.pty.Session.spawn(&command, .{ .cols = 160, .rows = 40 });
++    defer session.deinit();
++    return relay(.{ .{ .input = socket, .output = session.master }, .{ .input = session.master, .output = if (socket == 0) 1 else socket } });
++}
+--- a/src/main.zig
++++ b/src/main.zig
+@@ -11,6 +11,15 @@
+ 
+ /// Opt-in for development telemetry in optimized builds (`-Ddiagnostics`).
+ pub const telar_diagnostics = @import("build_options").diagnostics;
++pub const telar_echo_trace = @import("build_options").echo_trace;
++pub var echo_recorder: if (telar_echo_trace) @import("telar-core").echo_trace.Recorder else void = if (telar_echo_trace) .{} else {};
++
++fn dumpEchoTrace(init: std.process.Init) void {
++    if (comptime telar_echo_trace) {
++        const directory = init.minimal.environ.getPosix("TELAR_ECHO_TRACE_DIR") orelse return;
++        echo_recorder.dump(init.io, directory) catch {};
++    }
++}
+ 
+ const Cli = cli_mod.Cli;
+ 
+@@ -34,6 +43,7 @@
+ /// telar server
+ /// ```
+ pub fn main(init: std.process.Init) !void {
++    defer dumpEchoTrace(init);
+     var arg_storage: [cli_mod.max_args][*:0]const u8 = undefined;
+     const args = try collectArgs(init, &arg_storage);
+ 
+@@ -56,7 +66,9 @@
+         .proxy => |options| std.process.exit(try cli_mod.proxy.run(init, options)),
+         .skill => try cli_mod.skill.run(init),
+         .run => |options| {
+-            std.process.exit(try cli_mod.client.run(init, options));
++            const status = try cli_mod.client.run(init, options);
++            dumpEchoTrace(init);
++            std.process.exit(status);
+         },
+     }
+ }
+--- a/src/core/root.zig
++++ b/src/core/root.zig
+@@ -15,6 +15,7 @@
+ pub const link = @import("link.zig");
+ pub const endpoint = transport.endpoint;
+ pub const diagnostics = @import("diagnostics.zig");
++pub const echo_trace = @import("echo_trace.zig");
+ pub const graphics = @import("graphics.zig");
+ pub const plugin = @import("plugin.zig");
+ pub const fixed_index = @import("fixed_index.zig");
+--- /dev/null
++++ b/src/core/echo_trace.zig
+@@ -0,0 +1,67 @@
++//! Opt-in fixed-capacity traces. The process bootstrap owns the recorder.
++const std = @import("std");
++const root = @import("root");
++
++pub const enabled = @hasDecl(root, "telar_echo_trace") and root.telar_echo_trace;
++pub const Tag = enum {
++    host_read, client_input, client_send_start, client_send_done,
++    runtime_read, runtime_dispatch, input_forward, foreground_start, foreground_done, input_observed, pty_write_queued, pty_write_start, pty_write_done,
++    pty_read, output_dispatch, vt_queued, vt_start, vt_done, ingest_dispatch,
++    runtime_send_start, runtime_send_done, client_read, client_frame,
++    compose_start, host_flush_start, host_flush_done,
++};
++
++pub const Recorder = struct {
++    const capacity = 16384;
++    const Record = struct { ns: u64, tag: Tag };
++    claimed: std.atomic.Value(usize) = .init(0),
++    records: [capacity]Record = undefined,
++
++    /// Claims a unique slot. No allocation, lock or I/O; full traces drop work.
++    /// Example: `recorder.append(.{ .ns = now, .tag = .pty_read });`.
++    pub fn append(recorder: *Recorder, record: Record) void {
++        const index = recorder.claimed.fetchAdd(1, .monotonic);
++        if (index < capacity) {
++            recorder.records[index] = record;
++        }
++    }
++
++    /// Writes only after every producer has joined. Never call during a borrow.
++    /// Example: `try recorder.dump(io, directory);`.
++    pub fn dump(recorder: *const Recorder, io: std.Io, directory: []const u8) !void {
++        const count = recorder.claimed.load(.monotonic);
++        if (count == 0) {
++            return;
++        }
++        var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
++        const path = try std.fmt.bufPrint(&path_buffer, "{s}/{d}.echo.jsonl", .{ directory, std.c.getpid() });
++        const file = try std.Io.Dir.createFileAbsolute(io, path, .{ .exclusive = true, .permissions = .fromMode(0o600) });
++        defer file.close(io);
++        var buffer: [4096]u8 = undefined;
++        var writer = file.writer(io, &buffer);
++        for (recorder.records[0..@min(count, capacity)]) |record| {
++            try writer.interface.print("{{\"ns\":{d},\"event\":\"{s}\"}}\n", .{ record.ns, @tagName(record.tag) });
++        }
++        try writer.interface.print("{{\"dropped\":{d}}}\n", .{count -| capacity});
++        try writer.interface.flush();
++    }
++};
++
++/// Compiles away without `-Decho-trace`; records no contents, pane or request IDs.
++/// Example: `echo_trace.mark(io, .pty_read);`.
++pub fn mark(io: std.Io, tag: Tag) void {
++    if (comptime enabled) {
++        root.echo_recorder.append(.{ .ns = @intCast(std.Io.Clock.awake.now(io).nanoseconds), .tag = tag });
++    }
++}
++
++test "trace saturation does not overwrite retained records" {
++    const recorder = try std.testing.allocator.create(Recorder);
++    defer std.testing.allocator.destroy(recorder);
++    recorder.* = .{};
++    for (0..Recorder.capacity + 10) |index| {
++        recorder.append(.{ .ns = index, .tag = .host_read });
++    }
++    try std.testing.expectEqual(@as(u64, 0), recorder.records[0].ns);
++    try std.testing.expectEqual(@as(u64, Recorder.capacity - 1), recorder.records[Recorder.capacity - 1].ns);
++}
+--- a/src/backend/runtime/application/commands/pane_input.zig
++++ b/src/backend/runtime/application/commands/pane_input.zig
+@@ -50,6 +50,7 @@
+     /// try forwarder.forward(pane, "help\r");
+     /// ```
+     pub inline fn forward(forwarder: *const Forwarder, pane: *pane_mod.Pane, bytes: []const u8) !void {
++        core.echo_trace.mark(forwarder.io, .input_forward);
+         if (comptime diagnostics.enabled) {
+             forwarder.metrics.input_events += 1;
+             forwarder.metrics.input_bytes += bytes.len;
+@@ -59,11 +60,15 @@
+             _ = tracker.observeInput(pane.key(), bytes);
+         }
+ 
++        core.echo_trace.mark(forwarder.io, .foreground_start);
++        const foreground = pane.session.shellForeground() orelse false;
++        core.echo_trace.mark(forwarder.io, .foreground_done);
+         pane.queueHistoryInput(.{
+             .bytes = bytes,
+-            .shell_foreground = pane.session.shellForeground() orelse false,
++            .shell_foreground = foreground,
+             .clock = pane_mod.historyClock(forwarder.io),
+         });
++        core.echo_trace.mark(forwarder.io, .input_observed);
+         try forwarder.scheduler.observation(forwarder.scheduler.context, pane);
+ 
+         _ = pane.queuePtyInput(bytes);
+--- a/src/backend/runtime/application/event_dispatcher/client.zig
++++ b/src/backend/runtime/application/event_dispatcher/client.zig
+@@ -62,6 +62,7 @@
+         /// const should_stop = try ClientEvents.handleMessage(&application, event);
+         /// ```
+         pub fn handleMessage(application: *Application, event: ClientMessageEvent) !bool {
++            core.echo_trace.mark(application.io, .runtime_dispatch);
+             const session = application.clients.resolve(event.client) orelse {
+                 application.metrics.stale_client_messages += 1;
+                 return false;
+@@ -336,10 +337,14 @@
+         }
+ 
+         fn receiveSession(read: SessionRead) ClientMessageEvent {
+-            return .{ .client = read.key, .result = read.connection.receive(read.io, read.buffer) };
++            const result = read.connection.receive(read.io, read.buffer);
++            core.echo_trace.mark(read.io, .runtime_read);
++            return .{ .client = read.key, .result = result };
+         }
+ 
+         fn sendSession(write: SessionWrite) ClientSentEvent {
++            core.echo_trace.mark(write.io, .runtime_send_start);
++            defer core.echo_trace.mark(write.io, .runtime_send_done);
+             return .{ .client = write.key, .result = write.connection.send(write.io, write.payload) };
+         }
+     };
+--- a/src/backend/runtime/application/event_dispatcher/pane/io.zig
++++ b/src/backend/runtime/application/event_dispatcher/pane/io.zig
+@@ -80,10 +80,13 @@
+         }
+ 
+         fn startPaneInputWrite(application: *Application, write: pane_input_pump.Write) !void {
++            core.echo_trace.mark(application.io, .pty_write_queued);
+             try application.select.concurrent(.pane_input_written, writePaneInput, .{write});
+         }
+ 
+         fn writePaneInput(write: pane_input_pump.Write) PaneInputEvent {
++            core.echo_trace.mark(write.io, .pty_write_start);
++            defer core.echo_trace.mark(write.io, .pty_write_done);
+             const path = diagnostics.enter(.interactive);
+             defer path.restore();
+ 
+--- a/src/backend/runtime/application/event_dispatcher/pane/pipeline.zig
++++ b/src/backend/runtime/application/event_dispatcher/pane/pipeline.zig
+@@ -44,6 +44,7 @@
+         /// try PanePipelineEvents.handleOutput(&application, event, ingest_gate);
+         /// ```
+         pub fn handleOutput(application: *Application, event: pane_launcher_mod.PaneOutputEvent, ingest_gate: ?*IngestTestGate) !void {
++            core.echo_trace.mark(application.io, .output_dispatch);
+             var context: OutputRuntime = .{ .application = application, .ingest_gate = ingest_gate };
+             var pipeline = paneOutputPipeline(&context);
+             try pipeline.handle(event);
+@@ -56,6 +57,7 @@
+         /// try PanePipelineEvents.handleIngested(&application, event);
+         /// ```
+         pub fn handleIngested(application: *Application, event: PaneIngestEvent) !void {
++            core.echo_trace.mark(application.io, .ingest_dispatch);
+             var coordinator = paneIngestCoordinator(application);
+             try coordinator.handle(event);
+         }
+@@ -109,6 +111,7 @@
+         };
+ 
+         fn startOutputIngest(context: *OutputRuntime, ingest: pane_output_pipeline.Ingest) !void {
++            core.echo_trace.mark(ingest.io, .vt_queued);
+             try context.application.select.concurrent(.pane_ingested, ingestPane, .{PaneIngestTask{
+                 .ingest = ingest,
+                 .gate = context.ingest_gate,
+@@ -137,6 +140,8 @@
+         }
+ 
+         fn ingestPane(task: PaneIngestTask) PaneIngestEvent {
++            core.echo_trace.mark(task.ingest.io, .vt_start);
++            defer core.echo_trace.mark(task.ingest.io, .vt_done);
+             const path = diagnostics.enter(.interactive);
+             defer path.restore();
+ 
+--- a/src/backend/runtime/application/pane_launcher.zig
++++ b/src/backend/runtime/application/pane_launcher.zig
+@@ -314,6 +314,7 @@
+ pub fn readPane(io: Io, pane: *Pane) PaneOutputEvent {
+     const len = pane.session.read(io, &pane.output_buffer) catch |err|
+         return .{ .pane = pane.key(), .result = err };
++    core.echo_trace.mark(io, .pty_read);
+     return .{ .pane = pane.key(), .result = @intCast(len) };
+ }
+ 
+--- a/src/frontend/client/controllers/input/host_inputs.zig
++++ b/src/frontend/client/controllers/input/host_inputs.zig
+@@ -1,6 +1,7 @@
+ //! Owns one client's host-TTY read, native router and replaceable deadlines.
+ 
+ const std = @import("std");
++const core = @import("telar-core");
+ const input_capability = @import("../../../input/root.zig");
+ const lua_config = @import("../../../config/root.zig");
+ const widgets = @import("../../../widgets/root.zig");
+@@ -180,6 +181,7 @@
+ /// if (try host_inputs.handleOwnedRead(client, result)) return 0;
+ /// ```
+ pub fn handleOwnedRead(client: *Client, result: anyerror!u16) !bool {
++    core.echo_trace.mark(client.io, .client_input);
+     const state = &client.host_input;
+     state.read_pending = false;
+     state.chunk.len = try result;
+@@ -312,7 +314,9 @@
+ }
+ 
+ fn read(io: Io, file: File, chunk: *Chunk) anyerror!u16 {
+-    return @intCast(try file.readStreaming(io, &.{&chunk.bytes}));
++    const length = try file.readStreaming(io, &.{&chunk.bytes});
++    core.echo_trace.mark(io, .host_read);
++    return @intCast(length);
+ }
+ 
+ test "host input configuration owns router timeouts" {
+--- a/src/frontend/client/entrypoints/runtime_io.zig
++++ b/src/frontend/client/entrypoints/runtime_io.zig
+@@ -59,6 +59,7 @@
+ /// if (try runtime_transport.handleRead(client, result)) |status| return status;
+ /// ```
+ pub fn handleRead(client: *Client, result: anyerror![]u8) !?u8 {
++    core.echo_trace.mark(client.io, .client_frame);
+     const payload = try client.runtime_transport.completeRead(result);
+     const decode_started = diagnostics.now(client.io);
+     const message = try schema.decodeServer(payload);
+@@ -208,10 +209,14 @@
+ }
+ 
+ fn receive(io: Io, state: *State) anyerror![]u8 {
+-    return state.read(io);
++    const bytes = try state.read(io);
++    core.echo_trace.mark(io, .client_read);
++    return bytes;
+ }
+ 
+ fn send(io: Io, state: *State, payload: []const u8) anyerror!void {
++    core.echo_trace.mark(io, .client_send_start);
++    defer core.echo_trace.mark(io, .client_send_done);
+     return state.send(io, payload);
+ }
+ 
+--- a/src/frontend/client/presentation/presentation_lifecycle.zig
++++ b/src/frontend/client/presentation/presentation_lifecycle.zig
+@@ -40,6 +40,7 @@
+ /// try presentation_lifecycle.presentNow(client);
+ /// ```
+ pub fn presentNow(client: *Client) !void {
++    core.echo_trace.mark(client.io, .compose_start);
+     if (client.output) |*output| {
+         if (output.pending) {
+             output.draw_deferred = true;
+@@ -103,7 +104,9 @@
+ /// Example: `try pumpOutput(client);`.
+ pub fn pumpOutput(client: *Client) anyerror!void {
+     const output = if (client.output) |*output| output else return;
+-    const work = try output.tryWrite(output.begin() orelse return);
++    const pending = output.begin() orelse return;
++    core.echo_trace.mark(client.io, .host_flush_start);
++    const work = try output.tryWrite(pending);
+     if (work.bytes.len == 0) {
+         try handleWritten(client, {});
+         return;
+@@ -115,6 +118,7 @@
+ /// Commits only the presentation whose bytes reached the host, then folds work.
+ /// Example: `try handleWritten(client, result);`.
+ pub fn handleWritten(client: *Client, result: anyerror!void) !void {
++    core.echo_trace.mark(client.io, .host_flush_done);
+     const output = if (client.output) |*output| output else unreachable;
+     if (try output.complete(result)) |delivery| {
+         try deliver(client, delivery);

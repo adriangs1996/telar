@@ -183,6 +183,17 @@ pub fn terminateAndReap(pid: std.c.pid_t) void {
     _ = waitPid(pid) catch {};
 }
 
+extern "c" fn getpgrp() std.c.pid_t;
+
+/// Terminates the kernel-selected foreground job without targeting our group.
+/// Example: `terminateForeground(master);`.
+pub fn terminateForeground(master: std.c.fd_t) void {
+    const group = foregroundProcessGroup(master) orelse return;
+    if (group > 0 and group != getpgrp()) {
+        _ = std.c.kill(-group, .KILL);
+    }
+}
+
 pub fn terminate(pid: std.c.pid_t) void {
     _ = std.c.kill(pid, .KILL);
 }

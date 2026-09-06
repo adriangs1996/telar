@@ -19,6 +19,7 @@ const pane_focus = @import("../panes/pane_focus.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const pane_splits = @import("../panes/pane_splits.zig");
+const pane_viewports = @import("../panes/pane_viewports.zig");
 const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
 const tab_closures = @import("../tabs/tab_closures.zig");
 const tab_creations = @import("../tabs/tab_creations.zig");
@@ -83,6 +84,7 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
             .down => .down,
         } }),
         .navigate_pane => |direction| try navigatePane(client, direction),
+        .scroll_pane => |direction| try scrollPane(client, direction),
         .resize_pane => |direction| try resizePane(client, switch (direction) {
             .left => .left,
             .right => .right,
@@ -160,6 +162,20 @@ fn navigatePane(client: *Client, direction: input.action.Direction) !void {
     }
 
     _ = try pane_inputs.send(client, .{ .target = .focused, .source = .host, .payload = .{ .key = key } });
+}
+
+fn scrollPane(client: *Client, direction: input.action.ScrollDirection) !void {
+    const active = client.model.workspace.activeConst() orelse return;
+    const pane = active.model.focusedPaneConst() orelse return;
+    var use_case = pane_viewports.handler(client);
+
+    _ = try use_case.execute(.{
+        .pane_id = pane.id,
+        .target = .{ .relative = switch (direction) {
+            .up => -3,
+            .down => 3,
+        } },
+    });
 }
 
 fn navigationKey(direction: input.action.Direction) keybind.Key {

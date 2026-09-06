@@ -1,0 +1,33 @@
+{
+  "measured": {
+    "path": "/tmp/telar-echo/verified-baseline-trace/bin/telar",
+    "sha256": "a6e4aceb3c0b8b6754a6b351bdea428a84fea57176db354a128c87247fcd9e5c",
+    "sections": {
+      "__text": "7813ec46f84bad632426777f33d6b473342041e6422a739b2e661ab6acf3a83a",
+      "__stubs": "13b9628dff6c0a4580b5b9b6d4f5a2095c6443343f7aed4ea2fb2aa428b67594",
+      "__stub_helper": "de56e50cba776987b74801ad05bc081d5c2f20b974fc5f00f583bdb0745e0ef6",
+      "__const": "1fe2c00ce8b9e953a1842eafc6ddd746c6706cc1b2735202f5083a38ecc66098",
+      "__cstring": "581ec924c56cbbe0c7ebc6ff3982f35d42ced4f384bcc2d908a2cd20cfc8e5b6",
+      "__gcc_except_tab": "b757a885d43811754ad28772db19d2954b65e7e910bb5755ff58741fdc5cd4fd",
+      "__objc_methname": "2ae3f54e821d60edc1b011be8dd4e117087596edc0625e5b6f6451b0d43da313",
+      "__unwind_info": "e7b2d7c1ceed0f2d6ba616d3c56b5282c53a6b5993f7f667480dc9e231b912dc",
+      "__eh_frame": "152c434c814aebf2921acbae8fc159a3b200215aa481e117b34e241209b389fe"
+    }
+  },
+  "reproduced": {
+    "path": "/tmp/telar-echo/reproduced-baseline-trace/bin/telar",
+    "sha256": "2122e0461991baae0c220402bc3aa6511fc3a500ad5d9bf5d41f05bf31700374",
+    "sections": {
+      "__text": "7813ec46f84bad632426777f33d6b473342041e6422a739b2e661ab6acf3a83a",
+      "__stubs": "13b9628dff6c0a4580b5b9b6d4f5a2095c6443343f7aed4ea2fb2aa428b67594",
+      "__stub_helper": "de56e50cba776987b74801ad05bc081d5c2f20b974fc5f00f583bdb0745e0ef6",
+      "__const": "1fe2c00ce8b9e953a1842eafc6ddd746c6706cc1b2735202f5083a38ecc66098",
+      "__cstring": "581ec924c56cbbe0c7ebc6ff3982f35d42ced4f384bcc2d908a2cd20cfc8e5b6",
+      "__gcc_except_tab": "b757a885d43811754ad28772db19d2954b65e7e910bb5755ff58741fdc5cd4fd",
+      "__objc_methname": "2ae3f54e821d60edc1b011be8dd4e117087596edc0625e5b6f6451b0d43da313",
+      "__unwind_info": "e7b2d7c1ceed0f2d6ba616d3c56b5282c53a6b5993f7f667480dc9e231b912dc",
+      "__eh_frame": "152c434c814aebf2921acbae8fc159a3b200215aa481e117b34e241209b389fe"
+    }
+  },
+  "equal_text_sections": true
+}

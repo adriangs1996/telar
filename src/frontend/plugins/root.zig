@@ -182,6 +182,7 @@ pub const Registry = struct {
                 .split_pane, .close_pane, .new_workspace, .rename_workspace, .new_tab, .rename_tab, .close_tab, .move_tab, .detach => .runtime_control,
                 .focus_pane,
                 .navigate_pane,
+                .scroll_pane,
                 .resize_pane,
                 .toggle_pane_fullscreen,
                 .toggle_sidebar,

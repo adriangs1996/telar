@@ -44,9 +44,14 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
         /// try PanePipelineEvents.handleOutput(&application, event, ingest_gate);
         /// ```
         pub fn handleOutput(application: *Application, event: pane_launcher_mod.PaneOutputEvent, ingest_gate: ?*IngestTestGate) !void {
+            core.echo_trace.mark(application.io, .output_dispatch);
             var context: OutputRuntime = .{ .application = application, .ingest_gate = ingest_gate };
             var pipeline = paneOutputPipeline(&context);
             try pipeline.handle(event);
+
+            if (context.inline_ingest) |result| {
+                try handleIngested(application, result);
+            }
         }
 
         /// Commits one terminal-ingest result, refreshes attachments and rearms
@@ -56,6 +61,7 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
         /// try PanePipelineEvents.handleIngested(&application, event);
         /// ```
         pub fn handleIngested(application: *Application, event: PaneIngestEvent) !void {
+            core.echo_trace.mark(application.io, .ingest_dispatch);
             var coordinator = paneIngestCoordinator(application);
             try coordinator.handle(event);
         }
@@ -74,6 +80,7 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
         const OutputRuntime = struct {
             application: *Application,
             ingest_gate: ?*IngestTestGate,
+            inline_ingest: ?PaneIngestEvent = null,
         };
 
         const pane_output_runtime_port: pane_output_pipeline.RuntimePort(OutputRuntime) = .{
@@ -109,10 +116,15 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
         };
 
         fn startOutputIngest(context: *OutputRuntime, ingest: pane_output_pipeline.Ingest) !void {
-            try context.application.select.concurrent(.pane_ingested, ingestPane, .{PaneIngestTask{
-                .ingest = ingest,
-                .gate = context.ingest_gate,
-            }});
+            core.echo_trace.mark(ingest.io, .vt_queued);
+            const task: PaneIngestTask = .{ .ingest = ingest, .gate = context.ingest_gate };
+
+            if (context.ingest_gate == null and ingest.pane.canInlineOutput(ingest.bytes)) {
+                context.inline_ingest = ingestPane(task);
+                return;
+            }
+
+            try context.application.select.concurrent(.pane_ingested, ingestPane, .{task});
         }
 
         fn paneHasOutstandingFrame(context: *OutputRuntime, pane_id: schema.PaneId) bool {
@@ -137,6 +149,9 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
         }
 
         fn ingestPane(task: PaneIngestTask) PaneIngestEvent {
+            core.echo_trace.mark(task.ingest.io, .vt_start);
+            defer core.echo_trace.mark(task.ingest.io, .vt_done);
+
             const path = diagnostics.enter(.interactive);
             defer path.restore();
 

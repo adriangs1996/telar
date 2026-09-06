@@ -24,6 +24,7 @@ pub const State = struct {
     /// Generations the media actor froze for local clients, awaiting
     /// adoption on the runtime thread.
     prepared_transfers: shared_transfer.PreparedTransfers = .{},
+    transfer_preparation: @import("transfer_preparation.zig").Queue = .{},
     /// Attachments whose client takes shared-memory names. Written by the
     /// runtime thread, read by the media actor to decide whether freezing a
     /// generation right after decode can pay off.
@@ -58,6 +59,7 @@ pub const Processor = struct {
             processor.state.kitty_framing = .{};
             processor.state.kitty_loading_chunks = 0;
             processor.state.prepared_transfers.discardAll(processor.media_allocator);
+            processor.state.transfer_preparation.deinit(processor.media_allocator);
         }
 
         const Sink = struct {
@@ -80,6 +82,8 @@ pub const Processor = struct {
         if (!stats.failed and processor.state.shared_transport_clients.load(.acquire) != 0) {
             processor.prepareSharedTransfers(stats);
         }
+
+        processor.state.transfer_preparation.process(&processor.media.terminal.screens.active.kitty_images, processor.media_allocator);
     }
 
     const LiveImages = struct {

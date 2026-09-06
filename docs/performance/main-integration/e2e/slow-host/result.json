@@ -1,0 +1,5 @@
+{
+  "input_sent": 32,
+  "input_while_host_blocked": 32,
+  "input_after_drain": 32
+}

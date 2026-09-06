@@ -1,0 +1,32 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "python": "3.14.7",
+  "samples": 100,
+  "repetitions": 1,
+  "gap": 0.05,
+  "application": false,
+  "trace": false,
+  "floods": 2,
+  "controls": [],
+  "binaries": {
+    "probe": {
+      "path": "/private/tmp/telar-merge/install/bin/echo-probe",
+      "sha256": "8ddeb75aecd84072fd50c5a60f41099bfb1008a7bf9dcd691aa07e985522c6c1"
+    },
+    "candidate": {
+      "path": "/private/tmp/telar-merge/install/bin/telar",
+      "sha256": "5a7e326028b30a724d600ff82277d86734fdde06418f6eaf45c8062df76d08d9"
+    }
+  },
+  "tools": {
+    "echo_path.py": "a08351b2dbe37afee98a6c849966c6350f03bf1f12d7a60becb36fd10b8fe5ea",
+    "echo_latency.py": "295cd102afb4ea0ab82ed60cf28227b824c861367410af3226ab58a915691350",
+    "perf_e2e.py": "0a9d2627b6bccf31a23a926610a09db385d289999d8d297f470f29e0820d26fc",
+    "load_latency.py": "2b67e67f135abf3692b6324d27ec5057b303afea7929ce20f51b1ede51642004"
+  },
+  "order": [
+    [
+      "candidate"
+    ]
+  ]
+}

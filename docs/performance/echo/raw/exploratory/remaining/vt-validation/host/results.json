@@ -1,0 +1,142 @@
+[
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "baseline",
+    "case": "slow-host",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 51.08095798641443,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        93763
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "candidate",
+    "case": "slow-host",
+    "run": 0,
+    "shutdown": {
+      "elapsed_ms": 50.582915951963514,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        94196
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "candidate",
+    "case": "slow-host",
+    "run": 1,
+    "shutdown": {
+      "elapsed_ms": 49.40637497929856,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        94553
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "baseline",
+    "case": "slow-host",
+    "run": 1,
+    "shutdown": {
+      "elapsed_ms": 50.156582961790264,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        95028
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "baseline",
+    "case": "slow-host",
+    "run": 2,
+    "shutdown": {
+      "elapsed_ms": 50.04250002093613,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        95694
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "candidate",
+    "case": "slow-host",
+    "run": 2,
+    "shutdown": {
+      "elapsed_ms": 49.52312499517575,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        96107
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  },
+  {
+    "input_sent": 32,
+    "input_while_host_blocked": 32,
+    "input_after_drain": 32,
+    "version": "candidate",
+    "case": "slow-host",
+    "run": 3,
+    "shutdown": {
+      "elapsed_ms": 50.88620801689103,
+      "exited": true,
+      "returncode": 0,
+      "reply": "telar runtime is stopping\n",
+      "pids": [
+        96583
+      ],
+      "children_exited": true,
+      "socket_removed": true,
+      "cleanup_complete": true
+    }
+  }
+]

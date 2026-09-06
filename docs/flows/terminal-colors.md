@@ -25,6 +25,11 @@ client_startup.start
   -> existing client_layout_snapshot / open_pane flow
 ```
 
+Startup dispatches its buffered host probes through the single-flight output
+owner before awaiting the first event. Flushing the staging writer alone does
+not deliver bytes to the host. The async-output startup test verifies a pending
+host write with no bootstrap message sent and no consumed event.
+
 The three bootstrap messages use the ordinary FIFO outbox and its send actor.
 No synchronous socket write competes with that actor. Color readiness does not
 wait for graphics support. Before the first pane is activated,

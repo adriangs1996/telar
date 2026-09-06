@@ -310,21 +310,6 @@ pub const TitleState = struct {
     }
 };
 
-fn matchesAt(row: []const u21, needle: []const u21, fold: bool) bool {
-    for (row, needle) |have, want| {
-        if (have == want) {
-            continue;
-        }
-        if (!fold or have >= 0x80 or want >= 0x80) {
-            return false;
-        }
-        if (std.ascii.toLower(@intCast(have)) != std.ascii.toLower(@intCast(want))) {
-            return false;
-        }
-    }
-    return true;
-}
-
 fn sanitizeTitle(storage: *[schema.max_pane_title_bytes]u8, raw: []const u8) usize {
     var len: usize = 0;
     var view = std.unicode.Utf8View.initUnchecked(raw);
@@ -398,8 +383,9 @@ pub const LaunchRecord = struct {
     }
 };
 
-pub const max_search_rows = 10_000;
-pub const max_search_cols = 512;
+pub const TextSearch = @import("text_search.zig").Cursor;
+pub const max_search_rows = @import("text_search.zig").max_rows;
+pub const max_search_cols = @import("text_search.zig").max_cols;
 
 pub const SearchResult = struct {
     count: u8,
@@ -472,6 +458,7 @@ pub const Pane = struct {
     dirty: bool = true,
     render_pending: bool = true,
     cell_revision: u64 = 1,
+    search_revision: u64 = 1,
     output_pending: bool = false,
     ingest_pending: bool = false,
     actor_count: u8 = 0,
@@ -737,73 +724,12 @@ pub const Pane = struct {
     /// const result = pane.searchText("error", &matches);
     /// ```
     pub fn searchText(pane: *const Pane, needle: []const u8, storage: []schema.SearchMatch) SearchResult {
-        var needle_codepoints: [schema.max_search_needle_bytes]u21 = undefined;
-        var needle_len: usize = 0;
-        var fold = true;
-        var view = std.unicode.Utf8View.initUnchecked(needle);
-        var iterator = view.iterator();
-        while (iterator.nextCodepoint()) |codepoint| {
-            if (needle_len == needle_codepoints.len) {
-                break;
-            }
-            if (codepoint < 0x80 and std.ascii.isUpper(@intCast(codepoint))) {
-                fold = false;
-            }
-            needle_codepoints[needle_len] = codepoint;
-            needle_len += 1;
-        }
-        if (needle_len == 0) {
-            return .{ .count = 0, .truncated = false };
-        }
-
-        const screen: *const vt.Screen = pane.terminal.screens.active;
-        const pages = &screen.pages;
-        const total = pages.total_rows;
-        const first_row: usize = total -| max_search_rows;
-        var count: u8 = 0;
-        var truncated = first_row != 0;
-        var row_codepoints: [max_search_cols]u21 = undefined;
-        var row_columns: [max_search_cols]u16 = undefined;
-
-        var y: usize = first_row;
-        while (y < total) : (y += 1) {
-            const pin = pages.pin(.{ .screen = .{ .x = 0, .y = @intCast(y) } }) orelse continue;
-            const cells = pin.cells(.all);
-            var row_len: usize = 0;
-            for (cells, 0..) |*cell, x| {
-                if (row_len == row_codepoints.len) {
-                    truncated = true;
-                    break;
-                }
-                if (cell.wide == .spacer_tail or cell.wide == .spacer_head) {
-                    continue;
-                }
-                row_codepoints[row_len] = if (cell.hasText()) cell.codepoint() else ' ';
-                row_columns[row_len] = @intCast(x);
-                row_len += 1;
-            }
-
-            var start: usize = 0;
-            while (start + needle_len <= row_len) : (start += 1) {
-                if (!matchesAt(row_codepoints[start .. start + needle_len], needle_codepoints[0..needle_len], fold)) {
-                    continue;
-                }
-                if (count == storage.len) {
-                    return .{ .count = count, .truncated = true };
-                }
-
-                const last_column = row_columns[start + needle_len - 1];
-                storage[count] = .{
-                    .x = row_columns[start],
-                    .y = @intCast(y),
-                    .len = last_column - row_columns[start] + 1,
-                };
-                count += 1;
-                start += needle_len - 1;
-            }
-        }
-
-        return .{ .count = count, .truncated = truncated };
+        std.debug.assert(!pane.ingest_pending);
+        var cursor = TextSearch.init(needle);
+        while (!(cursor.advance(pane) catch unreachable)) {}
+        const count = @min(storage.len, cursor.count);
+        @memcpy(storage[0..count], cursor.matches[0..count]);
+        return .{ .count = @intCast(count), .truncated = cursor.truncated or cursor.count > count };
     }
 
     pub fn key(pane: *const Pane) PaneKey {
@@ -899,6 +825,7 @@ pub const Pane = struct {
         pane.render_state.deinit(gpa);
         pane.history_observer.deinit();
         pane.media_ingestion.prepared_transfers.discardAll(&pane.media_allocator);
+        pane.media_ingestion.transfer_preparation.deinit(&pane.media_allocator);
         pane.media.deinit();
         pane.stream.deinit();
         pane.media_allocator.detach();
@@ -907,7 +834,49 @@ pub const Pane = struct {
         gpa.destroy(pane);
     }
 
+    /// Admits at most 32 ASCII cells on the cursor's resident row. No parser
+    /// continuation, wrapping, style migration, hyperlink or grapheme cleanup
+    /// can enter this path. Ghostty still performs the actual interpretation.
+    /// Call only while holding the VT borrow, before starting its actor.
+    /// Example: `if (pane.canInlineOutput(bytes)) { finishIngestInline(); }`.
+    pub fn canInlineOutput(pane: *const Pane, bytes: []const u8) bool {
+        std.debug.assert(pane.ingest_pending);
+
+        if (bytes.len == 0 or bytes.len > 32 or !pane.stream.ground()) {
+            return false;
+        }
+
+        const terminal = &pane.terminal;
+        const screen = terminal.screens.active;
+        const cursor = &screen.cursor;
+
+        if (terminal.status_display != .main or terminal.modes.get(.insert) or
+            !terminal.modes.get(.wraparound) or cursor.pending_wrap or cursor.hyperlink_id != 0 or
+            screen.charset.single_shift != null or @as(usize, cursor.x) + bytes.len > terminal.scrolling_region.right)
+        {
+            return false;
+        }
+
+        switch (screen.charset.charsets.get(screen.charset.gl)) {
+            .ascii, .utf8 => {},
+            else => return false,
+        }
+
+        const cells: [*]const vt.Cell = @ptrCast(cursor.page_cell);
+
+        for (bytes, cells[0..bytes.len]) |byte, cell| {
+            if (byte < 0x20 or byte > 0x7e or cell.content_tag != .codepoint or
+                cell.wide != .narrow or cell.hyperlink or cell.style_id != cursor.style_id)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     pub fn ingest(pane: *Pane, io: Io, bytes: []const u8) !u64 {
+        pane.search_revision +%= 1;
         const started = diagnostics.now(io);
         {
             const terminal_allocations = diagnostics.enterTerminalAllocations();
@@ -1596,6 +1565,7 @@ pub const Pane = struct {
 
     pub fn applyPendingResize(pane: *Pane) !void {
         const size = pane.pending_size orelse return;
+        pane.search_revision +%= 1;
         {
             const terminal_allocations = diagnostics.enterTerminalAllocations();
             defer terminal_allocations.restore();
@@ -2469,6 +2439,70 @@ test "a child's synchronized-output block holds frames until it closes or expire
     pane.terminal.modes.set(.synchronized_output, false);
     try std.testing.expect(!pane.holdFrames(io));
     try std.testing.expectEqual(@as(?u64, null), pane.sync_hold_started_ns);
+}
+
+test "inline output admits only a bounded simple row run without allocation" {
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+    const gpa = failing.allocator();
+    var pane: Pane = undefined;
+    pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 80, .rows = 4 });
+    defer pane.terminal.deinit(gpa);
+    pane.stream = pane.terminal.vtStream();
+    defer pane.stream.deinit();
+    pane.ingest_pending = true;
+
+    try std.testing.expect(pane.canInlineOutput("~"));
+    for ([_][]const u8{ "", "x" ** 33, "\n", "\x08 \x08", "\x1b[2J", "é" }) |bytes| {
+        try std.testing.expect(!pane.canInlineOutput(bytes));
+    }
+
+    failing.fail_index = failing.alloc_index;
+    failing.resize_fail_index = failing.resize_index;
+    for (0..1000) |_| {
+        pane.stream.nextSlice("\x1b[H");
+        try std.testing.expect(pane.canInlineOutput("~" ** 32));
+        pane.stream.nextSlice("~" ** 32);
+    }
+
+    try std.testing.expect(!failing.has_induced_failure);
+    try std.testing.expectEqual(@as(u21, '~'), pane.terminal.screens.active.cursorCellLeft(1).codepoint());
+}
+
+test "inline output never completes a partial control or UTF-8 sequence" {
+    const gpa = std.testing.allocator;
+    const sequences = [_][]const u8{ "\x1b[31m", "\x1b]2;title\x1b\\", "\x1b_Ga=d\x1b\\", "\xf0\x9f\x98\x80" };
+    for (sequences) |sequence| {
+        for (1..sequence.len) |split| {
+            var pane: Pane = undefined;
+            pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 80, .rows = 4 });
+            defer pane.terminal.deinit(gpa);
+            pane.stream = pane.terminal.vtStream();
+            defer pane.stream.deinit();
+            pane.ingest_pending = true;
+            pane.stream.nextSlice(sequence[0..split]);
+            try std.testing.expect(!pane.canInlineOutput("~"));
+        }
+    }
+}
+
+test "inline output defers wrapping and complex terminal state to its actor" {
+    const gpa = std.testing.allocator;
+    const sequences = [_][]const u8{
+        "\x1b[80G",                          "\x1b[80Gx",                                          "\x1b[4h",     "\x1b[?7l", "\x1b(0",
+        "\x1bN",                             "\x1b[31m",                                           "e\xcc\x81\r",
+        "界\r",
+        "\x1b]8;;https://example.com\x1b\\", "\x1b]8;;https://example.com\x1b\\x\x1b]8;;\x1b\\\r",
+    };
+    for (sequences) |sequence| {
+        var pane: Pane = undefined;
+        pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 80, .rows = 4 });
+        defer pane.terminal.deinit(gpa);
+        pane.stream = pane.terminal.vtStream();
+        defer pane.stream.deinit();
+        pane.ingest_pending = true;
+        pane.stream.nextSlice(sequence);
+        try std.testing.expect(!pane.canInlineOutput("~"));
+    }
 }
 
 test "pane input modes expose child focus reporting" {

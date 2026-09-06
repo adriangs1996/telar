@@ -1271,6 +1271,17 @@ pub const Generation = struct {
             else
                 .{ .resize_pane = parsed_direction };
         }
+        if (std.mem.eql(u8, kind, "scroll-pane")) {
+            try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "direction" }, .path = "action" }, diagnostic);
+            const direction = try requiredStringField(state, .{ .index = absolute, .name = "direction" }, diagnostic);
+            const parsed = std.meta.stringToEnum(action_mod.ScrollDirection, direction) orelse {
+                diagnostic.set("scroll-pane direction must be up or down", .{});
+                return error.InvalidConfig;
+            };
+
+            return .{ .scroll_pane = parsed };
+        }
+
         if (std.mem.eql(u8, kind, "resize-sidebar")) {
             try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "direction" }, .path = "action" }, diagnostic);
             const direction = try requiredStringField(state, .{ .index = absolute, .name = "direction" }, diagnostic);
@@ -1862,6 +1873,31 @@ test "client config rejects invalid resize directions" {
         "resize-pane direction must be left, right, up, or down",
         diagnostic.message(),
     );
+}
+
+test "client config compiles scroll constructors and rejects invalid directions" {
+    const source =
+        \\local telar = require("telar")
+        \\return { api_version = 2, client = { keybindings = {
+        \\  telar.bind({ "u" }, telar.action.scroll_pane({ direction = "up" })),
+        \\  telar.bind({ "d" }, telar.action.scroll_pane({ direction = "down" })),
+        \\} } }
+    ;
+    var diagnostic: Diagnostic = .{};
+    const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
+    defer generation.deinit();
+
+    try std.testing.expectEqualDeep(action_mod.Action{ .scroll_pane = .up }, generation.snapshot.bindings[0].action);
+    try std.testing.expectEqualDeep(action_mod.Action{ .scroll_pane = .down }, generation.snapshot.bindings[1].action);
+
+    const invalid =
+        \\local telar = require("telar")
+        \\return { api_version = 2, client = { keybindings = {
+        \\  telar.bind({ "u" }, telar.action.scroll_pane({ direction = "left" })),
+        \\} } }
+    ;
+    try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = invalid, .source_name = "@config.lua", .number = 2 }));
+    try std.testing.expectEqualStrings("scroll-pane direction must be up or down", diagnostic.message());
 }
 
 test "client config rejects unknown fields without replacing a generation" {

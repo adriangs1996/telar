@@ -1,0 +1,33 @@
+{
+  "measured": {
+    "path": "/tmp/telar-echo/vt-final/bin/telar",
+    "sha256": "2fa00c60ac385810152642a0b42cd2e521cb81370778a2345d4bb8ebb5ca8342",
+    "sections": {
+      "__text": "60a4d599351fed123c7292d0d50a15f8d5d5a0098086b1f4f1521f29a6129be2",
+      "__stubs": "573cbd9ded1b02bd8f49ddc6bf4aa8395205848b5fc28c3a14ca9a6cf46cdd90",
+      "__stub_helper": "327156e7789b6200258d834579900dbd39e4bdba6113858d3d72cfaf08941aea",
+      "__const": "110706101f2171861952b748acb52edceddfbbe32b6840965ca6c8c1fcf9c0d9",
+      "__cstring": "c1a8c4067f1d70500547e9de08bc47c1972057edc22f32a70a6599129accce54",
+      "__gcc_except_tab": "b757a885d43811754ad28772db19d2954b65e7e910bb5755ff58741fdc5cd4fd",
+      "__objc_methname": "2ae3f54e821d60edc1b011be8dd4e117087596edc0625e5b6f6451b0d43da313",
+      "__unwind_info": "81796a684ceab0ca8ec33ccb79138f0d088e52281080b71cbe1b6525ff2e41e7",
+      "__eh_frame": "c0213e0234ef6d146a6d979cd166908c1f193bafa5fcdc26f284d73cf416fe05"
+    }
+  },
+  "delivery": {
+    "path": "/tmp/telar-echo/deliverable/bin/telar",
+    "sha256": "de1243437cadc5f30fd744a1e33f1e604c033caca79aea203401eb10c78c9a67",
+    "sections": {
+      "__text": "60a4d599351fed123c7292d0d50a15f8d5d5a0098086b1f4f1521f29a6129be2",
+      "__stubs": "573cbd9ded1b02bd8f49ddc6bf4aa8395205848b5fc28c3a14ca9a6cf46cdd90",
+      "__stub_helper": "327156e7789b6200258d834579900dbd39e4bdba6113858d3d72cfaf08941aea",
+      "__const": "110706101f2171861952b748acb52edceddfbbe32b6840965ca6c8c1fcf9c0d9",
+      "__cstring": "c1a8c4067f1d70500547e9de08bc47c1972057edc22f32a70a6599129accce54",
+      "__gcc_except_tab": "b757a885d43811754ad28772db19d2954b65e7e910bb5755ff58741fdc5cd4fd",
+      "__objc_methname": "2ae3f54e821d60edc1b011be8dd4e117087596edc0625e5b6f6451b0d43da313",
+      "__unwind_info": "81796a684ceab0ca8ec33ccb79138f0d088e52281080b71cbe1b6525ff2e41e7",
+      "__eh_frame": "c0213e0234ef6d146a6d979cd166908c1f193bafa5fcdc26f284d73cf416fe05"
+    }
+  },
+  "equal_text_sections": true
+}

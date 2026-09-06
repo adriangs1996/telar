@@ -273,6 +273,23 @@ test "client startup validates geometry before request registration" {
     try std.testing.expect(!client.runtime_transport.receive_pending);
 }
 
+test "client startup dispatches buffered host probes before awaiting its first event" {
+    var tty: platform.Tty = undefined;
+    var watcher = try platform.ResizeWatcher.init(&tty);
+    defer watcher.deinit();
+    var harness: TestHarness = undefined;
+    try harness.initWithAsyncOutput(true);
+    defer harness.deinit();
+    const client = harness.client;
+
+    try client_startup.start(client, .{ .resize_watcher = &watcher });
+
+    try std.testing.expect(client.output.?.pending);
+    try std.testing.expectEqual(@as(usize, 0), client.writer.end);
+    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expect(!client.host_negotiation.initial_settled);
+}
+
 test "client startup waits for runtime layout before its initial open" {
     var tty: platform.Tty = undefined;
     var watcher = try platform.ResizeWatcher.init(&tty);

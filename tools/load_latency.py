@@ -109,17 +109,17 @@ def terminate(proc):
             continue
 
 
-def open_telar_floods(master, floods):
+def open_telar_floods(master, floods, consume=drain):
     # Each split focuses the new pane; the flood command goes there, and the
     # final split leaves an idle pane focused for the measurement.
     for index in range(floods):
         os.write(master, TELAR_PREFIX + (b"%" if index % 2 == 0 else b'"'))
-        drain(master, 0.8)
+        consume(master, 0.8)
         os.write(master, FLOOD_COMMAND)
-        drain(master, 0.5)
+        consume(master, 0.5)
     if floods:
         os.write(master, TELAR_PREFIX + (b"%" if floods % 2 == 0 else b'"'))
-        drain(master, 1.0)
+        consume(master, 1.0)
 
 
 def open_tmux_floods(socket_name, floods):

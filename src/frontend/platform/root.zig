@@ -34,6 +34,7 @@ pub const localTime = impl.localTime;
 /// do, and it outlives the process: the settings belong to the device. Every
 /// exit path has to reach `deinit`.
 pub const Tty = impl.Tty;
+pub const FastWriter = impl.FastWriter;
 
 /// Blocks until the terminal changes size.
 ///

@@ -710,14 +710,11 @@ const LuaCallbackContext = struct {
 
     fn init(gpa: std.mem.Allocator, io: Io) !LuaCallbackContext {
         var diagnostic: frontend.config.Diagnostic = .{};
-        const generation = try frontend.config.Generation.loadSource(
-            gpa,
-            io,
-            "local t=require('telar'); return { api_version=2, client={ keybindings={ t.bind_global({'escape'}, function(ctx) return t.action.toggle_sidebar() end) } } }",
-            "@benchmark.lua",
-            1,
-            &diagnostic,
-        );
+        const generation = try frontend.config.Generation.loadSource(.{ .gpa = gpa, .io = io, .diagnostic = &diagnostic }, .{
+            .source = "local t=require('telar'); return { api_version=2, client={ keybindings={ t.bind_global({'escape'}, function(ctx) return t.action.toggle_sidebar() end) } } }",
+            .source_name = "@benchmark.lua",
+            .number = 1,
+        });
         return .{
             .generation = generation,
             .reference = generation.snapshot.bindings[0].action.lua_callback,
@@ -732,17 +729,16 @@ const LuaCallbackContext = struct {
 fn runLuaCallback(context: *LuaCallbackContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |_| {
-        const batch = try context.generation.invokeCallback(
-            context.reference,
-            .{
+        const batch = try context.generation.invokeCallback(.{
+            .reference = context.reference,
+            .context = .{
                 .sidebar_visible = true,
                 .tab_count = 8,
                 .active_tab_index = 3,
                 .pane_count = 4,
                 .focused_pane_id = 7,
             },
-            &context.diagnostic,
-        );
+        }, &context.diagnostic);
         checksum +%= batch.len;
     }
     return checksum;
@@ -777,11 +773,11 @@ const ClientUiContext = struct {
         var tabs = frontend.tabs.Model.init(gpa);
         errdefer tabs.deinit();
         const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-        try tabs.bootstrap(
-            @enumFromInt(1),
-            .{ .workspace = workspace, .tab_id = @enumFromInt(1) },
-            .{ .cols = cols - sidebar_width, .rows = rows - 2 },
-        );
+        try tabs.bootstrap(.{
+            .pane_id = @enumFromInt(1),
+            .location = .{ .workspace = workspace, .tab_id = @enumFromInt(1) },
+            .size = .{ .cols = cols - sidebar_width, .rows = rows - 2 },
+        });
         for (1..tab_count) |index| {
             var label_buffer: [schema.max_tab_label_bytes]u8 = undefined;
             const label = try std.fmt.bufPrint(&label_buffer, "tab-{d}", .{index + 1});
@@ -853,9 +849,9 @@ fn runPacer(context: *PacerContext, iterations: usize) !u64 {
     for (0..iterations) |_| {
         if (context.pacer.waitUntil(context.now_ns)) |deadline_ns| {
             context.now_ns = deadline_ns + 2 * std.time.ns_per_ms;
-            context.pacer.record(context.now_ns, deadline_ns, 1);
+            context.pacer.record(.{ .now = context.now_ns, .scheduled_deadline = deadline_ns, .absorbed = 1 });
         } else {
-            context.pacer.record(context.now_ns, null, 1);
+            context.pacer.record(.{ .now = context.now_ns, .scheduled_deadline = null, .absorbed = 1 });
         }
         checksum +%= context.pacer.anchor_ns.?;
     }
@@ -869,9 +865,9 @@ const LayoutContext = struct {
     fn init() !LayoutContext {
         var context: LayoutContext = .{};
         try context.layout.addRoot(@enumFromInt(1));
-        try context.layout.split(@enumFromInt(1), @enumFromInt(2), .horizontal);
-        try context.layout.split(@enumFromInt(1), @enumFromInt(3), .vertical);
-        try context.layout.split(@enumFromInt(2), @enumFromInt(4), .vertical);
+        try context.layout.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .axis = .horizontal });
+        try context.layout.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(3), .axis = .vertical });
+        try context.layout.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(4), .axis = .vertical });
         return context;
     }
 };
@@ -909,14 +905,14 @@ const MultiplexerContext = struct {
             .workspace = .{ .workspace = @enumFromInt(1) },
             .tab_id = @enumFromInt(1),
         };
-        try model.addRoot(@enumFromInt(1), location, .{ .cols = cols, .rows = rows });
+        try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = cols, .rows = rows } });
         const area: core.ui.Rect = .{ .w = cols, .h = rows };
-        try model.split(@enumFromInt(1), @enumFromInt(2), location, .horizontal, area);
-        try model.split(@enumFromInt(1), @enumFromInt(3), location, .vertical, area);
-        try model.split(@enumFromInt(2), @enumFromInt(4), location, .vertical, area);
+        try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
+        try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(3), .location = location, .axis = .vertical, .area = area });
+        try model.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(4), .location = location, .axis = .vertical, .area = area });
         for (&model.panes) |*slot| {
             const pane = if (slot.*) |*value| value else continue;
-            pane.buffer.setCell(0, 0, "x", 1, .{});
+            pane.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x" });
         }
         const screen = try frontend.term.Screen.init(gpa, cols, rows);
         return .{ .model = model, .screen = screen, .compositor = .init(gpa) };
@@ -952,7 +948,7 @@ const IncrementalComposeContext = struct {
             .workspace = .{ .workspace = @enumFromInt(1) },
             .tab_id = @enumFromInt(1),
         };
-        try model.addRoot(@enumFromInt(1), location, .{ .cols = cols, .rows = rows });
+        try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = cols, .rows = rows } });
         var screen = try frontend.term.Screen.init(gpa, cols, rows);
         errdefer screen.deinit();
         var compositor = frontend.multiplexer.Compositor.init(gpa);
@@ -999,10 +995,11 @@ const GraphicsContext = struct {
         var model = frontend.multiplexer.Model.init(gpa);
         errdefer model.deinit();
         const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.addRoot(pane_id, .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        }, .{ .cols = cols, .rows = rows });
+        try model.addRoot(.{
+            .pane_id = pane_id,
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
+            .size = .{ .cols = cols, .rows = rows },
+        });
         const metadata: core.graphics.Image = .{
             .key = .{ .image_id = 1, .generation = 1 },
             .format = .rgba,
@@ -1098,10 +1095,11 @@ const TransmitContext = struct {
         var model = frontend.multiplexer.Model.init(gpa);
         errdefer model.deinit();
         const pane_id: schema.PaneId = @enumFromInt(1);
-        try model.addRoot(pane_id, .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        }, .{ .cols = cols, .rows = rows });
+        try model.addRoot(.{
+            .pane_id = pane_id,
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
+            .size = .{ .cols = cols, .rows = rows },
+        });
 
         // Browser-frame shape: flat fills, a gradient, and a text-like band
         // of sparse noise. Pure random would defeat the zlib variant, pure
@@ -1484,9 +1482,9 @@ fn runTextRaster(context: *TextRasterContext, iterations: usize) !u64 {
     };
     var checksum: u64 = 0;
     for (0..iterations) |_| {
-        checksum +%= try context.rasterizer.drawText(surface, 20, 18, "Build complete", color, 420);
-        checksum +%= try context.rasterizer.drawText(surface, 20, 38, "Open the rendered result", color, 420);
-        checksum +%= try context.rasterizer.drawText(surface, 20, 58, "click to open", color, 420);
+        checksum +%= try context.rasterizer.drawText(.{ .surface = surface, .origin = .{ .x = 20, .y = 18 }, .text = "Build complete", .color = color, .max_width = 420 });
+        checksum +%= try context.rasterizer.drawText(.{ .surface = surface, .origin = .{ .x = 20, .y = 38 }, .text = "Open the rendered result", .color = color, .max_width = 420 });
+        checksum +%= try context.rasterizer.drawText(.{ .surface = surface, .origin = .{ .x = 20, .y = 58 }, .text = "click to open", .color = color, .max_width = 420 });
     }
     return checksum +% context.pixels[context.pixels.len / 2];
 }

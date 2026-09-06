@@ -986,21 +986,20 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
             }
         }
         if (transfer.shared_name == null) {
-            if (!pane.media_allocator.reserveManual(pixels.len)) {
-                return error.GraphicsQuotaExceeded;
-            }
-            errdefer pane.media_allocator.releaseManual(pixels.len);
-            const freeze_started = core.diagnostics.now(pane.io);
-            defer if (comptime core.diagnostics.enabled) {
-                attachment.graphics.freeze.observe(
-                    core.diagnostics.elapsed(freeze_started, core.diagnostics.now(pane.io)),
-                );
-            };
-            if (attachment.graphics.shared_transport) {
-                transfer.shared_name = graphics.freezeSharedPixels(pixels);
-            }
-            if (transfer.shared_name == null) {
-                transfer.pixels = try attachment.graphics.gpa.dupe(u8, pixels);
+            const request: @TypeOf(pane.media_ingestion.transfer_preparation).Input = .{ .key = key, .shared_transport = attachment.graphics.shared_transport, .allocator = attachment.graphics.gpa };
+            if (try pane.media_ingestion.transfer_preparation.take(request)) |frozen| {
+                transfer.shared_name = frozen.name;
+                transfer.pixels = frozen.pixels;
+                transfer.reserved_len = frozen.reserved_len;
+                attachment.graphics.adopted +|= 1;
+            } else {
+                if (pane.media_ingestion.transfer_preparation.request(request)) {
+                    // An empty output event wakes the existing single-flight
+                    // media actor without parsing or copying image bytes here.
+                    pane.queueMediaOutput(&.{});
+                }
+
+                return .blocked;
             }
         }
         attachment.graphics.credit -= pixels.len;
@@ -1374,6 +1373,8 @@ test "graphics transfers wait for pane and client memory credit" {
     try std.testing.expect(try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = 3, .live_storage_available = true }) == null);
     try std.testing.expect(attachment.graphics.transfer == null);
 
+    try std.testing.expect(try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = 4, .live_storage_available = true }) == null);
+    @import("../tests/support.zig").processMediaTurn(pane);
     const payload = (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = 4, .live_storage_available = true })).?;
     try std.testing.expect((try schema.decodeServer(payload)) == .graphics_image);
     try std.testing.expectEqual(@as(usize, 0), attachment.graphics.credit);
@@ -1439,8 +1440,9 @@ test "a staged transfer drains while the media actor stays busy" {
         (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = credit, .live_storage_available = true })).?,
     )) == .graphics_snapshot);
 
-    // The runtime stages at its media-idle boundary; the send loop then
-    // drains the frozen copy while the media actor is busy again.
+    // The media actor prepares the copy; runtime staging only adopts it.
+    try std.testing.expectEqual(StageResult.blocked, try stageNextTransfer(&attachment, credit));
+    @import("../tests/support.zig").processMediaTurn(pane);
     try std.testing.expectEqual(StageResult.staged, try stageNextTransfer(&attachment, credit));
     try std.testing.expect(attachment.graphics.transfer != null);
     try std.testing.expect((try schema.decodeServer(
@@ -1606,6 +1608,8 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
     try std.testing.expect((try schema.decodeServer(
         (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = core.graphics.max_image_bytes_global, .live_storage_available = true })).?,
     )) == .graphics_snapshot);
+    try std.testing.expect(try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = core.graphics.max_image_bytes_global, .live_storage_available = true }) == null);
+    @import("../tests/support.zig").processMediaTurn(pane);
     const message = (try schema.decodeServer(
         (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = core.graphics.max_image_bytes_global, .live_storage_available = true })).?,
     )).graphics_shared_image;

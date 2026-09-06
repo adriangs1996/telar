@@ -33,8 +33,10 @@ pub const Session = struct {
     last_input_sequence: u64 = 0,
     pending_pane_focus: ?PendingPaneFocus = null,
     terminal_colors: core.schema.TerminalColors = .{},
+    pending_search: ?@import("../application/pane_search.zig").Pending = null,
+    search_scheduled: bool = false,
 
-    /// Example: `if (session.setTerminalColors(colors)) updateOwnedPanes();`.
+    /// Example: `if (session.setTerminalColors(colors)) { updateOwnedPanes(); }`.
     pub fn setTerminalColors(session: *Session, colors: core.schema.TerminalColors) bool {
         if (std.meta.eql(session.terminal_colors, colors)) {
             return false;

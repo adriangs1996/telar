@@ -175,6 +175,8 @@ pub fn build(b: *std.Build) void {
     ) orelse false;
     const exe_options = b.addOptions();
     exe_options.addOption(bool, "diagnostics", diagnostics_enabled);
+    exe_options.addOption(bool, "echo_trace", b.option(bool, "echo-trace", "Record bounded echo phase timestamps until shutdown") orelse false);
+    exe_options.addOption(bool, "echo_trace_cpu", b.option(bool, "echo-trace-cpu", "Include thread CPU clocks in diagnostic echo traces") orelse false);
     exe.root_module.addOptions("build_options", exe_options);
     b.installArtifact(exe);
 
@@ -197,6 +199,12 @@ pub fn build(b: *std.Build) void {
     else
         optimize;
     const bench_lua_api = addLua(b, .{ .target = target, .optimize = bench_optimize, .name = "lua-bench" });
+    const bench_lua = b.createModule(.{
+        .root_source_file = b.path("src/lua/root.zig"),
+        .target = target,
+        .optimize = bench_optimize,
+    });
+    bench_lua.addImport("lua-api", bench_lua_api);
     const bench_unicode = b.createModule(.{
         .root_source_file = b.path("src/core/unicode.zig"),
         .target = target,
@@ -218,6 +226,7 @@ pub fn build(b: *std.Build) void {
     bench_backend.addImport("telar-core", bench_core);
     bench_backend.addImport("ghostty-vt", ghostty_vt);
     bench_backend.addImport("tls", tls);
+    bench_backend.addImport("telar-lua", bench_lua);
     bench_backend.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "include" }) });
     bench_backend.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ nghttp2_prefix, "lib" }) });
     bench_backend.linkSystemLibrary("nghttp2", .{});
@@ -240,6 +249,7 @@ pub fn build(b: *std.Build) void {
     bench_frontend.addImport("telar-core", bench_core);
     bench_frontend.addImport("kitty_protocol", bench_kitty_protocol);
     bench_frontend.addImport("lua-api", bench_lua_api);
+    bench_frontend.addImport("telar-lua", bench_lua);
     bench_frontend.addImport("freetype", bench_freetype);
 
     const benchmarks = b.addExecutable(.{
@@ -254,6 +264,22 @@ pub fn build(b: *std.Build) void {
     benchmarks.root_module.addImport("telar-core", bench_core);
     benchmarks.root_module.addImport("telar-backend", bench_backend);
     benchmarks.root_module.addImport("telar-frontend", bench_frontend);
+
+    const echo_probe = b.addExecutable(.{
+        .name = "echo-probe",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("benchmarks/echo_probe.zig"),
+            .target = target,
+            .optimize = bench_optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "ghostty-vt", .module = ghostty_vt },
+                .{ .name = "telar-backend", .module = bench_backend },
+                .{ .name = "telar-frontend", .module = bench_frontend },
+            },
+        }),
+    });
+    b.step("echo-probe", "Build the echo VT oracle and minimal interposition controls").dependOn(&b.addInstallArtifact(echo_probe, .{}).step);
     benchmarks.root_module.addImport("ghostty-vt", ghostty_vt);
     const run_benchmarks = b.addRunArtifact(benchmarks);
     if (b.args) |args| {
@@ -410,6 +436,17 @@ pub fn build(b: *std.Build) void {
         "test-backend-proxy",
         "Run the runtime observation proxy tests",
     );
+    const isolation_tests = b.addTest(.{ .root_module = backend, .filters = &.{"performance probe"} });
+    const isolation_step = b.step("test-isolation", "Measure bounded search, graphics staging and history query work");
+    const isolation_run = b.addRunArtifact(isolation_tests);
+    isolation_run.has_side_effects = true;
+    isolation_step.dependOn(&isolation_run.step);
+    const compression_tests = b.addTest(.{ .root_module = frontend, .filters = &.{"performance probe"} });
+    const compression_run = b.addRunArtifact(compression_tests);
+    compression_run.has_side_effects = true;
+    const compression_step = b.step("test-compression-isolation", "Measure compression work outside presentation turns");
+    compression_step.dependOn(&compression_run.step);
+
     const transport_test_step = b.step("test-transport", "Run the local transport tests");
     const schema_test_step = b.step("test-schema", "Run the shared protocol schema tests");
     const frontend_test_step = b.step("test-frontend", "Run the frontend package tests");

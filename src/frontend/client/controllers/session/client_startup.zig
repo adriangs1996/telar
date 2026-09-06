@@ -13,6 +13,7 @@ const host_capabilities = @import("../host/host_capabilities.zig");
 const host_resizes = @import("../host/host_resizes.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const host_inputs = @import("../input/host_inputs.zig");
+const presentation_lifecycle = @import("../../presentation/presentation_lifecycle.zig");
 
 pub const State = struct {
     phase: enum { inactive, probing, opening, active } = .inactive,
@@ -40,6 +41,8 @@ pub fn start(client: *Client, request: Request) !void {
         return error.TerminalTooSmall;
     client.startup.phase = .probing;
     try host_capabilities.begin(client);
+    // No socket completion can drive output while startup waits for colors.
+    try presentation_lifecycle.pumpOutput(client);
     try host_inputs.scheduleRead(client);
 
     try host_resizes.schedule(client, request.resize_watcher);

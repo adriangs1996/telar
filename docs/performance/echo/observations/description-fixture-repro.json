@@ -1,0 +1,19 @@
+[
+  {
+    "fixture": "previous",
+    "parent_delay_ms": 50,
+    "input_error": {
+      "errno": 32,
+      "name": "BrokenPipeError"
+    },
+    "returncode": 0,
+    "stdout": "first\nsecond\n"
+  },
+  {
+    "fixture": "draining",
+    "parent_delay_ms": 50,
+    "input_error": null,
+    "returncode": 0,
+    "stdout": "first\nsecond\n"
+  }
+]

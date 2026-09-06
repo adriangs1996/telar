@@ -11,6 +11,15 @@ const telemetry_mod = @import("../observability/root.zig").telemetry;
 
 const schema = core.schema;
 
+/// Executes a media actor synchronously in a fixture, preserving borrow order.
+/// Example: `processMediaTurn(pane);`.
+pub fn processMediaTurn(pane: *pane_mod.Pane) void {
+    const borrow = pane.beginMediaProcessing() orelse return;
+    var stats: @import("../../media/root.zig").Stats = .{};
+    pane.processMedia(borrow.current_size, &stats);
+    pane.completeMediaProcessing();
+}
+
 pub const PaneFixture = struct {
     pub const initial_size: schema.TerminalSize = .{ .cols = 20, .rows = 5 };
     pub const location: schema.TabLocation = .{
@@ -123,6 +132,12 @@ pub const PaneFixture = struct {
     /// ```zig
     /// try fixture.addRgbaImage(7);
     /// ```
+    /// Executes a queued media turn deterministically, with the production borrow.
+    /// Example: `fixture.processMedia();`.
+    pub fn processMedia(fixture: *PaneFixture) void {
+        processMediaTurn(fixture.pane);
+    }
+
     pub fn addRgbaImage(fixture: *PaneFixture, image_id: u32) !void {
         const media = fixture.pane.media_allocator.allocator();
         const pixels = try media.dupe(u8, &[_]u8{ 1, 2, 3, 255 });

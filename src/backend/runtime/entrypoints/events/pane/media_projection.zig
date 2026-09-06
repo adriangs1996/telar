@@ -46,6 +46,7 @@ pub fn synchronize(pane: *Pane, stores: []const *AttachmentStore, media_reset: b
         }
     }
     discardUnwanted(pane, stores);
+    pane.media_ingestion.transfer_preparation.retain(Consumers{ .pane_id = pane.id, .stores = stores }, &pane.media_allocator);
 
     return stats;
 }
@@ -82,6 +83,30 @@ fn wanted(key: core.graphics.ImageKey, pane_id: core.schema.PaneId, stores: []co
     }
     return false;
 }
+
+const Consumers = struct {
+    pane_id: core.schema.PaneId,
+    stores: []const *AttachmentStore,
+
+    /// Example: `const needed = consumers.wants(key, true);`.
+    pub fn wants(consumers: Consumers, key: core.graphics.ImageKey, shared: bool) bool {
+        for (consumers.stores) |store| {
+            const attachment = store.find(consumers.pane_id) orelse continue;
+            if (attachment.graphics.shared_transport != shared or attachment_mod.knowsImage(attachment, key)) {
+                continue;
+            }
+            if (attachment.graphics.transfer) |transfer| {
+                if (std.meta.eql(transfer.metadata.key, key)) {
+                    continue;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+};
 
 fn objectExists(name: core.graphics.ShmName) bool {
     const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
@@ -213,6 +238,44 @@ test "parked generations every client already knows are released at synchronizat
     try std.testing.expectEqual(used_before, fixture.pane.media_allocator.used);
 }
 
+test "detach releases a parked fallback and its quota before another consumer arrives" {
+    var fixture: test_support.PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    try fixture.addRgbaImage(63);
+    fixture.pane.refreshGraphicsProjection();
+    const stores = [_]*AttachmentStore{&fixture.attachments};
+    _ = synchronize(fixture.pane, &stores, false);
+    fixture.processMedia();
+    const parked_bytes = fixture.pane.media_allocator.used;
+    try std.testing.expect(fixture.pane.media_ingestion.transfer_preparation.entries[0] != null);
+    _ = fixture.attachments.detach(fixture.pane.id);
+    _ = synchronize(fixture.pane, &stores, false);
+    try std.testing.expectEqual(parked_bytes - 4, fixture.pane.media_allocator.used);
+    for (fixture.pane.media_ingestion.transfer_preparation.entries) |entry| {
+        try std.testing.expect(entry == null);
+    }
+}
+
+test "missing generations release all bounded transfer request slots" {
+    var fixture: test_support.PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    const queue = &fixture.pane.media_ingestion.transfer_preparation;
+    for (0..8) |index| {
+        try std.testing.expect(queue.request(.{
+            .key = .{ .image_id = @intCast(index + 1), .generation = 99 },
+            .shared_transport = false,
+            .allocator = std.testing.allocator,
+        }));
+    }
+    try std.testing.expect(!queue.request(.{ .key = .{ .image_id = 99, .generation = 99 }, .shared_transport = false, .allocator = std.testing.allocator }));
+    queue.process(&fixture.pane.media.terminal.screens.active.kitty_images, &fixture.pane.media_allocator);
+    for (queue.entries) |entry| {
+        try std.testing.expect(entry == null);
+    }
+}
+
 test "a media reset invalidates every attached client before staging" {
     var fixture: test_support.PaneFixture = .{};
     try fixture.init();
@@ -239,6 +302,8 @@ test "one idle-boundary pass freezes at most one transfer per client" {
     fixture.pane.refreshGraphicsProjection();
     const stores = [_]*AttachmentStore{&fixture.attachments};
 
+    try std.testing.expectEqual(@as(u64, 0), synchronize(fixture.pane, &stores, false).staged);
+    fixture.processMedia();
     const first = synchronize(fixture.pane, &stores, false);
     const second = synchronize(fixture.pane, &stores, false);
 
@@ -256,6 +321,8 @@ test "a failed freeze abandons only its client graphics projection" {
     fixture.pane.refreshGraphicsProjection();
     fixture.failNextAttachmentAllocation();
     const stores = [_]*AttachmentStore{&fixture.attachments};
+    _ = synchronize(fixture.pane, &stores, false);
+    fixture.processMedia();
 
     const stats = synchronize(fixture.pane, &stores, false);
 

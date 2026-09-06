@@ -8,6 +8,41 @@ const test_support = @import("support.zig");
 const schema = core.schema;
 const PaneFixture = test_support.PaneFixture;
 
+test "search turns are bounded, wait for VT ownership and reject changed history" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    for (0..100) |_| {
+        _ = try fixture.pane.ingest(std.testing.io, "aaaaab\r\n");
+    }
+    const Cursor = @import("../../pane/root.zig").TextSearch;
+    var cursor = Cursor.init("missing");
+    fixture.pane.ingest_pending = true;
+    try std.testing.expect(!try cursor.advance(fixture.pane));
+    try std.testing.expect(cursor.revision == null);
+    fixture.pane.ingest_pending = false;
+    try std.testing.expect(!try cursor.advance(fixture.pane));
+    try std.testing.expectEqual(@as(usize, Cursor.rows_per_turn), cursor.next_row);
+    _ = try fixture.pane.ingest(std.testing.io, "changed");
+    try std.testing.expectError(error.SearchInvalidated, cursor.advance(fixture.pane));
+}
+
+test "linear search preserves non-overlap and wide-cell coordinates" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    _ = try fixture.pane.ingest(std.testing.io, "aaaaa\r\n界x界x");
+    var handler: search_commands.SearchPaneHandler = .{ .attachments = &fixture.attachments };
+    const ascii = handler.execute(.{ .pane_id = fixture.pane.id, .needle = "aa" }).found;
+    try std.testing.expectEqual(@as(u8, 2), ascii.count);
+    try std.testing.expectEqual(@as(u16, 0), ascii.items[0].x);
+    try std.testing.expectEqual(@as(u16, 2), ascii.items[1].x);
+    const wide = handler.execute(.{ .pane_id = fixture.pane.id, .needle = "x界" }).found;
+    try std.testing.expectEqual(@as(u8, 1), wide.count);
+    try std.testing.expectEqual(@as(u16, 2), wide.items[0].x);
+    try std.testing.expectEqual(@as(u16, 2), wide.items[0].len);
+}
+
 test "search finds matches in document order with absolute rows and folds ASCII case" {
     var fixture: PaneFixture = .{};
     try fixture.init();

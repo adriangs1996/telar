@@ -465,6 +465,44 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
 }
 
+test "native scroll actions reuse bounded viewport delivery without forwarding input" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
+    const version = client.model.version();
+    const pending_updates = client.presenter.pending_updates;
+
+    for (0..4) |_| {
+        _ = try client_actions.apply(client, try input_capability.action.Action.parse("scroll-pane-up"));
+    }
+
+    try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
+    _ = try client_actions.apply(client, .{ .scroll_pane = .up });
+
+    for (0..4) |_| {
+        _ = try client_actions.apply(client, try input_capability.action.Action.parse("scroll-pane-down"));
+    }
+
+    _ = try client_actions.apply(client, .{ .scroll_pane = .down });
+    try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
+    try std.testing.expectEqual(version.viewport + 8, client.model.version().viewport);
+    try expectNonViewportVersionEqual(version, client.model.version());
+    try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    for ([_]u32{ 7, 4, 1, 0, 3, 6, 9, 10 }) |offset| {
+        const message = try harness.nextClientMessage(&buffer);
+        try std.testing.expect(message == .set_pane_viewport);
+        try std.testing.expectEqual(pane.id, message.set_pane_viewport.pane_id);
+        try std.testing.expectEqual(offset, message.set_pane_viewport.offset);
+    }
+}
+
 test "a full outbox preserves the committed pane viewport and rejects input" {
     var harness: TestHarness = undefined;
     try harness.init();

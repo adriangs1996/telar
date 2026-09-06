@@ -57,6 +57,7 @@ pub fn handle(client: *Client, event: Event, resources: Resources) !Outcome {
 
             try client_layouts.observe(client);
             try presentation_lifecycle.observe(client);
+            try presentation_lifecycle.pumpOutput(client);
         },
         .exit => |status| return .{ .exit = status },
     }
@@ -94,6 +95,11 @@ fn route(client: *Client, event: Event, resources: Resources) !Outcome {
         .sent => |result| try runtime_transport.handleSent(client, result),
         .draw => |result| try presentation_lifecycle.handleDraw(client, result),
         .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
+        .host_written => |result| try presentation_lifecycle.handleWritten(client, result),
+        .compression_done => |job| {
+            client.graphics_store.completeCompression(job);
+            try client.presenter.requestMedia();
+        },
         .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),
         .notification_tick => |result| _ = try notifications.handleTick(client, result),
         .bar_tick => |result| try bar_updates.handleTick(client, result),
@@ -127,7 +133,8 @@ fn pathFor(tag: EventTag) diagnostics.Path {
         .draw,
         .sidebar_animation_tick,
         => .interactive,
-        .media_tick, .clipboard_image => .media,
+        .host_written => .interactive,
+        .media_tick, .clipboard_image, .compression_done => .media,
         .notification_tick,
         .bar_tick,
         .bar_command,
@@ -144,6 +151,7 @@ fn pathFor(tag: EventTag) diagnostics.Path {
 
 test "client event paths preserve interactive media and observation budgets" {
     const interactive = [_]EventTag{
+        .host_written,
         .input,
         .input_timeout,
         .binding_timeout,
@@ -154,7 +162,7 @@ test "client event paths preserve interactive media and observation budgets" {
         .draw,
         .sidebar_animation_tick,
     };
-    const media = [_]EventTag{ .media_tick, .clipboard_image };
+    const media = [_]EventTag{ .media_tick, .clipboard_image, .compression_done };
     const observation = [_]EventTag{
         .notification_tick,
         .bar_tick,

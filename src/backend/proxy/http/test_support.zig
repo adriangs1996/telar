@@ -13,6 +13,8 @@ pub const FakeSession = struct {
     child_output_len: usize = 0,
     origin_output: [max_output_bytes]u8 = undefined,
     origin_output_len: usize = 0,
+    write_calls: usize = 0,
+    fail_write_at: ?usize = null,
 
     pub fn read(fake: *FakeSession, side: tls.Session.Side, buffer: []u8) ?usize {
         const input, const offset = switch (side) {
@@ -31,6 +33,12 @@ pub const FakeSession = struct {
     }
 
     pub fn writeAll(fake: *FakeSession, side: tls.Session.Side, bytes: []const u8) bool {
+        const index = fake.write_calls;
+        fake.write_calls += 1;
+        if (fake.fail_write_at == index) {
+            return false;
+        }
+
         const output, const len = switch (side) {
             .child => .{ &fake.child_output, &fake.child_output_len },
             .origin => .{ &fake.origin_output, &fake.origin_output_len },

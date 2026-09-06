@@ -1,0 +1,24 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "results": [
+    {
+      "mode": "send",
+      "timed_out": true,
+      "stdout": "{\"flags\": 524416, \"fd_flags\": 2}\n{\"completed\": 1, \"last_bytes\": 68}\n{\"completed\": 11, \"last_bytes\": 68}\n{\"completed\": 21, \"last_bytes\": 68}\n{\"completed\": 31, \"last_bytes\": 68}\n{\"completed\": 41, \"last_bytes\": 68}\n{\"completed\": 51, \"last_bytes\": 68}\n",
+      "stderr": ""
+    },
+    {
+      "mode": "sendmsg",
+      "timed_out": true,
+      "stdout": "{\"flags\": 524416, \"fd_flags\": 2}\n{\"completed\": 1, \"last_bytes\": 68}\n{\"completed\": 11, \"last_bytes\": 68}\n{\"completed\": 21, \"last_bytes\": 68}\n{\"completed\": 31, \"last_bytes\": 68}\n{\"completed\": 41, \"last_bytes\": 68}\n{\"completed\": 51, \"last_bytes\": 68}\n",
+      "stderr": ""
+    },
+    {
+      "mode": "nonblocking-fd",
+      "timed_out": false,
+      "returncode": 0,
+      "stdout": "{\"flags\": 524416, \"fd_flags\": 6}\n{\"completed\": 1, \"last_bytes\": 68}\n{\"completed\": 11, \"last_bytes\": 68}\n{\"completed\": 21, \"last_bytes\": 68}\n{\"completed\": 31, \"last_bytes\": 68}\n{\"completed\": 41, \"last_bytes\": 68}\n{\"completed\": 51, \"last_bytes\": 68}\n{\"would_block\": true, \"completed\": 60}\n",
+      "stderr": ""
+    }
+  ]
+}

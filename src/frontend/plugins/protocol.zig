@@ -22,7 +22,7 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
             try writer.writeByte(2);
             try writer.writeByte(@intFromEnum(value));
         },
-        .navigate_pane => return error.InvalidWorkerEffect,
+        .navigate_pane, .scroll_pane => return error.InvalidWorkerEffect,
         .resize_pane => |value| {
             try writer.writeByte(12);
             try writer.writeByte(@intFromEnum(value));
@@ -244,6 +244,15 @@ test "plugin result protocol round trips semantic effects" {
     batch.len = 9;
     var buffer: [max_bytes]u8 = undefined;
     try std.testing.expectEqualDeep(batch, try decode(try encode(&buffer, &batch)));
+}
+
+test "plugin result protocol rejects client-only scrolling effects" {
+    var batch: lua_config.EffectBatch = .{};
+    batch.items[0] = .{ .scroll_pane = .up };
+    batch.len = 1;
+    var buffer: [max_bytes]u8 = undefined;
+
+    try std.testing.expectError(error.InvalidWorkerEffect, encode(&buffer, &batch));
 }
 
 test "plugin result protocol rejects invalid enum discriminants" {

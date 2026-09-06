@@ -15,6 +15,7 @@ pub const fuzzy = @import("fuzzy.zig");
 pub const link = @import("link.zig");
 pub const endpoint = transport.endpoint;
 pub const diagnostics = @import("diagnostics.zig");
+pub const echo_trace = @import("echo_trace.zig");
 pub const graphics = @import("graphics.zig");
 pub const plugin = @import("plugin.zig");
 pub const fixed_index = @import("fixed_index.zig");

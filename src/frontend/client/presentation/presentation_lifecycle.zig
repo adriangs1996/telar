@@ -40,11 +40,33 @@ pub fn handleDraw(client: *Client, result: anyerror!void) !void {
 /// try presentation_lifecycle.presentNow(client);
 /// ```
 pub fn presentNow(client: *Client) !void {
+    core.echo_trace.mark(client.io, .compose_start);
+    if (client.output) |*output| {
+        if (output.pending) {
+            output.draw_deferred = true;
+            return;
+        }
+
+        try output.prepareFrame(@as(usize, client.presenter.screen.back.w) * client.presenter.screen.back.h);
+    }
+
     const delivery = try client.presenter.presentDue(
         presentation_projection.projection(client),
         presentation_projection.resources(client),
     ) orelse return;
 
+    if (client.output) |*output| {
+        if (output.writer.end != 0) {
+            output.delivery = delivery;
+            try pumpOutput(client);
+            return;
+        }
+    }
+
+    try deliver(client, delivery);
+}
+
+fn deliver(client: *Client, delivery: @import("presenter.zig").Delivery) !void {
     var use_case: presentation_delivery.DeliverPresentationHandler = .{
         .model = &client.model,
         .effects = deliveryEffects(client),
@@ -63,10 +85,55 @@ pub fn presentNow(client: *Client) !void {
 /// ```
 pub fn handleMediaTick(client: *Client, result: anyerror!void) !void {
     try client.presenter.completeMediaTick(result);
+    if (client.output) |*output| {
+        if (output.pending) {
+            output.media_deferred = true;
+            return;
+        }
+
+        try output.prepareFrame(@as(usize, client.presenter.screen.back.w) * client.presenter.screen.back.h);
+    }
+
     try client.presenter.presentMedia(
         presentation_projection.projection(client),
         presentation_projection.resources(client),
     );
+}
+
+/// Starts one host write without lending model or presentation state.
+/// Example: `try pumpOutput(client);`.
+pub fn pumpOutput(client: *Client) anyerror!void {
+    const output = if (client.output) |*output| output else return;
+    const pending = output.begin() orelse return;
+    core.echo_trace.mark(client.io, .host_flush_start);
+    const work = try output.tryWrite(pending);
+    if (work.bytes.len == 0) {
+        try handleWritten(client, {});
+        return;
+    }
+
+    try client.select.concurrent(.host_written, @import("../resources/host_output.zig").Output.write, .{work});
+}
+
+/// Commits only the presentation whose bytes reached the host, then folds work.
+/// Example: `try handleWritten(client, result);`.
+pub fn handleWritten(client: *Client, result: anyerror!void) !void {
+    core.echo_trace.mark(client.io, .host_flush_done);
+    const output = if (client.output) |*output| output else unreachable;
+    if (try output.complete(result)) |delivery| {
+        try deliver(client, delivery);
+    }
+
+    if (output.draw_deferred) {
+        output.draw_deferred = false;
+        try client.presenter.requestDraw();
+    }
+    if (output.media_deferred) {
+        output.media_deferred = false;
+        try client.presenter.requestMedia();
+    }
+
+    try pumpOutput(client);
 }
 
 fn deliveryEffects(client: *Client) presentation_delivery.Effects {

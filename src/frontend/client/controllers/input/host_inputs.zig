@@ -1,6 +1,7 @@
 //! Owns one client's host-TTY read, native router and replaceable deadlines.
 
 const std = @import("std");
+const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
 const lua_config = @import("../../../config/root.zig");
 const widgets = @import("../../../widgets/root.zig");
@@ -181,6 +182,7 @@ pub fn scheduleRead(client: *Client) !void {
 /// if (try host_inputs.handleOwnedRead(client, result)) return 0;
 /// ```
 pub fn handleOwnedRead(client: *Client, result: anyerror!u16) !bool {
+    core.echo_trace.mark(client.io, .client_input);
     const state = &client.host_input;
     state.read_pending = false;
     state.chunk.len = try result;
@@ -346,7 +348,9 @@ fn synchronizeBindingTimeout(client: *Client) !void {
 }
 
 fn read(io: Io, file: File, chunk: *Chunk) anyerror!u16 {
-    return @intCast(try file.readStreaming(io, &.{&chunk.bytes}));
+    const length = try file.readStreaming(io, &.{&chunk.bytes});
+    core.echo_trace.mark(io, .host_read);
+    return @intCast(length);
 }
 
 test "host input configuration owns router timeouts" {

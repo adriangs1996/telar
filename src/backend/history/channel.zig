@@ -122,6 +122,17 @@ pub const Channel = struct {
         return request;
     }
 
+    /// Drains a bounded batch, waiting only for its first request.
+    /// Example: `const count = try channel.receiveBatch(io, .{ .items = &items, .metrics = metrics });`.
+    pub fn receiveBatch(channel: *Channel, io: std.Io, batch: struct { items: []model.Request, metrics: *metrics_mod.Counters }) !usize {
+        const count = try channel.requests.get(io, batch.items, 1);
+        for (0..count) |_| {
+            batch.metrics.completeDequeue();
+        }
+
+        return count;
+    }
+
     /// Transfers one owned response to the bounded consumer queue.
     ///
     /// ```zig

@@ -203,6 +203,11 @@ pub const TestHarness = struct {
     client: *Client,
 
     pub fn init(harness: *TestHarness) !void {
+        try harness.initWithAsyncOutput(false);
+    }
+
+    /// Example: `try harness.initWithAsyncOutput(true);`.
+    pub fn initWithAsyncOutput(harness: *TestHarness, async_output: bool) !void {
         var sockets: [2]std.c.fd_t = undefined;
         if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0) {
             return error.SocketPairFailed;
@@ -228,6 +233,7 @@ pub const TestHarness = struct {
             .connection = &harness.connection,
             .input_file = harness.input_read,
             .writer = &harness.sink.writer,
+            .async_output = async_output,
             .host_size = .{ .cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0 },
             .options = .{ .arguments = &.{}, .cwd = "/", .endpoint = "" },
         });

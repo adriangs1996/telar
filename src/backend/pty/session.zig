@@ -198,7 +198,12 @@ pub const Session = struct {
         defer session.unlockLifecycle();
 
         if (!session.reaped.load(.acquire)) {
+            native.terminateForeground(session.master);
+
             native.terminate(session.pid);
+            // Discard queued terminal I/O before joining the wait actor.
+            // The master stays open until all descriptor borrows finish.
+            native.flushPty(session.master);
         }
     }
 
@@ -537,6 +542,23 @@ test "foreground inspection identifies the session leader" {
 
     session.shutdown();
     try std.testing.expectEqual(Exit{ .signaled = .KILL }, try session.wait());
+}
+
+test "foreground inspection follows a foreground job rather than its shell" {
+    const io = std.testing.io;
+    const args = [_][*:0]const u8{ "/bin/sh", "-c", "set -m; /bin/sh -c 'printf \"ready\\n\"; exec /bin/sleep 60'; :" };
+    const command = try Command.fromArgv(&args);
+    var session = try Session.spawn(&command, .{ .cols = 20, .rows = 5 });
+    defer session.deinit();
+
+    var output_buffer: [256]u8 = undefined;
+    _ = try readUntil(&session, io, .{ .buffer = &output_buffer, .suffix = "ready\r\n" });
+    const foreground = session.foregroundProcessGroup().?;
+    try std.testing.expect(foreground != session.processId());
+    try std.testing.expect(!session.shellForeground().?);
+
+    session.shutdown();
+    _ = try session.wait();
 }
 
 test "deinit is idempotent after the child has been reaped" {

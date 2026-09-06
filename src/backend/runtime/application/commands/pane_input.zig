@@ -50,6 +50,7 @@ pub const Forwarder = struct {
     /// try forwarder.forward(pane, "help\r");
     /// ```
     pub inline fn forward(forwarder: *const Forwarder, pane: *pane_mod.Pane, bytes: []const u8) !void {
+        core.echo_trace.mark(forwarder.io, .input_forward);
         if (comptime diagnostics.enabled) {
             forwarder.metrics.input_events += 1;
             forwarder.metrics.input_bytes += bytes.len;
@@ -59,11 +60,15 @@ pub const Forwarder = struct {
             _ = tracker.observeInput(pane.key(), bytes);
         }
 
+        core.echo_trace.mark(forwarder.io, .foreground_start);
+        const foreground = pane.session.shellForeground() orelse false;
+        core.echo_trace.mark(forwarder.io, .foreground_done);
         pane.queueHistoryInput(.{
             .bytes = bytes,
-            .shell_foreground = pane.session.shellForeground() orelse false,
+            .shell_foreground = foreground,
             .clock = pane_mod.historyClock(forwarder.io),
         });
+        core.echo_trace.mark(forwarder.io, .input_observed);
         try forwarder.scheduler.observation(forwarder.scheduler.context, pane);
 
         _ = pane.queuePtyInput(bytes);

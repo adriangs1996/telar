@@ -1,0 +1,64 @@
+[
+  {
+    "name": "baseline",
+    "samples": [
+      {
+        "us": 694.458,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 221.833,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 184.542,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 182.166,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 188.25,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 189.75,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 156.834,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 215.375,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 202.333,
+        "wire_bytes": 45,
+        "reads": 1
+      },
+      {
+        "us": 155.5,
+        "wire_bytes": 45,
+        "reads": 1
+      }
+    ],
+    "p50_us": 189.0,
+    "p95_us": 481.77674999999954,
+    "p99_us": 651.9217500000001,
+    "min_us": 155.5,
+    "repetition": 0,
+    "application": false,
+    "gap": 0.05
+  }
+]

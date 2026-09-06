@@ -11,6 +11,16 @@ pub const std_options: std.Options = .{ .log_level = .err };
 
 /// Opt-in for development telemetry in optimized builds (`-Ddiagnostics`).
 pub const telar_diagnostics = @import("build_options").diagnostics;
+pub const telar_echo_trace = @import("build_options").echo_trace;
+pub const telar_echo_trace_cpu = @import("build_options").echo_trace_cpu;
+pub var echo_recorder: if (telar_echo_trace) @import("telar-core").echo_trace.Recorder else void = if (telar_echo_trace) .{} else {};
+
+fn dumpEchoTrace(init: std.process.Init) void {
+    if (comptime telar_echo_trace) {
+        const directory = init.minimal.environ.getPosix("TELAR_ECHO_TRACE_DIR") orelse return;
+        echo_recorder.dump(init.io, directory) catch {};
+    }
+}
 
 const Cli = cli_mod.Cli;
 
@@ -34,6 +44,7 @@ fn collectArgs(init: std.process.Init, storage: *[cli_mod.max_args][*:0]const u8
 /// telar server
 /// ```
 pub fn main(init: std.process.Init) !void {
+    defer dumpEchoTrace(init);
     var arg_storage: [cli_mod.max_args][*:0]const u8 = undefined;
     const args = try collectArgs(init, &arg_storage);
 
@@ -56,7 +67,9 @@ pub fn main(init: std.process.Init) !void {
         .proxy => |options| std.process.exit(try cli_mod.proxy.run(init, options)),
         .skill => try cli_mod.skill.run(init),
         .run => |options| {
-            std.process.exit(try cli_mod.client.run(init, options));
+            const status = try cli_mod.client.run(init, options);
+            dumpEchoTrace(init);
+            std.process.exit(status);
         },
     }
 }

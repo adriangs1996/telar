@@ -1,0 +1,13 @@
+patching file build.zig
+patching file 'benchmarks/echo_probe.zig'
+patching file 'src/main.zig'
+patching file 'src/core/root.zig'
+patching file 'src/core/echo_trace.zig'
+patching file 'src/backend/runtime/application/commands/pane_input.zig'
+patching file 'src/backend/runtime/application/event_dispatcher/client.zig'
+patching file 'src/backend/runtime/application/event_dispatcher/pane/io.zig'
+patching file 'src/backend/runtime/application/event_dispatcher/pane/pipeline.zig'
+patching file 'src/backend/runtime/application/pane_launcher.zig'
+patching file 'src/frontend/client/controllers/input/host_inputs.zig'
+patching file 'src/frontend/client/entrypoints/runtime_io.zig'
+patching file 'src/frontend/client/presentation/presentation_lifecycle.zig'

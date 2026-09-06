@@ -1,0 +1,20 @@
+{
+  "main": "667f3112c52fe2762ffe42bf604caeccdfc7ffbe",
+  "performance": "22198c9763c4cac9512e1ec37cf130aa493aa587",
+  "zig": "0.16.0",
+  "tested_sources": {
+    "src/backend/runtime/client/session.zig": "187d3f9268947a2be70f708be26146dec0465d36761332cce63daa27507af96d",
+    "src/frontend/client/controllers/session/client_startup.zig": "ba03c306809b7f29cc53485420016f83aab9b9d41ec67ba1fd310cbd28e8a490",
+    "src/frontend/client/controllers/input/actions.zig": "2eec02c5526bd462f4d3a8caa6ea8ac7d7316547107470776d3516f80661c423",
+    "src/frontend/config/generation.zig": "0dba0e76197f620ffa64e60b2ce64fda48eaea08d3868a390529cab5bb29d23e",
+    "src/frontend/plugins/protocol.zig": "4afe42f7346fe2af17523a841ef4b986b908dcd40988d18c4739a12ccb4f77d8",
+    "src/frontend/plugins/root.zig": "11ae61f97a4339e416c5333f1f8972b6feb619f2e37afdb3b781c9df03c26790"
+  },
+  "binaries": {
+    "/tmp/telar-merge/install/bin/telar": "5a7e326028b30a724d600ff82277d86734fdde06418f6eaf45c8062df76d08d9",
+    "/tmp/telar-merge/install/bin/echo-probe": "8ddeb75aecd84072fd50c5a60f41099bfb1008a7bf9dcd691aa07e985522c6c1",
+    "/tmp/telar-merge/diagnostic/bin/telar": "e420f14c3e2516a1387a600deed02a54cde0055c5ecfa0246bfedaf771fb2eab"
+  },
+  "performance_verdict": "not evaluated; functional integration checks only",
+  "historical_hashes_verified": 789
+}

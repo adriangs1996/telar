@@ -24,8 +24,7 @@ const telemetry_tick_coordinator = observability.telemetry_tick_coordinator;
 /// ```
 pub fn Dispatcher(comptime Application: type) type {
     return struct {
-        /// Samples host metrics, rearms the periodic source and publishes the
-        /// resulting projection to connected clients.
+        /// Rearms the periodic source and admits at most one observation job.
         ///
         /// ```zig
         /// try ObservabilityEvents.handleMetricsTick(&application, result);
@@ -33,6 +32,15 @@ pub fn Dispatcher(comptime Application: type) type {
         pub fn handleMetricsTick(application: *Application, result: anyerror!void) !void {
             var coordinator = systemMetricsCoordinator(application);
             try coordinator.handle(result);
+        }
+
+        /// Publishes a complete value-owned observation before client delivery.
+        /// Example: `ObservabilityEvents.handleMetricsSample(&application, sample);`.
+        pub fn handleMetricsSample(application: *Application, sample: system_metrics_mod.Sample) void {
+            application.metrics.system_sample.observe(sample.duration_ns);
+            application.metrics.system_sample_last_ns = sample.captured_ns;
+            var coordinator = systemMetricsCoordinator(application);
+            coordinator.complete(sample.sampler);
         }
 
         /// Formats and schedules one telemetry sample when its sink remains
@@ -61,14 +69,14 @@ pub fn Dispatcher(comptime Application: type) type {
 
         const system_metrics_runtime_port: system_metrics_coordinator.RuntimePort(Application) = .{
             .rearm_tick = rearmSystemMetrics,
-            .sample = sampleSystemMetrics,
+            .schedule = scheduleSystemMetrics,
             .pump_clients = pumpRuntimeClients,
         };
 
         const RuntimeSystemMetricsCoordinator = system_metrics_coordinator.Coordinator(Application, system_metrics_runtime_port);
 
         fn systemMetricsCoordinator(application: *Application) RuntimeSystemMetricsCoordinator {
-            return RuntimeSystemMetricsCoordinator.init(application, .{ .sampler = &application.system_metrics });
+            return RuntimeSystemMetricsCoordinator.init(application, .{ .sampler = &application.system_metrics, .pending = &application.system_metrics_pending });
         }
 
         fn rearmSystemMetrics(application: *Application) !void {
@@ -76,8 +84,8 @@ pub fn Dispatcher(comptime Application: type) type {
             try sources.waitForSystemMetrics();
         }
 
-        fn sampleSystemMetrics(_: *Application, sampler: *system_metrics_mod.Sampler) void {
-            sampler.sample();
+        fn scheduleSystemMetrics(application: *Application, sampler: system_metrics_mod.Sampler) !void {
+            try application.select.concurrent(.metrics_sampled, system_metrics_mod.sampleOwned, .{ application.io, sampler });
         }
 
         const telemetry_tick_runtime_port: telemetry_tick_coordinator.RuntimePort(Application) = .{

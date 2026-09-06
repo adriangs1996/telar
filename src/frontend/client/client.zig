@@ -81,6 +81,7 @@ const presenter_mod = @import("presentation/presenter.zig");
 const request_lifecycle_mod = @import("connection/request_lifecycle.zig");
 const runtime_transport_mod = @import("connection/runtime_transport.zig");
 const sidebar_animations = @import("controllers/notifications/sidebar_animations.zig");
+const host_output = @import("resources/host_output.zig");
 
 pub const AppearanceThemes = struct {
     light: ?theme_capability.Theme = null,
@@ -98,6 +99,8 @@ pub const ClientEvent = union(enum) {
     sent: anyerror!void,
     draw: anyerror!void,
     media_tick: anyerror!void,
+    host_written: anyerror!void,
+    compression_done: *kitty.Compression,
     sidebar_animation_tick: anyerror!void,
     notification_tick: anyerror!void,
     bar_tick: anyerror!void,
@@ -124,6 +127,8 @@ const Params = struct {
     connection: *core.transport.SocketChannel,
     input_file: File,
     writer: *Io.Writer,
+    async_output: bool = false,
+    fast_output: ?host_output.FastWrite = null,
     /// Host terminal geometry measured by the platform adapter.
     host_size: schema.TerminalSize,
     window_width_px: u32 = 0,
@@ -136,6 +141,7 @@ io: Io,
 gpa: std.mem.Allocator,
 runtime_transport: runtime_transport_mod.State,
 writer: *Io.Writer,
+output: ?host_output.Output = null,
 select: Io.Select(ClientEvent),
 select_storage: [client_event_count]ClientEvent = undefined,
 options: Options,
@@ -241,11 +247,20 @@ pub fn init(params: Params) !*Client {
         .escape_timeout_ns = params.options.input_escape_timeout_ns,
         .sequence_timeout_ns = params.options.input_sequence_timeout_ns,
     });
+    var output: ?host_output.Output = if (params.async_output) try .init(gpa, params.writer) else null;
+    if (output) |*value| {
+        value.fast_write = params.fast_output;
+    }
+    errdefer if (output) |*value| {
+        value.deinit();
+    };
+
     client.* = .{
         .io = params.io,
         .gpa = gpa,
         .runtime_transport = runtime_transport_state,
         .writer = params.writer,
+        .output = output,
         .select = undefined,
         .options = params.options,
         .client_identity = params.client_identity,
@@ -262,6 +277,11 @@ pub fn init(params: Params) !*Client {
         .sound_playback = .init(params.options.sound),
         .reload = .{ .mtime_ns = params.options.config_mtime_ns },
     };
+    if (client.output) |*value| {
+        client.writer = &value.writer;
+        client.graphics_store.compression_scheduler = .{ .context = client, .start = scheduleCompression };
+    }
+
     // The select's storage lives inside the heap-stable client, so the
     // select can only be built once the client's address exists.
     client.select = Io.Select(ClientEvent).init(params.io, &client.select_storage);
@@ -280,6 +300,11 @@ pub fn init(params: Params) !*Client {
         .compositor = .init(gpa),
     };
     return client;
+}
+
+fn scheduleCompression(context: *anyopaque, job: *kitty.Compression) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    try client.select.concurrent(.compression_done, kitty.Compression.run, .{job});
 }
 
 fn scheduleDraw(context: *anyopaque, deadline_ns: u64) !void {
@@ -308,6 +333,10 @@ fn waitForPresentation(io: Io, deadline_ns: u64) anyerror!void {
 pub fn deinit(client: *Client) void {
     const gpa = client.gpa;
     client.select.cancelDiscard();
+    if (client.output) |*output| {
+        output.deinit();
+    }
+
     client.telemetry.deinit(client.io);
     client.reload.deinit(gpa);
     client.clipboard_capture_resources.deinit(gpa);

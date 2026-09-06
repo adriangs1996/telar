@@ -1,0 +1,1670 @@
+{
+  "baseline": "4708085",
+  "implementation": "d5f377d0894804a9a07d70d4d65626435b726d19",
+  "initial_implementation": "3e4ea5d8ee3b208ab459a8f166404959e1f62396",
+  "runner": "06b1db0",
+  "official_gate": "not_run",
+  "repetitions": 5,
+  "environment": {
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "zig": "0.16.0",
+    "repetitions": 5,
+    "samples": 20,
+    "sample_ms": 40,
+    "binary_sha256": {
+      "baseline": "0cde53d0d456db5d19b2d0f395fa52d76760479361e7ef139ae54726e8630d83",
+      "candidate": "1ef2f62f17439966e3827b47aaa9449ce825f4a02eacb22fd7a0f9942597b2a0"
+    }
+  },
+  "microbenchmarks": {
+    "backend.damage.one_cell": {
+      "baseline_ns": 570,
+      "candidate_ns": 569,
+      "change_percent": -0.17543859649122862,
+      "payload_bytes": 0
+    },
+    "backend.damage.fragmented": {
+      "baseline_ns": 17672,
+      "candidate_ns": 17565,
+      "change_percent": -0.6054775916704336,
+      "payload_bytes": 0
+    },
+    "backend.damage.full_screen": {
+      "baseline_ns": 6481,
+      "candidate_ns": 6495,
+      "change_percent": 0.21601604690633103,
+      "payload_bytes": 0
+    },
+    "backend.frame.fragmented": {
+      "baseline_ns": 21981,
+      "candidate_ns": 22255,
+      "change_percent": 1.2465310950366293,
+      "payload_bytes": 2786
+    },
+    "backend.history.input_scan": {
+      "baseline_ns": 41,
+      "candidate_ns": 42,
+      "change_percent": 2.4390243902439046,
+      "payload_bytes": 0
+    },
+    "schema.encode.one_cell": {
+      "baseline_ns": 13,
+      "candidate_ns": 13,
+      "change_percent": 0.0,
+      "payload_bytes": 75
+    },
+    "schema.encode.fragmented": {
+      "baseline_ns": 2769,
+      "candidate_ns": 2857,
+      "change_percent": 3.178042614662324,
+      "payload_bytes": 4867
+    },
+    "schema.encode.full_screen": {
+      "baseline_ns": 30297,
+      "candidate_ns": 30156,
+      "change_percent": -0.46539261313001123,
+      "payload_bytes": 13359
+    },
+    "schema.decode.one_cell": {
+      "baseline_ns": 12,
+      "candidate_ns": 12,
+      "change_percent": 0.0,
+      "payload_bytes": 75
+    },
+    "schema.decode.fragmented": {
+      "baseline_ns": 386,
+      "candidate_ns": 403,
+      "change_percent": 4.404145077720201,
+      "payload_bytes": 4867
+    },
+    "schema.decode.full_screen": {
+      "baseline_ns": 12,
+      "candidate_ns": 12,
+      "change_percent": 0.0,
+      "payload_bytes": 13359
+    },
+    "frontend.pipeline.one_cell": {
+      "baseline_ns": 113,
+      "candidate_ns": 112,
+      "change_percent": -0.8849557522123908,
+      "payload_bytes": 75
+    },
+    "frontend.pipeline.fragmented": {
+      "baseline_ns": 18515,
+      "candidate_ns": 18383,
+      "change_percent": -0.712935457736974,
+      "payload_bytes": 4867
+    },
+    "frontend.pipeline.full_screen": {
+      "baseline_ns": 69805,
+      "candidate_ns": 70092,
+      "change_percent": 0.41114533342883064,
+      "payload_bytes": 13359
+    },
+    "frontend.outbox.input": {
+      "baseline_ns": 9,
+      "candidate_ns": 9,
+      "change_percent": 0.0,
+      "payload_bytes": 0
+    },
+    "frontend.keybind.route": {
+      "baseline_ns": 194,
+      "candidate_ns": 195,
+      "change_percent": 0.5154639175257714,
+      "payload_bytes": 0
+    },
+    "frontend.lua.callback": {
+      "baseline_ns": 515,
+      "candidate_ns": 494,
+      "change_percent": -4.077669902912618,
+      "payload_bytes": 0
+    },
+    "frontend.pacer.late_frame": {
+      "baseline_ns": 2,
+      "candidate_ns": 2,
+      "change_percent": 0.0,
+      "payload_bytes": 0
+    },
+    "frontend.flush.cursor_only": {
+      "baseline_ns": 84,
+      "candidate_ns": 85,
+      "change_percent": 1.1904761904761862,
+      "payload_bytes": 0
+    },
+    "frontend.client_ui.chrome.tabs_1": {
+      "baseline_ns": 20941,
+      "candidate_ns": 20897,
+      "change_percent": -0.21011413017525404,
+      "payload_bytes": 0
+    },
+    "frontend.client_ui.chrome.tabs_8": {
+      "baseline_ns": 24263,
+      "candidate_ns": 23785,
+      "change_percent": -1.970077896385447,
+      "payload_bytes": 0
+    },
+    "frontend.client_ui.chrome.tabs_64": {
+      "baseline_ns": 27997,
+      "candidate_ns": 28276,
+      "change_percent": 0.9965353430724688,
+      "payload_bytes": 0
+    },
+    "frontend.layout.directional_focus": {
+      "baseline_ns": 82,
+      "candidate_ns": 79,
+      "change_percent": -3.658536585365857,
+      "payload_bytes": 0
+    },
+    "frontend.multiplexer.compose_four": {
+      "baseline_ns": 42102,
+      "candidate_ns": 42055,
+      "change_percent": -0.11163365160800076,
+      "payload_bytes": 0
+    },
+    "frontend.multiplexer.patch_one_cell": {
+      "baseline_ns": 123,
+      "candidate_ns": 124,
+      "change_percent": 0.8130081300812941,
+      "payload_bytes": 0
+    },
+    "backend.kitty.ingest_zlib_rgba_1920x1080": {
+      "baseline_ns": 3329477,
+      "candidate_ns": 3445791,
+      "change_percent": 3.4934615857085127,
+      "payload_bytes": 43344
+    },
+    "backend.kitty.shared_frame_3840x2160.publish": {
+      "baseline_ns": 2107013,
+      "candidate_ns": 2274599,
+      "change_percent": 7.9537240634016015,
+      "payload_bytes": 0
+    },
+    "backend.kitty.shared_frame_3840x2160.ingest": {
+      "baseline_ns": 6207166,
+      "candidate_ns": 6767680,
+      "change_percent": 9.030111326167201,
+      "payload_bytes": 0
+    },
+    "backend.kitty.shared_frame_3840x2160.freeze": {
+      "baseline_ns": 2186557,
+      "candidate_ns": 2051016,
+      "change_percent": -6.198832228018758,
+      "payload_bytes": 0
+    },
+    "frontend.kitty.transmit_rgba_64x64": {
+      "baseline_ns": 4482,
+      "candidate_ns": 4415,
+      "change_percent": -1.494868362338242,
+      "payload_bytes": 22001
+    },
+    "frontend.kitty.idle": {
+      "baseline_ns": 6,
+      "candidate_ns": 5,
+      "change_percent": -16.666666666666664,
+      "payload_bytes": 0
+    },
+    "frontend.kitty.transmit_rgba_480x360": {
+      "baseline_ns": 169129,
+      "candidate_ns": 169132,
+      "change_percent": 0.0017737939679074444,
+      "payload_bytes": 923730
+    },
+    "frontend.kitty.transmit_rgba_480x360_zlib": {
+      "baseline_ns": 2037578,
+      "candidate_ns": 2041326,
+      "change_percent": 0.18394387846747406,
+      "payload_bytes": 49157
+    },
+    "frontend.text.rasterize_jetbrains_mono": {
+      "baseline_ns": 496479,
+      "candidate_ns": 498505,
+      "change_percent": 0.40807365467623313,
+      "payload_bytes": 0
+    }
+  },
+  "probes": {
+    "compression_max_turn": {
+      "baseline": [
+        {
+          "n": 20,
+          "p50_ns": 1593542,
+          "p95_ns": 1780375,
+          "p99_ns": 2112041
+        },
+        {
+          "n": 20,
+          "p50_ns": 1746500,
+          "p95_ns": 1929125,
+          "p99_ns": 2052125
+        },
+        {
+          "n": 20,
+          "p50_ns": 1574042,
+          "p95_ns": 1630625,
+          "p99_ns": 1653500
+        },
+        {
+          "n": 20,
+          "p50_ns": 1567792,
+          "p95_ns": 1578542,
+          "p99_ns": 1607542
+        },
+        {
+          "n": 20,
+          "p50_ns": 1577583,
+          "p95_ns": 1613416,
+          "p99_ns": 1628916
+        }
+      ],
+      "candidate": [
+        {
+          "n": 20,
+          "p50_ns": 62542,
+          "p95_ns": 73000,
+          "p99_ns": 86958
+        },
+        {
+          "n": 20,
+          "p50_ns": 68875,
+          "p95_ns": 98292,
+          "p99_ns": 256166
+        },
+        {
+          "n": 20,
+          "p50_ns": 56709,
+          "p95_ns": 62084,
+          "p99_ns": 62833
+        },
+        {
+          "n": 20,
+          "p50_ns": 55042,
+          "p95_ns": 66541,
+          "p99_ns": 68042
+        },
+        {
+          "n": 20,
+          "p50_ns": 57958,
+          "p95_ns": 64250,
+          "p99_ns": 64792
+        }
+      ]
+    },
+    "compression_total": {
+      "baseline": [
+        {
+          "n": 20,
+          "p50_ns": 1593625,
+          "p95_ns": 1780375,
+          "p99_ns": 2112083
+        },
+        {
+          "n": 20,
+          "p50_ns": 1746541,
+          "p95_ns": 1929208,
+          "p99_ns": 2052125
+        },
+        {
+          "n": 20,
+          "p50_ns": 1574042,
+          "p95_ns": 1630666,
+          "p99_ns": 1653542
+        },
+        {
+          "n": 20,
+          "p50_ns": 1567875,
+          "p95_ns": 1578625,
+          "p99_ns": 1607542
+        },
+        {
+          "n": 20,
+          "p50_ns": 1577625,
+          "p95_ns": 1613458,
+          "p99_ns": 1629042
+        }
+      ],
+      "candidate": [
+        {
+          "n": 20,
+          "p50_ns": 1809584,
+          "p95_ns": 2079833,
+          "p99_ns": 2363334
+        },
+        {
+          "n": 20,
+          "p50_ns": 1939708,
+          "p95_ns": 6192791,
+          "p99_ns": 10132625
+        },
+        {
+          "n": 20,
+          "p50_ns": 1621042,
+          "p95_ns": 1673625,
+          "p99_ns": 1704167
+        },
+        {
+          "n": 20,
+          "p50_ns": 1620584,
+          "p95_ns": 1665250,
+          "p99_ns": 1672667
+        },
+        {
+          "n": 20,
+          "p50_ns": 1620167,
+          "p95_ns": 1635917,
+          "p99_ns": 1681792
+        }
+      ]
+    },
+    "search_complete": {
+      "baseline": [
+        {
+          "n": 20,
+          "p50_ns": 1405459,
+          "p95_ns": 1431834,
+          "p99_ns": 1467750
+        },
+        {
+          "n": 20,
+          "p50_ns": 1602167,
+          "p95_ns": 1791250,
+          "p99_ns": 2121375
+        },
+        {
+          "n": 20,
+          "p50_ns": 1521208,
+          "p95_ns": 1548917,
+          "p99_ns": 1564542
+        },
+        {
+          "n": 20,
+          "p50_ns": 1401167,
+          "p95_ns": 1431042,
+          "p99_ns": 1445500
+        },
+        {
+          "n": 20,
+          "p50_ns": 1415625,
+          "p95_ns": 1483292,
+          "p99_ns": 1486208
+        }
+      ],
+      "candidate": [
+        {
+          "n": 20,
+          "p50_ns": 509208,
+          "p95_ns": 564250,
+          "p99_ns": 564750
+        },
+        {
+          "n": 20,
+          "p50_ns": 466709,
+          "p95_ns": 584958,
+          "p99_ns": 604917
+        },
+        {
+          "n": 20,
+          "p50_ns": 404167,
+          "p95_ns": 414625,
+          "p99_ns": 415875
+        },
+        {
+          "n": 20,
+          "p50_ns": 399792,
+          "p95_ns": 412250,
+          "p99_ns": 412666
+        },
+        {
+          "n": 20,
+          "p50_ns": 399125,
+          "p95_ns": 410042,
+          "p99_ns": 413917
+        }
+      ]
+    },
+    "graphics_runtime_stage_4k": {
+      "baseline": [
+        {
+          "n": 20,
+          "p50_ns": 2254167,
+          "p95_ns": 3155042,
+          "p99_ns": 4233125
+        },
+        {
+          "n": 20,
+          "p50_ns": 2601708,
+          "p95_ns": 3328458,
+          "p99_ns": 3960625
+        },
+        {
+          "n": 20,
+          "p50_ns": 2564917,
+          "p95_ns": 2961167,
+          "p99_ns": 3420542
+        },
+        {
+          "n": 20,
+          "p50_ns": 2112875,
+          "p95_ns": 2353875,
+          "p99_ns": 2479750
+        },
+        {
+          "n": 20,
+          "p50_ns": 2080125,
+          "p95_ns": 2436334,
+          "p99_ns": 2438000
+        }
+      ],
+      "candidate": [
+        {
+          "n": 20,
+          "p50_ns": 2500,
+          "p95_ns": 13583,
+          "p99_ns": 33291
+        },
+        {
+          "n": 20,
+          "p50_ns": 1542,
+          "p95_ns": 7541,
+          "p99_ns": 14875
+        },
+        {
+          "n": 20,
+          "p50_ns": 667,
+          "p95_ns": 2084,
+          "p99_ns": 2459
+        },
+        {
+          "n": 20,
+          "p50_ns": 500,
+          "p95_ns": 1041,
+          "p99_ns": 1625
+        },
+        {
+          "n": 20,
+          "p50_ns": 459,
+          "p95_ns": 1416,
+          "p99_ns": 2250
+        }
+      ]
+    },
+    "graphics_total_prepare_4k": {
+      "baseline": [
+        {
+          "n": 20,
+          "p50_ns": 2254167,
+          "p95_ns": 3155083,
+          "p99_ns": 4233125
+        },
+        {
+          "n": 20,
+          "p50_ns": 2601708,
+          "p95_ns": 3328458,
+          "p99_ns": 3960667
+        },
+        {
+          "n": 20,
+          "p50_ns": 2564959,
+          "p95_ns": 2961167,
+          "p99_ns": 3420542
+        },
+        {
+          "n": 20,
+          "p50_ns": 2112875,
+          "p95_ns": 2353875,
+          "p99_ns": 2479792
+        },
+        {
+          "n": 20,
+          "p50_ns": 2080166,
+          "p95_ns": 2436375,
+          "p99_ns": 2438000
+        }
+      ],
+      "candidate": [
+        {
+          "n": 20,
+          "p50_ns": 3421416,
+          "p95_ns": 10742042,
+          "p99_ns": 11654667
+        },
+        {
+          "n": 20,
+          "p50_ns": 2728708,
+          "p95_ns": 3358875,
+          "p99_ns": 9260291
+        },
+        {
+          "n": 20,
+          "p50_ns": 2245041,
+          "p95_ns": 2592792,
+          "p99_ns": 3592042
+        },
+        {
+          "n": 20,
+          "p50_ns": 2247667,
+          "p95_ns": 2635459,
+          "p99_ns": 2750958
+        },
+        {
+          "n": 20,
+          "p50_ns": 2138542,
+          "p95_ns": 2287542,
+          "p99_ns": 2732917
+        }
+      ]
+    },
+    "metrics_ticks": {
+      "baseline": [
+        {
+          "ticks": 100,
+          "inline_reads": 100,
+          "scheduled_jobs": 0,
+          "client_pumps": 100
+        },
+        {
+          "ticks": 100,
+          "inline_reads": 100,
+          "scheduled_jobs": 0,
+          "client_pumps": 100
+        },
+        {
+          "ticks": 100,
+          "inline_reads": 100,
+          "scheduled_jobs": 0,
+          "client_pumps": 100
+        },
+        {
+          "ticks": 100,
+          "inline_reads": 100,
+          "scheduled_jobs": 0,
+          "client_pumps": 100
+        },
+        {
+          "ticks": 100,
+          "inline_reads": 100,
+          "scheduled_jobs": 0,
+          "client_pumps": 100
+        }
+      ],
+      "candidate": [
+        {
+          "ticks": 100,
+          "inline_reads": 0,
+          "scheduled_jobs": 1,
+          "client_pumps": 0
+        },
+        {
+          "ticks": 100,
+          "inline_reads": 0,
+          "scheduled_jobs": 1,
+          "client_pumps": 0
+        },
+        {
+          "ticks": 100,
+          "inline_reads": 0,
+          "scheduled_jobs": 1,
+          "client_pumps": 0
+        },
+        {
+          "ticks": 100,
+          "inline_reads": 0,
+          "scheduled_jobs": 1,
+          "client_pumps": 0
+        },
+        {
+          "ticks": 100,
+          "inline_reads": 0,
+          "scheduled_jobs": 1,
+          "client_pumps": 0
+        }
+      ]
+    },
+    "chunk_framing": {
+      "baseline": [
+        {
+          "wire_bytes": 279,
+          "tls_facing_writes": 23
+        },
+        {
+          "wire_bytes": 279,
+          "tls_facing_writes": 23
+        },
+        {
+          "wire_bytes": 279,
+          "tls_facing_writes": 23
+        },
+        {
+          "wire_bytes": 279,
+          "tls_facing_writes": 23
+        },
+        {
+          "wire_bytes": 279,
+          "tls_facing_writes": 23
+        }
+      ],
+      "candidate": [
+        {
+          "wire_bytes": 279,
+          "tls_facing_writes": 6
+        },
+        {
+          "wire_bytes": 279,
+          "tls_facing_writes": 6
+        },
+        {
+          "wire_bytes": 279,
+          "tls_facing_writes": 6
+        },
+        {
+          "wire_bytes": 279,
+          "tls_facing_writes": 6
+        },
+        {
+          "wire_bytes": 279,
+          "tls_facing_writes": 6
+        }
+      ]
+    },
+    "history_burst": {
+      "baseline": [
+        {
+          "queued": 32,
+          "sqlite_queries": 32,
+          "elapsed_ns": 1306166
+        },
+        {
+          "queued": 32,
+          "sqlite_queries": 32,
+          "elapsed_ns": 1508375
+        },
+        {
+          "queued": 32,
+          "sqlite_queries": 32,
+          "elapsed_ns": 1198458
+        },
+        {
+          "queued": 32,
+          "sqlite_queries": 32,
+          "elapsed_ns": 1220292
+        },
+        {
+          "queued": 32,
+          "sqlite_queries": 32,
+          "elapsed_ns": 1261958
+        }
+      ],
+      "candidate": [
+        {
+          "queued": 32,
+          "sqlite_queries": 1,
+          "elapsed_ns": 441583
+        },
+        {
+          "queued": 32,
+          "sqlite_queries": 1,
+          "elapsed_ns": 263750
+        },
+        {
+          "queued": 32,
+          "sqlite_queries": 1,
+          "elapsed_ns": 185667
+        },
+        {
+          "queued": 32,
+          "sqlite_queries": 1,
+          "elapsed_ns": 180000
+        },
+        {
+          "queued": 32,
+          "sqlite_queries": 1,
+          "elapsed_ns": 173208
+        }
+      ]
+    },
+    "search_incremental_total": {
+      "candidate": [
+        {
+          "n": 20,
+          "p50_ns": 454375,
+          "p95_ns": 503542,
+          "p99_ns": 511417
+        },
+        {
+          "n": 20,
+          "p50_ns": 425875,
+          "p95_ns": 432666,
+          "p99_ns": 435333
+        },
+        {
+          "n": 20,
+          "p50_ns": 406292,
+          "p95_ns": 414875,
+          "p99_ns": 418167
+        },
+        {
+          "n": 20,
+          "p50_ns": 409792,
+          "p95_ns": 419667,
+          "p99_ns": 422750
+        },
+        {
+          "n": 20,
+          "p50_ns": 413000,
+          "p95_ns": 425708,
+          "p99_ns": 426708
+        }
+      ]
+    },
+    "search_max_turn": {
+      "candidate": [
+        {
+          "n": 20,
+          "p50_ns": 22125,
+          "p95_ns": 44792,
+          "p99_ns": 45333
+        },
+        {
+          "n": 20,
+          "p50_ns": 15750,
+          "p95_ns": 19250,
+          "p99_ns": 24792
+        },
+        {
+          "n": 20,
+          "p50_ns": 13667,
+          "p95_ns": 16042,
+          "p99_ns": 18000
+        },
+        {
+          "n": 20,
+          "p50_ns": 14416,
+          "p95_ns": 17333,
+          "p99_ns": 17542
+        },
+        {
+          "n": 20,
+          "p50_ns": 14792,
+          "p95_ns": 17417,
+          "p99_ns": 20167
+        }
+      ]
+    }
+  },
+  "e2e": {
+    "echo": {
+      "baseline": [
+        {
+          "timeouts": 0,
+          "p50_us": 523.4585,
+          "p95_us": 936.4651999999996,
+          "p99_us": 1571.5749099999998,
+          "version": "baseline",
+          "case": "echo",
+          "run": 0,
+          "shutdown": {
+            "elapsed_ms": 44.855125015601516,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              75752
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 214.8125,
+          "p95_us": 739.0121999999997,
+          "p99_us": 960.6392499999997,
+          "version": "baseline",
+          "case": "echo",
+          "run": 1,
+          "shutdown": {
+            "elapsed_ms": 44.99641701113433,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              79892
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 235.8125,
+          "p95_us": 706.7086499999998,
+          "p99_us": 1032.9646699999996,
+          "version": "baseline",
+          "case": "echo",
+          "run": 2,
+          "shutdown": {
+            "elapsed_ms": 47.496584011241794,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              82926
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 230.25,
+          "p95_us": 627.3228999999994,
+          "p99_us": 1706.76084,
+          "version": "baseline",
+          "case": "echo",
+          "run": 3,
+          "shutdown": {
+            "elapsed_ms": 49.8028330039233,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              86663
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 268.35400000000004,
+          "p95_us": 900.7639499999995,
+          "p99_us": 1400.7582499999921,
+          "version": "baseline",
+          "case": "echo",
+          "run": 4,
+          "shutdown": {
+            "elapsed_ms": 53.28270798781887,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              89574
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        }
+      ],
+      "candidate": [
+        {
+          "timeouts": 0,
+          "p50_us": 466.875,
+          "p95_us": 886.2214499999999,
+          "p99_us": 996.0133399999994,
+          "version": "candidate",
+          "case": "echo",
+          "run": 0,
+          "shutdown": {
+            "elapsed_ms": 43.30408401438035,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              75994
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 255.25,
+          "p95_us": 828.2770999999998,
+          "p99_us": 981.2281599999984,
+          "version": "candidate",
+          "case": "echo",
+          "run": 1,
+          "shutdown": {
+            "elapsed_ms": 46.28608399070799,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              79676
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 294.7705,
+          "p95_us": 982.9371999999969,
+          "p99_us": 2434.329589999998,
+          "version": "candidate",
+          "case": "echo",
+          "run": 2,
+          "shutdown": {
+            "elapsed_ms": 91.20320799411274,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              83209
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 234.77100000000002,
+          "p95_us": 712.9246499999998,
+          "p99_us": 800.8137499999997,
+          "version": "candidate",
+          "case": "echo",
+          "run": 3,
+          "shutdown": {
+            "elapsed_ms": 48.52020798716694,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              86357
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 216.16649999999998,
+          "p95_us": 721.40655,
+          "p99_us": 1416.08325,
+          "version": "candidate",
+          "case": "echo",
+          "run": 4,
+          "shutdown": {
+            "elapsed_ms": 43.8797090027947,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              89763
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        }
+      ]
+    },
+    "load": {
+      "baseline": [
+        {
+          "timeouts": 0,
+          "p50_us": 531.083,
+          "p95_us": 804.7416499999998,
+          "p99_us": 957.6633299999985,
+          "version": "baseline",
+          "case": "load",
+          "run": 0,
+          "shutdown": {
+            "elapsed_ms": 5031.21841698885,
+            "exited": false,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              76809
+            ],
+            "children_exited": true,
+            "socket_removed": false,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 726.5205000000001,
+          "p95_us": 1391.67915,
+          "p99_us": 1743.6785099999997,
+          "version": "baseline",
+          "case": "load",
+          "run": 1,
+          "shutdown": {
+            "elapsed_ms": 5046.138165984303,
+            "exited": false,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              80842
+            ],
+            "children_exited": true,
+            "socket_removed": false,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 574.5415,
+          "p95_us": 905.5853999999997,
+          "p99_us": 1128.1124199999995,
+          "version": "baseline",
+          "case": "load",
+          "run": 2,
+          "shutdown": {
+            "elapsed_ms": 5025.070125004277,
+            "exited": false,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              83478
+            ],
+            "children_exited": true,
+            "socket_removed": false,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 555.563,
+          "p95_us": 912.21075,
+          "p99_us": 1131.44884,
+          "version": "baseline",
+          "case": "load",
+          "run": 3,
+          "shutdown": {
+            "elapsed_ms": 5030.662999983178,
+            "exited": false,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              87457
+            ],
+            "children_exited": true,
+            "socket_removed": false,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 577.6455,
+          "p95_us": 894.6649,
+          "p99_us": 1012.0516599999997,
+          "version": "baseline",
+          "case": "load",
+          "run": 4,
+          "shutdown": {
+            "elapsed_ms": 5059.3163749726955,
+            "exited": false,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              90081
+            ],
+            "children_exited": true,
+            "socket_removed": false,
+            "cleanup_complete": true
+          }
+        }
+      ],
+      "candidate": [
+        {
+          "timeouts": 0,
+          "p50_us": 538.833,
+          "p95_us": 826.6295,
+          "p99_us": 920.6768399999999,
+          "version": "candidate",
+          "case": "load",
+          "run": 0,
+          "shutdown": {
+            "elapsed_ms": 42.64474997762591,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              77810
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 604.8745,
+          "p95_us": 968.4148999999999,
+          "p99_us": 1586.839159999998,
+          "version": "candidate",
+          "case": "load",
+          "run": 1,
+          "shutdown": {
+            "elapsed_ms": 43.5693750041537,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              80204
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 606.375,
+          "p95_us": 1153.8919499999995,
+          "p99_us": 4407.932499999998,
+          "version": "candidate",
+          "case": "load",
+          "run": 2,
+          "shutdown": {
+            "elapsed_ms": 45.33675001584925,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              84228
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 545.25,
+          "p95_us": 916.1836499999998,
+          "p99_us": 1141.300419999999,
+          "version": "candidate",
+          "case": "load",
+          "run": 3,
+          "shutdown": {
+            "elapsed_ms": 46.544832992367446,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              86881
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "timeouts": 0,
+          "p50_us": 553.792,
+          "p95_us": 859.08365,
+          "p99_us": 973.5402399999988,
+          "version": "candidate",
+          "case": "load",
+          "run": 4,
+          "shutdown": {
+            "elapsed_ms": 44.49304100126028,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              90807
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        }
+      ]
+    },
+    "slow-host": {
+      "baseline": [
+        {
+          "input_sent": 32,
+          "input_while_host_blocked": 0,
+          "input_after_drain": 32,
+          "version": "baseline",
+          "case": "slow-host",
+          "run": 0,
+          "shutdown": {
+            "elapsed_ms": 5034.016958001303,
+            "exited": false,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              78408
+            ],
+            "children_exited": true,
+            "socket_removed": false,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "input_sent": 32,
+          "input_while_host_blocked": 0,
+          "input_after_drain": 32,
+          "version": "baseline",
+          "case": "slow-host",
+          "run": 1,
+          "shutdown": {
+            "elapsed_ms": 5057.179874973372,
+            "exited": false,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              82019
+            ],
+            "children_exited": true,
+            "socket_removed": false,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "input_sent": 32,
+          "input_while_host_blocked": 0,
+          "input_after_drain": 32,
+          "version": "baseline",
+          "case": "slow-host",
+          "run": 2,
+          "shutdown": {
+            "elapsed_ms": 5024.504500004696,
+            "exited": false,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              84804
+            ],
+            "children_exited": true,
+            "socket_removed": false,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "input_sent": 32,
+          "input_while_host_blocked": 0,
+          "input_after_drain": 32,
+          "version": "baseline",
+          "case": "slow-host",
+          "run": 3,
+          "shutdown": {
+            "elapsed_ms": 5035.200875019655,
+            "exited": false,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              88694
+            ],
+            "children_exited": true,
+            "socket_removed": false,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "input_sent": 32,
+          "input_while_host_blocked": 0,
+          "input_after_drain": 32,
+          "version": "baseline",
+          "case": "slow-host",
+          "run": 4,
+          "shutdown": {
+            "elapsed_ms": 5049.30341700674,
+            "exited": false,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              91413
+            ],
+            "children_exited": true,
+            "socket_removed": false,
+            "cleanup_complete": true
+          }
+        }
+      ],
+      "candidate": [
+        {
+          "input_sent": 32,
+          "input_while_host_blocked": 32,
+          "input_after_drain": 32,
+          "version": "candidate",
+          "case": "slow-host",
+          "run": 0,
+          "shutdown": {
+            "elapsed_ms": 42.02358299517073,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              79002
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "input_sent": 32,
+          "input_while_host_blocked": 32,
+          "input_after_drain": 32,
+          "version": "candidate",
+          "case": "slow-host",
+          "run": 1,
+          "shutdown": {
+            "elapsed_ms": 44.168790976982564,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              81636
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "input_sent": 32,
+          "input_while_host_blocked": 32,
+          "input_after_drain": 32,
+          "version": "candidate",
+          "case": "slow-host",
+          "run": 2,
+          "shutdown": {
+            "elapsed_ms": 47.14287500246428,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              85442
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "input_sent": 32,
+          "input_while_host_blocked": 32,
+          "input_after_drain": 32,
+          "version": "candidate",
+          "case": "slow-host",
+          "run": 3,
+          "shutdown": {
+            "elapsed_ms": 45.36291601834819,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              88218
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "input_sent": 32,
+          "input_while_host_blocked": 32,
+          "input_after_drain": 32,
+          "version": "candidate",
+          "case": "slow-host",
+          "run": 4,
+          "shutdown": {
+            "elapsed_ms": 46.50516700348817,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              92048
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        }
+      ]
+    },
+    "graphics": {
+      "baseline": [
+        {
+          "pixel_bytes": 33177600,
+          "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+          "compressed": true,
+          "wire_payload_bytes": 4004011,
+          "elapsed_ms": 2113.375416985946,
+          "host_bytes": 5384687,
+          "version": "baseline",
+          "case": "graphics",
+          "run": 0,
+          "shutdown": {
+            "elapsed_ms": 46.2485000025481,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              79442
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "pixel_bytes": 33177600,
+          "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+          "compressed": true,
+          "wire_payload_bytes": 4004011,
+          "elapsed_ms": 2153.0136670044158,
+          "host_bytes": 5384731,
+          "version": "baseline",
+          "case": "graphics",
+          "run": 1,
+          "shutdown": {
+            "elapsed_ms": 46.87424999428913,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              82795
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "pixel_bytes": 33177600,
+          "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+          "compressed": true,
+          "wire_payload_bytes": 4004011,
+          "elapsed_ms": 2110.006874980172,
+          "host_bytes": 5384718,
+          "version": "baseline",
+          "case": "graphics",
+          "run": 2,
+          "shutdown": {
+            "elapsed_ms": 47.71137499483302,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              86114
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "pixel_bytes": 33177600,
+          "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+          "compressed": true,
+          "wire_payload_bytes": 4004011,
+          "elapsed_ms": 2212.1193330094684,
+          "host_bytes": 5384694,
+          "version": "baseline",
+          "case": "graphics",
+          "run": 3,
+          "shutdown": {
+            "elapsed_ms": 49.5282500050962,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              89368
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "pixel_bytes": 33177600,
+          "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+          "compressed": true,
+          "wire_payload_bytes": 4004011,
+          "elapsed_ms": 2195.087166997837,
+          "host_bytes": 5384729,
+          "version": "baseline",
+          "case": "graphics",
+          "run": 4,
+          "shutdown": {
+            "elapsed_ms": 49.132375017507,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime stopped\n",
+            "pids": [
+              92432
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        }
+      ],
+      "candidate": [
+        {
+          "pixel_bytes": 33177600,
+          "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+          "compressed": true,
+          "wire_payload_bytes": 4004011,
+          "elapsed_ms": 1945.6223750021309,
+          "host_bytes": 5384720,
+          "version": "candidate",
+          "case": "graphics",
+          "run": 0,
+          "shutdown": {
+            "elapsed_ms": 45.29537499183789,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              79567
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "pixel_bytes": 33177600,
+          "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+          "compressed": true,
+          "wire_payload_bytes": 4004011,
+          "elapsed_ms": 1903.787207993446,
+          "host_bytes": 5384799,
+          "version": "candidate",
+          "case": "graphics",
+          "run": 1,
+          "shutdown": {
+            "elapsed_ms": 48.34579201997258,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              82651
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "pixel_bytes": 33177600,
+          "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+          "compressed": true,
+          "wire_payload_bytes": 4004011,
+          "elapsed_ms": 1923.5685000021476,
+          "host_bytes": 5384729,
+          "version": "candidate",
+          "case": "graphics",
+          "run": 2,
+          "shutdown": {
+            "elapsed_ms": 51.208000018959865,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              86335
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "pixel_bytes": 33177600,
+          "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+          "compressed": true,
+          "wire_payload_bytes": 4004011,
+          "elapsed_ms": 1980.892708990723,
+          "host_bytes": 5384740,
+          "version": "candidate",
+          "case": "graphics",
+          "run": 3,
+          "shutdown": {
+            "elapsed_ms": 51.490082987584174,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              89311
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        },
+        {
+          "pixel_bytes": 33177600,
+          "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+          "compressed": true,
+          "wire_payload_bytes": 4004011,
+          "elapsed_ms": 1912.0744590181857,
+          "host_bytes": 5384467,
+          "version": "candidate",
+          "case": "graphics",
+          "run": 4,
+          "shutdown": {
+            "elapsed_ms": 48.95545801264234,
+            "exited": true,
+            "returncode": 0,
+            "reply": "telar runtime is stopping\n",
+            "pids": [
+              92585
+            ],
+            "children_exited": true,
+            "socket_removed": true,
+            "cleanup_complete": true
+          }
+        }
+      ]
+    }
+  }
+}
