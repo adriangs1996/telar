@@ -1,0 +1,151 @@
+diff --git a/src/backend/runtime/application/event_dispatcher/client.zig b/src/backend/runtime/application/event_dispatcher/client.zig
+index 9bc4542..61115b1 100644
+--- a/src/backend/runtime/application/event_dispatcher/client.zig
++++ b/src/backend/runtime/application/event_dispatcher/client.zig
+@@ -337,12 +337,18 @@ pub fn Dispatcher(comptime Application: type) type {
+         }
+ 
+         fn receiveSession(read: SessionRead) ClientMessageEvent {
++            const qos = core.echo_trace.ExperimentQos.enter();
++            defer qos.restore();
++
+             const result = read.connection.receive(read.io, read.buffer);
+             core.echo_trace.mark(read.io, .runtime_read);
+             return .{ .client = read.key, .result = result };
+         }
+ 
+         fn sendSession(write: SessionWrite) ClientSentEvent {
++            const qos = core.echo_trace.ExperimentQos.enter();
++            defer qos.restore();
++
+             core.echo_trace.mark(write.io, .runtime_send_start);
+             defer core.echo_trace.mark(write.io, .runtime_send_done);
+             return .{ .client = write.key, .result = write.connection.send(write.io, write.payload) };
+diff --git a/src/backend/runtime/application/event_dispatcher/pane/io.zig b/src/backend/runtime/application/event_dispatcher/pane/io.zig
+index 39508b4..261b9f0 100644
+--- a/src/backend/runtime/application/event_dispatcher/pane/io.zig
++++ b/src/backend/runtime/application/event_dispatcher/pane/io.zig
+@@ -85,6 +85,9 @@ pub fn Dispatcher(comptime Application: type) type {
+         }
+ 
+         fn writePaneInput(write: pane_input_pump.Write) PaneInputEvent {
++            const qos = core.echo_trace.ExperimentQos.enter();
++            defer qos.restore();
++
+             core.echo_trace.mark(write.io, .pty_write_start);
+             defer core.echo_trace.mark(write.io, .pty_write_done);
+             const path = diagnostics.enter(.interactive);
+diff --git a/src/backend/runtime/application/event_dispatcher/pane/pipeline.zig b/src/backend/runtime/application/event_dispatcher/pane/pipeline.zig
+index e2cd878..53cc95c 100644
+--- a/src/backend/runtime/application/event_dispatcher/pane/pipeline.zig
++++ b/src/backend/runtime/application/event_dispatcher/pane/pipeline.zig
+@@ -149,6 +149,9 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
+         }
+ 
+         fn ingestPane(task: PaneIngestTask) PaneIngestEvent {
++            const qos = core.echo_trace.ExperimentQos.enter();
++            defer qos.restore();
++
+             core.echo_trace.mark(task.ingest.io, .vt_start);
+             defer core.echo_trace.mark(task.ingest.io, .vt_done);
+ 
+diff --git a/src/backend/runtime/application/pane_launcher.zig b/src/backend/runtime/application/pane_launcher.zig
+index cabb62f..96be5ad 100644
+--- a/src/backend/runtime/application/pane_launcher.zig
++++ b/src/backend/runtime/application/pane_launcher.zig
+@@ -312,6 +312,9 @@ const OwnedCommand = struct {
+ };
+ 
+ pub fn readPane(io: Io, pane: *Pane) PaneOutputEvent {
++    const qos = core.echo_trace.ExperimentQos.enter();
++    defer qos.restore();
++
+     const len = pane.session.read(io, &pane.output_buffer) catch |err|
+         return .{ .pane = pane.key(), .result = err };
+     core.echo_trace.mark(io, .pty_read);
+diff --git a/src/core/echo_trace.zig b/src/core/echo_trace.zig
+index 47f8a35..6e6fd70 100644
+--- a/src/core/echo_trace.zig
++++ b/src/core/echo_trace.zig
+@@ -32,6 +32,26 @@ pub const Tag = enum {
+     host_flush_done,
+ };
+ 
++pub const ExperimentQos = struct {
++    previous: c_uint,
++    changed: bool,
++
++    extern "c" fn qos_class_self() c_uint;
++    extern "c" fn pthread_set_qos_class_self_np(qos: c_uint, priority: c_int) c_int;
++
++    pub fn enter() ExperimentQos {
++        const previous = qos_class_self();
++        const changed = previous != 0 and previous != 0x21 and pthread_set_qos_class_self_np(0x21, 0) == 0;
++        return .{ .previous = previous, .changed = changed };
++    }
++
++    pub fn restore(scope: ExperimentQos) void {
++        if (scope.changed) {
++            _ = pthread_set_qos_class_self_np(scope.previous, 0);
++        }
++    }
++};
++
+ pub const Recorder = struct {
+     const capacity = 16384;
+     const Record = struct { ns: u64, tag: Tag };
+diff --git a/src/frontend/client/controllers/input/host_inputs.zig b/src/frontend/client/controllers/input/host_inputs.zig
+index accd24f..97b9936 100644
+--- a/src/frontend/client/controllers/input/host_inputs.zig
++++ b/src/frontend/client/controllers/input/host_inputs.zig
+@@ -314,6 +314,9 @@ fn synchronizeBindingTimeout(client: *Client) !void {
+ }
+ 
+ fn read(io: Io, file: File, chunk: *Chunk) anyerror!u16 {
++    const qos = core.echo_trace.ExperimentQos.enter();
++    defer qos.restore();
++
+     const length = try file.readStreaming(io, &.{&chunk.bytes});
+     core.echo_trace.mark(io, .host_read);
+     return @intCast(length);
+diff --git a/src/frontend/client/entrypoints/runtime_io.zig b/src/frontend/client/entrypoints/runtime_io.zig
+index 3c3600e..b0f51cc 100644
+--- a/src/frontend/client/entrypoints/runtime_io.zig
++++ b/src/frontend/client/entrypoints/runtime_io.zig
+@@ -209,12 +209,18 @@ fn pump(client: *Client) !void {
+ }
+ 
+ fn receive(io: Io, state: *State) anyerror![]u8 {
++    const qos = core.echo_trace.ExperimentQos.enter();
++    defer qos.restore();
++
+     const bytes = try state.read(io);
+     core.echo_trace.mark(io, .client_read);
+     return bytes;
+ }
+ 
+ fn send(io: Io, state: *State, payload: []const u8) anyerror!void {
++    const qos = core.echo_trace.ExperimentQos.enter();
++    defer qos.restore();
++
+     core.echo_trace.mark(io, .client_send_start);
+     defer core.echo_trace.mark(io, .client_send_done);
+     return state.send(io, payload);
+diff --git a/src/main.zig b/src/main.zig
+index 9fac720..82449b5 100644
+--- a/src/main.zig
++++ b/src/main.zig
+@@ -44,6 +44,13 @@ fn collectArgs(init: std.process.Init, storage: *[cli_mod.max_args][*:0]const u8
+ /// ```
+ pub fn main(init: std.process.Init) !void {
+     defer dumpEchoTrace(init);
++    const Policy = struct {
++        extern "c" fn pthread_set_qos_class_self_np(qos: c_uint, priority: c_int) c_int;
++    };
++    if (Policy.pthread_set_qos_class_self_np(0x21, 0) != 0) {
++        return error.QosUnavailable;
++    }
++
+     var arg_storage: [cli_mod.max_args][*:0]const u8 = undefined;
+     const args = try collectArgs(init, &arg_storage);
+ 

@@ -1,0 +1,10 @@
+{
+  "source_commit": "8d39225e54abdf414e28f20075e78e70efa4c104",
+  "baseline": "a5876ed",
+  "official_gate_run": false,
+  "production_optimization": false,
+  "experiments": [
+    "main QoS and scoped I/O QoS are discarded",
+    "constant foreground is a controlled-fixture ablation only"
+  ]
+}

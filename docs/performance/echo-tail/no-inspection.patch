@@ -1,0 +1,15 @@
+diff --git a/src/backend/pty/session.zig b/src/backend/pty/session.zig
+index 93ac833..41f6c44 100644
+--- a/src/backend/pty/session.zig
++++ b/src/backend/pty/session.zig
+@@ -101,8 +101,8 @@ pub const Session = struct {
+             return null;
+         }
+ 
+-        const foreground = native.foregroundProcessGroup(session.master) orelse return null;
+-        return foreground == session.pid;
++        // Controlled-fixture ablation only: its app remains the session leader.
++        return true;
+     }
+ 
+     /// Returns the foreground process group controlling the slave side. The

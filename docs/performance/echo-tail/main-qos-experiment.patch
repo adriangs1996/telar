@@ -1,0 +1,18 @@
+diff --git a/src/main.zig b/src/main.zig
+index 9fac720..82449b5 100644
+--- a/src/main.zig
++++ b/src/main.zig
+@@ -44,6 +44,13 @@ fn collectArgs(init: std.process.Init, storage: *[cli_mod.max_args][*:0]const u8
+ /// ```
+ pub fn main(init: std.process.Init) !void {
+     defer dumpEchoTrace(init);
++    const Policy = struct {
++        extern "c" fn pthread_set_qos_class_self_np(qos: c_uint, priority: c_int) c_int;
++    };
++    if (Policy.pthread_set_qos_class_self_np(0x21, 0) != 0) {
++        return error.QosUnavailable;
++    }
++
+     var arg_storage: [cli_mod.max_args][*:0]const u8 = undefined;
+     const args = try collectArgs(init, &arg_storage);
+ 
