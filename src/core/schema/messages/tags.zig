@@ -46,6 +46,7 @@ pub const ClientTag = enum(u8) {
     suggest_command = 0x29,
     report_agent_command = 0x2a,
     report_agent_title = 0x2b,
+    configure_terminal_colors = 0x2c,
 };
 
 pub const ServerTag = enum(u8) {

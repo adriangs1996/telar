@@ -15,6 +15,7 @@ pub const Snapshot = client_outbox.Snapshot;
 pub const Bootstrap = struct {
     graphics_shared: bool,
     client_identity: schema.ClientIdentity,
+    terminal_colors: schema.TerminalColors = .{},
 };
 
 pub const State = struct {
@@ -108,24 +109,20 @@ pub const State = struct {
         gpa.free(state.read_buffer);
     }
 
-    /// Sends the ordered synchronous frames required before the event loop
-    /// starts its first runtime read.
+    /// Queues one ordered bootstrap after host negotiation. Capacity is checked
+    /// before any frame is queued; the ordinary send actor owns all writes.
     ///
     /// ```zig
-    /// try state.bootstrap(io, bootstrap);
+    /// try state.bootstrap(bootstrap);
     /// ```
-    pub fn bootstrap(state: *State, io: Io, request: Bootstrap) !void {
-        std.debug.assert(!state.outbox.inFlight() and state.outbox.len == 0);
+    pub fn bootstrap(state: *State, request: Bootstrap) !void {
+        if (state.outbox.availableCapacity() < 3) {
+            return error.ClientOutboxFull;
+        }
 
-        const configure = try schema.encodeConfigureGraphics(state.send_buffer, .{
-            .shared = request.graphics_shared,
-        });
-        try state.connection.send(io, configure);
-
-        const runtime_state = try schema.encodeRequestRuntimeState(state.send_buffer, .{
-            .client_identity = request.client_identity,
-        });
-        try state.connection.send(io, runtime_state);
+        try state.outbox.push(.{ .configure_graphics = .{ .shared = request.graphics_shared } });
+        try state.outbox.push(.{ .configure_terminal_colors = request.terminal_colors });
+        try state.outbox.push(.{ .request_runtime_state = .{ .client_identity = request.client_identity } });
     }
 };
 
@@ -174,7 +171,7 @@ test "runtime transport releases every partial frame allocation" {
     );
 }
 
-test "runtime bootstrap emits graphics and identity before asynchronous reads" {
+test "runtime bootstrap queues colors before subscribing to the initial layout" {
     const io = std.testing.io;
     var channels = try testingSocketPair();
     defer channels[0].deinit(io);
@@ -182,17 +179,21 @@ test "runtime bootstrap emits graphics and identity before asynchronous reads" {
     var state = try State.init(std.testing.allocator, &channels[0]);
     defer state.deinit(std.testing.allocator);
 
-    try state.bootstrap(io, .{
+    try state.bootstrap(.{
         .graphics_shared = true,
         .client_identity = @enumFromInt(9),
     });
 
-    var buffer: [256]u8 = undefined;
-    const configure = try schema.decodeClient(try channels[1].receive(io, &buffer));
+    const configure = try schema.decodeClient((try state.prepareSend()).?);
     try std.testing.expect(configure == .configure_graphics);
     try std.testing.expect(configure.configure_graphics.shared);
 
-    const runtime_state = try schema.decodeClient(try channels[1].receive(io, &buffer));
+    try state.outbox.finishSend({});
+    const colors = try schema.decodeClient((try state.prepareSend()).?);
+    try std.testing.expect(colors == .configure_terminal_colors);
+    try state.outbox.finishSend({});
+
+    const runtime_state = try schema.decodeClient((try state.prepareSend()).?);
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(@as(schema.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
 }

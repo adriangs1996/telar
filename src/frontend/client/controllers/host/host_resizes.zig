@@ -6,14 +6,11 @@ const platform = @import("../../../platform/root.zig");
 const host_application = @import("../../application/host/root.zig");
 const client_model = @import("../../model/root.zig");
 const host_resources = @import("host_resources.zig");
+const host_capabilities = @import("host_capabilities.zig");
 
 const Client = @import("../../client.zig");
 const host_resize = host_application.host_resize;
 const schema = core.schema;
-
-/// Pixel geometry plus the host background, so the appearance follows the
-/// outer terminal after every resize as well as at startup.
-const pixel_queries = "\x1b[14t\x1b[16t\x1b]11;?\x07";
 
 pub const Source = struct {
     tty: *const platform.Tty,
@@ -37,7 +34,7 @@ pub fn schedule(client: *Client, watcher: *platform.ResizeWatcher) !void {
 pub fn handle(client: *Client, result: anyerror!void, source: Source) !?client_model.HostCommit {
     try result;
     const commit = try apply(client, source.tty.size());
-    try queryPixels(client);
+    try host_capabilities.refresh(client);
     try schedule(client, source.watcher);
 
     return commit;
@@ -107,15 +104,6 @@ fn deliverResources(raw_context: *anyopaque, commit: client_model.HostCommit) !v
     try host_resources.deliver(client, commit);
 }
 
-fn queryPixels(client: *Client) !void {
-    try writePixelQueries(client.writer);
-}
-
-fn writePixelQueries(writer: *std.Io.Writer) !void {
-    try writer.writeAll(pixel_queries);
-    try writer.flush();
-}
-
 test "initial host size normalizes an empty grid and resolves pixels" {
     try std.testing.expectEqual(schema.TerminalSize{
         .cols = 80,
@@ -128,13 +116,4 @@ test "initial host size normalizes an empty grid and resolves pixels" {
         .width_px = 800,
         .height_px = 480,
     }));
-}
-
-test "a resize requests current window and cell pixels" {
-    var bytes: [pixel_queries.len]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&bytes);
-
-    try writePixelQueries(&writer);
-
-    try std.testing.expectEqualStrings(pixel_queries, writer.buffered());
 }

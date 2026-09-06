@@ -3,9 +3,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const graphics = @import("../graphics/root.zig");
 const platform = @import("../platform/root.zig");
-const kitty = graphics.kitty;
 
 const Io = std.Io;
 const diagnostics = core.diagnostics;
@@ -53,7 +51,6 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
     const writer = &output_writer.interface;
 
     try writer.writeAll(platform.enter_sequence);
-    try writer.writeAll(kitty.capability_query);
     try writer.flush();
     defer {
         writer.writeAll(platform.leave_sequence) catch {};

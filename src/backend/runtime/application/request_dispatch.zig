@@ -46,6 +46,8 @@ const detach_pane_commands = @import("commands/detach_pane.zig");
 const detach_pane_controller = @import("../entrypoints/requests/detach_pane.zig");
 const frame_ack_commands = @import("commands/frame_ack.zig");
 const frame_ack_controller = @import("../entrypoints/requests/frame_ack.zig");
+const terminal_colors_commands = @import("commands/terminal_colors.zig");
+const terminal_colors_controller = @import("../entrypoints/requests/terminal_colors.zig");
 const graphics_configuration_commands = @import("commands/graphics_configuration.zig");
 const graphics_configuration_controller = @import("../entrypoints/requests/graphics_configuration.zig");
 const graphics_credit_commands = @import("commands/graphics_credit.zig");
@@ -180,6 +182,7 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             .request_graphics_snapshot = routeRequestGraphicsSnapshot,
             .graphics_credit = routeGraphicsCredit,
             .configure_graphics = routeConfigureGraphics,
+            .configure_terminal_colors = routeConfigureTerminalColors,
             .request_runtime_state = routeRequestRuntimeState,
             .create_workspace = routeCreateWorkspace,
             .rename_workspace = routeRenameWorkspace,
@@ -666,6 +669,15 @@ pub fn Dispatcher(comptime Application: type, comptime runtime_port: RuntimePort
             var controller = GraphicsConfigurationController.init(&handler);
 
             try controller.configureGraphics(configure);
+        }
+
+        fn routeConfigureTerminalColors(request: *ClientRequestContext, colors: schema.ConfigureTerminalColors) !void {
+            var handler: terminal_colors_commands.Handler(Application) = .{
+                .application = request.application,
+                .session = request.session,
+            };
+            var controller: terminal_colors_controller.Controller(@TypeOf(&handler)) = .{ .executor = &handler };
+            controller.configureTerminalColors(colors);
         }
 
         fn routeRequestRuntimeState(request: *ClientRequestContext, runtime_state: schema.RequestRuntimeState) !void {

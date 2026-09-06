@@ -260,6 +260,8 @@ pub const Message = union(enum) {
     request_graphics_snapshot: schema.RequestGraphicsSnapshot,
     graphics_credit: schema.GraphicsCredit,
     configure_graphics: schema.ConfigureGraphics,
+    configure_terminal_colors: schema.ConfigureTerminalColors,
+    request_runtime_state: schema.RequestRuntimeState,
     create_workspace: OwnedCreateWorkspace,
     rename_workspace: OwnedWorkspaceRename,
     set_pane_viewport: schema.SetPaneViewport,
@@ -612,6 +614,8 @@ pub const Outbox = struct {
             .request_graphics_snapshot => |value| schema.encodeRequestGraphicsSnapshot(buffer, value),
             .graphics_credit => |value| schema.encodeGraphicsCredit(buffer, value),
             .configure_graphics => |value| schema.encodeConfigureGraphics(buffer, value),
+            .configure_terminal_colors => |value| schema.encodeConfigureTerminalColors(buffer, value),
+            .request_runtime_state => |value| schema.encodeRequestRuntimeState(buffer, value),
             .create_workspace => |*value| schema.encodeCreateWorkspace(
                 buffer,
                 value.view(outbox.launchCwd(outbox.head)),

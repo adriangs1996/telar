@@ -414,6 +414,7 @@ pub const Event = union(enum) {
         window_pixels: struct { width: u32, height: u32 },
         cell_pixels: struct { width: u32, height: u32 },
         mouse_pixels: struct { supported: bool },
+        foreground_color: Rgb8,
         background_color: Rgb8,
         primary_device_attributes,
     };
@@ -549,9 +550,7 @@ pub const Parsed = struct {
 /// the start of an arrow key until the next byte does or does not come. This
 /// reports `incomplete` with a length of zero and lets the caller keep the
 /// bytes, which is the only honest thing to do.
-/// Parses one OSC reply from the host. Only the OSC 11 background report is
-/// surfaced; every other OSC is consumed silently once its terminator
-/// arrives.
+/// Surfaces OSC 10/11 color reports and consumes other complete OSC replies.
 fn parseOscReply(input: []const u8) Parsed {
     var end: usize = 2;
     var terminator_len: usize = 0;
@@ -574,9 +573,12 @@ fn parseOscReply(input: []const u8) Parsed {
 
     const length = end + terminator_len;
     const body = input[2..end];
-    if (std.mem.startsWith(u8, body, "11;")) {
+    if (std.mem.startsWith(u8, body, "10;") or std.mem.startsWith(u8, body, "11;")) {
         if (parseOscColor(body[3..])) |color| {
-            return .{ .event = .{ .terminal_response = .{ .background_color = color } }, .len = length };
+            return .{ .event = .{ .terminal_response = if (body[1] == '0')
+                .{ .foreground_color = color }
+            else
+                .{ .background_color = color } }, .len = length };
         }
     }
 
@@ -596,6 +598,10 @@ fn parseOscColor(text: []const u8) ?Event.Rgb8 {
         if (digits.len == 0 or digits.len > 4) {
             return null;
         }
+        for (digits) |digit| {
+            _ = std.fmt.charToDigit(digit, 16) catch return null;
+        }
+
         var value: u16 = 0;
         for (digits[0..@min(digits.len, 2)]) |digit| {
             value = value * 16 + (std.fmt.charToDigit(digit, 16) catch return null);
@@ -2021,6 +2027,26 @@ test "an oversized copy fails rather than silently doing nothing" {
     var huge: [max_clipboard_bytes + 1]u8 = undefined;
     @memset(&huge, 'x');
     try testing.expectError(error.TooLarge, writeClipboard(&w, &huge));
+}
+
+test "OSC 10 supports both terminators and validates all color digits" {
+    for ([_][]const u8{ "\x07", "\x1b\\" }) |terminator| {
+        var buffer: [64]u8 = undefined;
+        const reply = try std.fmt.bufPrint(&buffer, "\x1b]10;rgb:ffff/1234/5678{s}", .{terminator});
+        const parsed = parse(reply).?;
+        try testing.expectEqual(reply.len, parsed.len);
+        try testing.expectEqual(Event.Rgb8{ .r = 255, .g = 0x12, .b = 0x56 }, parsed.event.terminal_response.foreground_color);
+        for (2..reply.len) |end| {
+            const partial = parse(reply[0..end]).?;
+            try testing.expect(partial.event == .incomplete);
+            try testing.expectEqual(@as(usize, 0), partial.len);
+        }
+    }
+
+    const malformed = "\x1b]10;rgb:ffzz/0000/0000\x07";
+    const parsed = parse(malformed).?;
+    try testing.expectEqual(malformed.len, parsed.len);
+    try testing.expect(parsed.event == .incomplete);
 }
 
 test "an OSC 11 reply reports the host background and other OSCs are consumed" {

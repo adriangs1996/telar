@@ -261,6 +261,7 @@ pub const Application = struct {
             .proxy = application.proxy_runtime.capability(),
             .panes = &application.model.panes,
             .launch_fault = application.launch_fault,
+            .terminal_colors = application.workspaceTerminalColors(request.location.workspace),
         };
         const fresh = try launcher.launch(request);
         application.model.agents.touch();
@@ -507,10 +508,51 @@ pub const Application = struct {
             }
 
             slot.* = .{ .workspace = workspace, .owner = key };
+            application.applyWorkspaceTerminalColors(workspace, key);
             return true;
         }
 
         return false;
+    }
+
+    /// Queries authority without acquiring an unowned workspace.
+    /// Example: `const owner = application.geometryOwner(workspace) orelse return;`.
+    pub fn geometryOwner(application: *const Application, workspace: schema.WorkspaceLocation) ?ClientKey {
+        for (application.geometry_leases) |slot| {
+            const lease = slot orelse continue;
+            if (std.meta.eql(lease.workspace, workspace)) {
+                return lease.owner;
+            }
+        }
+
+        return null;
+    }
+
+    fn workspaceTerminalColors(application: *Application, workspace: schema.WorkspaceLocation) schema.TerminalColors {
+        const owner = application.geometryOwner(workspace) orelse return .{};
+        const session = application.clients.resolve(owner) orelse return .{};
+        return session.terminal_colors;
+    }
+
+    /// Updates only workspaces already controlled by this exact generation.
+    /// Example: `application.refreshTerminalColors(session.key);`.
+    pub fn refreshTerminalColors(application: *Application, key: ClientKey) void {
+        for (application.geometry_leases) |slot| {
+            const lease = slot orelse continue;
+            if (std.meta.eql(lease.owner, key)) {
+                application.applyWorkspaceTerminalColors(lease.workspace, key);
+            }
+        }
+    }
+
+    fn applyWorkspaceTerminalColors(application: *Application, workspace: schema.WorkspaceLocation, key: ClientKey) void {
+        const session = application.clients.resolve(key) orelse return;
+        for (application.model.panes.items) |slot| {
+            const pane = slot orelse continue;
+            if (std.meta.eql(pane.location.workspace, workspace)) {
+                pane.setTerminalColors(session.terminal_colors);
+            }
+        }
     }
 
     fn releaseGeometry(application: *Application, key: ClientKey) void {
@@ -822,6 +864,61 @@ pub fn handle(application: *Application, event: RuntimeEvent, resources: EventRe
 fn deinitWorkspaces(application: *Application) void {
     var repository = application.workspaceRepository();
     repository.deinit();
+}
+
+test "terminal colors follow workspace authority without letting spectators acquire it" {
+    var fixture: @import("../tests/support.zig").PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = fixture.pane;
+    const workspace = pane.location.workspace;
+    var owner: ClientSession = undefined;
+    owner.key = .{ .id = 1, .generation = 1 };
+    owner.terminal_colors = .{ .foreground = .{ 255, 255, 255 }, .background = .{ 16, 16, 16 } };
+    owner.closing = true;
+    var spectator: ClientSession = undefined;
+    spectator.key = .{ .id = 2, .generation = 1 };
+    spectator.terminal_colors = .{ .background = .{ 240, 240, 240 } };
+    spectator.closing = true;
+    var clients: ClientStore = .{};
+    clients.items[0] = &owner;
+    clients.items[1] = &spectator;
+    var application: Application = undefined;
+    application.clients = &clients;
+    application.geometry_leases = @splat(null);
+    application.model.panes = .{};
+    application.model.workspaces = .{};
+    application.gpa = std.testing.allocator;
+    try application.model.panes.insert(pane);
+
+    var wire_buffer: [16]u8 = undefined;
+    const declaration = try schema.encodeConfigureTerminalColors(&wire_buffer, .{ .background = .{ 240, 240, 240 } });
+    try application.dispatchClientMessage(&spectator, try schema.decodeClient(declaration));
+    application.refreshTerminalColors(spectator.key);
+    try std.testing.expect(application.geometryOwner(workspace) == null);
+    try std.testing.expect(pane.terminal.colors.background.get() == null);
+    try std.testing.expect(application.holdsGeometry(owner.key, workspace));
+    try std.testing.expectEqual(@as(u8, 16), pane.terminal.colors.background.get().?.r);
+    try std.testing.expectEqualDeep(owner.terminal_colors, application.workspaceTerminalColors(workspace));
+    const replacement = try schema.encodeConfigureTerminalColors(&wire_buffer, .{ .foreground = .{ 255, 255, 255 }, .background = .{ 32, 32, 32 } });
+    try application.dispatchClientMessage(&owner, try schema.decodeClient(replacement));
+    try std.testing.expectEqual(@as(u8, 32), pane.terminal.colors.background.default.?.r);
+    owner.terminal_colors.background = .{ 16, 16, 16 };
+    application.refreshTerminalColors(owner.key);
+    application.refreshTerminalColors(spectator.key);
+    try std.testing.expectEqual(@as(u8, 16), pane.terminal.colors.background.get().?.r);
+
+    pane.stream.nextSlice("\x1b]11;rgb:12/34/56\x07");
+    application.releaseGeometryFor(owner.key, workspace);
+    try std.testing.expectEqual(@as(u8, 16), pane.terminal.colors.background.default.?.r);
+    try std.testing.expect(application.holdsGeometry(spectator.key, workspace));
+    try std.testing.expectEqual(@as(u8, 240), pane.terminal.colors.background.default.?.r);
+    try std.testing.expectEqual(@as(u8, 0x12), pane.terminal.colors.background.get().?.r);
+    pane.stream.nextSlice("\x1b]111\x07");
+    try std.testing.expectEqual(@as(u8, 240), pane.terminal.colors.background.get().?.r);
+
+    application.refreshTerminalColors(.{ .id = spectator.key.id, .generation = 2 });
+    try std.testing.expectEqual(@as(u8, 240), pane.terminal.colors.background.get().?.r);
 }
 
 test "a workspace geometry lease is exclusive to one client generation" {

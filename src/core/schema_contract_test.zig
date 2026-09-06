@@ -34,7 +34,7 @@ const EntryMetadata = struct {
     golden_hex: []const u8,
 };
 
-const corpus_len = 89;
+const corpus_len = 90;
 const corpus_storage_size = 8 * 1024;
 
 fn buildCorpus(storage: []u8) ![corpus_len]Entry {
@@ -314,6 +314,12 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     helper.add(.{ .name = "configure_graphics", .direction = .client, .golden_hex = golden.configure_graphics }, helper.commit(
         try schema.encodeConfigureGraphics(helper.space(), .{
             .shared = true,
+        }),
+    ));
+    helper.add(.{ .name = "configure_terminal_colors", .direction = .client, .golden_hex = golden.configure_terminal_colors }, helper.commit(
+        try schema.encodeConfigureTerminalColors(helper.space(), .{
+            .foreground = .{ 255, 255, 255 },
+            .background = .{ 16, 16, 16 },
         }),
     ));
     helper.add(.{ .name = "request_runtime_state", .direction = .client, .golden_hex = golden.request_runtime_state }, helper.commit(
@@ -939,6 +945,7 @@ const golden = struct {
     pub const request_graphics_snapshot = "110500000000000000";
     pub const graphics_credit = "1205000000000000000010000000000000";
     pub const configure_graphics = "1301";
+    pub const configure_terminal_colors = "2c01ffffff01101010";
     pub const request_runtime_state = "140900000000000000";
     pub const set_pane_viewport = "1705000000000000002a000000";
     pub const copy_selection = "18050000000000000001000200000003000400000001";
@@ -1020,6 +1027,20 @@ fn decodeEntry(entry: Entry, payload: []const u8) !void {
         .client => _ = try schema.decodeClient(payload),
         .server => _ = try schema.decodeServer(payload),
     }
+}
+
+test "terminal color configuration preserves partial unknowns and rejects malformed flags" {
+    var buffer: [16]u8 = undefined;
+    for ([_]?[3]u8{ null, .{ 1, 2, 3 } }) |foreground| {
+        for ([_]?[3]u8{ null, .{ 4, 5, 6 } }) |background| {
+            const colors: schema.TerminalColors = .{ .foreground = foreground, .background = background };
+            const encoded = try schema.encodeConfigureTerminalColors(&buffer, colors);
+            const decoded = try schema.decodeClient(encoded);
+            try std.testing.expectEqualDeep(colors, decoded.configure_terminal_colors);
+        }
+    }
+
+    try std.testing.expectError(error.InvalidBoolean, schema.decodeClient(&.{ 0x2c, 2, 0 }));
 }
 
 test "golden corpus bytes are stable" {

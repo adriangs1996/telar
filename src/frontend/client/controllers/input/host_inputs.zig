@@ -76,6 +76,7 @@ pub const State = struct {
     input_timeout: deadline_timer.Scheduler = .{},
     binding_timeout: deadline_timer.Scheduler = .{},
     application_leases: key_routing.Leases = .{},
+    startup_input: @import("../../resources/startup_input.zig").State = .{},
 
     /// Creates the host input state around the client-owned TTY handle.
     ///
@@ -205,12 +206,46 @@ fn routeChunk(client: *Client) !bool {
         return true;
     }
 
+    if (client.startup.holdsInput()) {
+        var handler: InputHandler = .{ .client = client };
+        try state.startup_input.feed(chunk.slice(), &handler);
+        try scheduleRead(client);
+        return false;
+    }
+
+    const stop = try routeBytes(client, chunk.slice());
+    if (!stop) {
+        try scheduleRead(client);
+    }
+
+    return stop;
+}
+
+/// Replays early input only after the runtime has supplied the active pane.
+/// Example: `if (try replayStartup(client)) detachClient();`.
+pub fn replayStartup(client: *Client) !bool {
+    const bytes = try client.host_input.startup_input.finish();
+    var offset: usize = 0;
+    while (offset < bytes.len) {
+        const end = @min(offset + chunk_size, bytes.len);
+        if (try routeBytes(client, bytes[offset..end])) {
+            return true;
+        }
+
+        offset = end;
+    }
+
+    return false;
+}
+
+fn routeBytes(client: *Client, bytes: []const u8) !bool {
+    const state = &client.host_input;
     client.presenter.noteInput(client_clock.monotonic(client.io));
     var handler: InputHandler = .{ .client = client };
     const prefix_was_pending = state.router.prefixPending();
     const lease_overflows_before = state.router.leaseOverflowCount();
     const control = try state.router.feed(.{
-        .bytes = chunk.slice(),
+        .bytes = bytes,
         .now_ns = client_clock.monotonic(client.io),
     }, &handler);
     client.telemetry.metrics.key_lease_overflows +%= state.router.leaseOverflowCount() -% lease_overflows_before;
@@ -219,7 +254,6 @@ fn routeChunk(client: *Client) !bool {
     }
 
     try finishRouting(client, prefix_was_pending);
-    try scheduleRead(client);
 
     return false;
 }

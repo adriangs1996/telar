@@ -16,6 +16,35 @@ const encodeDerived = codec.encodeDerived;
 const validateErrorMessage = codec.validateErrorMessage;
 const decodeFailureCode = codec.decodeFailureCode;
 
+pub const ConfigureTerminalColors = types.TerminalColors;
+
+/// Example: `const bytes = try encodeConfigureTerminalColors(&buffer, colors);`.
+pub fn encodeConfigureTerminalColors(buffer: []u8, colors: ConfigureTerminalColors) ![]const u8 {
+    var encoder = wire.Encoder.init(buffer);
+    try encoder.writeByte(@intFromEnum(ClientTag.configure_terminal_colors));
+
+    for ([_]?[3]u8{ colors.foreground, colors.background }) |color| {
+        try encoder.writeByte(@intFromBool(color != null));
+        if (color) |rgb| {
+            try encoder.writeBytes(&rgb);
+        }
+    }
+
+    return encoder.finish();
+}
+
+/// Example: `const colors = try decodeConfigureTerminalColors(&decoder);`.
+pub fn decodeConfigureTerminalColors(decoder: *wire.Decoder) !ConfigureTerminalColors {
+    var colors: ConfigureTerminalColors = .{};
+    for ([_]*?[3]u8{ &colors.foreground, &colors.background }) |color| {
+        if (try decoder.readBool()) {
+            color.* = (try decoder.readBytes(3))[0..3].*;
+        }
+    }
+
+    return colors;
+}
+
 pub const RequestRuntimeState = struct {
     client_identity: ClientIdentity,
 

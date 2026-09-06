@@ -6,6 +6,7 @@ const client_model = @import("../../model/root.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const pane_graphics = @import("../panes/pane_graphics.zig");
 const tab_snapshots = @import("../tabs/tab_snapshots.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 const Client = @import("../../client.zig");
 const host_resource_delivery = host_application.host_resource_delivery;
@@ -35,7 +36,17 @@ fn effects(client: *Client) host_resource_delivery.Effects {
         .resize_view = resizeView,
         .sync_pane_geometry = syncPaneGeometry,
         .apply_appearance = applyAppearance,
+        .sync_terminal_colors = syncTerminalColors,
     };
+}
+
+fn syncTerminalColors(raw_context: *anyopaque, colors: schema.TerminalColors) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+    if (client.startup.phase != .opening and client.startup.phase != .active) {
+        return;
+    }
+
+    try runtime_transport.enqueue(client, .{ .configure_terminal_colors = colors });
 }
 
 fn applyAppearance(raw_context: *anyopaque, appearance: client_model.HostAppearance) !void {

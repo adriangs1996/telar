@@ -50,6 +50,13 @@ pub const min_notification_duration_ms: u32 = 500;
 pub const max_notification_duration_ms: u32 = 60_000;
 pub const default_notification_duration_ms: u32 = 4_000;
 
+/// Host defaults used for terminal queries, independently of cell styling.
+/// Example: `const colors: TerminalColors = .{ .background = .{ 16, 16, 16 } };`.
+pub const TerminalColors = struct {
+    foreground: ?[3]u8 = null,
+    background: ?[3]u8 = null,
+};
+
 pub const TerminalSize = struct {
     cols: u16,
     rows: u16,

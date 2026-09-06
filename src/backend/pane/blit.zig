@@ -558,6 +558,23 @@ test "unmodified colours defer to the outer terminal theme" {
     try testing.expect(buf.at(9, 1).?.style.bg == .default);
 }
 
+test "host query defaults do not turn semantic cells into opaque RGB backgrounds" {
+    const gpa = testing.allocator;
+    var pane = try Pane.init(gpa, 10, 2);
+    defer pane.deinit();
+    var buf = try ui.Buffer.init(gpa, 10, 2);
+    defer buf.deinit();
+    pane.term.colors.foreground.default = .{ .r = 255, .g = 255, .b = 255 };
+    pane.term.colors.background.default = .{ .r = 16, .g = 16, .b = 16 };
+
+    try pane.write("x\x1b[48;2;44;44;44my");
+    _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
+    try testing.expect(buf.at(0, 0).?.style.fg == .default);
+    try testing.expect(buf.at(0, 0).?.style.bg == .default);
+    try testing.expect(buf.at(9, 1).?.style.bg == .default);
+    try testing.expectEqual(ui.Color{ .rgb = .{ 44, 44, 44 } }, buf.at(1, 0).?.style.bg);
+}
+
 test "OSC default colour overrides stay inside the pane" {
     const gpa = testing.allocator;
     var pane = try Pane.init(gpa, 10, 2);

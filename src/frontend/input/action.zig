@@ -23,6 +23,7 @@ pub const SplitDirection = enum(u8) { horizontal, vertical };
 pub const Direction = enum(u8) { left, right, up, down };
 pub const SidebarDirection = enum(u8) { left, right };
 pub const TabMove = enum(u8) { previous, next };
+pub const ScrollDirection = enum(u8) { up, down };
 
 pub const Notification = struct {
     pub const Input = struct {
@@ -152,6 +153,7 @@ pub const CommandTab = struct {
         return std.fs.path.basename(command.argument(0));
     }
 };
+
 pub const Action = union(enum) {
     split_pane: SplitDirection,
     focus_pane: Direction,
@@ -181,9 +183,18 @@ pub const Action = union(enum) {
     lua_callback: CallbackRef,
     lua_expr: CallbackRef,
     plugin: PluginAction,
+    scroll_pane: ScrollDirection,
 
     /// Parses stable built-in action names used by configuration and tests.
     pub fn parse(name: []const u8) !Action {
+        if (std.mem.eql(u8, name, "scroll-pane-up")) {
+            return .{ .scroll_pane = .up };
+        }
+
+        if (std.mem.eql(u8, name, "scroll-pane-down")) {
+            return .{ .scroll_pane = .down };
+        }
+
         if (std.mem.eql(u8, name, "split-horizontal")) {
             return .{ .split_pane = .horizontal };
         }

@@ -405,6 +405,7 @@ test "a stale generation cannot release a live ingest borrow" {
     pane.generation = 11;
     pane.ingest_pending = true;
     pane.actor_count = 1;
+    pane.pending_terminal_colors = null;
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };

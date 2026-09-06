@@ -69,6 +69,7 @@ pub const max_notification_duration_ms = types.max_notification_duration_ms;
 pub const default_notification_duration_ms = types.default_notification_duration_ms;
 
 pub const TerminalSize = types.TerminalSize;
+pub const TerminalColors = types.TerminalColors;
 pub const PaneTarget = types.PaneTarget;
 pub const WorkspaceLocation = types.WorkspaceLocation;
 pub const TabLocation = types.TabLocation;
@@ -317,6 +318,8 @@ pub const encodeClientLayoutUpdate = messages.layout.encodeClientLayoutUpdate;
 pub const encodeClientLayoutSnapshot = messages.layout.encodeClientLayoutSnapshot;
 
 pub const RequestCompleted = messages.runtime.RequestCompleted;
+pub const ConfigureTerminalColors = messages.runtime.ConfigureTerminalColors;
+pub const encodeConfigureTerminalColors = messages.runtime.encodeConfigureTerminalColors;
 pub const RequestRuntimeState = messages.runtime.RequestRuntimeState;
 pub const RequestFailed = messages.runtime.RequestFailed;
 pub const ProxyStatus = messages.runtime.ProxyStatus;

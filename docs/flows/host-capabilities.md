@@ -1,8 +1,10 @@
 # Host capabilities
 
 Each client negotiates the features of its own exterior terminal. The result is
-disposable client state. It never becomes runtime truth, because two clients
-attached to the same runtime may use different terminals.
+disposable client state. Graphics and mouse support never become runtime truth,
+because two clients may use different terminals. Known default colors are sent
+as per-client values; the geometry owner supplies each pane's defaults. See
+[terminal colors](terminal-colors.md).
 
 ## End-to-end paths
 
@@ -49,12 +51,14 @@ Presenter
 ```
 
 The protocol adapter recognizes the two reserved Kitty image IDs, window and
-cell pixel reports, mode 1016 support, and the OSC 11 background report,
-which resolves the host appearance (light or dark) by luminance. When the
+cell pixel reports, mode 1016 support, and OSC 10/11 color reports. RGB values
+remain in the model; the background also resolves light or dark appearance by
+luminance. When the
 appearance changes and `client.appearance` configures a theme for it, the
 delivery handler swaps the view theme unless `--theme` locked it; the same
 preference applies when a configuration generation is adopted. The
-background is re-queried with the pixel probes on every host resize. It converts them into
+colors are queried at startup and refreshed with pixel probes on host resize,
+without overlapping color-query windows. The adapter converts replies into
 `HostCapabilityObservation`, which contains no parser or terminal-protocol
 types. An unrelated Kitty image ID and primary device attributes are no-ops.
 
@@ -111,8 +115,9 @@ version. The presenter folds a changed version into its paced frame and records
 the version it painted. A repeated reply or deadline on an already settled
 model schedules no frame.
 
-`client_startup` registers the deadline through
-`host_capabilities.scheduleExpiry` after the runtime handshake.
+`client_startup` begins negotiation through `host_capabilities.begin` before
+subscribing to runtime state. The same adapter refreshes queries on resize and
+owns a single replaceable deadline through `host_capabilities.scheduleExpiry`.
 `host_capabilities.handleExpiry` validates its completion before applying the
 fallback, so a failed timer changes no capability state.
 

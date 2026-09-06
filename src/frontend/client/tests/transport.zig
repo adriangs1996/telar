@@ -290,6 +290,18 @@ test "client startup waits for runtime layout before its initial open" {
 
     try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
     try std.testing.expect(client.runtime_transport.receive_pending);
+    try std.testing.expect(client.host_input.read_pending);
+    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expect(!try client_startup.advance(client));
+    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    var input: InputHandler = .{ .client = client };
+    try input.terminalResponse(.{ .foreground_color = .{ .r = 255, .g = 255, .b = 255 } });
+    try std.testing.expect(!try client_startup.advance(client));
+    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try input.terminalResponse(.{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
+    try std.testing.expect(!try client_startup.advance(client));
+    try harness.settle();
+
     var buffer: [256]u8 = undefined;
     const configure = try harness.nextClientMessage(&buffer);
     try std.testing.expect(configure == .configure_graphics);
@@ -297,6 +309,12 @@ test "client startup waits for runtime layout before its initial open" {
         kitty.clientSupportsSharedMemory(),
         configure.configure_graphics.shared,
     );
+    const colors = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(colors == .configure_terminal_colors);
+    try std.testing.expectEqualDeep(schema.TerminalColors{
+        .foreground = .{ 255, 255, 255 },
+        .background = .{ 16, 16, 16 },
+    }, colors.configure_terminal_colors);
     const runtime_state = try harness.nextClientMessage(&buffer);
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(client.client_identity, runtime_state.request_runtime_state.client_identity);
@@ -314,6 +332,62 @@ test "client startup waits for runtime layout before its initial open" {
     var arguments = open.open_pane.launch.?.arguments();
     try std.testing.expectEqualStrings("/bin/sh", (try arguments.next()).?);
     try std.testing.expect((try arguments.next()) == null);
+}
+
+test "startup timeout publishes unknown colors once and consumes late replies" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.startup.phase = .probing;
+    _ = client.host_negotiation.begin(0);
+    _ = try host_capabilities.handleExpiry(client, {});
+    try std.testing.expect(!try client_startup.advance(client));
+    try harness.settle();
+    var buffer: [128]u8 = undefined;
+    _ = try harness.nextClientMessage(&buffer);
+    const colors = try harness.nextClientMessage(&buffer);
+    try std.testing.expectEqualDeep(schema.TerminalColors{}, colors.configure_terminal_colors);
+    try std.testing.expect((try harness.nextClientMessage(&buffer)) == .request_runtime_state);
+
+    var input: InputHandler = .{ .client = client };
+    const revision = client.model.version();
+    try input.terminalResponse(.{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
+    try std.testing.expectEqualDeep(revision, client.model.version());
+    try std.testing.expect(!try client_startup.advance(client));
+    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+}
+
+test "startup replays early typing exactly once after pane activation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    client.startup.phase = .opening;
+    const bytes = "abc\x1b]11;rgb:10/10/10\x07";
+    var chunk: host_inputs.Chunk = .{ .len = bytes.len };
+    @memcpy(chunk.bytes[0..bytes.len], bytes);
+    try std.testing.expect(!try host_inputs.handleRead(client, chunk));
+    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try harness.bootstrap();
+    try std.testing.expect(!try client_startup.advance(client));
+    try harness.settle();
+
+    var buffer: [256]u8 = undefined;
+    var received: [3]u8 = undefined;
+    var len: usize = 0;
+    while (len < received.len) {
+        const message = try harness.nextClientMessage(&buffer);
+        try std.testing.expectEqual(TestHarness.bootstrap_pane, message.pane_input.pane_id);
+        const input = message.pane_input.bytes;
+        try std.testing.expect(input.len <= received.len - len);
+        @memcpy(received[len..][0..input.len], input);
+        len += input.len;
+    }
+
+    try std.testing.expectEqualStrings("abc", &received);
+    try std.testing.expect(!try client_startup.advance(client));
+    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
 }
 
 test "restored client layout controls the initial attach geometry" {

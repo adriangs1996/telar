@@ -320,6 +320,7 @@ pub const HostCapabilities = struct {
     cell_height_px: u32 = 0,
     mouse_pixels: kitty.Support = .unknown,
     appearance: HostAppearance = .unknown,
+    terminal_colors: schema.TerminalColors = .{},
 
     /// Resolves one cell size, preferring the host's explicit cell report.
     ///
@@ -365,7 +366,9 @@ pub const HostCapabilities = struct {
                 next.cell_height_px = size.height;
             },
             .mouse_pixels => |support| next.mouse_pixels = observedSupport(support),
+            .foreground => |color| next.terminal_colors.foreground = .{ color.r, color.g, color.b },
             .background => |color| {
+                next.terminal_colors.background = .{ color.r, color.g, color.b };
                 // ITU-R BT.601 luma; the midpoint splits light from dark.
                 const luma = 299 * @as(u32, color.r) + 587 * @as(u32, color.g) + 114 * @as(u32, color.b);
                 next.appearance = if (luma >= 128_000) .light else .dark;
@@ -404,6 +407,7 @@ pub const HostCapabilityObservation = union(enum) {
     window_pixels: PixelSize,
     cell_pixels: PixelSize,
     mouse_pixels: HostCapabilitySupport,
+    foreground: struct { r: u8, g: u8, b: u8 },
     background: struct { r: u8, g: u8, b: u8 },
 };
 

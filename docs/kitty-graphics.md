@@ -23,6 +23,11 @@ are clamped to `[-1000, 1000]`, while sidebar layers use `-10` through `-8`.
 `telar-core` contains only bounded wire values, formats, rectangles, clipping,
 and schema messages. It contains no parser, allocator, PTY, or terminal writer.
 
+`kitty_protocol` is a dependency-free leaf module that encodes Kitty image
+transmissions, placements, and deletions into a caller-owned writer. It owns no
+resources or pacing policy. The frontend adapter converts Telar image metadata
+and applies client-specific byte budgets and z-index limits before calling it.
+
 ## Capability detection
 
 On client startup Telar sends direct-data KGP probes for raw image support and

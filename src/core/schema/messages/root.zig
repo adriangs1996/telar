@@ -52,6 +52,7 @@ pub const ClientMessage = union(enum) {
     request_graphics_snapshot: graphics.RequestGraphicsSnapshot,
     graphics_credit: graphics.GraphicsCredit,
     configure_graphics: graphics.ConfigureGraphics,
+    configure_terminal_colors: runtime.ConfigureTerminalColors,
     request_runtime_state: runtime.RequestRuntimeState,
     create_workspace: workspace.CreateWorkspaceView,
     rename_workspace: workspace.RenameWorkspace,
@@ -156,6 +157,7 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         .configure_graphics => .{
             .configure_graphics = try Derived(graphics.ConfigureGraphics).decode(&decoder),
         },
+        .configure_terminal_colors => .{ .configure_terminal_colors = try runtime.decodeConfigureTerminalColors(&decoder) },
         .request_runtime_state => .{ .request_runtime_state = try runtime.decodeRequestRuntimeState(&decoder) },
         .create_workspace => .{ .create_workspace = try workspace.decodeCreateWorkspace(&decoder) },
         .rename_workspace => .{ .rename_workspace = try workspace.decodeRenameWorkspace(&decoder) },

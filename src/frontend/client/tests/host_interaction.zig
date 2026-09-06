@@ -310,6 +310,7 @@ test "client event dispatch observes a completed capability expiry" {
     const client = harness.client;
     const pending_updates = client.presenter.pending_updates;
     var heap = core.diagnostics.Heap.init(std.testing.allocator);
+    client.host_negotiation.deadline_ns = 0;
 
     const first = try client_events.handle(
         client,
@@ -388,6 +389,7 @@ test "capability effect failure retains the committed fallback" {
     const client = harness.client;
     client.sidebar_rendering = .kitty_hybrid;
     const pending_updates = client.presenter.pending_updates;
+    client.host_negotiation.deadline_ns = 0;
 
     try std.testing.expectError(
         error.KittyGraphicsUnsupported,

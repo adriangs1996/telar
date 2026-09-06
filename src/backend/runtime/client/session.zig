@@ -32,6 +32,17 @@ pub const Session = struct {
     last_input_pane: core.schema.PaneId = .invalid,
     last_input_sequence: u64 = 0,
     pending_pane_focus: ?PendingPaneFocus = null,
+    terminal_colors: core.schema.TerminalColors = .{},
+
+    /// Example: `if (session.setTerminalColors(colors)) updateOwnedPanes();`.
+    pub fn setTerminalColors(session: *Session, colors: core.schema.TerminalColors) bool {
+        if (std.meta.eql(session.terminal_colors, colors)) {
+            return false;
+        }
+
+        session.terminal_colors = colors;
+        return true;
+    }
 
     /// Reserves one correlated focus exchange before its command is delivered.
     /// Example: `try session.reserveFocus(pending);`.

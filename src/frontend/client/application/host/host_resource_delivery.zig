@@ -21,6 +21,7 @@ pub const Effects = struct {
     resize_view: *const fn (*anyopaque, schema.TerminalSize) anyerror!void,
     sync_pane_geometry: *const fn (*anyopaque) anyerror!void,
     apply_appearance: *const fn (*anyopaque, client_model.HostAppearance) anyerror!void,
+    sync_terminal_colors: *const fn (*anyopaque, schema.TerminalColors) anyerror!void,
 };
 
 pub const DeliverHostResourcesHandler = struct {
@@ -37,6 +38,10 @@ pub const DeliverHostResourcesHandler = struct {
         try handler.validate(commit);
 
         if (commit.capabilities) |capabilities| {
+            if (!std.meta.eql(capabilities.previous.terminal_colors, capabilities.current.terminal_colors)) {
+                try handler.effects.sync_terminal_colors(handler.effects.context, capabilities.current.terminal_colors);
+            }
+
             if (capabilities.previous.appearance != capabilities.current.appearance) {
                 try handler.effects.apply_appearance(handler.effects.context, capabilities.current.appearance);
             }
@@ -133,8 +138,11 @@ const EffectCapture = struct {
             .resize_view = resizeView,
             .sync_pane_geometry = syncPaneGeometry,
             .apply_appearance = applyAppearance,
+            .sync_terminal_colors = syncTerminalColors,
         };
     }
+
+    fn syncTerminalColors(_: *anyopaque, _: schema.TerminalColors) !void {}
 
     fn applyAppearance(context: *anyopaque, appearance: client_model.HostAppearance) !void {
         const capture: *EffectCapture = @ptrCast(@alignCast(context));

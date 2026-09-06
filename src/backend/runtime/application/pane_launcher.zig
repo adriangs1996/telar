@@ -125,6 +125,7 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
         proxy: ?*proxy_mod.Proxy,
         panes: *PaneStore,
         launch_fault: ?*LaunchTestFault,
+        terminal_colors: schema.TerminalColors = .{},
 
         /// Executes one pane-launch transaction and returns only after both
         /// runtime observation actors own their work.
@@ -189,6 +190,7 @@ pub fn PaneLauncher(comptime RuntimeEvent: type) type {
                 .workspace_path = request.workspace_path,
                 .size = request.size,
                 .graphics_limits = launcher.panes.graphics_limits,
+                .terminal_colors = launcher.terminal_colors,
             });
 
             fresh.launch_record.capture(request.launch);

@@ -1,8 +1,9 @@
 # Client startup
 
 This flow starts after `run` has opened the host terminal and constructed one
-heap-stable `Client`. It ends when the runtime handshake is complete and every
-initial asynchronous event source is armed.
+heap-stable `Client`. It negotiates host colors before subscribing to the runtime
+state that triggers the first pane opening. See [terminal colors](terminal-colors.md)
+for probe ownership and early-input bounds.
 
 ## Boundary
 
@@ -18,11 +19,17 @@ client_startup.start
         |
 validate workbench geometry
         |
-configure_graphics
+start host probes and TTY input, arm asynchronous event sources
+        |
+run -> select.await -> client_events
+        |
+OSC 10/11 results or 250 ms deadline
+        |
+client_startup.advance
+        |
+configure_graphics -> configure_terminal_colors
         |
 request_runtime_state(client_identity)
-        |
-arm resize, runtime read, capability, telemetry, bar and config sources
         |
 client_layout_snapshot
         |
@@ -32,12 +39,13 @@ register initial_open continuation
         |
 open_pane(restored pane or default launch)
         |
-run -> select.await
+pane activation -> replay retained input
 ```
 
-The startup entrypoint is the only caller that knows this complete sequence.
-`run` starts it and then waits for `client_events` outcomes. The individual
-adapters still own their tokens, worker functions and rearming policy.
+The startup controller owns the negotiation gate and bootstrap ordering. The
+layout controller continues to restore the runtime snapshot and request the
+initial pane without knowing about probes. `run` waits for `client_events`
+outcomes; individual adapters own their tokens and rearming policy.
 
 ## Validation and handshake
 
@@ -45,14 +53,16 @@ Startup derives the initial pane size from the current workbench. An empty
 workbench returns `TerminalTooSmall` before request correlation or transport
 state changes.
 
-`runtime_transport.State.bootstrap` sends two synchronous frames through its
-bounded send buffer:
+After color negotiation settles, `runtime_transport.State.bootstrap` reserves
+space for three FIFO messages before changing its bounded outbox:
 
 1. `configure_graphics` with this client's shared-memory support;
-2. `request_runtime_state` with the stable identity of the host terminal.
+2. `configure_terminal_colors` with the known foreground and background;
+3. `request_runtime_state` with the stable identity of the host terminal.
 
-The runtime receive task starts after both sends complete. The runtime delivers
-`client_layout_snapshot` before its other level-triggered projections. The
+The ordinary send actor delivers them in order. Runtime and TTY reads are
+already armed; early user input is retained until the first pane is active.
+The runtime delivers `client_layout_snapshot` before its other level-triggered projections. The
 client restores sidebar visibility and width, workspace-list collapse, active
 tab, pane focus, fullscreen state and validated split trees. It then derives
 geometry from the restored sidebar, registers `initial_open`, and requests the
@@ -62,10 +72,10 @@ unregistered continuation, and the first pane size matches the restored view.
 
 ## Event sources and lifetime
 
-After the handshake, startup arms the host resize watcher, one runtime read,
-the host-capability deadline, telemetry, configured bar deadlines and
-configuration reload. Adapters with disabled configuration schedule no worker.
-Each active adapter owns its bounded pending token.
+Before waiting for replies, startup arms the host resize watcher, one runtime
+read, one TTY read, the host-capability deadline, telemetry, configured bar
+deadlines and configuration reload. Adapters with disabled configuration
+schedule no worker. Each active adapter owns its bounded pending token.
 
 Any startup error aborts the disposable client. `Client.deinit` cancels tasks
 before freeing client buffers, and its defer runs before `run` destroys the
@@ -82,7 +92,11 @@ snapshots.
   launch arguments and the receive token.
 - `restored client layout controls the initial attach geometry` proves that
   retained chrome and navigation precede the attach request.
-- `runtime bootstrap emits graphics and identity before asynchronous reads`
-  proves the bounded transport encoding independently of startup orchestration.
+- `runtime bootstrap queues colors before subscribing to the initial layout`
+  proves ordered bounded delivery independently of startup orchestration.
+- `startup timeout publishes unknown colors once and consumes late replies`
+  proves fallback and expiry.
+- `startup replays early typing exactly once after pane activation` proves that
+  negotiation does not discard keystrokes.
 - Resize, capability, telemetry and reload lifecycle tests prove their own
   scheduling-token cleanup and failure rules.

@@ -80,9 +80,10 @@ latest-value outbox policy.
 
 `client_startup` registers the initial observation through
 `host_resizes.schedule` after the runtime handshake.
-After successful synchronization, `host_resizes.handle` writes `CSI 14 t` and
-`CSI 16 t`. These queries refresh window and cell pixels after a font or
-display-scale change. It then rearms the same `ResizeWatcher`. Neither the
+After successful synchronization, `host_resizes.handle` asks
+`host_capabilities.refresh` to query the host. That adapter refreshes window and
+cell pixels after a font or display-scale change, and issues OSC 10/11 when no
+color probe is pending. The resize adapter then rearms the same `ResizeWatcher`. Neither the
 handler nor its adapter requests a draw.
 
 At the client-loop boundary, `presentation_lifecycle.observe` publishes
@@ -102,7 +103,7 @@ but schedules no frame.
 - `src/frontend/client/application/host_resource_delivery.zig` proves exact
   branch ordering, no-op policy, stale-commit rejection and partial failures.
 - `src/frontend/client/host_resizes.zig` owns platform measurement, pixel
-  queries and watcher rearming.
+  refresh requests and watcher rearming.
 - `src/frontend/client/host_resources.zig` implements the physical host effect
   ports shared by resize and capability delivery.
 - `src/frontend/client/pane_geometry.zig` owns translation and bounded delivery

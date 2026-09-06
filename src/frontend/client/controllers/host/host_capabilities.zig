@@ -7,19 +7,51 @@ const host_application = @import("../../application/host/root.zig");
 const client_clock = @import("../../resources/clock.zig");
 const client_model = @import("../../model/root.zig");
 const host_resources = @import("host_resources.zig");
+const negotiation = @import("../../resources/host_negotiation.zig");
+const deadline_timer = @import("../../resources/deadline_timer.zig");
 
 const Client = @import("../../client.zig");
 const host_capability = host_application.host_capabilities;
 const kitty = graphics.kitty;
 const term = presentation.screen;
 
-/// Registers the capability-probe deadline for this client.
-///
-/// ```zig
-/// try scheduleExpiry(client);
-/// ```
+/// Starts the exterior-terminal probes through one owner.
+/// Example: `try begin(client);`.
+pub fn begin(client: *Client) !void {
+    try client.writer.writeAll(kitty.capability_query);
+    try queryColors(client);
+    try client.writer.flush();
+}
+
+/// Coalesces overlapping color probes. A resize needs no protocol details.
+/// Example: `try refresh(client);`.
+pub fn refresh(client: *Client) !void {
+    try client.writer.writeAll(negotiation.pixel_query);
+    try queryColors(client);
+    try client.writer.flush();
+}
+
+fn queryColors(client: *Client) !void {
+    if (!client.host_negotiation.begin(client_clock.monotonic(client.io))) {
+        return;
+    }
+
+    try client.writer.writeAll(negotiation.color_query);
+    try scheduleExpiry(client);
+}
+
+/// Example: `try scheduleExpiry(client);`.
 pub fn scheduleExpiry(client: *Client) !void {
-    try client.select.concurrent(.capability_timeout, waitExpiry, .{client.io});
+    const state = &client.host_negotiation;
+    switch (state.timer.update(client.io, state.deadline_ns)) {
+        .idle, .retained => {},
+        .schedule => client.select.concurrent(.capability_timeout, deadline_timer.wait, .{
+            client.io, &state.timer,
+        }) catch |err| {
+            state.timer.schedulingFailed();
+            return err;
+        },
+    }
 }
 
 /// Applies probe fallbacks after the registered deadline completes.
@@ -28,7 +60,11 @@ pub fn scheduleExpiry(client: *Client) !void {
 /// _ = try handleExpiry(client, result);
 /// ```
 pub fn handleExpiry(client: *Client, result: anyerror!void) !?client_model.HostCommit {
-    try result;
+    try client.host_negotiation.timer.complete(result);
+    if (!client.host_negotiation.expire(client_clock.monotonic(client.io))) {
+        try scheduleExpiry(client);
+        return null;
+    }
 
     return expire(client);
 }
@@ -39,6 +75,17 @@ pub fn handleExpiry(client: *Client, result: anyerror!void) !?client_model.HostC
 /// _ = try observe(client, response);
 /// ```
 pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?client_model.HostCommit {
+    const color: ?negotiation.Color = switch (response) {
+        .foreground_color => .foreground,
+        .background_color => .background,
+        else => null,
+    };
+    if (color) |target| {
+        if (!client.host_negotiation.accept(target, client_clock.monotonic(client.io))) {
+            return null;
+        }
+    }
+
     const observation = translate(response) orelse return null;
     var use_case = handler(client);
 
@@ -54,15 +101,6 @@ pub fn expire(client: *Client) !?client_model.HostCommit {
     var use_case = handler(client);
 
     return use_case.expire();
-}
-
-fn waitExpiry(io: std.Io) anyerror!void {
-    const now_ns = client_clock.monotonic(io);
-    const deadline = std.Io.Timestamp.fromNanoseconds(
-        @intCast(now_ns +| kitty.capability_timeout_ns),
-    ).withClock(.awake);
-
-    try deadline.wait(io);
 }
 
 fn handler(client: *Client) host_capability.Handler {
@@ -97,6 +135,7 @@ pub fn translate(response: term.Event.TerminalResponse) ?client_model.HostCapabi
             .height = size.height,
         } },
         .mouse_pixels => |reply| .{ .mouse_pixels = support(reply.supported) },
+        .foreground_color => |color| .{ .foreground = .{ .r = color.r, .g = color.g, .b = color.b } },
         .background_color => |color| .{ .background = .{ .r = color.r, .g = color.g, .b = color.b } },
         .primary_device_attributes => null,
     };

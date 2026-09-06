@@ -435,6 +435,7 @@ pub const Pane = struct {
         workspace_path: []const u8,
         size: schema.TerminalSize,
         graphics_limits: GraphicsLimits,
+        terminal_colors: schema.TerminalColors = .{},
     };
 
     id: schema.PaneId,
@@ -501,6 +502,7 @@ pub const Pane = struct {
     launch_record: LaunchRecord = .{},
     manifests: *const core.agent_manifest.Table,
     pending_size: ?schema.TerminalSize = null,
+    pending_terminal_colors: ?schema.TerminalColors = null,
     /// When the child's synchronized-output block started holding frames
     /// back, null while no hold is active. See `holdFrames`.
     sync_hold_started_ns: ?u64 = null,
@@ -570,6 +572,7 @@ pub const Pane = struct {
             .kitty_image_loading_limits = .direct,
         });
         errdefer pane.terminal.deinit(gpa);
+        pane.setTerminalColors(request.terminal_colors);
         errdefer pane.render_state.deinit(gpa);
         var handler = pane.terminal.vtHandler();
         handler.apc_handler.enable(.kitty, false);
@@ -1115,6 +1118,7 @@ pub const Pane = struct {
 
         pane.ingest_pending = false;
         pane.actorFinished();
+        pane.applyTerminalColors();
     }
 
     /// Rolls back an ingest actor that could not be scheduled.
@@ -1536,6 +1540,40 @@ pub const Pane = struct {
             pane.media.worker == null and
             !pane.media.hasPending() and
             pane.pty_responses.len == 0;
+    }
+
+    /// Replaces host defaults without changing child overrides or cell styles.
+    /// An ingest actor never shares mutable VT state with this operation.
+    /// Example: `pane.setTerminalColors(.{ .background = .{ 16, 16, 16 } });`.
+    pub fn setTerminalColors(pane: *Pane, colors: schema.TerminalColors) void {
+        pane.pending_terminal_colors = colors;
+        if (!pane.ingest_pending) {
+            pane.applyTerminalColors();
+        }
+    }
+
+    fn applyTerminalColors(pane: *Pane) void {
+        const colors = pane.pending_terminal_colors orelse return;
+        std.debug.assert(!pane.ingest_pending);
+        const foreground = terminalRgb(colors.foreground);
+        const background = terminalRgb(colors.background);
+        pane.pending_terminal_colors = null;
+        if (std.meta.eql(pane.terminal.colors.foreground.default, foreground) and
+            std.meta.eql(pane.terminal.colors.background.default, background))
+        {
+            return;
+        }
+
+        pane.terminal.colors.foreground.default = foreground;
+        pane.terminal.colors.background.default = background;
+        pane.render_pending = true;
+        pane.semantic_colors_dirty = true;
+        pane.dirty = true;
+    }
+
+    fn terminalRgb(color: ?[3]u8) ?vt.color.RGB {
+        const rgb = color orelse return null;
+        return .{ .r = rgb[0], .g = rgb[1], .b = rgb[2] };
     }
 
     pub fn resize(pane: *Pane, size: schema.TerminalSize) !void {
@@ -1971,6 +2009,49 @@ pub fn historyClock(io: Io) history.osc.Clock {
         .real_ms = Io.Timestamp.now(io, .real).toMilliseconds(),
         .awake_ns = @intCast(Io.Timestamp.now(io, .awake).toNanoseconds()),
     };
+}
+
+test "pane color defaults answer fragmented OSC queries and preserve overrides" {
+    const gpa = std.testing.allocator;
+    var pane: Pane = undefined;
+    pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 4, .rows = 2 });
+    defer pane.terminal.deinit(gpa);
+    pane.ingest_pending = false;
+    pane.pty_responses = .{};
+    var handler = pane.terminal.vtHandler();
+    handler.effects.write_pty = Pane.writePty;
+    pane.stream = vt.TerminalStream.init(.{ .allocator = gpa, .handler = handler });
+    defer pane.stream.deinit();
+    pane.setTerminalColors(.{ .foreground = .{ 255, 255, 255 }, .background = .{ 16, 16, 16 } });
+
+    const query = "\x1b]10;?\x07\x1b]11;?\x1b\\";
+    for (0..query.len + 1) |split| {
+        pane.stream.nextSlice(query[0..split]);
+        pane.stream.nextSlice(query[split..]);
+        try std.testing.expectEqualStrings("\x1b]10;rgb:ffff/ffff/ffff\x07", pane.pty_responses.peek().?);
+        pane.pty_responses.pop();
+        try std.testing.expectEqualStrings("\x1b]11;rgb:1010/1010/1010\x1b\\", pane.pty_responses.peek().?);
+        pane.pty_responses.pop();
+    }
+
+    pane.stream.nextSlice("\x1b]10;rgb:aa/bb/cc\x07\x1b]11;rgb:12/34/56\x07");
+    pane.setTerminalColors(.{ .foreground = .{ 1, 2, 3 }, .background = .{ 4, 5, 6 } });
+    try std.testing.expectEqual(vt.color.RGB{ .r = 0xaa, .g = 0xbb, .b = 0xcc }, pane.terminal.colors.foreground.get().?);
+    try std.testing.expectEqual(vt.color.RGB{ .r = 0x12, .g = 0x34, .b = 0x56 }, pane.terminal.colors.background.get().?);
+    pane.stream.nextSlice("\x1b]110\x07\x1b]111\x1b\\");
+    try std.testing.expectEqual(vt.color.RGB{ .r = 1, .g = 2, .b = 3 }, pane.terminal.colors.foreground.get().?);
+    try std.testing.expectEqual(vt.color.RGB{ .r = 4, .g = 5, .b = 6 }, pane.terminal.colors.background.get().?);
+
+    pane.actor_count = 0;
+    pane.output_pending = false;
+    _ = pane.beginOutputIngest(1);
+    pane.setTerminalColors(.{ .background = .{ 7, 8, 9 } });
+    pane.setTerminalColors(.{ .background = .{ 10, 11, 12 } });
+    try std.testing.expectEqual(@as(u8, 4), pane.terminal.colors.background.get().?.r);
+    pane.completeOutputIngest();
+    try std.testing.expect(pane.pending_terminal_colors == null);
+    try std.testing.expectEqual(@as(u8, 10), pane.terminal.colors.background.get().?.r);
+    try std.testing.expect(pane.terminal.colors.foreground.get() == null);
 }
 
 test "agent reports capture runtime geometry without accessing the observation terminal" {
