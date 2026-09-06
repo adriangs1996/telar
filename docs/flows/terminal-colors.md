@@ -66,6 +66,22 @@ and launch commands do not know the color-update protocol.
 The emulator parses and answers child OSC queries itself. Telar does not forward
 child escape sequences to the exterior terminal.
 
+## Development launch environment
+
+`zig build run`, including `just r`, uses `Run.color = .manual`. The build
+runner must not inject `CLICOLOR_FORCE` or `NO_COLOR` into Telar. Explicit
+user values still pass through unchanged.
+
+This matters independently of OSC replies. Codex 0.153.4 treats
+`CLICOLOR_FORCE=1` as a 16-color override and drops its RGB input background,
+even with `COLORTERM=truecolor` and successful OSC 10/11 queries. Zig's default
+run-step color policy injects that variable when build output uses color.
+
+A runtime retains its launch environment. After changing this build setting,
+restart the development runtime with `just stop`, then `just r`. Stopping the
+runtime terminates its live pane processes; rebuilding or reattaching alone
+does not replace their environment.
+
 ## Bounds and failure
 
 - One replaceable timer task and one color probe window per client.
@@ -87,6 +103,11 @@ color query.
 
 ## Proof
 
+- PTY integration through `zig build run --color on` and `--color off`: neither
+  mode injects color overrides; panes retain `COLORTERM=truecolor` and answer
+  OSC 10/11. Explicit user overrides remain unchanged. With no override,
+  Codex 0.153.4 emits the RGB input background; `CLICOLOR_FORCE=1` reproduces
+  its missing background with the same host color replies.
 - `resources/host_negotiation.zig`: deadline, duplicate replies and probe overlap.
 - `resources/startup_input.zig`: fragmented replies, preserved typing, paste,
   partial escapes and explicit saturation failure.

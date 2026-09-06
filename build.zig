@@ -181,6 +181,8 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     const run_exe = b.addRunArtifact(exe);
+    // Build-runner color overrides leak into panes and can downgrade truecolor.
+    run_exe.color = .manual;
     run_exe.step.dependOn(b.getInstallStep());
     run_exe.setEnvironmentVariable(
         "TELAR_DEVELOPMENT_CONFIG",
