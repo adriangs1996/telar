@@ -1,3 +1,5 @@
+dev_runtime_dir := justfile_directory() / ".zig-out/dev"
+
 # Show the available commands.
 default:
     @just --list
@@ -10,12 +12,14 @@ build *args:
 release:
     zig build --prefix .zig-out/prod -Doptimize=ReleaseFast
 
+# Stop only the development runtime.
 stop:
-  zig build run -- server stop
+    TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" zig build run -- server stop
 
-# Build and run Telar. Extra arguments are passed to Telar.
+# Build and run an isolated development runtime. Extra arguments are passed to Telar.
 run *args:
-    zig build run -- {{ args }}
+    mkdir -p -m 700 "{{ dev_runtime_dir }}"
+    TELAR_SOCKET="{{ dev_runtime_dir }}/runtime.sock" TELAR_HISTORY="{{ dev_runtime_dir }}/history.db" zig build run -- {{ args }}
 
 # Format the project Zig sources.
 fmt:
