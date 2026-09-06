@@ -63,6 +63,7 @@ def consume(master, oracle, duration):
 def exchange(master, oracle, stimulus, expected):
     started = time.perf_counter_ns()
     os.write(master, stimulus)
+    sent = time.perf_counter_ns()
     deadline = time.perf_counter() + 2
     wire = reads = 0
     while time.perf_counter() < deadline:
@@ -77,7 +78,8 @@ def exchange(master, oracle, stimulus, expected):
         # Timestamp before VT work. Only a committed visible change counts.
         oracle.feed(data)
         if oracle.count == expected and not oracle.synchronized:
-            return dict(us=(arrived - started) / 1000, wire_bytes=wire, reads=reads)
+            return dict(us=(arrived - started) / 1000, wire_bytes=wire, reads=reads,
+                        started_ns=started, sent_ns=sent, arrived_ns=arrived)
     raise TimeoutError(f'expected {expected} visible tildes; got {oracle.count}, sync={oracle.synchronized}')
 
 

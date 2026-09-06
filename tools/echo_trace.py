@@ -18,7 +18,7 @@ OPTIONAL = {'input_forward', 'foreground_start', 'foreground_done', 'input_obser
             'pty_write_queued', 'vt_queued'}
 
 
-def summarize(directory, erase=False):
+def load_events(directory):
     events = []
     paths = list(directory.glob('*.echo.jsonl'))
     if len(paths) != 2:
@@ -27,8 +27,13 @@ def summarize(directory, erase=False):
         rows = [json.loads(line) for line in path.read_text().splitlines()]
         if 'dropped' not in rows[-1] or rows[-1]['dropped']:
             raise ValueError('incomplete or overflowing trace')
-        events.extend(row for row in rows if 'ns' in row)
+        events.extend(dict(row, process=path.name) for row in rows if 'ns' in row)
     events.sort(key=lambda row: row['ns'])
+    return events
+
+
+def fixture_chains(directory, erase=False):
+    events = load_events(directory)
     present = {row['event'] for row in events}
     chain = [tag for tag in CHAIN if tag in present or tag not in OPTIONAL]
     blocks = []
@@ -40,7 +45,7 @@ def summarize(directory, erase=False):
             block = []
         if block or event['event'] == 'host_read':
             block.append(event)
-    durations = collections.defaultdict(list)
+    chains = []
     # The fixture sends 20 warmup pairs, then alternating '~' and DEL.
     # Do not mix idle-separated echoes with their immediate erases.
     for block in blocks[40 + int(erase)::2]:
@@ -52,6 +57,15 @@ def summarize(directory, erase=False):
                     break
         if len(selected) != len(chain):
             continue
+        chains.append(selected)
+    if not chains:
+        raise ValueError('no complete fixture chains')
+    return chains
+
+
+def summarize(directory, erase=False):
+    durations = collections.defaultdict(list)
+    for selected in fixture_chains(directory, erase):
         for start, end in zip(selected, selected[1:]):
             durations[f"{start['event']} -> {end['event']}"].append((end['ns'] - start['ns']) / 1000)
         durations['internal_total'].append((selected[-1]['ns'] - selected[0]['ns']) / 1000)

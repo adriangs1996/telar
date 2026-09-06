@@ -168,6 +168,7 @@ pub fn build(b: *std.Build) void {
     const exe_options = b.addOptions();
     exe_options.addOption(bool, "diagnostics", diagnostics_enabled);
     exe_options.addOption(bool, "echo_trace", b.option(bool, "echo-trace", "Record bounded echo phase timestamps until shutdown") orelse false);
+    exe_options.addOption(bool, "echo_trace_cpu", b.option(bool, "echo-trace-cpu", "Include thread CPU clocks in diagnostic echo traces") orelse false);
     exe.root_module.addOptions("build_options", exe_options);
     b.installArtifact(exe);
 

@@ -3,6 +3,8 @@ const std = @import("std");
 const root = @import("root");
 
 pub const enabled = @hasDecl(root, "telar_echo_trace") and root.telar_echo_trace;
+const cpu_enabled = enabled and @hasDecl(root, "telar_echo_trace_cpu") and root.telar_echo_trace_cpu;
+threadlocal var thread_id: ?std.Thread.Id = null;
 pub const Tag = enum {
     host_read,
     client_input,
@@ -34,7 +36,12 @@ pub const Tag = enum {
 
 pub const Recorder = struct {
     const capacity = 16384;
-    const Record = struct { ns: u64, tag: Tag };
+    const Record = struct {
+        ns: u64,
+        tag: Tag,
+        cpu_ns: if (cpu_enabled) u64 else void = if (cpu_enabled) 0 else {},
+        thread: if (cpu_enabled) std.Thread.Id else void = if (cpu_enabled) 0 else {},
+    };
     claimed: std.atomic.Value(usize) = .init(0),
     records: [capacity]Record = undefined,
 
@@ -65,7 +72,11 @@ pub const Recorder = struct {
         var writer = file.writer(io, &buffer);
 
         for (recorder.records[0..@min(count, capacity)]) |record| {
-            try writer.interface.print("{{\"ns\":{d},\"event\":\"{s}\"}}\n", .{ record.ns, @tagName(record.tag) });
+            if (comptime cpu_enabled) {
+                try writer.interface.print("{{\"ns\":{d},\"event\":\"{s}\",\"cpu_ns\":{d},\"thread\":{d}}}\n", .{ record.ns, @tagName(record.tag), record.cpu_ns, record.thread });
+            } else {
+                try writer.interface.print("{{\"ns\":{d},\"event\":\"{s}\"}}\n", .{ record.ns, @tagName(record.tag) });
+            }
         }
 
         try writer.interface.print("{{\"dropped\":{d}}}\n", .{count -| capacity});
@@ -77,7 +88,18 @@ pub const Recorder = struct {
 /// Example: `echo_trace.mark(io, .pty_read);`.
 pub fn mark(io: std.Io, tag: Tag) void {
     if (comptime enabled) {
-        root.echo_recorder.append(.{ .ns = @intCast(std.Io.Clock.awake.now(io).nanoseconds), .tag = tag });
+        if (comptime cpu_enabled) {
+            if (thread_id == null) {
+                thread_id = std.Thread.getCurrentId();
+            }
+        }
+
+        root.echo_recorder.append(.{
+            .ns = @intCast(std.Io.Clock.awake.now(io).nanoseconds),
+            .tag = tag,
+            .cpu_ns = if (cpu_enabled) @intCast(std.Io.Clock.cpu_thread.now(io).nanoseconds) else {},
+            .thread = if (cpu_enabled) thread_id.? else {},
+        });
     }
 }
 

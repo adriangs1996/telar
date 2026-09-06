@@ -12,6 +12,7 @@ pub const std_options: std.Options = .{ .log_level = .err };
 /// Opt-in for development telemetry in optimized builds (`-Ddiagnostics`).
 pub const telar_diagnostics = @import("build_options").diagnostics;
 pub const telar_echo_trace = @import("build_options").echo_trace;
+pub const telar_echo_trace_cpu = @import("build_options").echo_trace_cpu;
 pub var echo_recorder: if (telar_echo_trace) @import("telar-core").echo_trace.Recorder else void = if (telar_echo_trace) .{} else {};
 
 fn dumpEchoTrace(init: std.process.Init) void {
