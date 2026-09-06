@@ -1,0 +1,24 @@
+{
+  "main": "5ace06faa89690b97970855ca3403680c9f30085",
+  "initial_integration": "a638267f1f796638fcc2e6424d8095849cde820a",
+  "performance": "22198c9763c4cac9512e1ec37cf130aa493aa587",
+  "zig": "0.16.0",
+  "tested_sources": {
+    "src/backend/runtime/client/session.zig": "187d3f9268947a2be70f708be26146dec0465d36761332cce63daa27507af96d",
+    "src/frontend/client/controllers/session/client_startup.zig": "ba03c306809b7f29cc53485420016f83aab9b9d41ec67ba1fd310cbd28e8a490",
+    "src/frontend/client/controllers/input/actions.zig": "6d36ce7e5bad82147b2e2106a46384e0b2f28ef42cd49e6902e356322a14a299",
+    "src/frontend/config/generation.zig": "b798a7f5a4542d0d4b98f25520d1766f49869f2904d3190959e859556fe6ce14",
+    "src/frontend/plugins/protocol.zig": "b5539b94b6af24defbc104c5ff139f4725946de63b6bba9052aa5dc2ccdf66b2",
+    "src/frontend/plugins/root.zig": "1a0673199063acb952b9fdebec7effd561ce6bb1eac4d84a2f816fc30d65db52",
+    "justfile": "88f950e63774c04bf56f4cba00cb295845efe69ecf151cdddef21d9e249c6edd"
+  },
+  "binaries": {
+    "/tmp/telar-merge-final/install/bin/telar": "768e3368387875c403e3b577030f87915e2468a2ac3425f517e913753d309b65",
+    "/tmp/telar-merge-final/install/bin/echo-probe": "5a488a51937af5803439f0acbd53ee2ec7ffc19508ffa2c52b573af638015118",
+    "/tmp/telar-merge-final/diagnostic/bin/telar": "74d53b8936f4f786caf7940ca1e13346d6055a7cc53c6b72e05ba505cdd7c849"
+  },
+  "debug_tests_passed": 3523,
+  "release_tests_passed": 3523,
+  "python_tests_passed": 9,
+  "performance_verdict": "not evaluated; functional integration checks only"
+}

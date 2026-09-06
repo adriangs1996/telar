@@ -5,6 +5,10 @@ neither consumes it, textual links get first refusal. Remaining events resolve
 one pane and select one effect: move its viewport, translate an alternate-screen
 wheel into cursor keys, or send an SGR mouse report to the child.
 
+A `scroll_pane` binding enters the same policy directly through native action
+dispatch. Its command carries only an up/down direction and always targets the
+focused pane. It does not run pointer hit testing or enter copy mode.
+
 This is an interactive-path flow. It allocates no memory, retains no pane
 pointer and adds no queue. The application decision uses fixed values. Mouse
 reports use a 64-byte stack buffer, while delivery reuses the bounded client
@@ -79,8 +83,10 @@ chooses scroll policy, encodes SGR bytes or sends IPC.
 
 ## Pane plan
 
-`multiplexer.Model.planPaneMouse` is the only query that reads pane geometry,
-child mouse modes and scroll state for this flow. Wheel events target the
+`multiplexer.Model.planPaneMouse` resolves physical pointer events.
+`multiplexer.Model.planFocusedPaneMouse` resolves focused scroll without any
+pointer coordinates. Both queries read pane geometry, child mouse modes and
+scroll state and share construction of the immutable `PaneMousePlan`. Wheel events target the
 visible pane under the pointer. Other events target the focused pane and are
 dropped unless the pointer lies inside its content rectangle.
 
@@ -89,9 +95,41 @@ alternate-screen scroll flag and live-bottom state. It does not expose pane
 storage to the application handler. Planning does not advance a client model
 revision.
 
+## Focused scroll entry
+
+```text
+host binding or client Lua action
+        |
+InputHandler.action -> action_routing -> actions
+        |
+NativeActionHandler, then scroll_pane dispatch
+        |
+pane_mouse_inputs.apply(.focused_scroll)
+        |
+PaneMouseHandler -> Plans.resolve(Command)
+        |
+planFocusedPaneMouse -> Resolved { plan, pointer }
+        |
+same wheel policy and effect delivery as physical input
+```
+
+`Command` distinguishes `.pointer` from `.focused_scroll`. The pointer router
+continues to accept only `PointerCommand` and wraps it at pane delivery.
+The adapter's resolver preserves physical pointer commands unchanged. For
+focused scroll it resolves the focused pane first, then builds a synthetic
+wheel event at the first content cell with button 64 or 65 and no modifiers.
+Pixel reports use host cell dimensions and the existing cell-center fallback,
+not raw pointer pixels. Empty pane content produces no resolution.
+
+`NativeActionHandler` exits any active copy mode before dispatching this action,
+restoring its entry viewport before the step. Plugin worker effects explicitly
+reject `scroll_pane`; client Lua bindings and callbacks use native dispatch.
+
 ## Application policy
 
-`PaneMouseHandler` resolves one plan and chooses at most one effect.
+`PaneMouseHandler` resolves a plan and normalized pointer command, then chooses
+at most one effect. Its policy does not distinguish physical and synthetic
+wheel events.
 
 - A child-tracked event with SGR enabled becomes a report, including tracked
   wheel events.
@@ -129,14 +167,19 @@ recomposes the affected projection. No use case requests a draw directly.
 ## Proof
 
 - `src/frontend/workspace/multiplexer.zig` proves focused button ownership,
-  pointer-local wheel targeting and value-copy planning.
+  pointer-local wheel targeting, focus-only scroll targeting, empty-target
+  rejection and value-copy planning.
 - `src/frontend/client/application/pointer_routing.zig` proves exclusive owner
   order, workbench gating and selected-effect failure boundaries.
 - `src/frontend/client/application/pane_mouse.zig` proves tracked-event,
   viewport and alternate-scroll selection, the live-bottom gate, ignored
   events and effect failure propagation.
-- `src/frontend/client/pane_mouse_inputs.zig` proves exact raw-pixel and
-  cell-center SGR encoding.
+- `src/frontend/client/controllers/input/pane_mouse_inputs.zig` proves exact
+  raw-pixel and cell-center SGR encoding.
+- `src/frontend/client/tests/input.zig` proves default scroll bindings through
+  host byte routing, focus rather than hover, synthetic SGR cell/pixel reports,
+  alternate-screen keys, viewport no-ops, return to live output and copy-mode
+  retirement.
 - `src/frontend/client/client_test.zig` proves prompt rejection after host
   telemetry, focus-before-press delivery, scrollback preservation, exact
   host-pixel delivery and pointer-local alternate-screen scrolling through the

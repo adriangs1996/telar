@@ -246,13 +246,15 @@ test "plugin result protocol round trips semantic effects" {
     try std.testing.expectEqualDeep(batch, try decode(try encode(&buffer, &batch)));
 }
 
-test "plugin result protocol rejects client-only scrolling effects" {
-    var batch: lua_config.EffectBatch = .{};
-    batch.items[0] = .{ .scroll_pane = .up };
-    batch.len = 1;
-    var buffer: [max_bytes]u8 = undefined;
+test "plugin result protocol rejects focused scroll effects" {
+    for ([_]action_mod.ScrollDirection{ .up, .down }) |direction| {
+        var batch: lua_config.EffectBatch = .{};
+        batch.items[0] = .{ .scroll_pane = direction };
+        batch.len = 1;
+        var buffer: [max_bytes]u8 = undefined;
 
-    try std.testing.expectError(error.InvalidWorkerEffect, encode(&buffer, &batch));
+        try std.testing.expectError(error.InvalidWorkerEffect, encode(&buffer, &batch));
+    }
 }
 
 test "plugin result protocol rejects invalid enum discriminants" {

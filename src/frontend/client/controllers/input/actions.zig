@@ -19,13 +19,13 @@ const pane_focus = @import("../panes/pane_focus.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const pane_splits = @import("../panes/pane_splits.zig");
-const pane_viewports = @import("../panes/pane_viewports.zig");
 const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
 const tab_closures = @import("../tabs/tab_closures.zig");
 const tab_creations = @import("../tabs/tab_creations.zig");
 const tab_moves = @import("../tabs/tab_moves.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
+const pane_mouse_input = @import("pane_mouse_inputs.zig");
 
 const Action = input.action.Action;
 const keybind = input.keybind;
@@ -73,6 +73,7 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     switch (value) {
+        .scroll_pane => |direction| try scrollPane(client, direction),
         .split_pane => |direction| try beginSplit(client, switch (direction) {
             .horizontal => .horizontal,
             .vertical => .vertical,
@@ -84,7 +85,6 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
             .down => .down,
         } }),
         .navigate_pane => |direction| try navigatePane(client, direction),
-        .scroll_pane => |direction| try scrollPane(client, direction),
         .resize_pane => |direction| try resizePane(client, switch (direction) {
             .left => .left,
             .right => .right,
@@ -164,20 +164,6 @@ fn navigatePane(client: *Client, direction: input.action.Direction) !void {
     _ = try pane_inputs.send(client, .{ .target = .focused, .source = .host, .payload = .{ .key = key } });
 }
 
-fn scrollPane(client: *Client, direction: input.action.ScrollDirection) !void {
-    const active = client.model.workspace.activeConst() orelse return;
-    const pane = active.model.focusedPaneConst() orelse return;
-    var use_case = pane_viewports.handler(client);
-
-    _ = try use_case.execute(.{
-        .pane_id = pane.id,
-        .target = .{ .relative = switch (direction) {
-            .up => -3,
-            .down => 3,
-        } },
-    });
-}
-
 fn navigationKey(direction: input.action.Direction) keybind.Key {
     return switch (direction) {
         .left => ctrl_h,
@@ -185,6 +171,16 @@ fn navigationKey(direction: input.action.Direction) keybind.Key {
         .up => ctrl_k,
         .down => ctrl_j,
     };
+}
+
+fn scrollPane(client: *Client, direction: input.action.ScrollDirection) !void {
+    const model = client.model.activeTabModel() orelse return;
+
+    _ = try pane_mouse_input.apply(
+        client,
+        model,
+        .{ .focused_scroll = direction },
+    );
 }
 
 fn beginSplit(client: *Client, axis: layout.Axis) !void {

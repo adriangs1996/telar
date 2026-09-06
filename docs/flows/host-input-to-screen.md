@@ -148,13 +148,14 @@ owned outbox delivery to `notifications.requestDelivery`. See
 [Notifications](notifications.md) for request and report handling.
 
 `scroll-pane-up`, `scroll-pane-down` and the Lua `telar.action.scroll_pane`
-constructor dispatch through `SetPaneViewportHandler` for the focused pane.
-Each action moves three rows, bounded by the available scrollback. The handler
-commits client scroll state before graphics visibility and `set_pane_viewport`
-delivery. It never forwards the binding as child input. Worker plugin effects
-reject scrolling, as they already reject pane navigation. The native scroll
-integration test in `client/tests/host_interaction.zig` covers both directions,
-bounds and viewport message order.
+constructor enter the focused-pane wheel policy through `pane_mouse_inputs`.
+The policy selects a three-row viewport change, alternate-screen cursor keys,
+or an SGR mouse report according to the child's modes. It never forwards the
+binding bytes. Worker plugin effects reject scrolling. See
+[Pane mouse input](pane-mouse-input.md) for selection and delivery rules.
+The native scroll integration test in `client/tests/host_interaction.zig`
+covers viewport bounds and message order; `client/tests/input.zig` covers
+focus, child modes, default bindings and copy-mode retirement.
 
 Actions may mutate disposable client state or enqueue a typed runtime request.
 They never call runtime internals. The unit test `a configured sequence runs

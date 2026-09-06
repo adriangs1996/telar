@@ -182,7 +182,6 @@ pub const Registry = struct {
                 .split_pane, .close_pane, .new_workspace, .rename_workspace, .new_tab, .rename_tab, .close_tab, .move_tab, .detach => .runtime_control,
                 .focus_pane,
                 .navigate_pane,
-                .scroll_pane,
                 .resize_pane,
                 .toggle_pane_fullscreen,
                 .toggle_sidebar,
@@ -198,7 +197,7 @@ pub const Registry = struct {
                 .suggest_command,
                 => null,
                 .notification => .notifications,
-                .lua_callback, .lua_expr, .plugin => return error.InvalidPluginEffect,
+                .scroll_pane, .lua_callback, .lua_expr, .plugin => return error.InvalidPluginEffect,
             };
             if (capability) |required| {
                 try registry.authorize(authorization.package_index, required);
@@ -649,6 +648,16 @@ test "privileged plugin effects require a digest-bound capability grant" {
         .digest = digest,
         .batch = &batch,
     });
+
+    for ([_]action_mod.ScrollDirection{ .up, .down }) |direction| {
+        batch.items[0] = .{ .scroll_pane = direction };
+        try std.testing.expectError(error.InvalidPluginEffect, registry.authorizeBatch(.{
+            .package_index = 0,
+            .plugin_id = plugin.stableId(manifest.id()),
+            .digest = digest,
+            .batch = &batch,
+        }));
+    }
 
     const stale_digest: plugin.Digest = @splat(8);
     try std.testing.expectError(

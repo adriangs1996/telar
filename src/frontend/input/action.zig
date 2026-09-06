@@ -352,6 +352,9 @@ test "built-in names compile to parameterized actions" {
     try std.testing.expectEqual(Action.new_workspace, try Action.parse("new-workspace"));
     try std.testing.expectEqual(Action.rename_workspace, try Action.parse("rename-workspace"));
     try std.testing.expectEqual(Action.enter_copy_mode, try Action.parse("copy-mode"));
+    try std.testing.expectEqualDeep(Action{ .scroll_pane = .up }, try Action.parse("scroll-pane-up"));
+    try std.testing.expectEqualDeep(Action{ .scroll_pane = .down }, try Action.parse("scroll-pane-down"));
+    try std.testing.expectError(error.UnknownAction, Action.parse("scroll-pane-left"));
     try std.testing.expectError(error.UnknownAction, Action.parse("select-tab-0"));
     try std.testing.expectError(error.UnknownAction, Action.parse("select-workspace-0"));
     try std.testing.expectError(error.UnknownAction, Action.parse("rename-pane"));

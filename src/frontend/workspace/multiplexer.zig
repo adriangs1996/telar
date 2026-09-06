@@ -1114,16 +1114,16 @@ pub const Model = struct {
         return applied;
     }
 
-    pub fn contentSize(model: *Model, pane_id: schema.PaneId, area: ui.Rect) ?schema.TerminalSize {
-        const view = model.layoutSnapshot(area).find(pane_id) orelse return null;
+    pub fn contentSize(self: *Model, pane_id: schema.PaneId, area: ui.Rect) ?schema.TerminalSize {
+        const view = self.layoutSnapshot(area).find(pane_id) orelse return null;
         var size = rectSize(view.content) orelse return null;
-        size.cell_width_px = model.cell_width_px;
-        size.cell_height_px = model.cell_height_px;
+        size.cell_width_px = self.cell_width_px;
+        size.cell_height_px = self.cell_height_px;
         return size;
     }
 
-    pub fn viewForPane(model: *Model, pane_id: schema.PaneId, area: ui.Rect) ?layout_mod.View {
-        return model.layoutSnapshot(area).find(pane_id);
+    pub fn viewForPane(self: *Model, pane_id: schema.PaneId, area: ui.Rect) ?layout_mod.View {
+        return self.layoutSnapshot(area).find(pane_id);
     }
 
     /// Resolves one pointer event to a visible pane and returns only the state
@@ -1133,17 +1133,17 @@ pub const Model = struct {
     /// ```zig
     /// const plan = model.planPaneMouse(event, area) orelse return;
     /// ```
-    pub fn planPaneMouse(model: *Model, event: term.Event.Mouse, area: ui.Rect) ?PaneMousePlan {
-        const snapshot = model.layoutSnapshot(area);
+    pub fn planPaneMouse(self: *Model, event: term.Event.Mouse, area: ui.Rect) ?PaneMousePlan {
+        const snapshot = self.layoutSnapshot(area);
         const wheel = event.kind == .scroll_up or event.kind == .scroll_down;
-        var pane = model.focusedPane() orelse return null;
+        var pane = self.focusedPane() orelse return null;
         if (wheel) {
             for (snapshot.views()) |candidate| {
                 if (!candidate.content.contains(event.x, event.y)) {
                     continue;
                 }
 
-                pane = model.find(candidate.pane_id) orelse return null;
+                pane = self.find(candidate.pane_id) orelse return null;
                 break;
             }
         }
@@ -1153,13 +1153,20 @@ pub const Model = struct {
             return null;
         }
 
-        return .{
-            .pane_id = pane.id,
-            .content = view.content,
-            .protocol = pane.mouse,
-            .alternate_scroll = pane.input_modes.alternate_screen and pane.input_modes.alternate_scroll,
-            .at_bottom = pane.scroll.atBottom(pane.buffer.h),
-        };
+        return paneMousePlan(pane, view.content);
+    }
+
+    /// Resolves the focused pane without consulting pointer coordinates.
+    /// Example: `const plan = model.planFocusedPaneMouse(area) orelse return;`.
+    pub fn planFocusedPaneMouse(self: *Model, area: ui.Rect) ?PaneMousePlan {
+        const pane = self.focusedPane() orelse return null;
+        const view = self.layoutSnapshot(area).find(pane.id) orelse return null;
+
+        if (view.content.w == 0 or view.content.h == 0) {
+            return null;
+        }
+
+        return paneMousePlan(pane, view.content);
     }
 
     pub fn layoutSnapshot(model: *Model, area: ui.Rect) *const layout_mod.Snapshot {
@@ -1255,6 +1262,16 @@ pub const Model = struct {
 
     fn indexPane(model: *Model, pane_id: schema.PaneId, pane_slot: u8) void {
         model.pane_index.put(schema.id.raw(pane_id), pane_slot);
+    }
+
+    fn paneMousePlan(pane: *const Pane, content: ui.Rect) PaneMousePlan {
+        return .{
+            .pane_id = pane.id,
+            .content = content,
+            .protocol = pane.mouse,
+            .alternate_scroll = pane.input_modes.alternate_screen and pane.input_modes.alternate_scroll,
+            .at_bottom = pane.scroll.atBottom(pane.buffer.h),
+        };
     }
 };
 
@@ -2311,4 +2328,35 @@ test "pane mouse planning keeps buttons focused and wheels pointer-local" {
         .kind = .release,
     }, area).?;
     try std.testing.expectEqual(first, focused.pane_id);
+
+    const revision = model.layout.currentRevision();
+    const focused_scroll = model.planFocusedPaneMouse(area).?;
+    try std.testing.expectEqual(first, focused_scroll.pane_id);
+    try std.testing.expectEqualDeep(first_view.content, focused_scroll.content);
+    try std.testing.expectEqualDeep(model.find(first).?.mouse, focused_scroll.protocol);
+    try std.testing.expectEqual(revision, model.layout.currentRevision());
+    try std.testing.expectEqual(first, model.layout.focused().?);
+
+    try std.testing.expect(model.focusPane(second));
+    try std.testing.expectEqualDeep(plan, model.planFocusedPaneMouse(area).?);
+}
+
+test "focused pane mouse planning ignores missing and empty pane content" {
+    var model = Model.init(std.testing.allocator);
+    defer model.deinit();
+    const area: ui.Rect = .{ .w = 80, .h = 24 };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+
+    try std.testing.expect(model.planFocusedPaneMouse(area) == null);
+    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 80, .rows = 24 } });
+    try std.testing.expect(model.planFocusedPaneMouse(.{ .w = 0, .h = 24 }) == null);
+    try std.testing.expect(model.planFocusedPaneMouse(.{ .w = 80, .h = 0 }) == null);
+    try std.testing.expectEqual(pane_id, model.planFocusedPaneMouse(area).?.pane_id);
+
+    try std.testing.expect(model.removePane(pane_id));
+    try std.testing.expect(model.planFocusedPaneMouse(area) == null);
 }

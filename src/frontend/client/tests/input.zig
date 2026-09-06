@@ -670,6 +670,193 @@ test "alternate-screen wheel sends cursor keys to the pane under the pointer" {
     try std.testing.expectEqualStrings("\x1b[A\x1b[A\x1b[A", &received);
 }
 
+fn testingHostInput(client: *Client, bytes: []const u8) !void {
+    var chunk: InputChunk = .{};
+    try std.testing.expect(bytes.len <= chunk.bytes.len);
+    @memcpy(chunk.bytes[0..bytes.len], bytes);
+    chunk.len = @intCast(bytes.len);
+
+    try std.testing.expect(!try host_inputs.handleRead(client, chunk));
+}
+
+test "focused scroll bindings target focus rather than hover and normal input restores the viewport" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const model = client.model.activeTabModel().?;
+    const focused = TestHarness.bootstrap_pane;
+    const hovered: schema.PaneId = @enumFromInt(20);
+    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try std.testing.expect(model.focusPane(focused));
+    const pane = model.find(focused).?;
+    const other = model.find(hovered).?;
+    pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
+    other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 10, .offset = 10 };
+    const hovered_view = model.viewForPane(hovered, client.view.workbench()).?;
+    var handler: InputHandler = .{ .client = client };
+    try handler.mouse(.{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
+    const version = client.model.version();
+
+    try testingHostInput(client, "\x02-");
+
+    try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
+    try std.testing.expectEqual(@as(u32, 10), other.scroll.offset);
+    try std.testing.expectEqual(focused, model.layout.focused().?);
+    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expect(!client.graphics_store.paneVisible(focused));
+    try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
+    try std.testing.expectEqual(@as(usize, 1), client.runtime_transport.outbox.len);
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const scrolled = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(scrolled == .set_pane_viewport);
+    try std.testing.expectEqual(focused, scrolled.set_pane_viewport.pane_id);
+    try std.testing.expectEqual(@as(u32, 7), scrolled.set_pane_viewport.offset);
+
+    try handler.key(try keybind.parseKey("x"));
+    try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
+    try std.testing.expect(client.graphics_store.paneVisible(focused));
+    try harness.settle();
+    const restored = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(restored == .set_pane_viewport);
+    try std.testing.expectEqual(focused, restored.set_pane_viewport.pane_id);
+    try std.testing.expectEqual(@as(u32, 10), restored.set_pane_viewport.offset);
+    const input = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(input == .pane_input);
+    try std.testing.expectEqual(focused, input.pane_input.pane_id);
+    try std.testing.expectEqualStrings("x", input.pane_input.bytes);
+
+    const bottom_version = client.model.version();
+    try testingHostInput(client, "\x02=");
+    try std.testing.expectEqualDeep(bottom_version, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+}
+
+test "focused scroll bindings emit unmodified SGR wheel reports in cells or pixels" {
+    for ([_]bool{ false, true }) |pixels| {
+        var harness: TestHarness = undefined;
+        try harness.init();
+        defer harness.deinit();
+        try harness.bootstrap();
+        const client = harness.client;
+        _ = try client.model.observeHostCapability(.{ .cell_pixels = .{ .width = 10, .height = 20 } });
+        _ = try client.model.observeHostCapability(.{ .mouse_pixels = .supported });
+        const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+        pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = pixels };
+        pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
+        pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 2 };
+        pane.cursor = .{ .visible = true, .x = 5, .y = 3 };
+        const version = client.model.version();
+
+        for ([_]input_capability.action.ScrollDirection{ .up, .down }) |direction| {
+            try testingHostInput(client, if (direction == .up) "\x02-" else "\x02=");
+            try std.testing.expectEqualDeep(version, client.model.version());
+            try std.testing.expectEqual(@as(u32, 2), pane.scroll.offset);
+            try std.testing.expect(!client.model.copyModeActive());
+            try harness.settle();
+            var buffer: [256]u8 = undefined;
+            const message = try harness.nextClientMessage(&buffer);
+            try std.testing.expect(message == .pane_input);
+            try std.testing.expectEqual(pane.id, message.pane_input.pane_id);
+            const expected = if (pixels)
+                (if (direction == .up) "\x1b[<64;6;11M" else "\x1b[<65;6;11M")
+            else
+                (if (direction == .up) "\x1b[<64;1;1M" else "\x1b[<65;1;1M");
+
+            try std.testing.expectEqualStrings(expected, message.pane_input.bytes);
+        }
+    }
+}
+
+test "focused scroll sends alternate-screen cursor keys only to the focused pane" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const model = client.model.activeTabModel().?;
+    const focused = TestHarness.bootstrap_pane;
+    const hovered: schema.PaneId = @enumFromInt(20);
+    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try std.testing.expect(model.focusPane(focused));
+    const pane = model.find(focused).?;
+    pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
+    pane.scroll = .{ .total_rows = pane.buffer.h, .offset = 0 };
+    const hovered_view = model.viewForPane(hovered, client.view.workbench()).?;
+    var handler: InputHandler = .{ .client = client };
+    try handler.mouse(.{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
+    const version = client.model.version();
+
+    for ([_]input_capability.action.ScrollDirection{ .up, .down }) |direction| {
+        _ = try client_actions.apply(client, .{ .scroll_pane = direction });
+        try std.testing.expectEqualDeep(version, client.model.version());
+        try std.testing.expectEqual(focused, model.layout.focused().?);
+        try harness.settle();
+        var buffer: [256]u8 = undefined;
+        var received: [9]u8 = undefined;
+        var received_len: usize = 0;
+
+        while (received_len < received.len) {
+            const message = try harness.nextClientMessage(&buffer);
+            try std.testing.expect(message == .pane_input);
+            try std.testing.expectEqual(focused, message.pane_input.pane_id);
+            try std.testing.expect(message.pane_input.bytes.len > 0);
+            try std.testing.expect(message.pane_input.bytes.len <= received.len - received_len);
+            @memcpy(received[received_len..][0..message.pane_input.bytes.len], message.pane_input.bytes);
+            received_len += message.pane_input.bytes.len;
+        }
+
+        try std.testing.expectEqualStrings(if (direction == .up) "\x1b[A\x1b[A\x1b[A" else "\x1b[B\x1b[B\x1b[B", &received);
+    }
+}
+
+test "focused scroll without an active pane has no effects" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const version = client.model.version();
+
+    _ = try client_actions.apply(client, .{ .scroll_pane = .up });
+    _ = try client_actions.apply(client, .{ .scroll_pane = .down });
+
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+}
+
+test "focused scroll retires copy mode before moving the restored viewport" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
+    var handler: InputHandler = .{ .client = client };
+    _ = try client_actions.apply(client, .enter_copy_mode);
+    try handler.key(try keybind.parseKey("g"));
+    try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    const copied = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(copied == .set_pane_viewport);
+    try std.testing.expectEqual(@as(u32, 0), copied.set_pane_viewport.offset);
+
+    try testingHostInput(client, "\x02-");
+
+    try std.testing.expect(!client.model.copyModeActive());
+    try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
+    try harness.settle();
+    const restored = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(restored == .set_pane_viewport);
+    try std.testing.expectEqual(@as(u32, 10), restored.set_pane_viewport.offset);
+    const scrolled = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(scrolled == .set_pane_viewport);
+    try std.testing.expectEqual(@as(u32, 7), scrolled.set_pane_viewport.offset);
+}
+
 test "focus reporting emits focus-in only after the pane opts in" {
     var harness: TestHarness = undefined;
     try harness.init();

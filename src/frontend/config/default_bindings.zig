@@ -6,7 +6,7 @@ const config_model = @import("model.zig");
 const keybind = input.keybind;
 
 pub const max_keys = config_model.max_binding_keys;
-pub const count = 39;
+pub const count = 41;
 pub const Binding = keybind.Binding(action.Action, max_keys);
 
 pub const Resolved = struct {
@@ -20,6 +20,8 @@ pub const Resolved = struct {
 
 pub fn load(prefix: keybind.Key) ![count]Binding {
     return .{
+        try prefixed(prefix, "-", .{ .scroll_pane = .up }),
+        try prefixed(prefix, "=", .{ .scroll_pane = .down }),
         try prefixed(prefix, "%", .{ .split_pane = .horizontal }),
         try prefixed(prefix, "\"", .{ .split_pane = .vertical }),
         try prefixed(prefix, "left", .{ .focus_pane = .left }),
@@ -108,6 +110,29 @@ pub fn validate(prefix: keybind.Key, configured: []const Binding) !void {
 
 fn prefixed(prefix: keybind.Key, suffix: []const u8, action_value: action.Action) !Binding {
     return .init(&.{ prefix, try keybind.parseKey(suffix) }, action_value);
+}
+
+test "focused scroll defaults use the configured prefix and can be overridden" {
+    const testing = @import("std").testing;
+    const prefix = try keybind.parseKey("ctrl+s");
+    const up = try prefixed(prefix, "-", .{ .scroll_pane = .up });
+    const down = try prefixed(prefix, "=", .{ .scroll_pane = .down });
+    const defaults = try resolve(prefix, &.{});
+    var found: usize = 0;
+
+    for (defaults.slice()) |*binding| {
+        if (binding.sameSequence(&up) or binding.sameSequence(&down)) {
+            try testing.expectEqualDeep(if (binding.sameSequence(&up)) up.action else down.action, binding.action);
+            found += 1;
+        }
+    }
+
+    try testing.expectEqual(@as(usize, 2), found);
+    const override = try prefixed(prefix, "-", .toggle_sidebar);
+    const resolved = try resolve(prefix, &.{override});
+    try testing.expectEqual(@as(usize, count), resolved.slice().len);
+    try testing.expectEqualDeep(override.action, resolved.bindings[0].action);
+    try validate(prefix, &.{override});
 }
 
 test "configured bindings extend defaults and override matching sequences" {

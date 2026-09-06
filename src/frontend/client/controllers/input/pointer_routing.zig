@@ -48,7 +48,7 @@ pub fn apply(client: *Client, event: term.Event.Mouse) !Outcome {
     return use_case.execute(resolve(&context, event));
 }
 
-fn link(raw_context: *anyopaque, command: pointer_routing.Command) !bool {
+fn link(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !bool {
     const context: *Context = @ptrCast(@alignCast(raw_context));
 
     return link_openings.pointer(context.client, context.model.?, command.event);
@@ -81,13 +81,13 @@ fn resolve(context: *Context, event: term.Event.Mouse) pointer_routing.Authority
     } };
 }
 
-fn copyMode(raw_context: *anyopaque, command: pointer_routing.Command) !bool {
+fn copyMode(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !bool {
     const context: *Context = @ptrCast(@alignCast(raw_context));
 
     return copy_mode_pointer.apply(context.client, context.model.?, command.event);
 }
 
-fn view(raw_context: *anyopaque, command: pointer_routing.Command) !pointer_routing.ViewOutcome {
+fn view(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !pointer_routing.ViewOutcome {
     const context: *Context = @ptrCast(@alignCast(raw_context));
     const interaction = context.client.view.handleMouse(command.event);
     const outcome = try view_interactions.apply(context.client, context.model.?, interaction);
@@ -98,8 +98,12 @@ fn view(raw_context: *anyopaque, command: pointer_routing.Command) !pointer_rout
     };
 }
 
-fn pane(raw_context: *anyopaque, command: pointer_routing.Command) !void {
+fn pane(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !void {
     const context: *Context = @ptrCast(@alignCast(raw_context));
 
-    _ = try pane_mouse_inputs.apply(context.client, context.model.?, command);
+    _ = try pane_mouse_inputs.apply(
+        context.client,
+        context.model.?,
+        .{ .pointer = command },
+    );
 }

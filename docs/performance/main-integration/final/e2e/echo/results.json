@@ -1,0 +1,815 @@
+[
+  {
+    "name": "candidate",
+    "samples": [
+      {
+        "us": 540.5,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208246425750,
+        "sent_ns": 309208246470083,
+        "arrived_ns": 309208246966250
+      },
+      {
+        "us": 646.667,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208302601416,
+        "sent_ns": 309208302647416,
+        "arrived_ns": 309208303248083
+      },
+      {
+        "us": 348.75,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208356697041,
+        "sent_ns": 309208356708125,
+        "arrived_ns": 309208357045791
+      },
+      {
+        "us": 520.625,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208412387000,
+        "sent_ns": 309208412418791,
+        "arrived_ns": 309208412907625
+      },
+      {
+        "us": 377.708,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208465829750,
+        "sent_ns": 309208465858833,
+        "arrived_ns": 309208466207458
+      },
+      {
+        "us": 346.792,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208520626833,
+        "sent_ns": 309208520652041,
+        "arrived_ns": 309208520973625
+      },
+      {
+        "us": 486.375,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208572592875,
+        "sent_ns": 309208572613458,
+        "arrived_ns": 309208573079250
+      },
+      {
+        "us": 243.25,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208628932000,
+        "sent_ns": 309208628949416,
+        "arrived_ns": 309208629175250
+      },
+      {
+        "us": 456.125,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208683809041,
+        "sent_ns": 309208683854000,
+        "arrived_ns": 309208684265166
+      },
+      {
+        "us": 693.959,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208736696791,
+        "sent_ns": 309208736740083,
+        "arrived_ns": 309208737390750
+      },
+      {
+        "us": 661.0,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208793163375,
+        "sent_ns": 309208793206583,
+        "arrived_ns": 309208793824375
+      },
+      {
+        "us": 296.584,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208849602166,
+        "sent_ns": 309208849615500,
+        "arrived_ns": 309208849898750
+      },
+      {
+        "us": 392.125,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208905229333,
+        "sent_ns": 309208905252250,
+        "arrived_ns": 309208905621458
+      },
+      {
+        "us": 566.625,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309208960660458,
+        "sent_ns": 309208960699375,
+        "arrived_ns": 309208961227083
+      },
+      {
+        "us": 545.917,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209016937166,
+        "sent_ns": 309209016979375,
+        "arrived_ns": 309209017483083
+      },
+      {
+        "us": 270.625,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209072706041,
+        "sent_ns": 309209072718708,
+        "arrived_ns": 309209072976666
+      },
+      {
+        "us": 1027.083,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209128503750,
+        "sent_ns": 309209128553041,
+        "arrived_ns": 309209129530833
+      },
+      {
+        "us": 550.458,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209181817958,
+        "sent_ns": 309209181860000,
+        "arrived_ns": 309209182368416
+      },
+      {
+        "us": 490.541,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209235644625,
+        "sent_ns": 309209235678375,
+        "arrived_ns": 309209236135166
+      },
+      {
+        "us": 605.459,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209291482041,
+        "sent_ns": 309209291522416,
+        "arrived_ns": 309209292087500
+      },
+      {
+        "us": 502.917,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209347877291,
+        "sent_ns": 309209347920125,
+        "arrived_ns": 309209348380208
+      },
+      {
+        "us": 298.541,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209403459250,
+        "sent_ns": 309209403477041,
+        "arrived_ns": 309209403757791
+      },
+      {
+        "us": 500.709,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209456868041,
+        "sent_ns": 309209456897958,
+        "arrived_ns": 309209457368750
+      },
+      {
+        "us": 518.417,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209511942083,
+        "sent_ns": 309209511965208,
+        "arrived_ns": 309209512460500
+      },
+      {
+        "us": 616.375,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209564514083,
+        "sent_ns": 309209564558708,
+        "arrived_ns": 309209565130458
+      },
+      {
+        "us": 261.834,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209620733916,
+        "sent_ns": 309209620750000,
+        "arrived_ns": 309209620995750
+      },
+      {
+        "us": 244.084,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209676250041,
+        "sent_ns": 309209676263000,
+        "arrived_ns": 309209676494125
+      },
+      {
+        "us": 217.417,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209731822708,
+        "sent_ns": 309209731833958,
+        "arrived_ns": 309209732040125
+      },
+      {
+        "us": 723.084,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209787366291,
+        "sent_ns": 309209787410791,
+        "arrived_ns": 309209788089375
+      },
+      {
+        "us": 326.417,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209843936208,
+        "sent_ns": 309209843957166,
+        "arrived_ns": 309209844262625
+      },
+      {
+        "us": 191.833,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209899564875,
+        "sent_ns": 309209899577708,
+        "arrived_ns": 309209899756708
+      },
+      {
+        "us": 454.75,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309209955054916,
+        "sent_ns": 309209955077541,
+        "arrived_ns": 309209955509666
+      },
+      {
+        "us": 852.375,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210006697916,
+        "sent_ns": 309210006740375,
+        "arrived_ns": 309210007550291
+      },
+      {
+        "us": 225.333,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210063364583,
+        "sent_ns": 309210063375750,
+        "arrived_ns": 309210063589916
+      },
+      {
+        "us": 455.458,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210118881708,
+        "sent_ns": 309210118907166,
+        "arrived_ns": 309210119337166
+      },
+      {
+        "us": 540.541,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210174781125,
+        "sent_ns": 309210174814083,
+        "arrived_ns": 309210175321666
+      },
+      {
+        "us": 847.875,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210226178750,
+        "sent_ns": 309210226221916,
+        "arrived_ns": 309210227026625
+      },
+      {
+        "us": 656.584,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210280767916,
+        "sent_ns": 309210280800416,
+        "arrived_ns": 309210281424500
+      },
+      {
+        "us": 715.458,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210336669458,
+        "sent_ns": 309210336712333,
+        "arrived_ns": 309210337384916
+      },
+      {
+        "us": 611.875,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210393055666,
+        "sent_ns": 309210393095041,
+        "arrived_ns": 309210393667541
+      },
+      {
+        "us": 585.25,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210446885125,
+        "sent_ns": 309210446917583,
+        "arrived_ns": 309210447470375
+      },
+      {
+        "us": 720.875,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210503012666,
+        "sent_ns": 309210503058041,
+        "arrived_ns": 309210503733541
+      },
+      {
+        "us": 241.25,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210556162166,
+        "sent_ns": 309210556169250,
+        "arrived_ns": 309210556403416
+      },
+      {
+        "us": 214.042,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210607783541,
+        "sent_ns": 309210607790083,
+        "arrived_ns": 309210607997583
+      },
+      {
+        "us": 161.75,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210663196750,
+        "sent_ns": 309210663202625,
+        "arrived_ns": 309210663358500
+      },
+      {
+        "us": 204.209,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210718564791,
+        "sent_ns": 309210718575791,
+        "arrived_ns": 309210718769000
+      },
+      {
+        "us": 528.5,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210774084000,
+        "sent_ns": 309210774124833,
+        "arrived_ns": 309210774612500
+      },
+      {
+        "us": 4564.291,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210825928500,
+        "sent_ns": 309210825976166,
+        "arrived_ns": 309210830492791
+      },
+      {
+        "us": 246.625,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210898734250,
+        "sent_ns": 309210898753500,
+        "arrived_ns": 309210898980875
+      },
+      {
+        "us": 233.25,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309210954216541,
+        "sent_ns": 309210954230458,
+        "arrived_ns": 309210954449791
+      },
+      {
+        "us": 198.833,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211009689833,
+        "sent_ns": 309211009695750,
+        "arrived_ns": 309211009888666
+      },
+      {
+        "us": 206.125,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211065117166,
+        "sent_ns": 309211065126000,
+        "arrived_ns": 309211065323291
+      },
+      {
+        "us": 353.458,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211116655000,
+        "sent_ns": 309211116677333,
+        "arrived_ns": 309211117008458
+      },
+      {
+        "us": 955.458,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211172471083,
+        "sent_ns": 309211172514000,
+        "arrived_ns": 309211173426541
+      },
+      {
+        "us": 752.541,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211226703250,
+        "sent_ns": 309211226747583,
+        "arrived_ns": 309211227455791
+      },
+      {
+        "us": 192.166,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211281094125,
+        "sent_ns": 309211281105750,
+        "arrived_ns": 309211281286291
+      },
+      {
+        "us": 1027.25,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211336580291,
+        "sent_ns": 309211336699958,
+        "arrived_ns": 309211337607541
+      },
+      {
+        "us": 689.042,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211392898833,
+        "sent_ns": 309211392943625,
+        "arrived_ns": 309211393587875
+      },
+      {
+        "us": 583.167,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211446105291,
+        "sent_ns": 309211446148458,
+        "arrived_ns": 309211446688458
+      },
+      {
+        "us": 721.083,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211498606500,
+        "sent_ns": 309211498650041,
+        "arrived_ns": 309211499327583
+      },
+      {
+        "us": 592.458,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211551464083,
+        "sent_ns": 309211551505416,
+        "arrived_ns": 309211552056541
+      },
+      {
+        "us": 237.5,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211604322458,
+        "sent_ns": 309211604339250,
+        "arrived_ns": 309211604559958
+      },
+      {
+        "us": 195.0,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211658091958,
+        "sent_ns": 309211658102208,
+        "arrived_ns": 309211658286958
+      },
+      {
+        "us": 476.334,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211713574666,
+        "sent_ns": 309211713617416,
+        "arrived_ns": 309211714051000
+      },
+      {
+        "us": 557.083,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211767165125,
+        "sent_ns": 309211767208125,
+        "arrived_ns": 309211767722208
+      },
+      {
+        "us": 12753.833,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211823431833,
+        "sent_ns": 309211825151500,
+        "arrived_ns": 309211836185666
+      },
+      {
+        "us": 573.959,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211891912666,
+        "sent_ns": 309211891950583,
+        "arrived_ns": 309211892486625
+      },
+      {
+        "us": 714.208,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309211948094875,
+        "sent_ns": 309211948137708,
+        "arrived_ns": 309211948809083
+      },
+      {
+        "us": 537.917,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212001225708,
+        "sent_ns": 309212001263333,
+        "arrived_ns": 309212001763625
+      },
+      {
+        "us": 640.917,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212055637666,
+        "sent_ns": 309212055678666,
+        "arrived_ns": 309212056278583
+      },
+      {
+        "us": 596.875,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212111339916,
+        "sent_ns": 309212111379750,
+        "arrived_ns": 309212111936791
+      },
+      {
+        "us": 286.042,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212165491291,
+        "sent_ns": 309212165504041,
+        "arrived_ns": 309212165777333
+      },
+      {
+        "us": 455.125,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212221167958,
+        "sent_ns": 309212221200250,
+        "arrived_ns": 309212221623083
+      },
+      {
+        "us": 822.625,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212276699916,
+        "sent_ns": 309212276749833,
+        "arrived_ns": 309212277522541
+      },
+      {
+        "us": 905.792,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212333268666,
+        "sent_ns": 309212333311166,
+        "arrived_ns": 309212334174458
+      },
+      {
+        "us": 485.292,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212387462958,
+        "sent_ns": 309212387502041,
+        "arrived_ns": 309212387948250
+      },
+      {
+        "us": 664.416,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212443448000,
+        "sent_ns": 309212443485375,
+        "arrived_ns": 309212444112416
+      },
+      {
+        "us": 553.458,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212496705708,
+        "sent_ns": 309212496738916,
+        "arrived_ns": 309212497259166
+      },
+      {
+        "us": 548.75,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212549350166,
+        "sent_ns": 309212549389000,
+        "arrived_ns": 309212549898916
+      },
+      {
+        "us": 161.958,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212605611208,
+        "sent_ns": 309212605623708,
+        "arrived_ns": 309212605773166
+      },
+      {
+        "us": 155.834,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212660982291,
+        "sent_ns": 309212660992125,
+        "arrived_ns": 309212661138125
+      },
+      {
+        "us": 224.292,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212715579791,
+        "sent_ns": 309212715585916,
+        "arrived_ns": 309212715804083
+      },
+      {
+        "us": 589.792,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212771032791,
+        "sent_ns": 309212771065750,
+        "arrived_ns": 309212771622583
+      },
+      {
+        "us": 532.375,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212826386000,
+        "sent_ns": 309212826399541,
+        "arrived_ns": 309212826918375
+      },
+      {
+        "us": 333.708,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212880620125,
+        "sent_ns": 309212880637333,
+        "arrived_ns": 309212880953833
+      },
+      {
+        "us": 548.75,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212936380541,
+        "sent_ns": 309212936422375,
+        "arrived_ns": 309212936929291
+      },
+      {
+        "us": 653.875,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309212992485833,
+        "sent_ns": 309212992530500,
+        "arrived_ns": 309212993139708
+      },
+      {
+        "us": 191.875,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213043908041,
+        "sent_ns": 309213043919916,
+        "arrived_ns": 309213044099916
+      },
+      {
+        "us": 465.292,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213099394416,
+        "sent_ns": 309213099428666,
+        "arrived_ns": 309213099859708
+      },
+      {
+        "us": 541.291,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213150751875,
+        "sent_ns": 309213150788125,
+        "arrived_ns": 309213151293166
+      },
+      {
+        "us": 282.042,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213205828666,
+        "sent_ns": 309213205840583,
+        "arrived_ns": 309213206110708
+      },
+      {
+        "us": 288.291,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213257116000,
+        "sent_ns": 309213257127000,
+        "arrived_ns": 309213257404291
+      },
+      {
+        "us": 192.25,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213312751958,
+        "sent_ns": 309213312767416,
+        "arrived_ns": 309213312944208
+      },
+      {
+        "us": 158.375,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213368137458,
+        "sent_ns": 309213368146291,
+        "arrived_ns": 309213368295833
+      },
+      {
+        "us": 194.291,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213423514500,
+        "sent_ns": 309213423525416,
+        "arrived_ns": 309213423708791
+      },
+      {
+        "us": 239.834,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213476643041,
+        "sent_ns": 309213476656958,
+        "arrived_ns": 309213476882875
+      },
+      {
+        "us": 217.625,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213532216208,
+        "sent_ns": 309213532227750,
+        "arrived_ns": 309213532433833
+      },
+      {
+        "us": 207.417,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213586917291,
+        "sent_ns": 309213586923750,
+        "arrived_ns": 309213587124708
+      },
+      {
+        "us": 254.083,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213642382625,
+        "sent_ns": 309213642397875,
+        "arrived_ns": 309213642636708
+      },
+      {
+        "us": 201.667,
+        "wire_bytes": 45,
+        "reads": 1,
+        "started_ns": 309213697882333,
+        "sent_ns": 309213697894666,
+        "arrived_ns": 309213698084000
+      }
+    ],
+    "p50_us": 488.45799999999997,
+    "p95_us": 908.2752999999999,
+    "p99_us": 4646.186420000042,
+    "min_us": 155.834,
+    "repetition": 0,
+    "application": false,
+    "gap": 0.05,
+    "floods": 0
+  }
+]
