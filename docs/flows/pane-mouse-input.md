@@ -2,8 +2,9 @@
 
 A host pointer event first crosses client chrome and copy-mode ownership. If
 neither consumes it, textual links get first refusal. Remaining events resolve
-one pane and select one effect: move its viewport, translate an alternate-screen
-wheel into cursor keys, or send an SGR mouse report to the child.
+one pane and select one effect: begin mouse selection, move its viewport,
+translate an alternate-screen wheel into cursor keys, or send an SGR mouse
+report to the child. See [Mouse selection](mouse-selection.md).
 
 A `scroll_pane` binding enters the same policy directly through native action
 dispatch. Its command carries only an up/down direction and always targets the
@@ -62,7 +63,8 @@ SetPaneViewportHandler      +---------+----------+
 
 `InputHandler.mouse` only delegates the host event.
 `pointer_routing` counts the event, rejects input while a name prompt owns the
-client or no active model exists, and converts supported raw pixel coordinates
+client, except for a captured selection gesture, or no active model exists,
+and converts supported raw pixel coordinates
 to host cells. It captures one active model pointer for the synchronous call.
 
 `PointerRoutingHandler` owns the order between the four policies.
@@ -131,12 +133,14 @@ reject `scroll_pane`; client Lua bindings and callbacks use native dispatch.
 at most one effect. Its policy does not distinguish physical and synthetic
 wheel events.
 
-- A child-tracked event with SGR enabled becomes a report, including tracked
+- A left press without child mouse tracking starts selection. Shift-left press
+  forces selection when the host delivers it; textual links decline that press.
+- A remaining child-tracked event with SGR enabled becomes a report, including tracked
   wheel events.
 - An untracked wheel at the live bottom becomes three cursor-up or cursor-down
   inputs when alternate-screen scroll is enabled.
 - Every other untracked wheel moves the client viewport by three rows.
-- An untracked non-wheel event is ignored.
+- Other untracked non-wheel events are ignored.
 
 The handler knows these rules but does not know how to mutate a viewport,
 encode a report or reach the runtime.

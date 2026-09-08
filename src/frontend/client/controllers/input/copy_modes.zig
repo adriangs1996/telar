@@ -23,6 +23,30 @@ pub fn enter(client: *Client) bool {
     return use_case.enter();
 }
 
+/// Starts a pane-local mouse selection after focus and ownership resolution.
+/// Example: `_ = beginPointer(client, press);`.
+pub fn beginPointer(client: *Client, press: input_capability.copy_mode.PointerPress) bool {
+    var use_case = handler(client);
+
+    return use_case.beginPointer(press);
+}
+
+/// Extends or copies the captured mouse selection through the copy transaction.
+/// Example: `_ = try pointer(client, motion);`.
+pub fn pointer(client: *Client, motion: input_capability.copy_mode.PointerMotion) !copy_mode.Outcome {
+    var use_case = handler(client);
+
+    return use_case.execute(.{ .pointer = motion });
+}
+
+/// Cancels mouse highlighting and physical capture without touching keyboard copy mode.
+/// Example: `_ = try cancelPointer(client);`.
+pub fn cancelPointer(client: *Client) !copy_mode.Outcome {
+    var use_case = handler(client);
+
+    return use_case.execute(.cancel_pointer);
+}
+
 /// Routes one host key through copy-mode semantics.
 ///
 /// ```zig

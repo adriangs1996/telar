@@ -653,6 +653,8 @@ pub const PaneViewportChange = struct {
 
 pub const CopyModeCommand = union(enum) {
     key: keybind.Key,
+    pointer: copy_mode.PointerMotion,
+    cancel_pointer,
     vertical: i32,
     matches: CopyModeMatches,
     leave,

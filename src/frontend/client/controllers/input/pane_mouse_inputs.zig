@@ -6,6 +6,8 @@ const input_capability = @import("../../../input/root.zig");
 const workspace_capability = @import("../../../workspace/root.zig");
 const input_application = @import("../../application/input/root.zig");
 const pane_inputs = @import("pane_inputs.zig");
+const copy_modes = @import("copy_modes.zig");
+const clock = @import("../../resources/clock.zig");
 const pane_viewports = @import("../panes/pane_viewports.zig");
 
 const Client = @import("../../client.zig");
@@ -83,6 +85,16 @@ fn applyEffect(raw_context: *anyopaque, effect: pane_mouse.Effect) !void {
     const context: *Context = @ptrCast(@alignCast(raw_context));
 
     switch (effect) {
+        .selection => |selection| {
+            _ = copy_modes.beginPointer(context.client, .{
+                .pane_id = selection.plan.pane_id,
+                .position = .{
+                    .x = selection.command.event.x - selection.plan.content.x,
+                    .y = selection.command.event.y - selection.plan.content.y,
+                },
+                .now_ns = clock.monotonic(context.client.io),
+            });
+        },
         .viewport => |scroll| {
             var use_case = pane_viewports.handler(context.client);
 

@@ -196,6 +196,10 @@ pub const PaneInputHandler = struct {
             return error.InvalidInputLength;
         }
 
+        if (prepared.source != .mouse) {
+            _ = handler.model.clearPointerSelection();
+        }
+
         if (prepared.source != .mouse and prepared.restore_viewport) {
             var viewport: set_pane_viewport.SetPaneViewportHandler = .{
                 .model = handler.model,

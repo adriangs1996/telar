@@ -14,5 +14,6 @@ test {
     _ = @import("history_browser.zig");
     _ = @import("configuration.zig");
     _ = @import("host_interaction.zig");
+    _ = @import("mouse_selection.zig");
     _ = @import("renaming_and_telemetry.zig");
 }

@@ -178,6 +178,9 @@ pub const Model = struct {
     workspace_list_collapsed: bool = false,
     chrome_revision: u64 = 0,
     copy_state: ?copy_mode.State = null,
+    selection_clicks: core.select.ClickTracker = .{},
+    selection_click_pane: ?schema.PaneId = null,
+    selection_gesture: ?schema.PaneId = null,
     copy_revision: u64 = 0,
     reported_pane_focus: ?ReportedPaneFocus = null,
     pane_paste: ?PanePasteSession = null,
@@ -1420,7 +1423,7 @@ pub const Model = struct {
     pub fn planPaneInput(model: *const Model, target: PaneInputTarget) ?PaneInputPlan {
         switch (target) {
             .focused, .pane => {
-                if (model.name_prompt.active() or model.copy_state != null) {
+                if (model.name_prompt.active() or model.copyModeActive()) {
                     return null;
                 }
             },
@@ -1598,7 +1601,7 @@ pub const Model = struct {
     /// const change = model.setPaneViewport(command) orelse return;
     /// ```
     pub fn setPaneViewport(model: *Model, command: PaneViewportCommand) ?PaneViewportChange {
-        if (model.copy_state != null) {
+        if (model.copyModeActive()) {
             return null;
         }
 
@@ -1617,7 +1620,73 @@ pub const Model = struct {
     /// if (model.copyModeActive()) return;
     /// ```
     pub fn copyModeActive(model: *const Model) bool {
-        return model.copy_state != null;
+        const state = model.copy_state orelse return false;
+
+        return state.pointer == null;
+    }
+
+    /// Returns the pointer gesture's stable owner without lending its state.
+    /// Example: `const target = model.pointerSelection() orelse return;`.
+    pub fn pointerSelection(model: *const Model) ?struct { pane_id: schema.PaneId, dragging: bool } {
+        if (model.selection_gesture) |pane_id| {
+            return .{ .pane_id = pane_id, .dragging = true };
+        }
+
+        const state = model.copy_state orelse return null;
+        if (state.pointer == null) {
+            return null;
+        }
+
+        return .{ .pane_id = state.pane_id, .dragging = false };
+    }
+
+    /// Releases physical capture even when copying fails or the pane retired.
+    /// Example: `model.finishPointerGesture();`.
+    pub fn finishPointerGesture(model: *Model) void {
+        model.selection_gesture = null;
+    }
+
+    /// Clears disposable mouse highlighting before typing or pasting.
+    /// Example: `_ = model.clearPointerSelection();`.
+    pub fn clearPointerSelection(model: *Model) bool {
+        const state = model.copy_state orelse return false;
+        if (state.pointer == null) {
+            return false;
+        }
+
+        return model.releaseCopyMode(state.pane_id);
+    }
+
+    /// Starts selection only after routing has focused an attached pane.
+    /// Example: `_ = model.beginPointerSelection(press);`.
+    pub fn beginPointerSelection(model: *Model, press: copy_mode.PointerPress) bool {
+        if (model.copyModeActive() or model.name_prompt.active() or model.pane_paste != null) {
+            return false;
+        }
+
+        const active = model.workspace.active() orelse return false;
+        const pane = active.model.focusedPane() orelse return false;
+        if (pane.id != press.pane_id or !pane.attached or
+            press.position.x >= pane.buffer.w or press.position.y >= pane.buffer.h)
+        {
+            return false;
+        }
+
+        if (model.selection_click_pane != pane.id) {
+            model.selection_clicks = .{};
+        }
+
+        model.selection_click_pane = pane.id;
+        const granularity = model.selection_clicks.press(press.position, press.now_ns);
+        var state = copy_mode.State.init(pane.id, .{
+            .x = press.position.x,
+            .y = pane.scroll.offset + press.position.y,
+        }, pane.scroll.offset);
+        state.beginPointer(granularity, .{ .buffer = &pane.buffer, .scroll = pane.scroll });
+        model.selection_gesture = pane.id;
+        model.copy_state = state;
+        model.copy_revision +%= 1;
+        return true;
     }
 
     /// Returns the pane captured by active copy mode.
@@ -1649,7 +1718,7 @@ pub const Model = struct {
     /// if (model.enterCopyMode()) observe(model.version());
     /// ```
     pub fn enterCopyMode(model: *Model) bool {
-        if (model.copy_state != null or model.name_prompt.active() or model.pane_paste != null) {
+        if (model.copyModeActive() or model.name_prompt.active() or model.pane_paste != null) {
             return false;
         }
 
@@ -1722,9 +1791,40 @@ pub const Model = struct {
                     return model.planCopyModeExit(previous, selection);
                 }
             },
+            .pointer => |motion| {
+                if (previous.pointer == null or model.selection_gesture != previous.pane_id) {
+                    return null;
+                }
+
+                next.movePointer(motion, .{ .buffer = &pane.buffer, .scroll = pane.scroll });
+                if (motion.release) {
+                    const anchor = next.anchor orelse return model.planCopyModeExit(previous, null);
+
+                    return .{
+                        .expected_revision = model.copy_revision,
+                        .previous = previous,
+                        .next = next,
+                        .selection = .{
+                            .pane_id = next.pane_id,
+                            .start_x = anchor.x,
+                            .start_y = anchor.y,
+                            .end_x = next.cursor.x,
+                            .end_y = next.cursor.y,
+                            .linewise = next.linewise,
+                        },
+                    };
+                }
+            },
+            .cancel_pointer => {
+                if (previous.pointer == null) {
+                    return null;
+                }
+
+                return model.planCopyModeExit(previous, null);
+            },
             .vertical => |delta| next.vertical(delta, .{ .scroll = pane.scroll, .rows = pane.buffer.h }),
             .matches => |found| {
-                if (found.pane_id != previous.pane_id) {
+                if (found.pane_id != previous.pane_id or previous.pointer != null) {
                     return null;
                 }
 
@@ -1813,6 +1913,14 @@ pub const Model = struct {
             return false;
         }
 
+        if (state.pointer) |pointer| {
+            const active = model.workspace.activeConst() orelse return model.releaseCopyMode(state.pane_id);
+            const pane = active.model.findConst(state.pane_id) orelse return model.releaseCopyMode(state.pane_id);
+            if (pointer.cols != pane.buffer.w or pointer.rows != pane.buffer.h) {
+                return model.releaseCopyMode(state.pane_id);
+            }
+        }
+
         var next = state;
         copy_mode.onFrame(&next, command.previous_offset, command.scroll);
         if (std.meta.eql(state, next)) {
@@ -1829,8 +1937,8 @@ pub const Model = struct {
             active.model.findConst(previous.pane_id)
         else
             null;
-        const viewport = if (pane) |target|
-            copyModeViewport(target, previous.entry_offset)
+        const viewport = if (pane != null and previous.pointer == null)
+            copyModeViewport(pane.?, previous.entry_offset)
         else
             null;
 
@@ -2865,6 +2973,29 @@ fn findTabConst(workspace: *const tabs_mod.Model, location: schema.TabLocation) 
     }
 
     return tab;
+}
+
+test "resizing a mouse-selected pane cancels coordinates but retains gesture ownership" {
+    var model = Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    try std.testing.expect(model.beginPointerSelection(.{ .pane_id = pane_id, .position = .{ .x = 15, .y = 0 }, .now_ns = 0 }));
+    const version = model.version();
+    const pane = model.workspace.findPane(pane_id).?;
+    try pane.buffer.resize(10, 5);
+
+    try std.testing.expect(model.reconcileCopyModeFrame(.{ .pane_id = pane_id, .previous_offset = 0, .scroll = pane.scroll }));
+    try std.testing.expect(model.copyModeProjection() == null);
+    try std.testing.expectEqual(version.copy + 1, model.version().copy);
+    try std.testing.expectEqual(pane_id, model.pointerSelection().?.pane_id);
+    try std.testing.expect(model.pointerSelection().?.dragging);
+    model.finishPointerGesture();
+    try std.testing.expect(model.pointerSelection() == null);
 }
 
 test "copy mode frame reconciliation and pane release are exact" {

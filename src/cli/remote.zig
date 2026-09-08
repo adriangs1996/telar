@@ -29,18 +29,18 @@ pub const Forward = struct {
     local_path: [std.fs.max_path_bytes:0]u8 = undefined,
     local_path_len: usize = 0,
 
-    pub fn localPath(forward: *const Forward) []const u8 {
-        return forward.local_path[0..forward.local_path_len];
+    pub fn localPath(self: *const Forward) []const u8 {
+        return self.local_path[0..self.local_path_len];
     }
 
-    pub fn localPathZ(forward: *Forward) [*:0]const u8 {
-        forward.local_path[forward.local_path_len] = 0;
-        return forward.local_path[0..forward.local_path_len :0];
+    pub fn localPathZ(self: *Forward) [*:0]const u8 {
+        self.local_path[self.local_path_len] = 0;
+        return self.local_path[0..self.local_path_len :0];
     }
 
-    pub fn stop(forward: *Forward, io: Io) void {
-        forward.child.kill(io);
-        Io.Dir.deleteFileAbsolute(io, forward.localPath()) catch {};
+    pub fn stop(self: *Forward, io: Io) void {
+        self.child.kill(io);
+        Io.Dir.deleteFileAbsolute(io, self.localPath()) catch {};
     }
 };
 

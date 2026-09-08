@@ -121,6 +121,10 @@ pub const Range = struct {
 };
 
 fn isWordByte(cell: *const ui.Cell) bool {
+    if (cell.width == 0) {
+        return true;
+    }
+
     const glyph = cell.text();
     if (glyph.len == 0) {
         return false;
@@ -132,10 +136,12 @@ fn isWordByte(cell: *const ui.Cell) bool {
 }
 
 fn wordStart(b: *const ui.Buffer, at: Point) u16 {
+    const current = cellAt(b, at.x, at.y) orelse return at.x;
+    const word = isWordByte(current);
     var x = at.x;
     while (x > 0) : (x -= 1) {
         const previous = cellAt(b, x - 1, at.y) orelse break;
-        if (!isWordByte(previous)) {
+        if (isWordByte(previous) != word) {
             break;
         }
     }
@@ -143,10 +149,12 @@ fn wordStart(b: *const ui.Buffer, at: Point) u16 {
 }
 
 fn wordEnd(b: *const ui.Buffer, at: Point) u16 {
+    const current = cellAt(b, at.x, at.y) orelse return at.x;
+    const word = isWordByte(current);
     var x = at.x;
     while (x + 1 < b.w) : (x += 1) {
         const next = cellAt(b, x + 1, at.y) orelse break;
-        if (!isWordByte(next)) {
+        if (isWordByte(next) != word) {
             break;
         }
     }
@@ -246,7 +254,7 @@ pub const ClickTracker = struct {
         const near = at.y == t.last.y and (if (at.x > t.last.x) at.x - t.last.x else t.last.x - at.x) <= 1;
         const soon = t.count > 0 and now_ns -| t.last_ns <= t.interval_ns;
 
-        t.count = if (near and soon) t.count + 1 else 1;
+        t.count = if (near and soon) @min(t.count +| 1, 3) else 1;
         t.last = at;
         t.last_ns = now_ns;
 
@@ -430,6 +438,27 @@ test "highlighting agrees with what gets copied" {
     // break the rows imply.
     try testing.expectEqual(@as(usize, 4), painted);
     try testing.expectEqualStrings("ef\ngh", got);
+}
+
+test "word expansion groups whitespace separately and keeps wide glyph tails inside words" {
+    var b = try screen(testing.allocator, &.{"ab  界cd"});
+    defer b.deinit();
+    const space = (Range{ .anchor = .{ .x = 2, .y = 0 }, .head = .{ .x = 2, .y = 0 }, .granularity = .word }).expanded(&b);
+    try testing.expectEqual(@as(u16, 2), space.anchor.x);
+    try testing.expectEqual(@as(u16, 3), space.head.x);
+    const wide = (Range{ .anchor = .{ .x = 5, .y = 0 }, .head = .{ .x = 5, .y = 0 }, .granularity = .word }).expanded(&b);
+    try testing.expectEqual(@as(u16, 4), wide.anchor.x);
+    try testing.expectEqual(@as(u16, 7), wide.head.x);
+}
+
+test "rapid repeated clicks saturate at line granularity" {
+    var tracker: ClickTracker = .{};
+    for (0..1024) |index| {
+        const granularity = tracker.press(.{ .x = 2, .y = 3 }, index);
+        if (index >= 2) {
+            try testing.expectEqual(Granularity.line, granularity);
+        }
+    }
 }
 
 test "an empty selection copies nothing" {

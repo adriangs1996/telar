@@ -55,7 +55,9 @@ fn link(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !bool 
 }
 
 fn resolve(context: *Context, event: term.Event.Mouse) pointer_routing.Authority {
-    if (context.client.model.name_prompt.active()) {
+    const selection = context.client.model.pointerSelection();
+    const captured = if (selection) |value| value.dragging else false;
+    if (context.client.model.name_prompt.active() and !captured) {
         return .unavailable;
     }
 

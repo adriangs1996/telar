@@ -52,7 +52,9 @@ commands publish a bounded in-app warning.
 After the view accepts pane input, textual links get refusal before child mouse
 reporting. A left press over a link opens it and owns that gesture. Matching
 drag and release events never leak to the child. A press outside a link leaves
-pane mouse behavior unchanged.
+pane mouse behavior unchanged. Shift-left press declines link opening so
+[mouse selection](mouse-selection.md) can own the gesture when the host delivers
+that modifier.
 
 Active copy mode already owns every pointer event, so it opens links through
 the `o` key instead. `ClientModel.planCopyMode` resolves the target from the

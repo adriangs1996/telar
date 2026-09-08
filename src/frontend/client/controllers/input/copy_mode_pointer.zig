@@ -35,15 +35,30 @@ pub fn apply(client: *Client, model: *multiplexer.Model, event: term.Event.Mouse
             .context = &context,
             .leave = leave,
             .vertical = vertical,
+            .pointer = pointer,
+            .cancel_pointer = cancelPointer,
         },
     };
 
-    const outcome = try use_case.execute(.{ .kind = event.kind }, resolve(&context, event));
+    const outcome = try use_case.execute(.{
+        .kind = event.kind,
+        .left_button = event.button & 0b11 == 0,
+    }, resolve(&context, event));
 
     return outcome != .unowned;
 }
 
 fn resolve(context: *Context, event: term.Event.Mouse) copy_mode_pointer.Authority {
+    if (context.client.model.pointerSelection()) |selection| {
+        const view = context.model.viewForPane(selection.pane_id, context.area);
+        const position: ?ui.Point = if (view != null and view.?.content.w > 0 and view.?.content.h > 0) .{
+            .x = @min(event.x -| view.?.content.x, view.?.content.w - 1),
+            .y = @min(event.y -| view.?.content.y, view.?.content.h - 1),
+        } else null;
+
+        return .{ .selection = .{ .dragging = selection.dragging, .position = position } };
+    }
+
     const pane_id = context.client.model.copyModeTarget() orelse return .unowned;
     if (context.model.find(pane_id) == null) {
         return .target_missing;
@@ -61,6 +76,18 @@ fn leave(raw_context: *anyopaque) !void {
     const context: *Context = @ptrCast(@alignCast(raw_context));
 
     _ = try copy_modes.leave(context.client);
+}
+
+fn cancelPointer(raw_context: *anyopaque) !void {
+    const context: *Context = @ptrCast(@alignCast(raw_context));
+
+    _ = try copy_modes.cancelPointer(context.client);
+}
+
+fn pointer(raw_context: *anyopaque, motion: @import("../../../input/root.zig").copy_mode.PointerMotion) !void {
+    const context: *Context = @ptrCast(@alignCast(raw_context));
+
+    _ = try copy_modes.pointer(context.client, motion);
 }
 
 fn vertical(raw_context: *anyopaque, delta: i32) !void {

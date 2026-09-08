@@ -7,6 +7,11 @@ entry viewport and current viewport. `ClientModel.Version.copy` identifies
 committed changes independently from workspace, pane, chrome and prompt state.
 Viewport commits advance `ClientModel.Version.viewport` separately.
 
+Mouse selection reuses the range and projection without taking keyboard input
+or changing the child cursor. Its physical gesture has a separate bounded pane
+ID lease. See [Mouse selection](mouse-selection.md) for entry, copying and
+cancellation. The keyboard-mode rules below apply only to keyboard copy mode.
+
 The state and its motions allocate nothing. The runtime still owns scrollback
 and performs the actual copy; the client sends a bounded `copy_selection`
 request containing only coordinates.

@@ -50,7 +50,7 @@ pub fn pointer(client: *Client, model: *multiplexer.Model, event: term.Event.Mou
         },
         .left_button = event.button & 0b11 == 0,
     };
-    const target = if (command.kind == .press and command.left_button)
+    const target = if (command.kind == .press and command.left_button and event.button & 4 == 0)
         targetAt(model, event, client.view.workbench())
     else
         null;

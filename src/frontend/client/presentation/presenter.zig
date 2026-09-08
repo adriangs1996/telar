@@ -344,7 +344,9 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         projection.version.suggestion;
     const viewport_changed = presenter.presented_model_version.viewport !=
         projection.version.viewport;
-    const copy_status_changed = (presenter.compositor.copy == null) != (projection.copy == null);
+    const was_copy_mode = if (presenter.compositor.copy) |copy| !copy.view.pointer else false;
+    const is_copy_mode = if (projection.copy) |copy| !copy.view.pointer else false;
+    const copy_status_changed = was_copy_mode != is_copy_mode;
     const view_interaction_changed = presenter.presented_presentation_ingress.view_interaction !=
         projection.presentation_ingress.view_interaction;
     const input_routing_changed = presenter.presented_presentation_ingress.input_routing !=
@@ -602,7 +604,7 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
         .proxy_tls_scope = input.projection.proxy_tls_scope,
         .proxy_system_trusted = input.projection.proxy_system_trusted,
         .system_metrics = input.projection.system_metrics,
-        .copy_mode_active = input.projection.copy != null,
+        .copy_mode_active = if (input.projection.copy) |copy| !copy.view.pointer else false,
         .bar_state = input.projection.bar_state,
         .status_mode = input.projection.status_mode,
         .force = composed.stats.full,

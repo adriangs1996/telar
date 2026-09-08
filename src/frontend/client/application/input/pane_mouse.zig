@@ -37,6 +37,7 @@ pub const Effect = union(enum) {
     viewport: ScrollEffect,
     alternate_scroll: ScrollEffect,
     report: ReportEffect,
+    selection: ReportEffect,
 };
 
 pub const Outcome = enum {
@@ -44,6 +45,7 @@ pub const Outcome = enum {
     viewport_selected,
     alternate_scroll_selected,
     report_selected,
+    selection_started,
 };
 
 pub const Resolved = struct {
@@ -65,8 +67,8 @@ pub const PaneMouseHandler = struct {
     plans: Plans,
     effects: Effects,
 
-    /// Resolves one pane snapshot, then selects exactly one viewport,
-    /// alternate-scroll or child mouse-report effect.
+    /// Resolves one pane snapshot, then selects one mouse-selection,
+    /// viewport, alternate-scroll or child mouse-report effect.
     ///
     /// ```zig
     /// const outcome = try handler.execute(command);
@@ -75,6 +77,17 @@ pub const PaneMouseHandler = struct {
         const resolved = self.plans.resolve(self.plans.context, command) orelse return .ignored;
         const plan = resolved.plan;
         const pointer = resolved.pointer;
+
+        const forced_selection = pointer.event.button & 4 != 0;
+        if (pointer.event.kind == .press and pointer.event.button & 0b11 == 0 and
+            (plan.protocol.tracking == .none or forced_selection))
+        {
+            try self.effects.apply(self.effects.context, .{ .selection = .{
+                .plan = plan,
+                .command = pointer,
+            } });
+            return .selection_started;
+        }
 
         const wheel_delta: ?i32 = switch (pointer.event.kind) {
             .scroll_up => -3,
@@ -235,7 +248,7 @@ test "PaneMouseHandler reports only child-tracked events" {
         .{ .tracking = .normal, .kind = .scroll_up, .outcome = .report_selected },
         .{ .tracking = .normal, .kind = .scroll_down, .outcome = .report_selected },
         .{ .tracking = .normal, .kind = .move, .outcome = .ignored },
-        .{ .tracking = .none, .kind = .press, .outcome = .ignored },
+        .{ .tracking = .none, .kind = .press, .outcome = .selection_started },
         .{ .tracking = .normal, .sgr = false, .kind = .press, .outcome = .ignored },
         .{ .tracking = .normal, .sgr = false, .kind = .scroll_up, .outcome = .viewport_selected },
     };
@@ -256,6 +269,8 @@ test "PaneMouseHandler reports only child-tracked events" {
         } else {
             const expected: Effect = if (case.outcome == .report_selected)
                 .{ .report = .{ .plan = resolved.plan, .command = resolved.pointer } }
+            else if (case.outcome == .selection_started)
+                .{ .selection = .{ .plan = resolved.plan, .command = resolved.pointer } }
             else
                 .{ .viewport = .{ .pane_id = resolved.plan.pane_id, .delta = -3 } };
 
@@ -269,7 +284,7 @@ test "PaneMouseHandler preserves the resolved report instead of the original poi
     var resolved = testingResolved(.press);
     resolved.plan.protocol = .{ .tracking = .normal, .sgr = true, .pixels = true };
     resolved.pointer = .{
-        .event = .{ .x = 14, .y = 7, .raw_x = 147, .raw_y = 151, .kind = .press, .button = 4 },
+        .event = .{ .x = 14, .y = 7, .raw_x = 147, .raw_y = 151, .kind = .press, .button = 16 },
         .exterior_pixels = true,
         .cell_width_px = 10,
         .cell_height_px = 20,

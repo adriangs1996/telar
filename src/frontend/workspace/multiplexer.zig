@@ -1361,7 +1361,8 @@ const PaneCursor = struct {
 };
 
 fn setPaneCursor(screen: *term.Screen, pane: *const Pane, projection: PaneCursor) void {
-    if (projection.copy) |selection| {
+    if (projection.copy != null and !projection.copy.?.pointer) {
+        const selection = projection.copy.?;
         if (selection.cursor.y < pane.scroll.offset or selection.cursor.x >= projection.content.w) {
             return;
         }

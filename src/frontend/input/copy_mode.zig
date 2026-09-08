@@ -29,8 +29,28 @@ pub const Screen = struct {
     scroll: schema.frame.Scroll,
 };
 
+pub const PointerPress = struct {
+    pane_id: schema.PaneId,
+    position: ui.Point,
+    now_ns: u64,
+};
+
+pub const PointerMotion = struct {
+    position: ui.Point,
+    release: bool = false,
+};
+
+const PointerSelection = struct {
+    start: Point,
+    end: Point,
+    granularity: core.select.Granularity,
+    cols: u16,
+    rows: u16,
+};
+
 pub const View = struct {
     cursor: Point,
+    pointer: bool = false,
     anchor: ?Point,
     linewise: bool,
 
@@ -53,6 +73,7 @@ pub const View = struct {
 pub const State = struct {
     pane_id: schema.PaneId,
     cursor: Point,
+    pointer: ?PointerSelection = null,
     anchor: ?Point = null,
     linewise: bool = false,
     entry_offset: u32,
@@ -74,9 +95,47 @@ pub const State = struct {
     pub fn view(state: State) View {
         return .{
             .cursor = state.cursor,
+            .pointer = state.pointer != null,
             .anchor = state.anchor,
             .linewise = state.linewise,
         };
+    }
+
+    /// Captures a word or line boundary once; subsequent drags retain it.
+    /// Example: `state.beginPointer(.word, screen);`.
+    pub fn beginPointer(state: *State, granularity: core.select.Granularity, screen: Screen) void {
+        const span = pointerSpan(state.cursor, granularity, screen);
+        state.pointer = .{
+            .start = span[0],
+            .end = span[1],
+            .granularity = granularity,
+            .cols = screen.buffer.w,
+            .rows = screen.buffer.h,
+        };
+        state.anchor = if (granularity == .character) null else span[0];
+        state.cursor = span[1];
+        state.linewise = granularity == .line;
+    }
+
+    /// Extends only within the supplied pane cells, in absolute history rows.
+    /// Example: `state.movePointer(motion, screen);`.
+    pub fn movePointer(state: *State, motion: PointerMotion, screen: Screen) void {
+        const pointer = if (state.pointer) |*value| value else return;
+        if (screen.buffer.w == 0 or screen.buffer.h == 0) {
+            return;
+        }
+
+        const point: Point = .{
+            .x = @min(motion.position.x, screen.buffer.w - 1),
+            .y = screen.scroll.offset + @min(motion.position.y, screen.buffer.h - 1),
+        };
+        const span = pointerSpan(point, pointer.granularity, screen);
+        const backwards = less(point, pointer.start);
+        state.anchor = if (backwards) pointer.end else pointer.start;
+        state.cursor = if (backwards) span[0] else span[1];
+        if (pointer.granularity == .character and std.meta.eql(span[0], pointer.start) and std.meta.eql(span[1], pointer.end)) {
+            state.anchor = null;
+        }
     }
 
     pub fn toggleSelection(state: *State, linewise: bool) void {
@@ -217,6 +276,28 @@ pub const State = struct {
     }
 };
 
+fn pointerSpan(point: Point, granularity: core.select.Granularity, screen: Screen) [2]Point {
+    const local: ui.Point = .{ .x = point.x, .y = @intCast(point.y - screen.scroll.offset) };
+    var range = (core.select.Range{
+        .anchor = local,
+        .head = local,
+        .granularity = granularity,
+    }).expanded(screen.buffer);
+    const row = screen.buffer.cells[@as(usize, local.y) * screen.buffer.w ..][0..screen.buffer.w];
+    if (row[range.anchor.x].width == 0 and range.anchor.x > 0) {
+        range.anchor.x -= 1;
+    }
+
+    if (row[range.head.x].width == 2 and range.head.x + 1 < screen.buffer.w) {
+        range.head.x += 1;
+    }
+
+    return .{
+        .{ .x = range.anchor.x, .y = screen.scroll.offset + range.anchor.y },
+        .{ .x = range.head.x, .y = screen.scroll.offset + range.head.y },
+    };
+}
+
 fn less(a: Point, b: Point) bool {
     return a.y < b.y or (a.y == b.y and a.x < b.x);
 }
@@ -328,11 +409,21 @@ pub fn onFrame(state: *State, previous_offset: u32, scroll: schema.frame.Scroll)
     if (scroll.offset < previous_offset and state.viewport_offset == previous_offset) {
         const pruned = previous_offset - scroll.offset;
         state.cursor.y -|= pruned;
+        if (state.pointer) |*pointer| {
+            pointer.start.y -|= pruned;
+            pointer.end.y -|= pruned;
+        }
+
         if (state.anchor) |*anchor| {
             anchor.y -|= pruned;
         }
     }
     state.cursor.y = @min(state.cursor.y, scroll.total_rows -| 1);
+    if (state.pointer) |*pointer| {
+        pointer.start.y = @min(pointer.start.y, scroll.total_rows -| 1);
+        pointer.end.y = @min(pointer.end.y, scroll.total_rows -| 1);
+    }
+
     if (state.anchor) |*anchor| {
         anchor.y = @min(anchor.y, scroll.total_rows -| 1);
     }
@@ -517,6 +608,55 @@ test "vertical movement scrolls the viewport only at its edges" {
     state.vertical(-20, .{ .scroll = scroll, .rows = 10 });
     try std.testing.expectEqual(@as(u32, 78), state.cursor.y);
     try std.testing.expectEqual(@as(u32, 78), state.viewport_offset);
+}
+
+test "pointer selection includes both cells of wide glyphs without copying a bare click" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 2);
+    defer buffer.deinit();
+    buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "a界b", .style = .{} });
+    const screen: Screen = .{ .buffer = &buffer, .scroll = .{ .offset = 0, .total_rows = 2 } };
+    var state = State.init(@enumFromInt(1), .{ .x = 2, .y = 0 }, 0);
+    state.beginPointer(.character, screen);
+    state.movePointer(.{ .position = .{ .x = 2, .y = 0 }, .release = true }, screen);
+    try std.testing.expect(state.anchor == null);
+
+    state.movePointer(.{ .position = .{ .x = 3, .y = 0 } }, screen);
+    try std.testing.expectEqual(@as(u16, 1), state.anchor.?.x);
+    try std.testing.expectEqual(@as(u16, 3), state.cursor.x);
+    try std.testing.expect(state.view().selected(2, 0));
+}
+
+test "pointer word drags retain the original word when reversing direction" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 13, 2);
+    defer buffer.deinit();
+    buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
+    _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "one two three", .style = .{} });
+    const screen: Screen = .{ .buffer = &buffer, .scroll = .{ .offset = 100, .total_rows = 102 } };
+    var state = State.init(@enumFromInt(1), .{ .x = 5, .y = 100 }, 100);
+    state.beginPointer(.word, screen);
+    state.movePointer(.{ .position = .{ .x = 10, .y = 0 } }, screen);
+    try std.testing.expectEqualDeep(Point{ .x = 4, .y = 100 }, state.anchor.?);
+    try std.testing.expectEqualDeep(Point{ .x = 12, .y = 100 }, state.cursor);
+
+    state.movePointer(.{ .position = .{ .x = 1, .y = 0 } }, screen);
+    try std.testing.expectEqualDeep(Point{ .x = 6, .y = 100 }, state.anchor.?);
+    try std.testing.expectEqualDeep(Point{ .x = 0, .y = 100 }, state.cursor);
+    state.movePointer(.{ .position = .{ .x = 65535, .y = 65535 } }, screen);
+    try std.testing.expectEqualDeep(Point{ .x = 12, .y = 101 }, state.cursor);
+}
+
+test "pruned history moves the captured pointer origin with its highlight" {
+    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 2);
+    defer buffer.deinit();
+    var state = State.init(@enumFromInt(1), .{ .x = 2, .y = 100 }, 100);
+    state.beginPointer(.character, .{ .buffer = &buffer, .scroll = .{ .offset = 100, .total_rows = 102 } });
+    const scroll: schema.frame.Scroll = .{ .offset = 90, .total_rows = 92 };
+    onFrame(&state, 100, scroll);
+    state.movePointer(.{ .position = .{ .x = 4, .y = 0 } }, .{ .buffer = &buffer, .scroll = scroll });
+
+    try std.testing.expectEqualDeep(Point{ .x = 2, .y = 90 }, state.anchor.?);
+    try std.testing.expectEqualDeep(Point{ .x = 4, .y = 90 }, state.cursor);
 }
 
 test "linear and linewise selections are inclusive" {
