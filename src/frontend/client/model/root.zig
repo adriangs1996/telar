@@ -136,7 +136,13 @@ pub const WorkspaceReconciliation = model_types.WorkspaceReconciliation;
 
 pub const HistoryPageResult = history_palette_mod.State.PageResult;
 
+pub const PresentationMode = enum {
+    normal,
+    agent,
+};
+
 pub const Model = struct {
+    mode: PresentationMode = .normal,
     workspace: tabs_mod.Model,
     clipboard: @import("clipboard_capture.zig").State = .{},
     plugins: @import("plugin_execution.zig").State = .{},
@@ -246,6 +252,15 @@ pub const Model = struct {
     pub fn deinit(model: *Model) void {
         model.history_palette.deinit();
         model.workspace.deinit();
+    }
+
+    pub fn toggleAgentMode(self: *Model) void {
+        self.mode = switch (self.mode) {
+            .normal => .agent,
+            .agent => .normal,
+        };
+
+        self.chrome_revision +%= 1;
     }
 
     /// Returns the version that presenters use to observe committed changes.

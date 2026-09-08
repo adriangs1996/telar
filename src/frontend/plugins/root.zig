@@ -197,7 +197,7 @@ pub const Registry = struct {
                 .suggest_command,
                 => null,
                 .notification => .notifications,
-                .scroll_pane, .lua_callback, .lua_expr, .plugin => return error.InvalidPluginEffect,
+                .scroll_pane, .lua_callback, .lua_expr, .plugin, .toggle_agent_mode => return error.InvalidPluginEffect,
             };
             if (capability) |required| {
                 try registry.authorize(authorization.package_index, required);
@@ -658,6 +658,15 @@ test "privileged plugin effects require a digest-bound capability grant" {
             .batch = &batch,
         }));
     }
+
+    batch.items[0] = .toggle_agent_mode;
+
+    try std.testing.expectError(error.InvalidPluginEffect, registry.authorizeBatch(.{
+        .package_index = 0,
+        .plugin_id = plugin.stableId(manifest.id()),
+        .digest = digest,
+        .batch = &batch,
+    }));
 
     const stale_digest: plugin.Digest = @splat(8);
     try std.testing.expectError(

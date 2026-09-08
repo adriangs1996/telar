@@ -915,3 +915,48 @@ test "canonical reported focus retirement is silent and idempotent" {
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
 }
+
+test "native agent mode action toggles the client presentation" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+
+    const client = harness.client;
+    var expected_version = client.model.version();
+    try std.testing.expectEqual(.normal, client.model.mode);
+
+    for ([_]client_model.PresentationMode{ .agent, .normal }) |expected_mode| {
+        const control = try client_actions.apply(client, .toggle_agent_mode);
+
+        expected_version.chrome +%= 1;
+        try std.testing.expectEqual(keybind.Control.continue_routing, control);
+        try std.testing.expectEqual(expected_mode, client.model.mode);
+        try std.testing.expectEqualDeep(expected_version, client.model.version());
+    }
+}
+
+test "configured action routing observes the client presentation mode" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+
+    const client = harness.client;
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try handler.action(.toggle_agent_mode);
+
+    try std.testing.expectEqual(.agent, client.model.mode);
+    const version = client.model.version();
+    const sidebar_visible = client.model.sidebarVisible();
+
+    _ = try handler.action(.toggle_sidebar);
+
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(sidebar_visible, client.model.sidebarVisible());
+
+    _ = try handler.action(.toggle_agent_mode);
+
+    try std.testing.expectEqual(.normal, client.model.mode);
+}

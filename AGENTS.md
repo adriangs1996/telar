@@ -33,7 +33,7 @@ every rule relevant to the change.
 
 ### The runtime
 
-One long-lived process per machine. It owns everything that has to survive the
+One long-lived per SSH account. It owns everything that has to survive the
 UI dying: child processes and their ptys, one `vt.Terminal` per pane, what each
 agent is currently doing, and the history.
 

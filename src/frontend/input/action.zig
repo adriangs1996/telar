@@ -155,6 +155,7 @@ pub const CommandTab = struct {
 };
 
 pub const Action = union(enum) {
+    toggle_agent_mode,
     split_pane: SplitDirection,
     focus_pane: Direction,
     navigate_pane: Direction,

@@ -162,13 +162,13 @@ pub const State = struct {
         };
     }
 
-    pub fn deinit(state: *State) void {
-        state.scratch.deinit();
-        state.kitty_sidebar.deinit();
-        state.kitty_icons.deinit();
-        state.kitty_toasts.deinit();
-        state.kitty_modal.deinit();
-        state.attachment_store.deinit();
+    pub fn deinit(self: *State) void {
+        self.scratch.deinit();
+        self.kitty_sidebar.deinit();
+        self.kitty_icons.deinit();
+        self.kitty_toasts.deinit();
+        self.kitty_modal.deinit();
+        self.attachment_store.deinit();
     }
 
     pub fn resize(state: *State, width: u16, height: u16) !void {

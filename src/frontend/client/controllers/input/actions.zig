@@ -26,6 +26,7 @@ const tab_moves = @import("../tabs/tab_moves.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const pane_mouse_input = @import("pane_mouse_inputs.zig");
+const presentation = @import("../../application/presentation/root.zig");
 
 const Action = input.action.Action;
 const keybind = input.keybind;
@@ -73,6 +74,10 @@ fn deliver(raw_context: *anyopaque, value: Action) !native_action.Control {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     switch (value) {
+        .toggle_agent_mode => {
+            var handler: presentation.ToggleAgentMode = .{ .model = &client.model };
+            handler.execute();
+        },
         .scroll_pane => |direction| try scrollPane(client, direction),
         .split_pane => |direction| try beginSplit(client, switch (direction) {
             .horizontal => .horizontal,

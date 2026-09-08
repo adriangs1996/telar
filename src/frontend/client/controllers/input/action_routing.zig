@@ -41,8 +41,12 @@ pub fn apply(client: *Client, value: Action) !keybind.Control {
     const authority: action_routing.Authority = if (client.model.name_prompt.active())
         .suppressed
     else
-        .{ .available = .{ .copy_mode_active = client.model.copyModeActive() } };
-
+        .{
+            .available = .{
+                .copy_mode_active = client.model.copyModeActive(),
+                .agent_mode_active = client.model.mode == .agent,
+            },
+        };
     const control = try use_case.execute(value, authority);
 
     return switch (control) {

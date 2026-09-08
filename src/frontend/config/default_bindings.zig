@@ -6,7 +6,7 @@ const config_model = @import("model.zig");
 const keybind = input.keybind;
 
 pub const max_keys = config_model.max_binding_keys;
-pub const count = 41;
+pub const count = 42;
 pub const Binding = keybind.Binding(action.Action, max_keys);
 
 pub const Resolved = struct {
@@ -20,34 +20,54 @@ pub const Resolved = struct {
 
 pub fn load(prefix: keybind.Key) ![count]Binding {
     return .{
+        try prefixed(prefix, "a", .toggle_agent_mode),
+
         try prefixed(prefix, "-", .{ .scroll_pane = .up }),
         try prefixed(prefix, "=", .{ .scroll_pane = .down }),
+
         try prefixed(prefix, "%", .{ .split_pane = .horizontal }),
         try prefixed(prefix, "\"", .{ .split_pane = .vertical }),
+
         try prefixed(prefix, "left", .{ .focus_pane = .left }),
         try prefixed(prefix, "right", .{ .focus_pane = .right }),
         try prefixed(prefix, "up", .{ .focus_pane = .up }),
         try prefixed(prefix, "down", .{ .focus_pane = .down }),
+
         try prefixed(prefix, "shift+left", .{ .resize_pane = .left }),
         try prefixed(prefix, "shift+right", .{ .resize_pane = .right }),
         try prefixed(prefix, "shift+up", .{ .resize_pane = .up }),
         try prefixed(prefix, "shift+down", .{ .resize_pane = .down }),
+
         try prefixed(prefix, "z", .toggle_pane_fullscreen),
+
         try prefixed(prefix, "s", .toggle_sidebar),
+
         try prefixed(prefix, "alt+left", .{ .resize_sidebar = .left }),
         try prefixed(prefix, "alt+right", .{ .resize_sidebar = .right }),
+
         try prefixed(prefix, "w", .toggle_workspace_list),
+
         try prefixed(prefix, "N", .new_workspace),
+
         try prefixed(prefix, "W", .rename_workspace),
+
         try prefixed(prefix, "x", .close_pane),
+
         try prefixed(prefix, "d", .detach),
+
         try prefixed(prefix, "[", .enter_copy_mode),
+
         try prefixed(prefix, "g", .goto_picker),
+
         try prefixed(prefix, "/", .history_palette),
+
         try prefixed(prefix, "?", .suggest_command),
+
         try prefixed(prefix, "c", .new_tab),
+
         try prefixed(prefix, "n", .{ .select_tab_offset = 1 }),
         try prefixed(prefix, "p", .{ .select_tab_offset = -1 }),
+
         try prefixed(prefix, "1", .{ .select_tab = 0 }),
         try prefixed(prefix, "2", .{ .select_tab = 1 }),
         try prefixed(prefix, "3", .{ .select_tab = 2 }),
@@ -57,8 +77,10 @@ pub fn load(prefix: keybind.Key) ![count]Binding {
         try prefixed(prefix, "7", .{ .select_tab = 6 }),
         try prefixed(prefix, "8", .{ .select_tab = 7 }),
         try prefixed(prefix, "9", .{ .select_tab = 8 }),
+
         try prefixed(prefix, "T", .rename_tab),
         try prefixed(prefix, "X", .close_tab),
+
         try prefixed(prefix, ",", .{ .move_tab = .previous }),
         try prefixed(prefix, ".", .{ .move_tab = .next }),
     };
@@ -110,6 +132,39 @@ pub fn validate(prefix: keybind.Key, configured: []const Binding) !void {
 
 fn prefixed(prefix: keybind.Key, suffix: []const u8, action_value: action.Action) !Binding {
     return .init(&.{ prefix, try keybind.parseKey(suffix) }, action_value);
+}
+
+test "agent mode toggle uses configured prefix key and allow for overrides" {
+    const testing = @import("std").testing;
+    const prefix = try keybind.parseKey("ctrl+s");
+    const expected = try prefixed(prefix, "a", .toggle_agent_mode);
+    const resolved = try resolve(prefix, &.{});
+    var found: usize = 0;
+
+    for (resolved.slice()) |*binding| {
+        if (binding.sameSequence(&expected)) {
+            try testing.expectEqualDeep(expected.action, binding.action);
+            found += 1;
+        }
+    }
+
+    try testing.expectEqual(@as(usize, 1), found);
+
+    try validate(prefix, &.{});
+
+    const replacement = try prefixed(prefix, "a", .detach);
+    const overridden = try resolve(prefix, &.{replacement});
+    found = 0;
+
+    for (overridden.slice()) |*binding| {
+        if (binding.sameSequence(&replacement)) {
+            try testing.expectEqualDeep(replacement.action, binding.action);
+            found += 1;
+        }
+    }
+
+    try testing.expectEqual(@as(usize, 1), found);
+    try validate(prefix, &.{replacement});
 }
 
 test "focused scroll defaults use the configured prefix and can be overridden" {

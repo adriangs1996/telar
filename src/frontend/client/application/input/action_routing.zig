@@ -13,6 +13,7 @@ pub const Authority = union(enum) {
     suppressed,
     available: struct {
         copy_mode_active: bool,
+        agent_mode_active: bool = false,
     },
 };
 
@@ -39,27 +40,31 @@ pub const ActionRoutingHandler = struct {
     /// ```zig
     /// const control = try handler.execute(action, authority);
     /// ```
-    pub fn execute(handler: *ActionRoutingHandler, value: Action, authority: Authority) !Control {
+    pub fn execute(self: *ActionRoutingHandler, value: Action, authority: Authority) !Control {
         const available = switch (authority) {
             .suppressed => return .continue_routing,
             .available => |state| state,
         };
 
+        if (available.agent_mode_active and value != .toggle_agent_mode and value != .detach) {
+            return .continue_routing;
+        }
+
         return switch (value) {
-            .lua_callback => |reference| handler.executeLua(
+            .lua_callback => |reference| self.executeLua(
                 .{ .callback = reference },
                 available.copy_mode_active,
             ),
-            .lua_expr => |reference| handler.executeLua(
+            .lua_expr => |reference| self.executeLua(
                 .{ .expression = reference },
                 available.copy_mode_active,
             ),
             .plugin => |requested| plugin: {
-                try handler.effects.plugin(handler.effects.context, requested);
+                try self.effects.plugin(self.effects.context, requested);
 
                 break :plugin .continue_routing;
             },
-            else => handler.effects.native(handler.effects.context, value),
+            else => self.effects.native(self.effects.context, value),
         };
     }
 
@@ -305,4 +310,49 @@ test "action routing propagates a selected effect failure before later input" {
         handler.execute(.{ .lua_expr = .{ .generation = 1, .id = 2 } }, routingAuthority(false)),
     );
     try std.testing.expectEqualSlices(Event, &.{ .lua, .key }, capture.events[0..capture.event_count]);
+}
+
+test "agent mode suppresses configured actions before source execution" {
+    const blocked = [_]Action{
+        .new_tab,
+        .close_pane,
+        .toggle_sidebar,
+        .enter_copy_mode,
+        .{ .lua_callback = .{ .generation = 1, .id = 1 } },
+        .{ .lua_expr = .{ .generation = 1, .id = 1 } },
+        .{ .plugin = .{ .plugin = 1, .action = 1 } },
+    };
+
+    for (blocked) |action| {
+        var capture: Capture = .{};
+        var handler: ActionRoutingHandler = .{ .effects = capture.port() };
+
+        const control = try handler.execute(action, .{ .available = .{
+            .copy_mode_active = false,
+            .agent_mode_active = true,
+        } });
+
+        try std.testing.expectEqual(Control.continue_routing, control);
+        try std.testing.expectEqual(@as(usize, 0), capture.event_count);
+    }
+}
+
+test "agent mode allows toggling back and detaching" {
+    const authority: Authority = .{ .available = .{
+        .copy_mode_active = false,
+        .agent_mode_active = true,
+    } };
+    var capture: Capture = .{};
+    var handler: ActionRoutingHandler = .{ .effects = capture.port() };
+
+    try std.testing.expectEqual(
+        Control.continue_routing,
+        try handler.execute(.toggle_agent_mode, authority),
+    );
+    try std.testing.expectEqualSlices(Event, &.{.native}, capture.events[0..capture.event_count]);
+
+    capture = .{ .native_control = .stop };
+
+    try std.testing.expectEqual(Control.stop, try handler.execute(.detach, authority));
+    try std.testing.expectEqualSlices(Event, &.{.native}, capture.events[0..capture.event_count]);
 }

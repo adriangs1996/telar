@@ -80,7 +80,7 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
             try writeSized8(&writer, value.title());
             try writeSized8(&writer, value.message());
         },
-        .lua_callback, .lua_expr, .plugin => return error.InvalidWorkerEffect,
+        .lua_callback, .lua_expr, .plugin, .toggle_agent_mode => return error.InvalidWorkerEffect,
     };
     return writer.buffered();
 }
@@ -259,4 +259,13 @@ test "plugin result protocol rejects focused scroll effects" {
 
 test "plugin result protocol rejects invalid enum discriminants" {
     try std.testing.expectError(error.InvalidWorkerEffect, decode(&.{ 1, 1, 255 }));
+}
+
+test "plugin result protocol rejects agent mode toggles" {
+    var batch: lua_config.EffectBatch = .{};
+    batch.items[0] = .toggle_agent_mode;
+    batch.len = 1;
+    var buffer: [max_bytes]u8 = undefined;
+
+    try std.testing.expectError(error.InvalidWorkerEffect, encode(&buffer, &batch));
 }
