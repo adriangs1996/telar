@@ -11,7 +11,8 @@ terminal state.
 
 - one borrowed `SocketChannel` for the client's lifetime;
 - one receive buffer and one send buffer, each exactly
-  `core.transport.max_frame_size` bytes;
+  `core.transport.max_frame_size` bytes; the send buffer carries a batch of
+  framed messages, so one write may hold every message that fits;
 - one `core.transport.read_buffer_size` read-ahead buffer bound to the
   channel, so a burst of small runtime messages costs one `read` instead of
   two per message and the length prefix never costs its own syscall. The
@@ -64,14 +65,19 @@ runtime_transport.handleSent
 Outbox.finishSend -> next send -> host input capacity check
 ```
 
-`Outbox.beginSend` lends the shared send buffer to one write actor. No producer
-can mutate the head or reuse that buffer until `.sent` releases the claim.
-Queue insertion may fold pane input, resize and frame acknowledgements only
-where their ordering rules permit it.
+`Outbox.beginSend` claims every queued message that fits the shared send
+buffer, oldest first, encodes each as its own wire frame and lends the batch to
+one write actor. No producer can mutate a claimed message or reuse that buffer
+until `.sent` releases the claim; messages queued behind the claim still fold.
+Queue insertion may fold pane input, resize, viewport and frame
+acknowledgements only where their ordering rules permit it.
 
-A full outbox stops new host TTY reads. A successful send removes one message,
-pumps its successor and asks `host_inputs` to resume only if capacity still
-exists. Request correlation rolls back when an enqueue fails; transport does
+A full outbox stops new host TTY reads. A successful send removes the claimed
+batch, pumps its successor and asks `host_inputs` to resume only if capacity
+still exists. The runtime assembles its deliveries the same way: `pump`
+prepares and commits payloads behind one another in the session's send buffer
+while a maximum frame still fits, stops at a transaction whose completion
+must run after the write, and sends the batch with one framed write. Request correlation rolls back when an enqueue fails; transport does
 not invent or consume continuations.
 
 Graphics memory credit follows the same queue. The graphics store retains a
@@ -127,8 +133,9 @@ propagate without transport classifying their original message.
 
 - `src/frontend/client/runtime_transport.zig` checks partial-allocation cleanup
   and the exact three-frame bootstrap order over a real socketpair.
-- `src/frontend/client/outbox.zig` proves one send claim, completion on success
-  and failure, copied payload ownership, folding rules and saturation bounds.
+- `src/frontend/client/outbox.zig` proves the batched send claim, completion
+  on success and failure, copied payload ownership, folding rules and
+  saturation bounds.
 - `runtime reads own one token and do not rearm after shutdown` in
   `src/frontend/client/client_test.zig` crosses the real framed socket and
   proves rearming, terminal shutdown and error cleanup.

@@ -848,27 +848,64 @@ pub const Application = struct {
             return;
         }
 
-        const pending = try session.delivery.prepare(.{
-            .io = application.io,
-            .attachments = &session.attachments,
-            .sources = .{
-                .panes = &application.model.panes,
-                .workspaces = application.workspaceReader(),
-                .agents = &application.model.agents,
-                .manifests = application.agent_manifests,
-                .system_metrics = &application.system_metrics,
-                .proxy_active = application.proxy_runtime.active(),
-                .proxy_scope = application.proxy_runtime.interceptionScope(),
-                .proxy_system_trusted = application.proxy_runtime.systemTrusted(),
-                .home = application.home,
-                .client_layouts = &application.model.client_layouts,
-            },
-            .metrics = &application.metrics,
-        });
-        errdefer if (pending) |prepared| {
-            session.delivery.abort(prepared);
-        };
+        // Assemble one write from every payload delivery has ready, oldest
+        // lane first. Each staged frame is committed before the next is
+        // prepared, so a client that fell behind still receives one message
+        // per queued change rather than a replay, and a transaction whose
+        // completion must run after the write ends the batch.
+        const outbound = &session.delivery;
+        const prefix_size = core.transport.length_prefix_size;
+        var batch_len: usize = 0;
+        outbound.stage_offset = prefix_size;
+        defer outbound.stage_offset = 0;
+        while (true) {
+            const prepared = (try outbound.prepare(.{
+                .io = application.io,
+                .attachments = &session.attachments,
+                .sources = .{
+                    .panes = &application.model.panes,
+                    .workspaces = application.workspaceReader(),
+                    .agents = &application.model.agents,
+                    .manifests = application.agent_manifests,
+                    .system_metrics = &application.system_metrics,
+                    .proxy_active = application.proxy_runtime.active(),
+                    .proxy_scope = application.proxy_runtime.interceptionScope(),
+                    .proxy_system_trusted = application.proxy_runtime.systemTrusted(),
+                    .home = application.home,
+                    .client_layouts = &application.model.client_layouts,
+                },
+                .metrics = &application.metrics,
+            })) orelse break;
+            core.transport.writePrefix(outbound.send_buffer[batch_len..][0..prefix_size], prepared.payload.len);
+            batch_len += prefix_size + prepared.payload.len;
+            outbound.commit(.{
+                .prepared = prepared,
+                .attachments = &session.attachments,
+                .metrics = &application.metrics,
+            });
+            if (outbound.completionPending()) {
+                break;
+            }
 
+            outbound.stage_offset = batch_len + prefix_size;
+            if (!outbound.canStageAnother()) {
+                break;
+            }
+            outbound.continueBatch();
+        }
+
+        try application.schedulePendingMedia(session);
+        if (batch_len == 0) {
+            return;
+        }
+
+        if (outbound.phase == .ready) {
+            outbound.resumeInFlight();
+        }
+        try Operations.startSessionSendFramed(application, session, outbound.send_buffer[0..batch_len]);
+    }
+
+    fn schedulePendingMedia(application: *Application, session: *ClientSession) !void {
         var remaining = session.attachments.len();
         var index: usize = 0;
         while (remaining != 0) : (remaining -= 1) {
@@ -879,14 +916,6 @@ pub const Application = struct {
                 try RuntimeEvents.schedulePaneMedia(application, attachment.pane);
             }
         }
-
-        const prepared = pending orelse return;
-        try Operations.startSessionSend(application, session, prepared.payload);
-        session.delivery.commit(.{
-            .prepared = prepared,
-            .attachments = &session.attachments,
-            .metrics = &application.metrics,
-        });
     }
 
     /// Routes a decoded client message through a request-scoped dispatcher.
