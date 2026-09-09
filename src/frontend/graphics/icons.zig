@@ -67,7 +67,13 @@ pub const Renderer = struct {
     slot_count: u8 = 0,
     placements: [ui_icons.max_marks]Placement = undefined,
     placement_count: u8 = 0,
+    /// Placements the host currently holds, so a change re-places only the
+    /// entries that moved instead of deleting and re-placing every one.
+    emitted_placements: [ui_icons.max_marks]Placement = undefined,
     emitted_placement_count: u8 = 0,
+    /// A rasterization was needed while the user was typing; it runs at
+    /// the next media pass after the idle boundary.
+    deferred: bool = false,
     visible: bool = false,
     image_emitted: bool = false,
     image_dirty: bool = false,
@@ -123,6 +129,23 @@ pub const Renderer = struct {
     }
 
     pub fn prepare(renderer: *Renderer, marks: []const ui_icons.Mark) !void {
+        return renderer.preparePaced(marks, true);
+    }
+
+    /// Whether a needed rasterization is waiting for the idle boundary.
+    /// Example: `if (renderer.preparationDeferred()) requestMediaAfterIdle();`.
+    pub fn preparationDeferred(renderer: *const Renderer) bool {
+        return renderer.deferred;
+    }
+
+    /// Like `prepare`, but a changed atlas is rasterized only while
+    /// `media_idle`; otherwise the current atlas and placements stay up and
+    /// the change waits, so FreeType never runs between keystrokes.
+    ///
+    /// ```zig
+    /// try renderer.preparePaced(marks, media_idle);
+    /// ```
+    pub fn preparePaced(renderer: *Renderer, marks: []const ui_icons.Mark, media_idle: bool) !void {
         if (marks.len > ui_icons.max_marks) {
             return error.TooManyIconMarks;
         }
@@ -180,6 +203,11 @@ pub const Renderer = struct {
                 next_slots[0..next_slot_count],
             );
 
+        if (slots_changed and !media_idle) {
+            renderer.deferred = true;
+            return;
+        }
+        renderer.deferred = false;
         if (slots_changed) {
             const atlas_height = std.math.mul(u32, raster_size.height, next_slot_count) catch
                 return error.IconAtlasTooLarge;
@@ -294,14 +322,22 @@ pub const Renderer = struct {
         }
 
         if (renderer.placements_dirty and renderer.image_emitted) {
-            for (0..renderer.emitted_placement_count) |index| {
+            // A placement re-emitted under its id replaces the host's; only
+            // ids past the new count need a delete.
+            var stale = renderer.placement_count;
+            while (stale < renderer.emitted_placement_count) : (stale += 1) {
                 written += try kitty.writeDeletePlacement(
                     writer,
                     image_id,
-                    first_placement_id + @as(u32, @intCast(index)),
+                    first_placement_id + @as(u32, @intCast(stale)),
                 );
             }
             for (renderer.placements[0..renderer.placement_count], 0..) |placement, index| {
+                if (index < renderer.emitted_placement_count and
+                    std.meta.eql(renderer.emitted_placements[index], placement))
+                {
+                    continue;
+                }
                 const columns: u32 = renderer.slots[placement.slot].columns;
                 written += try kitty.writePlacement(writer, .{
                     .image_id = image_id,
@@ -321,6 +357,10 @@ pub const Renderer = struct {
                     .z = z_index,
                 });
             }
+            @memcpy(
+                renderer.emitted_placements[0..renderer.placement_count],
+                renderer.placements[0..renderer.placement_count],
+            );
             renderer.emitted_placement_count = renderer.placement_count;
             renderer.placements_dirty = false;
         }
@@ -786,4 +826,51 @@ test "a hover background adds a slot once and later hovers move placements only"
     try renderer.prepare(&.{plain});
     try std.testing.expect(renderer.image_dirty);
     try std.testing.expectEqual(@as(u8, 1), renderer.slot_count);
+}
+
+test "a moved icon re-places only itself and rasterization waits for idle" {
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
+    const cpu = ui_icons.Mark{
+        .area = .{ .x = 2, .y = 3, .w = 1, .h = 1 },
+        .icon = .cpu,
+        .foreground = .{ 255, 255, 255 },
+        .background = .{ 20, 20, 20 },
+    };
+    var memory = cpu;
+    memory.icon = .memory;
+    memory.area.x = 5;
+    try renderer.prepare(&.{ cpu, memory });
+    var output: [65536]u8 = undefined;
+    var writer = Io.Writer.fixed(&output);
+    _ = try renderer.write(&writer);
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, writer.buffered(), "a=p"));
+
+    var moved = memory;
+    moved.area.y = 4;
+    try renderer.prepare(&.{ cpu, moved });
+    writer = Io.Writer.fixed(&output);
+    _ = try renderer.write(&writer);
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, writer.buffered(), "a=p"));
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=d") == null);
+
+    // Dropping the second mark deletes only its placement.
+    try renderer.prepare(&.{cpu});
+    writer = Io.Writer.fixed(&output);
+    _ = try renderer.write(&writer);
+    try std.testing.expectEqual(@as(usize, 0), std.mem.count(u8, writer.buffered(), "a=p"));
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, writer.buffered(), "a=d"));
+
+    // A new glyph while typing keeps the atlas and marks the deferral.
+    var battery = cpu;
+    battery.icon = .battery_full;
+    const slots_before = renderer.slot_count;
+    try renderer.preparePaced(&.{ cpu, battery }, false);
+    try std.testing.expect(renderer.preparationDeferred());
+    try std.testing.expectEqual(slots_before, renderer.slot_count);
+    try std.testing.expect(!renderer.image_dirty);
+    try renderer.preparePaced(&.{ cpu, battery }, true);
+    try std.testing.expect(!renderer.preparationDeferred());
+    try std.testing.expect(renderer.image_dirty);
 }

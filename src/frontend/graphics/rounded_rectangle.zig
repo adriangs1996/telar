@@ -37,14 +37,20 @@ pub fn render(input: Input) void {
     std.debug.assert(width <= stride);
     std.debug.assert((@as(u64, height -| 1) * stride + width) * 4 <= input.pixels.len);
     const shape: Shape = .{ .size = input.shape.size, .radius = @min(input.shape.radius, @min(width, height) / 2) };
+    const radius = shape.radius;
     var y: u32 = 0;
 
     while (y < height) : (y += 1) {
         var x: u32 = 0;
+        // Only the four radius-sized corner squares have partial coverage;
+        // everything else is opaque without sampling.
+        const corner_row = y < radius or y >= height - radius;
 
         while (x < width) : (x += 1) {
             const index = (@as(usize, y) * stride + x) * 4;
-            input.pixels[index..][0..4].* = .{ input.color[0], input.color[1], input.color[2], coverage(.{ .x = x, .y = y }, shape) };
+            const corner = corner_row and (x < radius or x >= width - radius);
+            const alpha: u8 = if (corner) coverage(.{ .x = x, .y = y }, shape) else 255;
+            input.pixels[index..][0..4].* = .{ input.color[0], input.color[1], input.color[2], alpha };
         }
     }
 }

@@ -260,6 +260,9 @@ pub const Renderer = struct {
     failed: bool = false,
     emitted_plan: labels.Plan = .{},
     emitted_key: ?Key = null,
+    /// A rasterization was needed while the user was typing; the current
+    /// images stay up and the change runs after the idle boundary.
+    deferred: bool = false,
 
     pub fn init(gpa: std.mem.Allocator) Renderer {
         return .{ .gpa = gpa };
@@ -302,14 +305,47 @@ pub const Renderer = struct {
     /// pill alone; text, geometry or theme replace the strip as well.
     /// Example: `renderer.prepare(plan, palette);`.
     pub fn prepare(renderer: *Renderer, plan: *const labels.Plan, palette: *const theme.Palette) void {
+        renderer.preparePaced(.{ .plan = plan, .palette = palette, .media_idle = true });
+    }
+
+    pub const Preparation = struct {
+        plan: *const labels.Plan,
+        palette: *const theme.Palette,
+        /// Rasterization may run now; otherwise the change waits for idle.
+        media_idle: bool,
+    };
+
+    /// Whether a needed rasterization is waiting for the idle boundary.
+    /// Example: `if (renderer.preparationDeferred()) requestMediaAfterIdle();`.
+    pub fn preparationDeferred(renderer: *const Renderer) bool {
+        return renderer.deferred;
+    }
+
+    /// Like `prepare`, but text or pill rasterization runs only while
+    /// `media_idle`; otherwise what the host shows stays and the change waits.
+    ///
+    /// ```zig
+    /// renderer.preparePaced(.{ .plan = plan, .palette = palette, .media_idle = media_idle });
+    /// ```
+    pub fn preparePaced(renderer: *Renderer, preparation: Preparation) void {
+        const plan = preparation.plan;
+        const palette = preparation.palette;
+        const media_idle = preparation.media_idle;
         const key = renderer.renderKey(plan, palette) orelse {
+            renderer.deferred = false;
             renderer.hide();
             return;
         };
         if (renderer.failed and renderer.matchesText(plan, key)) {
+            renderer.deferred = false;
             renderer.hide();
             return;
         }
+        if (!media_idle and renderer.rasterizationNeeded(plan, key)) {
+            renderer.deferred = true;
+            return;
+        }
+        renderer.deferred = false;
 
         if (!renderer.matchesText(plan, key)) {
             renderer.strip.hide();
@@ -468,6 +504,15 @@ pub const Renderer = struct {
         return renderer.emitted_key != null and std.meta.eql(renderer.emitted_key.?, key) and
             std.meta.eql(renderer.strip.emitted, @as(?Slot, stripSlot(plan.area, key))) and
             renderer.emitted_plan.sameText(plan);
+    }
+
+    fn rasterizationNeeded(renderer: *Renderer, plan: *const labels.Plan, key: Key) bool {
+        if (!renderer.matchesText(plan, key)) {
+            return true;
+        }
+        const selected = selectedLabel(plan) orelse return false;
+        const shape = pillShape(renderer.textRasterizer(), selected, key) catch return true;
+        return !renderer.matchesPill(selected, shape);
     }
 
     fn matchesText(renderer: *const Renderer, plan: *const labels.Plan, key: Key) bool {

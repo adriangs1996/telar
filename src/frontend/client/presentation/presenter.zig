@@ -519,7 +519,8 @@ fn controlGraphicsReady(projection: Projection, resources: Resources) bool {
 fn mediaWorkPending(projection: Projection, resources: Resources) bool {
     return resources.view.kittyPill().damaged() or resources.view.kittyAttachments().cleanupPending() or
         (projection.host_capabilities.kitty_graphics == .supported and
-            (resources.view.graphicsPreparationPending() or resources.graphics_store.damage or
+            (resources.view.graphicsPreparationPending() or resources.view.preparationDeferred() or
+                resources.graphics_store.damage or
                 resources.view.kittySidebar().damaged() or resources.view.kittyIcons().damaged() or
                 resources.view.kittyToasts().damaged() or resources.view.kittyModal().damaged() or
                 resources.view.kittyAttachments().damaged()));
@@ -530,7 +531,8 @@ fn onlyWaitingForMediaIdle(resources: Resources, media_idle: bool) bool {
         !resources.graphics_store.damage and !resources.view.kittySidebar().damaged() and
         !resources.view.kittyIcons().damaged() and !resources.view.kittyAttachments().damaged() and
         !resources.view.kittyModal().damaged() and !resources.view.kittyPill().damaged() and
-        resources.view.kittyToasts().waitingForMediaIdle();
+        (resources.view.kittyToasts().waitingForMediaIdle() or
+            resources.view.kittyIcons().preparationDeferred() or resources.view.kittyPill().preparationDeferred());
 }
 
 fn observePresentation(presenter: *Presenter, presented_ns: u64) void {

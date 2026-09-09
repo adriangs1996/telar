@@ -478,9 +478,7 @@ pub const State = struct {
     /// _ = try view.prepareGraphics(model.notificationSnapshot(), media_idle);
     /// ```
     pub fn prepareGraphics(state: *State, snapshot: *const notifications.Center, media_idle: bool) !bool {
-        if (!state.graphics_plan_dirty and
-            !(media_idle and state.kitty_toasts.preparationDeferred()))
-        {
+        if (!state.graphics_plan_dirty and !(media_idle and state.preparationDeferred())) {
             return false;
         }
         state.kitty_toasts.setMediaIdle(media_idle);
@@ -492,14 +490,14 @@ pub const State = struct {
         });
         state.attachment_store.prepare(state.graphics_plan.attachments);
         state.kitty_modal.prepare(state.graphics_plan.modal_area, state.palette());
-        state.kitty_pill.prepare(&state.graphics_plan.pill_labels, state.palette());
+        state.kitty_pill.preparePaced(.{ .plan = &state.graphics_plan.pill_labels, .palette = state.palette(), .media_idle = media_idle });
         try state.kitty_sidebar.prepare(.{
             .area = state.graphics_plan.sidebar_area,
             .focused_card = state.graphics_plan.focused_card,
             .provider_marks = state.graphics_plan.provider_marks[0..state.graphics_plan.provider_mark_count],
         }, .{ .width = state.cell_width_px, .height = state.cell_height_px });
         var icon_fallback_changed = false;
-        state.kitty_icons.prepare(state.graphics_plan.icons.slice()) catch {
+        state.kitty_icons.preparePaced(state.graphics_plan.icons.slice(), media_idle) catch {
             state.kitty_icons.disable();
             state.dirty = true;
             icon_fallback_changed = true;
@@ -510,6 +508,13 @@ pub const State = struct {
 
     pub fn graphicsPreparationPending(state: *const State) bool {
         return state.graphics_plan_dirty;
+    }
+
+    /// Whether any UI renderer holds back a rasterization until the host
+    /// input goes idle. Example: `if (view.preparationDeferred()) requestMediaAfterIdle();`.
+    pub fn preparationDeferred(state: *const State) bool {
+        return state.kitty_toasts.preparationDeferred() or state.kitty_icons.preparationDeferred() or
+            state.kitty_pill.preparationDeferred();
     }
 
     /// Reports whether prepared toast rasters exactly cover this snapshot.
