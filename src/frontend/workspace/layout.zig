@@ -357,21 +357,41 @@ pub const Layout = struct {
 
     /// One-based depth-first position used as the pane's disposable display
     /// index. Stable runtime ids never leak into the UI.
+    ///
+    /// ```zig
+    /// const index = layout.displayIndex(pane_id);
+    /// ```
     pub fn displayIndex(layout: *const Layout, pane_id: schema.PaneId) ?u16 {
-        const root = layout.root orelse return null;
+        var storage: [max_panes]schema.PaneId = undefined;
+        for (layout.orderedPanes(&storage), 1..) |candidate, index| {
+            if (candidate == pane_id) {
+                return @intCast(index);
+            }
+        }
+
+        return null;
+    }
+
+    /// Lists leaves in display order, independent of fullscreen and geometry.
+    ///
+    /// ```zig
+    /// const panes = layout.orderedPanes(&storage);
+    /// ```
+    pub fn orderedPanes(layout: *const Layout, output: *[max_panes]schema.PaneId) []const schema.PaneId {
+        const root = layout.root orelse return output[0..0];
         var stack: [max_nodes]NodeIndex = undefined;
         var stack_len: usize = 1;
-        var index: u16 = 0;
+        var index: usize = 0;
         stack[0] = root;
+
         while (stack_len != 0) {
             stack_len -= 1;
+
             switch (layout.nodes[stack[stack_len]].node) {
                 .empty => unreachable,
                 .leaf => |candidate| {
+                    output[index] = candidate;
                     index += 1;
-                    if (candidate == pane_id) {
-                        return index;
-                    }
                 },
                 .split => |branch| {
                     stack[stack_len] = branch.second;
@@ -381,7 +401,8 @@ pub const Layout = struct {
                 },
             }
         }
-        return null;
+
+        return output[0..index];
     }
 
     pub fn addRoot(layout: *Layout, pane_id: schema.PaneId) !void {
@@ -573,16 +594,50 @@ pub const Layout = struct {
         return true;
     }
 
+    /// Fullscreen follows the border tabs horizontally without changing the
+    /// split tree. Tiled panes retain spatial navigation.
+    ///
+    /// ```zig
+    /// const focused = layout.focusDirection(.right, area);
+    /// ```
     pub fn focusDirection(layout: *Layout, direction: Direction, area: ui.Rect) ?schema.PaneId {
         const current_id = layout.focused() orelse return null;
-        var geometry: Snapshot = .{};
-        layout.snapshotTiled(area, &geometry);
-        const candidate = geometry.focusTarget(current_id, direction);
+        const candidate = if (layout.fullscreen)
+            layout.fullscreenFocusTarget(direction)
+        else spatial: {
+            var geometry: Snapshot = .{};
+            layout.snapshotTiled(area, &geometry);
+            break :spatial geometry.focusTarget(current_id, direction);
+        };
+
         if (candidate) |pane_id| {
-            layout.focused_pane = pane_id;
-            layout.changed();
+            _ = layout.focusPane(pane_id);
         }
+
         return candidate;
+    }
+
+    fn fullscreenFocusTarget(layout: *const Layout, direction: Direction) ?schema.PaneId {
+        if (direction == .up or direction == .down) {
+            return null;
+        }
+
+        var storage: [max_panes]schema.PaneId = undefined;
+        const panes = layout.orderedPanes(&storage);
+
+        for (panes, 0..) |pane_id, index| {
+            if (pane_id != layout.focused_pane) {
+                continue;
+            }
+
+            return switch (direction) {
+                .left => if (index > 0) panes[index - 1] else null,
+                .right => if (index + 1 < panes.len) panes[index + 1] else null,
+                .up, .down => unreachable,
+            };
+        }
+
+        return null;
     }
 
     /// Moves the nearest split edge in `direction` by five percent. If the
@@ -1154,6 +1209,72 @@ test "fullscreen toggles one pane without destroying the tiled layout" {
     try std.testing.expectEqual(@as(usize, 2), geometry.views().len);
     try std.testing.expectEqual(first_width, geometry.find(@enumFromInt(1)).?.outer.w);
     try std.testing.expectEqual(second_width, geometry.find(@enumFromInt(2)).?.outer.w);
+}
+
+test "fullscreen navigation follows display order and restores spatial geometry" {
+    const area: ui.Rect = .{ .w = 101, .h = 41 };
+    const first: schema.PaneId = @enumFromInt(10);
+    const second: schema.PaneId = @enumFromInt(90);
+    const third: schema.PaneId = @enumFromInt(40);
+    var layout: Layout = .{};
+    try layout.addRoot(first);
+    try layout.splitFocused(second, .horizontal);
+    try std.testing.expect(layout.focusPane(first));
+    try layout.splitFocused(third, .vertical);
+    try std.testing.expect(layout.resizeFocused(.right, area));
+    try std.testing.expect(layout.resizeFocused(.up, area));
+    try std.testing.expect(layout.focusPane(first));
+
+    var storage: [max_panes]schema.PaneId = undefined;
+    try std.testing.expectEqualSlices(schema.PaneId, &.{ first, third, second }, layout.orderedPanes(&storage));
+    var before: Snapshot = .{};
+    layout.snapshot(area, &before);
+    var nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    const original = layout.clientLayoutNodes(&nodes);
+    try std.testing.expect(layout.toggleFullscreen());
+
+    const start_revision = layout.currentRevision();
+    try std.testing.expect(layout.focusDirection(.left, area) == null);
+    try std.testing.expect(layout.focusDirection(.up, area) == null);
+    try std.testing.expect(layout.focusDirection(.down, area) == null);
+    try std.testing.expectEqual(start_revision, layout.currentRevision());
+    try std.testing.expectEqual(third, layout.focusDirection(.right, area).?);
+    try std.testing.expectEqual(second, layout.focusDirection(.right, area).?);
+    const end_revision = layout.currentRevision();
+    try std.testing.expect(layout.focusDirection(.right, area) == null);
+    try std.testing.expectEqual(end_revision, layout.currentRevision());
+    try std.testing.expectEqual(third, layout.focusDirection(.left, area).?);
+
+    try std.testing.expect(layout.toggleFullscreen());
+    try std.testing.expectEqual(third, layout.focused().?);
+    var restored_nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    try std.testing.expectEqualDeep(original, layout.clientLayoutNodes(&restored_nodes));
+    var after: Snapshot = .{};
+    layout.snapshot(area, &after);
+    for (before.views(), after.views()) |previous, current| {
+        try std.testing.expectEqual(previous.pane_id, current.pane_id);
+        try std.testing.expectEqual(previous.outer, current.outer);
+        try std.testing.expectEqual(previous.content, current.content);
+    }
+
+    try std.testing.expectEqual(first, layout.focusDirection(.up, area).?);
+    try std.testing.expectEqual(third, layout.focusDirection(.down, area).?);
+    try std.testing.expectEqual(second, layout.focusDirection(.right, area).?);
+}
+
+test "fullscreen pane order tracks splits and removals" {
+    var layout: Layout = .{};
+    var storage: [max_panes]schema.PaneId = undefined;
+    try std.testing.expectEqual(@as(usize, 0), layout.orderedPanes(&storage).len);
+    try layout.addRoot(@enumFromInt(1));
+    try layout.splitFocused(@enumFromInt(2), .vertical);
+    try std.testing.expect(layout.toggleFullscreen());
+    try layout.splitFocused(@enumFromInt(3), .horizontal);
+    try std.testing.expect(layout.isFullscreen());
+    try std.testing.expect(layout.remove(@enumFromInt(2)));
+    try std.testing.expectEqualSlices(schema.PaneId, &.{ @enumFromInt(1), @enumFromInt(3) }, layout.orderedPanes(&storage));
+    try std.testing.expectEqual(@as(u16, 2), layout.displayIndex(@enumFromInt(3)).?);
+    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), layout.focusDirection(.left, .{}).?);
 }
 
 test "removing a fullscreen pane clears fullscreen when one pane remains" {

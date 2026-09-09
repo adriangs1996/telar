@@ -8,6 +8,7 @@ const diff = presentation.diff;
 const copy_mode = input_capability.copy_mode;
 const frame_apply = presentation.frame;
 const layout_mod = @import("layout.zig");
+const fullscreen_tabs = @import("fullscreen_tabs.zig");
 const term = presentation.screen;
 const theme = @import("../ui/root.zig").theme;
 
@@ -30,6 +31,8 @@ const PaneIndex = core.fixed_index.SlotIndex(pane_index_capacity);
 const BorderTheme = struct {
     focused: ui.Color,
     unfocused: ui.Color,
+    tab_text: ui.Color,
+    selected_tab_text: ui.Color,
 };
 
 pub const PaneSpec = struct {
@@ -396,6 +399,8 @@ pub const Compositor = struct {
         const border_theme: BorderTheme = .{
             .focused = options.palette.accent,
             .unfocused = options.palette.overlay0,
+            .tab_text = options.palette.subtext0,
+            .selected_tab_text = options.palette.surface_dim,
         };
         if (compositor.border_theme == null or !std.meta.eql(compositor.border_theme.?, border_theme)) {
             compositor.border_theme = border_theme;
@@ -446,6 +451,7 @@ pub const Compositor = struct {
                     drawBorder(target, .{
                         .view = view,
                         .foreground_name = pane.foregroundName(),
+                        .fullscreen_model = if (model.layout.isFullscreen()) model else null,
                         .progress_state = pane.progress_state,
                         .progress_percent = pane.progress_percent,
                         .animation_frame = options.progress_animation_frame,
@@ -632,6 +638,7 @@ pub const Compositor = struct {
             drawBorder(context.target, .{
                 .view = view,
                 .foreground_name = pane.foregroundName(),
+                .fullscreen_model = if (context.model.layout.isFullscreen()) context.model else null,
                 .progress_state = pane.progress_state,
                 .progress_percent = pane.progress_percent,
                 .animation_frame = options.progress_animation_frame,
@@ -1441,6 +1448,7 @@ pub fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
 const BorderInput = struct {
     view: layout_mod.View,
     foreground_name: []const u8,
+    fullscreen_model: ?*const Model = null,
     progress_state: schema.PaneProgressState,
     progress_percent: ?u8,
     animation_frame: u8,
@@ -1452,6 +1460,13 @@ fn drawBorder(buffer: *ui.Buffer, input: BorderInput) void {
         .{ .fg = input.palette.accent, .flags = .{ .bold = true } }
     else
         .{ .fg = input.palette.overlay0 };
+
+    if (input.fullscreen_model != null) {
+        buffer.box(input.view.outer, .{ .style = style });
+        drawProgress(buffer, input, drawFullscreenTabs(buffer, input));
+        return;
+    }
+
     var title_buffer: [schema.max_foreground_name_bytes + 32]u8 = undefined;
     const text = std.fmt.bufPrint(
         &title_buffer,
@@ -1460,6 +1475,31 @@ fn drawBorder(buffer: *ui.Buffer, input: BorderInput) void {
     ) catch " pane ";
     buffer.box(input.view.outer, .{ .style = style, .title = text });
     drawProgress(buffer, input, ui.measure(text));
+}
+
+fn drawFullscreenTabs(buffer: *ui.Buffer, input: BorderInput) u16 {
+    const model = input.fullscreen_model.?;
+    const outer = input.view.outer;
+    if (outer.w <= 4 or outer.h < 2) {
+        return 0;
+    }
+
+    var storage: [max_panes]schema.PaneId = undefined;
+    const panes = model.layout.orderedPanes(&storage);
+    var names: [max_panes][]const u8 = undefined;
+
+    for (panes, 0..) |pane_id, index| {
+        names[index] = if (model.findConst(pane_id)) |pane| pane.foregroundName() else "";
+    }
+
+    const available = outer.w - 4;
+    const progress_width: u16 = if (input.progress_state != .remove and available >= 16) 8 else 0;
+    return fullscreen_tabs.draw(buffer, .{
+        .area = .{ .x = outer.x + 2, .y = outer.y, .w = available - progress_width, .h = 1 },
+        .names = names[0..panes.len],
+        .focused = input.view.display_index - 1,
+        .palette = input.palette,
+    });
 }
 
 fn drawProgress(buffer: *ui.Buffer, input: BorderInput, title_width: u16) void {
@@ -1855,11 +1895,81 @@ test "fullscreen border keeps the pane's tiled display index" {
         .area = area,
     });
 
-    // The title starts two cells in: " 2 shell ".
+    // Labels follow tiled order, with only the second pane selected.
     try std.testing.expectEqualStrings(" ", screen.back.cells[2].text());
-    try std.testing.expectEqualStrings("2", screen.back.cells[3].text());
+    try std.testing.expectEqualStrings("1", screen.back.cells[3].text());
+    try std.testing.expectEqualStrings("2", screen.back.cells[13].text());
+    try std.testing.expectEqual(theme.default_theme.palette.accent, screen.back.cells[13].style.bg);
+    try std.testing.expectEqual(ui.Color.default, screen.back.cells[3].style.bg);
     try std.testing.expectEqualStrings("│", screen.back.cells[area.w].text());
     try std.testing.expectEqualStrings("│", screen.back.cells[2 * area.w - 1].text());
+}
+
+test "fullscreen tabs follow focus and survive progress animation without idle redraws" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const area: ui.Rect = .{ .x = 2, .y = 1, .w = 60, .h = 12 };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    const third: schema.PaneId = @enumFromInt(3);
+    try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 6 } });
+    try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
+    try model.split(.{ .existing_pane = first, .new_pane = third, .location = location, .axis = .vertical, .area = area });
+    _ = model.setPaneForeground(first, "nvim");
+    _ = model.setPaneForeground(third, "claude");
+    try std.testing.expect(model.toggleFullscreen());
+    var screen = try term.Screen.init(gpa, 64, 14);
+    defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    const palette = &theme.default_theme.palette;
+    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    try std.testing.expectEqualStrings("1", screen.back.at(5, 1).?.text());
+    try std.testing.expectEqualStrings("2", screen.back.at(14, 1).?.text());
+    try std.testing.expectEqualStrings("c", screen.back.at(16, 1).?.text());
+    try std.testing.expectEqual(palette.accent, screen.back.at(14, 1).?.style.bg);
+    try std.testing.expectEqualStrings("3", screen.back.at(25, 1).?.text());
+
+    try std.testing.expectEqual(second, model.focusDirection(.right, area).?);
+    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    try std.testing.expectEqual(ui.Color.default, screen.back.at(14, 1).?.style.bg);
+    try std.testing.expectEqual(palette.accent, screen.back.at(25, 1).?.style.bg);
+    const idle = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    try std.testing.expect(!idle.full);
+    try std.testing.expectEqual(@as(usize, 0), idle.cells);
+    try std.testing.expectEqual(@as(usize, 0), idle.damaged_cells);
+
+    model.find(second).?.progress_state = .indeterminate;
+    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    const animated = try compositor.render(.{
+        .model = &model,
+        .screen = &screen,
+        .input = .{ .area = area, .palette = palette, .progress_animation_frame = 127 },
+    });
+    try std.testing.expect(!animated.stats.full);
+    try std.testing.expectEqual(@as(usize, 0), animated.stats.cells);
+    try std.testing.expectEqual(palette.accent, screen.back.at(25, 1).?.style.bg);
+    try std.testing.expectEqualStrings("◇", screen.back.at(60, 1).?.text());
+    try std.testing.expectEqualStrings("╮", screen.back.at(61, 1).?.text());
+    try std.testing.expectEqualStrings("│", screen.back.at(2, 2).?.text());
+
+    // Presenter invalidates composition when any pane's foreground changes,
+    // including a hidden pane whose label is now part of the border.
+    _ = model.setPaneForeground(first, "zig");
+    compositor.invalidate();
+    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    try std.testing.expectEqualStrings("z", screen.back.at(7, 1).?.text());
+
+    var changed_palette = palette.*;
+    changed_palette.surface_dim = .{ .rgb = .{ 1, 2, 3 } };
+    const restyled = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area, .palette = &changed_palette });
+    try std.testing.expect(restyled.full);
+    try std.testing.expectEqual(changed_palette.surface_dim, screen.back.at(24, 1).?.style.fg);
 }
 
 test "pane borders use the selected theme without coloring pane contents" {

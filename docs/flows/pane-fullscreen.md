@@ -38,15 +38,25 @@ fullscreen flag and advances only `ClientModel.Version.panes`. The returned
 change carries the exact tab, focus, pane revision, area and new fullscreen
 state.
 
-The layout retains every split ratio while fullscreen is active. Directional
-focus and resize may still alter that hidden tiled tree. Exiting fullscreen
-reveals the retained geometry.
+The layout retains every split ratio while fullscreen is active. Left/right
+focus selects the previous/next leaf in display order without wrapping;
+up/down focus is a no-op. Navigation changes only focus, never the split tree.
+Explicit resize actions can still change the hidden split ratios. Exiting
+fullscreen reveals the retained geometry, keeps the last selected pane focused
+and restores spatial navigation through the same pane-focus transition.
 
-The fullscreen pane keeps its border. Fullscreen needs at least two panes, so
-the border, titled with the pane's tiled display index, is what tells the user
-the tab still holds more. The tab bar draws the `pane_fullscreen` icon after
-the label of every tab whose layout is fullscreen, so a hidden pane in another
-tab stays visible from the bar.
+The fullscreen pane keeps its border. Its top edge lists pane indices and
+foreground names in the same order used by navigation. The active label uses
+the theme's accent background; other labels use subdued text. The strip
+truncates names at grapheme boundaries before hiding labels, and always keeps
+the active label visible when space permits. It uses fixed storage bounded by
+`schema.max_panes_per_tab`, does O(panes + label bytes) work only when the border
+is drawn and adds no content row or persistent state. The focused pane's
+progress indicator uses the remaining border space.
+
+The tab bar still draws the `pane_fullscreen` icon after the label of every tab
+whose layout is fullscreen, so fullscreen in another tab stays visible from
+the bar.
 
 ## Geometry effects and presentation
 
@@ -90,7 +100,14 @@ telemetry. The client does not roll back an unacknowledged resize.
   both panes.
 
 - `src/frontend/workspace/layout.zig` proves that fullscreen retains tiled
-  ratios, follows focus and clears when pane count falls below two.
+  ratios, follows display order without wrapping, ignores vertical focus,
+  restores spatial navigation and clears when pane count falls below two.
+- `src/frontend/workspace/fullscreen_tabs.zig` covers active styling, Unicode
+  truncation and narrow widths up to the pane-count limit.
+- `src/frontend/workspace/multiplexer.zig` covers border composition, focus
+  changes, progress animation and incremental idle rendering.
+- `src/frontend/client/model/tests/panes.zig` covers horizontal fullscreen
+  navigation, geometry commits and no-op revision preservation.
 - `src/frontend/client/model.zig` proves entry, exit, single-pane no-op and
   pane-version ownership.
 - `src/frontend/client/application/toggle_pane_fullscreen.zig` proves

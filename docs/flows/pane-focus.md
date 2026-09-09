@@ -49,7 +49,11 @@ first, then sends the same identity through this transition.
 missing identity, the already focused identity, a direction without a
 candidate, or an absent active tab is a no-op. A commit advances only
 `ClientModel.Version.panes` and returns the exact tab, previous pane, focused
-pane and whether fullscreen geometry changed.
+pane and whether fullscreen geometry changed. Tiled direction lookup uses
+spatial geometry. In fullscreen, left/right follows the display order shown in
+the pane's top border, stops at either end and leaves the split tree unchanged.
+Up/down is a no-op until fullscreen ends. Identity-based focus remains available
+in either mode.
 
 The commit also carries the exact `Version.panes` revision, so resource
 delivery rejects a superseded focus even if later navigation returned to the

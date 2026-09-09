@@ -70,6 +70,46 @@ test "pane focus resolves identity and direction through one visible revision" {
     try std.testing.expectEqual(client_model.Version{ .panes = 2 }, model.version());
 }
 
+test "fullscreen directional focus publishes geometry only for horizontal moves" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    const area: ui.Rect = .{ .w = 80, .h = 24 };
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
+    const active = &model.workspace.active().?.model;
+    try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .vertical, .area = area });
+    try std.testing.expect(active.focusPane(first));
+    const tiled_size = active.contentSize(second, area).?;
+    _ = model.togglePaneFullscreen(.{ .area = area }).?;
+    const entered_version = model.version();
+    for ([_]layout_mod.Direction{ .up, .down, .left }) |direction| {
+        try std.testing.expect(model.focusPane(.{ .target = .{ .direction = direction }, .area = area }) == null);
+    }
+
+    try std.testing.expectEqualDeep(entered_version, model.version());
+    const moved = model.focusPane(.{ .target = .{ .direction = .right }, .area = area }).?;
+    try std.testing.expectEqual(first, moved.previous);
+    try std.testing.expectEqual(second, moved.focused);
+    try std.testing.expect(moved.geometry_changed);
+    try std.testing.expectEqual(entered_version.panes + 1, moved.panes_revision);
+    try std.testing.expectEqual(schema.TerminalSize{ .cols = 78, .rows = 22 }, active.contentSize(second, area).?);
+    try std.testing.expect(active.contentSize(first, area) == null);
+    try std.testing.expect(model.focusPane(.{ .target = .{ .direction = .right }, .area = area }) == null);
+    try std.testing.expectEqual(moved.panes_revision, model.version().panes);
+
+    const exited = model.togglePaneFullscreen(.{ .area = area }).?;
+    try std.testing.expectEqual(second, exited.focused);
+    try std.testing.expectEqual(tiled_size, active.contentSize(second, area).?);
+    const spatial = model.focusPane(.{ .target = .{ .direction = .up }, .area = area }).?;
+    try std.testing.expectEqual(first, spatial.focused);
+    try std.testing.expect(!spatial.geometry_changed);
+}
+
 test "pane resize owns direction resolution geometry and visible revisions" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
