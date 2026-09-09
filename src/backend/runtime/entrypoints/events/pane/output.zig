@@ -104,7 +104,9 @@ pub fn Pipeline(comptime Context: type, comptime port: RuntimePort(Context)) typ
             }
 
             const bytes = pane.output_buffer[0..output_len];
-            const shell_foreground = pane.session.shellForeground();
+            // The probe's last verdict; the kernel is asked only until the
+            // first observation has established a process group.
+            const shell_foreground = pane.shellForegroundHint() orelse pane.session.shellForeground();
             pane.expireProgress(shell_foreground orelse false);
             pane.queueHistoryOutput(.{
                 .bytes = bytes,

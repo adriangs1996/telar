@@ -61,7 +61,7 @@ pub const Forwarder = struct {
         }
 
         core.echo_trace.mark(forwarder.io, .foreground_start);
-        const foreground = pane.session.shellForeground() orelse false;
+        const foreground = pane.shellForegroundHint() orelse pane.session.shellForeground() orelse false;
         core.echo_trace.mark(forwarder.io, .foreground_done);
         pane.queueHistoryInput(.{
             .bytes = bytes,

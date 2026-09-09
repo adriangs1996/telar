@@ -85,6 +85,25 @@ pub fn BoundedList(comptime capacity: usize, comptime entry_bytes: usize) type {
             }
             return false;
         }
+
+        /// Reports whether any entry occurs in `lowered`, a haystack already
+        /// folded to ASCII lower case, so a screen is folded once and every
+        /// phrase then costs one plain substring search.
+        ///
+        /// ```zig
+        /// if (list.matchesLowered(lowered_screen)) return .working;
+        /// ```
+        pub fn matchesLowered(list: *const Self, lowered: []const u8) bool {
+            for (0..list.count) |index| {
+                var needle: [entry_bytes]u8 = undefined;
+                const phrase = list.get(index);
+                const folded = std.ascii.lowerString(needle[0..phrase.len], phrase);
+                if (std.mem.indexOf(u8, lowered, folded) != null) {
+                    return true;
+                }
+            }
+            return false;
+        }
     };
 }
 
@@ -373,6 +392,10 @@ pub const Table = struct {
         return manifest.ready_prompt.count != 0;
     }
 
+    /// The longest screen sample the heuristics consider; a longer text is
+    /// matched on its tail, where the prompt and status rows live.
+    pub const max_detect_bytes = 16 * 1024;
+
     /// Applies the screen heuristics to one plain-text sample. Blocked
     /// outranks working; a prompt outranks identity alone.
     ///
@@ -380,20 +403,30 @@ pub const Table = struct {
     /// const signal = table.detect(sample) orelse return;
     /// ```
     pub fn detect(table: *const Table, text: []const u8) ?Signal {
+        // Fold the screen once; every phrase of every manifest then costs a
+        // plain substring search instead of a case-insensitive compare at
+        // each offset.
+        var storage: [max_detect_bytes]u8 = undefined;
+        const tail = text[text.len -| max_detect_bytes..];
+        const lowered = std.ascii.lowerString(storage[0..tail.len], tail);
+        return table.detectLowered(lowered);
+    }
+
+    fn detectLowered(table: *const Table, lowered: []const u8) ?Signal {
         for (table.slice()) |*manifest| {
-            if (manifest.blocked.matches(text)) {
-                return .{ .provider = table.inferProvider(text), .status = .blocked, .confidence = 88 };
+            if (manifest.blocked.matchesLowered(lowered)) {
+                return .{ .provider = table.inferProviderLowered(lowered), .status = .blocked, .confidence = 88 };
             }
         }
 
         for (table.slice()) |*manifest| {
-            if (manifest.working.matches(text)) {
-                return .{ .provider = table.inferProvider(text), .status = .working, .confidence = 78 };
+            if (manifest.working.matchesLowered(lowered)) {
+                return .{ .provider = table.inferProviderLowered(lowered), .status = .working, .confidence = 78 };
             }
         }
 
         for (table.slice()) |*manifest| {
-            if (manifest.ready_prompt.matches(text)) {
+            if (manifest.ready_prompt.matchesLowered(lowered)) {
                 return .{
                     .provider = manifest.provider,
                     .status = .ready,
@@ -405,7 +438,7 @@ pub const Table = struct {
         }
 
         for (table.slice()) |*manifest| {
-            if (manifest.identity.matches(text)) {
+            if (manifest.identity.matchesLowered(lowered)) {
                 return .{
                     .provider = manifest.provider,
                     .status = .ready,
@@ -449,9 +482,9 @@ pub const Table = struct {
         return null;
     }
 
-    fn inferProvider(table: *const Table, text: []const u8) AgentProvider {
+    fn inferProviderLowered(table: *const Table, lowered: []const u8) AgentProvider {
         for (table.slice()) |*manifest| {
-            if (manifest.brand.matches(text)) {
+            if (manifest.brand.matchesLowered(lowered)) {
                 return manifest.provider;
             }
         }
@@ -728,4 +761,13 @@ test "presentation defaults derive from the manifest and configuration overrides
     try std.testing.expectError(error.EmptyText, gemini.setIcon(""));
     try std.testing.expectError(error.TextTooLong, gemini.setIcon("x" ** (max_icon_bytes + 1)));
     try std.testing.expectError(error.TextTooLong, gemini.setDisplayName("x" ** (max_display_name_bytes + 1)));
+}
+
+test "lowered phrase matching folds only the phrase and finds mixed-case screens" {
+    var list: PhraseList = .{};
+    try list.append("Esc To Interrupt");
+    try std.testing.expect(list.matchesLowered("thinking... esc to interrupt"));
+    try std.testing.expect(!list.matchesLowered("thinking... ESC to interrupt"));
+    try std.testing.expect(list.matches("thinking... ESC to interrupt"));
+    try std.testing.expect(!list.matchesLowered("idle"));
 }
