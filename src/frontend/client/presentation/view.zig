@@ -523,10 +523,10 @@ pub const State = struct {
         return state.graphicalModalCovers(state.graphics_plan.modal_area);
     }
 
-    /// Checks the current label and theme, not a previously prepared texture.
+    /// Checks text coverage, allowing the previous focus during image replacement.
     /// Example: `const covered = view.graphicalPillCoversPlan();`.
     pub fn graphicalPillCoversPlan(state: *const State) bool {
-        return state.kitty_pill.covers(&state.graphics_plan.pill_labels, state.palette());
+        return state.kitty_pill.coversText(&state.graphics_plan.pill_labels, state.palette());
     }
 
     /// Maps one pointer event to semantic intent without mutating client
@@ -784,7 +784,7 @@ pub const State = struct {
             (has_toasts and !label_area.intersect(toast_area).isEmpty());
         const pill_plan = if (pill_occluded) &empty_pane_labels else label_plan;
         state.kitty_pill.observe(pill_plan, state.palette());
-        if (state.kitty_pill.covers(pill_plan, state.palette())) {
+        if (state.kitty_pill.coversText(pill_plan, state.palette())) {
             for (pill_plan.slice()) |label| {
                 const area: ui.Rect = .{ .x = pill_plan.area.x + label.offset, .y = pill_plan.area.y, .w = label.width, .h = 1 };
                 state.scratch.fill(area, .{ .glyph = " ", .style = .{} });
@@ -1739,7 +1739,7 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
     try std.testing.expectEqual(@as(u8, 0), state.graphics_plan.icons.len);
 }
 
-test "fullscreen labels keep regular cell text until the exact small-font image is ready" {
+test "fullscreen labels keep small-font text across focus changes and fall back on geometry changes" {
     const gpa = std.testing.allocator;
     var state = try State.init(gpa, 100, 24);
     defer state.deinit();
@@ -1793,12 +1793,13 @@ test "fullscreen labels keep regular cell text until the exact small-font image 
     try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = area });
     _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
     try std.testing.expect(!original.sameContent(compositor.fullscreenLabels()));
-    try std.testing.expect(!state.graphicalPillCoversPlan());
-    try std.testing.expect(state.kittyPill().retirementPending());
-    try std.testing.expectEqualStrings("2", screen.back.at(selected_x, original.area.y).?.text());
+    try std.testing.expect(state.graphicalPillCoversPlan());
+    try std.testing.expect(!state.kittyPill().retirementPending());
+    try std.testing.expectEqualStrings(" ", screen.back.at(selected_x, original.area.y).?.text());
     writer = std.Io.Writer.fixed(&storage);
-    _ = try state.kittyPill().writeRetirements(&writer);
+    try std.testing.expectEqual(@as(usize, 0), try state.kittyPill().writeRetirements(&writer));
     _ = try state.prepareGraphics(&empty_notifications, true);
+    try std.testing.expect(state.graphicalPillCoversPlan());
     writer = std.Io.Writer.fixed(&storage);
     _ = try state.kittyPill().write(&writer);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=t") != null);
@@ -1811,6 +1812,7 @@ test "fullscreen labels keep regular cell text until the exact small-font image 
     _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
     const resized_labels = compositor.fullscreenLabels().area;
     try std.testing.expectEqual(resized_labels, resized_labels.intersect(screen.back.area()));
+    try std.testing.expect(!state.graphicalPillCoversPlan());
     try std.testing.expect(model.toggleFullscreen());
     try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = resized_area });
     _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });

@@ -443,13 +443,26 @@ hides or clamps the sidebar without discarding its preferred width.
 `telar.action.scroll_pane({ direction = ... })` accepts `"up"` or `"down"` and
 applies one wheel step to the focused pane without entering copy mode. The
 default bindings are `prefix`, then `-` to scroll up, and `prefix`, then `=`
-to scroll down. Each step requires the prefix again. Global bindings allow
-repeated scrolling without a prefix:
+to scroll down. For holding a key, use a modified chord that the host reports
+with physical repeat events, such as these global bindings:
 
 ```lua
 telar.bind_global({ "alt+up" }, telar.action.scroll_pane({ direction = "up" }))
 telar.bind_global({ "alt+down" }, telar.action.scroll_pane({ direction = "down" }))
 ```
+
+The first step is immediate; host auto-repeat then drives at most one step
+every 100 ms. Excess repeats are discarded, not queued. Releasing the key,
+another key press, pointer input, paste, configuration reload or a changed
+target cancels the hold. Lua callbacks and other actions do not gain
+physical-repeat execution.
+
+A prefixed binding can also repeat its final chord when the host reports its
+physical lifecycle, without re-entering the prefix. Telar requests Kitty
+keyboard flags 7, which leave plain text keys such as the default `-` and `=`
+suffixes as text. Those defaults still require the prefix for each step.
+Legacy hosts that report only presses keep ordinary binding behavior;
+Telar does not infer a held key or start a synthetic repeat timer.
 
 The action follows the same policy as the wheel: send an SGR wheel report when
 the application tracks it, send three cursor keys at the live bottom when
@@ -495,10 +508,24 @@ replaces them with the prefix-mode hints.
 
 `telar.action.toggle_pane_fullscreen()` makes the focused pane occupy the whole
 tab inside its own border, and the tab bar marks the tab with a fullscreen
-icon. The client retains the tiled layout and its split ratios, so invoking the
-action again restores the previous geometry. Directional focus still selects
-another pane while fullscreen is active. The default binding is `prefix`, then
-`z`. A tab with one pane ignores the action.
+icon. The top border lists the tab's panes in display order and highlights the
+focused pane. Long labels are truncated; when the strip overflows, the focused
+pane stays visible. In fullscreen, left/right focus selects the previous/next
+pane without wrapping, and up/down focus does nothing. These rules apply to
+pane-focus actions, not arrow keys forwarded to the child. With Kitty graphics
+support and RGB label colors, pane labels use smaller embedded JetBrains Mono
+Regular text. The selected pill is 75 percent of the cell height and centered
+on the border; workspace labels and pane contents keep their usual size.
+While graphics are pending, unavailable or cannot display a glyph, the labels
+use normal terminal text without bold and selection stays rectangular.
+
+The client retains the tiled layout and its split ratios. Invoking the action
+again restores that geometry and spatial navigation, keeping the last selected
+pane focused. The default binding is `prefix`, then `z`. A tab with one pane
+can also enter fullscreen, including its border and label. Creating another
+pane keeps fullscreen active and focuses the new pane; closing back down to
+one pane does not exit the mode. Toggle again to leave fullscreen and restore
+borderless content when only one pane remains.
 
 `telar.action.toggle_workspace_list()` collapses the top bar's list of open
 workspaces to the active one plus a `+N` counter, and expands it again.

@@ -1,6 +1,7 @@
 //! Small JetBrains Mono labels and the selected pill inside the pane border.
-//! Client-owned media: one <=1 MiB RGBA image, one placement, latest plan wins.
-//! Cells remain visible until the exact label snapshot has reached the host.
+//! Client-owned media: one <=1 MiB RGBA buffer, two bounded host image slots.
+//! Focus replacements keep the old labels visible until the new image is placed.
+//! Text, geometry and theme changes still fall back to cells; latest plan wins.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -41,6 +42,9 @@ pub const Renderer = struct {
     emitted_generation: u64 = 0,
     desired: ?ui.Rect = null,
     emitted: ?ui.Rect = null,
+    emitted_plan: labels.Plan = .{},
+    emitted_key: ?Key = null,
+    emitted_image_id: u32 = image_id,
     image_dirty: bool = false,
     image_emitted: bool = false,
     transfer_offset: usize = 0,
@@ -124,6 +128,15 @@ pub const Renderer = struct {
             std.meta.eql(renderer.emitted, @as(?ui.Rect, plan.area));
     }
 
+    /// Keeps small-font text visible while only its selection is being replaced.
+    /// Unlike covers, this permits the previous focus but never stale text or geometry.
+    /// Example: `if (renderer.coversText(plan, palette)) hideCellLabels();`.
+    pub fn coversText(renderer: *const Renderer, plan: *const labels.Plan, palette: *const theme.Palette) bool {
+        const key = renderer.renderKey(plan, palette) orelse return false;
+        return !renderer.failed and renderer.image_emitted and
+            std.meta.eql(renderer.desired, @as(?ui.Rect, plan.area)) and renderer.emittedTextMatches(plan, key);
+    }
+
     /// Retires stale text before the next cell frame, without rasterization.
     /// Example: `renderer.observe(plan, palette);`.
     pub fn observe(renderer: *Renderer, plan: *const labels.Plan, palette: *const theme.Palette) void {
@@ -131,7 +144,9 @@ pub const Renderer = struct {
             renderer.hide();
             return;
         };
-        if (!renderer.matches(plan, key) or !std.meta.eql(renderer.desired, @as(?ui.Rect, plan.area))) {
+        if ((!renderer.matches(plan, key) and !renderer.coversText(plan, palette)) or
+            !std.meta.eql(renderer.desired, @as(?ui.Rect, plan.area)))
+        {
             renderer.hide();
         }
     }
@@ -142,7 +157,8 @@ pub const Renderer = struct {
 
     pub fn retirementPending(renderer: *const Renderer) bool {
         return renderer.emitted != null and
-            (renderer.image_dirty or !std.meta.eql(renderer.desired, renderer.emitted));
+            (!std.meta.eql(renderer.desired, renderer.emitted) or renderer.key == null or
+                !renderer.emittedTextMatches(&renderer.plan, renderer.key.?));
     }
 
     /// Deletes stale placements only when no continuation is open.
@@ -152,7 +168,7 @@ pub const Renderer = struct {
             return 0;
         }
 
-        const written = try kitty.writeDeletePlacement(writer, image_id, placement_id);
+        const written = try kitty.writeDeletePlacement(writer, renderer.emitted_image_id, placement_id);
         renderer.emitted = null;
         return written;
     }
@@ -181,15 +197,17 @@ pub const Renderer = struct {
             written += try renderer.writeRetirements(writer);
         }
         if (!renderer.supported and renderer.image_emitted) {
-            written += try kitty.writeDeleteImage(writer, image_id);
+            written += try kitty.writeDeleteImage(writer, renderer.emitted_image_id);
             renderer.image_emitted = false;
         }
 
         const area = renderer.desired orelse return written;
         const key = renderer.key orelse return written;
+        const next_image_id = if (renderer.image_dirty) renderer.emitted_image_id ^ 1 else renderer.emitted_image_id;
+        var replaced_image_id: ?u32 = null;
         if (renderer.image_dirty) {
             const progress = try kitty.writeTransmissionChunks(writer, .{
-                .external_id = image_id,
+                .external_id = next_image_id,
                 .image = .{
                     .key = .{ .image_id = image_id, .generation = 1 },
                     .format = .rgba,
@@ -210,12 +228,17 @@ pub const Renderer = struct {
 
             renderer.transfer_offset = 0;
             renderer.emitted_generation = renderer.generation;
+            if (renderer.image_emitted) {
+                replaced_image_id = renderer.emitted_image_id;
+            }
+
+            renderer.emitted_image_id = next_image_id;
             renderer.image_emitted = true;
             renderer.image_dirty = false;
         }
 
         written += try kitty.writePlacement(writer, .{
-            .image_id = image_id,
+            .image_id = renderer.emitted_image_id,
             .placement_id = placement_id,
             .value = .{
                 .column = area.x,
@@ -231,7 +254,15 @@ pub const Renderer = struct {
             },
             .z = -9,
         });
+
+        // Place first, then delete the old image and its placement in the same frame.
+        if (replaced_image_id) |previous| {
+            written += try kitty.writeDeleteImage(writer, previous);
+        }
+
         renderer.emitted = area;
+        renderer.emitted_plan = renderer.plan;
+        renderer.emitted_key = key;
         return written;
     }
 
@@ -243,6 +274,11 @@ pub const Renderer = struct {
 
         renderer.desired = null;
         renderer.image_dirty = false;
+    }
+
+    fn emittedTextMatches(renderer: *const Renderer, plan: *const labels.Plan, key: Key) bool {
+        return renderer.emitted_key != null and std.meta.eql(renderer.emitted_key.?, key) and
+            std.meta.eql(renderer.emitted, @as(?ui.Rect, plan.area)) and renderer.emitted_plan.sameText(plan);
     }
 
     fn matches(renderer: *const Renderer, plan: *const labels.Plan, key: Key) bool {
@@ -423,7 +459,9 @@ test "label coverage rejects stale focus text theme and cell size" {
     plan.labels[0].selected = true;
     plan.labels[1].selected = false;
     try std.testing.expect(!renderer.covers(&plan, &palette));
+    try std.testing.expect(renderer.coversText(&plan, &palette));
     renderer.observe(&plan, &palette);
+    try std.testing.expect(!renderer.retirementPending());
     renderer.prepare(&plan, &palette);
     renderer.prepare(&plan, &palette);
     try std.testing.expect(renderer.image_dirty);
@@ -433,19 +471,29 @@ test "label coverage rejects stale focus text theme and cell size" {
 
     plan = testingPlan(&.{ "zsh", "bash" }, 0);
     try std.testing.expect(!renderer.covers(&plan, &palette));
+    try std.testing.expect(!renderer.coversText(&plan, &palette));
     renderer.prepare(&plan, &palette);
+    try std.testing.expect(renderer.retirementPending());
+    try std.testing.expect(!renderer.coversText(&plan, &palette));
+    writer = Io.Writer.fixed(&storage);
+    _ = try renderer.write(&writer);
     palette.subtext0 = .{ .rgb = .{ 12, 34, 56 } };
+    try std.testing.expect(!renderer.coversText(&plan, &palette));
     renderer.prepare(&plan, &palette);
+    try std.testing.expect(renderer.retirementPending());
     writer = Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(renderer.covers(&plan, &palette));
+    try std.testing.expect(renderer.coversText(&plan, &palette));
     _ = renderer.configure(.{ .support = .supported, .cell_width = 12, .cell_height = 28 });
     try std.testing.expect(!renderer.covers(&plan, &palette));
+    try std.testing.expect(!renderer.coversText(&plan, &palette));
     renderer.prepare(&plan, &palette);
     writer = Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(renderer.covers(&plan, &palette));
     _ = renderer.configure(.{ .support = .unsupported, .cell_width = 0, .cell_height = 0 });
+    try std.testing.expect(!renderer.coversText(&plan, &palette));
     writer = Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=d,d=I") != null);
@@ -504,6 +552,70 @@ test "large label images are chunked and canceled before replacement or hide" {
     try std.testing.expect(!renderer.damaged());
 }
 
+test "focus replacements retain graphical text through chunking and latest-wins cancellation" {
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    const palette = &theme.default_theme.palette;
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 22, .cell_height = 64 });
+    const names = [_][]const u8{"long-process-label"} ** 8;
+    var plan = testingPlan(&names, 0);
+    renderer.prepare(&plan, palette);
+    var storage: [kitty.transmission_budget_per_frame + 8192]u8 = undefined;
+    while (renderer.damaged()) {
+        var writer = Io.Writer.fixed(&storage);
+        _ = try renderer.write(&writer);
+    }
+
+    const original_id = renderer.emitted_image_id;
+    const original_key = renderer.key.?;
+    const original_pixels = renderer.pixels.ptr;
+    for (1..4) |selected| {
+        plan = testingPlan(&names, selected);
+        renderer.observe(&plan, palette);
+        try std.testing.expect(renderer.coversText(&plan, palette));
+        try std.testing.expect(!renderer.covers(&plan, palette));
+        try std.testing.expect(!renderer.retirementPending());
+        renderer.prepare(&plan, palette);
+        try std.testing.expectEqual(original_key, renderer.key.?);
+        try std.testing.expectEqual(original_pixels, renderer.pixels.ptr);
+        try std.testing.expect(renderer.coversText(&plan, palette));
+        var writer = Io.Writer.fixed(&storage);
+        _ = try renderer.write(&writer);
+        try std.testing.expect(renderer.transferInProgress());
+        try std.testing.expect(renderer.coversText(&plan, palette));
+        try std.testing.expectEqual(original_id, renderer.emitted_image_id);
+        try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=d") == null);
+        try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=p") == null);
+        if (selected > 1) {
+            try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), "\x1b_Gm=0;\x1b\\"));
+        }
+    }
+
+    while (renderer.transferInProgress()) {
+        var writer = Io.Writer.fixed(&storage);
+        _ = try renderer.write(&writer);
+        try std.testing.expect(renderer.coversText(&plan, palette));
+        if (renderer.transferInProgress()) {
+            try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=d") == null);
+            try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=p") == null);
+        } else {
+            const placed = std.mem.indexOf(u8, writer.buffered(), "a=p").?;
+            const deleted = std.mem.indexOf(u8, writer.buffered(), "a=d,d=I").?;
+            try std.testing.expect(placed < deleted);
+        }
+    }
+
+    try std.testing.expectEqual(original_id ^ 1, renderer.emitted_image_id);
+    try std.testing.expect(renderer.covers(&plan, palette));
+    try std.testing.expect(!renderer.damaged());
+    renderer.observe(&.{}, palette);
+    try std.testing.expect(!renderer.coversText(&plan, palette));
+    var writer = Io.Writer.fixed(&storage);
+    _ = try renderer.write(&writer);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=d") != null);
+    try std.testing.expect(!renderer.damaged());
+}
+
 test "unsupported text quotas and allocation failure keep the cell fallback" {
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     var renderer = Renderer.init(failing.allocator());
@@ -516,6 +628,7 @@ test "unsupported text quotas and allocation failure keep the cell fallback" {
     renderer.prepare(&plan, palette);
     try std.testing.expect(renderer.failed);
     try std.testing.expect(!renderer.covers(&plan, palette));
+    try std.testing.expect(!renderer.coversText(&plan, palette));
     try std.testing.expect(!renderer.damaged());
     const generation = renderer.generation;
     renderer.prepare(&plan, palette);

@@ -18,8 +18,8 @@ pub const Label = struct {
         return label.bytes[0..label.len];
     }
 
-    fn eql(a: *const Label, b: *const Label) bool {
-        return a.offset == b.offset and a.width == b.width and a.selected == b.selected and
+    fn sameText(a: *const Label, b: *const Label) bool {
+        return a.offset == b.offset and a.width == b.width and
             std.mem.eql(u8, a.text(), b.text());
     }
 };
@@ -77,15 +77,31 @@ pub const Plan = struct {
         return true;
     }
 
-    /// Compares only initialized labels; movement does not change image content.
-    /// Example: `const reusable = plan.sameContent(previous);`.
-    pub fn sameContent(plan: *const Plan, other: *const Plan) bool {
+    /// Ignores focus and strip position while comparing text and label geometry.
+    /// Example: `const stable = plan.sameText(previous);`.
+    pub fn sameText(plan: *const Plan, other: *const Plan) bool {
         if (plan.area.w != other.area.w or plan.area.h != other.area.h or plan.len != other.len) {
             return false;
         }
 
         for (plan.slice(), other.slice()) |*left, *right| {
-            if (!left.eql(right)) {
+            if (!left.sameText(right)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// Compares only initialized labels; movement does not change image content.
+    /// Example: `const reusable = plan.sameContent(previous);`.
+    pub fn sameContent(plan: *const Plan, other: *const Plan) bool {
+        if (!plan.sameText(other)) {
+            return false;
+        }
+
+        for (plan.slice(), other.slice()) |left, right| {
+            if (left.selected != right.selected) {
                 return false;
             }
         }
@@ -108,4 +124,10 @@ test "label plans own cell text and compare content independently of position" {
     try std.testing.expect(plan.sameContent(&moved));
     moved.labels[0].selected = false;
     try std.testing.expect(!plan.sameContent(&moved));
+    try std.testing.expect(plan.sameText(&moved));
+    moved.labels[0].width += 1;
+    try std.testing.expect(!plan.sameText(&moved));
+    moved = plan;
+    moved.labels[0].bytes[0] = '2';
+    try std.testing.expect(!plan.sameText(&moved));
 }
