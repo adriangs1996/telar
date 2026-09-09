@@ -48,6 +48,10 @@ pub const Screen = struct {
     /// flush. `null` forces recovery to re-emit the desired shape.
     mouse_pointer: pointer.Shape = .default,
     presented_mouse_pointer: ?pointer.Shape = null,
+    /// The cursor position and visibility the host last received; a present
+    /// that changes no cell, cursor, pointer or graphics writes nothing.
+    presented_cursor: ?Position = null,
+    cursor_presented: bool = false,
     graphics: ?GraphicsEffect = null,
 
     pub const GraphicsEffect = struct {
@@ -100,7 +104,20 @@ pub const Screen = struct {
         @memset(s.front.cells, .{ .len = 0, .width = 0 });
         s.full_damage = true;
         s.presented_mouse_pointer = null;
+        s.cursor_presented = false;
         @memset(s.damage_rows, .{});
+    }
+
+    fn hasDamage(s: *const Screen) bool {
+        if (s.full_damage) {
+            return true;
+        }
+        for (s.damage_rows) |row| {
+            if (row.dirty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     pub fn deinit(s: *Screen) void {
@@ -159,6 +176,15 @@ pub const Screen = struct {
         var stats: Stats = .{};
         const before = w.end;
 
+        // A present with nothing new for the host is not a frame: writing
+        // the synchronized-output envelope alone would cost a write per
+        // hover, prefix or routing change that painted nothing.
+        const cursor_unchanged = s.cursor_presented and std.meta.eql(s.presented_cursor, s.cursor);
+        const pointer_unchanged = s.presented_mouse_pointer != null and s.presented_mouse_pointer.? == s.mouse_pointer;
+        if (cursor_unchanged and pointer_unchanged and s.graphics == null and !s.hasDamage()) {
+            return stats;
+        }
+
         // Synchronised output: the terminal is told to hold the frame until it
         // is complete. Without it a large repaint tears, because the emulator
         // draws whatever has arrived so far. herdr wraps its own draw in this.
@@ -199,11 +225,11 @@ pub const Screen = struct {
                 // unchanged screen this is where the bytes are saved.
                 const contiguous = cursor != null and cursor.?.y == y and cursor.?.x == x;
                 if (!contiguous) {
-                    try w.print("\x1b[{d};{d}H", .{ y + 1, x + 1 });
+                    try writeCursorMove(w, x, y);
                 }
 
                 if (last_style == null or !last_style.?.eql(next.style)) {
-                    try writeStyle(w, next.style);
+                    try writeStyleTransition(w, last_style, next.style);
                     last_style = next.style;
                 }
 
@@ -222,7 +248,7 @@ pub const Screen = struct {
         // The cursor is placed after the diff, so it ends up where the caller
         // asked rather than wherever the last cell happened to be.
         if (s.cursor) |at| {
-            try w.print("\x1b[{d};{d}H", .{ at.y + 1, at.x + 1 });
+            try writeCursorMove(w, at.x, at.y);
             try w.writeAll("\x1b[?25h");
         } else {
             try w.writeAll("\x1b[?25l");
@@ -233,6 +259,8 @@ pub const Screen = struct {
         stats.bytes = w.end -| before;
         try w.flush();
         s.presented_mouse_pointer = s.mouse_pointer;
+        s.presented_cursor = s.cursor;
+        s.cursor_presented = true;
         s.full_damage = false;
         @memset(s.damage_rows, .{});
         return stats;
@@ -250,6 +278,130 @@ pub const PatchSink = struct {
     pub fn copyRun(sink: *PatchSink, run_start: u16, count: u16) !void {
         const destination = try sink.screen.patchCells(@intCast(sink.base + run_start), count);
         @memcpy(destination, sink.source_row[run_start..][0..count]);
+    }
+};
+
+/// `CUP` with hand-rolled decimals: one cursor move opens every run of
+/// changed cells, so it must not pay for a format string parse.
+fn writeCursorMove(w: *Io.Writer, x: u16, y: u16) !void {
+    try w.writeAll("\x1b[");
+    try writeDecimal(w, @as(u32, y) + 1);
+    try w.writeByte(';');
+    try writeDecimal(w, @as(u32, x) + 1);
+    try w.writeByte('H');
+}
+
+fn writeDecimal(w: *Io.Writer, value: u32) !void {
+    var digits: [10]u8 = undefined;
+    var end: usize = digits.len;
+    var remaining = value;
+    while (true) {
+        end -= 1;
+        digits[end] = @intCast('0' + remaining % 10);
+        remaining /= 10;
+        if (remaining == 0) {
+            break;
+        }
+    }
+    try w.writeAll(digits[end..]);
+}
+
+/// Emits only what separates `next` from the style the terminal already has.
+/// Attributes can be added and colours replaced in place; only turning an
+/// attribute off needs the full reset form.
+fn writeStyleTransition(w: *Io.Writer, previous: ?ui.Style, next: ui.Style) !void {
+    const before = previous orelse return writeStyle(w, next);
+    if (flagsRemoved(before.flags, next.flags)) {
+        return writeStyle(w, next);
+    }
+
+    try w.writeAll("\x1b[");
+    var params: SgrParams = .{ .w = w };
+    inline for (.{
+        .{ "bold", "1" },
+        .{ "faint", "2" },
+        .{ "italic", "3" },
+        .{ "blink", "5" },
+        .{ "inverse", "7" },
+        .{ "invisible", "8" },
+        .{ "strikethrough", "9" },
+        .{ "overline", "53" },
+    }) |attribute| {
+        if (@field(next.flags, attribute[0]) and !@field(before.flags, attribute[0])) {
+            try params.code(attribute[1]);
+        }
+    }
+    if (next.flags.underline != before.flags.underline) {
+        try params.code("4:");
+        try writeDecimal(w, @intFromEnum(next.flags.underline));
+    }
+    if (!next.fg.eql(before.fg)) {
+        try params.color(38, next.fg);
+    }
+    if (!next.bg.eql(before.bg)) {
+        try params.color(48, next.bg);
+    }
+    if (next.flags.underline != .none and
+        (!next.underline_color.eql(before.underline_color) or before.flags.underline == .none))
+    {
+        try params.color(58, next.underline_color);
+    }
+    if (params.written == 0) {
+        // Only the underline colour of a non-underlined cell differed, which
+        // the terminal cannot show. The opened sequence must still be a
+        // valid one, so close it as a reset and restate the style.
+        try w.writeByte('m');
+        return writeStyle(w, next);
+    }
+    try w.writeByte('m');
+}
+
+/// Whether reaching `next` from `before` turns any attribute off, which the
+/// incremental form cannot express.
+fn flagsRemoved(before: ui.Style.Flags, next: ui.Style.Flags) bool {
+    // Bits 0..7 are the boolean attributes; the underline style follows.
+    const attribute_mask: u16 = 0xff;
+    const before_bits = @as(u16, @bitCast(before)) & attribute_mask;
+    const next_bits = @as(u16, @bitCast(next)) & attribute_mask;
+    if (before_bits & ~next_bits != 0) {
+        return true;
+    }
+    return before.underline != .none and next.underline == .none;
+}
+
+/// Appends SGR parameters with their separators to one open sequence.
+const SgrParams = struct {
+    w: *Io.Writer,
+    written: usize = 0,
+
+    fn code(params: *SgrParams, text: []const u8) !void {
+        if (params.written != 0) {
+            try params.w.writeByte(';');
+        }
+        try params.w.writeAll(text);
+        params.written += 1;
+    }
+
+    fn color(params: *SgrParams, base: u8, value: ui.Color) !void {
+        try params.code("");
+        switch (value) {
+            // 39 and 49 reset one colour; 59 resets the underline colour.
+            .default => try writeDecimal(params.w, base + 1),
+            .indexed => |i| {
+                try writeDecimal(params.w, base);
+                try params.w.writeAll(";5;");
+                try writeDecimal(params.w, i);
+            },
+            .rgb => |c| {
+                try writeDecimal(params.w, base);
+                try params.w.writeAll(";2;");
+                try writeDecimal(params.w, c[0]);
+                try params.w.writeByte(';');
+                try writeDecimal(params.w, c[1]);
+                try params.w.writeByte(';');
+                try writeDecimal(params.w, c[2]);
+            },
+        }
     }
 };
 
@@ -2068,4 +2220,45 @@ test "an OSC 11 reply reports the host background and other OSCs are consumed" {
     const partial = parse("\x1b]11;rgb:1e1e/22").?;
     try std.testing.expect(partial.event == .incomplete);
     try std.testing.expectEqual(@as(usize, 0), partial.len);
+}
+
+test "style transitions add attributes and replace colours without a reset" {
+    var screen = try Screen.init(std.testing.allocator, 4, 1);
+    defer screen.deinit();
+    const red: ui.Style = .{ .fg = .{ .rgb = .{ 255, 0, 0 } }, .flags = .{ .bold = true } };
+    var with_bg = red;
+    with_bg.bg = .{ .indexed = 4 };
+    var italic = with_bg;
+    italic.flags.italic = true;
+    var plain: ui.Style = .{ .fg = .{ .rgb = .{ 255, 0, 0 } } };
+    plain.bg = .{ .indexed = 4 };
+    screen.back.setCell(.{ .x = 0, .y = 0 }, .{ .text = "a", .width = 1, .style = red });
+    screen.back.setCell(.{ .x = 1, .y = 0 }, .{ .text = "b", .width = 1, .style = with_bg });
+    screen.back.setCell(.{ .x = 2, .y = 0 }, .{ .text = "c", .width = 1, .style = italic });
+    screen.back.setCell(.{ .x = 3, .y = 0 }, .{ .text = "d", .width = 1, .style = plain });
+    screen.invalidate();
+
+    var output: [512]u8 = undefined;
+    var writer = Io.Writer.fixed(&output);
+    _ = try screen.flush(&writer);
+    const bytes = writer.buffered();
+    // First run: full form. Then the background alone, then italic alone,
+    // and finally a reset because bold and italic turn off.
+    try std.testing.expect(std.mem.indexOf(u8, bytes, "\x1b[0;1;38;2;255;0;0ma") != null);
+    try std.testing.expect(std.mem.indexOf(u8, bytes, "a\x1b[48;5;4mb") != null);
+    try std.testing.expect(std.mem.indexOf(u8, bytes, "b\x1b[3mc") != null);
+    try std.testing.expect(std.mem.indexOf(u8, bytes, "c\x1b[0;38;2;255;0;0;48;5;4md") != null);
+    try std.testing.expect(std.mem.indexOf(u8, bytes, "\x1b[1;1H") != null);
+
+    // Nothing changed: no envelope at all.
+    writer = Io.Writer.fixed(&output);
+    const idle = try screen.flush(&writer);
+    try std.testing.expectEqual(@as(usize, 0), idle.bytes);
+    try std.testing.expectEqual(@as(usize, 0), writer.buffered().len);
+
+    // A cursor move alone is still a frame.
+    screen.cursor = .{ .x = 2, .y = 0 };
+    writer = Io.Writer.fixed(&output);
+    _ = try screen.flush(&writer);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[1;3H\x1b[?25h") != null);
 }

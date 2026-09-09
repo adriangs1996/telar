@@ -550,7 +550,7 @@ test "pane cwd allocation failure preserves metadata and revisions" {
     pane.gpa = std.testing.failing_allocator;
     const result = model.updatePaneMetadata(.{ .cwd = .{
         .pane_id = pane_id,
-        .path = "/work/api",
+        .path = "/work/telar/backend/runtime",
     } });
     pane.gpa = original_gpa;
 

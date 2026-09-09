@@ -75,14 +75,20 @@ pub const Pane = struct {
     applied_frame_id: u64 = 0,
     pending_frame_id: u64 = 0,
     graphics_placeholder: bool = false,
-    cwd: []u8 = &.{},
+    /// Owned storage for the child's working directory. It grows to the
+    /// longest path seen and is reused, so a shell that reports a new cwd per
+    /// command allocates only when the path outgrows what was kept.
+    cwd_storage: []u8 = &.{},
+    cwd_len: u16 = 0,
     foreground_name: [schema.max_foreground_name_bytes]u8 = @splat(0),
     foreground_name_len: u8 = 0,
     progress_state: schema.PaneProgressState = .remove,
     progress_percent: ?u8 = null,
-    /// Owned copy of the child's window title; empty until the runtime
-    /// reports one. Allocated on change so idle panes cost nothing.
-    title: []u8 = &.{},
+    /// Owned storage for the child's window title, empty until the runtime
+    /// reports one. Titles change per prompt in many shells, so the storage
+    /// is kept and reused; it allocates only when a title outgrows it.
+    title_storage: []u8 = &.{},
+    title_len: u16 = 0,
 
     fn init(gpa: std.mem.Allocator, input: PaneInit) !Pane {
         var buffer = try ui.Buffer.init(gpa, input.spec.size.cols, input.spec.size.rows);
@@ -103,11 +109,11 @@ pub const Pane = struct {
     }
 
     fn deinit(pane: *Pane) void {
-        if (pane.cwd.len != 0) {
-            pane.gpa.free(pane.cwd);
+        if (pane.cwd_storage.len != 0) {
+            pane.gpa.free(pane.cwd_storage);
         }
-        if (pane.title.len != 0) {
-            pane.gpa.free(pane.title);
+        if (pane.title_storage.len != 0) {
+            pane.gpa.free(pane.title_storage);
         }
         pane.gpa.free(pane.damage_rows);
         pane.buffer.deinit();
@@ -123,26 +129,30 @@ pub const Pane = struct {
 
     fn setCwd(pane: *Pane, path: []const u8) !bool {
         std.debug.assert(path.len != 0 and path.len <= schema.max_cwd_bytes);
-        if (std.mem.eql(u8, pane.cwd, path)) {
+        if (std.mem.eql(u8, pane.cwdSlice(), path)) {
             return false;
         }
 
         const display_changed = !std.mem.eql(u8, pane.cwdName(), displayCwdName(path));
-        const replacement = try pane.gpa.dupe(u8, path);
-        if (pane.cwd.len != 0) {
-            pane.gpa.free(pane.cwd);
+        if (path.len > pane.cwd_storage.len) {
+            const replacement = try pane.gpa.dupe(u8, path);
+            if (pane.cwd_storage.len != 0) {
+                pane.gpa.free(pane.cwd_storage);
+            }
+            pane.cwd_storage = replacement;
+        } else {
+            @memcpy(pane.cwd_storage[0..path.len], path);
         }
-
-        pane.cwd = replacement;
+        pane.cwd_len = @intCast(path.len);
         return display_changed;
     }
 
     pub fn cwdName(pane: *const Pane) []const u8 {
-        return displayCwdName(pane.cwd);
+        return displayCwdName(pane.cwdSlice());
     }
 
     pub fn cwdSlice(pane: *const Pane) []const u8 {
-        return pane.cwd;
+        return pane.cwd_storage[0..pane.cwd_len];
     }
 
     fn setForegroundName(pane: *Pane, name: []const u8) bool {
@@ -177,21 +187,25 @@ pub const Pane = struct {
 
     fn setTitle(pane: *Pane, title: []const u8) !bool {
         std.debug.assert(title.len <= schema.max_pane_title_bytes);
-        if (std.mem.eql(u8, pane.title, title)) {
+        if (std.mem.eql(u8, pane.titleSlice(), title)) {
             return false;
         }
 
-        const replacement = if (title.len != 0) try pane.gpa.dupe(u8, title) else &[_]u8{};
-        if (pane.title.len != 0) {
-            pane.gpa.free(pane.title);
+        if (title.len > pane.title_storage.len) {
+            const replacement = try pane.gpa.dupe(u8, title);
+            if (pane.title_storage.len != 0) {
+                pane.gpa.free(pane.title_storage);
+            }
+            pane.title_storage = replacement;
+        } else {
+            @memcpy(pane.title_storage[0..title.len], title);
         }
-
-        pane.title = @constCast(replacement);
+        pane.title_len = @intCast(title.len);
         return true;
     }
 
     pub fn titleSlice(pane: *const Pane) []const u8 {
-        return pane.title;
+        return pane.title_storage[0..pane.title_len];
     }
 };
 
@@ -256,8 +270,9 @@ test "pane cwd names use a bounded basename" {
 
     var pane: Pane = undefined;
     pane.gpa = std.testing.allocator;
-    pane.cwd = &.{};
-    defer if (pane.cwd.len != 0) pane.gpa.free(pane.cwd);
+    pane.cwd_storage = &.{};
+    pane.cwd_len = 0;
+    defer if (pane.cwd_storage.len != 0) pane.gpa.free(pane.cwd_storage);
     const long_name = [_]u8{'x'} ** (max_cwd_name_bytes + 1);
     try std.testing.expect(try pane.setCwd("/work/telar"));
     try std.testing.expectEqualStrings("telar", pane.cwdName());
@@ -442,7 +457,8 @@ pub const Compositor = struct {
             compositor.source = model.location;
             compositor.invalidated = true;
         }
-        if (!std.meta.eql(compositor.bottom_reservation, options.bottom_reservation)) {
+        const reservation_changed = !std.meta.eql(compositor.bottom_reservation, options.bottom_reservation);
+        if (reservation_changed) {
             compositor.bottom_reservation = options.bottom_reservation;
             compositor.invalidated = true;
         }
@@ -454,7 +470,15 @@ pub const Compositor = struct {
         if (compositor.layout_snapshot.geometry_revision != model.layout.geometryRevision()) {
             compositor.invalidated = true;
         }
-        model.layout.snapshot(options.area, &compositor.layout_snapshot);
+        // The snapshot is retaken when its inputs moved. A bottom reservation
+        // carves its pane out of the snapshot in place, so it is retaken on
+        // every frame that has or just lost one.
+        if (compositor.layout_snapshot.revision != model.layout.currentRevision() or
+            !std.meta.eql(compositor.layout_snapshot.area, options.area) or
+            reservation_changed or options.bottom_reservation != null)
+        {
+            model.layout.snapshot(options.area, &compositor.layout_snapshot);
+        }
         compositor.bottom_reservation_area = compositor.layout_snapshot.reserveBelowPane(options.bottom_reservation);
         if (compositor.paneProjectionChanged(model)) {
             compositor.invalidated = true;

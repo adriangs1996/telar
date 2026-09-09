@@ -12,7 +12,7 @@ pub const Color = union(enum) {
     indexed: u8,
     rgb: [3]u8,
 
-    fn eql(a: Color, b: Color) bool {
+    pub fn eql(a: Color, b: Color) bool {
         return switch (a) {
             .default => b == .default,
             .indexed => |v| b == .indexed and b.indexed == v,
