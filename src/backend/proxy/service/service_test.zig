@@ -196,15 +196,18 @@ test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
     service.observations.pipeline().publish(io, observation);
     const observation_metrics = service.observations.metrics();
 
+    // Activity may fill the channel only up to the slots reserved for
+    // lifecycle transitions; everything past that is dropped as obsolete.
+    const activity_capacity = event_capacity - observation_queue.transition_reserve;
     try std.testing.expectEqual(
-        @as(u64, event_capacity),
+        @as(u64, activity_capacity),
         observation_metrics.queued,
     );
     try std.testing.expectEqual(
-        @as(u64, event_capacity),
+        @as(u64, activity_capacity),
         observation_metrics.high_water,
     );
-    try std.testing.expectEqual(@as(u64, 1), observation_metrics.dropped);
+    try std.testing.expectEqual(@as(u64, event_capacity + 1 - activity_capacity), observation_metrics.dropped);
     var worker = try service.start();
     defer service.cancel(&worker);
 
