@@ -451,9 +451,10 @@ test "clicking a sidebar agent hands off directly to its pane" {
     try saved_layout.addRoot(left_pane);
     try saved_layout.split(.{ .existing_pane = left_pane, .new_pane = agent_pane, .axis = .horizontal });
     try saved_layout.split(.{ .existing_pane = agent_pane, .new_pane = bottom_right_pane, .axis = .vertical });
+    try std.testing.expect(saved_layout.toggleFullscreen());
     client.navigation_history.remember(.{
         .location = agent.location,
-        .pane_id = agent_pane,
+        .pane_id = bottom_right_pane,
         .tab_layout = saved_layout,
     });
     _ = try client.model.reconcileAgentSnapshot(.{
@@ -537,16 +538,125 @@ test "clicking a sidebar agent hands off directly to its pane" {
 
     const restored = &client.model.workspace.activeConst().?.model;
     try std.testing.expectEqual(agent_pane, restored.layout.focused().?);
+    try std.testing.expect(restored.layout.isFullscreen());
     try std.testing.expectEqual(@as(u16, 2), restored.displayIndex(agent_pane).?);
     var expected_geometry: workspace_capability.layout.Snapshot = .{};
     var actual_geometry: workspace_capability.layout.Snapshot = .{};
+    var actual_tiled = restored.layout;
+    try std.testing.expect(saved_layout.toggleFullscreen());
+    try std.testing.expect(actual_tiled.toggleFullscreen());
     saved_layout.snapshot(client.view.workbench(), &expected_geometry);
-    restored.layout.snapshot(client.view.workbench(), &actual_geometry);
+    actual_tiled.snapshot(client.view.workbench(), &actual_geometry);
     for ([_]schema.PaneId{ left_pane, agent_pane, bottom_right_pane }) |pane_id|
         try std.testing.expectEqual(
             expected_geometry.find(pane_id).?.outer,
             actual_geometry.find(pane_id).?.outer,
         );
+}
+
+test "sidebar workspace round trip restores fullscreen in a previously inactive tab" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    client.request_lifecycle.tracker = .{};
+    const first = TestHarness.bootstrap_pane;
+    const clicked: schema.PaneId = @enumFromInt(21);
+    const area = client.view.workbench();
+    _ = try client.model.reconcileTab(.{ .location = TestHarness.bootstrap_location, .panes = &.{first} }, area);
+    const fullscreen_tab = &client.model.workspace.active().?.model;
+    try fullscreen_tab.split(.{ .existing_pane = first, .new_pane = clicked, .location = TestHarness.bootstrap_location, .axis = .vertical, .area = area });
+    try std.testing.expect(fullscreen_tab.focusPane(first));
+    try std.testing.expect(fullscreen_tab.resizeFocused(.down, area));
+    try std.testing.expect(fullscreen_tab.toggleFullscreen());
+    var original_nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    const expected = fullscreen_tab.layout.clientLayoutNodes(&original_nodes);
+    const other_location = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
+    try std.testing.expectEqual(other_location, client.model.activeTabLocation().?);
+    const destinations = [_]agents.AgentInput{
+        .{
+            .key = .{ .pane_id = @enumFromInt(99), .pane_generation = 1 },
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(3) }, .tab_id = @enumFromInt(6) },
+            .pane_index = 1,
+            .provider = .claude,
+            .status = .working,
+        },
+        .{
+            .key = .{ .pane_id = clicked, .pane_generation = 1 },
+            .location = TestHarness.bootstrap_location,
+            .pane_index = 2,
+            .provider = .codex,
+            .status = .working,
+        },
+    };
+    _ = try client.model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &destinations });
+
+    for (destinations, 0..) |agent, turn| {
+        try std.testing.expectEqual(agent_navigation.Outcome.handoff_requested, try agent_navigation.apply(client, agent.key));
+        try harness.settle();
+        var buffer: [512]u8 = undefined;
+        var open_id: schema.RequestId = .none;
+        while (open_id == .none) {
+            switch (try harness.nextClientMessage(&buffer)) {
+                .open_pane => |open| {
+                    try std.testing.expectEqualDeep(schema.PaneTarget{ .pane = agent.key.pane_id }, open.target);
+                    open_id = open.request_id;
+                },
+                .detach_pane, .pane_resize => {},
+                else => return error.UnexpectedClientMessage,
+            }
+        }
+
+        const opened = try schema.encodePaneOpened(&buffer, .{
+            .request_id = open_id,
+            .pane_id = agent.key.pane_id,
+            .location = agent.location,
+            .created = false,
+        });
+        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+        try harness.settle();
+        var workspace_request: schema.RequestId = .none;
+        var tab_request: schema.RequestId = .none;
+        while (workspace_request == .none or tab_request == .none) {
+            switch (try harness.nextClientMessage(&buffer)) {
+                .request_workspace_snapshot => |request| workspace_request = request.request_id,
+                .request_tab_snapshot => |request| tab_request = request.request_id,
+                else => return error.UnexpectedClientMessage,
+            }
+        }
+
+        const tabs = [_]schema.TabDescriptor{
+            .{ .tab_id = agent.location.tab_id, .position = 0, .pane_count = if (turn == 0) 1 else 2, .label = "main" },
+            .{ .tab_id = other_location.tab_id, .position = 1, .pane_count = 1, .label = "other" },
+        };
+        const workspace_snapshot = try schema.encodeWorkspaceSnapshot(&buffer, .{
+            .request_id = workspace_request,
+            .workspace = agent.location.workspace,
+            .name = "workspace",
+            .tabs = tabs[0..if (turn == 0) @as(usize, 1) else 2],
+        });
+        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(workspace_snapshot));
+        const panes = [_]schema.PaneDescriptor{
+            .{ .pane_id = agent.key.pane_id, .lifecycle = .running },
+            .{ .pane_id = first, .lifecycle = .running },
+        };
+        const tab_snapshot = try schema.encodeTabSnapshot(&buffer, .{
+            .request_id = tab_request,
+            .location = agent.location,
+            .panes = panes[0..if (turn == 0) @as(usize, 1) else 2],
+        });
+        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(tab_snapshot));
+    }
+
+    const restored = &client.model.workspace.active().?.model;
+    try std.testing.expect(restored.layout.isFullscreen());
+    try std.testing.expectEqual(clicked, restored.layout.focused().?);
+    var actual_nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    try std.testing.expectEqualDeep(expected, restored.layout.clientLayoutNodes(&actual_nodes));
+    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, restored.contentSize(clicked, area).?);
+    try std.testing.expect(restored.contentSize(first, area) == null);
+    try std.testing.expect(client.model.saved_layouts.find(other_location) != null);
 }
 
 test "local agent navigation selects its tab before focusing its pane" {
@@ -594,6 +704,53 @@ test "local agent navigation selects its tab before focusing its pane" {
     const snapshot = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(snapshot == .request_tab_snapshot);
     try std.testing.expectEqualDeep(location, snapshot.request_tab_snapshot.location);
+}
+
+test "local sidebar agent navigation keeps fullscreen when targeting a different pane" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    try harness.allowTabSelection();
+    const client = harness.client;
+    const first: schema.PaneId = @enumFromInt(20);
+    const clicked: schema.PaneId = @enumFromInt(21);
+    const location = try harness.addInactiveTab(@enumFromInt(2), first);
+    const tab = client.model.workspace.find(location.tab_id).?;
+    const area = client.view.workbench();
+    try tab.model.split(.{ .existing_pane = first, .new_pane = clicked, .location = location, .axis = .vertical, .area = area });
+    try std.testing.expect(tab.model.focusPane(first));
+    try std.testing.expect(tab.model.toggleFullscreen());
+    const key: agents.AgentKey = .{ .pane_id = clicked, .pane_generation = 1 };
+    _ = try client.model.reconcileAgentSnapshot(.{
+        .revision = 1,
+        .agents = &.{.{ .key = key, .location = location, .pane_index = 2, .provider = .codex, .status = .working }},
+    });
+
+    try std.testing.expectEqual(agent_navigation.Outcome.focused, try agent_navigation.apply(client, key));
+    try std.testing.expect(tab.model.layout.isFullscreen());
+    try std.testing.expectEqual(clicked, tab.model.layout.focused().?);
+    try harness.settle();
+    var buffer: [256]u8 = undefined;
+    var snapshot_request: schema.RequestId = .none;
+    while (snapshot_request == .none) {
+        switch (try harness.nextClientMessage(&buffer)) {
+            .request_tab_snapshot => |request| snapshot_request = request.request_id,
+            .detach_pane, .pane_resize, .open_pane => {},
+            else => return error.UnexpectedClientMessage,
+        }
+    }
+
+    const payload = try schema.encodeTabSnapshot(&buffer, .{
+        .request_id = snapshot_request,
+        .location = location,
+        .panes = &.{ .{ .pane_id = first, .lifecycle = .running }, .{ .pane_id = clicked, .lifecycle = .running } },
+    });
+    _ = try server_messages.handleServerMessage(client, try schema.decodeServer(payload));
+    try std.testing.expect(tab.model.layout.isFullscreen());
+    try std.testing.expectEqual(clicked, tab.model.layout.focused().?);
+    try std.testing.expect(tab.model.contentSize(first, area) == null);
+    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, tab.model.contentSize(clicked, area).?);
 }
 
 test "tab snapshots commit pane revisions before attaching and presenting" {

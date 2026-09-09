@@ -55,6 +55,18 @@ pub fn apply(client: *Client, value: Action) !keybind.Control {
     };
 }
 
+/// Resolves repeat authority without retaining pane storage.
+/// For example: `const policy = repeatPolicy(client, action);`.
+pub fn repeatPolicy(client: *const Client, value: Action) ?keybind.RepeatPolicy {
+    if (key_routing.captures(client) or client.model.mode == .agent) {
+        return null;
+    }
+
+    const target = client.model.planPaneInput(.focused) orelse return null;
+
+    return action_routing.repeatPolicy(value, target.pane_id);
+}
+
 fn native(raw_context: *anyopaque, value: Action) !action_routing.Control {
     const context: *Context = @ptrCast(@alignCast(raw_context));
 

@@ -85,6 +85,12 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
     }
 }
 
+/// Opts native scroll bindings into paced repeats for their current pane.
+/// For example: `const policy = handler.repeatPolicy(action);`.
+pub fn repeatPolicy(handler: *const InputHandler, value: Action) ?keybind.RepeatPolicy {
+    return action_routing.repeatPolicy(handler.client, value);
+}
+
 pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
     return action_routing.apply(handler.client, value);
 }

@@ -746,6 +746,102 @@ test "focused scroll bindings target focus rather than hover and normal input re
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
+test "held scroll suffixes pace both viewport directions without queued steps" {
+    for ([_]bool{ true, false }) |up| {
+        var harness: TestHarness = undefined;
+        try harness.init();
+        defer harness.deinit();
+        try harness.bootstrap();
+        const client = harness.client;
+        const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+        pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 50 };
+        const press = if (up) "\x02\x1b[45::45;1:1u" else "\x02\x1b[61::61;1:1u";
+        const repeated = if (up) "\x1b[45::45;1:2u" else "\x1b[61::61;1:2u";
+        const release = if (up) "\x1b[45::45;1:3u" else "\x1b[61::61;1:3u";
+        var handler: InputHandler = .{ .client = client };
+        const ms = std.time.ns_per_ms;
+
+        _ = try client.host_input.router.feed(.{ .bytes = press, .now_ns = 0 }, &handler);
+        try std.testing.expectEqual(@as(u32, if (up) 47 else 53), pane.scroll.offset);
+        _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 99 * ms }, &handler);
+        try std.testing.expectEqual(@as(u32, if (up) 47 else 53), pane.scroll.offset);
+        _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 100 * ms }, &handler);
+        try std.testing.expectEqual(@as(u32, if (up) 44 else 56), pane.scroll.offset);
+
+        for (0..20) |_| {
+            _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 1000 * ms }, &handler);
+        }
+
+        try std.testing.expectEqual(@as(u32, if (up) 41 else 59), pane.scroll.offset);
+        const version = client.model.version();
+        const pending = client.runtime_transport.outbox.len;
+        _ = try client.host_input.router.feed(.{ .bytes = release, .now_ns = 1001 * ms }, &handler);
+        _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 2000 * ms }, &handler);
+        try std.testing.expectEqualDeep(version, client.model.version());
+        try std.testing.expectEqual(pending, client.runtime_transport.outbox.len);
+        try std.testing.expect(client.host_input.router.inputDeadline() == null);
+        try std.testing.expect(client.host_input.router.bindingDeadline() == null);
+
+        _ = try client.host_input.router.feed(.{ .bytes = press, .now_ns = 2001 * ms }, &handler);
+        try std.testing.expectEqual(@as(u32, if (up) 38 else 62), pane.scroll.offset);
+        pane.scroll.offset = if (up) 0 else 100;
+        const at_edge = client.model.version();
+        _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 2101 * ms }, &handler);
+        try std.testing.expectEqualDeep(at_edge, client.model.version());
+    }
+}
+
+test "a held global scroll cannot move a newly focused pane or resume after returning" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const model = client.model.activeTabModel().?;
+    const focused = TestHarness.bootstrap_pane;
+    const second: schema.PaneId = @enumFromInt(20);
+    try model.split(.{ .existing_pane = focused, .new_pane = second, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = client.view.workbench() });
+    try std.testing.expect(model.focusPane(focused));
+    const pane = model.find(focused).?;
+    const other = model.find(second).?;
+    pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
+    other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 100, .offset = 100 };
+    const binding = try lua_config.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
+    client.host_input.replaceRouter(client.io, try Client.InputRouter.init(&.{binding}));
+    var handler: InputHandler = .{ .client = client };
+    const repeated = "\x1b[45::45;3:2u";
+
+    _ = try client.host_input.router.feed(.{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &handler);
+    _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    try std.testing.expectEqual(@as(u32, 94), pane.scroll.offset);
+    try std.testing.expect(model.focusPane(second));
+    _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 200 * std.time.ns_per_ms }, &handler);
+    try std.testing.expectEqual(@as(u32, 100), other.scroll.offset);
+    try std.testing.expect(model.focusPane(focused));
+    _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 300 * std.time.ns_per_ms }, &handler);
+    try std.testing.expectEqual(@as(u32, 94), pane.scroll.offset);
+    try std.testing.expectEqual(@as(u32, 100), other.scroll.offset);
+}
+
+test "copy mode takes authority away from a held scroll binding" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
+    var handler: InputHandler = .{ .client = client };
+
+    _ = try client.host_input.router.feed(.{ .bytes = "\x02\x1b[45::45;1:1u", .now_ns = 0 }, &handler);
+    _ = try client_actions.apply(client, .enter_copy_mode);
+    const version = client.model.version();
+    _ = try client.host_input.router.feed(.{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    try std.testing.expect(client.model.copyModeActive());
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try std.testing.expectEqual(@as(u32, 97), pane.scroll.offset);
+}
+
 test "focused scroll bindings emit unmodified SGR wheel reports in cells or pixels" {
     for ([_]bool{ false, true }) |pixels| {
         var harness: TestHarness = undefined;
@@ -780,6 +876,44 @@ test "focused scroll bindings emit unmodified SGR wheel reports in cells or pixe
             try std.testing.expectEqualStrings(expected, message.pane_input.bytes);
         }
     }
+}
+
+test "held global scroll paces SGR reports without forwarding the binding chord" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    pane.mouse = .{ .tracking = .normal, .sgr = true };
+    const binding = try lua_config.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
+    client.host_input.replaceRouter(client.io, try Client.InputRouter.init(&.{binding}));
+    var handler: InputHandler = .{ .client = client };
+    const version = client.model.version();
+    const repeated = "\x1b[45::45;3:2u";
+
+    _ = try client.host_input.router.feed(.{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &handler);
+    _ = try client.host_input.router.feed(.{ .bytes = repeated, .now_ns = 99 * std.time.ns_per_ms }, &handler);
+    _ = try client.host_input.router.feed(.{ .bytes = repeated ++ repeated, .now_ns = 100 * std.time.ns_per_ms }, &handler);
+    _ = try client.host_input.router.feed(.{ .bytes = "\x1b[45::45;1:3u" ++ repeated, .now_ns = 200 * std.time.ns_per_ms }, &handler);
+    try std.testing.expectEqualDeep(version, client.model.version());
+    try harness.settle();
+
+    const expected = "\x1b[<64;1;1M\x1b[<64;1;1M";
+    var received: [expected.len]u8 = undefined;
+    var received_len: usize = 0;
+    var buffer: [256]u8 = undefined;
+    while (received_len < received.len) {
+        const message = try harness.nextClientMessage(&buffer);
+        try std.testing.expect(message == .pane_input);
+        try std.testing.expectEqual(pane.id, message.pane_input.pane_id);
+        try std.testing.expect(message.pane_input.bytes.len > 0);
+        try std.testing.expect(message.pane_input.bytes.len <= received.len - received_len);
+        @memcpy(received[received_len..][0..message.pane_input.bytes.len], message.pane_input.bytes);
+        received_len += message.pane_input.bytes.len;
+    }
+
+    try std.testing.expectEqualStrings(expected, &received);
 }
 
 test "focused scroll sends alternate-screen cursor keys only to the focused pane" {

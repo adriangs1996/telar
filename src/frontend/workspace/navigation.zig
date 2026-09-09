@@ -21,6 +21,7 @@ pub const SavedLayout = struct {
 
 pub const Layouts = struct {
     entries: [schema.max_client_layout_tabs]?SavedLayout = @splat(null),
+    eviction_index: usize = 0,
 
     /// Retains the latest split tree for one stable tab identity.
     ///
@@ -42,6 +43,20 @@ pub const Layouts = struct {
 
         const slot = free orelse return error.TooManySavedLayouts;
         slot.* = saved;
+    }
+
+    /// Retains a live layout without blocking navigation when the cache fills.
+    /// Existing tabs replace their entry; overflow replaces slots round-robin.
+    /// Evicted layouts fall back to canonical pane order on their next visit.
+    ///
+    /// ```zig
+    /// layouts.retain(saved);
+    /// ```
+    pub fn retain(layouts: *Layouts, saved: SavedLayout) void {
+        layouts.remember(saved) catch {
+            layouts.entries[layouts.eviction_index] = saved;
+            layouts.eviction_index = (layouts.eviction_index + 1) % layouts.entries.len;
+        };
     }
 
     /// Finds a retained tab layout without changing its lifetime.
@@ -134,6 +149,38 @@ test "workspace bookmarks replace the last focused tab and pane" {
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(9)), restored.pane_id);
     history.forget(workspace);
     try std.testing.expect(history.find(workspace) == null);
+}
+
+test "live layout retention stays bounded and replaces existing tabs before eviction" {
+    var layouts: Layouts = .{};
+    var layout: layout_mod.Layout = .{};
+    const pane: schema.PaneId = @enumFromInt(5);
+    try layout.addRoot(pane);
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(3) },
+        .tab_id = @enumFromInt(1),
+    };
+    var saved: SavedLayout = .{ .location = location, .pane_id = pane, .workspace_active = true, .layout = layout };
+    for (0..schema.max_client_layout_tabs) |index| {
+        saved.location.tab_id = @enumFromInt(index + 1);
+        layouts.retain(saved);
+    }
+
+    saved.location = location;
+    try std.testing.expect(saved.layout.toggleFullscreen());
+    layouts.retain(saved);
+    try std.testing.expect(layouts.find(location).?.layout.isFullscreen());
+    try std.testing.expectEqual(@as(usize, 0), layouts.eviction_index);
+    saved.location.workspace = .{ .workspace = @enumFromInt(4) };
+    try std.testing.expectError(error.TooManySavedLayouts, layouts.remember(saved));
+    layouts.retain(saved);
+    try std.testing.expectEqual(@as(usize, 1), layouts.eviction_index);
+    try std.testing.expect(layouts.find(location) == null);
+    try std.testing.expect(layouts.find(saved.location).?.layout.isFullscreen());
+    layouts.forget(saved.location);
+    layouts.retain(saved);
+    try std.testing.expectEqual(@as(usize, 1), layouts.eviction_index);
+    try std.testing.expect(layouts.find(saved.location) != null);
 }
 
 test "saved layouts are keyed by complete tab identity" {

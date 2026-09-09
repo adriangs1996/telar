@@ -220,7 +220,8 @@ pub const Model = struct {
         return true;
     }
 
-    /// Stages a server-retained client tree including its saved pane focus.
+    /// Stages a retained client tree including its saved pane focus. An
+    /// already staged arrival for this tab keeps its explicit navigation focus.
     ///
     /// ```zig
     /// _ = model.restoreClientLayoutOnNextSnapshot(location, saved);
@@ -228,6 +229,12 @@ pub const Model = struct {
     pub fn restoreClientLayoutOnNextSnapshot(model: *Model, location: schema.TabLocation, saved: layout_mod.Layout) bool {
         if (model.find(location.tab_id) == null) {
             return false;
+        }
+
+        if (model.pending_layout_restore) |pending| {
+            if (std.meta.eql(pending.location, location)) {
+                return true;
+            }
         }
 
         model.pending_layout_restore = .{

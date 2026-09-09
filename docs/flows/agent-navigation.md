@@ -38,13 +38,29 @@ The handler does not draw. Local selection and focus commit their own
 commits the normal empty workspace transition after its protocol messages enter
 the outbox. `Presenter` observes either result at the event boundary.
 
+## Fullscreen across workspaces
+
+Leaving a workspace retains every reconciled tab layout in the client model,
+including inactive tabs. The workspace bookmark still chooses the default tab
+and pane for ordinary workspace selection; it does not determine which tab
+layout a sidebar agent receives.
+
+On a sidebar return, the confirmed `(workspace, tab)` identity selects the
+retained tree. Its fullscreen flag, split axes and ratios survive. The clicked
+pane remains the focus even when another pane was focused in the saved tree.
+Canonical pane reconciliation validates membership before applying the tree
+and consumes only that tab's cache entry. Other tabs remain available for later
+selection. See [Client layout persistence](client-layout-persistence.md).
+
 ## Proof
 
-- `src/frontend/client/model.zig` proves exact generation lookup and local or
-  remote planning without exposing the agent replica.
-- `src/frontend/client/application/agent_navigation.zig` proves selection
+- `src/frontend/client/model/root.zig` resolves exact generations and local or
+  remote plans without exposing the agent replica.
+- `src/frontend/client/application/agents/agent_navigation.zig` proves selection
   before focus, stale and pending suppression, and effect failure ordering.
-- `src/frontend/client/agent_navigation.zig` wires the plan to tab, focus and
-  handoff adapters.
-- `src/frontend/client/client_test.zig` proves local tab focus and remote pane
-  handoff through the substituted runtime socket.
+- `src/frontend/client/controllers/agents/agent_navigation.zig` wires the plan
+  to tab, focus and handoff adapters.
+- `src/frontend/client/tests/synchronization.zig` proves local fullscreen focus,
+  direct pane handoff and a workspace round trip into a previously inactive
+  fullscreen tab through the substituted runtime socket. The requested pane
+  differs from saved focus, and canonical pane order differs from split order.

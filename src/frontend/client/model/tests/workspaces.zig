@@ -166,6 +166,66 @@ test "workspace arrival commits atomically and stages the saved layout" {
     }
 }
 
+test "workspace return restores an inactive tab fullscreen with the requested pane focus" {
+    try expectInactiveFullscreenReturn(false);
+}
+
+test "workspace creation also retains inactive tab layouts" {
+    try expectInactiveFullscreenReturn(true);
+}
+
+fn expectInactiveFullscreenReturn(replace: bool) !void {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const other_location: schema.TabLocation = .{ .workspace = location.workspace, .tab_id = @enumFromInt(2) };
+    const first: schema.PaneId = @enumFromInt(10);
+    const clicked: schema.PaneId = @enumFromInt(11);
+    const other: schema.PaneId = @enumFromInt(20);
+    const area: ui.Rect = .{ .w = 101, .h = 41 };
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
+    _ = try model.reconcileTab(.{ .location = location, .panes = &.{first} }, area);
+    const original = &model.workspace.active().?.model;
+    try original.split(.{ .existing_pane = first, .new_pane = clicked, .location = location, .axis = .vertical, .area = area });
+    try std.testing.expect(original.focusPane(first));
+    try std.testing.expect(original.resizeFocused(.down, area));
+    try std.testing.expect(original.toggleFullscreen());
+    var node_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    const expected_nodes = original.layout.clientLayoutNodes(&node_storage);
+    _ = try model.workspace.addCreated(.{
+        .location = other_location,
+        .position = 1,
+        .label = "other",
+        .root_pane_id = other,
+    }, .{ .cols = area.w, .rows = area.h });
+    try std.testing.expectEqual(other_location, model.activeTabLocation().?);
+    const departure = if (replace)
+        (try model.replaceWorkspace(.{
+            .pane_id = @enumFromInt(30),
+            .location = .{ .workspace = .{ .workspace = @enumFromInt(3) }, .tab_id = @enumFromInt(3) },
+            .size = .{ .cols = area.w, .rows = area.h },
+        })).departure
+    else
+        model.departWorkspace();
+    try std.testing.expectEqual(other_location, departure.bookmark.?.location);
+    if (replace) {
+        _ = model.departWorkspace();
+    }
+
+    _ = try model.arriveWorkspace(.{ .pane_id = clicked, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
+    _ = try model.reconcileTab(.{ .location = location, .panes = &.{ first, clicked } }, area);
+    const restored = &model.workspace.active().?.model;
+    try std.testing.expect(restored.layout.isFullscreen());
+    try std.testing.expectEqual(clicked, restored.layout.focused().?);
+    var restored_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    try std.testing.expectEqualDeep(expected_nodes, restored.layout.clientLayoutNodes(&restored_storage));
+    try std.testing.expect(restored.contentSize(first, area) == null);
+    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, restored.contentSize(clicked, area).?);
+}
+
 test "rejected workspace arrival preserves its previous model and version" {
     var empty = client_model.Model.init(std.testing.allocator, true);
     defer empty.deinit();
@@ -321,6 +381,64 @@ test "rejected workspace replacement preserves the occupied projection" {
     try std.testing.expectEqualDeep(location, model.activeTabLocation().?);
     try std.testing.expect(model.workspace.findPane(pane_id) != null);
     try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+}
+
+test "failed workspace replacement rolls back retained layouts" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    const pane_id: schema.PaneId = @enumFromInt(10);
+    const area: ui.Rect = .{ .w = 40, .h = 10 };
+    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
+    _ = try model.reconcileTab(.{ .location = location, .panes = &.{pane_id} }, area);
+    _ = model.togglePaneFullscreen(.{ .area = area }).?;
+    const version = model.version();
+    const saved_before = model.saved_layouts;
+    var failing: std.testing.FailingAllocator = .init(std.testing.allocator, .{ .fail_index = 0 });
+    model.workspace.gpa = failing.allocator();
+    defer model.workspace.gpa = std.testing.allocator;
+
+    try std.testing.expectError(error.OutOfMemory, model.replaceWorkspace(.{
+        .pane_id = @enumFromInt(20),
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(2) },
+        .size = .{ .cols = area.w, .rows = area.h },
+    }));
+    try std.testing.expectEqualDeep(saved_before, model.saved_layouts);
+    try std.testing.expectEqualDeep(version, model.version());
+    try std.testing.expectEqual(location, model.activeTabLocation().?);
+    try std.testing.expect(model.workspace.active().?.model.layout.isFullscreen());
+}
+
+test "provisional arrivals cannot overwrite retained fullscreen layouts" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    const first: schema.PaneId = @enumFromInt(10);
+    const clicked: schema.PaneId = @enumFromInt(11);
+    const area: ui.Rect = .{ .w = 60, .h = 12 };
+    var saved: layout_mod.Layout = .{};
+    try saved.addRoot(first);
+    try saved.splitFocused(clicked, .vertical);
+    try std.testing.expect(saved.focusPane(first));
+    try std.testing.expect(saved.toggleFullscreen());
+    var layouts: workspace_capability.navigation.Layouts = .{};
+    try layouts.remember(.{ .location = location, .pane_id = first, .workspace_active = true, .layout = saved });
+    model.restoreClientLayouts(layouts);
+    const arrival: client_model.WorkspaceArrival = .{ .pane_id = clicked, .location = location, .size = .{ .cols = area.w, .rows = area.h } };
+    _ = try model.arriveWorkspace(arrival);
+    _ = model.departWorkspace();
+    try std.testing.expectEqualDeep(saved, model.saved_layouts.find(location).?.layout);
+
+    _ = try model.arriveWorkspace(arrival);
+    try std.testing.expectError(error.DuplicatePane, model.reconcileTab(.{ .location = location, .panes = &.{ clicked, clicked } }, area));
+    try std.testing.expectEqualDeep(saved, model.saved_layouts.find(location).?.layout);
+    _ = try model.reconcileTab(.{ .location = location, .panes = &.{ first, clicked } }, area);
+    try std.testing.expect(model.saved_layouts.find(location) == null);
+    try std.testing.expect(model.workspace.active().?.model.layout.isFullscreen());
+    try std.testing.expectEqual(clicked, model.workspace.active().?.model.layout.focused().?);
+    const revision = model.workspace.active().?.model.layout.currentRevision();
+    _ = try model.reconcileTab(.{ .location = location, .panes = &.{ first, clicked } }, area);
+    try std.testing.expectEqual(revision, model.workspace.active().?.model.layout.currentRevision());
 }
 
 test "workspace replacement can recover from an already empty source" {

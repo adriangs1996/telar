@@ -172,10 +172,10 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
     const first: schema.PaneId = @enumFromInt(1);
     const second: schema.PaneId = @enumFromInt(2);
     const area: ui.Rect = .{ .w = 101, .h = 41 };
-    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 101, .rows = 41 } });
-    const active = &model.workspace.active().?.model;
     try std.testing.expect(model.togglePaneFullscreen(.{ .area = area }) == null);
     try std.testing.expectEqual(client_model.Version{}, model.version());
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 101, .rows = 41 } });
+    const active = &model.workspace.active().?.model;
     try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(active.focusPane(first));
     const first_tiled = active.contentSize(first, area).?;
@@ -202,6 +202,39 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
     model.workspace.deinit();
     try std.testing.expect(model.togglePaneFullscreen(.{ .area = area }) == null);
     try std.testing.expectEqual(client_model.Version{ .panes = 2 }, model.version());
+}
+
+test "splitting a single fullscreen pane focuses the new pane without leaving fullscreen" {
+    var model = client_model.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    const area: ui.Rect = .{ .w = 101, .h = 41 };
+    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
+    const entered = model.togglePaneFullscreen(.{ .area = area }).?;
+    try std.testing.expect(entered.fullscreen);
+    const plan = model.planPaneSplit(.{ .axis = .vertical, .area = area }).?;
+    const commit = try model.commitPaneSplit(.{ .split = plan.split, .new_pane = second });
+    try std.testing.expectEqual(.active, commit.disposition);
+    const active = &model.workspace.active().?.model;
+    try std.testing.expect(active.layout.isFullscreen());
+    try std.testing.expectEqual(second, active.layout.focused().?);
+    try std.testing.expect(active.contentSize(first, area) == null);
+    try std.testing.expectEqual(plan.restore_resize.size, active.contentSize(second, area).?);
+
+    const moved = model.focusPane(.{ .target = .{ .direction = .left }, .area = area }).?;
+    try std.testing.expectEqual(first, moved.focused);
+    try std.testing.expect(moved.geometry_changed);
+    try std.testing.expect(model.focusPane(.{ .target = .{ .direction = .down }, .area = area }) == null);
+    const exited = model.togglePaneFullscreen(.{ .area = area }).?;
+    try std.testing.expect(!exited.fullscreen);
+    try std.testing.expect(active.contentSize(first, area) != null);
+    try std.testing.expect(active.contentSize(second, area) != null);
+    try std.testing.expectEqual(second, model.focusPane(.{ .target = .{ .direction = .down }, .area = area }).?.focused);
 }
 
 test "pane closure planning requires the active attached pane without mutation" {

@@ -91,8 +91,10 @@ the original detach or open error returned by the handoff request.
 
 Only after `open_pane` is accepted locally does `ClientModel.departWorkspace`
 commit the empty model. It captures the source workspace, focused tab, focused
-pane, client-owned layout and every pane identity in fixed-capacity values,
-then advances the affected workspace, tab, active-tab and pane revisions once.
+pane, active client-owned layout and every pane identity in fixed-capacity
+values. Before discarding the projection, it also retains all reconciled tab
+layouts in `ClientModel.saved_layouts`, including inactive tabs. It then advances
+the affected workspace, tab, active-tab and pane revisions once.
 `ReleaseWorkspaceResourcesHandler` copies the bookmark into navigation history
 and gives every retired pane identity to `ReleasePaneResourcesHandler`.
 `RetireReportedPaneFocusHandler` then removes any remaining stale reporting
@@ -138,9 +140,10 @@ layout only when its exact tab identity matches the confirmed location. The
 adapter only translates the bookmark returned by navigation history.
 
 `ClientModel.arriveWorkspace` accepts only an empty model. The tab store builds
-the root tab and confirmed pane transactionally before publishing them, then
-the model stages the saved layout and advances all four semantic dimensions
-once. It returns a `WorkspaceActivation` carrying every pre/post semantic
+the root tab and confirmed pane transactionally before publishing them. The
+model prefers the exact tab's retained layout over the workspace bookmark's
+fallback tree, stages it with the confirmed pane as focus and advances all four
+semantic dimensions once. It returns a `WorkspaceActivation` carrying every pre/post semantic
 revision and the exact copy revision transition. Construction failure therefore
 preserves the prior empty model and every revision.
 
@@ -149,9 +152,11 @@ and root, the current revisions, every one-step semantic delta and the exact
 copy release. It then synchronizes attachment geometry and
 `ClientModel.reported_pane_focus`, schedules host input, and requests canonical
 workspace and tab snapshots in order. The tab snapshot restores the saved
-split tree only if the runtime still reports exactly the bookmarked pane set;
-otherwise normal deterministic display order wins. Delivery failure does not
-roll the confirmed model back.
+split tree only if the runtime still reports exactly the retained pane set;
+otherwise normal deterministic display order wins. Snapshot preparation keeps
+an already staged explicit pane focus instead of replacing it with saved focus.
+Successful reconciliation consumes only that tab's cache entry. Delivery failure
+does not roll the confirmed model back.
 
 The dispatcher does not draw the arrival. The presenter observes its new
 version independently. Its compositor detects the new immutable source and

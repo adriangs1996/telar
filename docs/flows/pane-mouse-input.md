@@ -9,6 +9,9 @@ report to the child. See [Mouse selection](mouse-selection.md).
 A `scroll_pane` binding enters the same policy directly through native action
 dispatch. Its command carries only an up/down direction and always targets the
 focused pane. It does not run pointer hit testing or enter copy mode.
+A physical hold repeats this same action at most once every 100 ms, provided
+its original pane still owns focus. The client router drops excess repeats;
+wheel events themselves remain unthrottled. See [Key routing](key-routing.md).
 
 This is an interactive-path flow. It allocates no memory, retains no pane
 pointer and adds no queue. The application decision uses fixed values. Mouse
@@ -183,7 +186,8 @@ recomposes the affected projection. No use case requests a draw directly.
 - `src/frontend/client/tests/input.zig` proves default scroll bindings through
   host byte routing, focus rather than hover, synthetic SGR cell/pixel reports,
   alternate-screen keys, viewport no-ops, return to live output and copy-mode
-  retirement.
+  retirement. Physical hold tests cover both viewport directions, bounded
+  repetition, endpoint no-ops and cancellation on focus or copy-mode changes.
 - `src/frontend/client/client_test.zig` proves prompt rejection after host
   telemetry, focus-before-press delivery, scrollback preservation, exact
   host-pixel delivery and pointer-local alternate-screen scrolling through the

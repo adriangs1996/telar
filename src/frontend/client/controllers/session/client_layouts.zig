@@ -37,7 +37,7 @@ pub fn apply(client: *Client, snapshot: schema.ClientLayoutSnapshotView) !void {
             client.view.setWorkspaceListCollapsed(snapshot.workspace_list_collapsed);
         }
 
-        client.saved_layouts = saved_layouts;
+        client.model.restoreClientLayouts(saved_layouts);
         client.navigation_history = history;
     }
 

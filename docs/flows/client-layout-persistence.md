@@ -67,6 +67,35 @@ pane order. Chrome preferences still restore even when no split tree remains
 safe. A narrower host clamps only presentation geometry and preserves the
 preferred sidebar width for later expansion.
 
+## Layouts during a connected session
+
+`ClientModel.saved_layouts` owns the same cache used for reconnect restoration
+and workspace navigation. Before a committed workspace departure destroys pane
+buffers, the model retains every non-empty tab whose canonical snapshot has
+loaded. Workspace creation captures those layouts too; failed root construction
+restores the prior cache as well as preserving the live projection.
+
+The cache stores at most 64 owned layouts keyed by complete workspace and tab
+identity. Each layout has at most 127 fixed node slots and retains no pane
+pointer. Capture scans at most 64 tabs against 64 cache entries and copies one
+tree per retained tab. It allocates no memory or queue and schedules no idle
+work. Workspace replacement uses one bounded cache backup for rollback.
+Existing entries replace in place; saturation evicts slots round-robin rather
+than blocking navigation. An evicted tree falls back to canonical pane order.
+The strict reconnect loader still rejects an oversized snapshot.
+
+An explicit pane arrival stages the matching cached tree with the requested
+pane focus. Later snapshot preparation cannot overwrite that navigation choice
+with saved focus. Selecting an unprojected tab normally restores its saved
+focus instead. A successful canonical reconciliation consumes only that cache
+entry. Rejected snapshots retain it, and provisional roots cannot overwrite
+complete saved trees while membership is pending. Changed membership keeps the
+existing canonical-order fallback. Destroying the client model clears the cache;
+reconnecting seeds a new one from the runtime replica.
+
+No new IPC messages, runtime state or wire schema are needed for this cache
+retention. Fullscreen rendering still follows [Pane fullscreen](pane-fullscreen.md).
+
 ## Proof
 
 - `runtime retains a terminal layout across client reconnection` crosses two
@@ -75,6 +104,11 @@ preferred sidebar width for later expansion.
   ordering and restored navigation.
 - `sidebar preferences survive when retained pane layouts become stale` proves
   chrome recovery without a valid active tree.
+- `src/frontend/client/model/tests/workspaces.zig` covers inactive fullscreen
+  return, workspace creation, allocation-failure rollback, pending arrivals and
+  rejected snapshots without cache loss.
+- `src/frontend/workspace/navigation.zig` covers fixed capacity, in-place
+  replacement, overflow eviction and slot reuse.
 - Schema corpus, workspace layout, outbox ownership and event-observation tests
   prove bounded encoding, split-tree reconstruction, causal coalescing and
   duplicate suppression.

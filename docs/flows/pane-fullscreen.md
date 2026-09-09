@@ -32,8 +32,8 @@ runtime socket                   Presenter
 The shared action dispatcher supplies the current workbench rectangle and
 delegates. It does not inspect the layout, invalidate `View` or request a draw.
 
-`ClientModel.togglePaneFullscreen` rejects an absent active tab or a tab with
-fewer than two panes. A commit keeps the focused pane identity, toggles the
+`ClientModel.togglePaneFullscreen` rejects an absent active tab or an empty
+layout. A single pane can enter fullscreen. A commit keeps the focused pane identity, toggles the
 fullscreen flag and advances only `ClientModel.Version.panes`. The returned
 change carries the exact tab, focus, pane revision, area and new fullscreen
 state.
@@ -45,7 +45,13 @@ Explicit resize actions can still change the hidden split ratios. Exiting
 fullscreen reveals the retained geometry, keeps the last selected pane focused
 and restores spatial navigation through the same pane-focus transition.
 
-The fullscreen pane keeps its border. Its top edge lists pane indices and
+Splitting a single fullscreen pane keeps fullscreen active and focuses the new
+pane. Closing panes also preserves fullscreen when only one remains. Only
+removing the last pane clears it automatically; an explicit toggle always
+leaves the mode. With one pane, all directional focus actions are no-ops.
+
+The fullscreen pane keeps its border, including when it is the only pane.
+Exiting fullscreen with one pane restores borderless content. Its top edge lists pane indices and
 foreground names in the same order used by navigation. The active label uses
 the theme's accent background; other labels use subdued text. The strip
 truncates names at grapheme boundaries before hiding labels, and always keeps
@@ -116,6 +122,12 @@ not stop runtime panes or PTYs. Reconnect restores the retained fullscreen and
 split layout when pane membership still matches runtime authority; otherwise it
 falls back to canonical pane order. Graphics state is always rebuilt.
 
+Client layout updates and reconnect snapshots accept a one-leaf fullscreen
+tree. Schema generation 43 requires an updated runtime because generation 42
+rejects that state. The wire fields are unchanged; the handshake generation
+prevents an older runtime from accepting the connection and then rejecting
+layout persistence. Updating only the client is insufficient.
+
 A runtime geometry rejection leaves PTY size unchanged and increments runtime
 telemetry. The client does not roll back an unacknowledged resize.
 
@@ -127,7 +139,8 @@ telemetry. The client does not roll back an unacknowledged resize.
 
 - `src/frontend/workspace/layout.zig` proves that fullscreen retains tiled
   ratios, follows display order without wrapping, ignores vertical focus,
-  restores spatial navigation and clears when pane count falls below two.
+  restores spatial navigation, preserves fullscreen through single-pane splits
+  and removals, clears on the last removal and round-trips one-leaf snapshots.
 - `src/frontend/workspace/fullscreen_tabs.zig` covers regular-weight selection,
   Unicode truncation and label snapshots at narrow widths.
 - `src/frontend/presentation/pane_labels.zig` covers ownership of grapheme text
@@ -141,16 +154,17 @@ telemetry. The client does not roll back an unacknowledged resize.
 - `src/frontend/workspace/multiplexer.zig` covers border composition, focus
   changes, progress animation and incremental idle rendering.
 - `src/frontend/client/model/tests/panes.zig` covers horizontal fullscreen
-  navigation, geometry commits and no-op revision preservation.
-- `src/frontend/client/model.zig` proves entry, exit, single-pane no-op and
-  pane-version ownership.
-- `src/frontend/client/application/toggle_pane_fullscreen.zig` proves
-  commit-before-delivery ordering and post-commit failure behavior.
+  navigation, splitting from one fullscreen pane, geometry commits and no-op
+  revision preservation.
+- `src/core/schema_contract_test.zig` accepts single-pane fullscreen updates
+  while still rejecting invalid trees and duplicate panes.
+- `src/frontend/client/application/panes/toggle_pane_fullscreen.zig` proves
+  single-pane entry, commit-before-delivery ordering and post-commit failure behavior.
 - `src/frontend/client/application/pane_geometry_delivery.zig` proves shared
   validation, visible-pane selection, delivery order and retained commits on
   failure.
 - `src/frontend/client/pane_geometry.zig` implements the physical graphics and
   runtime delivery ports.
-- `src/frontend/client/client_test.zig` proves the one-pane enter resize, the
-  tiled exit resizes and presenter-only frame scheduling through a substituted
-  runtime socket.
+- `src/frontend/client/tests/pane_lifecycle.zig` proves bordered and borderless
+  resizes for a single pane, multi-pane tiled exit resizes and presenter-only
+  frame scheduling through a substituted runtime socket.

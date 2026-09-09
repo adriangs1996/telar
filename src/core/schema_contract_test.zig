@@ -1998,7 +1998,7 @@ test "client layout schema validates trees focus and chrome-only recovery" {
     }));
 
     const pane = [_]schema.ClientLayoutNode{.{ .pane = @enumFromInt(5) }};
-    try std.testing.expectError(error.InvalidClientLayoutFullscreen, schema.encodeClientLayoutUpdate(&buffer, .{
+    const single_fullscreen = try schema.encodeClientLayoutUpdate(&buffer, .{
         .sidebar_visible = true,
         .sidebar_width = 62,
         .workspace_list_collapsed = false,
@@ -2010,7 +2010,12 @@ test "client layout schema validates trees focus and chrome-only recovery" {
             .workspace_active = true,
             .nodes = &pane,
         }},
-    }));
+    });
+    var single_tabs = (try schema.decodeClient(single_fullscreen)).update_client_layout.tabs();
+    const single_tab = (try single_tabs.next()).?;
+    try std.testing.expect(single_tab.fullscreen);
+    try std.testing.expectEqual(@as(u16, 1), single_tab.node_count);
+    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(5)), single_tab.focused_pane);
 
     const chrome_only = try schema.encodeClientLayoutSnapshot(&buffer, .{
         .restored = true,

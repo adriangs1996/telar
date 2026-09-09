@@ -449,7 +449,7 @@ pub const Compositor = struct {
             for (compositor.layout_snapshot.views()) |view| {
                 const pane = model.findConst(view.pane_id) orelse continue;
                 full_stats.panes += 1;
-                if (model.layout.count() > 1) {
+                if (model.layout.hasBorders()) {
                     compositor.fullscreen_labels = drawBorder(target, .{
                         .view = view,
                         .foreground_name = pane.foregroundName(),
@@ -633,7 +633,7 @@ pub const Compositor = struct {
     }
 
     fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposition, options: CompositionInput) !void {
-        if (context.model.layout.count() <= 1) {
+        if (!context.model.layout.hasBorders()) {
             return;
         }
 
@@ -1880,6 +1880,51 @@ test "fullscreen composes only the focused pane across the whole tab" {
 
     try std.testing.expect(model.toggleFullscreen());
     try std.testing.expect(model.contentSize(@enumFromInt(2), area) != null);
+}
+
+test "single-pane fullscreen draws labels and progress and restores borderless content" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const area: ui.Rect = .{ .w = 40, .h = 7 };
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
+    const pane = model.find(pane_id).?;
+    pane.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
+    try std.testing.expect(model.toggleFullscreen());
+    var screen = try term.Screen.init(gpa, area.w, area.h);
+    defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    try std.testing.expectEqualStrings("╭", screen.back.at(0, 0).?.text());
+    try std.testing.expectEqualStrings("1", screen.back.at(3, 0).?.text());
+    try std.testing.expectEqualStrings("x", screen.back.at(1, 1).?.text());
+    try std.testing.expectEqual(@as(u8, 1), compositor.fullscreenLabels().len);
+    const idle = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    try std.testing.expect(!idle.full);
+    try std.testing.expectEqual(@as(usize, 0), idle.cells);
+
+    pane.progress_state = .indeterminate;
+    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    const animated = try compositor.render(.{
+        .model = &model,
+        .screen = &screen,
+        .input = .{ .area = area, .palette = &theme.default_theme.palette, .progress_animation_frame = 127 },
+    });
+    try std.testing.expect(!animated.stats.full);
+    try std.testing.expectEqualStrings("◇", screen.back.at(38, 0).?.text());
+    try std.testing.expectEqual(@as(u8, 1), compositor.fullscreenLabels().len);
+
+    try std.testing.expect(model.toggleFullscreen());
+    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    try std.testing.expectEqualStrings("x", screen.back.at(0, 0).?.text());
+    try std.testing.expectEqual(@as(u8, 0), compositor.fullscreenLabels().len);
+    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w, .rows = area.h }, model.contentSize(pane_id, area).?);
 }
 
 test "fullscreen border keeps the pane's tiled display index" {

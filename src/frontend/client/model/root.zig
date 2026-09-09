@@ -21,6 +21,7 @@ const keybind = input_capability.keybind;
 const kitty = graphics.kitty;
 const schema = core.schema;
 const layout_mod = workspace_capability.layout;
+const navigation = workspace_capability.navigation;
 const multiplexer = workspace_capability.multiplexer;
 const tabs_mod = workspace_capability.tabs;
 const workspace_list_mod = workspace_capability.workspace_list;
@@ -144,6 +145,7 @@ pub const PresentationMode = enum {
 pub const Model = struct {
     mode: PresentationMode = .normal,
     workspace: tabs_mod.Model,
+    saved_layouts: navigation.Layouts = .{},
     clipboard: @import("clipboard_capture.zig").State = .{},
     plugins: @import("plugin_execution.zig").State = .{},
     host: @import("host.zig").State,
@@ -252,6 +254,13 @@ pub const Model = struct {
     pub fn deinit(model: *Model) void {
         model.history_palette.deinit();
         model.workspace.deinit();
+        model.saved_layouts = .{};
+    }
+
+    /// Installs validated reconnect layouts before the initial pane arrives.
+    /// Example: `model.restoreClientLayouts(layouts);`.
+    pub fn restoreClientLayouts(model: *Model, layouts: navigation.Layouts) void {
+        model.saved_layouts = layouts;
     }
 
     pub fn toggleAgentMode(self: *Model) void {
@@ -2040,6 +2049,7 @@ pub const Model = struct {
         const had_tabs = model.workspace.count != 0;
         const had_active = active != null;
         const had_visible_panes = if (active) |tab| tab.model.pane_count != 0 else false;
+        model.retainWorkspaceLayouts();
         model.workspace.deinit();
         model.workspace_revision +%= 1;
         if (had_tabs) {
@@ -2070,9 +2080,7 @@ pub const Model = struct {
 
         const version_before = model.version();
         try model.workspace.bootstrap(.{ .pane_id = arrival.pane_id, .location = arrival.location, .size = arrival.size });
-        if (arrival.saved_layout) |saved| {
-            std.debug.assert(model.workspace.restoreLayoutOnNextSnapshot(arrival.location, saved));
-        }
+        model.stageArrivalLayout(arrival);
 
         model.workspace_revision +%= 1;
         model.tabs_revision +%= 1;
@@ -2103,14 +2111,15 @@ pub const Model = struct {
             }
         }
 
+        const saved_before = model.saved_layouts;
+        model.retainWorkspaceLayouts();
+        errdefer model.saved_layouts = saved_before;
         try model.workspace.replaceWithRoot(.{
             .pane_id = arrival.pane_id,
             .location = arrival.location,
             .size = arrival.size,
         });
-        if (arrival.saved_layout) |saved| {
-            std.debug.assert(model.workspace.restoreLayoutOnNextSnapshot(arrival.location, saved));
-        }
+        model.stageArrivalLayout(arrival);
 
         model.workspace_revision +%= 1;
         model.tabs_revision +%= 1;
@@ -2126,6 +2135,34 @@ pub const Model = struct {
                 .version_before = version_before,
             }),
         };
+    }
+
+    fn retainWorkspaceLayouts(model: *Model) void {
+        const active = model.activeTabLocation() orelse return;
+        var tabs = model.workspace.tabIterator();
+        while (tabs.next()) |tab| {
+            // A provisional root must not replace the complete retained tree
+            // while its canonical membership response is still pending.
+            if (!tab.snapshot_loaded) {
+                continue;
+            }
+
+            const focused = tab.model.layout.focused() orelse continue;
+            model.saved_layouts.retain(.{
+                .location = tab.location,
+                .pane_id = focused,
+                .workspace_active = std.meta.eql(active, tab.location),
+                .layout = tab.model.layout,
+            });
+        }
+    }
+
+    fn stageArrivalLayout(model: *Model, arrival: WorkspaceArrival) void {
+        const saved_layout = if (model.saved_layouts.find(arrival.location)) |saved| saved.layout else arrival.saved_layout;
+        if (saved_layout) |saved| {
+            const staged = model.workspace.restoreLayoutOnNextSnapshot(arrival.location, saved);
+            std.debug.assert(staged);
+        }
     }
 
     fn workspaceActivation(model: *const Model, seed: WorkspaceActivationSeed) WorkspaceActivation {
@@ -2276,7 +2313,13 @@ pub const Model = struct {
             }
         }
 
+        if (model.saved_layouts.find(snapshot.location)) |saved| {
+            const staged = model.workspace.restoreClientLayoutOnNextSnapshot(snapshot.location, saved.layout);
+            std.debug.assert(staged);
+        }
+
         const reconciled = try model.workspace.reconcileTab(snapshot, area);
+        model.saved_layouts.forget(snapshot.location);
         reconciliation.panes_changed = reconciled.model.layout.currentRevision() != previous_layout_revision;
         if (reconciliation.active and reconciliation.panes_changed) {
             model.panes_revision +%= 1;
@@ -2458,7 +2501,7 @@ pub const Model = struct {
     }
 
     /// Toggles fullscreen for the focused pane without discarding tiled
-    /// geometry. Tabs with fewer than two panes leave every version intact.
+    /// geometry. Absent or empty layouts leave every version intact.
     ///
     /// ```zig
     /// const change = model.togglePaneFullscreen(.{ .area = area }) orelse return;

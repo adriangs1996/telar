@@ -1,6 +1,7 @@
 //! Application policy for routing one configured semantic action.
 
 const std = @import("std");
+const core = @import("telar-core");
 const lua_config = @import("../../../config/root.zig");
 const input = @import("../../../input/root.zig");
 const lua_action = @import("lua_action.zig");
@@ -30,6 +31,15 @@ pub const Effects = struct {
     key: *const fn (*anyopaque, keybind.Key) anyerror!void,
     paste: *const fn (*anyopaque, []const u8) anyerror!void,
 };
+
+/// Only native wheel-step actions may repeat, at most ten steps per second.
+/// For example: `const policy = repeatPolicy(.{ .scroll_pane = .up }, pane_id);`.
+pub fn repeatPolicy(value: Action, pane_id: core.schema.PaneId) ?keybind.RepeatPolicy {
+    return switch (value) {
+        .scroll_pane => .{ .interval_ns = 100 * std.time.ns_per_ms, .context = @intFromEnum(pane_id) },
+        else => null,
+    };
+}
 
 pub const ActionRoutingHandler = struct {
     effects: Effects,
@@ -197,6 +207,31 @@ const Capture = struct {
 
 fn routingAuthority(copy_mode_active: bool) Authority {
     return .{ .available = .{ .copy_mode_active = copy_mode_active } };
+}
+
+test "repeat policy enables only native scroll with exact pane ownership" {
+    const pane_id: core.schema.PaneId = @enumFromInt(7);
+    for ([_]input.action.ScrollDirection{ .up, .down }) |direction| {
+        const policy = repeatPolicy(.{ .scroll_pane = direction }, pane_id).?;
+        try std.testing.expectEqual(@as(u64, 100 * std.time.ns_per_ms), policy.interval_ns);
+        try std.testing.expectEqual(@as(u64, 7), policy.context);
+    }
+
+    const non_repeating = [_]Action{
+        .close_pane,
+        .close_tab,
+        .detach,
+        .toggle_sidebar,
+        .enter_copy_mode,
+        .{ .focus_pane = .left },
+        .{ .lua_callback = .{ .generation = 1, .id = 1 } },
+        .{ .lua_expr = .{ .generation = 1, .id = 1 } },
+        .{ .plugin = .{ .plugin = 1, .action = 1 } },
+    };
+
+    for (non_repeating) |value| {
+        try std.testing.expect(repeatPolicy(value, pane_id) == null);
+    }
 }
 
 test "action routing suppresses every configured source while a prompt owns input" {

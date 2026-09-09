@@ -9,7 +9,7 @@ const std = @import("std");
 pub const SchemaId = [8]u8;
 /// Human-readable schema generation. Bump it on any breaking wire change so a
 /// mismatch log can say which side is newer.
-pub const schema_version: *const [2]u8 = "42";
+pub const schema_version: *const [2]u8 = "43";
 /// Version prefix plus a fingerprint of the golden corpus in
 /// `schema_contract_test.zig`. The test "the handshake fingerprint derives from the
 /// golden corpus" recomputes the hash, so an encoding change cannot ship

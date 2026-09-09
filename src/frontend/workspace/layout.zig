@@ -280,6 +280,12 @@ pub const Layout = struct {
         return layout.fullscreen;
     }
 
+    /// Fullscreen keeps its label border even when the tab has only one pane.
+    /// Example: `if (layout.hasBorders()) drawPaneBorder();`.
+    pub fn hasBorders(layout: *const Layout) bool {
+        return layout.fullscreen or layout.pane_count > 1;
+    }
+
     /// Writes this split tree in the protocol's pre-order representation.
     ///
     /// ```zig
@@ -575,9 +581,6 @@ pub const Layout = struct {
         if (layout.focused_pane == pane_id) {
             layout.focused_pane = layout.firstLeaf(parent).?;
         }
-        if (layout.pane_count <= 1) {
-            layout.fullscreen = false;
-        }
         layout.changed();
         return true;
     }
@@ -672,9 +675,10 @@ pub const Layout = struct {
     }
 
     pub fn toggleFullscreen(layout: *Layout) bool {
-        if (layout.pane_count <= 1) {
+        if (layout.pane_count == 0) {
             return false;
         }
+
         layout.fullscreen = !layout.fullscreen;
         layout.changed();
         return true;
@@ -704,8 +708,8 @@ pub const Layout = struct {
         return geometry.prospectiveSplit(target, layout.pane_count);
     }
 
-    /// A fullscreen pane keeps its border: fullscreen requires two panes, and
-    /// the border is what tells the user the tab still has more than one.
+    /// A fullscreen pane keeps its border and labels regardless of pane count.
+    /// Example: `layout.snapshot(area, &geometry);`.
     pub fn snapshot(layout: *const Layout, area: ui.Rect, output: *Snapshot) void {
         if (!layout.fullscreen) {
             return layout.snapshotTiled(area, output);
@@ -739,7 +743,7 @@ pub const Layout = struct {
                     output.append(.{
                         .pane_id = pane_id,
                         .outer = pending.area,
-                        .content = if (layout.pane_count > 1)
+                        .content = if (layout.hasBorders())
                             borderedContent(pending.area)
                         else
                             pending.area,
@@ -1175,8 +1179,8 @@ test "resize selects the nearest matching ancestor and preserves usable pane con
 test "fullscreen toggles one pane without destroying the tiled layout" {
     const area: ui.Rect = .{ .w = 101, .h = 41 };
     var layout: Layout = .{};
-    try layout.addRoot(@enumFromInt(1));
     try std.testing.expect(!layout.toggleFullscreen());
+    try layout.addRoot(@enumFromInt(1));
     try layout.splitFocused(@enumFromInt(2), .horizontal);
     try std.testing.expect(layout.focusPane(@enumFromInt(1)));
     try std.testing.expect(layout.resizeFocused(.right, area));
@@ -1277,13 +1281,46 @@ test "fullscreen pane order tracks splits and removals" {
     try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), layout.focusDirection(.left, .{}).?);
 }
 
-test "removing a fullscreen pane clears fullscreen when one pane remains" {
+test "fullscreen survives single-pane splits and removals until the tab is empty" {
+    const area: ui.Rect = .{ .w = 101, .h = 41 };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
     var layout: Layout = .{};
-    try layout.addRoot(@enumFromInt(1));
-    try layout.splitFocused(@enumFromInt(2), .horizontal);
+    try layout.addRoot(first);
+    try std.testing.expect(!layout.hasBorders());
     try std.testing.expect(layout.toggleFullscreen());
-    try std.testing.expect(layout.remove(@enumFromInt(2)));
+    try std.testing.expect(layout.hasBorders());
+    var geometry: Snapshot = .{};
+    layout.snapshot(area, &geometry);
+    try std.testing.expectEqual(borderedContent(area), geometry.find(first).?.content);
+
+    const revision = layout.currentRevision();
+    for ([_]Direction{ .left, .right, .up, .down }) |direction| {
+        try std.testing.expect(layout.focusDirection(direction, area) == null);
+    }
+
+    try std.testing.expectEqual(revision, layout.currentRevision());
+    try layout.splitFocused(second, .horizontal);
+    try std.testing.expect(layout.isFullscreen());
+    try std.testing.expectEqual(second, layout.focused().?);
+    layout.snapshot(area, &geometry);
+    try std.testing.expectEqual(@as(usize, 1), geometry.views().len);
+    try std.testing.expectEqual(borderedContent(area), geometry.find(second).?.content);
+    try std.testing.expectEqual(first, layout.focusDirection(.left, area).?);
+    try std.testing.expectEqual(second, layout.focusDirection(.right, area).?);
+    try std.testing.expect(layout.remove(second));
+    try std.testing.expect(layout.isFullscreen());
+    try std.testing.expectEqual(first, layout.focused().?);
+
+    try std.testing.expect(layout.toggleFullscreen());
+    layout.snapshot(area, &geometry);
+    try std.testing.expectEqual(area, geometry.find(first).?.content);
+    try std.testing.expect(!layout.hasBorders());
+    try std.testing.expect(layout.toggleFullscreen());
+    try std.testing.expect(layout.remove(first));
     try std.testing.expect(!layout.isFullscreen());
+    try std.testing.expect(!layout.hasBorders());
+    try std.testing.expect(!layout.toggleFullscreen());
 }
 
 test "removing a leaf compacts its parent and preserves the sibling" {
@@ -1333,44 +1370,48 @@ test "focus changes advance the layout revision" {
     try std.testing.expectEqual(focused_revision, layout.currentRevision());
 }
 
-test "client layout encoding restores splits ratios focus and fullscreen" {
-    var original: Layout = .{};
-    try original.addRoot(@enumFromInt(1));
-    try original.splitFocused(@enumFromInt(2), .horizontal);
-    try original.splitFocused(@enumFromInt(3), .vertical);
-    try std.testing.expect(original.focusPane(@enumFromInt(1)));
-    try std.testing.expect(original.resizeFocused(.right, .{ .w = 100, .h = 40 }));
-    try std.testing.expect(original.toggleFullscreen());
+test "client layout encoding restores single and split pane fullscreen" {
+    for ([_]bool{ false, true }) |split| {
+        var original: Layout = .{};
+        try original.addRoot(@enumFromInt(1));
+        if (split) {
+            try original.splitFocused(@enumFromInt(2), .horizontal);
+            try original.splitFocused(@enumFromInt(3), .vertical);
+            try std.testing.expect(original.focusPane(@enumFromInt(1)));
+            try std.testing.expect(original.resizeFocused(.right, .{ .w = 100, .h = 40 }));
+        }
 
-    var node_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
-    const nodes = original.clientLayoutNodes(&node_storage);
-    const location: schema.TabLocation = .{
-        .workspace = .{ .workspace = @enumFromInt(4) },
-        .tab_id = @enumFromInt(5),
-    };
-    var wire: [schema.max_client_layout_wire_bytes]u8 = undefined;
-    const payload = try schema.encodeClientLayoutSnapshot(&wire, .{
-        .restored = true,
-        .sidebar_width = 62,
-        .active_tab = location,
-        .tabs = &.{.{
-            .location = location,
-            .focused_pane = original.focused().?,
-            .fullscreen = original.isFullscreen(),
-            .workspace_active = true,
-            .nodes = nodes,
-        }},
-    });
-    var tabs = (try schema.decodeServer(payload)).client_layout_snapshot.tabs();
-    const restored = try Layout.fromClientLayout((try tabs.next()).?);
+        try std.testing.expect(original.toggleFullscreen());
+        var node_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+        const nodes = original.clientLayoutNodes(&node_storage);
+        const location: schema.TabLocation = .{
+            .workspace = .{ .workspace = @enumFromInt(4) },
+            .tab_id = @enumFromInt(5),
+        };
+        var wire: [schema.max_client_layout_wire_bytes]u8 = undefined;
+        const payload = try schema.encodeClientLayoutSnapshot(&wire, .{
+            .restored = true,
+            .sidebar_width = 62,
+            .active_tab = location,
+            .tabs = &.{.{
+                .location = location,
+                .focused_pane = original.focused().?,
+                .fullscreen = original.isFullscreen(),
+                .workspace_active = true,
+                .nodes = nodes,
+            }},
+        });
+        var tabs = (try schema.decodeServer(payload)).client_layout_snapshot.tabs();
+        const restored = try Layout.fromClientLayout((try tabs.next()).?);
 
-    try std.testing.expectEqual(original.count(), restored.count());
-    try std.testing.expectEqual(original.focused().?, restored.focused().?);
-    try std.testing.expect(restored.isFullscreen());
-    var restored_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
-    const restored_nodes = restored.clientLayoutNodes(&restored_storage);
-    try std.testing.expectEqual(nodes.len, restored_nodes.len);
-    for (nodes, restored_nodes) |expected, actual| {
-        try std.testing.expectEqualDeep(expected, actual);
+        try std.testing.expectEqual(original.count(), restored.count());
+        try std.testing.expectEqual(original.focused().?, restored.focused().?);
+        try std.testing.expect(restored.isFullscreen());
+        var restored_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+        const restored_nodes = restored.clientLayoutNodes(&restored_storage);
+        try std.testing.expectEqual(nodes.len, restored_nodes.len);
+        for (nodes, restored_nodes) |expected, actual| {
+            try std.testing.expectEqualDeep(expected, actual);
+        }
     }
 }

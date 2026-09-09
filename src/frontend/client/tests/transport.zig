@@ -444,7 +444,7 @@ test "restored client layout controls the initial attach geometry" {
     try std.testing.expect(client.model.workspaceListCollapsed());
     try std.testing.expectEqual(@as(u16, 50), client.view.regions.sidebar.w);
     try std.testing.expectEqual(@as(u16, 50), client.view.regions.top.x);
-    try std.testing.expectEqual(pane_id, client.saved_layouts.find(location).?.pane_id);
+    try std.testing.expectEqual(pane_id, client.model.saved_layouts.find(location).?.pane_id);
     try std.testing.expectEqual(pane_id, client.navigation_history.find(location.workspace).?.pane_id);
 
     const open = try harness.nextClientMessage(&buffer);

@@ -19,7 +19,7 @@ pub const TogglePaneFullscreenHandler = struct {
     effects: FullscreenEffects,
 
     /// Commits fullscreen state before delivering graphics and runtime
-    /// geometry. Tabs with fewer than two panes have no effects.
+    /// geometry. Absent or empty layouts have no effects.
     ///
     /// ```zig
     /// const change = try handler.execute(.{ .area = area });
@@ -120,7 +120,7 @@ test "TogglePaneFullscreenHandler commits before delivering geometry" {
     try std.testing.expect(effects.observed_commit);
 }
 
-test "TogglePaneFullscreenHandler suppresses single-pane and absent layouts" {
+test "TogglePaneFullscreenHandler accepts a single pane and suppresses absent layouts" {
     var testing = try TestingModel.init();
     defer testing.deinit();
     var effects: EffectsCapture = .{
@@ -133,12 +133,15 @@ test "TogglePaneFullscreenHandler suppresses single-pane and absent layouts" {
     };
 
     try std.testing.expect(testing.model.workspace.active().?.model.removePane(testing.second));
-    try std.testing.expect((try handler.execute(.{ .area = testing.area })) == null);
+    const change = (try handler.execute(.{ .area = testing.area })).?;
+    try std.testing.expect(change.fullscreen);
+    try std.testing.expectEqual(testing.first, change.focused);
+    try std.testing.expect(effects.observed_commit);
     testing.model.workspace.deinit();
     try std.testing.expect((try handler.execute(.{ .area = testing.area })) == null);
 
-    try std.testing.expectEqual(@as(usize, 0), effects.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqual(@as(usize, 1), effects.calls);
+    try std.testing.expectEqualDeep(client_model.Version{ .panes = 1 }, testing.model.version());
 }
 
 test "TogglePaneFullscreenHandler preserves the commit after effect failure" {

@@ -21,6 +21,12 @@ pub const default_sequence_timeout_ns: u64 = 1000 * std.time.ns_per_ms;
 pub const default_prefix = parseKey("ctrl+b") catch unreachable;
 pub const max_physical_leases = 64;
 
+pub const RepeatPolicy = struct {
+    interval_ns: u64,
+    /// An owner token, such as the focused pane ID. A changed token cancels hold.
+    context: u64,
+};
+
 /// Parses one key chord from configuration syntax.
 ///
 /// Examples are `ctrl+b`, `ctrl+shift+left`, `escape`, `space`, and `ñ`.
@@ -427,6 +433,14 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
         escape_timeout_ns: u64 = default_escape_timeout_ns,
         sequence_timeout_ns: u64 = default_sequence_timeout_ns,
         leases: Leases = .{},
+        repeating: ?RepeatingBinding = null,
+
+        const RepeatingBinding = struct {
+            key: Key,
+            action: Action,
+            policy: RepeatPolicy,
+            last_ns: u64,
+        };
 
         const Self = @This();
 
@@ -459,6 +473,7 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
         /// ```
         pub fn inheritPhysicalLeases(router: *Self, previous: *const Self) void {
             router.leases = previous.leases;
+            router.repeating = null;
         }
 
         /// Returns how many physical presses were dropped because the bounded
@@ -491,7 +506,11 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
         ///
         /// `handler.forward(bytes)` must finish using `bytes` before returning.
         /// `handler.action(action)` returns `.stop` when the action ends input
-        /// processing, for example after detaching the client.
+        /// processing, for example after detaching the client. An optional
+        /// `handler.repeatPolicy(action)` opts into paced physical repeats.
+        /// It must return null when the action or its current owner is unavailable.
+        /// Repeats retain the matched action, never re-enter sequence matching,
+        /// and schedule no timers or catch-up work.
         /// For example: `const control = try router.feed(.{ .bytes = input, .now_ns = now }, handler);`.
         pub fn feed(router: *Self, input: Feed, handler: anytype) !Control {
             const bytes = input.bytes;
@@ -609,6 +628,7 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
                         continue;
                     },
                     .mouse => |mouse| {
+                        router.repeating = null;
                         if (comptime @hasDecl(@TypeOf(handler.*), "mouse")) {
                             // A pointer action belongs to telar's visible UI.
                             // Cancel a half-entered keybinding instead of
@@ -636,6 +656,7 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
                         }
                     },
                     .paste_start => {
+                        router.repeating = null;
                         try router.replayBinding(handler);
                         try router.flushOutput(handler);
                         router.pasting = true;
@@ -679,6 +700,10 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
         };
 
         fn handleKey(router: *Self, input: KeyInput, handler: anytype) !Control {
+            if (input.key.phase == .press) {
+                router.repeating = null;
+            }
+
             const identity = input.key.physical orelse return router.handleKeyPress(input, handler);
 
             switch (input.key.phase) {
@@ -691,6 +716,10 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
                     return router.handleKeyPress(input, handler);
                 },
                 .repeat => {
+                    if (router.leases.owner(identity) == .binding) {
+                        return router.repeatBinding(input, handler);
+                    }
+
                     if (router.leases.owner(identity) != .application) {
                         return .continue_routing;
                     }
@@ -700,6 +729,12 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
                     return .continue_routing;
                 },
                 .release => {
+                    if (router.repeating) |held| {
+                        if (held.key.physical.?.eql(identity)) {
+                            router.repeating = null;
+                        }
+                    }
+
                     if (router.leases.release(identity) != .application) {
                         return .continue_routing;
                     }
@@ -758,7 +793,22 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
                     router.binding_since_ns = null;
                     try router.flushOutput(handler);
 
-                    return handler.action(action);
+                    const control = try handler.action(action);
+                    if (comptime @hasDecl(@TypeOf(handler.*), "repeatPolicy")) {
+                        if (control == .continue_routing and input.key.physical != null) {
+                            if (handler.repeatPolicy(action)) |policy| {
+                                std.debug.assert(policy.interval_ns != 0);
+                                router.repeating = .{
+                                    .key = input.key,
+                                    .action = action,
+                                    .policy = policy,
+                                    .last_ns = input.now_ns,
+                                };
+                            }
+                        }
+                    }
+
+                    return control;
                 },
             }
             if (router.depth == 0) {
@@ -766,6 +816,36 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
             }
 
             return .continue_routing;
+        }
+
+        fn repeatBinding(router: *Self, input: KeyInput, handler: anytype) !Control {
+            if (comptime !@hasDecl(@TypeOf(handler.*), "repeatPolicy")) {
+                return .continue_routing;
+            } else {
+                const held = router.repeating orelse return .continue_routing;
+                if (!held.key.physical.?.eql(input.key.physical.?)) {
+                    return .continue_routing;
+                }
+
+                const policy = handler.repeatPolicy(held.action);
+                if (keyOrder(held.key, input.key) != .eq or !std.meta.eql(policy, @as(?RepeatPolicy, held.policy))) {
+                    router.repeating = null;
+
+                    return .continue_routing;
+                }
+
+                if (input.now_ns -| held.last_ns < held.policy.interval_ns) {
+                    return .continue_routing;
+                }
+
+                // Late and batched repeats produce one step, not a replay of
+                // every interval missed while the client was busy.
+                router.repeating.?.last_ns = input.now_ns;
+                errdefer router.repeating = null;
+                try router.flushOutput(handler);
+
+                return handler.action(held.action);
+            }
         }
 
         fn deliverApplicationKey(router: *Self, input: KeyInput, handler: anytype) !void {
@@ -920,6 +1000,7 @@ pub fn Router(comptime Action: type, comptime limits: RouterLimits) type {
             router.output_len = 0;
             router.pasting = false;
             router.leases.clear();
+            router.repeating = null;
         }
 
         fn appendOutput(router: *Self, bytes: []const u8, handler: anytype) !void {
@@ -1029,6 +1110,12 @@ const SemanticCapture = struct {
     key_count: usize = 0,
     action_count: usize = 0,
     fail_key: bool = false,
+    fail_action: bool = false,
+    repeat_policy: ?RepeatPolicy = null,
+
+    fn repeatPolicy(capture: *const SemanticCapture, value: TestAction) ?RepeatPolicy {
+        return if (value == .next) capture.repeat_policy else null;
+    }
 
     fn key(capture: *SemanticCapture, value: Key) !void {
         if (capture.fail_key) {
@@ -1042,6 +1129,10 @@ const SemanticCapture = struct {
     fn forward(_: *SemanticCapture, _: []const u8) !void {}
 
     fn action(capture: *SemanticCapture, _: TestAction) !Control {
+        if (capture.fail_action) {
+            return error.ActionFailed;
+        }
+
         capture.action_count += 1;
 
         return .continue_routing;
@@ -1283,6 +1374,150 @@ test "a binding-owned key consumes repeats and release" {
 
     try testing.expectEqual(@as(usize, 1), capture.action_count);
     try testing.expectEqual(@as(usize, 0), capture.key_count);
+}
+
+test "holding a matched suffix repeats with pacing at every byte boundary" {
+    const bindings = [_]TestBinding{try .parse(&.{ "ctrl+b", "-" }, .next)};
+    const repeated = "\x1b[45::45;1:2u";
+
+    for (0..repeated.len + 1) |split| {
+        var router = try TestRouter.initWithPrefix(&bindings, default_prefix);
+        var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
+        _ = try router.feed(.{ .bytes = "\x1b[98::98;5:1u\x1b[45::45;1:1u\x1b[98::98;1:3u", .now_ns = 0 }, &capture);
+        try testing.expectEqual(@as(usize, 1), capture.action_count);
+        try testing.expect(!router.prefixPending());
+        try testing.expect(router.bindingDeadline() == null);
+        try testing.expect(router.inputDeadline() == null);
+
+        _ = try router.feed(.{ .bytes = repeated, .now_ns = 99 }, &capture);
+        try testing.expectEqual(@as(usize, 1), capture.action_count);
+        _ = try router.feed(.{ .bytes = repeated[0..split], .now_ns = 100 }, &capture);
+        _ = try router.feed(.{ .bytes = repeated[split..], .now_ns = 100 }, &capture);
+        try testing.expectEqual(@as(usize, 2), capture.action_count);
+
+        _ = try router.feed(.{ .bytes = repeated ++ repeated ++ repeated, .now_ns = 1000 }, &capture);
+        try testing.expectEqual(@as(usize, 3), capture.action_count);
+        _ = try router.feed(.{ .bytes = repeated, .now_ns = 1099 }, &capture);
+        try testing.expectEqual(@as(usize, 3), capture.action_count);
+        _ = try router.feed(.{ .bytes = repeated, .now_ns = 1100 }, &capture);
+        try testing.expectEqual(@as(usize, 4), capture.action_count);
+
+        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:3u" ++ repeated, .now_ns = 2000 }, &capture);
+        try testing.expectEqual(@as(usize, 4), capture.action_count);
+        try testing.expectEqual(@as(usize, 0), capture.key_count);
+        try testing.expect(router.repeating == null);
+    }
+}
+
+test "repeat pacing cannot catch up at clock saturation or regression" {
+    const bindings = [_]TestBinding{try .parse(&.{"-"}, .next)};
+    var router = try TestRouter.init(&bindings);
+    var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
+    const end = std.math.maxInt(u64);
+    const repeated = "\x1b[45::45;1:2u";
+
+    _ = try router.feed(.{ .bytes = "\x1b[45::45;1:1u", .now_ns = end - 100 }, &capture);
+    _ = try router.feed(.{ .bytes = repeated ++ repeated, .now_ns = end }, &capture);
+    try testing.expectEqual(@as(usize, 2), capture.action_count);
+    _ = try router.feed(.{ .bytes = repeated, .now_ns = 0 }, &capture);
+    try testing.expectEqual(@as(usize, 2), capture.action_count);
+}
+
+test "global hold repeats but separate physical taps stay immediate" {
+    const bindings = [_]TestBinding{try .parse(&.{"alt+-"}, .next)};
+    var router = try TestRouter.init(&bindings);
+    var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
+    const press = "\x1b[45::45;3:1u";
+    const release = "\x1b[45::45;1:3u";
+    const repeated = "\x1b[45::45;3:2u";
+
+    _ = try router.feed(.{ .bytes = press, .now_ns = 0 }, &capture);
+    _ = try router.feed(.{ .bytes = repeated, .now_ns = 100 }, &capture);
+    _ = try router.feed(.{ .bytes = release ++ press, .now_ns = 101 }, &capture);
+    try testing.expectEqual(@as(usize, 3), capture.action_count);
+    _ = try router.feed(.{ .bytes = repeated, .now_ns = 200 }, &capture);
+    try testing.expectEqual(@as(usize, 3), capture.action_count);
+    _ = try router.feed(.{ .bytes = repeated, .now_ns = 201 }, &capture);
+    try testing.expectEqual(@as(usize, 4), capture.action_count);
+    try testing.expectEqual(@as(usize, 0), capture.key_count);
+}
+
+test "losing a held chord modifier cancels without leaking into the application" {
+    const bindings = [_]TestBinding{try .parse(&.{"alt+-"}, .next)};
+    var router = try TestRouter.init(&bindings);
+    var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
+
+    _ = try router.feed(.{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 }, &capture);
+    _ = try router.feed(.{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 }, &capture);
+    _ = try router.feed(.{ .bytes = "\x1b[45::45;3:2u\x1b[45::45;1:3u", .now_ns = 200 }, &capture);
+    try testing.expectEqual(@as(usize, 1), capture.action_count);
+    try testing.expectEqual(@as(usize, 0), capture.key_count);
+    try testing.expect(router.repeating == null);
+}
+
+test "new input and reload cancel hold while preserving physical ownership" {
+    const bindings = [_]TestBinding{try .parse(&.{"-"}, .next)};
+    const interruptions = [_][]const u8{ "x", "\x1b[<0;8;4M", "\x1b[200~paste\x1b[201~" };
+
+    for (interruptions) |interruption| {
+        var router = try TestRouter.init(&bindings);
+        var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
+        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
+        _ = try router.feed(.{ .bytes = interruption, .now_ns = 1 }, &capture);
+        const keys_before = capture.key_count;
+        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:2u\x1b[45::45;1:3u", .now_ns = 100 }, &capture);
+        try testing.expectEqual(@as(usize, 1), capture.action_count);
+        try testing.expectEqual(keys_before, capture.key_count);
+        try testing.expect(router.repeating == null);
+    }
+
+    var router = try TestRouter.init(&bindings);
+    var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
+    _ = try router.feed(.{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
+    var replacement = try TestRouter.init(&.{});
+    replacement.inheritPhysicalLeases(&router);
+    _ = try replacement.feed(.{ .bytes = "\x1b[45::45;1:2u\x1b[45::45;1:3u", .now_ns = 100 }, &capture);
+    try testing.expectEqual(@as(usize, 1), capture.action_count);
+    try testing.expectEqual(@as(usize, 0), capture.key_count);
+    try testing.expect(replacement.repeating == null);
+}
+
+test "changed or unavailable repeat authority permanently cancels the hold" {
+    const bindings = [_]TestBinding{try .parse(&.{"-"}, .next)};
+    const original: RepeatPolicy = .{ .interval_ns = 100, .context = 7 };
+    const replacements = [_]?RepeatPolicy{ null, .{ .interval_ns = 100, .context = 8 } };
+
+    for (replacements) |replacement| {
+        var router = try TestRouter.init(&bindings);
+        var capture: SemanticCapture = .{ .repeat_policy = original };
+        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
+        capture.repeat_policy = replacement;
+        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:2u", .now_ns = 1 }, &capture);
+        capture.repeat_policy = original;
+        _ = try router.feed(.{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 }, &capture);
+        try testing.expectEqual(@as(usize, 1), capture.action_count);
+        try testing.expectEqual(@as(usize, 0), capture.key_count);
+        try testing.expect(router.repeating == null);
+    }
+}
+
+test "a failed repeated action cancels further execution" {
+    const bindings = [_]TestBinding{try .parse(&.{"-"}, .next)};
+    var router = try TestRouter.init(&bindings);
+    var capture: SemanticCapture = .{ .repeat_policy = .{ .interval_ns = 100, .context = 7 } };
+    const key_value: Key = .{
+        .code = .{ .char = .init("-") },
+        .phase = .repeat,
+        .physical = .{ .value = 45 },
+    };
+
+    _ = try router.feed(.{ .bytes = "\x1b[45::45;1:1u", .now_ns = 0 }, &capture);
+    capture.fail_action = true;
+    try testing.expectError(error.ActionFailed, router.handleKey(.{ .key = key_value, .raw = "", .now_ns = 100 }, &capture));
+    capture.fail_action = false;
+    _ = try router.handleKey(.{ .key = key_value, .raw = "", .now_ns = 200 }, &capture);
+    try testing.expectEqual(@as(usize, 1), capture.action_count);
+    try testing.expect(router.repeating == null);
 }
 
 test "releasing a physical prefix does not cancel its logical state" {

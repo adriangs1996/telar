@@ -369,16 +369,12 @@ const ClientLayoutTreeValidation = struct {
         if (std.mem.findScalar(PaneId, validation.panes[0..validation.pane_count], layout.focused_pane) == null) {
             return error.InvalidClientLayoutFocus;
         }
-        if (layout.fullscreen and validation.pane_count < 2) {
-            return error.InvalidClientLayoutFullscreen;
-        }
     }
 };
 
 const ClientLayoutTreeSummary = struct {
     node_count: usize,
     focused_pane: PaneId,
-    fullscreen: bool,
 };
 
 fn validateClientTabLayout(layout: ClientTabLayout) !void {
@@ -394,7 +390,6 @@ fn validateClientTabLayout(layout: ClientTabLayout) !void {
     try validation.finish(.{
         .node_count = layout.nodes.len,
         .focused_pane = layout.focused_pane,
-        .fullscreen = layout.fullscreen,
     });
 }
 
@@ -408,7 +403,6 @@ fn validateClientTabLayoutView(layout: ClientTabLayoutView) !void {
     try validation.finish(.{
         .node_count = layout.node_count,
         .focused_pane = layout.focused_pane,
-        .fullscreen = layout.fullscreen,
     });
 }
 

@@ -84,6 +84,36 @@ A selected owner failure propagates and never falls through to another owner.
 If the pane target disappeared or is exclusively owned, `PaneInputHandler`
 returns no delivery and the route ends without another effect.
 
+## Held scroll bindings
+
+`InputHandler.repeatPolicy` delegates to action routing. Only native
+`scroll_pane` actions opt in, with a 100 ms interval and the current `PaneId`
+as their owner token. Prompts, attachment modals, copy mode, agent mode and
+missing or detached panes deny repeat authority. The initial action runs
+normally before repeat authority is captured, so scroll can first exit copy
+mode through the existing native action handler.
+
+The client router retains one owned action, its final physical key and chord,
+its policy and its last execution timestamp. A matching binding-owned repeat
+rechecks authority and modifiers before checking elapsed monotonic time. A due
+repeat dispatches the captured action through `InputHandler.action`; it never
+re-runs keymap matching or requires the prefix again. Excess events are dropped.
+A late batch produces one step, with no timer, allocation or catch-up queue.
+The existing 64-entry lease table still bounds physical ownership.
+
+Release clears the held action but remains consumed by its binding lease.
+Another press, mouse input, paste, router replacement, changed authority or
+chord modifiers cancels repetition. A failed repeat also cancels it. Reload
+inherits ownership but never the old repeat action. No repeated event means
+no scroll work, even if the host loses a release. Ordinary taps stay immediate.
+Client detach or destruction discards the state; neither IPC nor runtime state
+changes. Repeated scroll uses the existing viewport or child-input flows.
+
+This needs a physical lifecycle from the host. Current Kitty flags 7 report
+modified chords such as `alt+-`, but leave plain text suffixes as text.
+Legacy press-only input retains its old behavior. See
+[Configuration](../configuration.md) and [Pane mouse input](pane-mouse-input.md).
+
 ## Clipboard preview order
 
 Only an unmodified `Ctrl+V` is eligible for local image inspection. The handler
@@ -129,9 +159,14 @@ delivery.
   `Ctrl+V` ordering.
 - `src/frontend/input/keybind.zig` proves active editor capture before bindings,
   semantic replay, binding/application physical ownership, persistent prefix
-  release, reload inheritance and bounded forwarding.
+  release, reload inheritance, repeat pacing, cancellation, clock bounds,
+  arbitrary repeat-report splits and bounded forwarding.
 - `src/frontend/client/tests/input.zig` proves attachment-modal capture, prompt
   input, copy-mode keys, child-mode encoding, pane backpressure and `Ctrl+V`
-  delivery through the complete input entrypoint.
+  delivery through the complete input entrypoint. Held-scroll tests cover both
+  viewport directions, burst suppression, endpoint no-ops, global bindings,
+  changed focus and copy-mode capture through the router and real adapters.
+- `src/frontend/client/application/input/action_routing.zig` proves that only
+  native scroll actions receive a repeat policy and exact-pane owner token.
 - `name-prompt.md`, `copy-mode.md`, `pane-input.md` and `clipboard-image.md`
   prove each downstream owner and effect.

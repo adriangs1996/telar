@@ -539,6 +539,41 @@ test "pane resize publishes committed geometry before presentation" {
     try std.testing.expect(!client.view.dirty);
 }
 
+test "single-pane fullscreen publishes bordered and restored geometry" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    const pane_id = TestHarness.bootstrap_pane;
+    const area = client.view.workbench();
+    const model = &client.model.workspace.active().?.model;
+    const initial = model.contentSize(pane_id, area).?;
+    var message_buffer: [256]u8 = undefined;
+
+    for ([_]bool{ true, false }) |fullscreen| {
+        const version = client.model.version();
+        const pending_updates = client.presenter.pending_updates;
+        _ = try client_actions.apply(client, .toggle_pane_fullscreen);
+        const expected = if (fullscreen)
+            schema.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }
+        else
+            initial;
+        try std.testing.expectEqual(fullscreen, model.layout.isFullscreen());
+        try std.testing.expectEqual(expected, model.contentSize(pane_id, area).?);
+        try std.testing.expectEqual(version.panes + 1, client.model.version().panes);
+        try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
+        try harness.settle();
+        const message = try harness.nextClientMessage(&message_buffer);
+        try std.testing.expect(message == .pane_resize);
+        try std.testing.expectEqual(pane_id, message.pane_resize.pane_id);
+        try std.testing.expectEqual(expected, message.pane_resize.size);
+        try presentation_lifecycle.observe(client);
+        try harness.settleModelPresentation();
+        try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    }
+}
+
 test "pane fullscreen publishes visible geometry without direct presentation scheduling" {
     var harness: TestHarness = undefined;
     try harness.init();
