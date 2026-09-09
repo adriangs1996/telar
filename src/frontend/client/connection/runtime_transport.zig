@@ -69,10 +69,10 @@ pub const State = struct {
         state.outbox.sendFailed();
     }
 
-    /// Sends the reserved frame without knowing the client event protocol.
-    /// Example: `try state.send(io, bytes);`.
+    /// Sends the reserved batch of frames without knowing the client event
+    /// protocol. Example: `try state.send(io, bytes);`.
     pub fn send(state: *State, io: Io, bytes: []const u8) !void {
-        try state.connection.send(io, bytes);
+        try state.connection.sendFramed(io, bytes);
     }
 
     /// Allocates the bounded frame buffers around one connected channel.
@@ -184,16 +184,19 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
         .client_identity = @enumFromInt(9),
     });
 
-    const configure = try schema.decodeClient((try state.prepareSend()).?);
+    // The three bootstrap messages leave in one framed batch, in order.
+    var frames: core.transport.FrameIterator = .{ .batch = (try state.prepareSend()).? };
+    const configure = try schema.decodeClient(frames.next().?);
     try std.testing.expect(configure == .configure_graphics);
     try std.testing.expect(configure.configure_graphics.shared);
 
-    try state.outbox.finishSend({});
-    const colors = try schema.decodeClient((try state.prepareSend()).?);
+    const colors = try schema.decodeClient(frames.next().?);
     try std.testing.expect(colors == .configure_terminal_colors);
-    try state.outbox.finishSend({});
 
-    const runtime_state = try schema.decodeClient((try state.prepareSend()).?);
+    const runtime_state = try schema.decodeClient(frames.next().?);
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(@as(schema.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
+    try std.testing.expect(frames.next() == null);
+    try state.outbox.finishSend({});
+    try std.testing.expect((try state.prepareSend()) == null);
 }

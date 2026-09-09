@@ -24,6 +24,40 @@ pub const ReadFrameError = Io.Reader.Error || error{
     BufferTooSmall,
 };
 
+/// Encodes the length prefix that precedes every frame on the wire.
+///
+/// ```zig
+/// writePrefix(buffer[0..length_prefix_size], payload.len);
+/// ```
+pub fn writePrefix(prefix: *[length_prefix_size]u8, payload_len: usize) void {
+    std.mem.writeInt(u32, prefix, @intCast(payload_len), .little);
+}
+
+/// Walks the frames of a batch produced by prefixing each payload, as one
+/// `sendFramed` carries them. A truncated tail ends the walk.
+///
+/// ```zig
+/// var frames = FrameIterator{ .batch = batch };
+/// while (frames.next()) |payload| handle(payload);
+/// ```
+pub const FrameIterator = struct {
+    batch: []const u8,
+    offset: usize = 0,
+
+    pub fn next(frames: *FrameIterator) ?[]const u8 {
+        if (frames.offset + length_prefix_size > frames.batch.len) {
+            return null;
+        }
+        const len = std.mem.readInt(u32, frames.batch[frames.offset..][0..length_prefix_size], .little);
+        if (frames.offset + length_prefix_size + len > frames.batch.len) {
+            return null;
+        }
+        const payload = frames.batch[frames.offset + length_prefix_size ..][0..len];
+        frames.offset += length_prefix_size + len;
+        return payload;
+    }
+};
+
 /// Writes one complete frame. No bytes are written when the payload is too
 /// large, so callers can recover from that local programming error.
 pub fn writeFrame(writer: *Io.Writer, payload: []const u8) WriteFrameError!void {
@@ -32,7 +66,7 @@ pub fn writeFrame(writer: *Io.Writer, payload: []const u8) WriteFrameError!void 
     }
 
     var prefix: [length_prefix_size]u8 = undefined;
-    std.mem.writeInt(u32, &prefix, @intCast(payload.len), .little);
+    writePrefix(&prefix, payload.len);
     // One vectored write instead of two: this path carries per-keystroke
     // messages, so the prefix must not cost its own syscall.
     var parts = [2][]const u8{ &prefix, payload };
@@ -107,6 +141,22 @@ pub const SocketChannel = struct {
         }
         var stream_writer = channel.stream.writer(io, &.{});
         try writeFrame(&stream_writer.interface, payload);
+    }
+
+    /// Writes bytes that already carry their frame prefixes, so a batch of
+    /// messages leaves in one syscall. The receiver reads them one frame at
+    /// a time as usual.
+    ///
+    /// ```zig
+    /// try channel.sendFramed(io, batch);
+    /// ```
+    pub fn sendFramed(channel: *SocketChannel, io: Io, framed: []const u8) WriteFrameError!void {
+        if (!channel.isActive()) {
+            return error.ConnectionClosed;
+        }
+        var stream_writer = channel.stream.writer(io, &.{});
+        try stream_writer.interface.writeAll(framed);
+        try stream_writer.interface.flush();
     }
 
     pub fn receive(channel: *SocketChannel, io: Io, buffer: []u8) ReadFrameError![]u8 {
