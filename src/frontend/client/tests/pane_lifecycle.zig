@@ -159,6 +159,138 @@ test "pane focus commits before reports resize and presentation" {
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
+const FullscreenReattachment = struct {
+    harness: *TestHarness,
+
+    fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const schema.PaneDescriptor) !void {
+        const client = scenario.harness.client;
+        _ = try client_actions.apply(client, .{ .select_tab = index });
+        try scenario.harness.settle();
+        var buffer: [512]u8 = undefined;
+        const request = request: while (true) {
+            switch (try scenario.harness.nextClientMessage(&buffer)) {
+                .detach_pane => {},
+                .request_tab_snapshot => |request| break :request request,
+                else => return error.UnexpectedClientMessage,
+            }
+        };
+        const snapshot = try schema.encodeTabSnapshot(&buffer, .{
+            .request_id = request.request_id,
+            .location = request.location,
+            .panes = panes,
+        });
+        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(snapshot));
+        try scenario.confirmAttachment(client.model.workspace.active().?.model.layout.focused().?);
+    }
+
+    fn confirmAttachment(scenario: FullscreenReattachment, pane_id: schema.PaneId) !void {
+        const client = scenario.harness.client;
+        try std.testing.expect(client.request_lifecycle.tracker.hasPane(.attachment, pane_id));
+        try scenario.harness.settle();
+        var buffer: [256]u8 = undefined;
+        const message = try scenario.harness.nextClientMessage(&buffer);
+        try std.testing.expect(message == .open_pane);
+        try std.testing.expectEqualDeep(schema.PaneTarget{ .pane = pane_id }, message.open_pane.target);
+        try std.testing.expectEqualDeep(
+            client.model.workspace.active().?.model.contentSize(pane_id, client.view.workbench()).?,
+            message.open_pane.size,
+        );
+        const opened = try schema.encodePaneOpened(&buffer, .{
+            .request_id = message.open_pane.request_id,
+            .pane_id = pane_id,
+            .location = client.model.activeTabLocation().?,
+            .created = false,
+        });
+        _ = try server_messages.handleServerMessage(client, try schema.decodeServer(opened));
+        try std.testing.expect(client.model.workspace.findPane(pane_id).?.attached);
+    }
+
+    fn expectInput(scenario: FullscreenReattachment, pane_id: schema.PaneId) !void {
+        var handler: InputHandler = .{ .client = scenario.harness.client };
+        try std.testing.expectEqual(pane_id, handler.client.model.planPaneInput(.focused).?.pane_id);
+        try handler.key(try keybind.parseKey("x"));
+        try scenario.harness.settle();
+        var buffer: [256]u8 = undefined;
+        const message = try scenario.harness.nextClientMessage(&buffer);
+        try std.testing.expect(message == .pane_input);
+        try std.testing.expectEqual(pane_id, message.pane_input.pane_id);
+        try std.testing.expectEqualStrings("x", message.pane_input.bytes);
+    }
+};
+
+test "fullscreen tab round trip reconnects panes revealed by focus or tiled layout" {
+    for ([_]bool{ false, true }) |exit_fullscreen| {
+        var harness: TestHarness = undefined;
+        try harness.init();
+        defer harness.deinit();
+        try harness.bootstrap();
+        try harness.allowTabSelection();
+        const client = harness.client;
+        _ = try client.model.reconcileTab(.{
+            .location = TestHarness.bootstrap_location,
+            .panes = &.{TestHarness.bootstrap_pane},
+        }, client.view.workbench());
+        const sibling: schema.PaneId = @enumFromInt(20);
+        const other_tab_pane: schema.PaneId = @enumFromInt(30);
+        const model = &client.model.workspace.active().?.model;
+        try model.split(.{
+            .existing_pane = TestHarness.bootstrap_pane,
+            .new_pane = sibling,
+            .location = TestHarness.bootstrap_location,
+            .axis = .horizontal,
+            .area = client.view.workbench(),
+        });
+        try std.testing.expect(model.toggleFullscreen());
+        _ = try harness.addInactiveTab(@enumFromInt(2), other_tab_pane);
+        const scenario: FullscreenReattachment = .{ .harness = &harness };
+        const original_panes = [_]schema.PaneDescriptor{
+            .{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running },
+            .{ .pane_id = sibling, .lifecycle = .running },
+        };
+
+        try scenario.selectTab(1, &.{.{ .pane_id = other_tab_pane, .lifecycle = .running }});
+        try scenario.selectTab(0, &original_panes);
+        try std.testing.expect(model.layout.isFullscreen());
+        try std.testing.expect(!model.find(TestHarness.bootstrap_pane).?.attached);
+        try scenario.expectInput(sibling);
+
+        if (exit_fullscreen) {
+            _ = try client_actions.apply(client, .toggle_pane_fullscreen);
+            try harness.settle();
+            var buffer: [256]u8 = undefined;
+            const resize = try harness.nextClientMessage(&buffer);
+            try std.testing.expect(resize == .pane_resize);
+            try std.testing.expectEqual(sibling, resize.pane_resize.pane_id);
+        } else {
+            _ = try client_actions.apply(client, .{ .focus_pane = .left });
+            _ = try client_actions.apply(client, .{ .focus_pane = .right });
+            _ = try client_actions.apply(client, .{ .focus_pane = .left });
+        }
+
+        try scenario.confirmAttachment(TestHarness.bootstrap_pane);
+        if (exit_fullscreen) {
+            _ = try client_actions.apply(client, .{ .focus_pane = .left });
+        } else {
+            // Returning to the attached sibling resized it, but did not duplicate the pending open.
+            var buffer: [256]u8 = undefined;
+            const resize = try harness.nextClientMessage(&buffer);
+            try std.testing.expect(resize == .pane_resize);
+            try std.testing.expectEqual(sibling, resize.pane_resize.pane_id);
+        }
+
+        try scenario.expectInput(TestHarness.bootstrap_pane);
+        _ = try client_actions.apply(client, .{ .focus_pane = .right });
+        if (!exit_fullscreen) {
+            try harness.settle();
+            var buffer: [256]u8 = undefined;
+            try std.testing.expect((try harness.nextClientMessage(&buffer)) == .pane_resize);
+        }
+
+        try scenario.expectInput(sibling);
+        try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    }
+}
+
 test "navigation forwards the canonical key only to Neovim at a Telar edge" {
     for ([_][]const u8{ "nvim", "zsh" }) |foreground_name| {
         var harness: TestHarness = undefined;

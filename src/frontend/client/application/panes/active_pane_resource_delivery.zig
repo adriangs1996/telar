@@ -15,6 +15,7 @@ pub const Effects = struct {
     sync_focus_reporting: *const fn (*anyopaque) anyerror!void,
     invalidate_graphics_placements: *const fn (*anyopaque) void,
     offer_pane_geometry: *const fn (*anyopaque, ui.Rect) anyerror!void,
+    request_visible_attachments: *const fn (*anyopaque, ui.Rect) anyerror!void,
     acknowledge_agent: *const fn (*anyopaque, agents.AgentKey) anyerror!void,
 };
 
@@ -54,7 +55,8 @@ pub const DeliverActivePaneResourcesHandler = struct {
     }
 
     /// Validates one committed focus and delivers its active-pane resources.
-    /// Fullscreen geometry follows attachment and focus-report synchronization.
+    /// Fullscreen geometry follows attachment and focus-report synchronization,
+    /// then newly visible detached panes request runtime attachments.
     ///
     /// ```zig
     /// try handler.deliverFocus(focus, area);
@@ -68,6 +70,7 @@ pub const DeliverActivePaneResourcesHandler = struct {
 
         handler.effects.invalidate_graphics_placements(handler.effects.context);
         try handler.effects.offer_pane_geometry(handler.effects.context, area);
+        try handler.effects.request_visible_attachments(handler.effects.context, area);
     }
 
     fn validateFocus(handler: *const DeliverActivePaneResourcesHandler, focus: client_model.PaneFocus) !void {
@@ -87,6 +90,7 @@ const Event = enum {
     focus_reporting,
     invalidate_placements,
     pane_geometry,
+    request_attachments,
 };
 
 const Failure = enum {
@@ -94,6 +98,7 @@ const Failure = enum {
     focus_reporting,
     first_geometry,
     second_geometry,
+    attachments,
 };
 
 const EffectCapture = struct {
@@ -101,7 +106,7 @@ const EffectCapture = struct {
     expected_focus: ?client_model.PaneFocus = null,
     attachment_area: ?ui.Rect = null,
     attachment_target: ?attachments.Target = null,
-    events: [6]Event = undefined,
+    events: [7]Event = undefined,
     event_count: usize = 0,
     geometry_areas: [2]ui.Rect = undefined,
     geometry_count: usize = 0,
@@ -116,6 +121,7 @@ const EffectCapture = struct {
             .sync_focus_reporting = syncFocusReporting,
             .invalidate_graphics_placements = invalidateGraphicsPlacements,
             .offer_pane_geometry = offerPaneGeometry,
+            .request_visible_attachments = requestVisibleAttachments,
             .acknowledge_agent = acknowledgeAgent,
         };
     }
@@ -159,6 +165,15 @@ const EffectCapture = struct {
         }
         if (capture.failure == .second_geometry and capture.geometry_count == 2) {
             return error.PaneGeometryFailed;
+        }
+    }
+
+    fn requestVisibleAttachments(raw_context: *anyopaque, _: ui.Rect) !void {
+        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
+        capture.append(.request_attachments);
+
+        if (capture.failure == .attachments) {
+            return error.PaneAttachmentFailed;
         }
     }
 
@@ -230,6 +245,7 @@ test "DeliverActivePaneResourcesHandler orders attachment focus and fullscreen g
         .focus_reporting,
         .invalidate_placements,
         .pane_geometry,
+        .request_attachments,
     }, capture.eventSlice());
     try std.testing.expectEqualDeep(shelf_area, capture.geometry_areas[0]);
     try std.testing.expectEqualDeep(focus_area, capture.geometry_areas[1]);
@@ -318,11 +334,13 @@ test "DeliverActivePaneResourcesHandler stops after each failed resource" {
         .first_geometry,
         .focus_reporting,
         .second_geometry,
+        .attachments,
     };
     const expected = [_][]const Event{
         &.{ .attachment_target, .pane_geometry },
         &.{ .attachment_target, .pane_geometry, .focus_reporting },
         &.{ .attachment_target, .pane_geometry, .focus_reporting, .invalidate_placements, .pane_geometry },
+        &.{ .attachment_target, .pane_geometry, .focus_reporting, .invalidate_placements, .pane_geometry, .request_attachments },
     };
 
     for (failures, expected) |failure, events| {
@@ -344,6 +362,7 @@ test "DeliverActivePaneResourcesHandler stops after each failed resource" {
         switch (failure) {
             .first_geometry, .second_geometry => try std.testing.expectError(error.PaneGeometryFailed, result),
             .focus_reporting => try std.testing.expectError(error.FocusReportingFailed, result),
+            .attachments => try std.testing.expectError(error.PaneAttachmentFailed, result),
             .none => unreachable,
         }
         try std.testing.expectEqualSlices(Event, events, capture.eventSlice());

@@ -55,7 +55,12 @@ need the same resource policy after their separate model commits. The handler
 verifies active tab, focus, pane revision and fullscreen state, then invalidates
 host graphics placements. `OfferPaneGeometryHandler` selects attached panes
 with visible content from one layout snapshot; the adapter only publishes the
-resulting commands.
+resulting commands. After resizing attached panes, the handler requests missing
+attachments through `RequestActivePaneAttachmentsHandler`. This also covers
+exiting fullscreen after a tab round trip, when hidden siblings remain
+detached. Each newly visible detached pane receives one `open_pane` request;
+input stays disabled until `pane_opened` confirms it. Existing pending requests
+are not duplicated.
 
 Entering fullscreen gives the focused pane the workbench minus its one-cell
 border, so the client sends one `pane_resize`. Exiting restores the tiled snapshot and sends
@@ -79,6 +84,10 @@ A runtime geometry rejection leaves PTY size unchanged and increments runtime
 telemetry. The client does not roll back an unacknowledged resize.
 
 ## Proof
+
+- `src/frontend/client/tests/pane_lifecycle.zig` covers exiting fullscreen
+  after a tab round trip and verifies attachment confirmation and input to
+  both panes.
 
 - `src/frontend/workspace/layout.zig` proves that fullscreen retains tiled
   ratios, follows focus and clears when pane count falls below two.

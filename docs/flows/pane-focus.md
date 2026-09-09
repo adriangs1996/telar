@@ -96,7 +96,12 @@ target to a physical view effect. If the shelf appears, disappears or moves,
 the handler re-offers pane sizes before focus reporting. The geometry
 projection shortens only the pane that owns the shelf and places the shelf in
 the released rows below it. A fullscreen focus change then invalidates
-graphics placements and re-offers the committed focus rectangle.
+graphics placements and re-offers the committed focus rectangle. It then calls
+`RequestActivePaneAttachmentsHandler` through the attachment request port.
+Returning to a fullscreen tab attaches only its visible pane; revealing a
+sibling must request `open_pane` before that sibling can accept input. Pending
+requests are deduplicated, and `pane_opened` confirms the attachment. Hidden
+panes remain detached until revealed.
 
 The same handler exposes `synchronize` for tab, workspace, frame and snapshot
 flows whose committed state may change the active pane without entering
@@ -120,6 +125,10 @@ the saved pane set is still authoritative. Runtime panes and PTYs continue
 running.
 
 ## Proof
+
+- `src/frontend/client/tests/pane_lifecycle.zig` covers a fullscreen tab round
+  trip, reconnection on focus, rapid focus changes while attachment is pending,
+  and `pane_input` delivery to both panes after confirmation.
 
 - `src/frontend/client/model.zig` proves focus resolution, report transitions,
   exact retirement and the absence of presentation revisions for report state.

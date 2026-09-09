@@ -19,6 +19,7 @@ pub const OfferEffects = struct {
 pub const Effects = struct {
     context: *anyopaque,
     invalidate_graphics_placements: *const fn (*anyopaque) void,
+    request_visible_attachments: *const fn (*anyopaque, ui.Rect) anyerror!void,
     deliver_resize: *const fn (*anyopaque, schema.PaneResize) anyerror!void,
     bottom_reservation: *const fn (*anyopaque) ?layout_mod.PaneBottomReservation = noBottomReservation,
 };
@@ -80,7 +81,8 @@ pub const DeliverPaneGeometryHandler = struct {
     effects: Effects,
 
     /// Validates one committed geometry change before invalidating placements
-    /// and offering its visible attached pane sizes.
+    /// and offering its visible attached pane sizes, then requests attachments
+    /// for detached panes revealed by the new geometry.
     ///
     /// ```zig
     /// const count = try handler.execute(change);
@@ -102,7 +104,10 @@ pub const DeliverPaneGeometryHandler = struct {
             .bottom_reservation = handler.effects.bottom_reservation,
         } };
 
-        return offer.execute(&active.model, change.area);
+        const count = try offer.execute(&active.model, change.area);
+        try handler.effects.request_visible_attachments(handler.effects.context, change.area);
+
+        return count;
     }
 };
 
@@ -115,6 +120,7 @@ fn noBottomReservation(context: *anyopaque) ?layout_mod.PaneBottomReservation {
 const Event = enum {
     invalidate_placements,
     resize,
+    request_attachments,
 };
 
 const EffectCapture = struct {
@@ -140,6 +146,7 @@ const EffectCapture = struct {
         return .{
             .context = capture,
             .invalidate_graphics_placements = invalidateGraphicsPlacements,
+            .request_visible_attachments = requestVisibleAttachments,
             .deliver_resize = deliverResize,
             .bottom_reservation = bottomReservation,
         };
@@ -154,6 +161,11 @@ const EffectCapture = struct {
     fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
         const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
         capture.append(.invalidate_placements);
+    }
+
+    fn requestVisibleAttachments(raw_context: *anyopaque, _: ui.Rect) !void {
+        const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
+        capture.append(.request_attachments);
     }
 
     fn deliverResize(raw_context: *anyopaque, resize: schema.PaneResize) !void {
@@ -327,6 +339,7 @@ test "DeliverPaneGeometryHandler validates then invalidates before resize delive
         .invalidate_placements,
         .resize,
         .resize,
+        .request_attachments,
     }, capture.eventSlice());
     try std.testing.expect(
         model.workspace.active().?.model.contentSize(testing.first, testing.area).?.cols > width_before,

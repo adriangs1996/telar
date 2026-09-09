@@ -5,6 +5,7 @@ const workspace_capability = @import("../../../workspace/root.zig");
 const panes_application = @import("../../application/panes/root.zig");
 const client_model = @import("../../model/root.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
+const tab_snapshots = @import("../tabs/tab_snapshots.zig");
 
 const Client = @import("../../client.zig");
 const pane_geometry_delivery = panes_application.pane_geometry_delivery;
@@ -92,12 +93,19 @@ fn deliverGeometry(context: *anyopaque, change: client_model.PaneGeometryChange)
         .effects = .{
             .context = client,
             .invalidate_graphics_placements = invalidateGraphicsPlacements,
+            .request_visible_attachments = requestVisibleAttachments,
             .deliver_resize = deliverResize,
             .bottom_reservation = bottomReservation,
         },
     };
 
     _ = try use_case.execute(change);
+}
+
+fn requestVisibleAttachments(raw_context: *anyopaque, area: ui.Rect) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    try tab_snapshots.attachActive(client, area);
 }
 
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {

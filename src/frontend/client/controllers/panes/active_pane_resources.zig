@@ -7,6 +7,7 @@ const panes_application = @import("../../application/panes/root.zig");
 const client_model = @import("../../model/root.zig");
 const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_geometry = @import("pane_geometry.zig");
+const tab_snapshots = @import("../tabs/tab_snapshots.zig");
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 const Client = @import("../../client.zig");
@@ -56,6 +57,7 @@ fn handler(client: *Client) active_pane_resource_delivery.DeliverActivePaneResou
             .sync_focus_reporting = syncFocusReporting,
             .invalidate_graphics_placements = invalidateGraphicsPlacements,
             .offer_pane_geometry = offerPaneGeometry,
+            .request_visible_attachments = requestVisibleAttachments,
             .acknowledge_agent = acknowledgeAgent,
         },
     };
@@ -89,6 +91,12 @@ fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     client.graphics_store.invalidatePlacements();
+}
+
+fn requestVisibleAttachments(raw_context: *anyopaque, area: ui.Rect) !void {
+    const client: *Client = @ptrCast(@alignCast(raw_context));
+
+    try tab_snapshots.attachActive(client, area);
 }
 
 fn offerPaneGeometry(raw_context: *anyopaque, area: ui.Rect) !void {
