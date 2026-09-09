@@ -2627,7 +2627,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
     const arguments = [_][]const u8{
         "/bin/sh",
         "-c",
-        "stty raw -echo; while IFS= read -r line; do printf '\\033]22;crosshair\\033\\\\%s\\r\\n' \"$line\"; done",
+        "stty raw -echo; printf 'RAW_READY\\r\\n'; while IFS= read -r line; do printf '\\033]22;crosshair\\033\\\\%s\\r\\n' \"$line\"; done",
     };
     try first.send(io, try schema.encodeOpenPane(&first_send, .{
         .request_id = @enumFromInt(1),
@@ -2640,12 +2640,16 @@ test "two clients observe one pane with independent frame acknowledgement" {
     var first_cells: [40 * 8]core.ui.Cell = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
     var first_snapshot = false;
-    while (pane_id == .invalid or !first_snapshot) {
+    // The shell must reach raw mode before any input arrives; otherwise the
+    // tty driver echoes the line itself, ahead of the shell's OSC 22 reply.
+    var shell_raw = false;
+    while (pane_id == .invalid or !first_snapshot or !shell_raw) {
         switch (try schema.decodeServer(try first.receive(io, first_receive))) {
             .pane_opened => |opened| pane_id = opened.pane_id,
             .pane_frame => |frame| {
                 try applyFrameCells(&first_cells, frame);
-                first_snapshot = frame.base_frame_id == 0;
+                first_snapshot = first_snapshot or frame.base_frame_id == 0;
+                shell_raw = rowContains(&first_cells, "RAW_READY");
                 try first.send(io, try schema.encodeFrameAck(&first_send, .{
                     .pane_id = frame.pane_id,
                     .frame_id = frame.frame_id,
