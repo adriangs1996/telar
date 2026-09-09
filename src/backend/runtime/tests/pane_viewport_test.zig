@@ -29,7 +29,7 @@ fn screenAtBottom(fixture: *PaneFixture) bool {
     return scrollbar.offset + scrollbar.len >= scrollbar.total;
 }
 
-test "viewport change crosses controller and handler and schedules one snapshot" {
+test "viewport change crosses controller and handler and schedules one full projection" {
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -37,6 +37,7 @@ test "viewport change crosses controller and handler and schedules one snapshot"
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     attachment.cells.snapshot_pending = false;
+    attachment.cells.viewport_moved = false;
     var handler: pane_viewport_commands.SetPaneViewportHandler = .{
         .attachments = &fixture.attachments,
     };
@@ -46,7 +47,7 @@ test "viewport change crosses controller and handler and schedules one snapshot"
 
     try std.testing.expectEqual(@as(u32, 0), try attachmentOffset(&fixture));
     try std.testing.expect(attachment.cells.viewport_pin != null);
-    try std.testing.expect(attachment.cells.snapshot_pending);
+    try std.testing.expect(attachment.cells.viewport_moved);
     try std.testing.expect(screenAtBottom(&fixture));
     try std.testing.expectEqual(@as(u64, 0), fixture.metrics.stale_client_messages);
 }
@@ -68,12 +69,13 @@ test "SetPaneViewportHandler leaves an identical historical viewport unchanged" 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     const original_pin = attachment.cells.viewport_pin.?;
     attachment.cells.snapshot_pending = false;
+    attachment.cells.viewport_moved = false;
 
     const result = try handler.execute(.{ .pane_id = fixture.pane.id, .offset = 0 });
 
     try std.testing.expectEqual(pane_viewport_commands.SetPaneViewportResult.unchanged, result);
     try std.testing.expectEqual(original_pin, attachment.cells.viewport_pin.?);
-    try std.testing.expect(!attachment.cells.snapshot_pending);
+    try std.testing.expect(!attachment.cells.viewport_moved);
     try std.testing.expectEqual(baseline_pin_count + 1, fixture.pane.terminal.screens.active.pages.countTrackedPins());
     try std.testing.expect(screenAtBottom(&fixture));
 }
@@ -91,6 +93,7 @@ test "SetPaneViewportHandler clamps beyond scrollback to bottom and releases its
     _ = try handler.execute(.{ .pane_id = fixture.pane.id, .offset = 0 });
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     attachment.cells.snapshot_pending = false;
+    attachment.cells.viewport_moved = false;
 
     const changed = try handler.execute(.{
         .pane_id = fixture.pane.id,
@@ -99,17 +102,18 @@ test "SetPaneViewportHandler clamps beyond scrollback to bottom and releases its
 
     try std.testing.expectEqual(pane_viewport_commands.SetPaneViewportResult.changed, changed);
     try std.testing.expect(attachment.cells.viewport_pin == null);
-    try std.testing.expect(attachment.cells.snapshot_pending);
+    try std.testing.expect(attachment.cells.viewport_moved);
     try std.testing.expect(screenAtBottom(&fixture));
     try std.testing.expectEqual(baseline_pin_count, fixture.pane.terminal.screens.active.pages.countTrackedPins());
 
     attachment.cells.snapshot_pending = false;
+    attachment.cells.viewport_moved = false;
     const unchanged = try handler.execute(.{
         .pane_id = fixture.pane.id,
         .offset = std.math.maxInt(u32),
     });
     try std.testing.expectEqual(pane_viewport_commands.SetPaneViewportResult.unchanged, unchanged);
-    try std.testing.expect(!attachment.cells.snapshot_pending);
+    try std.testing.expect(!attachment.cells.viewport_moved);
 }
 
 test "SetPaneViewportHandler leaves existing projection state unchanged for another pane" {
@@ -125,6 +129,7 @@ test "SetPaneViewportHandler leaves existing projection state unchanged for anot
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     const original_pin = attachment.cells.viewport_pin.?;
     attachment.cells.snapshot_pending = false;
+    attachment.cells.viewport_moved = false;
 
     const result = try handler.execute(.{
         .pane_id = try schema.id.pane(99),
@@ -133,7 +138,7 @@ test "SetPaneViewportHandler leaves existing projection state unchanged for anot
 
     try std.testing.expectEqual(pane_viewport_commands.SetPaneViewportResult.pane_not_attached, result);
     try std.testing.expectEqual(original_pin, attachment.cells.viewport_pin.?);
-    try std.testing.expect(!attachment.cells.snapshot_pending);
+    try std.testing.expect(!attachment.cells.viewport_moved);
     try std.testing.expectEqual(@as(u32, 0), try attachmentOffset(&fixture));
     try std.testing.expect(screenAtBottom(&fixture));
 }

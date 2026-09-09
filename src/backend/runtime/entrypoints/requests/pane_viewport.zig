@@ -1,5 +1,6 @@
 //! Protocol controller for one client's pane viewport. Accepted requests have
-//! no direct response; a changed viewport schedules a full cell snapshot.
+//! no direct response; a changed viewport schedules a full cell projection
+//! delivered as a patch against the acknowledged frame.
 
 const std = @import("std");
 const core = @import("telar-core");

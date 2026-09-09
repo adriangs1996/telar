@@ -196,7 +196,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         "\"draw_pending\":{d},\"media_pending\":{d},\"outbox_depth\":{d}," ++
         "\"outbox_high_water\":{d},\"outbox_saturated\":{d}," ++
         "\"outbox_coalesced_input\":{d},\"outbox_coalesced_resize\":{d}," ++
-        "\"outbox_coalesced_ack\":{d},\"outbox_coalesced_layout\":{d}," ++
+        "\"outbox_coalesced_ack\":{d},\"outbox_coalesced_viewport\":{d},\"outbox_coalesced_layout\":{d}," ++
         "\"kitty_graphics\":\"{s}\"," ++
         "\"kitty_zlib\":\"{s}\"," ++
         "\"mouse_pixels\":\"{s}\",\"sidebar_renderer\":\"{s}\"," ++
@@ -220,6 +220,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         state.outbox.coalesced_input,
         state.outbox.coalesced_resize,
         state.outbox.coalesced_ack,
+        state.outbox.coalesced_viewport,
         state.outbox.coalesced_client_layout,
         @tagName(state.capabilities.kitty_graphics),
         @tagName(state.capabilities.kitty_zlib),

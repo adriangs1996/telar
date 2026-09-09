@@ -111,3 +111,45 @@ test "a current attachment skips retained damage while a stale attachment receiv
     try std.testing.expectEqual(fixture.pane.cell_revision, stale.observedCellRevision());
     try std.testing.expect(stale_frame.frame_id != 0);
 }
+
+test "a moved viewport is delivered as a patch against the acknowledged frame" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    _ = try fixture.pane.ingest(
+        std.testing.io,
+        "zero\r\none\r\ntwo\r\nthree\r\nfour\r\nfive\r\nsix\r\nseven\r\n",
+    );
+    try fixture.pane.render(false);
+
+    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    var buffer: [16 * 1024]u8 = undefined;
+    try establishBaseline(&fixture, attachment, &buffer);
+    const baseline_frame_id = attachment.cells.acknowledged_frame_id;
+    const snapshots_before = fixture.metrics.snapshots;
+
+    try std.testing.expect((try fixture.attachments.setPaneViewport(.{ .pane_id = fixture.pane.id, .offset = 0 })).? == .changed);
+    try std.testing.expect(attachment.cells.viewport_moved);
+    try std.testing.expect(!attachment.cells.snapshot_pending);
+
+    const scrolled = try prepareFrame(&fixture, attachment, &buffer);
+    try std.testing.expectEqual(baseline_frame_id, scrolled.base_frame_id);
+    try std.testing.expectEqual(@as(u32, 0), scrolled.scroll.offset);
+    try std.testing.expect(!attachment.cells.viewport_moved);
+    try std.testing.expectEqual(snapshots_before, fixture.metrics.snapshots);
+    var scrolled_spans = scrolled.spans();
+    try std.testing.expect((try scrolled_spans.next()) != null);
+
+    const received_at_ns = attachment.cells.outstanding.?.sent_ns +| 1;
+    try std.testing.expect(attachment.cells.acknowledge(scrolled.frame_id, received_at_ns) != null);
+
+    // Returning to the live screen leaves the pin and projects from the pane
+    // screen; the frame still diffs every row against the scrolled baseline.
+    try std.testing.expect((try fixture.attachments.setPaneViewport(.{ .pane_id = fixture.pane.id, .offset = std.math.maxInt(u32) })).? == .changed);
+    try std.testing.expect(attachment.cells.viewport_pin == null);
+    const restored = try prepareFrame(&fixture, attachment, &buffer);
+    try std.testing.expectEqual(scrolled.frame_id, restored.base_frame_id);
+    var restored_spans = restored.spans();
+    try std.testing.expect((try restored_spans.next()) != null);
+    try std.testing.expectEqual(snapshots_before, fixture.metrics.snapshots);
+}

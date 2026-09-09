@@ -214,8 +214,13 @@ pub const Attachment = struct {
             return .{ .bytes = payload, .effect = .cells };
         }
 
-        if (attachment.cells.hasOutstanding() or
-            (!pane.render_pending and attachment.cells.observed_revision == pane.cell_revision))
+        if (attachment.cells.hasOutstanding()) {
+            return null;
+        }
+
+        const viewport_moved = attachment.cells.viewport_moved;
+        if (!viewport_moved and !pane.render_pending and
+            attachment.cells.observed_revision == pane.cell_revision)
         {
             return null;
         }
@@ -225,6 +230,7 @@ pub const Attachment = struct {
             .buffer = preparation.buffer,
             .pane = pane,
             .force_snapshot = false,
+            .force_projection = viewport_moved,
             .metrics = preparation.metrics,
         })) orelse
             return null;

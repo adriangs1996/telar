@@ -293,6 +293,7 @@ pub const Stats = struct {
     coalesced_input: u64 = 0,
     coalesced_resize: u64 = 0,
     coalesced_ack: u64 = 0,
+    coalesced_viewport: u64 = 0,
     coalesced_client_layout: u64 = 0,
 };
 
@@ -303,6 +304,7 @@ pub const Snapshot = struct {
     coalesced_input: u64 = 0,
     coalesced_resize: u64 = 0,
     coalesced_ack: u64 = 0,
+    coalesced_viewport: u64 = 0,
     coalesced_client_layout: u64 = 0,
 };
 
@@ -344,6 +346,7 @@ pub const Outbox = struct {
             .coalesced_input = outbox.stats.coalesced_input,
             .coalesced_resize = outbox.stats.coalesced_resize,
             .coalesced_ack = outbox.stats.coalesced_ack,
+            .coalesced_viewport = outbox.stats.coalesced_viewport,
             .coalesced_client_layout = outbox.stats.coalesced_client_layout,
         };
     }
@@ -352,6 +355,7 @@ pub const Outbox = struct {
         switch (message) {
             .pane_resize => |resize| return outbox.pushResize(resize),
             .frame_ack => |ack| return outbox.pushAck(ack),
+            .set_pane_viewport => |viewport| return outbox.pushViewport(viewport),
             .query_history => |query| {
                 if (query.offset == 0 and query.snapshot_id == 0 and query.entry_id == 0) {
                     if (outbox.mutableTailIndex()) |index| {
@@ -775,6 +779,27 @@ pub const Outbox = struct {
         try outbox.append(.{ .pane_resize = resize });
     }
 
+    /// Keeps one pending viewport per pane. The runtime projects only the
+    /// last requested offset; intermediate offsets it never showed are folded.
+    fn pushViewport(outbox: *Outbox, viewport: schema.SetPaneViewport) !void {
+        var offset: usize = 0;
+        const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
+        while (offset < mutable_len) : (offset += 1) {
+            const index = (@as(usize, outbox.head) + outbox.len - 1 - offset) % capacity;
+            switch (outbox.items[index]) {
+                .set_pane_viewport => |*pending| {
+                    if (pending.pane_id == viewport.pane_id) {
+                        pending.* = viewport;
+                        outbox.stats.coalesced_viewport +|= 1;
+                        return;
+                    }
+                },
+                else => break,
+            }
+        }
+        try outbox.append(.{ .set_pane_viewport = viewport });
+    }
+
     fn pushAck(outbox: *Outbox, ack: schema.FrameAck) !void {
         var offset: usize = 0;
         const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
@@ -1125,6 +1150,28 @@ test "client layout folding never crosses an ordered request" {
 
     try std.testing.expectEqual(@as(u8, 3), outbox.len);
     try std.testing.expectEqual(@as(u64, 0), outbox.stats.coalesced_client_layout);
+}
+
+test "viewport folding keeps one pending offset per pane" {
+    var outbox: Outbox = .{};
+    const pane_id: schema.PaneId = @enumFromInt(1);
+    const other_pane: schema.PaneId = @enumFromInt(2);
+    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = pane_id, .offset = 7 } });
+    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = other_pane, .offset = 3 } });
+    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = pane_id, .offset = 10 } });
+    try std.testing.expectEqual(@as(u8, 2), outbox.len);
+    try std.testing.expectEqual(@as(u64, 1), outbox.stats.coalesced_viewport);
+
+    var buffer: [64]u8 = undefined;
+    const first = (try outbox.beginSend(&buffer)).?;
+    const decoded = try schema.decodeClient(first);
+    try std.testing.expectEqual(@as(u32, 10), decoded.set_pane_viewport.offset);
+    outbox.popSent();
+
+    try outbox.pushInput(pane_id, "x");
+    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = pane_id, .offset = 0 } });
+    try std.testing.expectEqual(@as(u8, 3), outbox.len);
+    try std.testing.expectEqual(@as(u64, 1), outbox.stats.coalesced_viewport);
 }
 
 test "resize folding never crosses an ordered input message" {

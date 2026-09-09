@@ -343,8 +343,6 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         projection.version.history;
     const suggestion_changed = presenter.presented_model_version.suggestion !=
         projection.version.suggestion;
-    const viewport_changed = presenter.presented_model_version.viewport !=
-        projection.version.viewport;
     const was_copy_mode = if (presenter.compositor.copy) |copy| !copy.view.pointer else false;
     const is_copy_mode = if (projection.copy) |copy| !copy.view.pointer else false;
     const copy_status_changed = was_copy_mode != is_copy_mode;
@@ -374,8 +372,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     }
 
     const force_composition = workspace_changed or configuration_changed or host_changed or
-        active_tab_changed or panes_changed or pane_foreground_changed or pane_graphics_changed or
-        viewport_changed;
+        active_tab_changed or panes_changed or pane_foreground_changed or pane_graphics_changed;
     try presenter.syncWindowTitle(projection, resources.writer);
     const presented = if (projection.model) |model|
         try presenter.present(.{

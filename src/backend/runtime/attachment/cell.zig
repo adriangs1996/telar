@@ -17,6 +17,10 @@ pub const Preparation = struct {
     buffer: []u8,
     pane: *Pane,
     force_snapshot: bool,
+    /// Projects every row instead of trusting emulator damage, then diffs the
+    /// result against the acknowledged cells. A moved viewport needs this: the
+    /// emulator marks nothing dirty when only the visible window changes.
+    force_projection: bool = false,
     metrics: *RuntimeMetrics,
 };
 
@@ -37,6 +41,9 @@ pub const Sync = struct {
     acknowledged_frame_id: u64 = 0,
     outstanding: ?Outstanding = null,
     snapshot_pending: bool = true,
+    /// The client viewport moved since the last projection. The next frame
+    /// projects every row and sends the difference as a patch, not a snapshot.
+    viewport_moved: bool = false,
     gpa: std.mem.Allocator,
 
     const Outstanding = struct {
@@ -108,7 +115,9 @@ pub const Sync = struct {
 
     /// Moves this client's viewport without leaving the shared terminal
     /// scrolled. Returns whether the effective offset changed. On allocation
-    /// failure, the previous client viewport and snapshot state are preserved.
+    /// failure, the previous client viewport and projection state are
+    /// preserved. A changed viewport marks the next frame as a full projection
+    /// diffed against the acknowledged cells; it never schedules a snapshot.
     ///
     /// ```zig
     /// const changed = try sync.setViewport(pane, requested_offset);
@@ -145,7 +154,7 @@ pub const Sync = struct {
             }
         }
 
-        sync.snapshot_pending = true;
+        sync.viewport_moved = true;
         return true;
     }
 
@@ -206,9 +215,14 @@ pub const Sync = struct {
                 .scroll = scrollState(screen.pages.scrollbar()),
             };
         }
+
+        if (force) {
+            @memset(sync.projected_damage, true);
+        }
+
         return .{
             .buffer = &pane.screen,
-            .damaged_rows = pane.damaged_rows,
+            .damaged_rows = if (force) sync.projected_damage else pane.damaged_rows,
             .cursor = pane.cursor,
             .scroll = scrollState(screen.pages.scrollbar()),
         };
@@ -241,7 +255,7 @@ pub const Sync = struct {
         if (pane.render_pending) {
             try pane.render(false);
         }
-        const projection = try sync.project(pane, force_snapshot);
+        const projection = try sync.project(pane, force_snapshot or preparation.force_projection);
         const source = projection.buffer;
         var span_storage: [schema.frame.max_span_count]schema.frame.Span = undefined;
         var snapshot = force_snapshot;
@@ -342,10 +356,11 @@ pub const Sync = struct {
     }
 
     fn observeProjection(sync: *Sync, pane: *const Pane, projection: Projection) void {
-        if (projection.buffer == &sync.projected) {
+        if (projection.damaged_rows.ptr == sync.projected_damage.ptr) {
             @memset(sync.projected_damage, false);
         }
 
+        sync.viewport_moved = false;
         sync.observed_revision = pane.cell_revision;
     }
 };
