@@ -722,13 +722,11 @@ pub fn enforceGraphicsCounts(io: Io, pane: *Pane, screen_key: vt.ScreenSet.Key) 
         terminal.screens.active = previous;
     }
     const storage = &screen.kitty_images;
-    const placement_limit = pane.graphics_limits.placements_per_pane / 2;
-    if (storage.placements.count() > placement_limit) {
+    if (storage.placements.count() > pane.graphics_limits.placements_per_pane) {
         storage.delete(io, pane.media_allocator.allocator(), terminal, .{ .all = false });
     }
 
-    const image_limit = pane.graphics_limits.images_per_pane / 2;
-    while (storage.images.count() > image_limit) {
+    while (storage.images.count() > pane.graphics_limits.images_per_pane) {
         var oldest_id: ?u32 = null;
         var oldest_generation: u64 = std.math.maxInt(u64);
         var iterator = storage.images.iterator();
@@ -771,12 +769,19 @@ fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsP
         attachment.graphics.target_revision = pane.graphics_revision;
         attachment.graphics.revision = @max(pane.graphics_revision, @as(u64, 1));
         attachment.graphics.batch_active = true;
+        attachment.graphics.placement_cursor = 0;
+    } else if (attachment.graphics.target_revision != pane.graphics_revision) {
+        // Storage moved under the batch; placements compared so far may
+        // have changed, so the walk starts over.
+        attachment.graphics.placement_cursor = 0;
     }
     const revision = attachment.graphics.revision;
 
     if (attachment.graphics.snapshot == .begin_pending) {
         attachment.graphics.known_images = [_]?graphics.Sync.KnownImage{null} ** core.graphics.max_images_per_pane;
         attachment.graphics.known_placements = [_]?graphics.Sync.KnownPlacement{null} ** core.graphics.max_placements_per_pane;
+        attachment.graphics.placement_index.reset();
+        attachment.graphics.placement_cursor = 0;
         attachment.freeTransfer();
         attachment.graphics.snapshot = .open;
         return try schema.encodeGraphicsSnapshot(buffer, .{
@@ -882,12 +887,20 @@ fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsP
         .idle => {},
     }
 
-    for (&attachment.graphics.known_placements) |*slot| {
+    // One pass over storage marks which known placements still exist; the
+    // known table is then swept once instead of searching storage per entry.
+    var present: [core.graphics.max_placements_per_pane]bool = @splat(false);
+    var presence_iterator = storage.placements.iterator();
+    while (presence_iterator.next()) |entry| {
+        const slot = attachment.graphics.placement_index.get(placementVirtualId(entry.key_ptr.*)) orelse continue;
+        present[slot] = true;
+    }
+    for (&attachment.graphics.known_placements, 0..) |*slot, index| {
         const known = slot.* orelse continue;
-        if (findPlacement(storage, known.placement.virtual_id) != null) {
+        if (present[index]) {
             continue;
         }
-        slot.* = null;
+        forgetPlacementSlot(attachment, index);
         return try schema.encodeGraphicsDeletePlacement(buffer, .{
             .pane_id = pane.id,
             .revision = revision,
@@ -898,7 +911,12 @@ fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsP
     }
 
     var placement_iterator = storage.placements.iterator();
+    var position: usize = 0;
     while (placement_iterator.next()) |entry| {
+        defer position += 1;
+        if (position < attachment.graphics.placement_cursor) {
+            continue;
+        }
         const image = storage.imageById(entry.key_ptr.image_id) orelse continue;
         if (!knowsImage(attachment, .{ .image_id = image.id, .generation = image.generation })) {
             continue;
@@ -913,6 +931,7 @@ fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsP
         } else {
             try rememberPlacement(attachment, placement);
         }
+        attachment.graphics.placement_cursor = position + 1;
         attachment.graphics.sent_placements +|= 1;
         return try schema.encodeGraphicsPlacement(buffer, .{
             .pane_id = pane.id,
@@ -921,6 +940,7 @@ fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsP
         });
     }
 
+    attachment.graphics.placement_cursor = 0;
     attachment.graphics.observed_revision = attachment.graphics.target_revision;
     attachment.graphics.batch_active = false;
     if (attachment.graphics.snapshot == .open) {
@@ -1092,27 +1112,29 @@ fn forgetReplacedGenerations(attachment: *Attachment, current: core.graphics.Ima
 }
 
 pub fn forgetPlacementsForImage(attachment: *Attachment, key: core.graphics.ImageKey) void {
-    for (&attachment.graphics.known_placements) |*slot| {
+    for (&attachment.graphics.known_placements, 0..) |*slot, index| {
         const known = slot.* orelse continue;
         if (std.meta.eql(known.placement.key, key)) {
-            slot.* = null;
+            forgetPlacementSlot(attachment, index);
         }
     }
+}
+
+fn forgetPlacementSlot(attachment: *Attachment, index: usize) void {
+    const known = attachment.graphics.known_placements[index] orelse return;
+    attachment.graphics.placement_index.remove(known.placement.virtual_id);
+    attachment.graphics.known_placements[index] = null;
 }
 
 pub fn knownPlacement(attachment: *Attachment, virtual_id: u64) ?*graphics.Sync.KnownPlacement {
-    for (&attachment.graphics.known_placements) |*slot| {
-        const known = if (slot.*) |*value| value else continue;
-        if (known.placement.virtual_id == virtual_id) {
-            return known;
-        }
-    }
-    return null;
+    const slot = attachment.graphics.placement_index.get(virtual_id) orelse return null;
+    return if (attachment.graphics.known_placements[slot]) |*known| known else null;
 }
 
 pub fn rememberPlacement(attachment: *Attachment, placement: core.graphics.Placement) !void {
-    for (&attachment.graphics.known_placements) |*slot| if (slot.* == null) {
+    for (&attachment.graphics.known_placements, 0..) |*slot, index| if (slot.* == null) {
         slot.* = .{ .placement = placement };
+        attachment.graphics.placement_index.put(placement.virtual_id, index);
         return;
     };
     return error.GraphicsPlacementLimitReached;
@@ -1615,7 +1637,7 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
         .launch_cwd = "/",
         .workspace_path = "/",
         .size = .{ .cols = 20, .rows = 5 },
-        .graphics_limits = .{ .images_per_pane = 4 },
+        .graphics_limits = .{ .images_per_pane = 2 },
     });
     defer {
         pane.session.shutdown();
@@ -1636,8 +1658,8 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
     }
     try std.testing.expectEqual(@as(usize, 3), screen.kitty_images.images.count());
 
-    // The pass runs after this pane's own ingest completes; the limit is
-    // half the configured maximum, evicting by oldest generation.
+    // The pass runs after this pane's own ingest completes and evicts by
+    // oldest generation down to the configured maximum.
     enforceGraphicsQuotas(io, pane);
     try std.testing.expectEqual(@as(usize, 2), screen.kitty_images.images.count());
     try std.testing.expect(screen.kitty_images.imageById(1) == null);

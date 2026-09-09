@@ -49,7 +49,15 @@ pub const Sync = struct {
         [_]?KnownImage{null} ** core.graphics.max_images_per_pane,
     known_placements: [core.graphics.max_placements_per_pane]?KnownPlacement =
         [_]?KnownPlacement{null} ** core.graphics.max_placements_per_pane,
+    /// Slot of each known placement by virtual id, so the projection walk
+    /// resolves a placement without scanning the table.
+    placement_index: PlacementIndex = .{},
+    /// Placements already compared in the batch being encoded. One message
+    /// leaves per call, so the walk resumes here instead of restarting.
+    placement_cursor: usize = 0,
     gpa: std.mem.Allocator,
+
+    pub const PlacementIndex = core.fixed_index.SlotIndex(2 * core.graphics.max_placements_per_pane);
 
     pub fn init(gpa: std.mem.Allocator, pane: *Pane) Sync {
         return .{
@@ -72,6 +80,8 @@ pub const Sync = struct {
         sync.observed_revision = 0;
         sync.known_images = [_]?KnownImage{null} ** core.graphics.max_images_per_pane;
         sync.known_placements = [_]?KnownPlacement{null} ** core.graphics.max_placements_per_pane;
+        sync.placement_index.reset();
+        sync.placement_cursor = 0;
     }
 
     pub fn freeTransfer(sync: *Sync) void {
