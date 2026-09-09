@@ -5,7 +5,9 @@
 //! interactive path. Glyph slots are opaque over their cell background; the
 //! telar mark keeps its own alpha, so it composes over any background the
 //! host paints, including one Telar does not know. Cell fallbacks remain
-//! underneath every placement.
+//! underneath every placement. Slots stay resident across frames, so a
+//! hovered or focused row that recolors its icons costs a retransmission
+//! only the first time that color pair appears.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -136,28 +138,39 @@ pub const Renderer = struct {
         var next_slots: [ui_icons.max_marks]Slot = undefined;
         var next_slot_count: u8 = 0;
         var next_placements: [ui_icons.max_marks]Placement = undefined;
-        for (marks, 0..) |mark, mark_index| {
-            const wanted = slotFromMark(mark);
-            if (isWorkingIcon(mark.icon)) {
-                inline for (.{
-                    ui_icons.Icon.agent_working_0,
-                    ui_icons.Icon.agent_working_1,
-                    ui_icons.Icon.agent_working_2,
-                    ui_icons.Icon.agent_working_3,
-                }) |frame| {
-                    _ = try ensureSlot(&next_slots, &next_slot_count, .{
-                        .icon = frame,
-                        .foreground = mark.foreground,
-                        .background = mark.background,
-                        .columns = wanted.columns,
-                    });
-                }
+        var collection: SlotCollection = .{
+            .slots = &next_slots,
+            .count = &next_slot_count,
+            .placements = &next_placements,
+        };
+        const raster_size = fitCell(renderer.cell_width, renderer.cell_height);
+        // Keep every slot the atlas already holds while the cell geometry is
+        // unchanged: hover and focus recolor a row's background, and a tuple
+        // seen once stays resident so the next hover moves placements only.
+        // The atlas is rebuilt from the current marks alone when the retained
+        // set no longer fits its slot or byte capacity.
+        var retained = renderer.pixel_width == raster_size.width and renderer.pixel_height == raster_size.height;
+        if (retained) {
+            @memcpy(next_slots[0..renderer.slot_count], renderer.slots[0..renderer.slot_count]);
+            next_slot_count = renderer.slot_count;
+        }
+        collectSlots(marks, &collection) catch |err| {
+            if (!retained) {
+                return err;
             }
-            const slot = try ensureSlot(&next_slots, &next_slot_count, wanted);
-            next_placements[mark_index] = .{ .area = mark.area, .slot = slot };
+            retained = false;
+            next_slot_count = 0;
+            try collectSlots(marks, &collection);
+        };
+        if (retained and (try rgbaLength(
+            @as(u32, raster_size.width) * widestSlot(next_slots[0..next_slot_count]),
+            @as(u32, raster_size.height) * next_slot_count,
+        )) > max_atlas_bytes) {
+            retained = false;
+            next_slot_count = 0;
+            try collectSlots(marks, &collection);
         }
         const next_placement_count: u8 = @intCast(marks.len);
-        const raster_size = fitCell(renderer.cell_width, renderer.cell_height);
         const atlas_width = @as(u32, raster_size.width) * widestSlot(next_slots[0..next_slot_count]);
         const slots_changed = renderer.pixel_width != raster_size.width or
             renderer.pixel_height != raster_size.height or
@@ -331,6 +344,38 @@ fn widestSlot(slots: []const Slot) u32 {
     }
 
     return widest;
+}
+
+const SlotCollection = struct {
+    slots: *[ui_icons.max_marks]Slot,
+    count: *u8,
+    placements: *[ui_icons.max_marks]Placement,
+};
+
+/// Resolves every mark to a slot, appending tuples the collection lacks, and
+/// records one placement per mark. Working icons reserve all four frames so
+/// the animation never needs a new atlas.
+fn collectSlots(marks: []const ui_icons.Mark, collection: *SlotCollection) !void {
+    for (marks, 0..) |mark, mark_index| {
+        const wanted = slotFromMark(mark);
+        if (isWorkingIcon(mark.icon)) {
+            inline for (.{
+                ui_icons.Icon.agent_working_0,
+                ui_icons.Icon.agent_working_1,
+                ui_icons.Icon.agent_working_2,
+                ui_icons.Icon.agent_working_3,
+            }) |frame| {
+                _ = try ensureSlot(collection.slots, collection.count, .{
+                    .icon = frame,
+                    .foreground = mark.foreground,
+                    .background = mark.background,
+                    .columns = wanted.columns,
+                });
+            }
+        }
+        const slot = try ensureSlot(collection.slots, collection.count, wanted);
+        collection.placements[mark_index] = .{ .area = mark.area, .slot = slot };
+    }
 }
 
 fn ensureSlot(slots: *[ui_icons.max_marks]Slot, count: *u8, wanted: Slot) !u8 {
@@ -701,4 +746,44 @@ test "unsupported terminals keep the renderer empty" {
         .background = .{ 20, 20, 20 },
     }});
     try std.testing.expect(!renderer.damaged());
+}
+
+test "a hover background adds a slot once and later hovers move placements only" {
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
+    const plain = ui_icons.Mark{
+        .area = .{ .x = 2, .y = 3, .w = 1, .h = 1 },
+        .icon = .cpu,
+        .foreground = .{ 255, 255, 255 },
+        .background = .{ 20, 20, 20 },
+    };
+    var hovered = plain;
+    hovered.background = .{ 60, 60, 60 };
+    try renderer.prepare(&.{plain});
+    var output: [65536]u8 = undefined;
+    var writer = Io.Writer.fixed(&output);
+    _ = try renderer.write(&writer);
+    try std.testing.expectEqual(@as(u8, 1), renderer.slot_count);
+
+    try renderer.prepare(&.{hovered});
+    try std.testing.expect(renderer.image_dirty);
+    try std.testing.expectEqual(@as(u8, 2), renderer.slot_count);
+    writer = Io.Writer.fixed(&output);
+    _ = try renderer.write(&writer);
+    try std.testing.expect(!renderer.damaged());
+
+    try renderer.prepare(&.{plain});
+    try std.testing.expect(!renderer.image_dirty);
+    try std.testing.expect(renderer.placements_dirty);
+    try std.testing.expectEqual(@as(u8, 2), renderer.slot_count);
+
+    try renderer.prepare(&.{hovered});
+    try std.testing.expect(!renderer.image_dirty);
+
+    // New cell geometry invalidates every resident slot.
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 12, .cell_height = 24 });
+    try renderer.prepare(&.{plain});
+    try std.testing.expect(renderer.image_dirty);
+    try std.testing.expectEqual(@as(u8, 1), renderer.slot_count);
 }
