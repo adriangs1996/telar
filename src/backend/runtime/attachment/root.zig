@@ -1053,6 +1053,7 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
                 return .blocked;
             }
         }
+        transfer.placements = try attachment.graphics.gpa.alloc(core.graphics.Placement, core.graphics.max_placements_per_pane);
         attachment.graphics.credit -= pixels.len;
         attachment.graphics.transfer = transfer;
         var placement_iterator = storage.placements.iterator();

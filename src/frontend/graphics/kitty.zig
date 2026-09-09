@@ -240,6 +240,9 @@ pub const Store = struct {
     gpa: std.mem.Allocator,
     images: std.AutoHashMapUnmanaged(ImageIdentity, ImageEntry) = .{},
     placements: std.AutoHashMapUnmanaged(PlacementIdentity, PlacementEntry) = .{},
+    /// Images marked `retire_pending` and not yet removed; the sweep that
+    /// retires them runs only while this is non-zero.
+    retire_candidates: u32 = 0,
     delete_queue: [graphics.max_placements_per_pane * 2]Delete = undefined,
     delete_head: usize = 0,
     delete_len: usize = 0,
@@ -949,7 +952,7 @@ pub const Store = struct {
     fn deleteImageData(store: *Store, pane_id: schema.PaneId, key: graphics.ImageKey) bool {
         const image_key = identity(pane_id, key);
         const image = store.images.getPtr(image_key) orelse return false;
-        image.retire_pending = true;
+        store.markRetirePending(image);
         store.removePlacementsForImage(pane_id, key);
         store.collectRetired(pane_id, key.image_id);
         store.damage = true;
@@ -959,6 +962,9 @@ pub const Store = struct {
 
     fn removeImageData(store: *Store, key: ImageIdentity) void {
         const removed = store.images.fetchRemove(key) orelse return;
+        if (removed.value.retire_pending) {
+            store.retire_candidates -= 1;
+        }
         store.total_bytes -= removed.value.pixels.len;
         store.noteImageRemoved(key.pane_id, removed.value.pixels.len);
         var removed_entry = removed.value;
@@ -1262,9 +1268,16 @@ pub const Store = struct {
             {
                 continue;
             }
-            entry.value_ptr.retire_pending = true;
+            store.markRetirePending(entry.value_ptr);
         }
         store.collectRetired(pane_id, current.image_id);
+    }
+
+    fn markRetirePending(store: *Store, image: *ImageEntry) void {
+        if (!image.retire_pending) {
+            image.retire_pending = true;
+            store.retire_candidates += 1;
+        }
     }
 
     fn exteriorGenerationLive(store: *const Store, key: ImageIdentity, external_id: u32) bool {
@@ -1289,6 +1302,11 @@ pub const Store = struct {
     }
 
     fn collectRetired(store: *Store, pane_id: ?schema.PaneId, image_id: ?u32) void {
+        // The writer asks after every placement it emits; with nothing
+        // marked for retirement the whole sweep is skipped.
+        if (store.retire_candidates == 0) {
+            return;
+        }
         // Retransmissions bypass the logical image count, so sweep in bounded
         // batches instead of assuming one fixed array holds every generation.
         var retired: [graphics.max_images_per_pane]ImageIdentity = undefined;

@@ -22,7 +22,9 @@ pub const Sync = struct {
         pixels: []u8,
         shared_name: ?core.graphics.ShmName = null,
         reserved_len: usize = 0,
-        placements: [core.graphics.max_placements_per_pane]core.graphics.Placement = undefined,
+        /// Placements captured with the frozen image, allocated for the
+        /// transfer's lifetime rather than reserved in every attachment.
+        placements: []core.graphics.Placement = &.{},
         placement_count: usize = 0,
         placement_index: usize = 0,
         offset: usize = 0,
@@ -86,6 +88,7 @@ pub const Sync = struct {
 
     pub fn freeTransfer(sync: *Sync) void {
         if (sync.transfer) |transfer| {
+            sync.gpa.free(transfer.placements);
             sync.gpa.free(transfer.pixels);
             sync.pane.media_allocator.releaseManual(transfer.reserved_len);
             if (transfer.shared_name) |name| {
