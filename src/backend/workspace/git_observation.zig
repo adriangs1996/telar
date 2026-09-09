@@ -18,6 +18,9 @@ pub const Probe = struct {
 pub const Observation = struct {
     workspace: schema.WorkspaceId,
     branch: []const u8,
-    dirty: bool,
+    /// Null when the probe could not decide, such as a timed-out `git
+    /// status`; the previous cleanliness is then retained rather than
+    /// reported clean.
+    dirty: ?bool,
     checked_at_ms: i64,
 };

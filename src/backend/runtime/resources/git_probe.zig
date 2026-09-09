@@ -1,9 +1,10 @@
 //! Git branch and cleanliness observation for workspaces.
 //!
 //! Probing runs on the observation path: the maintenance tick starts at most
-//! one bounded worker for the stalest workspace, the worker reads `.git/HEAD`
-//! and runs one time-limited `git status`, and the completion updates the
-//! aggregate and the workspace-list revision.
+//! one bounded worker for the stalest due workspace, the worker reads
+//! `.git/HEAD` and runs one time-limited `git status`, and the completion
+//! updates the aggregate and the workspace-list revision. A workspace whose
+//! state keeps coming back unchanged is probed less and less often.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -29,7 +30,9 @@ pub const Completion = struct {
     present: bool = false,
     branch: [schema.max_git_branch_bytes]u8 = undefined,
     branch_len: u8 = 0,
-    dirty: bool = false,
+    /// Null when `git status` failed or timed out; the aggregate then keeps
+    /// its last known cleanliness instead of showing a clean tree.
+    dirty: ?bool = null,
 
     pub fn branchSlice(completion: *const Completion) []const u8 {
         return completion.branch[0..completion.branch_len];
@@ -100,18 +103,21 @@ pub fn parseHead(bytes: []const u8) []const u8 {
     return trimmed[0..@min(trimmed.len, 8)];
 }
 
-fn statusDirty(io: Io, workspace_path: []const u8) bool {
+/// `--no-optional-locks` keeps the probe from refreshing and rewriting the
+/// user's index under `index.lock`, which could otherwise make their own
+/// interactive `git commit` or `rebase` fail while Telar was looking.
+fn statusDirty(io: Io, workspace_path: []const u8) ?bool {
     const gpa = std.heap.page_allocator;
     const result = std.process.run(gpa, io, .{
-        .argv = &.{ "git", "-C", workspace_path, "status", "--porcelain", "--no-renames" },
+        .argv = &.{ "git", "--no-optional-locks", "-C", workspace_path, "status", "--porcelain", "--no-renames" },
         .stdout_limit = .limited(max_status_bytes),
         .stderr_limit = .limited(4096),
         .timeout = status_timeout,
-    }) catch return false;
+    }) catch return null;
     defer gpa.free(result.stdout);
     defer gpa.free(result.stderr);
     if (result.term != .exited or result.term.exited != 0) {
-        return false;
+        return null;
     }
     return std.mem.trim(u8, result.stdout, " \r\n").len != 0;
 }

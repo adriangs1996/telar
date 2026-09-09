@@ -10,16 +10,20 @@ workspace names and does not mark dirty workspaces.
 ```text
 agent maintenance tick (1 s)
         |
-GitObserver.tick: one stalest workspace, ≥ 5 s since its last probe,
-                  at most one probe in flight runtime-wide
+GitObserver.tick: one stalest due workspace, at most one probe in flight
+                  runtime-wide. A workspace is due 5 s after its last probe;
+                  every probe that reports no change doubles its own
+                  interval, up to 80 s, and any change restores 5 s.
         |
 select.concurrent(.git_status, probe)   -- worker thread
         |
 read <path>/.git/HEAD  (a linked worktree's gitfile is followed)
-git -C <path> status --porcelain --no-renames   (2 s timeout, 64 KiB cap)
+git --no-optional-locks -C <path> status --porcelain --no-renames
+    (2 s timeout, 64 KiB cap; never rewrites the user's index)
         |
-Event.git_status -> Workspace.applyGitStatus (bounded branch copy, change
-                    detection) -> recordListChange on change
+Event.git_status -> Workspace.completeGitProbe (bounded branch copy, change
+                    detection; a failed or timed-out status keeps the last
+                    known cleanliness) -> recordListChange on change
         |
 schema.workspace_list entries carry `branch` and `dirty`
         |
