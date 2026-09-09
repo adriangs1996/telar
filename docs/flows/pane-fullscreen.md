@@ -54,6 +54,32 @@ the active label visible when space permits. It uses fixed storage bounded by
 is drawn and adds no content row or persistent state. The focused pane's
 progress indicator uses the remaining border space.
 
+With KGP and RGB label colors, all pane labels use embedded JetBrains Mono
+Regular. The selected pill is 75 percent of the cell height, vertically centered
+on the border. Font size is at most half the cell height and four-thirds of the
+cell width, so narrow terminal cells also get smaller text. The pill hugs the
+measured text rather than filling its entire cell rectangle. Workspace labels
+and pane contents are unchanged. The cell fallback uses regular-weight text.
+
+`Compositor` copies the already truncated label text into a fixed-size
+`pane_labels.Plan`. Each of at most 64 labels owns up to 80 UTF-8 bytes; media
+work never borrows pane names or cell storage. `View.prepareGraphics` rasterizes
+that snapshot into one RGBA image of at most 1 MiB on the media path. It reuses
+the sidebar's rounded fill and the existing text rasterizer. A position-only
+change reuses the image; focus, text, theme or cell-size changes replace it.
+There is one pending snapshot, not a replay queue.
+
+Image data is chunked within the media pass's 256 KiB encoded budget. An open
+continuation owns the graphics stream until completion or explicit abort;
+replaced or hidden snapshots cancel it. Stale placement deletions may accompany
+the next cell frame only when that stream is available. `View` removes the cell
+labels only after the exact snapshot, colors and placement have reached the
+host. Gaps retain their border glyphs. Overlapping modals or toasts retire the
+label image. Unsupported geometry, terminal-derived colors, missing font
+glyphs and allocation failure preserve all cell labels and rectangular
+selection. A failed host write exits through the existing presentation error
+path. Client teardown frees the pixels and font face; reconnect rebuilds them.
+
 The tab bar still draws the `pane_fullscreen` icon after the label of every tab
 whose layout is fullscreen, so fullscreen in another tab stays visible from
 the bar.
@@ -102,8 +128,16 @@ telemetry. The client does not roll back an unacknowledged resize.
 - `src/frontend/workspace/layout.zig` proves that fullscreen retains tiled
   ratios, follows display order without wrapping, ignores vertical focus,
   restores spatial navigation and clears when pane count falls below two.
-- `src/frontend/workspace/fullscreen_tabs.zig` covers active styling, Unicode
-  truncation and narrow widths up to the pane-count limit.
+- `src/frontend/workspace/fullscreen_tabs.zig` covers regular-weight selection,
+  Unicode truncation and label snapshots at narrow widths.
+- `src/frontend/presentation/pane_labels.zig` covers ownership of grapheme text
+  independently of cell-buffer lifetime and placement coordinates.
+- `src/frontend/graphics/pill.zig` covers font size, transparency, quotas, image
+  reuse, exact coverage, chunked transfer cancellation and fallback failures.
+- `src/frontend/graphics/rasterizer.zig` covers matching measured/drawn advances
+  and straight-alpha glyph blending without changing opaque blending.
+- `src/frontend/client/presentation/view.zig` covers all cell labels until media
+  completion, preserved border gaps, focus changes, resize and fullscreen exit.
 - `src/frontend/workspace/multiplexer.zig` covers border composition, focus
   changes, progress animation and incremental idle rendering.
 - `src/frontend/client/model/tests/panes.zig` covers horizontal fullscreen

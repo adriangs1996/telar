@@ -346,6 +346,7 @@ pub const Compositor = struct {
     bottom_reservation: ?layout_mod.PaneBottomReservation = null,
     bottom_reservation_area: ui.Rect = .{},
     layout_snapshot: layout_mod.Snapshot = .{},
+    fullscreen_labels: presentation.pane_labels.Plan = .{},
     panes: [max_panes]PaneProjection = undefined,
     pane_count: u8 = 0,
     progress_animation_frame: u8 = 0,
@@ -444,11 +445,12 @@ pub const Compositor = struct {
             target.clear(.{});
             screen.cursor = null;
             var full_stats: RenderStats = .{ .full = true };
+            compositor.fullscreen_labels = .{};
             for (compositor.layout_snapshot.views()) |view| {
                 const pane = model.findConst(view.pane_id) orelse continue;
                 full_stats.panes += 1;
                 if (model.layout.count() > 1) {
-                    drawBorder(target, .{
+                    compositor.fullscreen_labels = drawBorder(target, .{
                         .view = view,
                         .foreground_name = pane.foregroundName(),
                         .fullscreen_model = if (model.layout.isFullscreen()) model else null,
@@ -556,6 +558,12 @@ pub const Compositor = struct {
         return compositor.bottom_reservation_area;
     }
 
+    /// Returns owned labels from the last cell composition for deferred media.
+    /// Example: `const labels = compositor.fullscreenLabels();`.
+    pub fn fullscreenLabels(compositor: *const Compositor) *const presentation.pane_labels.Plan {
+        return &compositor.fullscreen_labels;
+    }
+
     fn ensureComposed(compositor: *Compositor, width: u16, height: u16) !bool {
         if (compositor.composed) |*buffer| {
             if (buffer.w == width and buffer.h == height) {
@@ -635,7 +643,7 @@ pub const Compositor = struct {
                 continue;
             }
 
-            drawBorder(context.target, .{
+            compositor.fullscreen_labels = drawBorder(context.target, .{
                 .view = view,
                 .foreground_name = pane.foregroundName(),
                 .fullscreen_model = if (context.model.layout.isFullscreen()) context.model else null,
@@ -1455,7 +1463,7 @@ const BorderInput = struct {
     palette: *const theme.Palette,
 };
 
-fn drawBorder(buffer: *ui.Buffer, input: BorderInput) void {
+fn drawBorder(buffer: *ui.Buffer, input: BorderInput) presentation.pane_labels.Plan {
     const style: ui.Style = if (input.view.focused)
         .{ .fg = input.palette.accent, .flags = .{ .bold = true } }
     else
@@ -1463,8 +1471,9 @@ fn drawBorder(buffer: *ui.Buffer, input: BorderInput) void {
 
     if (input.fullscreen_model != null) {
         buffer.box(input.view.outer, .{ .style = style });
-        drawProgress(buffer, input, drawFullscreenTabs(buffer, input));
-        return;
+        const tabs = drawFullscreenTabs(buffer, input);
+        drawProgress(buffer, input, tabs.width);
+        return tabs.plan;
     }
 
     var title_buffer: [schema.max_foreground_name_bytes + 32]u8 = undefined;
@@ -1475,13 +1484,14 @@ fn drawBorder(buffer: *ui.Buffer, input: BorderInput) void {
     ) catch " pane ";
     buffer.box(input.view.outer, .{ .style = style, .title = text });
     drawProgress(buffer, input, ui.measure(text));
+    return .{};
 }
 
-fn drawFullscreenTabs(buffer: *ui.Buffer, input: BorderInput) u16 {
+fn drawFullscreenTabs(buffer: *ui.Buffer, input: BorderInput) fullscreen_tabs.Result {
     const model = input.fullscreen_model.?;
     const outer = input.view.outer;
     if (outer.w <= 4 or outer.h < 2) {
-        return 0;
+        return .{};
     }
 
     var storage: [max_panes]schema.PaneId = undefined;
@@ -1583,7 +1593,7 @@ test "progress thread weaves determinate state and moves indeterminate shuttle" 
         .display_index = 1,
     };
 
-    drawBorder(&buffer, .{
+    _ = drawBorder(&buffer, .{
         .view = view,
         .foreground_name = "zsh",
         .progress_state = .set,
@@ -1600,7 +1610,7 @@ test "progress thread weaves determinate state and moves indeterminate shuttle" 
     try std.testing.expect(woven);
     try std.testing.expect(shuttle);
 
-    drawBorder(&buffer, .{
+    _ = drawBorder(&buffer, .{
         .view = view,
         .foreground_name = "zsh",
         .progress_state = .indeterminate,

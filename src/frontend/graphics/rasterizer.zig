@@ -150,6 +150,29 @@ pub const Rasterizer = struct {
         };
     }
 
+    /// Measures the same shaped advances used by drawText, without painting.
+    /// Example: `const width = try rasterizer.measureText("1 nvim");`.
+    pub fn measureText(rasterizer: *Rasterizer, text: []const u8) !u32 {
+        if (rasterizer.pixel_height == 0) {
+            return error.FontSizeNotSet;
+        }
+        if (text.len == 0) {
+            return 0;
+        }
+
+        const shaped = try rasterizer.shapeText(text);
+        var advance: i64 = 0;
+        for (shaped.glyphs, shaped.positions) |glyph, position| {
+            if (glyph.codepoint == 0) {
+                return error.MissingGlyph;
+            }
+
+            advance += position.x_advance;
+        }
+
+        return @intCast(@max(0, fixed26_6Round(advance)));
+    }
+
     /// Draws one UTF-8 line and returns its pixel advance. The baseline and
     /// origin are signed so bearings may safely extend outside the surface.
     /// For example: `try rasterizer.drawText(.{ .surface = surface, .origin = .{ .x = 0, .y = 16 }, .text = "Telar", .color = color, .max_width = 80 })`.
@@ -285,20 +308,22 @@ fn blendBitmap(blend: BitmapBlend) !void {
 
 fn blendPixel(surface: Surface, blend: PixelBlend) void {
     const index = (@as(usize, blend.point.y) * surface.width + blend.point.x) * 4;
-    const inverse: u16 = 255 - blend.alpha;
-    const previous_alpha = surface.pixels[index + 3];
-    surface.pixels[index] = compositeChannel(surface.pixels[index], blend.color.red, blend.alpha);
-    surface.pixels[index + 1] = compositeChannel(surface.pixels[index + 1], blend.color.green, blend.alpha);
-    surface.pixels[index + 2] = compositeChannel(surface.pixels[index + 2], blend.color.blue, blend.alpha);
-    surface.pixels[index + 3] = @intCast(@min(
-        255,
-        @as(u16, blend.alpha) + (@as(u16, previous_alpha) * inverse + 127) / 255,
-    ));
-}
+    // KGP consumes straight RGBA. Weight destination RGB by its alpha too,
+    // otherwise glyphs drawn onto transparency acquire dark fringes.
+    const previous_weight: u32 = @as(u32, surface.pixels[index + 3]) * (255 - @as(u32, blend.alpha));
+    const next_weight: u32 = @as(u32, blend.alpha) * 255;
+    const total = previous_weight + next_weight;
+    if (total == 0) {
+        return;
+    }
 
-fn compositeChannel(previous: u8, next: u8, alpha: u8) u8 {
-    const inverse: u16 = 255 - alpha;
-    return @intCast((@as(u16, next) * alpha + @as(u16, previous) * inverse + 127) / 255);
+    const color = [3]u8{ blend.color.red, blend.color.green, blend.color.blue };
+    for (color, 0..) |channel, offset| {
+        surface.pixels[index + offset] = @intCast((@as(u32, surface.pixels[index + offset]) * previous_weight +
+            @as(u32, channel) * next_weight + total / 2) / total);
+    }
+
+    surface.pixels[index + 3] = @intCast((total + 127) / 255);
 }
 
 test "embedded JetBrains Mono rasterizes UTF-8 into RGBA" {
@@ -316,6 +341,7 @@ test "embedded JetBrains Mono rasterizes UTF-8 into RGBA" {
         .max_width = 248,
     });
     try std.testing.expect(advance > 0);
+    try std.testing.expectEqual(advance, try rasterizer.measureText("Telar ✓"));
     try std.testing.expect(std.mem.indexOfNone(u8, &pixels, &.{0}) != null);
 }
 
@@ -339,6 +365,21 @@ test "empty notification lines are valid" {
         .color = .{ .red = 255, .green = 255, .blue = 255 },
         .max_width = 1,
     }));
+}
+
+test "transparent glyphs retain straight RGB and opaque blending stays unchanged" {
+    var pixels: [4]u8 = .{ 0, 0, 0, 0 };
+    const surface: Surface = .{ .pixels = &pixels, .width = 1, .height = 1 };
+    const blend: PixelBlend = .{
+        .point = .{ .x = 0, .y = 0 },
+        .color = .{ .red = 240, .green = 180, .blue = 120 },
+        .alpha = 64,
+    };
+    blendPixel(surface, blend);
+    try std.testing.expectEqualSlices(u8, &.{ 240, 180, 120, 64 }, &pixels);
+    pixels = .{ 20, 40, 60, 255 };
+    blendPixel(surface, blend);
+    try std.testing.expectEqualSlices(u8, &.{ 75, 75, 75, 255 }, &pixels);
 }
 
 test "surface length is checked before rasterization" {

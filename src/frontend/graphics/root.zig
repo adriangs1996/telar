@@ -3,6 +3,7 @@
 pub const kitty = @import("kitty.zig");
 pub const icons = @import("icons.zig");
 pub const modal = @import("modal.zig");
+pub const pill = @import("pill.zig");
 pub const rasterizer = @import("rasterizer.zig");
 pub const toast = @import("toast.zig");
 

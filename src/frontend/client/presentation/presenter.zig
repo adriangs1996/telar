@@ -22,6 +22,7 @@ const history_palette_state = @import("../model/history_palette.zig");
 const suggestion_state = @import("../model/suggestion.zig");
 const kitty = graphics.kitty;
 const modal_graphics = graphics.modal;
+const pill_graphics = graphics.pill;
 const toast_graphics = graphics.toast;
 const multiplexer = workspace_capability.multiplexer;
 const tabs = workspace_capability.tabs;
@@ -384,7 +385,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
             .force = force_composition,
         })
     else
-        try presenter.presentEmpty(resources);
+        try presenter.presentEmpty(projection, resources);
     presenter.presented_model_version = projection.version;
     presenter.presented_graphics_ingress = presenter.observed_graphics_ingress;
     presenter.presented_attachment_ingress = presenter.observed_attachment_ingress;
@@ -427,6 +428,7 @@ pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Re
     resources.view.kittyAttachments().reapRetired();
     const covered_before = resources.view.graphicalToastsCover(projection.notifications);
     const modal_covered_before = resources.view.graphicalModalCoversPlan();
+    const pill_covered_before = resources.view.graphicalPillCoversPlan();
     const icon_fallback_changed = try resources.view.prepareGraphics(projection.notifications, media_idle);
     if (icon_fallback_changed) {
         try presenter.requestDraw();
@@ -453,6 +455,7 @@ pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Re
         .icons = resources.view.kittyIcons(),
         .toasts = resources.view.kittyToasts(),
         .modal = resources.view.kittyModal(),
+        .pill = resources.view.kittyPill(),
         .attachments = resources.view.kittyAttachments(),
         .allow_toast_transmission = media_idle,
         .metrics = presenter.metrics,
@@ -465,7 +468,8 @@ pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Re
     presenter.notePaneGraphics(graphics_writer.panes.stats);
 
     if (covered_before != resources.view.graphicalToastsCover(projection.notifications) or
-        modal_covered_before != resources.view.graphicalModalCoversPlan())
+        modal_covered_before != resources.view.graphicalModalCoversPlan() or
+        pill_covered_before != resources.view.graphicalPillCoversPlan())
     {
         resources.view.invalidate();
         try presenter.requestDraw();
@@ -501,21 +505,21 @@ fn notePaneGraphics(presenter: *Presenter, graphics_stats: kitty.KittyGraphicsWr
 /// chunked transfer owns the graphics stream, so the frame stays clean until
 /// the bulk pass closes it.
 fn controlGraphicsReady(projection: Projection, resources: Resources) bool {
-    if (projection.host_capabilities.kitty_graphics != .supported) {
+    const pane_control = projection.host_capabilities.kitty_graphics == .supported and resources.graphics_store.damage;
+    if ((!pane_control and !resources.view.kittyPill().retirementPending()) or resources.graphics_store.partial != null) {
         return false;
     }
-    if (!resources.graphics_store.damage or resources.graphics_store.partial != null) {
-        return false;
-    }
+
     const view = resources.view;
     return !view.kittyAttachments().transferInProgress() and
         !view.kittyModal().transferInProgress() and
+        !view.kittyPill().transferInProgress() and
         !view.kittyToasts().transferInProgress() and
         !view.kittyIcons().transferInProgress();
 }
 
 fn mediaWorkPending(projection: Projection, resources: Resources) bool {
-    return resources.view.kittyAttachments().cleanupPending() or
+    return resources.view.kittyPill().damaged() or resources.view.kittyAttachments().cleanupPending() or
         (projection.host_capabilities.kitty_graphics == .supported and
             (resources.view.graphicsPreparationPending() or resources.graphics_store.damage or
                 resources.view.kittySidebar().damaged() or resources.view.kittyIcons().damaged() or
@@ -527,7 +531,7 @@ fn onlyWaitingForMediaIdle(resources: Resources, media_idle: bool) bool {
     return !media_idle and !resources.view.graphicsPreparationPending() and
         !resources.graphics_store.damage and !resources.view.kittySidebar().damaged() and
         !resources.view.kittyIcons().damaged() and !resources.view.kittyAttachments().damaged() and
-        !resources.view.kittyModal().damaged() and
+        !resources.view.kittyModal().damaged() and !resources.view.kittyPill().damaged() and
         resources.view.kittyToasts().waitingForMediaIdle();
 }
 
@@ -624,20 +628,29 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
     // Pane graphics that are only names, placements and deletes ride inside
     // this synchronized update, after the cells and before the cursor. Pixel
     // streams and UI rasters wait for the byte-bounded bulk media pass.
-    var control_writer: kitty.KittyGraphicsWriter = .{
-        .store = input.resources.graphics_store,
-        .layout_snapshot = presenter.compositor.layoutSnapshot(),
-        .cell_width = input.projection.host_size.cell_width_px,
-        .cell_height = input.projection.host_size.cell_height_px,
-        .mode = .control,
-        .now_ns = if (comptime diagnostics.enabled) monotonic(presenter.io) else 0,
+    var control_writer: CellGraphicsWriter = .{
+        .panes = if (input.projection.host_capabilities.kitty_graphics == .supported) .{
+            .store = input.resources.graphics_store,
+            .layout_snapshot = presenter.compositor.layoutSnapshot(),
+            .cell_width = input.projection.host_size.cell_width_px,
+            .cell_height = input.projection.host_size.cell_height_px,
+            .mode = .control,
+            .now_ns = if (comptime diagnostics.enabled) monotonic(presenter.io) else 0,
+        } else null,
+        .pill = input.resources.view.kittyPill(),
     };
     presenter.screen.graphics = if (controlGraphicsReady(input.projection, input.resources)) .{
         .context = &control_writer,
-        .write = kitty.KittyGraphicsWriter.writeOpaque,
+        .write = CellGraphicsWriter.writeOpaque,
     } else null;
     try presenter.flushScreen(input.resources.writer);
-    presenter.notePaneGraphics(control_writer.stats);
+    if (control_writer.panes) |panes| {
+        presenter.notePaneGraphics(panes.stats);
+    }
+
+    if (comptime diagnostics.enabled) {
+        presenter.metrics.pill_graphics_flushed_bytes += control_writer.pill_bytes;
+    }
     var acks: FrameAcks = .{};
     for (composed.commit.slice()) |pane| {
         if (!pane.attached or pane.frame_id == 0) {
@@ -654,17 +667,38 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
     };
 }
 
-fn presentEmpty(presenter: *Presenter, resources: Resources) !Presented {
+fn presentEmpty(presenter: *Presenter, projection: Projection, resources: Resources) !Presented {
     presenter.compositor.invalidate();
+    resources.view.kittyPill().observe(&.{}, resources.view.palette());
     const buffer = presenter.screen.buffer();
     buffer.clear(.{});
     presenter.screen.cursor = null;
     presenter.screen.mouse_pointer = .default;
-    presenter.screen.graphics = null;
+    var control_writer: CellGraphicsWriter = .{ .pill = resources.view.kittyPill() };
+    presenter.screen.graphics = if (controlGraphicsReady(projection, resources)) .{
+        .context = &control_writer,
+        .write = CellGraphicsWriter.writeOpaque,
+    } else null;
     try presenter.flushScreen(resources.writer);
+    if (comptime diagnostics.enabled) {
+        presenter.metrics.pill_graphics_flushed_bytes += control_writer.pill_bytes;
+    }
 
     return .{ .presented_ns = monotonic(presenter.io), .acks = .{}, .commit = .{} };
 }
+
+const CellGraphicsWriter = struct {
+    panes: ?kitty.KittyGraphicsWriter = null,
+    pill: *pill_graphics.Renderer,
+    pill_bytes: usize = 0,
+
+    fn writeOpaque(context: *anyopaque, writer: *Io.Writer) Io.Writer.Error!usize {
+        const self: *CellGraphicsWriter = @ptrCast(@alignCast(context));
+        self.pill_bytes = try self.pill.writeRetirements(writer);
+        const pane_bytes = if (self.panes) |*panes| try panes.write(writer) else 0;
+        return self.pill_bytes + pane_bytes;
+    }
+};
 
 const CombinedGraphicsWriter = struct {
     panes: kitty.KittyGraphicsWriter,
@@ -672,6 +706,7 @@ const CombinedGraphicsWriter = struct {
     icons: *icon_graphics.Renderer,
     toasts: *toast_graphics.Renderer,
     modal: *modal_graphics.Renderer,
+    pill: *pill_graphics.Renderer,
     attachments: *attachments.Store,
     allow_toast_transmission: bool,
     metrics: *ClientMetrics,
@@ -683,6 +718,7 @@ const CombinedGraphicsWriter = struct {
         var sidebar_bytes: usize = 0;
         var icon_bytes: usize = 0;
         var modal_bytes: usize = 0;
+        var pill_bytes: usize = 0;
         var attachment_bytes: usize = 0;
 
         // KGP continuation chunks do not identify their image. Whichever
@@ -690,6 +726,8 @@ const CombinedGraphicsWriter = struct {
         // a pane, toast, or icon atlas can never interleave another transfer.
         if (self.attachments.transferInProgress()) {
             attachment_bytes = try self.attachments.write(writer);
+        } else if (self.pill.transferInProgress()) {
+            pill_bytes = try self.pill.write(writer);
         } else if (self.modal.transferInProgress()) {
             modal_bytes = try self.modal.write(writer);
         } else if (self.toasts.transferInProgress()) {
@@ -710,7 +748,10 @@ const CombinedGraphicsWriter = struct {
                         if (toast_bytes == 0) {
                             sidebar_bytes = try self.sidebar.write(writer);
                             if (sidebar_bytes == 0) {
-                                icon_bytes = try self.icons.write(writer);
+                                pill_bytes = try self.pill.write(writer);
+                                if (pill_bytes == 0) {
+                                    icon_bytes = try self.icons.write(writer);
+                                }
                             }
                         }
                     }
@@ -723,9 +764,10 @@ const CombinedGraphicsWriter = struct {
             self.metrics.sidebar_graphics_flushed_bytes += sidebar_bytes;
             self.metrics.icon_graphics_flushed_bytes += icon_bytes;
             self.metrics.modal_graphics_flushed_bytes += modal_bytes;
+            self.metrics.pill_graphics_flushed_bytes += pill_bytes;
             self.metrics.attachment_graphics_flushed_bytes += attachment_bytes;
         }
-        return pane_bytes + toast_bytes + sidebar_bytes + icon_bytes + modal_bytes + attachment_bytes;
+        return pane_bytes + toast_bytes + sidebar_bytes + icon_bytes + modal_bytes + pill_bytes + attachment_bytes;
     }
 };
 

@@ -19,6 +19,7 @@ const pointer = presentation.pointer;
 const icon_graphics = @import("../../graphics/root.zig").icons;
 const kitty = @import("../../graphics/root.zig").kitty;
 const modal_graphics = @import("../../graphics/root.zig").modal;
+const pill_graphics = @import("../../graphics/root.zig").pill;
 const multiplexer = workspace_capability.multiplexer;
 const tabs_mod = workspace_capability.tabs;
 const workspace_list = workspace_capability.workspace_list;
@@ -34,6 +35,7 @@ const empty_history_palette: history_palette_state.State = .{};
 const empty_suggestion: suggestion_state.State = .{};
 const empty_notifications: notifications.Center = .{};
 const empty_workspace_list: workspace_list.Snapshot = .{};
+const empty_pane_labels: presentation.pane_labels.Plan = .{};
 const default_bars_state: bars.State = .{};
 const view_interaction = input_application.view_interaction;
 
@@ -94,6 +96,7 @@ const GraphicsPlan = struct {
     icons: ui.icons.Plan = .{},
     attachments: attachments.Plan = .{},
     modal_area: ui.Rect = .{},
+    pill_labels: presentation.pane_labels.Plan = .{},
 };
 
 pub const State = struct {
@@ -120,6 +123,7 @@ pub const State = struct {
     kitty_icons: icon_graphics.Renderer,
     kitty_toasts: toast_graphics.Renderer,
     kitty_modal: modal_graphics.Renderer,
+    kitty_pill: pill_graphics.Renderer,
     attachment_store: attachments.Store,
     graphics_plan: GraphicsPlan = .{},
     graphics_plan_dirty: bool = false,
@@ -158,6 +162,7 @@ pub const State = struct {
             .kitty_icons = .init(gpa),
             .kitty_toasts = .init(gpa),
             .kitty_modal = .init(gpa),
+            .kitty_pill = .init(gpa),
             .attachment_store = .init(gpa),
         };
     }
@@ -168,6 +173,7 @@ pub const State = struct {
         self.kitty_icons.deinit();
         self.kitty_toasts.deinit();
         self.kitty_modal.deinit();
+        self.kitty_pill.deinit();
         self.attachment_store.deinit();
     }
 
@@ -307,11 +313,12 @@ pub const State = struct {
         const resolved = try requested.resolve(configuration.support);
         const toast_changed = state.kitty_toasts.configure(configuration);
         const modal_changed = state.kitty_modal.configure(configuration);
+        const pill_changed = state.kitty_pill.configure(configuration);
         const icons_changed = state.kitty_icons.configure(configuration);
         const attachments_changed = state.attachment_store.configure(configuration);
         if (state.sidebar_rendering != resolved or state.cell_width_px != configuration.cell_width or
             state.cell_height_px != configuration.cell_height or toast_changed or icons_changed or
-            modal_changed or attachments_changed)
+            modal_changed or pill_changed or attachments_changed)
         {
             state.sidebar_rendering = resolved;
             state.cell_width_px = configuration.cell_width;
@@ -330,6 +337,10 @@ pub const State = struct {
 
     pub fn kittyModal(state: *State) *modal_graphics.Renderer {
         return &state.kitty_modal;
+    }
+
+    pub fn kittyPill(state: *State) *pill_graphics.Renderer {
+        return &state.kitty_pill;
     }
 
     pub fn kittyIcons(state: *State) *icon_graphics.Renderer {
@@ -475,6 +486,7 @@ pub const State = struct {
         });
         state.attachment_store.prepare(state.graphics_plan.attachments);
         state.kitty_modal.prepare(state.graphics_plan.modal_area, state.palette());
+        state.kitty_pill.prepare(&state.graphics_plan.pill_labels, state.palette());
         try state.kitty_sidebar.prepare(.{
             .area = state.graphics_plan.sidebar_area,
             .focused_card = state.graphics_plan.focused_card,
@@ -509,6 +521,12 @@ pub const State = struct {
 
     pub fn graphicalModalCoversPlan(state: *const State) bool {
         return state.graphicalModalCovers(state.graphics_plan.modal_area);
+    }
+
+    /// Checks the current label and theme, not a previously prepared texture.
+    /// Example: `const covered = view.graphicalPillCoversPlan();`.
+    pub fn graphicalPillCoversPlan(state: *const State) bool {
+        return state.kitty_pill.covers(&state.graphics_plan.pill_labels, state.palette());
     }
 
     /// Maps one pointer event to semantic intent without mutating client
@@ -699,6 +717,14 @@ pub const State = struct {
             compositor.bottomReservationArea()
         else
             fallback_attachment_area;
+        const previous_pill_area = state.graphics_plan.pill_labels.area.intersect(state.scratch.area());
+        const label_plan = if (input.compositor) |compositor| compositor.fullscreenLabels() else &empty_pane_labels;
+        const label_area = label_plan.area;
+        if (input.compositor) |compositor| {
+            compositor.copyArea(&state.scratch, previous_pill_area);
+            compositor.copyArea(&state.scratch, label_area);
+        }
+
         const composed = widgets.composition.render(&context, .{
             .regions = state.regions,
             .tabs = input.tabs,
@@ -754,6 +780,17 @@ pub const State = struct {
         }
         const toast_area = widgets.toast.overlayArea(state.regions.workbench);
         const has_toasts = input.notifications.hasItems() and !toast_area.isEmpty();
+        const pill_occluded = !label_area.intersect(current_modal_area).isEmpty() or
+            (has_toasts and !label_area.intersect(toast_area).isEmpty());
+        const pill_plan = if (pill_occluded) &empty_pane_labels else label_plan;
+        state.kitty_pill.observe(pill_plan, state.palette());
+        if (state.kitty_pill.covers(pill_plan, state.palette())) {
+            for (pill_plan.slice()) |label| {
+                const area: ui.Rect = .{ .x = pill_plan.area.x + label.offset, .y = pill_plan.area.y, .w = label.width, .h = 1 };
+                state.scratch.fill(area, .{ .glyph = " ", .style = .{} });
+            }
+        }
+
         const graphical_toasts = state.kitty_toasts.covers(input.notifications);
         if (has_toasts or state.toast_overlay_drawn) {
             if (input.compositor) |compositor| {
@@ -815,6 +852,7 @@ pub const State = struct {
         state.graphics_plan.toast_area = toast_area;
         state.graphics_plan.attachments = attachment_plan;
         state.graphics_plan.modal_area = drawn_modal_area;
+        state.graphics_plan.pill_labels = pill_plan.*;
         state.graphics_plan_dirty = true;
 
         var stats: RenderStats = .{};
@@ -822,6 +860,8 @@ pub const State = struct {
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.sidebar));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, state.regions.bottom));
         stats = addStats(stats, try syncRegion(screen, &state.scratch, attachment_area));
+        stats = addStats(stats, try syncRegion(screen, &state.scratch, previous_pill_area));
+        stats = addStats(stats, try syncRegion(screen, &state.scratch, label_area));
         if (has_toasts or state.toast_overlay_drawn) {
             stats = addStats(stats, try syncRegion(screen, &state.scratch, toast_area));
         }
@@ -1697,6 +1737,88 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
         screen.back.at(logo.?.x + 1, logo.?.y).?.text(),
     );
     try std.testing.expectEqual(@as(u8, 0), state.graphics_plan.icons.len);
+}
+
+test "fullscreen labels keep regular cell text until the exact small-font image is ready" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 100, 24);
+    defer state.deinit();
+    try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
+    var model = multiplexer.Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    const first: schema.PaneId = @enumFromInt(1);
+    const second: schema.PaneId = @enumFromInt(2);
+    const area = state.workbench();
+    try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 6 } });
+    try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .vertical, .area = area });
+    try std.testing.expect(model.toggleFullscreen());
+    var screen = try term.Screen.init(gpa, 100, 24);
+    defer screen.deinit();
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
+    const original = compositor.fullscreenLabels().*;
+    try std.testing.expectEqual(@as(u8, 2), original.len);
+    try std.testing.expectEqual(@as(usize, 0), state.kittyPill().retainedBytes());
+    const selected_x = original.area.x + original.labels[1].offset + 1;
+    try std.testing.expectEqualStrings("2", screen.back.at(selected_x, original.area.y).?.text());
+    try std.testing.expect(!screen.back.at(selected_x, original.area.y).?.style.flags.bold);
+
+    _ = try state.prepareGraphics(&empty_notifications, true);
+    try std.testing.expect(!state.graphicalPillCoversPlan());
+    var storage: [128 * 1024]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&storage);
+    _ = try state.kittyPill().write(&writer);
+    try std.testing.expect(state.graphicalPillCoversPlan());
+    state.invalidate();
+    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor });
+    for (original.slice()) |label| {
+        for (0..label.width) |offset| {
+            const cell = screen.back.at(original.area.x + label.offset + @as(u16, @intCast(offset)), original.area.y).?;
+            try std.testing.expectEqualStrings(" ", cell.text());
+            try std.testing.expectEqual(ui.Color.default, cell.style.bg);
+        }
+    }
+
+    // Gaps still show the pane border; only label rectangles are replaced.
+    try std.testing.expectEqualStrings("─", screen.back.at(original.area.x + original.labels[0].width, original.area.y).?.text());
+    const idle = try state.render(&screen, .{ .model = &model, .compositor = &compositor });
+    try std.testing.expectEqual(@as(usize, 0), idle.scanned);
+    try std.testing.expectEqual(first, model.focusDirection(.left, area).?);
+    try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
+    try std.testing.expect(!original.sameContent(compositor.fullscreenLabels()));
+    try std.testing.expect(!state.graphicalPillCoversPlan());
+    try std.testing.expect(state.kittyPill().retirementPending());
+    try std.testing.expectEqualStrings("2", screen.back.at(selected_x, original.area.y).?.text());
+    writer = std.Io.Writer.fixed(&storage);
+    _ = try state.kittyPill().writeRetirements(&writer);
+    _ = try state.prepareGraphics(&empty_notifications, true);
+    writer = std.Io.Writer.fixed(&storage);
+    _ = try state.kittyPill().write(&writer);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=t") != null);
+
+    // The old label row lies beyond the resized screen's right edge.
+    try state.resize(40, 8);
+    try screen.resize(40, 8);
+    const resized_area = state.workbench();
+    try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = resized_area });
+    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
+    const resized_labels = compositor.fullscreenLabels().area;
+    try std.testing.expectEqual(resized_labels, resized_labels.intersect(screen.back.area()));
+    try std.testing.expect(model.toggleFullscreen());
+    try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = resized_area });
+    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
+    try std.testing.expectEqual(@as(u8, 0), state.graphics_plan.pill_labels.len);
+    writer = std.Io.Writer.fixed(&storage);
+    _ = try state.kittyPill().writeRetirements(&writer);
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, writer.buffered(), "a=d"));
+    try std.testing.expect(!state.kittyPill().damaged());
 }
 
 test "cell rendering leaves toast rasterization to the media pass" {

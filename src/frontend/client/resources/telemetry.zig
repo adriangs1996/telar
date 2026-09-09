@@ -54,6 +54,7 @@ pub const Metrics = struct {
     sidebar_graphics_flushed_bytes: u64 = 0,
     icon_graphics_flushed_bytes: u64 = 0,
     modal_graphics_flushed_bytes: u64 = 0,
+    pill_graphics_flushed_bytes: u64 = 0,
     attachment_graphics_flushed_bytes: u64 = 0,
     media_flushes: u64 = 0,
     /// Media passes that yielded to a pending cell frame and re-armed a
@@ -162,6 +163,7 @@ pub const Snapshot = struct {
     sidebar_cache_bytes: usize,
     icon_cache_bytes: usize,
     modal_cache_bytes: usize,
+    pill_cache_bytes: usize = 0,
     attachment_cache_bytes: usize,
     screen_bytes: usize,
     shared_expiries: u8,
@@ -309,6 +311,10 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         state.shared_expiries,                                        state.shared_retire_latency.average() / std.time.ns_per_us,
         state.shared_retire_latency.max_ns / std.time.ns_per_us,
     });
+    try writer.print(",\"pill_graphics_flushed_bytes\":{d},\"pill_cache_bytes\":{d}", .{
+        metrics.pill_graphics_flushed_bytes,
+        state.pill_cache_bytes,
+    });
     try writer.print(",\"rss_bytes\":{d},\"lua_used\":{d},\"lua_limit\":{d}," ++
         "\"kitty_store_bytes\":{d},\"toast_cache_bytes\":{d}," ++
         "\"sidebar_cache_bytes\":{d},\"icon_cache_bytes\":{d}," ++
@@ -439,6 +445,7 @@ fn capture(client: *Client, heap: diagnostics.Heap.Snapshot) ?Snapshot {
         .sidebar_cache_bytes = client.view.kittySidebar().retainedBytes(),
         .icon_cache_bytes = client.view.kittyIcons().retainedBytes(),
         .modal_cache_bytes = client.view.kittyModal().retainedBytes(),
+        .pill_cache_bytes = client.view.kittyPill().retainedBytes(),
         .attachment_cache_bytes = client.view.kittyAttachments().retainedBytes(),
         .screen_bytes = (client.presenter.screen.front.cells.len +
             client.presenter.screen.back.cells.len) *
