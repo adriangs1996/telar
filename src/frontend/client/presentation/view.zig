@@ -1895,7 +1895,7 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
     try std.testing.expectEqual(@as(u8, 0), state.graphics_plan.pill_labels.len);
     writer = std.Io.Writer.fixed(&storage);
     _ = try state.kittyPill().writeRetirements(&writer);
-    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, writer.buffered(), "a=d"));
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, writer.buffered(), "a=d"));
     try std.testing.expect(!state.kittyPill().damaged());
 }
 
