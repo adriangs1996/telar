@@ -606,6 +606,7 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
         .copy_mode_active = if (input.projection.copy) |copy| !copy.view.pointer else false,
         .bar_state = input.projection.bar_state,
         .status_mode = input.projection.status_mode,
+        .pane_damage = composed.stats.damage_bounds,
         .force = composed.stats.full,
         .diagnostic = input.projection.diagnostic,
     });

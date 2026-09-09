@@ -274,7 +274,14 @@ pub const RenderStats = struct {
     panes: usize = 0,
     cells: usize = 0,
     damaged_cells: usize = 0,
+    /// Bounds of every screen cell this composition may have written, so a
+    /// chrome overlay can tell whether it was painted over.
+    damage_bounds: ui.Rect = .{},
     full: bool = false,
+
+    fn noteDamage(stats: *RenderStats, area: ui.Rect) void {
+        stats.damage_bounds = stats.damage_bounds.unite(area);
+    }
 };
 
 pub const PresentationCommit = struct {
@@ -462,7 +469,7 @@ pub const Compositor = struct {
         const stats = if (compositor.invalidated) full: {
             target.clear(.{});
             screen.cursor = null;
-            var full_stats: RenderStats = .{ .full = true };
+            var full_stats: RenderStats = .{ .full = true, .damage_bounds = target.area() };
             compositor.fullscreen_labels = .{};
             for (compositor.layout_snapshot.views()) |view| {
                 const pane = model.findConst(view.pane_id) orelse continue;
@@ -527,8 +534,9 @@ pub const Compositor = struct {
             };
             var incremental_stats = try compositor.composeIncremental(&context);
             if (progress_animation_changed or progress_changed or foreground_changed) {
-                incremental_stats.damaged_cells += try compositor.composeBorderRows(&context, .{
+                try compositor.composeBorderRows(&context, .{
                     .idle_panes = progress_changed or foreground_changed,
+                    .stats = &incremental_stats,
                 });
             }
             break :incremental incremental_stats;
@@ -614,6 +622,7 @@ pub const Compositor = struct {
             if (context.previous_focus) |previous| {
                 if (view.focused or view.pane_id == previous) {
                     stats.damaged_cells += try compositor.composePaneBorder(context, .{ .view = view, .pane = pane });
+                    stats.noteDamage(view.outer);
                 }
             }
             if (context.copy_changed) {
@@ -650,9 +659,11 @@ pub const Compositor = struct {
                     .end = end,
                     .copy = copyView(compositor.copy, pane.id),
                 });
+                stats.noteDamage(.{ .x = view.content.x + start, .y = view.content.y + y, .w = end - start, .h = 1 });
             }
             if (compositor.placeholder_dirty[index]) {
                 stats.cells += @as(usize, rows) * cols;
+                stats.noteDamage(view.content);
                 stats.damaged_cells += try compositor.composePaneContent(context, .{
                     .pane = pane,
                     .view = view,
@@ -675,12 +686,11 @@ pub const Compositor = struct {
     /// Redraws the top border of every visible pane and syncs only that row.
     /// Titles, fullscreen labels and progress threads all live there. Panes
     /// without progress are skipped when only the animation frame moved.
-    fn composeBorderRows(compositor: *Compositor, context: *IncrementalComposition, selection: BorderRowSelection) !usize {
+    fn composeBorderRows(compositor: *Compositor, context: *IncrementalComposition, selection: BorderRowSelection) !void {
         if (!context.model.layout.hasBorders()) {
-            return 0;
+            return;
         }
 
-        var damaged: usize = 0;
         for (compositor.layout_snapshot.views()) |view| {
             const pane = context.model.findConst(view.pane_id) orelse continue;
             if (!selection.idle_panes and pane.progress_state == .remove) {
@@ -688,9 +698,9 @@ pub const Compositor = struct {
             }
 
             compositor.drawPaneBorder(context, .{ .view = view, .pane = pane });
-            damaged += try syncComposedRow(context.screen, context.target, view.outer.y);
+            selection.stats.damaged_cells += try syncComposedRow(context.screen, context.target, view.outer.y);
+            selection.stats.noteDamage(view.outer.row(0));
         }
-        return damaged;
     }
 
     /// Redraws one pane's whole border frame and syncs its four sides. A
@@ -799,6 +809,7 @@ pub const Compositor = struct {
             }
 
             input.stats.cells += end - start;
+            input.stats.noteDamage(.{ .x = input.view.content.x + start, .y = input.view.content.y + source_y, .w = end - start, .h = 1 });
             input.stats.damaged_cells += try syncPaneRange(.{
                 .screen = context.screen,
                 .composed = context.target,
@@ -886,6 +897,7 @@ const BorderRowSelection = struct {
     /// Include panes without progress; needed when a title changed or a
     /// progress thread was removed and its border must be redrawn clean.
     idle_panes: bool,
+    stats: *RenderStats,
 };
 
 fn focusedPane(snapshot: *const layout_mod.Snapshot) schema.PaneId {

@@ -83,6 +83,9 @@ pub const RenderInput = struct {
     status_mode: widgets.status_bar.Mode = .normal,
     copy_mode_active: bool = false,
     bar_state: *const bars.State = &default_bars_state,
+    /// Screen cells the pane composition wrote this frame. Overlays drawn over
+    /// panes are restored only when this touches them.
+    pane_damage: ui.Rect = .{},
     force: bool = false,
     diagnostic: ?[]const u8 = null,
 };
@@ -105,6 +108,9 @@ pub const State = struct {
     theme: theme_mod.Theme,
     icon_theme: ui.icons.Theme,
     hits: Hits = .{},
+    /// Throwaway registry for overlay-only refreshes, which redraw cells the
+    /// panes painted over without re-registering the frame's hit targets.
+    overlay_hits: Hits = .{},
     sidebar_requested: bool = true,
     sidebar_preferred_width: u16 = sidebar_width,
     sidebar_resize_active: bool = false,
@@ -678,11 +684,19 @@ pub const State = struct {
         // The banner must survive every present — pane composition may have
         // repainted the bottom row — so it lands on both exit paths.
         defer state.renderDiagnosticBanner(screen, input.diagnostic);
-        if (!input.force and !state.dirty and !state.attachment_store.hasModal() and
-            pickerPrompt(input.prompt) == null and
-            !input.notifications.hasItems() and !state.toast_overlay_drawn)
-        {
-            return .{};
+        if (!input.force and !state.dirty) {
+            const toast_area = widgets.toast.overlayArea(state.regions.workbench);
+            const has_toasts = input.notifications.hasItems() and !toast_area.isEmpty();
+            if (has_toasts == state.toast_overlay_drawn) {
+                const toast_touched = has_toasts and !input.pane_damage.intersect(toast_area).isEmpty();
+                const modal_touched = !state.modal_overlay_area.isEmpty() and
+                    !input.pane_damage.intersect(state.modal_overlay_area).isEmpty();
+                if (!toast_touched and !modal_touched) {
+                    return .{};
+                }
+
+                return state.refreshOverlays(screen, input);
+            }
         }
         state.hits.clear();
         state.scratch.clear(.{});
@@ -888,6 +902,68 @@ pub const State = struct {
         state.dirty = false;
         state.toast_overlay_drawn = has_toasts;
         state.modal_overlay_area = drawn_modal_area;
+        return stats;
+    }
+
+    /// Repaints toasts and the open modal over pane cells that were composed
+    /// under them this frame. The chrome, hit targets and graphics plan are
+    /// unchanged, so only the overlay regions are drawn and synced.
+    fn refreshOverlays(state: *State, screen: *term.Screen, input: RenderInput) !RenderStats {
+        const compositor = input.compositor orelse return .{};
+        state.overlay_hits.clear();
+        var context: widgets.Context = .{
+            .buffer = &state.scratch,
+            .hits = &state.overlay_hits,
+            .palette = state.palette(),
+            .hovered = state.hovered,
+            .icon_theme = state.icon_theme,
+        };
+        var stats: RenderStats = .{};
+
+        const toast_area = widgets.toast.overlayArea(state.regions.workbench);
+        if (input.notifications.hasItems() and !toast_area.isEmpty()) {
+            compositor.copyArea(&state.scratch, toast_area);
+            if (state.kitty_toasts.covers(input.notifications)) {
+                widgets.toast.registerHits(&context, toast_area, input.notifications);
+            } else {
+                widgets.toast.render(&context, toast_area, input.notifications);
+            }
+            stats = addStats(stats, try syncRegion(screen, &state.scratch, toast_area));
+        }
+
+        const modal_area = state.modal_overlay_area;
+        if (modal_area.isEmpty()) {
+            return stats;
+        }
+
+        compositor.copyArea(&state.scratch, modal_area.intersect(state.regions.workbench));
+        const application_area = state.scratch.area();
+        const attachment_snapshot = state.attachment_store.snapshot();
+        var attachment_plan = state.graphics_plan.attachments;
+        const graphical_modal = state.graphicalModalCovers(modal_area);
+        const drawn_modal_area = widgets.attachment_preview.renderModal(&context, .{
+            .application = application_area,
+            .snapshot = &attachment_snapshot,
+            .plan = &attachment_plan,
+            .graphical_frame = graphical_modal,
+        });
+        if (drawn_modal_area.isEmpty()) {
+            if (pickerPrompt(input.prompt)) |prompt| {
+                const picker_output = renderGotoPicker(&context, application_area, .{
+                    .prompt = prompt,
+                    .agents = input.agents,
+                    .workspaces = input.workspaces,
+                    .tabs = input.tabs,
+                    .history = input.history,
+                    .suggestion = input.suggestion,
+                    .graphical_frame = graphical_modal,
+                });
+                if (picker_output.cursor) |cursor| {
+                    screen.cursor = .{ .x = cursor.cursor_x, .y = cursor.cursor_y };
+                }
+            }
+        }
+        stats = addStats(stats, try syncRegion(screen, &state.scratch, modal_area));
         return stats;
     }
 
@@ -2255,4 +2331,62 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     });
     try std.testing.expect(workspace_list_toggle.intent == .toggle_workspace_list);
     try std.testing.expect(state.workspace_list_collapsed);
+}
+
+test "a toast is refreshed only when pane composition paints under it" {
+    const gpa = std.testing.allocator;
+    var state = try State.init(gpa, 120, 30);
+    defer state.deinit();
+    var model = multiplexer.Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{
+        .cols = state.workbench().w,
+        .rows = state.workbench().h,
+    } });
+    var center: notifications.Center = .{};
+    _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
+    _ = center.advance(notifications.transition_duration_ns * 2);
+    var screen = try term.Screen.init(gpa, 120, 30);
+    defer screen.deinit();
+    var compositor = multiplexer.Compositor.init(gpa);
+    defer compositor.deinit();
+    try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = state.workbench() });
+    _ = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .notifications = &center,
+        .force = true,
+    });
+    const overlay = widgets.toast.overlayArea(state.workbench());
+    const registered = state.hits.registered().len;
+    const toast_cell = screen.back.cells[@as(usize, overlay.y) * screen.back.w + overlay.x + overlay.w - 1];
+    try std.testing.expect(!state.dirty);
+
+    // Damage away from the toast leaves the chrome and the overlay alone.
+    const idle = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .notifications = &center,
+        .pane_damage = .{ .x = state.workbench().x, .y = state.workbench().y + state.workbench().h - 1, .w = 10, .h = 1 },
+    });
+    try std.testing.expectEqual(@as(usize, 0), idle.scanned);
+
+    // Damage under the toast repaints only the overlay region and keeps the
+    // frame's hit targets.
+    screen.back.cells[@as(usize, overlay.y) * screen.back.w + overlay.x + overlay.w - 1] = .{};
+    const refreshed = try state.render(&screen, .{
+        .model = &model,
+        .compositor = &compositor,
+        .notifications = &center,
+        .pane_damage = overlay.row(0),
+    });
+    try std.testing.expectEqual(@as(usize, overlay.w) * overlay.h, refreshed.scanned);
+    try std.testing.expect(refreshed.damaged != 0);
+    try std.testing.expectEqual(registered, state.hits.registered().len);
+    const restored = screen.back.cells[@as(usize, overlay.y) * screen.back.w + overlay.x + overlay.w - 1];
+    try std.testing.expect(restored.eqlPublic(&toast_cell));
 }

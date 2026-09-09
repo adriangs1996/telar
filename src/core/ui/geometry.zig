@@ -95,6 +95,28 @@ pub const Rect = struct {
         return r.w == 0 or r.h == 0;
     }
 
+    /// The smallest rectangle covering both inputs. An empty input contributes
+    /// nothing, so a running bound can start from `.{}`.
+    /// Example: `bounds = bounds.unite(row_rect);`.
+    pub fn unite(a: Rect, b: Rect) Rect {
+        if (a.isEmpty()) {
+            return b;
+        }
+        if (b.isEmpty()) {
+            return a;
+        }
+        const x = @min(a.x, b.x);
+        const y = @min(a.y, b.y);
+        const right = @max(@as(u32, a.x) + a.w, @as(u32, b.x) + b.w);
+        const bottom = @max(@as(u32, a.y) + a.h, @as(u32, b.y) + b.h);
+        return .{
+            .x = x,
+            .y = y,
+            .w = @intCast(@min(right - x, std.math.maxInt(u16))),
+            .h = @intCast(@min(bottom - y, std.math.maxInt(u16))),
+        };
+    }
+
     pub fn row(r: Rect, index: u16) Rect {
         if (index >= r.h) {
             return .{ .x = r.x, .y = r.y };
@@ -108,6 +130,15 @@ pub const Rect = struct {
 // ---------------------------------------------------------------------------
 
 const testing = std.testing;
+
+test "unite covers both rectangles and ignores empty ones" {
+    const a: Rect = .{ .x = 2, .y = 3, .w = 4, .h = 1 };
+    const b: Rect = .{ .x = 10, .y = 1, .w = 1, .h = 6 };
+    try testing.expectEqualDeep(Rect{ .x = 2, .y = 1, .w = 9, .h = 6 }, a.unite(b));
+    try testing.expectEqualDeep(a, a.unite(.{}));
+    try testing.expectEqualDeep(b, (Rect{}).unite(b));
+    try testing.expect((Rect{}).unite(.{}).isEmpty());
+}
 
 test "rectangle arithmetic survives coordinates near the u16 limit" {
     // x + w exceeds maxInt(u16). Doing the sums in u16 panics in safe builds
