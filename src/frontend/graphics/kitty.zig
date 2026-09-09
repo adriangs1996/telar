@@ -1075,19 +1075,20 @@ pub const Store = struct {
         store.pruneUsage(credit.pane_id, usage.*);
     }
 
+    /// Marks every placement for re-emission after the cell geometry or the
+    /// layout moved. The emitted image id is kept: a placement re-emitted
+    /// under the same image and placement id replaces the host's copy, so no
+    /// delete is queued and a large layout cannot overflow the delete ring.
+    /// A placement that now clips to nothing is deleted by the writer.
+    ///
+    /// ```zig
+    /// store.invalidatePlacements();
+    /// ```
     pub fn invalidatePlacements(store: *Store) void {
         var iterator = store.placements.iterator();
         while (iterator.next()) |entry| {
-            if (entry.value_ptr.emitted_image_id) |image_id| {
-                store.queueDelete(.{ .placement = .{
-                    .image_id = image_id,
-                    .placement_id = entry.value_ptr.external_id,
-                } });
-            }
-            entry.value_ptr.emitted_image_id = null;
             entry.value_ptr.dirty = true;
         }
-        store.collectRetired(null, null);
         store.damage = true;
     }
 
@@ -3532,4 +3533,76 @@ test "a host that never consumes shared names loses them and gets pixels inline"
     // Two expiries prove the host cannot consume names at all; the session
     // stops offering them.
     try std.testing.expect(!store.shared_memory);
+}
+
+test "invalidating many placements queues no deletes and keeps shared transport" {
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    var model = multiplexer.Model.init(std.testing.allocator);
+    defer model.deinit();
+    const panes = [_]schema.PaneId{ @enumFromInt(1), @enumFromInt(2), @enumFromInt(3) };
+    try model.addRoot(.{ .pane_id = panes[0], .location = location, .size = .{ .cols = 40, .rows = 40 } });
+    try model.split(.{ .existing_pane = panes[0], .new_pane = panes[1], .location = location, .axis = .horizontal, .area = .{ .w = 120, .h = 40 } });
+    try model.split(.{ .existing_pane = panes[1], .new_pane = panes[2], .location = location, .axis = .horizontal, .area = .{ .w = 120, .h = 40 } });
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+    const metadata: graphics.Image = .{
+        .key = .{ .image_id = 1, .generation = 1 },
+        .format = .rgba,
+        .width = 1,
+        .height = 1,
+        .byte_len = 4,
+    };
+    // More placements in total than the delete ring holds, spread so no
+    // pane exceeds its own limit.
+    const per_pane = store.delete_queue.len / 2 - 8;
+    for (panes) |pane_id| {
+        try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = metadata });
+        try store.applyChunk(.{ .pane_id = pane_id, .revision = 1, .key = metadata.key, .offset = 0, .bytes = &.{ 1, 2, 3, 255 } });
+        var virtual_id: u32 = 1;
+        while (virtual_id <= per_pane) : (virtual_id += 1) {
+            try store.applyPlacement(.{
+                .pane_id = pane_id,
+                .revision = 1,
+                .placement = .{
+                    .key = metadata.key,
+                    .virtual_id = virtual_id,
+                    .placement_id = virtual_id,
+                    .x = @intCast(virtual_id % 16),
+                    .y = @intCast(virtual_id / 16),
+                    .columns = 1,
+                    .rows = 1,
+                },
+            });
+        }
+    }
+    const layout_snapshot = model.layoutSnapshot(.{ .w = 120, .h = 40 });
+    var graphics_writer: KittyGraphicsWriter = .{
+        .store = &store,
+        .layout_snapshot = layout_snapshot,
+        .cell_width = 10,
+        .cell_height = 20,
+    };
+    var first_bytes: [1 << 20]u8 = undefined;
+    var first_writer = Io.Writer.fixed(&first_bytes);
+    _ = try graphics_writer.write(&first_writer);
+    while (store.damage) {
+        first_writer = Io.Writer.fixed(&first_bytes);
+        _ = try graphics_writer.write(&first_writer);
+    }
+
+    store.invalidatePlacements();
+    try std.testing.expect(!store.delete_overflow);
+    try std.testing.expectEqual(@as(usize, 0), store.delete_len);
+    var resize_bytes: [1 << 20]u8 = undefined;
+    var resize_writer = Io.Writer.fixed(&resize_bytes);
+    _ = try graphics_writer.write(&resize_writer);
+    try std.testing.expect(std.mem.indexOf(u8, resize_writer.buffered(), "a=d") == null);
+    try std.testing.expect(std.mem.indexOf(u8, resize_writer.buffered(), "a=t") == null);
+    try std.testing.expectEqual(per_pane * panes.len, std.mem.count(u8, resize_writer.buffered(), "a=p"));
+    for (panes) |pane_id| {
+        try std.testing.expect(!store.images.get(identity(pane_id, metadata.key)).?.force_direct);
+    }
 }
