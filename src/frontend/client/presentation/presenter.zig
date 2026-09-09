@@ -59,6 +59,10 @@ pub const Projection = struct {
     tabs: *const tabs.Model,
     agents: *const agents.Snapshot,
     sidebar_animation_frame: u8,
+    /// The chrome shows a spinner or bouncing progress this frame, so an
+    /// animation tick must redraw it. Pane borders are redrawn by the
+    /// compositor regardless.
+    chrome_animation_active: bool = false,
     notifications: *const notifications.Center,
     workspaces: *const workspace_list.Snapshot,
     prompt: ?name_prompt.Prompt,
@@ -356,8 +360,9 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     if (prompt_changed or copy_status_changed) {
         resources.view.clearHover();
     }
+    const chrome_animation_changed = sidebar_animation_changed and projection.chrome_animation_active;
     if (workspace_changed or configuration_changed or diagnostic_changed or host_changed or
-        workspace_list_changed or agents_changed or sidebar_animation_changed or
+        workspace_list_changed or agents_changed or chrome_animation_changed or
         proxy_status_changed or system_metrics_changed or bars_changed or notifications_changed or tabs_changed or
         active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or
         pane_progress_changed or

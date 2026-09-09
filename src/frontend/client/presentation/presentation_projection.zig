@@ -41,6 +41,7 @@ pub fn projection(client: *const Client) presenter.Projection {
         .tabs = &client.model.workspace,
         .agents = client.model.agentSnapshot(),
         .sidebar_animation_frame = client.model.sidebarAnimationFrame(),
+        .chrome_animation_active = client.model.chromeAnimationActive(),
         .notifications = client.model.notificationSnapshot(),
         .workspaces = client.model.workspaceListSnapshot(),
         .prompt = prompt,
