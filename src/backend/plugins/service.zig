@@ -218,6 +218,12 @@ pub const Service = struct {
     results: Io.Queue(*effects.Result) = undefined,
     result_storage: [queue_depth]*effects.Result = undefined,
     next_event_id: std.atomic.Value(u64) = .init(1),
+    /// Completed exchanges waiting to be encoded, owned by the encoder actor
+    /// so the submitting loop never copies exchange bytes itself.
+    exchanges: Io.Queue(proxy.CaptureExchange) = undefined,
+    exchange_storage: [queue_depth]proxy.CaptureExchange = undefined,
+    encoder: ?Io.Future(anyerror!void) = null,
+    dropped_exchanges: std.atomic.Value(u64) = .init(0),
 
     /// Starts one actor for every configured and trusted tap plugin.
     ///
@@ -231,6 +237,7 @@ pub const Service = struct {
         }
         service.* = .{ .gpa = options.gpa, .io = options.io };
         service.results = .init(&service.result_storage);
+        service.exchanges = .init(&service.exchange_storage);
         errdefer {
             for (service.workers[0..service.worker_count]) |*worker| worker.stop(options.io);
         }
@@ -238,6 +245,9 @@ pub const Service = struct {
             service.workers[index].init(.{ .gpa = options.gpa, .spec = spec, .results = &service.results });
             try service.workers[index].start(options.io);
             service.worker_count += 1;
+        }
+        if (service.worker_count != 0) {
+            service.encoder = try options.io.concurrent(encodeExchanges, .{ service, options.io });
         }
     }
 
@@ -247,6 +257,7 @@ pub const Service = struct {
     /// service.deinit();
     /// ```
     pub fn deinit(service: *Service) void {
+        service.stopEncoder();
         for (service.workers[0..service.worker_count]) |*worker| worker.stop(service.io);
         service.results.close(service.io);
         while (true) {
@@ -259,21 +270,67 @@ pub const Service = struct {
         }
     }
 
-    /// Fans one completed exchange out to bounded per-plugin queues and frees it.
+    /// Hands one completed exchange to the encoder actor, taking ownership of
+    /// its halves. The caller's loop does no encoding; a full queue drops the
+    /// newest exchange and counts it.
     ///
     /// ```zig
     /// service.submit(&exchange);
     /// ```
     pub fn submit(service: *Service, captured: *proxy.CaptureExchange) void {
-        defer captured.deinit();
-        if (service.worker_count == 0) {
+        if (service.worker_count == 0 or service.encoder == null) {
+            captured.deinit();
             return;
         }
+
+        const owned = captured.*;
+        captured.* = .{};
+        if ((service.exchanges.put(service.io, &.{owned}, 0) catch 0) == 1) {
+            return;
+        }
+
+        var rejected = owned;
+        rejected.deinit();
+        _ = service.dropped_exchanges.fetchAdd(1, .monotonic);
+    }
+
+    /// Exchanges the loop could not hand to the encoder because its queue
+    /// was full. Example: `const lost = service.droppedExchanges();`.
+    pub fn droppedExchanges(service: *const Service) u64 {
+        return service.dropped_exchanges.load(.monotonic);
+    }
+
+    fn encodeExchanges(service: *Service, io: Io) anyerror!void {
+        while (true) {
+            var captured = service.exchanges.getOne(io) catch return;
+            defer captured.deinit();
+            service.fanOut(&captured);
+        }
+    }
+
+    /// Encodes one exchange once per worker and queues each frame.
+    fn fanOut(service: *Service, captured: *const proxy.CaptureExchange) void {
         const event_id = service.next_event_id.fetchAdd(1, .monotonic);
         for (service.workers[0..service.worker_count]) |*worker| {
             const identity: protocol.ExchangeIdentity = .{ .id = event_id, .generation = worker.spec.generation };
             const frame = service.encodeFrame(captured, identity) catch continue;
             worker.submit(service.io, frame);
+        }
+    }
+
+    fn stopEncoder(service: *Service) void {
+        service.exchanges.close(service.io);
+        if (service.encoder) |*future| {
+            _ = future.await(service.io) catch {};
+            service.encoder = null;
+        }
+        while (true) {
+            var pending: [1]proxy.CaptureExchange = undefined;
+            const count = service.exchanges.getUncancelable(service.io, &pending, 0) catch break;
+            if (count == 0) {
+                break;
+            }
+            pending[0].deinit();
         }
     }
 
@@ -438,4 +495,52 @@ test "five restarts in one window disable a worker" {
     for (0..restart_limit) |_| worker.recordRestart(std.testing.io);
 
     try std.testing.expect(worker.disabled);
+}
+
+test "submit hands exchanges to the encoder actor and frees them off the loop" {
+    const io = std.testing.io;
+    const capture = @import("../proxy/capture/root.zig");
+    var quota = capture.Quota.init(64);
+    const credential: @import("../proxy/identity.zig").Credential = .{
+        .pane_id = @enumFromInt(7),
+        .pane_generation = 1,
+        .token = .{0x5a} ** @import("../proxy/identity.zig").token_bytes,
+    };
+    var spec: Spec = undefined;
+    spec.generation = 3;
+    var service: Service = undefined;
+    service = .{ .gpa = std.testing.allocator, .io = io };
+    service.results = .init(&service.result_storage);
+    service.exchanges = .init(&service.exchange_storage);
+    service.workers[0].init(.{ .gpa = std.testing.allocator, .spec = spec, .results = &service.results });
+    service.workers[0].disabled = true;
+    service.worker_count = 1;
+    service.encoder = try io.concurrent(Service.encodeExchanges, .{ &service, io });
+    defer service.deinit();
+
+    const half = capture.Half.create(.{
+        .gpa = std.testing.allocator,
+        .quota = &quota,
+        .config = .{ .enabled = true, .max_part_bytes = 8, .max_exchange_bytes = 16, .max_total_bytes = 64 },
+        .credential = credential,
+        .dialect = .unknown,
+        .protocol = .h2,
+        .key = .{ .connection_id = 3, .stream_id = 5 },
+        .side = .request,
+        .host = "example.test",
+        .started_at_ms = 1,
+    }).?;
+    var exchange: proxy.CaptureExchange = .{ .request = half };
+
+    service.submit(&exchange);
+
+    // Ownership moved: the caller's exchange is empty and the encoder, not
+    // the loop, assigns the event id while producing the worker frame.
+    try std.testing.expect(exchange.request == null);
+    var waited: usize = 0;
+    while (service.next_event_id.load(.monotonic) == 1 and waited < 2000) : (waited += 1) {
+        try io.sleep(.fromMilliseconds(1), .awake);
+    }
+    try std.testing.expectEqual(@as(u64, 2), service.next_event_id.load(.monotonic));
+    try std.testing.expectEqual(@as(u64, 0), service.droppedExchanges());
 }

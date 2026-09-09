@@ -28,6 +28,7 @@ pub const Joiner = table.Joiner;
 pub const Key = buffer.Key;
 pub const Outcome = buffer.Outcome;
 pub const Pane = buffer.Pane;
+pub const Quota = buffer.Quota;
 pub const Part = buffer.Part;
 pub const PushResult = table.PushResult;
 pub const QueueMetrics = queue.Metrics;

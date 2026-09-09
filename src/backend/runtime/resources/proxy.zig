@@ -182,16 +182,6 @@ pub const Runtime = struct {
         }
     }
 
-    /// Delegates bounded content decoding to the active proxy service.
-    ///
-    /// ```zig
-    /// runtime.decodeCapture(half);
-    /// ```
-    pub fn decodeCapture(runtime: *Runtime, half: *proxy_mod.CaptureHalf) void {
-        const proxy = runtime.owner.capability orelse return;
-        proxy.decodeCapture(half);
-    }
-
     /// Releases every partial capture whose join deadline has elapsed.
     ///
     /// ```zig
