@@ -319,6 +319,11 @@ pub const CompositionInput = struct {
     copy: ?CopyProjection = null,
     bottom_reservation: ?layout_mod.PaneBottomReservation = null,
     progress_animation_frame: u8 = 0,
+    /// Model revisions whose change redraws border rows only. Titles and
+    /// progress live on the top border; nothing else in the composition
+    /// depends on them.
+    foreground_revision: u64 = 0,
+    progress_revision: u64 = 0,
     force: bool = false,
 };
 
@@ -348,8 +353,14 @@ pub const Compositor = struct {
     layout_snapshot: layout_mod.Snapshot = .{},
     fullscreen_labels: presentation.pane_labels.Plan = .{},
     panes: [max_panes]PaneProjection = undefined,
+    /// Indexed like `layout_snapshot.views()`; set when only that pane's
+    /// placeholder flag changed since the last composition.
+    placeholder_dirty: [max_panes]bool = undefined,
     pane_count: u8 = 0,
+    focused_pane: schema.PaneId = .invalid,
     progress_animation_frame: u8 = 0,
+    foreground_revision: u64 = 0,
+    progress_revision: u64 = 0,
     invalidated: bool = true,
 
     /// Creates an empty composition cache. Buffer allocation is deferred
@@ -397,6 +408,8 @@ pub const Compositor = struct {
         const previous_copy = compositor.copy;
         const copy_changed = !std.meta.eql(previous_copy, options.copy);
         const progress_animation_changed = compositor.progress_animation_frame != options.progress_animation_frame;
+        const progress_changed = compositor.progress_revision != options.progress_revision;
+        const foreground_changed = compositor.foreground_revision != options.foreground_revision;
         const border_theme: BorderTheme = .{
             .focused = options.palette.accent,
             .unfocused = options.palette.overlay0,
@@ -427,7 +440,7 @@ pub const Compositor = struct {
             compositor.invalidated = true;
         }
 
-        if (compositor.layout_snapshot.revision != model.layout.currentRevision()) {
+        if (compositor.layout_snapshot.geometry_revision != model.layout.geometryRevision()) {
             compositor.invalidated = true;
         }
         model.layout.snapshot(options.area, &compositor.layout_snapshot);
@@ -435,6 +448,11 @@ pub const Compositor = struct {
         if (compositor.paneProjectionChanged(model)) {
             compositor.invalidated = true;
         }
+        // Focus only restyles two borders and moves the cursor; the cells
+        // under it are unchanged, so it never rebuilds the composition.
+        const previous_focus = compositor.focused_pane;
+        compositor.focused_pane = focusedPane(&compositor.layout_snapshot);
+        const focus_changed = previous_focus != compositor.focused_pane;
         const target = &compositor.composed.?;
         var commit: PresentationCommit = .{ .location = model.location };
         for (&model.panes) |*slot| {
@@ -504,14 +522,21 @@ pub const Compositor = struct {
                 .target = target,
                 .previous_copy = previous_copy,
                 .copy_changed = copy_changed,
+                .previous_focus = if (focus_changed) previous_focus else null,
+                .options = options,
             };
-            if (progress_animation_changed) {
-                try compositor.composeProgressBorders(&context, options);
+            var incremental_stats = try compositor.composeIncremental(&context);
+            if (progress_animation_changed or progress_changed or foreground_changed) {
+                incremental_stats.damaged_cells += try compositor.composeBorderRows(&context, .{
+                    .idle_panes = progress_changed or foreground_changed,
+                });
             }
-            break :incremental try compositor.composeIncremental(&context);
+            break :incremental incremental_stats;
         };
 
         compositor.progress_animation_frame = options.progress_animation_frame;
+        compositor.progress_revision = options.progress_revision;
+        compositor.foreground_revision = options.foreground_revision;
         compositor.invalidated = false;
         return .{ .stats = stats, .commit = commit };
     }
@@ -581,11 +606,16 @@ pub const Compositor = struct {
     fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition) !RenderStats {
         var stats: RenderStats = .{};
         context.screen.cursor = null;
-        for (compositor.layout_snapshot.views()) |view| {
+        for (compositor.layout_snapshot.views(), 0..) |view, index| {
             const pane = context.model.findConst(view.pane_id) orelse continue;
             stats.panes += 1;
             const rows = @min(view.content.h, pane.buffer.h);
             const cols = @min(view.content.w, pane.buffer.w);
+            if (context.previous_focus) |previous| {
+                if (view.focused or view.pane_id == previous) {
+                    stats.damaged_cells += try compositor.composePaneBorder(context, .{ .view = view, .pane = pane });
+                }
+            }
             if (context.copy_changed) {
                 try compositor.composeCopyChange(context, .{
                     .pane = pane,
@@ -621,6 +651,16 @@ pub const Compositor = struct {
                     .copy = copyView(compositor.copy, pane.id),
                 });
             }
+            if (compositor.placeholder_dirty[index]) {
+                stats.cells += @as(usize, rows) * cols;
+                stats.damaged_cells += try compositor.composePaneContent(context, .{
+                    .pane = pane,
+                    .view = view,
+                    .rows = rows,
+                    .cols = cols,
+                    .stats = &stats,
+                });
+            }
             if (view.focused) {
                 setPaneCursor(context.screen, pane, .{
                     .content = view.content,
@@ -632,28 +672,102 @@ pub const Compositor = struct {
         return stats;
     }
 
-    fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposition, options: CompositionInput) !void {
+    /// Redraws the top border of every visible pane and syncs only that row.
+    /// Titles, fullscreen labels and progress threads all live there. Panes
+    /// without progress are skipped when only the animation frame moved.
+    fn composeBorderRows(compositor: *Compositor, context: *IncrementalComposition, selection: BorderRowSelection) !usize {
         if (!context.model.layout.hasBorders()) {
-            return;
+            return 0;
         }
 
+        var damaged: usize = 0;
         for (compositor.layout_snapshot.views()) |view| {
             const pane = context.model.findConst(view.pane_id) orelse continue;
-            if (pane.progress_state == .remove) {
+            if (!selection.idle_panes and pane.progress_state == .remove) {
                 continue;
             }
 
-            compositor.fullscreen_labels = drawBorder(context.target, .{
-                .view = view,
-                .foreground_name = pane.foregroundName(),
-                .fullscreen_model = if (context.model.layout.isFullscreen()) context.model else null,
-                .progress_state = pane.progress_state,
-                .progress_percent = pane.progress_percent,
-                .animation_frame = options.progress_animation_frame,
-                .palette = options.palette,
-            });
-            _ = try syncComposedRow(context.screen, context.target, view.outer.y);
+            compositor.drawPaneBorder(context, .{ .view = view, .pane = pane });
+            damaged += try syncComposedRow(context.screen, context.target, view.outer.y);
         }
+        return damaged;
+    }
+
+    /// Redraws one pane's whole border frame and syncs its four sides. A
+    /// focus change restyles the frame without touching the cells inside.
+    fn composePaneBorder(compositor: *Compositor, context: *IncrementalComposition, border: BorderComposition) !usize {
+        if (!context.model.layout.hasBorders()) {
+            return 0;
+        }
+
+        compositor.drawPaneBorder(context, border);
+        const outer = border.view.outer;
+        if (outer.w == 0 or outer.h == 0) {
+            return 0;
+        }
+
+        const left = outer.x;
+        const right = outer.x + outer.w;
+        var damaged = try syncComposedRange(context.screen, context.target, .{ .y = outer.y, .start = left, .end = right });
+        if (outer.h > 1) {
+            damaged += try syncComposedRange(context.screen, context.target, .{ .y = outer.y + outer.h - 1, .start = left, .end = right });
+        }
+
+        var y = outer.y + 1;
+        while (y + 1 < outer.y + outer.h) : (y += 1) {
+            damaged += try syncComposedRange(context.screen, context.target, .{ .y = y, .start = left, .end = left + 1 });
+            if (outer.w > 1) {
+                damaged += try syncComposedRange(context.screen, context.target, .{ .y = y, .start = right - 1, .end = right });
+            }
+        }
+        return damaged;
+    }
+
+    fn drawPaneBorder(compositor: *Compositor, context: *IncrementalComposition, border: BorderComposition) void {
+        compositor.fullscreen_labels = drawBorder(context.target, .{
+            .view = border.view,
+            .foreground_name = border.pane.foregroundName(),
+            .fullscreen_model = if (context.model.layout.isFullscreen()) context.model else null,
+            .progress_state = border.pane.progress_state,
+            .progress_percent = border.pane.progress_percent,
+            .animation_frame = context.options.progress_animation_frame,
+            .palette = context.options.palette,
+        });
+    }
+
+    /// Recomposes one pane's content rows and its placeholder overlay. Runs
+    /// when the placeholder flag flips; the rest of the screen is untouched.
+    fn composePaneContent(compositor: *Compositor, context: *IncrementalComposition, input: CopyChangeComposition) !usize {
+        var damaged: usize = 0;
+        if (input.cols == 0) {
+            return 0;
+        }
+
+        var source_y: u16 = 0;
+        while (source_y < input.rows) : (source_y += 1) {
+            damaged += try syncPaneRange(.{
+                .screen = context.screen,
+                .composed = context.target,
+                .pane = input.pane,
+                .destination_x = input.view.content.x,
+                .destination_y = input.view.content.y + source_y,
+                .source_y = source_y,
+                .start = 0,
+                .end = input.cols,
+                .copy = copyView(compositor.copy, input.pane.id),
+            });
+        }
+
+        if (input.pane.graphics_placeholder) {
+            drawGraphicsPlaceholder(context.target, input.view.content, context.options.palette);
+            const content = input.view.content;
+            damaged += try syncComposedRange(context.screen, context.target, .{
+                .y = content.y + content.h / 2,
+                .start = content.x,
+                .end = content.x + content.w,
+            });
+        }
+        return damaged;
     }
 
     fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, input: CopyChangeComposition) !void {
@@ -699,6 +813,9 @@ pub const Compositor = struct {
         }
     }
 
+    /// Reports whether the pane set or any pane geometry changed, which needs
+    /// a full composition. A placeholder flip alone is recorded per pane in
+    /// `placeholder_dirty` for a pane-local recomposition instead.
     fn paneProjectionChanged(compositor: *Compositor, model: *const Model) bool {
         var next: [max_panes]PaneProjection = undefined;
         var next_count: u8 = 0;
@@ -710,19 +827,22 @@ pub const Compositor = struct {
                 .rows = pane.buffer.h,
                 .scroll_offset = highlightedScrollOffset(compositor.copy, pane),
                 .graphics_placeholder = pane.graphics_placeholder,
-                .progress_state = pane.progress_state,
-                .progress_percent = pane.progress_percent,
             };
             next_count += 1;
         }
 
+        @memset(compositor.placeholder_dirty[0..next_count], false);
         var changed = compositor.pane_count != next_count;
         if (!changed) {
-            for (compositor.panes[0..compositor.pane_count], next[0..next_count]) |previous, current| {
-                if (!std.meta.eql(previous, current)) {
+            for (compositor.panes[0..compositor.pane_count], next[0..next_count], 0..) |previous, current, index| {
+                if (previous.pane_id != current.pane_id or previous.cols != current.cols or
+                    previous.rows != current.rows or previous.scroll_offset != current.scroll_offset)
+                {
                     changed = true;
                     break;
                 }
+
+                compositor.placeholder_dirty[index] = previous.graphics_placeholder != current.graphics_placeholder;
             }
         }
         @memcpy(compositor.panes[0..next_count], next[0..next_count]);
@@ -737,8 +857,6 @@ const PaneProjection = struct {
     rows: u16,
     scroll_offset: u32,
     graphics_placeholder: bool,
-    progress_state: schema.PaneProgressState,
-    progress_percent: ?u8,
 };
 
 const IncrementalComposition = struct {
@@ -747,7 +865,37 @@ const IncrementalComposition = struct {
     target: *ui.Buffer,
     previous_copy: ?CopyProjection,
     copy_changed: bool,
+    /// The pane that lost focus this frame, when focus moved.
+    previous_focus: ?schema.PaneId = null,
+    options: CompositionInput,
 };
+
+const BorderComposition = struct {
+    view: layout_mod.View,
+    pane: *const Pane,
+};
+
+/// One horizontal range of a composed row, `[start, end)` on row `y`.
+const RowSpan = struct {
+    y: u16,
+    start: u16,
+    end: u16,
+};
+
+const BorderRowSelection = struct {
+    /// Include panes without progress; needed when a title changed or a
+    /// progress thread was removed and its border must be redrawn clean.
+    idle_panes: bool,
+};
+
+fn focusedPane(snapshot: *const layout_mod.Snapshot) schema.PaneId {
+    for (snapshot.views()) |view| {
+        if (view.focused) {
+            return view.pane_id;
+        }
+    }
+    return .invalid;
+}
 
 const CopyChangeComposition = struct {
     pane: *const Pane,
@@ -1423,8 +1571,21 @@ fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
 }
 
 fn syncComposedRow(screen: *term.Screen, composed: *const ui.Buffer, y: u16) !usize {
+    return syncComposedRange(screen, composed, .{ .y = y, .start = 0, .end = composed.w });
+}
+
+/// Syncs one span of a composed row into the screen, clipped to the composed
+/// width. Example: `_ = try syncComposedRange(screen, composed, .{ .y = y, .start = x, .end = x + w });`.
+fn syncComposedRange(screen: *term.Screen, composed: *const ui.Buffer, span: RowSpan) !usize {
     std.debug.assert(screen.sizeMatches(composed.w, composed.h));
+    const y = span.y;
     if (y >= composed.h) {
+        return 0;
+    }
+
+    const start = span.start;
+    const clipped_end = @min(span.end, composed.w);
+    if (start >= clipped_end) {
         return 0;
     }
 
@@ -1438,8 +1599,8 @@ fn syncComposedRow(screen: *term.Screen, composed: *const ui.Buffer, y: u16) !us
     return diff.syncRow(.{
         .source = source_row,
         .reference = screen.back.cells[row_start..][0..composed.w],
-        .start = 0,
-        .end = composed.w,
+        .start = start,
+        .end = clipped_end,
     }, &sink);
 }
 
@@ -1628,6 +1789,8 @@ const TestingComposition = struct {
     palette: *const theme.Palette = &theme.default_theme.palette,
     copy: ?CopyProjection = null,
     bottom_reservation: ?layout_mod.PaneBottomReservation = null,
+    foreground_revision: u64 = 0,
+    progress_revision: u64 = 0,
     force: bool = false,
 };
 
@@ -1640,6 +1803,8 @@ fn testingRender(compositor: *Compositor, composition: TestingComposition) !Rend
             .palette = composition.palette,
             .copy = composition.copy,
             .bottom_reservation = composition.bottom_reservation,
+            .foreground_revision = composition.foreground_revision,
+            .progress_revision = composition.progress_revision,
             .force = composition.force,
         },
     });
@@ -2327,7 +2492,7 @@ test "unchanged composition produces no terminal damage" {
     try std.testing.expectEqual(@as(usize, 1), changed_flush.scanned);
 }
 
-test "compositor detects focus changes while stable focus stays incremental" {
+test "focus changes restyle two borders without a full composition" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
     defer model.deinit();
@@ -2343,8 +2508,19 @@ test "compositor detects focus changes while stable focus stays incremental" {
     defer compositor.deinit();
 
     try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
+    const accent = theme.default_theme.palette.accent;
+    try std.testing.expectEqualDeep(accent, screen.back.at(20, 0).?.style.fg);
+    try std.testing.expect(!std.meta.eql(accent, screen.back.at(0, 0).?.style.fg));
+
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
-    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
+    const refocused = try testingRenderDefault(&compositor, &model, &screen);
+    try std.testing.expect(!refocused.full);
+    try std.testing.expect(refocused.damaged_cells != 0);
+    try std.testing.expectEqualDeep(accent, screen.back.at(0, 0).?.style.fg);
+    try std.testing.expectEqualDeep(accent, screen.back.at(0, 5).?.style.fg);
+    try std.testing.expectEqualDeep(accent, screen.back.at(0, 3).?.style.fg);
+    try std.testing.expect(!std.meta.eql(accent, screen.back.at(20, 0).?.style.fg));
+    try std.testing.expect(!std.meta.eql(accent, screen.back.at(39, 3).?.style.fg));
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
     const stable = try testingRenderDefault(&compositor, &model, &screen);
     try std.testing.expect(!stable.full);
@@ -2400,7 +2576,14 @@ test "compositor detects pane projection changes without model cache flags" {
     try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
 
     pane.graphics_placeholder = true;
-    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
+    const placeholder = try testingRenderDefault(&compositor, &model, &screen);
+    try std.testing.expect(!placeholder.full);
+    try std.testing.expect(placeholder.damaged_cells != 0);
+    try std.testing.expectEqualStrings("[", screen.back.at(1, 1).?.text());
+    pane.graphics_placeholder = false;
+    const cleared = try testingRenderDefault(&compositor, &model, &screen);
+    try std.testing.expect(!cleared.full);
+    try std.testing.expectEqualStrings(" ", screen.back.at(1, 1).?.text());
 
     const stable = try testingRenderDefault(&compositor, &model, &screen);
     try std.testing.expect(!stable.full);
@@ -2527,4 +2710,74 @@ test "focused pane mouse planning ignores missing and empty pane content" {
 
     try std.testing.expect(model.removePane(pane_id));
     try std.testing.expect(model.planFocusedPaneMouse(area) == null);
+}
+
+test "foreground titles and progress threads redraw only border rows" {
+    const gpa = std.testing.allocator;
+    var model = Model.init(gpa);
+    defer model.deinit();
+    const location: schema.TabLocation = .{
+        .workspace = .{ .workspace = @enumFromInt(1) },
+        .tab_id = @enumFromInt(1),
+    };
+    try model.addRoot(.{ .pane_id = @enumFromInt(10), .location = location, .size = .{ .cols = 18, .rows = 4 } });
+    try model.split(.{ .existing_pane = @enumFromInt(10), .new_pane = @enumFromInt(41), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 6 } });
+    const first = model.find(@enumFromInt(10)).?;
+    _ = model.setPaneForeground(first.id, "zsh");
+    var screen = try term.Screen.init(gpa, 40, 6);
+    defer screen.deinit();
+    var compositor = Compositor.init(gpa);
+    defer compositor.deinit();
+    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
+    try std.testing.expectEqualStrings("z", screen.back.at(5, 0).?.text());
+
+    _ = model.setPaneForeground(first.id, "vim");
+    const retitled = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .foreground_revision = 1,
+    });
+    try std.testing.expect(!retitled.full);
+    try std.testing.expect(retitled.damaged_cells != 0);
+    try std.testing.expectEqualStrings("v", screen.back.at(5, 0).?.text());
+
+    try std.testing.expect(first.setProgress(.{ .pane_id = first.id, .state = .set, .percent = 50 }));
+    const woven = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .foreground_revision = 1,
+        .progress_revision = 1,
+    });
+    try std.testing.expect(!woven.full);
+    var thread = false;
+    for (screen.back.cells[0..20]) |cell| {
+        thread = thread or std.mem.eql(u8, cell.text(), "━");
+    }
+    try std.testing.expect(thread);
+
+    try std.testing.expect(first.setProgress(.{ .pane_id = first.id, .state = .remove }));
+    const cleared = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .foreground_revision = 1,
+        .progress_revision = 2,
+    });
+    try std.testing.expect(!cleared.full);
+    try std.testing.expect(cleared.damaged_cells != 0);
+    for (screen.back.cells[0..20]) |cell| {
+        try std.testing.expect(!std.mem.eql(u8, cell.text(), "━"));
+    }
+
+    const stable = try testingRender(&compositor, .{
+        .model = &model,
+        .screen = &screen,
+        .area = screen.back.area(),
+        .foreground_revision = 1,
+        .progress_revision = 2,
+    });
+    try std.testing.expect(!stable.full);
+    try std.testing.expectEqual(@as(usize, 0), stable.damaged_cells);
 }

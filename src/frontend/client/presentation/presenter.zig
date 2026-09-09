@@ -329,12 +329,8 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         projection.version.panes;
     const pane_metadata_changed = presenter.presented_model_version.pane_metadata !=
         projection.version.pane_metadata;
-    const pane_foreground_changed = presenter.presented_model_version.pane_foreground !=
-        projection.version.pane_foreground;
     const pane_progress_changed = presenter.presented_model_version.pane_progress !=
         projection.version.pane_progress;
-    const pane_graphics_changed = presenter.presented_model_version.pane_graphics !=
-        projection.version.pane_graphics;
     const chrome_changed = presenter.presented_model_version.chrome !=
         projection.version.chrome;
     const prompt_changed = presenter.presented_model_version.prompt !=
@@ -372,7 +368,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     }
 
     const force_composition = workspace_changed or configuration_changed or host_changed or
-        active_tab_changed or panes_changed or pane_foreground_changed or pane_graphics_changed;
+        active_tab_changed or panes_changed;
     try presenter.syncWindowTitle(projection, resources.writer);
     const presented = if (projection.model) |model|
         try presenter.present(.{
@@ -586,6 +582,8 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
             .copy = input.projection.copy,
             .bottom_reservation = input.resources.view.attachmentReservation(),
             .progress_animation_frame = input.projection.sidebar_animation_frame,
+            .foreground_revision = input.projection.version.pane_foreground,
+            .progress_revision = input.projection.version.pane_progress,
             .force = input.force,
         },
     });
