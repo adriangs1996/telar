@@ -45,7 +45,7 @@ pub fn RuntimePort(comptime Context: type) type {
         start_ingest: *const fn (*Context, Ingest) anyerror!void,
         has_outstanding_frame: *const fn (*Context, schema.PaneId) bool,
         collect: *const fn (*Context) void,
-        pump_clients: *const fn (*Context) void,
+        pump_clients: *const fn (*Context, *Pane) void,
     };
 }
 
@@ -134,7 +134,7 @@ pub fn Pipeline(comptime Context: type, comptime port: RuntimePort(Context)) typ
             }
 
             port.collect(pipeline.context);
-            port.pump_clients(pipeline.context);
+            port.pump_clients(pipeline.context, pane);
         }
     };
 }
@@ -193,7 +193,8 @@ const Capture = struct {
         capture.record(.collect) catch unreachable;
     }
 
-    fn pumpClients(capture: *Capture) void {
+    fn pumpClients(capture: *Capture, pane: *Pane) void {
+        _ = pane;
         capture.record(.pump_clients) catch unreachable;
     }
 };

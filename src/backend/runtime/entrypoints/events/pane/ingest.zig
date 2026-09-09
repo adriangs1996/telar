@@ -47,7 +47,7 @@ pub fn RuntimePort(comptime Context: type) type {
         schedule_response: *const fn (*Context, *Pane) anyerror!void,
         start_read: *const fn (*Context, Read) anyerror!void,
         collect: *const fn (*Context) void,
-        pump_clients: *const fn (*Context) void,
+        pump_clients: *const fn (*Context, *Pane) void,
     };
 }
 
@@ -117,7 +117,7 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
             };
 
             port.collect(coordinator.context);
-            port.pump_clients(coordinator.context);
+            port.pump_clients(coordinator.context, pane);
         }
     };
 }
@@ -180,7 +180,8 @@ const Capture = struct {
         capture.record(.collect) catch unreachable;
     }
 
-    fn pumpClients(capture: *Capture) void {
+    fn pumpClients(capture: *Capture, pane: *Pane) void {
+        _ = pane;
         capture.record(.pump_clients) catch unreachable;
     }
 

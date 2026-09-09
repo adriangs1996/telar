@@ -429,8 +429,13 @@ pub const AttachmentStore = struct {
     items: [max_panes]?Attachment = [_]?Attachment{null} ** max_panes,
     count: usize = 0,
     index: SlotIndex(2 * max_panes) = .{},
+    /// One bit per occupied slot, so a delivery lane visits the attached
+    /// panes instead of probing every slot.
+    occupied: OccupancyMask = 0,
     workspace: ?schema.WorkspaceLocation = null,
     shared_graphics: bool = false,
+
+    const OccupancyMask = std.meta.Int(.unsigned, max_panes);
 
     pub fn find(store: *AttachmentStore, pane_id: schema.PaneId) ?*Attachment {
         const slot = store.index.get(schema.id.raw(pane_id)) orelse return null;
@@ -530,6 +535,23 @@ pub const AttachmentStore = struct {
         return if (store.items[index]) |*attachment| attachment else null;
     }
 
+    /// Returns the first occupied slot at or after `from`, wrapping around,
+    /// or null when no pane is attached. Walking the store this way costs
+    /// the attached panes rather than the capacity.
+    ///
+    /// ```zig
+    /// var index = store.occupiedFrom(0) orelse return;
+    /// ```
+    pub fn occupiedFrom(store: *const AttachmentStore, from: usize) ?usize {
+        if (store.occupied == 0) {
+            return null;
+        }
+
+        const start: std.math.Log2Int(OccupancyMask) = @intCast(from % max_panes);
+        const rotated = std.math.rotr(OccupancyMask, store.occupied, start);
+        return (from % max_panes + @ctz(rotated)) % max_panes;
+    }
+
     pub fn iterator(store: *const AttachmentStore) Iterator {
         return .{ .store = store };
     }
@@ -580,6 +602,7 @@ pub const AttachmentStore = struct {
                 slot.* = try Attachment.init(gpa, pane);
                 slot.*.?.configureGraphics(store.shared_graphics);
                 store.index.put(schema.id.raw(pane.id), position);
+                store.occupied |= @as(OccupancyMask, 1) << @intCast(position);
                 if (store.workspace == null) {
                     store.workspace = pane.location.workspace;
                 }
@@ -610,6 +633,7 @@ pub const AttachmentStore = struct {
         attachment.deinit();
         store.index.remove(schema.id.raw(pane_id));
         store.items[position] = null;
+        store.occupied &= ~(@as(OccupancyMask, 1) << @intCast(position));
         store.count -= 1;
 
         return .{
@@ -666,6 +690,7 @@ pub const AttachmentStore = struct {
             slot.* = null;
         }
         store.index.reset();
+        store.occupied = 0;
         store.count = 0;
         store.workspace = null;
     }
@@ -1169,7 +1194,15 @@ test "attachment store reports and commits workspace departure on the last pane"
     try std.testing.expect(!store.leaveWorkspace(workspace));
     try std.testing.expect(store.detach(try schema.id.pane(99)) == null);
 
+    // The occupancy walk visits both slots from any start and wraps around.
+    try std.testing.expectEqual(@as(?usize, 0), store.occupiedFrom(0));
+    try std.testing.expectEqual(@as(?usize, 1), store.occupiedFrom(1));
+    try std.testing.expectEqual(@as(?usize, 0), store.occupiedFrom(2));
+    try std.testing.expectEqual(@as(?usize, 0), store.occupiedFrom(AttachmentStore.capacity - 1));
+
     const first_detached = store.detach(first.id).?;
+    try std.testing.expectEqual(@as(?usize, 1), store.occupiedFrom(0));
+    try std.testing.expectEqual(@as(?usize, 1), store.occupiedFrom(2));
 
     try std.testing.expectEqual(first.id, first_detached.pane_id);
     try std.testing.expectEqualDeep(workspace, first_detached.workspace);
@@ -1183,6 +1216,7 @@ test "attachment store reports and commits workspace departure on the last pane"
 
     try std.testing.expect(second_detached.last_attachment);
     try std.testing.expectEqual(@as(usize, 0), store.len());
+    try std.testing.expect(store.occupiedFrom(0) == null);
     try std.testing.expect(store.observes(workspace));
     try std.testing.expect(!store.leaveWorkspace(.{ .workspace = try schema.id.workspace(2) }));
     try std.testing.expect(store.leaveWorkspace(workspace));

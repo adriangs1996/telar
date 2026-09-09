@@ -123,6 +123,12 @@ pub const Application = struct {
     session: session_checkpoint.State = .{},
     session_name_probe_in_flight: bool = false,
     input_sequence: u64 = 0,
+    /// The inherited HOME, resolved once: delivery shortens agent cwd labels
+    /// with it on every pump.
+    home: ?[]const u8,
+    /// Set when pane collection changed runtime state that every client must
+    /// hear about, so the next targeted pump widens to all clients.
+    pump_all_pending: bool = false,
 
     /// Composes application state from stable, runtime-owned capabilities.
     ///
@@ -141,6 +147,7 @@ pub const Application = struct {
             .history_service = initialization.history_service,
             .child_environment = initialization.child_environment,
             .inherited_environment = initialization.inherited_environment,
+            .home = initialization.inherited_environment.getPosix("HOME"),
             .socket_path = initialization.socket_path,
             .executable_path = executable_path,
             .executable_path_len = executable_path_len,
@@ -212,7 +219,9 @@ pub const Application = struct {
     /// application.collect();
     /// ```
     pub fn collect(application: *Application) void {
-        application.collectFinished();
+        if (application.collectFinished()) {
+            application.pump_all_pending = true;
+        }
     }
 
     /// Revokes the proxy credential associated with a pane, when enabled.
@@ -382,14 +391,16 @@ pub const Application = struct {
     /// Reaps panes whose child exited and which no actor still borrows, then
     /// closes tabs that ran out of panes. Spans three stores, which is why it
     /// lives on the application rather than on any one of them.
-    fn collectFinished(application: *Application) void {
+    /// Destroys panes no client still holds and reports whether any left.
+    fn collectFinished(application: *Application) bool {
         const store = &application.model.panes;
         var workspaces = application.workspaceRepository();
 
         if (store.exited_count == 0) {
-            return;
+            return false;
         }
 
+        var destroyed = false;
         for (&store.items) |*slot| {
             const pane = slot.* orelse continue;
 
@@ -416,6 +427,7 @@ pub const Application = struct {
                 application.revokePaneCredential(pane);
                 pane.destroy();
                 application.noteSessionChange();
+                destroyed = true;
 
                 if (!store.hasAt(location) and workspaces.reader().contains(location)) {
                     const removed = workspace_mod.removeTab(&workspaces, location).?;
@@ -425,6 +437,7 @@ pub const Application = struct {
                 application.completeEmptyWorkspaceDepartures(location.workspace);
             }
         }
+        return destroyed;
     }
 
     /// Starts idempotent client teardown and removes it after actor claims end.
@@ -748,6 +761,7 @@ pub const Application = struct {
     /// application.pumpAll();
     /// ```
     pub fn pumpAll(application: *Application) void {
+        application.pump_all_pending = false;
         for (&application.clients.items) |*slot| {
             const session = slot.* orelse continue;
             const key = session.key;
@@ -757,6 +771,31 @@ pub const Application = struct {
             const pane = slot orelse continue;
             application.settlePaneDamage(pane);
         }
+    }
+
+    /// Pumps only the clients attached to `pane` after its output changed,
+    /// then settles that pane's damage. Widens to every client when pane
+    /// collection changed state the others must hear about.
+    ///
+    /// ```zig
+    /// application.pumpPaneClients(pane);
+    /// ```
+    pub fn pumpPaneClients(application: *Application, pane: *Pane) void {
+        if (application.pump_all_pending) {
+            application.pumpAll();
+            return;
+        }
+
+        for (&application.clients.items) |*slot| {
+            const session = slot.* orelse continue;
+            if (session.attachments.find(pane.id) == null) {
+                continue;
+            }
+
+            const key = session.key;
+            application.pump(session) catch application.dropClient(key);
+        }
+        application.settlePaneDamage(pane);
     }
 
     fn settlePaneDamage(application: *Application, pane: *Pane) void {
@@ -821,7 +860,7 @@ pub const Application = struct {
                 .proxy_active = application.proxy_runtime.active(),
                 .proxy_scope = application.proxy_runtime.interceptionScope(),
                 .proxy_system_trusted = application.proxy_runtime.systemTrusted(),
-                .home = application.inherited_environment.getPosix("HOME"),
+                .home = application.home,
                 .client_layouts = &application.model.client_layouts,
             },
             .metrics = &application.metrics,
@@ -830,8 +869,12 @@ pub const Application = struct {
             session.delivery.abort(prepared);
         };
 
-        for (0..attachment_mod.AttachmentStore.capacity) |index| {
-            const attachment = session.attachments.at(index) orelse continue;
+        var remaining = session.attachments.len();
+        var index: usize = 0;
+        while (remaining != 0) : (remaining -= 1) {
+            index = session.attachments.occupiedFrom(index) orelse break;
+            defer index += 1;
+            const attachment = session.attachments.at(index).?;
             if (attachment.pane.media.hasPending()) {
                 try RuntimeEvents.schedulePaneMedia(application, attachment.pane);
             }

@@ -144,8 +144,8 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
             context.application.collect();
         }
 
-        fn pumpAfterOutput(context: *OutputRuntime) void {
-            context.application.pumpAll();
+        fn pumpAfterOutput(context: *OutputRuntime, pane: *Pane) void {
+            context.application.pumpPaneClients(pane);
         }
 
         fn ingestPane(task: PaneIngestTask) PaneIngestEvent {
@@ -176,7 +176,7 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
             .schedule_response = dependencies.schedule_response,
             .start_read = startNextPaneRead,
             .collect = collectPaneLifecycle,
-            .pump_clients = pumpRuntimeClients,
+            .pump_clients = pumpIngestedPaneClients,
         };
 
         const RuntimePaneIngestCoordinator = pane_ingest_coordinator.Coordinator(Application, pane_ingest_runtime_port);
@@ -231,6 +231,10 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
 
         fn pumpRuntimeClients(application: *Application) void {
             application.pumpAll();
+        }
+
+        fn pumpIngestedPaneClients(application: *Application, pane: *Pane) void {
+            application.pumpPaneClients(pane);
         }
     };
 }

@@ -566,10 +566,12 @@ pub const Delivery = struct {
         const attachments = preparation.attachments;
         const buffer = delivery.send_buffer;
 
-        var checked: usize = 0;
-        while (checked < AttachmentStore.capacity) : (checked += 1) {
-            const index = (delivery.next_attachment + checked) % AttachmentStore.capacity;
-            const attachment = attachments.at(index) orelse continue;
+        var remaining = attachments.len();
+        var index = delivery.next_attachment % AttachmentStore.capacity;
+        while (remaining != 0) : (remaining -= 1) {
+            index = attachments.occupiedFrom(index) orelse return null;
+            defer index = (index + 1) % AttachmentStore.capacity;
+            const attachment = attachments.at(index).?;
             const candidate: ?attachment_mod.Attachment.Prepared = switch (lane) {
                 .cwd => try attachment.prepareCwd(buffer),
                 .foreground => try attachment.prepareForeground(buffer),
