@@ -26,7 +26,7 @@ fn prepareFrame(fixture: *PaneFixture, attachment: *Attachment, buffer: []u8) !s
 
 fn establishBaseline(fixture: *PaneFixture, attachment: *Attachment, buffer: []u8) !void {
     const frame = try prepareFrame(fixture, attachment, buffer);
-    const received_at_ns = attachment.cells.outstanding.?.sent_ns +| 1;
+    const received_at_ns = attachment.cells.lastSentNs().? +| 1;
 
     try std.testing.expect(attachment.cells.acknowledge(frame.frame_id, received_at_ns) != null);
 }
@@ -90,7 +90,7 @@ test "a current attachment skips retained damage while a stale attachment receiv
 
     _ = try fixture.pane.ingest(std.testing.io, "visible");
     const current_frame = try prepareFrame(&fixture, current, &current_buffer);
-    const received_at_ns = current.cells.outstanding.?.sent_ns +| 1;
+    const received_at_ns = current.cells.lastSentNs().? +| 1;
 
     try std.testing.expect(current.cells.acknowledge(current_frame.frame_id, received_at_ns) != null);
     try std.testing.expect(fixture.pane.dirty);
@@ -140,7 +140,7 @@ test "a moved viewport is delivered as a patch against the acknowledged frame" {
     var scrolled_spans = scrolled.spans();
     try std.testing.expect((try scrolled_spans.next()) != null);
 
-    const received_at_ns = attachment.cells.outstanding.?.sent_ns +| 1;
+    const received_at_ns = attachment.cells.lastSentNs().? +| 1;
     try std.testing.expect(attachment.cells.acknowledge(scrolled.frame_id, received_at_ns) != null);
 
     // Returning to the live screen leaves the pin and projects from the pane
@@ -152,4 +152,44 @@ test "a moved viewport is delivered as a patch against the acknowledged frame" {
     var restored_spans = restored.spans();
     try std.testing.expect((try restored_spans.next()) != null);
     try std.testing.expectEqual(snapshots_before, fixture.metrics.snapshots);
+}
+
+test "two dependent patches may be in flight and one acknowledgement releases both" {
+    var fixture: PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+
+    const attachment = fixture.attachments.find(fixture.pane.id).?;
+    var buffer: [16 * 1024]u8 = undefined;
+    try establishBaseline(&fixture, attachment, &buffer);
+    const baseline_frame_id = attachment.cells.acknowledged_frame_id;
+
+    _ = try fixture.pane.ingest(std.testing.io, "a");
+    const first = try prepareFrame(&fixture, attachment, &buffer);
+    try std.testing.expectEqual(baseline_frame_id, first.base_frame_id);
+    try std.testing.expect(!attachment.cells.windowFull());
+
+    // The second patch is diffed against the first, not the acknowledged one.
+    _ = try fixture.pane.ingest(std.testing.io, "b");
+    const second = try prepareFrame(&fixture, attachment, &buffer);
+    try std.testing.expectEqual(first.frame_id, second.base_frame_id);
+    try std.testing.expect(attachment.cells.windowFull());
+    try std.testing.expectEqual(first.frame_id, attachment.outstandingFrameId());
+
+    // A third waits for the window.
+    _ = try fixture.pane.ingest(std.testing.io, "c");
+    try std.testing.expect((try attachment.prepareNextCells(.{
+        .io = std.testing.io,
+        .buffer = &buffer,
+        .metrics = &fixture.metrics,
+    })) == null);
+
+    // The client presented both and acknowledged the newest.
+    const received_at_ns = attachment.cells.lastSentNs().? +| 1;
+    try std.testing.expect(attachment.cells.acknowledge(second.frame_id, received_at_ns) != null);
+    try std.testing.expectEqual(@as(u64, 0), attachment.outstandingFrameId());
+    try std.testing.expect(attachment.cells.acknowledge(first.frame_id, received_at_ns) == null);
+
+    const third = try prepareFrame(&fixture, attachment, &buffer);
+    try std.testing.expectEqual(second.frame_id, third.base_frame_id);
 }

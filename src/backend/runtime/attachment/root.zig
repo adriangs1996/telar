@@ -214,7 +214,7 @@ pub const Attachment = struct {
             return .{ .bytes = payload, .effect = .cells };
         }
 
-        if (attachment.cells.hasOutstanding()) {
+        if (attachment.cells.windowFull()) {
             return null;
         }
 
@@ -1248,6 +1248,12 @@ test "pointer-only frames coalesce independently and survive snapshot recovery" 
     try std.testing.expectEqual(initial.frame_id, changed.base_frame_id);
     _ = first.acknowledgeFrame(changed.frame_id, 0);
     try std.testing.expect((try first.prepareNextCells(preparation)) == null);
+    // The slow client has one more window slot: the pointer change follows
+    // its unacknowledged frame as a dependent patch.
+    const slow_pointer = (try schema.decodeServer((try second.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(schema.frame.PointerShape.pointer, slow_pointer.pointer_shape);
+    try std.testing.expectEqual(@as(u16, 0), slow_pointer.span_count);
+    try std.testing.expectEqual(slow_id, slow_pointer.base_frame_id);
     try std.testing.expect((try second.prepareNextCells(preparation)) == null);
 
     _ = try fixture.pane.ingest(std.testing.io, "\x1b]22;wait\x1b\\\x1b]22;zoom-in\x1b\\");
@@ -1255,12 +1261,13 @@ test "pointer-only frames coalesce independently and survive snapshot recovery" 
     try std.testing.expectEqual(schema.frame.PointerShape.zoom_in, latest.pointer_shape);
     try std.testing.expectEqual(@as(u16, 0), latest.span_count);
     _ = first.acknowledgeFrame(latest.frame_id, 0);
+    // The slow client's window is full until it acknowledges something.
     try std.testing.expect((try second.prepareNextCells(preparation)) == null);
     _ = second.acknowledgeFrame(slow_id, 0);
     const caught_up = (try schema.decodeServer((try second.prepareNextCells(preparation)).?.bytes)).pane_frame;
     try std.testing.expectEqual(schema.frame.PointerShape.zoom_in, caught_up.pointer_shape);
     try std.testing.expectEqual(@as(u16, 0), caught_up.span_count);
-    try std.testing.expectEqual(slow_id, caught_up.base_frame_id);
+    try std.testing.expectEqual(slow_pointer.frame_id, caught_up.base_frame_id);
 
     first.requestCellSnapshot();
     const recovered = (try schema.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
