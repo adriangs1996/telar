@@ -32,14 +32,16 @@ pub const Resources = struct {
     metrics: *RuntimeMetrics,
 };
 
-/// Defines the async writer and lifecycle effects supplied by the runtime.
+/// Defines the writer and lifecycle effects supplied by the runtime. `start`
+/// returns true when it wrote every byte before returning, so the pump can
+/// settle the borrow without a completion event.
 ///
 /// ```zig
 /// const port: RuntimePort(Context) = .{ .start = start, .collect = collect };
 /// ```
 pub fn RuntimePort(comptime Context: type) type {
     return struct {
-        start: *const fn (*Context, Write) anyerror!void,
+        start: *const fn (*Context, Write) anyerror!bool,
         collect: *const fn (*Context) void,
     };
 }
@@ -67,11 +69,13 @@ pub fn Pump(comptime Context: type, comptime port: RuntimePort(Context)) type {
 
         /// Starts at most one write for the pane. Async-start failure rolls
         /// back the borrow and preserves every queued byte for a later retry.
+        /// A write the port finished immediately is settled here, so the
+        /// backlog drains without a completion event.
         ///
         /// ```zig
         /// try pump.schedule(pane);
         /// ```
-        pub fn schedule(pump: *Self, pane: *Pane) !void {
+        pub fn schedule(pump: *Self, pane: *Pane) anyerror!void {
             const bytes = pane.beginPtyInputWrite() orelse return;
             const write: Write = .{
                 .io = pump.resources.io,
@@ -80,10 +84,14 @@ pub fn Pump(comptime Context: type, comptime port: RuntimePort(Context)) type {
                 .started_ns = if (comptime diagnostics.enabled) diagnostics.now(pump.resources.io) else 0,
             };
 
-            port.start(pump.context, write) catch |err| {
+            const completed = port.start(pump.context, write) catch |err| {
                 pane.cancelPtyInputWrite();
                 return err;
             };
+
+            if (completed) {
+                try pump.complete(.{ .pane = pane.key(), .started_ns = write.started_ns, .result = {} });
+            }
         }
 
         /// Applies exactly one completion to its generation-matched pane.
@@ -122,15 +130,23 @@ const Capture = struct {
     starts: usize = 0,
     collects: usize = 0,
     start_failure: ?anyerror = null,
+    immediate_writes: usize = 0,
     last_bytes: []const u8 = "",
 
-    fn start(capture: *Capture, write: Write) !void {
+    fn start(capture: *Capture, write: Write) !bool {
         capture.starts += 1;
         capture.last_bytes = write.bytes;
 
         if (capture.start_failure) |failure| {
             return failure;
         }
+
+        if (capture.immediate_writes == 0) {
+            return false;
+        }
+
+        capture.immediate_writes -= 1;
+        return true;
     }
 
     fn collect(capture: *Capture) void {
@@ -302,5 +318,34 @@ test "stale completion is counted without touching writer or lifecycle ports" {
     try expectInputTiming(&metrics, 0);
     try std.testing.expect(pane.input_write_pending);
     try std.testing.expectEqualStrings("still borrowed", pane.input_queue.nextChunk().?);
+    pane.cancelPtyInputWrite();
+}
+
+test "an immediate write settles its borrow and drains the backlog without a completion" {
+    var pane: Pane = undefined;
+    initTestPane(&pane);
+    var panes: PaneStore = .{};
+    try panes.insert(&pane);
+    var metrics: RuntimeMetrics = .{ .started_ns = 0 };
+    var capture: Capture = .{ .immediate_writes = 1 };
+    var pump = testPump(&capture, &panes, &metrics);
+    try std.testing.expect(pane.queuePtyInput("first"));
+
+    try pump.schedule(&pane);
+
+    try std.testing.expectEqual(@as(usize, 1), capture.starts);
+    try std.testing.expectEqual(@as(usize, 1), capture.collects);
+    try std.testing.expect(pane.input_queue.nextChunk() == null);
+    try std.testing.expect(!pane.input_write_pending);
+    try std.testing.expectEqual(@as(u8, 0), pane.actor_count);
+    try expectInputTiming(&metrics, 1);
+
+    try std.testing.expect(pane.queuePtyInput("second"));
+    try pump.schedule(&pane);
+
+    try std.testing.expectEqual(@as(usize, 2), capture.starts);
+    try std.testing.expectEqualStrings("second", capture.last_bytes);
+    try std.testing.expect(pane.input_write_pending);
+    try std.testing.expectEqual(@as(u8, 1), pane.actor_count);
     pane.cancelPtyInputWrite();
 }

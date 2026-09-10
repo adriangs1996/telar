@@ -79,9 +79,55 @@ pub fn Dispatcher(comptime Application: type) type {
             });
         }
 
-        fn startPaneInputWrite(application: *Application, write: pane_input_pump.Write) !void {
+        fn startPaneInputWrite(application: *Application, write: pane_input_pump.Write) !bool {
             core.echo_trace.mark(application.io, .pty_write_queued);
-            try application.select.concurrent(.pane_input_written, writePaneInput, .{write});
+            const written = writeInline(write) orelse 0;
+            if (written == write.bytes.len) {
+                return true;
+            }
+
+            const remainder: pane_input_pump.Write = .{
+                .io = write.io,
+                .pane = write.pane,
+                .bytes = write.bytes[written..],
+                .started_ns = write.started_ns,
+            };
+            try application.select.concurrent(.pane_input_written, writePaneInput, .{remainder});
+            return false;
+        }
+
+        /// Longest message written from the event loop. Covers plain keys
+        /// and legacy CSI keys; pastes and long sequences use the actor.
+        const max_inline_input_bytes = 4;
+
+        /// Writes a short message from the event loop, one byte per
+        /// writable poll, while no other writer holds the PTY. The master is
+        /// a blocking descriptor shared with the reader, and the kernel only
+        /// promises that one byte follows a positive poll without sleeping;
+        /// a longer write could park the loop on a wedged PTY. A keystroke
+        /// then reaches the child without an actor hop; whatever the kernel
+        /// does not take goes to the actor.
+        fn writeInline(write: pane_input_pump.Write) ?usize {
+            if (write.bytes.len > max_inline_input_bytes or !write.pane.pty_write_mutex.tryLock()) {
+                return null;
+            }
+
+            defer write.pane.pty_write_mutex.unlock(write.io);
+            const path = diagnostics.enter(.interactive);
+            defer path.restore();
+            core.echo_trace.mark(write.io, .pty_write_start);
+            defer core.echo_trace.mark(write.io, .pty_write_done);
+            var written: usize = 0;
+            while (written < write.bytes.len and write.pane.session.writable()) {
+                const count = write.pane.session.writeSome(write.bytes[written..][0..1]) orelse break;
+                if (count == 0) {
+                    break;
+                }
+
+                written += count;
+            }
+
+            return written;
         }
 
         fn writePaneInput(write: pane_input_pump.Write) PaneInputEvent {

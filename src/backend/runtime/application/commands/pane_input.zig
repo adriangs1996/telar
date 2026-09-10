@@ -43,8 +43,10 @@ pub const Forwarder = struct {
 
     /// Offers one input message to the bounded history observer before making
     /// it available to the PTY writer. This ordering prevents child output from
-    /// overtaking the input observation. PTY queue saturation drops the complete
-    /// message while preserving previously queued bytes.
+    /// overtaking the input observation. The observation actor itself starts
+    /// after the PTY write, so the keystroke never waits for that dispatch.
+    /// PTY queue saturation drops the complete message while preserving
+    /// previously queued bytes.
     ///
     /// ```zig
     /// try forwarder.forward(pane, "help\r");
@@ -69,10 +71,9 @@ pub const Forwarder = struct {
             .clock = pane_mod.historyClock(forwarder.io),
         });
         core.echo_trace.mark(forwarder.io, .input_observed);
-        try forwarder.scheduler.observation(forwarder.scheduler.context, pane);
-
         _ = pane.queuePtyInput(bytes);
         try forwarder.scheduler.input(forwarder.scheduler.context, pane);
+        try forwarder.scheduler.observation(forwarder.scheduler.context, pane);
     }
 };
 

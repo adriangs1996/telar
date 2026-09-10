@@ -361,12 +361,21 @@ through its request-scoped controller:
 1. resolves the client's attachment and rejects stale or exited panes;
 2. copies the bytes into the best-effort history observer;
 3. appends them to the pane's bounded input queue;
-4. asks `operation_scheduler.zig` to schedule pane input.
+4. asks `operation_scheduler.zig` to schedule pane input;
+5. asks it to start the history observation actor, after the PTY write, so the
+   keystroke never waits for that dispatch. The observer queue already holds
+   the input ahead of any child output.
 
-`PaneEvents.Io.scheduleInput` permits one in-flight write per pane.
-`writePaneInput` serializes PTY writes with terminal-query responses and writes
-the bytes to the child PTY. Its `.pane_input_written` completion consumes the
-queue prefix and schedules the next chunk. A blocked pane write does not block
+`PaneEvents.Io.scheduleInput` permits one in-flight write per pane. A message
+of at most four bytes, with no other PTY writer holding the pane, is written
+from the event loop one byte per positive `poll`, and its borrow settles at
+once; a keystroke then reaches the child without an actor hop. The master is a
+blocking descriptor shared with the reader, and one byte after a positive poll
+is all the kernel promises not to sleep on. Longer messages, bytes the kernel
+does not accept, and a PTY another writer holds go to `writePaneInput`,
+which serializes PTY writes with terminal-query responses and writes the rest
+to the child PTY. Its `.pane_input_written` completion consumes the queue
+prefix and schedules the next chunk. A blocked pane write does not block
 the event loop or another pane.
 
 ## 4. Child output and VT ingestion
@@ -383,7 +392,10 @@ There is no assumption that one key produces one frame.
 2. feeds copies to the observation and media queues;
 3. acquires the VT borrow and runs `ingestPane` inline only when
    `Pane.canInlineOutput` admits the entire fragment; otherwise it schedules
-   the interactive ingest actor.
+   the interactive ingest actor;
+4. starts the observation and media actors only after an actor ingest was
+   dispatched. After an inline ingest the ingest coordinator starts them,
+   behind the client frame.
 
 Inline admission allows at most 32 printable ASCII bytes. Ghostty must be at
 parser and UTF-8 ground, with no pending wrap, insertion, alternate charset,
@@ -402,8 +414,9 @@ The inline result enters the same completion handler after the output pipeline
 returns, without queuing an event or exposing the VT mid-ingest. The actor
 still reports `.pane_ingested`. Both delegate to `Coordinator` in
 `src/backend/runtime/entrypoints/events/pane/ingest.zig`. It applies deferred
-resize state, schedules terminal responses and the next PTY read, then calls
-`Application.pumpAll`.
+resize state, refreshes client attachments, schedules terminal responses and
+pumps the pane's clients, so the frame is dispatched before the next PTY read
+is armed and before the observation and media actors start.
 
 ## 5. Runtime frame publication
 

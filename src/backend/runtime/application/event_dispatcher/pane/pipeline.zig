@@ -115,16 +115,17 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
             gate: ?*IngestTestGate,
         };
 
-        fn startOutputIngest(context: *OutputRuntime, ingest: pane_output_pipeline.Ingest) !void {
+        fn startOutputIngest(context: *OutputRuntime, ingest: pane_output_pipeline.Ingest) !bool {
             core.echo_trace.mark(ingest.io, .vt_queued);
             const task: PaneIngestTask = .{ .ingest = ingest, .gate = context.ingest_gate };
 
             if (context.ingest_gate == null and ingest.pane.canInlineOutput(ingest.bytes)) {
                 context.inline_ingest = ingestPane(task);
-                return;
+                return true;
             }
 
             try context.application.select.concurrent(.pane_ingested, ingestPane, .{task});
+            return false;
         }
 
         fn paneHasOutstandingFrame(context: *OutputRuntime, pane_id: schema.PaneId) bool {

@@ -42,7 +42,9 @@ pub fn RuntimePort(comptime Context: type) type {
     return struct {
         schedule_observation: *const fn (*Context, *Pane) anyerror!void,
         schedule_media: *const fn (*Context, *Pane) anyerror!void,
-        start_ingest: *const fn (*Context, Ingest) anyerror!void,
+        /// Returns true when the ingest already completed inline; the ingest
+        /// coordinator then owns observer scheduling for that read.
+        start_ingest: *const fn (*Context, Ingest) anyerror!bool,
         has_outstanding_frame: *const fn (*Context, schema.PaneId) bool,
         collect: *const fn (*Context) void,
         pump_clients: *const fn (*Context, *Pane) void,
@@ -113,20 +115,24 @@ pub fn Pipeline(comptime Context: type, comptime port: RuntimePort(Context)) typ
                 .shell_foreground = shell_foreground,
                 .clock = pane_mod.historyClock(pipeline.resources.io),
             });
-            try port.schedule_observation(pipeline.context, pane);
-
             pane.queueMediaOutput(bytes);
-            try port.schedule_media(pipeline.context, pane);
 
             const ingest: Ingest = .{
                 .io = pipeline.resources.io,
                 .pane = pane,
                 .bytes = pane.beginOutputIngest(output_len),
             };
-            port.start_ingest(pipeline.context, ingest) catch |err| {
+            const ingested_inline = port.start_ingest(pipeline.context, ingest) catch |err| {
                 pane.cancelOutputIngest();
                 return err;
             };
+
+            // Observers start after the interactive work is dispatched; the
+            // queues above already hold their copies in arrival order.
+            if (!ingested_inline) {
+                try port.schedule_observation(pipeline.context, pane);
+                try port.schedule_media(pipeline.context, pane);
+            }
         }
 
         fn finishOutput(pipeline: *Self, pane: *Pane) !void {
@@ -158,6 +164,7 @@ const Capture = struct {
     observation_saw_history: bool = false,
     media_saw_output: bool = false,
     ingest_saw_borrow: bool = false,
+    ingest_inline: bool = false,
     ingest_bytes: []const u8 = "",
 
     fn record(capture: *Capture, step: Step) !void {
@@ -180,10 +187,11 @@ const Capture = struct {
         try capture.record(.media);
     }
 
-    fn startIngest(capture: *Capture, ingest: Ingest) !void {
+    fn startIngest(capture: *Capture, ingest: Ingest) !bool {
         capture.ingest_saw_borrow = ingest.pane.ingest_pending;
         capture.ingest_bytes = ingest.bytes;
         try capture.record(.ingest);
+        return capture.ingest_inline;
     }
 
     fn hasOutstandingFrame(capture: *Capture, _: schema.PaneId) bool {
@@ -283,7 +291,7 @@ test "EOF after exit queues the exit observation before lifecycle effects" {
     try std.testing.expect(fixture.pane.output_done);
 }
 
-test "data fans out before the VT ingest actor borrows the output buffer" {
+test "data fans out before the VT ingest actor borrows the output buffer, observers start after" {
     var fixture: test_support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -298,7 +306,7 @@ test "data fans out before the VT ingest actor borrows the output buffer" {
         .result = 6,
     });
 
-    try std.testing.expectEqualSlices(Step, &.{ .observation, .media, .ingest }, capture.steps[0..capture.len]);
+    try std.testing.expectEqualSlices(Step, &.{ .ingest, .observation, .media }, capture.steps[0..capture.len]);
     try std.testing.expect(capture.observation_saw_history);
     try std.testing.expect(capture.media_saw_output);
     try std.testing.expect(capture.ingest_saw_borrow);
@@ -336,7 +344,28 @@ test "data read while the shell owns the terminal expires stale progress" {
     fixture.pane.cancelOutputIngest();
 }
 
-test "observation scheduling failure stops before media and ingest" {
+test "an inline ingest leaves observer scheduling to the ingest coordinator" {
+    var fixture: test_support.PaneFixture = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    var panes: PaneStore = .{};
+    try insertFixturePane(&fixture, &panes);
+    fixture.pane.output_buffer[0] = 'x';
+    var capture: Capture = .{ .ingest_inline = true };
+    var pipeline = testPipeline(&capture, &panes, &fixture.metrics);
+
+    try pipeline.handle(.{
+        .pane = fixture.pane.key(),
+        .result = 1,
+    });
+
+    try std.testing.expectEqualSlices(Step, &.{.ingest}, capture.steps[0..capture.len]);
+    try std.testing.expect(fixture.pane.history_observer.hasPending());
+    try std.testing.expect(fixture.pane.ingest_pending);
+    fixture.pane.cancelOutputIngest();
+}
+
+test "observation scheduling failure stops before media and keeps the ingest running" {
     var fixture: test_support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -351,13 +380,14 @@ test "observation scheduling failure stops before media and ingest" {
         .result = 1,
     }));
 
-    try std.testing.expectEqualSlices(Step, &.{.observation}, capture.steps[0..capture.len]);
+    try std.testing.expectEqualSlices(Step, &.{ .ingest, .observation }, capture.steps[0..capture.len]);
     try std.testing.expect(capture.observation_saw_history);
-    try std.testing.expect(!fixture.pane.ingest_pending);
-    try std.testing.expectEqual(@as(u8, 0), fixture.pane.actor_count);
+    try std.testing.expect(fixture.pane.ingest_pending);
+    try std.testing.expectEqual(@as(u8, 1), fixture.pane.actor_count);
+    fixture.pane.cancelOutputIngest();
 }
 
-test "media scheduling failure stops before ingest" {
+test "media scheduling failure keeps the ingest running" {
     var fixture: test_support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -372,10 +402,11 @@ test "media scheduling failure stops before ingest" {
         .result = 1,
     }));
 
-    try std.testing.expectEqualSlices(Step, &.{ .observation, .media }, capture.steps[0..capture.len]);
+    try std.testing.expectEqualSlices(Step, &.{ .ingest, .observation, .media }, capture.steps[0..capture.len]);
     try std.testing.expect(capture.media_saw_output);
-    try std.testing.expect(!fixture.pane.ingest_pending);
-    try std.testing.expectEqual(@as(u8, 0), fixture.pane.actor_count);
+    try std.testing.expect(fixture.pane.ingest_pending);
+    try std.testing.expectEqual(@as(u8, 1), fixture.pane.actor_count);
+    fixture.pane.cancelOutputIngest();
 }
 
 test "ingest start failure releases its buffer borrow" {
@@ -393,7 +424,7 @@ test "ingest start failure releases its buffer borrow" {
         .result = 1,
     }));
 
-    try std.testing.expectEqualSlices(Step, &.{ .observation, .media, .ingest }, capture.steps[0..capture.len]);
+    try std.testing.expectEqualSlices(Step, &.{.ingest}, capture.steps[0..capture.len]);
     try std.testing.expect(capture.ingest_saw_borrow);
     try std.testing.expect(!fixture.pane.ingest_pending);
     try std.testing.expectEqual(@as(u8, 0), fixture.pane.actor_count);

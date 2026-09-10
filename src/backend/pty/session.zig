@@ -83,6 +83,34 @@ pub const Session = struct {
         return session.file().writeStreamingAll(io, bytes);
     }
 
+    /// Whether the PTY input queue accepts at least one byte right now. A
+    /// single poll with no timeout; the kernel promises one byte after a
+    /// positive answer, nothing more.
+    ///
+    /// ```zig
+    /// if (session.writable()) { _ = session.writeSome(bytes); }
+    /// ```
+    pub fn writable(session: *const Session) bool {
+        var polling = [1]std.c.pollfd{.{ .fd = session.master, .events = std.posix.POLL.OUT, .revents = 0 }};
+        const ready = std.c.poll(&polling, polling.len, 0);
+        return ready > 0 and polling[0].revents & std.posix.POLL.OUT != 0;
+    }
+
+    /// Issues one write and returns how many bytes the kernel accepted, or
+    /// null when the write failed. The caller decides how to retry.
+    ///
+    /// ```zig
+    /// const written = session.writeSome(bytes) orelse 0;
+    /// ```
+    pub fn writeSome(session: *const Session, bytes: []const u8) ?usize {
+        const count = std.c.write(session.master, bytes.ptr, bytes.len);
+        if (count < 0) {
+            return null;
+        }
+
+        return @intCast(count);
+    }
+
     fn file(session: *const Session) File {
         return .{
             .handle = session.master,
