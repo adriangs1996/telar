@@ -17,10 +17,6 @@ pub const Preparation = struct {
     buffer: []u8,
     pane: *Pane,
     force_snapshot: bool,
-    /// Projects every row instead of trusting emulator damage, then diffs the
-    /// result against the acknowledged cells. A moved viewport needs this: the
-    /// emulator marks nothing dirty when only the visible window changes.
-    force_projection: bool = false,
     metrics: *RuntimeMetrics,
 };
 
@@ -39,21 +35,9 @@ pub const Sync = struct {
     observed_revision: u64 = 0,
     next_frame_id: u64 = 1,
     acknowledged_frame_id: u64 = 0,
-    /// The id the next patch is diffed against: the newest frame sent, acked
-    /// or not, because the client applies frames in order.
-    last_sent_frame_id: u64 = 0,
-    /// Frames sent and not yet acknowledged, oldest first. A second frame
-    /// may follow the first before its acknowledgement returns, so a burst of
-    /// output does not pay a client paint and two socket hops per frame.
-    outstanding: [frame_window]Outstanding = undefined,
-    outstanding_count: u8 = 0,
+    outstanding: ?Outstanding = null,
     snapshot_pending: bool = true,
-    /// The client viewport moved since the last projection. The next frame
-    /// projects every row and sends the difference as a patch, not a snapshot.
-    viewport_moved: bool = false,
     gpa: std.mem.Allocator,
-
-    pub const frame_window = 2;
 
     const Outstanding = struct {
         frame_id: u64,
@@ -99,7 +83,7 @@ pub const Sync = struct {
             .cols = pane.screen.w,
             .rows = pane.screen.h,
         });
-        sync.outstanding_count = 0;
+        sync.outstanding = null;
         sync.snapshot_pending = true;
         return true;
     }
@@ -124,9 +108,7 @@ pub const Sync = struct {
 
     /// Moves this client's viewport without leaving the shared terminal
     /// scrolled. Returns whether the effective offset changed. On allocation
-    /// failure, the previous client viewport and projection state are
-    /// preserved. A changed viewport marks the next frame as a full projection
-    /// diffed against the acknowledged cells; it never schedules a snapshot.
+    /// failure, the previous client viewport and snapshot state are preserved.
     ///
     /// ```zig
     /// const changed = try sync.setViewport(pane, requested_offset);
@@ -163,7 +145,7 @@ pub const Sync = struct {
             }
         }
 
-        sync.viewport_moved = true;
+        sync.snapshot_pending = true;
         return true;
     }
 
@@ -171,54 +153,22 @@ pub const Sync = struct {
         sync.snapshot_pending = true;
     }
 
-    /// The oldest unacknowledged frame, or zero when every sent frame was
-    /// acknowledged. Example: `if (sync.outstandingFrameId() != 0) wait();`.
     pub fn outstandingFrameId(sync: *const Sync) u64 {
-        return if (sync.outstanding_count != 0) sync.outstanding[0].frame_id else 0;
+        return if (sync.outstanding) |outstanding| outstanding.frame_id else 0;
     }
 
-    /// Whether the window is full and the next dependent patch must wait
-    /// for an acknowledgement. Example: `if (sync.windowFull()) return null;`.
-    pub fn windowFull(sync: *const Sync) bool {
-        return sync.outstanding_count == frame_window;
+    pub fn hasOutstanding(sync: *const Sync) bool {
+        return sync.outstanding != null;
     }
 
-    /// When the newest outstanding frame left, for latency measurement.
-    /// Example: `const sent_ns = sync.lastSentNs().?;`.
-    pub fn lastSentNs(sync: *const Sync) ?u64 {
-        if (sync.outstanding_count == 0) {
+    pub fn acknowledge(sync: *Sync, frame_id: u64, now_ns: u64) ?u64 {
+        const outstanding = sync.outstanding orelse return null;
+        if (outstanding.frame_id != frame_id) {
             return null;
         }
-        return sync.outstanding[sync.outstanding_count - 1].sent_ns;
-    }
-
-    /// Accepts an acknowledgement for any outstanding frame. The client
-    /// applies frames in order and acknowledges the newest it presented, so
-    /// every older outstanding frame is acknowledged with it.
-    ///
-    /// ```zig
-    /// const elapsed = sync.acknowledge(frame_id, now_ns) orelse return;
-    /// ```
-    pub fn acknowledge(sync: *Sync, frame_id: u64, now_ns: u64) ?u64 {
-        const index = for (sync.outstanding[0..sync.outstanding_count], 0..) |outstanding, index| {
-            if (outstanding.frame_id == frame_id) {
-                break index;
-            }
-        } else return null;
-
-        const elapsed = diagnostics.elapsed(sync.outstanding[index].sent_ns, now_ns);
-        const remaining = sync.outstanding_count - (index + 1);
-        std.mem.copyForwards(Outstanding, sync.outstanding[0..remaining], sync.outstanding[index + 1 .. sync.outstanding_count]);
-        sync.outstanding_count = @intCast(remaining);
         sync.acknowledged_frame_id = frame_id;
-        return elapsed;
-    }
-
-    fn recordSent(sync: *Sync, frame_id: u64, sent_ns: u64) void {
-        std.debug.assert(sync.outstanding_count < frame_window);
-        sync.outstanding[sync.outstanding_count] = .{ .frame_id = frame_id, .sent_ns = sent_ns };
-        sync.outstanding_count += 1;
-        sync.last_sent_frame_id = frame_id;
+        sync.outstanding = null;
+        return diagnostics.elapsed(outstanding.sent_ns, now_ns);
     }
 
     const Projection = struct {
@@ -256,14 +206,9 @@ pub const Sync = struct {
                 .scroll = scrollState(screen.pages.scrollbar()),
             };
         }
-
-        if (force) {
-            @memset(sync.projected_damage, true);
-        }
-
         return .{
             .buffer = &pane.screen,
-            .damaged_rows = if (force) sync.projected_damage else pane.damaged_rows,
+            .damaged_rows = pane.damaged_rows,
             .cursor = pane.cursor,
             .scroll = scrollState(screen.pages.scrollbar()),
         };
@@ -296,7 +241,7 @@ pub const Sync = struct {
         if (pane.render_pending) {
             try pane.render(false);
         }
-        const projection = try sync.project(pane, force_snapshot or preparation.force_projection);
+        const projection = try sync.project(pane, force_snapshot);
         const source = projection.buffer;
         var span_storage: [schema.frame.max_span_count]schema.frame.Span = undefined;
         var snapshot = force_snapshot;
@@ -346,7 +291,7 @@ pub const Sync = struct {
         const payload = try schema.encodePaneFrame(buffer, .{
             .pane_id = pane.id,
             .frame_id = frame_id,
-            .base_frame_id = if (snapshot) 0 else sync.last_sent_frame_id,
+            .base_frame_id = if (snapshot) 0 else sync.acknowledged_frame_id,
             .cols = source.w,
             .rows = source.h,
             .cursor = projection.cursor,
@@ -370,12 +315,7 @@ pub const Sync = struct {
         sync.acknowledged_pointer_shape = pane.pointer_shape;
         sync.acknowledged_scroll = projection.scroll;
         sync.observeProjection(pane, projection);
-        if (snapshot) {
-            // A snapshot supersedes every patch still in flight; their
-            // acknowledgements arrive as stale.
-            sync.outstanding_count = 0;
-        }
-        sync.recordSent(frame_id, diagnostics.now(io));
+        sync.outstanding = .{ .frame_id = frame_id, .sent_ns = diagnostics.now(io) };
         if (comptime diagnostics.enabled) {
             var cell_count: u64 = 0;
             for (span_storage[0..span_count]) |span| cell_count += span.cells.len;
@@ -402,11 +342,10 @@ pub const Sync = struct {
     }
 
     fn observeProjection(sync: *Sync, pane: *const Pane, projection: Projection) void {
-        if (projection.damaged_rows.ptr == sync.projected_damage.ptr) {
+        if (projection.buffer == &sync.projected) {
             @memset(sync.projected_damage, false);
         }
 
-        sync.viewport_moved = false;
         sync.observed_revision = pane.cell_revision;
     }
 };

@@ -5,9 +5,7 @@
 //! interactive path. Glyph slots are opaque over their cell background; the
 //! telar mark keeps its own alpha, so it composes over any background the
 //! host paints, including one Telar does not know. Cell fallbacks remain
-//! underneath every placement. Slots stay resident across frames, so a
-//! hovered or focused row that recolors its icons costs a retransmission
-//! only the first time that color pair appears.
+//! underneath every placement.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -67,13 +65,7 @@ pub const Renderer = struct {
     slot_count: u8 = 0,
     placements: [ui_icons.max_marks]Placement = undefined,
     placement_count: u8 = 0,
-    /// Placements the host currently holds, so a change re-places only the
-    /// entries that moved instead of deleting and re-placing every one.
-    emitted_placements: [ui_icons.max_marks]Placement = undefined,
     emitted_placement_count: u8 = 0,
-    /// A rasterization was needed while the user was typing; it runs at
-    /// the next media pass after the idle boundary.
-    deferred: bool = false,
     visible: bool = false,
     image_emitted: bool = false,
     image_dirty: bool = false,
@@ -129,23 +121,6 @@ pub const Renderer = struct {
     }
 
     pub fn prepare(renderer: *Renderer, marks: []const ui_icons.Mark) !void {
-        return renderer.preparePaced(marks, true);
-    }
-
-    /// Whether a needed rasterization is waiting for the idle boundary.
-    /// Example: `if (renderer.preparationDeferred()) requestMediaAfterIdle();`.
-    pub fn preparationDeferred(renderer: *const Renderer) bool {
-        return renderer.deferred;
-    }
-
-    /// Like `prepare`, but a changed atlas is rasterized only while
-    /// `media_idle`; otherwise the current atlas and placements stay up and
-    /// the change waits, so FreeType never runs between keystrokes.
-    ///
-    /// ```zig
-    /// try renderer.preparePaced(marks, media_idle);
-    /// ```
-    pub fn preparePaced(renderer: *Renderer, marks: []const ui_icons.Mark, media_idle: bool) !void {
         if (marks.len > ui_icons.max_marks) {
             return error.TooManyIconMarks;
         }
@@ -161,39 +136,28 @@ pub const Renderer = struct {
         var next_slots: [ui_icons.max_marks]Slot = undefined;
         var next_slot_count: u8 = 0;
         var next_placements: [ui_icons.max_marks]Placement = undefined;
-        var collection: SlotCollection = .{
-            .slots = &next_slots,
-            .count = &next_slot_count,
-            .placements = &next_placements,
-        };
-        const raster_size = fitCell(renderer.cell_width, renderer.cell_height);
-        // Keep every slot the atlas already holds while the cell geometry is
-        // unchanged: hover and focus recolor a row's background, and a tuple
-        // seen once stays resident so the next hover moves placements only.
-        // The atlas is rebuilt from the current marks alone when the retained
-        // set no longer fits its slot or byte capacity.
-        var retained = renderer.pixel_width == raster_size.width and renderer.pixel_height == raster_size.height;
-        if (retained) {
-            @memcpy(next_slots[0..renderer.slot_count], renderer.slots[0..renderer.slot_count]);
-            next_slot_count = renderer.slot_count;
-        }
-        collectSlots(marks, &collection) catch |err| {
-            if (!retained) {
-                return err;
+        for (marks, 0..) |mark, mark_index| {
+            const wanted = slotFromMark(mark);
+            if (isWorkingIcon(mark.icon)) {
+                inline for (.{
+                    ui_icons.Icon.agent_working_0,
+                    ui_icons.Icon.agent_working_1,
+                    ui_icons.Icon.agent_working_2,
+                    ui_icons.Icon.agent_working_3,
+                }) |frame| {
+                    _ = try ensureSlot(&next_slots, &next_slot_count, .{
+                        .icon = frame,
+                        .foreground = mark.foreground,
+                        .background = mark.background,
+                        .columns = wanted.columns,
+                    });
+                }
             }
-            retained = false;
-            next_slot_count = 0;
-            try collectSlots(marks, &collection);
-        };
-        if (retained and (try rgbaLength(
-            @as(u32, raster_size.width) * widestSlot(next_slots[0..next_slot_count]),
-            @as(u32, raster_size.height) * next_slot_count,
-        )) > max_atlas_bytes) {
-            retained = false;
-            next_slot_count = 0;
-            try collectSlots(marks, &collection);
+            const slot = try ensureSlot(&next_slots, &next_slot_count, wanted);
+            next_placements[mark_index] = .{ .area = mark.area, .slot = slot };
         }
         const next_placement_count: u8 = @intCast(marks.len);
+        const raster_size = fitCell(renderer.cell_width, renderer.cell_height);
         const atlas_width = @as(u32, raster_size.width) * widestSlot(next_slots[0..next_slot_count]);
         const slots_changed = renderer.pixel_width != raster_size.width or
             renderer.pixel_height != raster_size.height or
@@ -203,11 +167,6 @@ pub const Renderer = struct {
                 next_slots[0..next_slot_count],
             );
 
-        if (slots_changed and !media_idle) {
-            renderer.deferred = true;
-            return;
-        }
-        renderer.deferred = false;
         if (slots_changed) {
             const atlas_height = std.math.mul(u32, raster_size.height, next_slot_count) catch
                 return error.IconAtlasTooLarge;
@@ -322,22 +281,14 @@ pub const Renderer = struct {
         }
 
         if (renderer.placements_dirty and renderer.image_emitted) {
-            // A placement re-emitted under its id replaces the host's; only
-            // ids past the new count need a delete.
-            var stale = renderer.placement_count;
-            while (stale < renderer.emitted_placement_count) : (stale += 1) {
+            for (0..renderer.emitted_placement_count) |index| {
                 written += try kitty.writeDeletePlacement(
                     writer,
                     image_id,
-                    first_placement_id + @as(u32, @intCast(stale)),
+                    first_placement_id + @as(u32, @intCast(index)),
                 );
             }
             for (renderer.placements[0..renderer.placement_count], 0..) |placement, index| {
-                if (index < renderer.emitted_placement_count and
-                    std.meta.eql(renderer.emitted_placements[index], placement))
-                {
-                    continue;
-                }
                 const columns: u32 = renderer.slots[placement.slot].columns;
                 written += try kitty.writePlacement(writer, .{
                     .image_id = image_id,
@@ -357,10 +308,6 @@ pub const Renderer = struct {
                     .z = z_index,
                 });
             }
-            @memcpy(
-                renderer.emitted_placements[0..renderer.placement_count],
-                renderer.placements[0..renderer.placement_count],
-            );
             renderer.emitted_placement_count = renderer.placement_count;
             renderer.placements_dirty = false;
         }
@@ -384,38 +331,6 @@ fn widestSlot(slots: []const Slot) u32 {
     }
 
     return widest;
-}
-
-const SlotCollection = struct {
-    slots: *[ui_icons.max_marks]Slot,
-    count: *u8,
-    placements: *[ui_icons.max_marks]Placement,
-};
-
-/// Resolves every mark to a slot, appending tuples the collection lacks, and
-/// records one placement per mark. Working icons reserve all four frames so
-/// the animation never needs a new atlas.
-fn collectSlots(marks: []const ui_icons.Mark, collection: *SlotCollection) !void {
-    for (marks, 0..) |mark, mark_index| {
-        const wanted = slotFromMark(mark);
-        if (isWorkingIcon(mark.icon)) {
-            inline for (.{
-                ui_icons.Icon.agent_working_0,
-                ui_icons.Icon.agent_working_1,
-                ui_icons.Icon.agent_working_2,
-                ui_icons.Icon.agent_working_3,
-            }) |frame| {
-                _ = try ensureSlot(collection.slots, collection.count, .{
-                    .icon = frame,
-                    .foreground = mark.foreground,
-                    .background = mark.background,
-                    .columns = wanted.columns,
-                });
-            }
-        }
-        const slot = try ensureSlot(collection.slots, collection.count, wanted);
-        collection.placements[mark_index] = .{ .area = mark.area, .slot = slot };
-    }
 }
 
 fn ensureSlot(slots: *[ui_icons.max_marks]Slot, count: *u8, wanted: Slot) !u8 {
@@ -786,91 +701,4 @@ test "unsupported terminals keep the renderer empty" {
         .background = .{ 20, 20, 20 },
     }});
     try std.testing.expect(!renderer.damaged());
-}
-
-test "a hover background adds a slot once and later hovers move placements only" {
-    var renderer = Renderer.init(std.testing.allocator);
-    defer renderer.deinit();
-    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    const plain = ui_icons.Mark{
-        .area = .{ .x = 2, .y = 3, .w = 1, .h = 1 },
-        .icon = .cpu,
-        .foreground = .{ 255, 255, 255 },
-        .background = .{ 20, 20, 20 },
-    };
-    var hovered = plain;
-    hovered.background = .{ 60, 60, 60 };
-    try renderer.prepare(&.{plain});
-    var output: [65536]u8 = undefined;
-    var writer = Io.Writer.fixed(&output);
-    _ = try renderer.write(&writer);
-    try std.testing.expectEqual(@as(u8, 1), renderer.slot_count);
-
-    try renderer.prepare(&.{hovered});
-    try std.testing.expect(renderer.image_dirty);
-    try std.testing.expectEqual(@as(u8, 2), renderer.slot_count);
-    writer = Io.Writer.fixed(&output);
-    _ = try renderer.write(&writer);
-    try std.testing.expect(!renderer.damaged());
-
-    try renderer.prepare(&.{plain});
-    try std.testing.expect(!renderer.image_dirty);
-    try std.testing.expect(renderer.placements_dirty);
-    try std.testing.expectEqual(@as(u8, 2), renderer.slot_count);
-
-    try renderer.prepare(&.{hovered});
-    try std.testing.expect(!renderer.image_dirty);
-
-    // New cell geometry invalidates every resident slot.
-    _ = renderer.configure(.{ .support = .supported, .cell_width = 12, .cell_height = 24 });
-    try renderer.prepare(&.{plain});
-    try std.testing.expect(renderer.image_dirty);
-    try std.testing.expectEqual(@as(u8, 1), renderer.slot_count);
-}
-
-test "a moved icon re-places only itself and rasterization waits for idle" {
-    var renderer = Renderer.init(std.testing.allocator);
-    defer renderer.deinit();
-    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    const cpu = ui_icons.Mark{
-        .area = .{ .x = 2, .y = 3, .w = 1, .h = 1 },
-        .icon = .cpu,
-        .foreground = .{ 255, 255, 255 },
-        .background = .{ 20, 20, 20 },
-    };
-    var memory = cpu;
-    memory.icon = .memory;
-    memory.area.x = 5;
-    try renderer.prepare(&.{ cpu, memory });
-    var output: [65536]u8 = undefined;
-    var writer = Io.Writer.fixed(&output);
-    _ = try renderer.write(&writer);
-    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, writer.buffered(), "a=p"));
-
-    var moved = memory;
-    moved.area.y = 4;
-    try renderer.prepare(&.{ cpu, moved });
-    writer = Io.Writer.fixed(&output);
-    _ = try renderer.write(&writer);
-    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, writer.buffered(), "a=p"));
-    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=d") == null);
-
-    // Dropping the second mark deletes only its placement.
-    try renderer.prepare(&.{cpu});
-    writer = Io.Writer.fixed(&output);
-    _ = try renderer.write(&writer);
-    try std.testing.expectEqual(@as(usize, 0), std.mem.count(u8, writer.buffered(), "a=p"));
-    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, writer.buffered(), "a=d"));
-
-    // A new glyph while typing keeps the atlas and marks the deferral.
-    var battery = cpu;
-    battery.icon = .battery_full;
-    const slots_before = renderer.slot_count;
-    try renderer.preparePaced(&.{ cpu, battery }, false);
-    try std.testing.expect(renderer.preparationDeferred());
-    try std.testing.expectEqual(slots_before, renderer.slot_count);
-    try std.testing.expect(!renderer.image_dirty);
-    try renderer.preparePaced(&.{ cpu, battery }, true);
-    try std.testing.expect(!renderer.preparationDeferred());
-    try std.testing.expect(renderer.image_dirty);
 }

@@ -51,26 +51,6 @@ pub fn initSharedFreezeNonce(io: Io) void {
 /// const name = freezeSharedPixels(pixels) orelse return error.SharedMemoryUnavailable;
 /// ```
 pub fn freezeSharedPixels(pixels: []const u8) ?core.graphics.ShmName {
-    const frozen = freezeSharedPixelsMapped(pixels) orelse return null;
-    std.posix.munmap(frozen.pixels);
-    return frozen.name;
-}
-
-/// A freshly frozen object together with its mapping, now read-only, so an
-/// emulator image can adopt the copy without reopening and remapping the
-/// object it just wrote.
-pub const FrozenObject = struct {
-    name: core.graphics.ShmName,
-    pixels: []align(std.heap.page_size_min) u8,
-};
-
-/// Like `freezeSharedPixels`, but keeps the mapping used for the copy and
-/// hands it back read-only. The caller owns both the object and the mapping.
-///
-/// ```zig
-/// const frozen = freezeSharedPixelsMapped(pixels) orelse return false;
-/// ```
-pub fn freezeSharedPixelsMapped(pixels: []const u8) ?FrozenObject {
     if (comptime !shm_supported) {
         return null;
     }
@@ -108,13 +88,9 @@ pub fn freezeSharedPixelsMapped(pixels: []const u8) ?FrozenObject {
         _ = std.c.shm_unlink(name.sliceZ());
         return null;
     };
+    defer std.posix.munmap(map);
     @memcpy(map[0..pixels.len], pixels);
-    if (std.c.mprotect(@ptrCast(map.ptr), map.len, .{ .READ = true }) != 0) {
-        std.posix.munmap(map);
-        _ = std.c.shm_unlink(name.sliceZ());
-        return null;
-    }
-    return .{ .name = name, .pixels = map };
+    return name;
 }
 
 /// A child's shared object mapped read-only for one copy out of it.

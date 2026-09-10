@@ -193,11 +193,8 @@ the checked-in atlas's 256 px source slots are downsampled with
 premultiplied-alpha bilinear filtering into slots that preserve the terminal
 cell aspect ratio. Text, cursor, selection marker, hover, and hit targets
 remain cells. Hover does not enter the KGP preparation contract and therefore
-cannot dirty graphical pixels or placements. The icon atlas keeps every glyph
-and colour pair it has rasterized while the cell geometry holds, so a hovered
-or focused row that recolours its icons costs a retransmission only the first
-time that pair appears; afterwards it only moves placements. Both renderers
-consume the same semantic frame, so hit testing does not depend on KGP.
+cannot dirty graphical pixels or placements. Both renderers consume the same
+semantic frame, so hit testing does not depend on KGP.
 
 The cell widget renders the immutable bounded snapshot supplied by the
 presenter. Agent storage, local pane-index projection and adapter ownership are

@@ -107,7 +107,6 @@ pub const KittySidebarRenderer = struct {
     area: core.ui.Rect = .{},
     provider_marks: [max_provider_placements]SidebarProviderPlacement = undefined,
     provider_mark_count: u8 = 0,
-    emitted_provider_marks: [max_provider_placements]SidebarProviderPlacement = undefined,
     emitted_provider_mark_count: u8 = 0,
     provider_dirty: bool = false,
     placements_dirty: bool = false,
@@ -300,11 +299,7 @@ pub const KittySidebarRenderer = struct {
             renderer.provider_emitted = true;
         }
         if (renderer.placements_dirty) {
-            // Re-placing under the same id replaces the host's placement;
-            // a delete is only needed when the card goes away.
-            if (renderer.emitted_focused_card != null and
-                (renderer.focused_card == null or !renderer.focused_card_emitted))
-            {
+            if (renderer.emitted_focused_card != null) {
                 written += try writeDeletePlacement(
                     writer,
                     focused_card_id,
@@ -312,9 +307,7 @@ pub const KittySidebarRenderer = struct {
                 );
             }
             if (renderer.focused_card) |card| {
-                if (renderer.focused_card_emitted and
-                    (renderer.focused_card_dirty or !std.meta.eql(renderer.emitted_focused_card, renderer.focused_card)))
-                {
+                if (renderer.focused_card_emitted) {
                     written += try writePlacement(writer, .{
                         .image_id = focused_card_id,
                         .placement_id = focused_card_placement_id,
@@ -334,22 +327,13 @@ pub const KittySidebarRenderer = struct {
                     });
                 }
             }
-            renderer.emitted_focused_card = if (renderer.focused_card_emitted) renderer.focused_card else null;
-            const provider_replaced = renderer.provider_dirty;
-            var stale = renderer.provider_mark_count;
-            while (stale < renderer.emitted_provider_mark_count) : (stale += 1) {
-                written += try writeDeletePlacement(
-                    writer,
-                    provider_atlas_id,
-                    first_provider_placement_id + @as(u32, @intCast(stale)),
-                );
-            }
+            renderer.emitted_focused_card = renderer.focused_card;
+            for (0..renderer.emitted_provider_mark_count) |index| written += try writeDeletePlacement(
+                writer,
+                provider_atlas_id,
+                first_provider_placement_id + @as(u32, @intCast(index)),
+            );
             for (renderer.provider_marks[0..renderer.provider_mark_count], 0..) |mark, index| {
-                if (!provider_replaced and index < renderer.emitted_provider_mark_count and
-                    std.meta.eql(renderer.emitted_provider_marks[index], mark))
-                {
-                    continue;
-                }
                 written += try writePlacement(writer, .{
                     .image_id = provider_atlas_id,
                     .placement_id = first_provider_placement_id + @as(u32, @intCast(index)),
@@ -368,10 +352,6 @@ pub const KittySidebarRenderer = struct {
                     .z = -8,
                 });
             }
-            @memcpy(
-                renderer.emitted_provider_marks[0..renderer.provider_mark_count],
-                renderer.provider_marks[0..renderer.provider_mark_count],
-            );
             renderer.emitted_provider_mark_count = renderer.provider_mark_count;
         }
         renderer.focused_card_dirty = false;

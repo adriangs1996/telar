@@ -209,10 +209,8 @@ test "graphics credits remain owned until the outbox accepts them" {
         .sent => |result| try runtime_transport.handleSent(client, result),
         else => return error.UnexpectedEvent,
     }
-    // The completed send carried the whole backlog; the credit that was
-    // waiting for room is now the only queued message and is in flight.
     try std.testing.expect(client.graphics_store.peekCredit() == null);
-    try std.testing.expectEqual(@as(u8, 1), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(client_outbox.capacity, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(client.runtime_transport.outbox.inFlight());
 }
 

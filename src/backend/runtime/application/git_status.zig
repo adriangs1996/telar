@@ -32,7 +32,7 @@ pub fn Observer(comptime Application: type) type {
             if (repository.completeGitProbe(.{
                 .workspace = completion.workspace,
                 .branch = if (completion.present) completion.branchSlice() else "",
-                .dirty = if (completion.present) completion.dirty else false,
+                .dirty = completion.present and completion.dirty,
                 .checked_at_ms = Io.Timestamp.now(application.io, .real).toMilliseconds(),
             })) {
                 application.pumpAll();

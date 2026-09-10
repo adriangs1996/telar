@@ -929,9 +929,6 @@ fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         _ = context.model.focusPane(@enumFromInt(iteration % 4 + 1));
-        // A focus change alone restyles two borders; this case measures the
-        // full four-pane composition, so it is forced every iteration.
-        context.compositor.invalidate();
         const composed = try composeFullScreen(&context.compositor, &context.model, &context.screen);
         checksum +%= composed.stats.cells + composed.stats.panes;
     }

@@ -47,7 +47,7 @@ pub fn RuntimePort(comptime Context: type) type {
         schedule_response: *const fn (*Context, *Pane) anyerror!void,
         start_read: *const fn (*Context, Read) anyerror!void,
         collect: *const fn (*Context) void,
-        pump_clients: *const fn (*Context, *Pane) void,
+        pump_clients: *const fn (*Context) void,
     };
 }
 
@@ -72,12 +72,9 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
             return .{ .context = context, .resources = resources };
         }
 
-        /// Settles one generation-matched ingest. Success synchronizes the
-        /// domain, refreshes client projections, queues PTY responses and
-        /// pumps client frames before it rearms the next read and starts the
-        /// background observers: the frame leaves ahead of every actor
-        /// dispatch it does not depend on. Ingest failure retires the pane
-        /// output.
+        /// Settles one generation-matched ingest. Success synchronizes domain,
+        /// background observers, client projections, PTY responses, and the
+        /// next read in that order. Ingest failure retires the pane output.
         ///
         /// ```zig
         /// try coordinator.handle(completion);
@@ -103,9 +100,10 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
             pane.applyPendingResize() catch {
                 _ = pane.requestClose();
             };
+            try port.schedule_observation(coordinator.context, pane);
+            try port.schedule_media(coordinator.context, pane);
             port.refresh_clients(coordinator.context, pane);
             try port.schedule_response(coordinator.context, pane);
-            port.pump_clients(coordinator.context, pane);
 
             const read: Read = .{
                 .io = coordinator.resources.io,
@@ -118,9 +116,8 @@ pub fn Coordinator(comptime Context: type, comptime port: RuntimePort(Context)) 
                 return err;
             };
 
-            try port.schedule_observation(coordinator.context, pane);
-            try port.schedule_media(coordinator.context, pane);
             port.collect(coordinator.context);
+            port.pump_clients(coordinator.context);
         }
     };
 }
@@ -183,8 +180,7 @@ const Capture = struct {
         capture.record(.collect) catch unreachable;
     }
 
-    fn pumpClients(capture: *Capture, pane: *Pane) void {
-        _ = pane;
+    fn pumpClients(capture: *Capture) void {
         capture.record(.pump_clients) catch unreachable;
     }
 
@@ -254,7 +250,7 @@ test "ingest failure closes the pane output before collection" {
     try std.testing.expectEqual(@as(u64, 0), fixture.metrics.ingest.count);
 }
 
-test "success pumps clients before the next read and the observers" {
+test "success synchronizes every dependent before starting the next read" {
     var fixture: test_support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -268,7 +264,7 @@ test "success pumps clients before the next read and the observers" {
         .result = .{ .elapsed_ns = 37 },
     });
 
-    try expectSteps(&capture, &.{ .refresh_clients, .response, .pump_clients, .read, .observation, .media, .collect });
+    try expectSteps(&capture, &.{ .observation, .media, .refresh_clients, .response, .read, .collect, .pump_clients });
     try std.testing.expect(capture.observation_saw_released_ingest);
     try std.testing.expect(capture.read_saw_borrow);
     try std.testing.expect(fixture.pane.output_pending);
@@ -318,14 +314,14 @@ test "a failed deferred resize retires the pane but preserves effect ordering" {
         .result = .{ .elapsed_ns = 1 },
     });
 
-    try expectSteps(&capture, &.{ .refresh_clients, .response, .pump_clients, .read, .observation, .media, .collect });
+    try expectSteps(&capture, &.{ .observation, .media, .refresh_clients, .response, .read, .collect, .pump_clients });
     try std.testing.expect(fixture.pane.close_requested);
     try std.testing.expectEqualDeep(test_support.PaneFixture.initial_size, fixture.pane.size);
     try std.testing.expectEqualDeep(resized, fixture.pane.pending_size.?);
     fixture.pane.cancelPtyOutputRead();
 }
 
-test "observation failure stops media and collection after the read started" {
+test "observation failure stops every later post-ingest effect" {
     var fixture: test_support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -339,14 +335,13 @@ test "observation failure stops media and collection after the read started" {
         .result = .{},
     }));
 
-    try expectSteps(&capture, &.{ .refresh_clients, .response, .pump_clients, .read, .observation });
+    try expectSteps(&capture, &.{.observation});
     try std.testing.expect(!fixture.pane.ingest_pending);
-    try std.testing.expect(fixture.pane.output_pending);
-    try std.testing.expectEqual(@as(u8, 1), fixture.pane.actor_count);
-    fixture.pane.cancelPtyOutputRead();
+    try std.testing.expect(!fixture.pane.output_pending);
+    try std.testing.expectEqual(@as(u8, 0), fixture.pane.actor_count);
 }
 
-test "media failure stops before collection" {
+test "media failure stops before client projection and PTY work" {
     var fixture: test_support.PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -360,10 +355,9 @@ test "media failure stops before collection" {
         .result = .{},
     }));
 
-    try expectSteps(&capture, &.{ .refresh_clients, .response, .pump_clients, .read, .observation, .media });
-    try std.testing.expect(fixture.pane.output_pending);
-    try std.testing.expectEqual(@as(u8, 1), fixture.pane.actor_count);
-    fixture.pane.cancelPtyOutputRead();
+    try expectSteps(&capture, &.{ .observation, .media });
+    try std.testing.expect(!fixture.pane.output_pending);
+    try std.testing.expectEqual(@as(u8, 0), fixture.pane.actor_count);
 }
 
 test "response failure preserves refreshed clients and skips the next read" {
@@ -380,7 +374,7 @@ test "response failure preserves refreshed clients and skips the next read" {
         .result = .{},
     }));
 
-    try expectSteps(&capture, &.{ .refresh_clients, .response });
+    try expectSteps(&capture, &.{ .observation, .media, .refresh_clients, .response });
     try std.testing.expect(!fixture.pane.output_pending);
     try std.testing.expectEqual(@as(u8, 0), fixture.pane.actor_count);
 }
@@ -399,7 +393,7 @@ test "read start failure releases its pane borrow and skips lifecycle effects" {
         .result = .{},
     }));
 
-    try expectSteps(&capture, &.{ .refresh_clients, .response, .pump_clients, .read });
+    try expectSteps(&capture, &.{ .observation, .media, .refresh_clients, .response, .read });
     try std.testing.expect(capture.read_saw_borrow);
     try std.testing.expect(!fixture.pane.output_pending);
     try std.testing.expectEqual(@as(u8, 0), fixture.pane.actor_count);

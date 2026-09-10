@@ -135,39 +135,14 @@ pub fn Dispatcher(comptime Application: type) type {
         /// try ClientEvents.startSend(&application, session, payload);
         /// ```
         pub fn startSend(application: *Application, session: *ClientSession, payload: []const u8) !void {
-            try startWrite(application, session, .{
+            std.debug.assert(!session.send_pending);
+            session.send_pending = true;
+            application.select.concurrent(.client_sent, sendSession, .{SessionWrite{
                 .io = application.io,
                 .key = session.key,
                 .connection = &session.connection,
                 .payload = payload,
-            });
-        }
-
-        /// Starts one bounded session write of already framed batch bytes.
-        ///
-        /// ```zig
-        /// try ClientEvents.startSendFramed(&application, session, batch);
-        /// ```
-        pub fn startSendFramed(application: *Application, session: *ClientSession, batch: []const u8) !void {
-            try startWrite(application, session, .{
-                .io = application.io,
-                .key = session.key,
-                .connection = &session.connection,
-                .payload = batch,
-                .framed = true,
-            });
-        }
-
-        fn startWrite(application: *Application, session: *ClientSession, write: SessionWrite) !void {
-            std.debug.assert(!session.send_pending);
-            session.send_pending = true;
-            if (write.framed and write.connection.canSendInline(write.payload)) {
-                session.inline_sent = sendSession(write).result;
-                application.inline_sends_pending = true;
-                return;
-            }
-
-            application.select.concurrent(.client_sent, sendSession, .{write}) catch |err| {
+            }}) catch |err| {
                 session.send_pending = false;
                 return err;
             };
@@ -370,11 +345,7 @@ pub fn Dispatcher(comptime Application: type) type {
         fn sendSession(write: SessionWrite) ClientSentEvent {
             core.echo_trace.mark(write.io, .runtime_send_start);
             defer core.echo_trace.mark(write.io, .runtime_send_done);
-            const result = if (write.framed)
-                write.connection.sendFramed(write.io, write.payload)
-            else
-                write.connection.send(write.io, write.payload);
-            return .{ .client = write.key, .result = result };
+            return .{ .client = write.key, .result = write.connection.send(write.io, write.payload) };
         }
     };
 }

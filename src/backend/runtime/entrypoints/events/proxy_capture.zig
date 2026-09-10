@@ -45,8 +45,7 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
             return .{ .context = context, .resources = resources };
         }
 
-        /// Rearms receive, rejects stale ownership, and joins one already
-        /// decoded half. No body work happens on the runtime loop.
+        /// Rearms receive, rejects stale ownership, decodes, and joins one half.
         ///
         /// ```zig
         /// try adapter.handle(result);
@@ -62,6 +61,7 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
                 return;
             }
 
+            adapter.resources.proxy_runtime.decodeCapture(half);
             adapter.resources.proxy_runtime.acceptCapture(.{
                 .now_ms = port.now_ms(adapter.context),
                 .half = half,

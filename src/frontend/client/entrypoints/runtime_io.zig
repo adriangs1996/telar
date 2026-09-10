@@ -194,27 +194,9 @@ pub fn flushGraphicsCredits(client: *Client) !void {
     try pump(client);
 }
 
-/// Settles sends the event loop completed itself. Runs once per event, after
-/// its handler returned, so a completion never re-enters the enqueue that
-/// started it.
-///
-/// ```zig
-/// try runtime_transport.settleInlineSends(client);
-/// ```
-pub fn settleInlineSends(client: *Client) !void {
-    while (client.runtime_transport.takeInlineSent()) |result| {
-        try handleSent(client, result);
-    }
-}
-
 fn pump(client: *Client) !void {
     const state = &client.runtime_transport;
     const payload = try state.prepareSend() orelse return;
-    if (state.connection.canSendInline(payload)) {
-        state.inline_sent = send(client.io, state, payload);
-        return;
-    }
-
     client.select.concurrent(.sent, send, .{
         client.io,
         state,

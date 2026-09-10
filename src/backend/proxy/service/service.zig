@@ -178,11 +178,16 @@ pub const Service = struct {
     /// const half = try service.receiveCapture(io);
     /// ```
     pub fn receiveCapture(service: *Service, io: Io) anyerror!*capture_mod.Half {
-        const half = try service.captures.receive(io);
-        // Content decoding runs here, on the receiving task, so neither the
-        // relay nor the runtime loop pays for a multi-megabyte inflate.
+        return service.captures.receive(io);
+    }
+
+    /// Decodes a captured body outside the traffic relay task.
+    ///
+    /// ```zig
+    /// service.decodeCapture(half);
+    /// ```
+    pub fn decodeCapture(service: *Service, half: *capture_mod.Half) void {
         service.captures.decodeBody(half);
-        return half;
     }
 
     /// Returns one lock-free snapshot without exposing queue, admission, or

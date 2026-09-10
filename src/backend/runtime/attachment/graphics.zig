@@ -22,9 +22,7 @@ pub const Sync = struct {
         pixels: []u8,
         shared_name: ?core.graphics.ShmName = null,
         reserved_len: usize = 0,
-        /// Placements captured with the frozen image, allocated for the
-        /// transfer's lifetime rather than reserved in every attachment.
-        placements: []core.graphics.Placement = &.{},
+        placements: [core.graphics.max_placements_per_pane]core.graphics.Placement = undefined,
         placement_count: usize = 0,
         placement_index: usize = 0,
         offset: usize = 0,
@@ -51,15 +49,7 @@ pub const Sync = struct {
         [_]?KnownImage{null} ** core.graphics.max_images_per_pane,
     known_placements: [core.graphics.max_placements_per_pane]?KnownPlacement =
         [_]?KnownPlacement{null} ** core.graphics.max_placements_per_pane,
-    /// Slot of each known placement by virtual id, so the projection walk
-    /// resolves a placement without scanning the table.
-    placement_index: PlacementIndex = .{},
-    /// Placements already compared in the batch being encoded. One message
-    /// leaves per call, so the walk resumes here instead of restarting.
-    placement_cursor: usize = 0,
     gpa: std.mem.Allocator,
-
-    pub const PlacementIndex = core.fixed_index.SlotIndex(2 * core.graphics.max_placements_per_pane);
 
     pub fn init(gpa: std.mem.Allocator, pane: *Pane) Sync {
         return .{
@@ -82,13 +72,10 @@ pub const Sync = struct {
         sync.observed_revision = 0;
         sync.known_images = [_]?KnownImage{null} ** core.graphics.max_images_per_pane;
         sync.known_placements = [_]?KnownPlacement{null} ** core.graphics.max_placements_per_pane;
-        sync.placement_index.reset();
-        sync.placement_cursor = 0;
     }
 
     pub fn freeTransfer(sync: *Sync) void {
         if (sync.transfer) |transfer| {
-            sync.gpa.free(transfer.placements);
             sync.gpa.free(transfer.pixels);
             sync.pane.media_allocator.releaseManual(transfer.reserved_len);
             if (transfer.shared_name) |name| {

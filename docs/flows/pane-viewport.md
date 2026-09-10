@@ -79,12 +79,10 @@ graphics and IPC knowledge in one adapter.
 ## Presentation
 
 `client_events` publishes `ClientModel.Version` after the input event.
-`Presenter` schedules a present when the viewport revision changes, but the
-change itself does not recompose cells: the scrolled rows arrive as damage in
-the next runtime frame and the compositor syncs only those rows. A copy-mode
-selection is the exception, because its highlight is anchored to absolute
-scrollback rows; the compositor detects that offset in its pane projection and
-rebuilds. Inactive tabs retain no last-painted cache.
+`Presenter` compares the viewport revision with the version it last painted.
+When it changes, the presenter renders only the active tab. The single
+presenter-owned compositor detects the active pane's projected scroll offset
+and rebuilds its composition. Inactive tabs retain no last-painted cache.
 
 Neither the viewport model transition nor its application handler touches
 presentation caches or scheduling. Runtime `pane_frame` messages
@@ -110,12 +108,7 @@ pane_frames -> ApplyPaneFrameHandler -> ClientModel.applyPaneFrame
 
 The attachment clamps the requested row against terminal history and pins the
 chosen viewport. Reaching the bottom clears the pin and resumes the active
-screen. The next frame projects every row, because the emulator marks nothing
-dirty when only the window moves, and sends the difference against the
-acknowledged cells as an ordinary patch; a scroll never forces a snapshot. The
-client outbox keeps one pending viewport per pane, so a burst of wheel or
-held-key steps delivers only the last offset. That frame carries the runtime's
-accepted `scroll` value. Client
+screen. A later frame carries the runtime's accepted `scroll` value. Client
 death drops the attachment projection without changing the PTY or terminal.
 
 ## Proof

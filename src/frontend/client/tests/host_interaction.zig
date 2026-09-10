@@ -446,9 +446,6 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
 
     try harness.settle();
     var buffer: [256]u8 = undefined;
-    // The scroll to 7 is already in flight when the restore to 10 is queued,
-    // so both reach the runtime in order; only offsets queued behind an
-    // in-flight viewport fold.
     const scrolled = try harness.nextClientMessage(&buffer);
     try std.testing.expect(scrolled == .set_pane_viewport);
     try std.testing.expectEqual(pane.id, scrolled.set_pane_viewport.pane_id);
@@ -498,15 +495,12 @@ test "native scroll actions reuse bounded viewport delivery without forwarding i
 
     try harness.settle();
     var buffer: [256]u8 = undefined;
-    // The first step is in flight immediately; the remaining seven fold into
-    // one pending viewport carrying the final offset.
-    for ([_]u32{ 7, 10 }) |offset| {
+    for ([_]u32{ 7, 4, 1, 0, 3, 6, 9, 10 }) |offset| {
         const message = try harness.nextClientMessage(&buffer);
         try std.testing.expect(message == .set_pane_viewport);
         try std.testing.expectEqual(pane.id, message.set_pane_viewport.pane_id);
         try std.testing.expectEqual(offset, message.set_pane_viewport.offset);
     }
-    try std.testing.expectEqual(@as(u64, 6), client.runtime_transport.outbox.stats.coalesced_viewport);
 }
 
 test "a full outbox preserves the committed pane viewport and rejects input" {

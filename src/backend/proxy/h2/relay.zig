@@ -587,15 +587,7 @@ const Transcoder = struct {
     encoded: [2 * max_header_block_bytes]u8 = undefined,
     setting: [6]u8 = undefined,
     setting_len: u8 = 0,
-    /// The current pass-through frame's header has not been written yet; it
-    /// leaves with the first payload bytes, or alone for an empty frame, so
-    /// a frame costs one TLS record instead of two.
-    header_pending: bool = false,
     streams: stream_state.Tracker = .{},
-
-    /// Bytes of a payload fragment joined to its frame header in one write.
-    /// Larger fragments follow the header in their own record.
-    const join_capacity = 16 * 1024;
 
     fn init(dialect: provider.ApiDialect, configuration: TranscodeConfiguration) Transcoder {
         var transcoder: Transcoder = .{ .dialect = dialect, .configuration = configuration };
@@ -648,7 +640,6 @@ const Transcoder = struct {
     }
 
     fn beginFrame(transcoder: *Transcoder, port: anytype) bool {
-        _ = port;
         transcoder.setting_len = 0;
         transcoder.frame_padding = 0;
 
@@ -684,18 +675,11 @@ const Transcoder = struct {
             transcoder.compressed_len = 0;
             return true;
         }
-        transcoder.header_pending = true;
-        return true;
-    }
-
-    /// Writes the pass-through frame header together with `payload` when
-    /// it is still pending, otherwise the payload alone.
-    fn writePassThrough(transcoder: *Transcoder, payload: []const u8, port: anytype) bool {
-        if (!transcoder.header_pending) {
-            return port.writeAll(transcoder.configuration.to, payload);
+        if (!port.writeAll(transcoder.configuration.to, &transcoder.framing.header)) {
+            transcoder.failed = true;
+            return false;
         }
-        transcoder.header_pending = false;
-        return writeJoined(port, transcoder.configuration.to, .{ &transcoder.framing.header, payload, "" });
+        return true;
     }
 
     fn processPayload(transcoder: *Transcoder, payload: []const u8, port: anytype) bool {
@@ -708,7 +692,7 @@ const Transcoder = struct {
             {
                 transcoder.observeSettings(payload, transcoder.configuration.source_settings);
             }
-            if (!transcoder.writePassThrough(payload, port)) {
+            if (!port.writeAll(transcoder.configuration.to, payload)) {
                 transcoder.failed = true;
                 return false;
             }
@@ -811,11 +795,6 @@ const Transcoder = struct {
                 }
             }
         } else {
-            // An empty frame never reached processPayload; its header goes now.
-            if (transcoder.header_pending and !transcoder.writePassThrough("", port)) {
-                transcoder.failed = true;
-                return false;
-            }
             transcoder.observeCompletedFrame(.{
                 .frame_type = completed_type,
                 .flags = completed_flags,
@@ -1030,11 +1009,21 @@ const Transcoder = struct {
                     .stream_id = transcoder.block_stream,
                 },
             );
-            if (!writeJoined(port, transcoder.configuration.to, .{
-                &header,
+            if (!port.writeAll(transcoder.configuration.to, &header)) {
+                return false;
+            }
+
+            if (prefix_len != 0 and !port.writeAll(
+                transcoder.configuration.to,
                 transcoder.block_prefix[0..prefix_len],
+            )) {
+                return false;
+            }
+
+            if (fragment_len != 0 and !port.writeAll(
+                transcoder.configuration.to,
                 transcoder.encoded[offset..][0..fragment_len],
-            })) {
+            )) {
                 return false;
             }
 
@@ -1496,31 +1485,6 @@ fn streamId(header: *const [frame_header_len]u8) u32 {
         header[8];
 }
 
-/// Writes up to three parts as one record when they fit the join buffer,
-/// otherwise one write per non-empty part. Frame headers are nine bytes and
-/// most payload fragments are small, so nearly every frame takes one write.
-fn writeJoined(port: anytype, to: tls.Session.Side, parts: [3][]const u8) bool {
-    var joined: [frame_header_len + 5 + Transcoder.join_capacity]u8 = undefined;
-    var total: usize = 0;
-    for (parts) |part| {
-        total += part.len;
-    }
-    if (total <= joined.len) {
-        var offset: usize = 0;
-        for (parts) |part| {
-            @memcpy(joined[offset..][0..part.len], part);
-            offset += part.len;
-        }
-        return total == 0 or port.writeAll(to, joined[0..total]);
-    }
-    for (parts) |part| {
-        if (part.len != 0 and !port.writeAll(to, part)) {
-            return false;
-        }
-    }
-    return true;
-}
-
 fn writeFrameHeader(buffer: *[frame_header_len]u8, header: FrameHeader) void {
     buffer.* = .{
         @truncate(header.length >> 16),
@@ -1971,10 +1935,8 @@ test "HPACK dynamic table survives padded response blocks" {
 const FakeWriteSession = struct {
     output: [512 * 1024]u8 = undefined,
     len: usize = 0,
-    calls: usize = 0,
 
     fn writeAll(fake: *FakeWriteSession, _: tls.Session.Side, bytes: []const u8) bool {
-        fake.calls += 1;
         if (bytes.len > fake.output.len - fake.len) {
             return false;
         }
@@ -1983,47 +1945,6 @@ const FakeWriteSession = struct {
         return true;
     }
 };
-
-test "HTTP2 pass-through frames leave in one write, empty frames included" {
-    var pipeline: middleware.TransformPipeline = .{};
-    var session: FakeWriteSession = .{};
-    const Collector = struct {
-        fn emit(_: *@This(), _: Event) void {}
-    };
-    var collector: Collector = .{};
-    var source_settings: PeerSettings = .{};
-    var target_settings: PeerSettings = .{};
-    var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
-    defer transcoder.deinit();
-
-    var wire: [3 * frame_header_len + 4 + 5]u8 = undefined;
-    var cursor: usize = 0;
-    // A WINDOW_UPDATE with its four bytes, an empty SETTINGS ACK, and a
-    // five-byte DATA frame.
-    writeFrameHeader(wire[cursor..][0..frame_header_len], .{ .length = 4, .frame_type = c.NGHTTP2_WINDOW_UPDATE, .flags = 0, .stream_id = 0 });
-    cursor += frame_header_len;
-    @memcpy(wire[cursor..][0..4], &[_]u8{ 0, 0, 1, 0 });
-    cursor += 4;
-    writeFrameHeader(wire[cursor..][0..frame_header_len], .{ .length = 0, .frame_type = c.NGHTTP2_SETTINGS, .flags = c.NGHTTP2_FLAG_ACK, .stream_id = 0 });
-    cursor += frame_header_len;
-    writeFrameHeader(wire[cursor..][0..frame_header_len], .{ .length = 5, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 1 });
-    cursor += frame_header_len;
-    @memcpy(wire[cursor..][0..5], "hello");
-    cursor += 5;
-
-    try std.testing.expect(transcoder.process(wire[0..cursor], transcodePort(&session, &collector)));
-    try std.testing.expectEqualSlices(u8, wire[0..cursor], session.output[0..session.len]);
-    try std.testing.expectEqual(@as(usize, 3), session.calls);
-
-    // Byte-at-a-time input still joins each header with its first payload
-    // byte; the remaining payload bytes follow as they arrive.
-    session = .{};
-    for (wire[0..cursor]) |byte| {
-        try std.testing.expect(transcoder.process(&.{byte}, transcodePort(&session, &collector)));
-    }
-    try std.testing.expectEqualSlices(u8, wire[0..cursor], session.output[0..session.len]);
-    try std.testing.expectEqual(@as(usize, 3 + 3 + 4), session.calls);
-}
 
 fn decodeTestHeaderBlock(inflater: *c.nghttp2_hd_inflater, block: []const u8) !middleware.Headers {
     var headers: middleware.Headers = .{};

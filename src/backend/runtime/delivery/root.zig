@@ -103,17 +103,8 @@ const Phase = union(enum) {
     closed,
 };
 
-/// Bytes past one maximum frame that a client's send buffer reserves for
-/// batching: after each staged message the next one is prepared behind it
-/// while a whole maximum frame still fits, so several frames leave in one
-/// write without any message ever failing to fit.
-pub const batch_slack = 256 * 1024;
-
 pub const Delivery = struct {
     send_buffer: []u8,
-    /// Where the next payload is encoded inside `send_buffer`; the pump
-    /// advances it past every staged frame of the batch being assembled.
-    stage_offset: usize = 0,
     responses: ResponseQueue = .{},
     phase: Phase = .ready,
     next_ticket: u64 = 1,
@@ -134,46 +125,7 @@ pub const Delivery = struct {
     clipboard_pending: bool = false,
 
     pub fn init(gpa: std.mem.Allocator) !Delivery {
-        return .{ .send_buffer = try gpa.alloc(u8, core.transport.max_frame_size + batch_slack) };
-    }
-
-    /// The unstaged tail of the send buffer that the next payload is encoded
-    /// into. Example: `const buffer = delivery.stagingBuffer();`.
-    pub fn stagingBuffer(delivery: *const Delivery) []u8 {
-        return delivery.send_buffer[delivery.stage_offset..];
-    }
-
-    /// Reports whether the batch being assembled can still take a payload
-    /// of any legal size behind `stage_offset`.
-    /// Example: `while (delivery.canStageAnother()) { ... }`.
-    pub fn canStageAnother(delivery: *const Delivery) bool {
-        return delivery.send_buffer.len - delivery.stage_offset >= core.transport.max_frame_size;
-    }
-
-    /// Whether the committed transaction carries an effect that must be
-    /// applied when its write completes, which ends a batch.
-    /// Example: `if (delivery.completionPending()) break;`.
-    pub fn completionPending(delivery: *const Delivery) bool {
-        const completion = switch (delivery.phase) {
-            .in_flight => |completion| completion,
-            else => return false,
-        };
-        return completion.detach_pane != null or completion.stopping_delivered or completion.close_client;
-    }
-
-    /// Reopens delivery for the next payload of the same batch after a
-    /// committed transaction without completion effects.
-    /// Example: `delivery.continueBatch();`.
-    pub fn continueBatch(delivery: *Delivery) void {
-        std.debug.assert(delivery.phase == .in_flight and !delivery.completionPending());
-        delivery.phase = .ready;
-    }
-
-    /// Marks an assembled batch as in flight when its last transaction was
-    /// already continued. Example: `delivery.resumeInFlight();`.
-    pub fn resumeInFlight(delivery: *Delivery) void {
-        std.debug.assert(delivery.phase == .ready);
-        delivery.phase = .{ .in_flight = .{} };
+        return .{ .send_buffer = try gpa.alloc(u8, core.transport.max_frame_size) };
     }
 
     pub fn deinit(delivery: *Delivery, gpa: std.mem.Allocator) void {
@@ -290,7 +242,7 @@ pub const Delivery = struct {
         const sources = preparation.sources;
 
         std.debug.assert(delivery.phase == .ready);
-        const buffer = delivery.stagingBuffer();
+        const buffer = delivery.send_buffer;
         const workspaces = sources.workspaces;
 
         if (delivery.stopping_pending) {
@@ -612,14 +564,12 @@ pub const Delivery = struct {
 
     fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) !?Prepared {
         const attachments = preparation.attachments;
-        const buffer = delivery.stagingBuffer();
+        const buffer = delivery.send_buffer;
 
-        var remaining = attachments.len();
-        var index = delivery.next_attachment % AttachmentStore.capacity;
-        while (remaining != 0) : (remaining -= 1) {
-            index = attachments.occupiedFrom(index) orelse return null;
-            defer index = (index + 1) % AttachmentStore.capacity;
-            const attachment = attachments.at(index).?;
+        var checked: usize = 0;
+        while (checked < AttachmentStore.capacity) : (checked += 1) {
+            const index = (delivery.next_attachment + checked) % AttachmentStore.capacity;
+            const attachment = attachments.at(index) orelse continue;
             const candidate: ?attachment_mod.Attachment.Prepared = switch (lane) {
                 .cwd => try attachment.prepareCwd(buffer),
                 .foreground => try attachment.prepareForeground(buffer),

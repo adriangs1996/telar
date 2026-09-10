@@ -9,8 +9,6 @@ const Io = std.Io;
 const schema = core.schema;
 const transcript = @import("../transcript.zig");
 
-var scan_window: [transcript.max_scan_bytes]u8 = undefined;
-
 /// Example: `probe(job, &completion);`.
 /// The first probe of a watch only records where the file ends; later
 /// probes read at most `max_scan_bytes` past the last offset and leave the
@@ -37,9 +35,9 @@ pub fn probe(job: Job, completion: *Completion) void {
         return;
     }
 
-    // Probes are single-flight, so one static window serves them all
-    // instead of a page mapping per probe.
-    const buffer = &scan_window;
+    const gpa = std.heap.page_allocator;
+    const buffer = gpa.alloc(u8, transcript.max_scan_bytes) catch return;
+    defer gpa.free(buffer);
     var reader = file.reader(job.io, &.{});
     reader.seekTo(offset) catch return;
     const len = reader.interface.readSliceShort(buffer) catch return;

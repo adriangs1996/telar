@@ -36,14 +36,10 @@ pub fn connect(io: std.Io, path: []const u8) !core.transport.SocketChannel {
             @intCast(@sizeOf(std.c.sockaddr.un)),
         );
         switch (std.posix.errno(result)) {
-            .SUCCESS => {
-                var channel: core.transport.SocketChannel = .init(.{ .socket = .{
-                    .handle = socket,
-                    .address = .{ .ip4 = .loopback(0) },
-                } });
-                channel.configure();
-                return channel;
-            },
+            .SUCCESS => return .init(.{ .socket = .{
+                .handle = socket,
+                .address = .{ .ip4 = .loopback(0) },
+            } }),
             .INTR => continue,
             .CONNREFUSED => return error.ConnectionRefused,
             .NOENT => return error.FileNotFound,

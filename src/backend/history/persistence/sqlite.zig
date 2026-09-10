@@ -173,34 +173,6 @@ pub const Store = struct {
     finish_agent_command: *c.sqlite3_stmt,
     read_command_output: *c.sqlite3_stmt,
     fts_available: bool,
-    /// A batch transaction is open; nested batches join it.
-    in_batch: bool = false,
-
-    /// Opens one write transaction around a batch of requests, so each row
-    /// of the batch does not pay its own WAL commit and FTS trigger fsync.
-    /// A batch already open is joined. Failure leaves autocommit in place.
-    ///
-    /// ```zig
-    /// store.beginBatch();
-    /// defer store.endBatch();
-    /// ```
-    pub fn beginBatch(store: *Store) void {
-        if (store.in_batch) {
-            return;
-        }
-        store.in_batch = c.sqlite3_exec(store.db, "BEGIN IMMEDIATE;", null, null, null) == c.SQLITE_OK;
-    }
-
-    /// Commits the open batch, rolling back when the commit itself fails.
-    pub fn endBatch(store: *Store) void {
-        if (!store.in_batch) {
-            return;
-        }
-        store.in_batch = false;
-        if (c.sqlite3_exec(store.db, "COMMIT;", null, null, null) != c.SQLITE_OK) {
-            _ = c.sqlite3_exec(store.db, "ROLLBACK;", null, null, null);
-        }
-    }
 
     pub fn open(path: [:0]const u8) !Store {
         var db: ?*c.sqlite3 = null;

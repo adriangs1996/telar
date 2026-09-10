@@ -59,10 +59,7 @@ pub const LocalListener = struct {
         if (!sameUserPeer(peer_uid, std.c.geteuid())) {
             return error.PeerNotOwned;
         }
-
-        var channel: core.transport.SocketChannel = .init(stream);
-        channel.configure();
-        return channel;
+        return .init(stream);
     }
 
     pub fn deinit(listener: *LocalListener, io: Io) void {

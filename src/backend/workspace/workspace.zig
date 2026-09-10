@@ -51,10 +51,6 @@ pub const Workspace = struct {
     git_branch_len: u8 = 0,
     git_dirty: bool = false,
     git_checked_at_ms: i64 = 0,
-    /// Probes that reported no change since the last one; each doubles the
-    /// probe interval up to `max_git_backoff`, so idle repositories stop
-    /// costing a `git status` every few seconds.
-    git_quiet_probes: u8 = 0,
 
     pub fn init(options: Init) !Workspace {
         if (options.path.len == 0 or options.path.len > schema.max_cwd_bytes or std.mem.indexOfScalar(u8, options.path, 0) != null) {
@@ -95,27 +91,11 @@ pub const Workspace = struct {
         return workspace.git_branch[0..workspace.git_branch_len];
     }
 
-    /// Doublings applied to the base probe interval while nothing changes:
-    /// 5 s, 10 s, 20 s, 40 s, then a steady 80 s.
-    pub const max_git_backoff: u8 = 4;
-
-    /// Commits observation time and visible Git state together. An
-    /// unchanged result lengthens this workspace's next probe interval; a
-    /// change restores the base cadence.
+    /// Commits observation time and visible Git state together.
     /// Example: `_ = workspace.completeGitProbe(observation);`.
     pub fn completeGitProbe(workspace: *Workspace, observation: @import("git_observation.zig").Observation) bool {
         workspace.git_checked_at_ms = observation.checked_at_ms;
-        const dirty = observation.dirty orelse workspace.git_dirty;
-        const changed = workspace.applyGitStatus(observation.branch, dirty);
-        workspace.git_quiet_probes = if (changed) 0 else @min(workspace.git_quiet_probes + 1, max_git_backoff);
-        return changed;
-    }
-
-    /// Milliseconds this workspace waits between probes given the base
-    /// interval and its quiet streak.
-    /// Example: `if (now - workspace.git_checked_at_ms >= workspace.gitProbeInterval(5000)) probe();`.
-    pub fn gitProbeInterval(workspace: *const Workspace, base_interval_ms: i64) i64 {
-        return base_interval_ms << @intCast(workspace.git_quiet_probes);
+        return workspace.applyGitStatus(observation.branch, observation.dirty);
     }
 
     /// Stores one git observation and reports whether the projection changed.
@@ -483,30 +463,4 @@ test "workspace rejects tabs beyond its fixed capacity without mutation" {
         workspace.createTab(try schema.id.tab(max_tabs_per_workspace + 1), "overflow"),
     );
     try std.testing.expectEqual(max_tabs_per_workspace, workspace.tabCount());
-}
-
-test "quiet Git probes back off and a change or unknown result restores the cadence" {
-    const gpa = std.testing.allocator;
-    var workspace = try Workspace.init(.{
-        .id = @enumFromInt(1),
-        .path = try gpa.dupe(u8, "/work"),
-        .default_tab_id = @enumFromInt(1),
-    });
-    defer workspace.deinit(gpa);
-
-    try std.testing.expectEqual(@as(i64, 5000), workspace.gitProbeInterval(5000));
-    try std.testing.expect(workspace.completeGitProbe(.{ .workspace = workspace.id, .branch = "main", .dirty = true, .checked_at_ms = 1 }));
-    try std.testing.expectEqual(@as(i64, 5000), workspace.gitProbeInterval(5000));
-
-    for ([_]i64{ 10000, 20000, 40000, 80000, 80000 }) |expected| {
-        try std.testing.expect(!workspace.completeGitProbe(.{ .workspace = workspace.id, .branch = "main", .dirty = true, .checked_at_ms = 2 }));
-        try std.testing.expectEqual(expected, workspace.gitProbeInterval(5000));
-    }
-
-    // A probe that could not decide keeps the last known cleanliness.
-    try std.testing.expect(!workspace.completeGitProbe(.{ .workspace = workspace.id, .branch = "main", .dirty = null, .checked_at_ms = 3 }));
-    try std.testing.expect(workspace.git_dirty);
-
-    try std.testing.expect(workspace.completeGitProbe(.{ .workspace = workspace.id, .branch = "main", .dirty = false, .checked_at_ms = 4 }));
-    try std.testing.expectEqual(@as(i64, 5000), workspace.gitProbeInterval(5000));
 }

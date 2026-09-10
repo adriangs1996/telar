@@ -59,10 +59,6 @@ pub const Projection = struct {
     tabs: *const tabs.Model,
     agents: *const agents.Snapshot,
     sidebar_animation_frame: u8,
-    /// The chrome shows a spinner or bouncing progress this frame, so an
-    /// animation tick must redraw it. Pane borders are redrawn by the
-    /// compositor regardless.
-    chrome_animation_active: bool = false,
     notifications: *const notifications.Center,
     workspaces: *const workspace_list.Snapshot,
     prompt: ?name_prompt.Prompt,
@@ -333,8 +329,12 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         projection.version.panes;
     const pane_metadata_changed = presenter.presented_model_version.pane_metadata !=
         projection.version.pane_metadata;
+    const pane_foreground_changed = presenter.presented_model_version.pane_foreground !=
+        projection.version.pane_foreground;
     const pane_progress_changed = presenter.presented_model_version.pane_progress !=
         projection.version.pane_progress;
+    const pane_graphics_changed = presenter.presented_model_version.pane_graphics !=
+        projection.version.pane_graphics;
     const chrome_changed = presenter.presented_model_version.chrome !=
         projection.version.chrome;
     const prompt_changed = presenter.presented_model_version.prompt !=
@@ -343,6 +343,8 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         projection.version.history;
     const suggestion_changed = presenter.presented_model_version.suggestion !=
         projection.version.suggestion;
+    const viewport_changed = presenter.presented_model_version.viewport !=
+        projection.version.viewport;
     const was_copy_mode = if (presenter.compositor.copy) |copy| !copy.view.pointer else false;
     const is_copy_mode = if (projection.copy) |copy| !copy.view.pointer else false;
     const copy_status_changed = was_copy_mode != is_copy_mode;
@@ -360,9 +362,8 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     if (prompt_changed or copy_status_changed) {
         resources.view.clearHover();
     }
-    const chrome_animation_changed = sidebar_animation_changed and projection.chrome_animation_active;
     if (workspace_changed or configuration_changed or diagnostic_changed or host_changed or
-        workspace_list_changed or agents_changed or chrome_animation_changed or
+        workspace_list_changed or agents_changed or sidebar_animation_changed or
         proxy_status_changed or system_metrics_changed or bars_changed or notifications_changed or tabs_changed or
         active_tab_changed or panes_changed or pane_metadata_changed or chrome_changed or
         pane_progress_changed or
@@ -373,7 +374,8 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     }
 
     const force_composition = workspace_changed or configuration_changed or host_changed or
-        active_tab_changed or panes_changed;
+        active_tab_changed or panes_changed or pane_foreground_changed or pane_graphics_changed or
+        viewport_changed;
     try presenter.syncWindowTitle(projection, resources.writer);
     const presented = if (projection.model) |model|
         try presenter.present(.{
@@ -519,8 +521,7 @@ fn controlGraphicsReady(projection: Projection, resources: Resources) bool {
 fn mediaWorkPending(projection: Projection, resources: Resources) bool {
     return resources.view.kittyPill().damaged() or resources.view.kittyAttachments().cleanupPending() or
         (projection.host_capabilities.kitty_graphics == .supported and
-            (resources.view.graphicsPreparationPending() or resources.view.preparationDeferred() or
-                resources.graphics_store.damage or
+            (resources.view.graphicsPreparationPending() or resources.graphics_store.damage or
                 resources.view.kittySidebar().damaged() or resources.view.kittyIcons().damaged() or
                 resources.view.kittyToasts().damaged() or resources.view.kittyModal().damaged() or
                 resources.view.kittyAttachments().damaged()));
@@ -531,8 +532,7 @@ fn onlyWaitingForMediaIdle(resources: Resources, media_idle: bool) bool {
         !resources.graphics_store.damage and !resources.view.kittySidebar().damaged() and
         !resources.view.kittyIcons().damaged() and !resources.view.kittyAttachments().damaged() and
         !resources.view.kittyModal().damaged() and !resources.view.kittyPill().damaged() and
-        (resources.view.kittyToasts().waitingForMediaIdle() or
-            resources.view.kittyIcons().preparationDeferred() or resources.view.kittyPill().preparationDeferred());
+        resources.view.kittyToasts().waitingForMediaIdle();
 }
 
 fn observePresentation(presenter: *Presenter, presented_ns: u64) void {
@@ -589,8 +589,6 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
             .copy = input.projection.copy,
             .bottom_reservation = input.resources.view.attachmentReservation(),
             .progress_animation_frame = input.projection.sidebar_animation_frame,
-            .foreground_revision = input.projection.version.pane_foreground,
-            .progress_revision = input.projection.version.pane_progress,
             .force = input.force,
         },
     });
@@ -613,7 +611,6 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
         .copy_mode_active = if (input.projection.copy) |copy| !copy.view.pointer else false,
         .bar_state = input.projection.bar_state,
         .status_mode = input.projection.status_mode,
-        .pane_damage = composed.stats.damage_bounds,
         .force = composed.stats.full,
         .diagnostic = input.projection.diagnostic,
     });

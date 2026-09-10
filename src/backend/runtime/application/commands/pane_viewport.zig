@@ -23,7 +23,7 @@ pub const SetPaneViewportHandler = struct {
 
     /// Changes only the requesting client's scrollback pin. Requests that
     /// resolve to the current offset are idempotent and do not schedule a new
-    /// projection.
+    /// snapshot.
     ///
     /// ```zig
     /// const result = try handler.execute(.{ .pane_id = pane_id, .offset = 0 });

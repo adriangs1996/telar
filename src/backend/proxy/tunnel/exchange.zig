@@ -23,11 +23,6 @@ pub const TransformTarget = struct {
     stream_id: u32,
 };
 
-/// Streaming responses arrive as hundreds of fragments per second; observers
-/// only need to know the stream is alive, so activity for one stream is
-/// published at most this often. Lifecycle transitions are never delayed.
-pub const activity_interval_ms: i64 = 250;
-
 pub const Exchange = struct {
     io: Io,
     pipeline: *const middleware.Pipeline,
@@ -38,8 +33,6 @@ pub const Exchange = struct {
     protocol: middleware.Protocol,
     host: net.HostName = undefined,
     status_code: u16 = 0,
-    last_activity_ms: i64 = 0,
-    last_activity_stream: u32 = 0,
 
     /// Publishes one lifecycle phase for the current status and stream.
     ///
@@ -65,11 +58,6 @@ pub const Exchange = struct {
     /// });
     /// ```
     pub fn publishStatus(exchange: *Exchange, status: Status) void {
-        const observed_at_ms = Io.Timestamp.now(exchange.io, .real).toMilliseconds();
-        if (!exchange.admitActivity(status, observed_at_ms)) {
-            return;
-        }
-
         if (exchange.dialect == .anthropic_messages) {
             const counter: ?metrics.Counter = switch (status.phase) {
                 .request_started => .claude_inference_request,
@@ -92,29 +80,8 @@ pub const Exchange = struct {
             .connection_id = exchange.connection_id,
             .stream_id = status.stream_id,
             .status_code = status.status_code,
-            .observed_at_ms = observed_at_ms,
+            .observed_at_ms = Io.Timestamp.now(exchange.io, .real).toMilliseconds(),
         });
-    }
-
-    /// Folds repeated activity of one stream into one publication per
-    /// interval. Any other phase resets the window, so the first fragment of
-    /// the next response on this connection is published immediately.
-    fn admitActivity(exchange: *Exchange, status: Status, observed_at_ms: i64) bool {
-        if (status.phase != .response_activity) {
-            exchange.last_activity_ms = 0;
-            return true;
-        }
-
-        const same_stream = status.stream_id == exchange.last_activity_stream;
-        if (exchange.last_activity_ms != 0 and same_stream and
-            observed_at_ms - exchange.last_activity_ms < activity_interval_ms)
-        {
-            return false;
-        }
-
-        exchange.last_activity_ms = observed_at_ms;
-        exchange.last_activity_stream = status.stream_id;
-        return true;
     }
 
     /// Builds the immutable identity and routing context passed to one header
@@ -257,28 +224,4 @@ test "only lifecycle evidence for Claude increments Claude counters" {
 test "request classification maps to one lifecycle phase" {
     try std.testing.expectEqual(middleware.Phase.request_started, requestPhase(.inference));
     try std.testing.expectEqual(middleware.Phase.auxiliary_request_started, requestPhase(.auxiliary));
-}
-
-test "response activity of one stream is folded within its interval" {
-    var capture: Capture = .{};
-    var counters: metrics.Counters = .{};
-    var pipeline: middleware.Pipeline = .{};
-    try pipeline.add(.{ .context = &capture, .observe = Capture.observe });
-    var exchange = try testExchange(&pipeline, &counters);
-
-    exchange.publish(.response_activity, 3);
-    exchange.publish(.response_activity, 3);
-    exchange.publish(.response_activity, 3);
-    try std.testing.expectEqual(@as(usize, 1), capture.len);
-
-    // Another stream is independent and a transition always passes.
-    exchange.publish(.response_activity, 5);
-    try std.testing.expectEqual(@as(usize, 2), capture.len);
-    exchange.publish(.response_finished, 5);
-    try std.testing.expectEqual(@as(usize, 3), capture.len);
-
-    // The transition reset the window, so the next response starts fresh.
-    exchange.publish(.response_activity, 5);
-    try std.testing.expectEqual(@as(usize, 4), capture.len);
-    try std.testing.expectEqual(middleware.Phase.response_activity, capture.events[3].phase);
 }

@@ -122,9 +122,7 @@ pub const Buffer = struct {
             return true;
         }
 
-        // Bodies of interest are kilobytes: starting at 4 KiB spares the
-        // first four doublings, each of which copies and scrubs the old copy.
-        var capacity = @min(buffer.max_bytes, @max(@as(usize, 4096), buffer.storage.len));
+        var capacity = @min(buffer.max_bytes, @max(@as(usize, 256), buffer.storage.len));
         while (capacity < needed) {
             capacity = @min(buffer.max_bytes, capacity *| 2);
             if (capacity < needed and capacity == buffer.max_bytes) {

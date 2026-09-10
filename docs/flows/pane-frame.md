@@ -3,11 +3,8 @@
 A pane frame is the runtime's bounded screen projection for one client
 attachment. The client commits that projection to disposable state, repairs
 client-only resources and presents it before acknowledging the frame. The
-runtime remains authoritative for terminal history and keeps at most two
-dependent patches in flight per attachment: each patch is diffed against the
-newest frame sent, the client applies frames in order, and acknowledging the
-newest presented frame acknowledges every older one with it. A snapshot
-supersedes whatever is still in flight.
+runtime remains authoritative for terminal history and never publishes the
+next dependent patch until the acknowledgement arrives.
 
 ## Client boundary
 
@@ -87,8 +84,8 @@ or incremental composition.
 
 `Presenter.presentDue` composes the active model and flushes the terminal cell
 diff. Only after that flush succeeds does it consume each attached pane's
-pending frame id and enqueue `frame_ack`. A frame therefore cannot free its
-slot in the runtime's window before the corresponding client state has
+pending frame id and enqueue `frame_ack`. A frame therefore cannot release the
+runtime's next dependent patch before the corresponding client state has
 reached the host terminal.
 
 ## Proof

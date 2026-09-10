@@ -86,14 +86,6 @@ pub const Worker = struct {
             const path = diagnostics.enter(.observation);
             defer path.restore();
 
-            // Several writes drained together commit as one transaction.
-            if (worker.database) |*database| {
-                if (countWrites(items[0..count]) > 1) {
-                    database.beginBatch();
-                }
-            }
-            defer if (worker.database) |*database| database.endBatch();
-
             while (next < count) {
                 const request = items[next];
                 next += 1;
@@ -400,20 +392,7 @@ fn respondPruned(context: Context, pruned: model.Pruned) void {
 
 /// Writes one imported session and its commands idempotently. Both SQLite
 /// operations use `OR IGNORE`, keyed by deterministic session and sequence.
-fn countWrites(requests: []const model.Request) usize {
-    var writes: usize = 0;
-    for (requests) |request| {
-        writes += @intFromBool(switch (request) {
-            .launch_attempt, .session_started, .session_finished, .session_title, .command_finished, .import, .delete, .prune => true,
-            .stats, .read_output, .query => false,
-        });
-    }
-    return writes;
-}
-
 fn writeImportBatch(database: *sqlite.Store, batch: *const model.ImportBatch) anyerror!void {
-    database.beginBatch();
-    defer database.endBatch();
     const session: model.SessionStarted = .{
         .id = batch.session_id,
         .pane_id = batch.pane_id,

@@ -9,13 +9,9 @@ terminal state.
 
 `runtime_transport.State` owns the client side of runtime I/O:
 
-- one borrowed `SocketChannel` for the client's lifetime, configured on
-  connect with `core.transport.socket_buffer_size` kernel buffers and the
-  `core.transport.inline_send_low_water` send mark; the runtime configures
-  its accepted end the same way;
+- one borrowed `SocketChannel` for the client's lifetime;
 - one receive buffer and one send buffer, each exactly
-  `core.transport.max_frame_size` bytes; the send buffer carries a batch of
-  framed messages, so one write may hold every message that fits;
+  `core.transport.max_frame_size` bytes;
 - one `core.transport.read_buffer_size` read-ahead buffer bound to the
   channel, so a burst of small runtime messages costs one `read` instead of
   two per message and the length prefix never costs its own syscall. The
@@ -68,27 +64,14 @@ runtime_transport.handleSent
 Outbox.finishSend -> next send -> host input capacity check
 ```
 
-`Outbox.beginSend` claims every queued message that fits the shared send
-buffer, oldest first, encodes each as its own wire frame and lends the batch to
-one write actor. A batch under the send low-water mark, while `poll` reports
-that much room, is written by the event loop itself and its result parked in
-`State.inline_sent`; `settleInlineSends` releases it through `handleSent`
-after the current event, so the completion order and the single send token
-are unchanged and no handler re-enters the enqueue that started it. No
-producer can mutate a claimed message or reuse that buffer until the claim is
-released; messages queued behind the claim still fold.
-Queue insertion may fold pane input, resize, viewport and frame
-acknowledgements only where their ordering rules permit it.
+`Outbox.beginSend` lends the shared send buffer to one write actor. No producer
+can mutate the head or reuse that buffer until `.sent` releases the claim.
+Queue insertion may fold pane input, resize and frame acknowledgements only
+where their ordering rules permit it.
 
-A full outbox stops new host TTY reads. A successful send removes the claimed
-batch, pumps its successor and asks `host_inputs` to resume only if capacity
-still exists. The runtime assembles its deliveries the same way: `pump`
-prepares and commits payloads behind one another in the session's send buffer
-while a maximum frame still fits, stops at a transaction whose completion
-must run after the write, and sends the batch with one framed write. A batch
-under the low-water mark with room reported leaves from the event loop, and
-`Application.handle` settles it as a `.client_sent` completion after the
-event; larger batches keep the send actor. Request correlation rolls back when an enqueue fails; transport does
+A full outbox stops new host TTY reads. A successful send removes one message,
+pumps its successor and asks `host_inputs` to resume only if capacity still
+exists. Request correlation rolls back when an enqueue fails; transport does
 not invent or consume continuations.
 
 Graphics memory credit follows the same queue. The graphics store retains a
@@ -144,9 +127,8 @@ propagate without transport classifying their original message.
 
 - `src/frontend/client/runtime_transport.zig` checks partial-allocation cleanup
   and the exact three-frame bootstrap order over a real socketpair.
-- `src/frontend/client/outbox.zig` proves the batched send claim, completion
-  on success and failure, copied payload ownership, folding rules and
-  saturation bounds.
+- `src/frontend/client/outbox.zig` proves one send claim, completion on success
+  and failure, copied payload ownership, folding rules and saturation bounds.
 - `runtime reads own one token and do not rearm after shutdown` in
   `src/frontend/client/client_test.zig` crosses the real framed socket and
   proves rearming, terminal shutdown and error cleanup.

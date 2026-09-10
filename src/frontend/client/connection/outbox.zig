@@ -293,7 +293,6 @@ pub const Stats = struct {
     coalesced_input: u64 = 0,
     coalesced_resize: u64 = 0,
     coalesced_ack: u64 = 0,
-    coalesced_viewport: u64 = 0,
     coalesced_client_layout: u64 = 0,
 };
 
@@ -304,7 +303,6 @@ pub const Snapshot = struct {
     coalesced_input: u64 = 0,
     coalesced_resize: u64 = 0,
     coalesced_ack: u64 = 0,
-    coalesced_viewport: u64 = 0,
     coalesced_client_layout: u64 = 0,
 };
 
@@ -318,8 +316,6 @@ pub const Outbox = struct {
     head: u8 = 0,
     len: u8 = 0,
     send_pending: bool = false,
-    /// Messages claimed by the in-flight send, oldest first from `head`.
-    send_count: u8 = 0,
     stats: Stats = .{},
 
     pub fn hasCapacity(outbox: *const Outbox) bool {
@@ -348,7 +344,6 @@ pub const Outbox = struct {
             .coalesced_input = outbox.stats.coalesced_input,
             .coalesced_resize = outbox.stats.coalesced_resize,
             .coalesced_ack = outbox.stats.coalesced_ack,
-            .coalesced_viewport = outbox.stats.coalesced_viewport,
             .coalesced_client_layout = outbox.stats.coalesced_client_layout,
         };
     }
@@ -357,7 +352,6 @@ pub const Outbox = struct {
         switch (message) {
             .pane_resize => |resize| return outbox.pushResize(resize),
             .frame_ack => |ack| return outbox.pushAck(ack),
-            .set_pane_viewport => |viewport| return outbox.pushViewport(viewport),
             .query_history => |query| {
                 if (query.offset == 0 and query.snapshot_id == 0 and query.entry_id == 0) {
                     if (outbox.mutableTailIndex()) |index| {
@@ -513,7 +507,7 @@ pub const Outbox = struct {
     /// ```
     pub fn pushClientLayout(outbox: *Outbox, update: schema.ClientLayoutUpdate) !void {
         var offset: usize = 0;
-        const mutable_len = outbox.mutableLen();
+        const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
         while (offset < mutable_len) : (offset += 1) {
             const index = (@as(usize, outbox.head) + outbox.len - 1 - offset) % capacity;
             switch (outbox.items[index]) {
@@ -542,48 +536,23 @@ pub const Outbox = struct {
         return &outbox.items[outbox.head];
     }
 
-    /// Claims every queued message that fits `buffer`, oldest first, and
-    /// encodes them as consecutive wire frames so one write carries them
-    /// all. Null while a send is already in flight or the queue is empty.
-    /// The claim ends in exactly one of `popSent` (the scheduler delivered
-    /// it) or `sendFailed` (nothing left).
-    ///
-    /// ```zig
-    /// const batch = try outbox.beginSend(send_buffer) orelse return;
-    /// ```
+    /// Claims the next queued message: encodes it into `buffer` and marks
+    /// the send in flight. Null while a send is already in flight or the
+    /// queue is empty. The claim ends in exactly one of `popSent` (the
+    /// scheduler delivered it) or `sendFailed` (it never left).
     pub fn beginSend(outbox: *Outbox, buffer: []u8) !?[]const u8 {
         if (outbox.send_pending or outbox.len == 0) {
             return null;
         }
-
-        const prefix_size = core.transport.length_prefix_size;
-        var offset: usize = 0;
-        var count: u8 = 0;
-        while (count < outbox.len and offset + prefix_size < buffer.len) {
-            const index = (@as(usize, outbox.head) + count) % capacity;
-            const payload = outbox.encodeAt(index, buffer[offset + prefix_size ..]) catch |err| {
-                // A message that does not fit behind the others waits for
-                // the next send; one that fits nowhere is a real error.
-                if (count == 0) {
-                    return err;
-                }
-                break;
-            };
-            core.transport.writePrefix(buffer[offset..][0..prefix_size], payload.len);
-            offset += prefix_size + payload.len;
-            count += 1;
-        }
-
+        const payload = try outbox.encodeNext(buffer);
         outbox.send_pending = true;
-        outbox.send_count = count;
-        return buffer[0..offset];
+        return payload;
     }
 
-    /// The scheduler refused the claimed send; the messages stay queued.
+    /// The scheduler refused the claimed send; the message stays queued.
     pub fn sendFailed(outbox: *Outbox) void {
         std.debug.assert(outbox.send_pending);
         outbox.send_pending = false;
-        outbox.send_count = 0;
     }
 
     /// Releases one completed send claim. A failed socket write retains the
@@ -609,30 +578,27 @@ pub const Outbox = struct {
 
     pub fn popSent(outbox: *Outbox) void {
         std.debug.assert(outbox.send_pending);
-        std.debug.assert(outbox.len >= outbox.send_count and outbox.send_count != 0);
-        for (0..outbox.send_count) |_| {
-            outbox.releaseLaunchCwd(outbox.head);
-            outbox.releaseClientLayout(outbox.head);
-            outbox.head = @intCast((@as(usize, outbox.head) + 1) % capacity);
-            outbox.len -= 1;
-        }
+        std.debug.assert(outbox.len != 0);
+        outbox.releaseLaunchCwd(outbox.head);
+        outbox.releaseClientLayout(outbox.head);
         outbox.send_pending = false;
-        outbox.send_count = 0;
+        outbox.head = @intCast((@as(usize, outbox.head) + 1) % capacity);
+        outbox.len -= 1;
     }
 
-    fn encodeAt(outbox: *const Outbox, index: usize, buffer: []u8) ![]const u8 {
-        const message = &outbox.items[index];
+    fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
+        const message = outbox.peek() orelse return error.OutboxEmpty;
         return switch (message.*) {
             .open_pane => |value| {
                 var owned = value;
                 if (owned.launch) |*launch| {
-                    launch.cwd = outbox.launchCwd(index);
+                    launch.cwd = outbox.launchCwd(outbox.head);
                 }
                 return schema.encodeOpenPane(buffer, owned);
             },
             .pane_input => |value| schema.encodePaneInput(buffer, .{
                 .pane_id = value.pane_id,
-                .bytes = outbox.input_bytes[index][0..value.len],
+                .bytes = outbox.input_bytes[outbox.head][0..value.len],
             }),
             .pane_resize => |value| schema.encodePaneResize(buffer, value),
             .frame_ack => |value| schema.encodeFrameAck(buffer, value),
@@ -641,7 +607,7 @@ pub const Outbox = struct {
             .request_tab_snapshot => |value| schema.encodeRequestTabSnapshot(buffer, value),
             .create_pane => |value| {
                 var owned = value;
-                owned.launch.cwd = outbox.launchCwd(index);
+                owned.launch.cwd = outbox.launchCwd(outbox.head);
                 return schema.encodeCreatePane(buffer, owned);
             },
             .close_pane => |value| schema.encodeClosePane(buffer, value),
@@ -650,7 +616,7 @@ pub const Outbox = struct {
                 var argument_scratch: [OwnedCreateTab.max_owned_arguments][]const u8 = undefined;
                 break :encode schema.encodeCreateTab(
                     buffer,
-                    value.view(outbox.launchCwd(index), &argument_scratch),
+                    value.view(outbox.launchCwd(outbox.head), &argument_scratch),
                 );
             },
             .rename_tab => |*value| schema.encodeRenameTab(buffer, .{
@@ -667,7 +633,7 @@ pub const Outbox = struct {
             .request_runtime_state => |value| schema.encodeRequestRuntimeState(buffer, value),
             .create_workspace => |*value| schema.encodeCreateWorkspace(
                 buffer,
-                value.view(outbox.launchCwd(index)),
+                value.view(outbox.launchCwd(outbox.head)),
             ),
             .rename_workspace => |*value| schema.encodeRenameWorkspace(buffer, .{
                 .request_id = value.request_id,
@@ -677,14 +643,7 @@ pub const Outbox = struct {
             .set_pane_viewport => |value| schema.encodeSetPaneViewport(buffer, value),
             .copy_selection => |value| schema.encodeCopySelection(buffer, value),
             .show_notification => |*value| schema.encodeShowNotification(buffer, value.view()),
-            .client_layout => |slot| copy: {
-                const encoded = outbox.client_layouts[slot].slice();
-                if (encoded.len > buffer.len) {
-                    return error.NoSpaceLeft;
-                }
-                @memcpy(buffer[0..encoded.len], encoded);
-                break :copy buffer[0..encoded.len];
-            },
+            .client_layout => |slot| outbox.client_layouts[slot].slice(),
             .acknowledge_agent => |value| schema.encodeAcknowledgeAgent(buffer, value),
             .search_pane => |*value| schema.encodeSearchPane(buffer, value.view()),
             .query_history => |*value| schema.encodeQueryHistory(buffer, value.view()),
@@ -791,20 +750,15 @@ pub const Outbox = struct {
 
     fn mutableTailIndex(outbox: *const Outbox) ?usize {
         const index = outbox.tailIndex() orelse return null;
-        if (outbox.send_pending and outbox.len <= outbox.send_count) {
+        if (outbox.send_pending and index == outbox.head) {
             return null;
         }
         return index;
     }
 
-    /// Queued messages not claimed by the in-flight send.
-    fn mutableLen(outbox: *const Outbox) usize {
-        return outbox.len - outbox.send_count;
-    }
-
     fn pushResize(outbox: *Outbox, resize: schema.PaneResize) !void {
         var offset: usize = 0;
-        const mutable_len = outbox.mutableLen();
+        const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
         while (offset < mutable_len) : (offset += 1) {
             const index = (@as(usize, outbox.head) + outbox.len - 1 - offset) % capacity;
             switch (outbox.items[index]) {
@@ -821,30 +775,9 @@ pub const Outbox = struct {
         try outbox.append(.{ .pane_resize = resize });
     }
 
-    /// Keeps one pending viewport per pane. The runtime projects only the
-    /// last requested offset; intermediate offsets it never showed are folded.
-    fn pushViewport(outbox: *Outbox, viewport: schema.SetPaneViewport) !void {
-        var offset: usize = 0;
-        const mutable_len = outbox.mutableLen();
-        while (offset < mutable_len) : (offset += 1) {
-            const index = (@as(usize, outbox.head) + outbox.len - 1 - offset) % capacity;
-            switch (outbox.items[index]) {
-                .set_pane_viewport => |*pending| {
-                    if (pending.pane_id == viewport.pane_id) {
-                        pending.* = viewport;
-                        outbox.stats.coalesced_viewport +|= 1;
-                        return;
-                    }
-                },
-                else => break,
-            }
-        }
-        try outbox.append(.{ .set_pane_viewport = viewport });
-    }
-
     fn pushAck(outbox: *Outbox, ack: schema.FrameAck) !void {
         var offset: usize = 0;
-        const mutable_len = outbox.mutableLen();
+        const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
         while (offset < mutable_len) : (offset += 1) {
             const index = (@as(usize, outbox.head) + outbox.len - 1 - offset) % capacity;
             switch (outbox.items[index]) {
@@ -862,13 +795,6 @@ pub const Outbox = struct {
     }
 };
 
-const BatchFrames = core.transport.FrameIterator;
-
-fn firstPayload(batch: []const u8) []const u8 {
-    var frames: BatchFrames = .{ .batch = batch };
-    return frames.next().?;
-}
-
 test "adjacent input for one pane is folded without allocation" {
     var outbox: Outbox = .{};
     try outbox.pushInput(@enumFromInt(1), "abc");
@@ -877,7 +803,7 @@ test "adjacent input for one pane is folded without allocation" {
     try std.testing.expectEqual(@as(u64, 1), outbox.stats.coalesced_input);
 
     var buffer: [64]u8 = undefined;
-    const decoded = try schema.decodeClient(firstPayload((try outbox.beginSend(&buffer)).?));
+    const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("abcdef", decoded.pane_input.bytes);
 }
 
@@ -900,15 +826,12 @@ test "a long paste reserves all chunks before mutating the outbox" {
     try outbox.pushInputBatch(pane_id, command);
     var buffer: [max_input_bytes + 64]u8 = undefined;
     var offset: usize = 0;
-    while (try outbox.beginSend(&buffer)) |batch| {
-        var frames: BatchFrames = .{ .batch = batch };
-        while (frames.next()) |encoded| {
-            const message = try schema.decodeClient(encoded);
-            const input = message.pane_input;
-            try std.testing.expectEqual(pane_id, input.pane_id);
-            try std.testing.expectEqualStrings(command[offset..][0..input.bytes.len], input.bytes);
-            offset += input.bytes.len;
-        }
+    while (try outbox.beginSend(&buffer)) |encoded| {
+        const message = try schema.decodeClient(encoded);
+        const input = message.pane_input;
+        try std.testing.expectEqual(pane_id, input.pane_id);
+        try std.testing.expectEqualStrings(command[offset..][0..input.bytes.len], input.bytes);
+        offset += input.bytes.len;
         try outbox.finishSend({});
     }
 
@@ -947,7 +870,7 @@ test "queued launches own cwd bytes until encoding" {
     @memset(&cwd, 'x');
 
     outbox.popSent();
-    const decoded = try schema.decodeClient(firstPayload((try outbox.beginSend(&buffer)).?));
+    const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("/work/first", decoded.create_pane.launch.cwd);
     try std.testing.expectEqual(pane_id, decoded.create_pane.launch.cwd_source.?);
 }
@@ -986,7 +909,7 @@ test "queued tab rename owns bounded label bytes until encoding" {
     @memset(&label, 'x');
 
     outbox.popSent();
-    const decoded = try schema.decodeClient(firstPayload((try outbox.beginSend(&buffer)).?));
+    const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("agents", decoded.rename_tab.label);
     try std.testing.expectEqualDeep(location, decoded.rename_tab.location);
 }
@@ -1017,7 +940,7 @@ test "queued workspace creation owns name and cwd bytes until encoding" {
     @memset(&cwd, 'y');
 
     outbox.popSent();
-    const decoded = try schema.decodeClient(firstPayload((try outbox.beginSend(&buffer)).?));
+    const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("agents", decoded.create_workspace.name);
     try std.testing.expectEqualStrings("/work/source", decoded.create_workspace.launch.cwd);
     try std.testing.expectEqual(pane_id, decoded.create_workspace.launch.cwd_source.?);
@@ -1050,7 +973,7 @@ test "queued tab creation owns label and cwd bytes until encoding" {
     @memset(&cwd, 'y');
 
     outbox.popSent();
-    const decoded = try schema.decodeClient(firstPayload((try outbox.beginSend(&buffer)).?));
+    const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("agents", decoded.create_tab.label);
     try std.testing.expectEqualStrings("/work/source", decoded.create_tab.launch.cwd);
     try std.testing.expectEqual(pane_id, decoded.create_tab.launch.cwd_source.?);
@@ -1086,7 +1009,7 @@ test "history replaces only unsent first-page queries" {
     try outbox.push(.{ .query_history = query });
     try std.testing.expectEqual(@as(u8, 1), outbox.len);
     var buffer: [2048]u8 = undefined;
-    const sent = (try schema.decodeClient(firstPayload((try outbox.beginSend(&buffer)).?))).query_history;
+    const sent = (try schema.decodeClient((try outbox.beginSend(&buffer)).?)).query_history;
     try std.testing.expectEqual(query.request_id, sent.request_id);
 
     query.request_id = @enumFromInt(3);
@@ -1106,7 +1029,7 @@ test "input never coalesces into a message already in flight" {
     const pane_id: schema.PaneId = @enumFromInt(1);
     try outbox.pushInput(pane_id, "first");
     var buffer: [64]u8 = undefined;
-    var decoded = try schema.decodeClient(firstPayload((try outbox.beginSend(&buffer)).?));
+    var decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("first", decoded.pane_input.bytes);
     try outbox.pushInput(pane_id, "second");
     try std.testing.expectEqual(@as(u8, 2), outbox.len);
@@ -1114,7 +1037,7 @@ test "input never coalesces into a message already in flight" {
     // A second claim while one is in flight yields nothing.
     try std.testing.expectEqual(@as(?[]const u8, null), try outbox.beginSend(&buffer));
     outbox.popSent();
-    decoded = try schema.decodeClient(firstPayload((try outbox.beginSend(&buffer)).?));
+    decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqualStrings("second", decoded.pane_input.bytes);
 }
 
@@ -1146,8 +1069,8 @@ test "client layouts coalesce without mutating an in-flight snapshot" {
     try std.testing.expectEqual(@as(u8, 1), outbox.len);
     try std.testing.expectEqual(@as(u64, 1), outbox.stats.coalesced_client_layout);
 
-    var buffer: [schema.max_client_layout_wire_bytes + core.transport.length_prefix_size]u8 = undefined;
-    const first_payload = firstPayload((try outbox.beginSend(&buffer)).?);
+    var buffer: [schema.max_client_layout_wire_bytes]u8 = undefined;
+    const first_payload = (try outbox.beginSend(&buffer)).?;
     const first = try schema.decodeClient(first_payload);
     try std.testing.expect(first == .update_client_layout);
     try std.testing.expectEqual(@as(u16, 55), first.update_client_layout.sidebar_width);
@@ -1161,7 +1084,7 @@ test "client layouts coalesce without mutating an in-flight snapshot" {
     try std.testing.expectEqual(@as(u16, 55), first.update_client_layout.sidebar_width);
 
     outbox.popSent();
-    const second = try schema.decodeClient(firstPayload((try outbox.beginSend(&buffer)).?));
+    const second = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expect(second == .update_client_layout);
     try std.testing.expectEqual(@as(u16, 65), second.update_client_layout.sidebar_width);
     outbox.popSent();
@@ -1202,30 +1125,6 @@ test "client layout folding never crosses an ordered request" {
 
     try std.testing.expectEqual(@as(u8, 3), outbox.len);
     try std.testing.expectEqual(@as(u64, 0), outbox.stats.coalesced_client_layout);
-}
-
-test "viewport folding keeps one pending offset per pane" {
-    var outbox: Outbox = .{};
-    const pane_id: schema.PaneId = @enumFromInt(1);
-    const other_pane: schema.PaneId = @enumFromInt(2);
-    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = pane_id, .offset = 7 } });
-    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = other_pane, .offset = 3 } });
-    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = pane_id, .offset = 10 } });
-    try std.testing.expectEqual(@as(u8, 2), outbox.len);
-    try std.testing.expectEqual(@as(u64, 1), outbox.stats.coalesced_viewport);
-
-    var buffer: [64]u8 = undefined;
-    const first = (try outbox.beginSend(&buffer)).?;
-    const decoded = try schema.decodeClient(firstPayload(first));
-    try std.testing.expectEqual(@as(u32, 10), decoded.set_pane_viewport.offset);
-    outbox.popSent();
-
-    // Both pending viewports left in that one batch.
-    try std.testing.expectEqual(@as(u8, 0), outbox.len);
-    try outbox.pushInput(pane_id, "x");
-    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = pane_id, .offset = 0 } });
-    try std.testing.expectEqual(@as(u8, 2), outbox.len);
-    try std.testing.expectEqual(@as(u64, 1), outbox.stats.coalesced_viewport);
 }
 
 test "resize folding never crosses an ordered input message" {
@@ -1299,52 +1198,9 @@ test "queued tab creation owns argument bytes until encoding" {
     @memset(&flag, 'y');
 
     outbox.popSent();
-    const decoded = try schema.decodeClient(firstPayload((try outbox.beginSend(&buffer)).?));
+    const decoded = try schema.decodeClient((try outbox.beginSend(&buffer)).?);
     try std.testing.expectEqual(@as(u16, 2), decoded.create_tab.launch.argument_count);
     var iterator = decoded.create_tab.launch.arguments();
     try std.testing.expectEqualStrings("lazygit", (try iterator.next()).?);
     try std.testing.expectEqualStrings("-p", (try iterator.next()).?);
-}
-
-test "one send carries every queued message that fits and pops them together" {
-    var outbox: Outbox = .{};
-    const pane_id: schema.PaneId = @enumFromInt(1);
-    try outbox.pushInput(pane_id, "abc");
-    try outbox.push(.{ .frame_ack = .{ .pane_id = pane_id, .frame_id = 7 } });
-    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = pane_id, .offset = 3 } });
-
-    var buffer: [256]u8 = undefined;
-    const batch = (try outbox.beginSend(&buffer)).?;
-    try std.testing.expect(outbox.inFlight());
-    try std.testing.expectEqual(@as(u8, 3), outbox.send_count);
-    var frames: BatchFrames = .{ .batch = batch };
-    try std.testing.expect((try schema.decodeClient(frames.next().?)) == .pane_input);
-    try std.testing.expect((try schema.decodeClient(frames.next().?)) == .frame_ack);
-    try std.testing.expect((try schema.decodeClient(frames.next().?)) == .set_pane_viewport);
-    try std.testing.expect(frames.next() == null);
-
-    // Messages queued behind a claimed batch are still foldable and are not
-    // part of the claim.
-    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = pane_id, .offset = 5 } });
-    try outbox.push(.{ .set_pane_viewport = .{ .pane_id = pane_id, .offset = 6 } });
-    try std.testing.expectEqual(@as(u8, 4), outbox.len);
-    try std.testing.expectEqual(@as(u64, 1), outbox.stats.coalesced_viewport);
-
-    outbox.popSent();
-    try std.testing.expectEqual(@as(u8, 1), outbox.len);
-    try std.testing.expect(!outbox.inFlight());
-    const rest = (try outbox.beginSend(&buffer)).?;
-    try std.testing.expectEqual(@as(u32, 6), (try schema.decodeClient(firstPayload(rest))).set_pane_viewport.offset);
-    outbox.popSent();
-    try std.testing.expectEqual(@as(u8, 0), outbox.len);
-
-    // A batch stops before a message that does not fit; it goes next.
-    try outbox.pushInput(pane_id, "0123456789");
-    try outbox.pushInput(@enumFromInt(2), "0123456789");
-    var tight: [40]u8 = undefined;
-    const partial = (try outbox.beginSend(&tight)).?;
-    try std.testing.expectEqual(@as(u8, 1), outbox.send_count);
-    try std.testing.expectEqualStrings("0123456789", (try schema.decodeClient(firstPayload(partial))).pane_input.bytes);
-    outbox.popSent();
-    try std.testing.expectEqual(@as(u8, 1), outbox.len);
 }

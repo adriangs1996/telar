@@ -131,14 +131,22 @@ pub const Proxy = struct {
         gpa.destroy(proxy);
     }
 
-    /// Waits for one live, heap-owned captured exchange half. Its body is
-    /// decoded on the waiting task before it is returned.
+    /// Waits for one live, heap-owned captured exchange half.
     ///
     /// ```zig
     /// const half = try proxy.receiveCapture(io);
     /// ```
     pub fn receiveCapture(proxy: *Proxy, io: Io) anyerror!*capture_mod.Half {
         return proxy.lifecycle.service.receiveCapture(io);
+    }
+
+    /// Decodes one captured body on the runtime observation path.
+    ///
+    /// ```zig
+    /// proxy.decodeCapture(half);
+    /// ```
+    pub fn decodeCapture(proxy: *Proxy, half: *capture_mod.Half) void {
+        proxy.lifecycle.service.decodeCapture(half);
     }
 
     /// Registers one pane generation and returns its owned child environment.

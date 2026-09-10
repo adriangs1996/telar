@@ -115,17 +115,16 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
             gate: ?*IngestTestGate,
         };
 
-        fn startOutputIngest(context: *OutputRuntime, ingest: pane_output_pipeline.Ingest) !bool {
+        fn startOutputIngest(context: *OutputRuntime, ingest: pane_output_pipeline.Ingest) !void {
             core.echo_trace.mark(ingest.io, .vt_queued);
             const task: PaneIngestTask = .{ .ingest = ingest, .gate = context.ingest_gate };
 
             if (context.ingest_gate == null and ingest.pane.canInlineOutput(ingest.bytes)) {
                 context.inline_ingest = ingestPane(task);
-                return true;
+                return;
             }
 
             try context.application.select.concurrent(.pane_ingested, ingestPane, .{task});
-            return false;
         }
 
         fn paneHasOutstandingFrame(context: *OutputRuntime, pane_id: schema.PaneId) bool {
@@ -145,8 +144,8 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
             context.application.collect();
         }
 
-        fn pumpAfterOutput(context: *OutputRuntime, pane: *Pane) void {
-            context.application.pumpPaneClients(pane);
+        fn pumpAfterOutput(context: *OutputRuntime) void {
+            context.application.pumpAll();
         }
 
         fn ingestPane(task: PaneIngestTask) PaneIngestEvent {
@@ -177,7 +176,7 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
             .schedule_response = dependencies.schedule_response,
             .start_read = startNextPaneRead,
             .collect = collectPaneLifecycle,
-            .pump_clients = pumpIngestedPaneClients,
+            .pump_clients = pumpRuntimeClients,
         };
 
         const RuntimePaneIngestCoordinator = pane_ingest_coordinator.Coordinator(Application, pane_ingest_runtime_port);
@@ -232,10 +231,6 @@ pub fn Dispatcher(comptime Application: type, comptime dependencies: Dependencie
 
         fn pumpRuntimeClients(application: *Application) void {
             application.pumpAll();
-        }
-
-        fn pumpIngestedPaneClients(application: *Application, pane: *Pane) void {
-            application.pumpPaneClients(pane);
         }
     };
 }

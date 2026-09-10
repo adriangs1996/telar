@@ -44,15 +44,6 @@ pub fn Scheduler(comptime Application: type) type {
         pub fn startSessionSend(application: *Application, session: *ClientSession, payload: []const u8) !void {
             return ClientEvents.startSend(application, session, payload);
         }
-
-        /// Starts one bounded client write of a batch of framed messages.
-        ///
-        /// ```zig
-        /// try Operations.startSessionSendFramed(&application, session, batch);
-        /// ```
-        pub fn startSessionSendFramed(application: *Application, session: *ClientSession, batch: []const u8) !void {
-            return ClientEvents.startSendFramed(application, session, batch);
-        }
     };
 }
 

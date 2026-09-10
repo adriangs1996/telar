@@ -75,20 +75,14 @@ pub const Pane = struct {
     applied_frame_id: u64 = 0,
     pending_frame_id: u64 = 0,
     graphics_placeholder: bool = false,
-    /// Owned storage for the child's working directory. It grows to the
-    /// longest path seen and is reused, so a shell that reports a new cwd per
-    /// command allocates only when the path outgrows what was kept.
-    cwd_storage: []u8 = &.{},
-    cwd_len: u16 = 0,
+    cwd: []u8 = &.{},
     foreground_name: [schema.max_foreground_name_bytes]u8 = @splat(0),
     foreground_name_len: u8 = 0,
     progress_state: schema.PaneProgressState = .remove,
     progress_percent: ?u8 = null,
-    /// Owned storage for the child's window title, empty until the runtime
-    /// reports one. Titles change per prompt in many shells, so the storage
-    /// is kept and reused; it allocates only when a title outgrows it.
-    title_storage: []u8 = &.{},
-    title_len: u16 = 0,
+    /// Owned copy of the child's window title; empty until the runtime
+    /// reports one. Allocated on change so idle panes cost nothing.
+    title: []u8 = &.{},
 
     fn init(gpa: std.mem.Allocator, input: PaneInit) !Pane {
         var buffer = try ui.Buffer.init(gpa, input.spec.size.cols, input.spec.size.rows);
@@ -109,11 +103,11 @@ pub const Pane = struct {
     }
 
     fn deinit(pane: *Pane) void {
-        if (pane.cwd_storage.len != 0) {
-            pane.gpa.free(pane.cwd_storage);
+        if (pane.cwd.len != 0) {
+            pane.gpa.free(pane.cwd);
         }
-        if (pane.title_storage.len != 0) {
-            pane.gpa.free(pane.title_storage);
+        if (pane.title.len != 0) {
+            pane.gpa.free(pane.title);
         }
         pane.gpa.free(pane.damage_rows);
         pane.buffer.deinit();
@@ -129,30 +123,26 @@ pub const Pane = struct {
 
     fn setCwd(pane: *Pane, path: []const u8) !bool {
         std.debug.assert(path.len != 0 and path.len <= schema.max_cwd_bytes);
-        if (std.mem.eql(u8, pane.cwdSlice(), path)) {
+        if (std.mem.eql(u8, pane.cwd, path)) {
             return false;
         }
 
         const display_changed = !std.mem.eql(u8, pane.cwdName(), displayCwdName(path));
-        if (path.len > pane.cwd_storage.len) {
-            const replacement = try pane.gpa.dupe(u8, path);
-            if (pane.cwd_storage.len != 0) {
-                pane.gpa.free(pane.cwd_storage);
-            }
-            pane.cwd_storage = replacement;
-        } else {
-            @memcpy(pane.cwd_storage[0..path.len], path);
+        const replacement = try pane.gpa.dupe(u8, path);
+        if (pane.cwd.len != 0) {
+            pane.gpa.free(pane.cwd);
         }
-        pane.cwd_len = @intCast(path.len);
+
+        pane.cwd = replacement;
         return display_changed;
     }
 
     pub fn cwdName(pane: *const Pane) []const u8 {
-        return displayCwdName(pane.cwdSlice());
+        return displayCwdName(pane.cwd);
     }
 
     pub fn cwdSlice(pane: *const Pane) []const u8 {
-        return pane.cwd_storage[0..pane.cwd_len];
+        return pane.cwd;
     }
 
     fn setForegroundName(pane: *Pane, name: []const u8) bool {
@@ -187,25 +177,21 @@ pub const Pane = struct {
 
     fn setTitle(pane: *Pane, title: []const u8) !bool {
         std.debug.assert(title.len <= schema.max_pane_title_bytes);
-        if (std.mem.eql(u8, pane.titleSlice(), title)) {
+        if (std.mem.eql(u8, pane.title, title)) {
             return false;
         }
 
-        if (title.len > pane.title_storage.len) {
-            const replacement = try pane.gpa.dupe(u8, title);
-            if (pane.title_storage.len != 0) {
-                pane.gpa.free(pane.title_storage);
-            }
-            pane.title_storage = replacement;
-        } else {
-            @memcpy(pane.title_storage[0..title.len], title);
+        const replacement = if (title.len != 0) try pane.gpa.dupe(u8, title) else &[_]u8{};
+        if (pane.title.len != 0) {
+            pane.gpa.free(pane.title);
         }
-        pane.title_len = @intCast(title.len);
+
+        pane.title = @constCast(replacement);
         return true;
     }
 
     pub fn titleSlice(pane: *const Pane) []const u8 {
-        return pane.title_storage[0..pane.title_len];
+        return pane.title;
     }
 };
 
@@ -270,9 +256,8 @@ test "pane cwd names use a bounded basename" {
 
     var pane: Pane = undefined;
     pane.gpa = std.testing.allocator;
-    pane.cwd_storage = &.{};
-    pane.cwd_len = 0;
-    defer if (pane.cwd_storage.len != 0) pane.gpa.free(pane.cwd_storage);
+    pane.cwd = &.{};
+    defer if (pane.cwd.len != 0) pane.gpa.free(pane.cwd);
     const long_name = [_]u8{'x'} ** (max_cwd_name_bytes + 1);
     try std.testing.expect(try pane.setCwd("/work/telar"));
     try std.testing.expectEqualStrings("telar", pane.cwdName());
@@ -289,14 +274,7 @@ pub const RenderStats = struct {
     panes: usize = 0,
     cells: usize = 0,
     damaged_cells: usize = 0,
-    /// Bounds of every screen cell this composition may have written, so a
-    /// chrome overlay can tell whether it was painted over.
-    damage_bounds: ui.Rect = .{},
     full: bool = false,
-
-    fn noteDamage(stats: *RenderStats, area: ui.Rect) void {
-        stats.damage_bounds = stats.damage_bounds.unite(area);
-    }
 };
 
 pub const PresentationCommit = struct {
@@ -341,11 +319,6 @@ pub const CompositionInput = struct {
     copy: ?CopyProjection = null,
     bottom_reservation: ?layout_mod.PaneBottomReservation = null,
     progress_animation_frame: u8 = 0,
-    /// Model revisions whose change redraws border rows only. Titles and
-    /// progress live on the top border; nothing else in the composition
-    /// depends on them.
-    foreground_revision: u64 = 0,
-    progress_revision: u64 = 0,
     force: bool = false,
 };
 
@@ -375,18 +348,8 @@ pub const Compositor = struct {
     layout_snapshot: layout_mod.Snapshot = .{},
     fullscreen_labels: presentation.pane_labels.Plan = .{},
     panes: [max_panes]PaneProjection = undefined,
-    /// Indexed like `layout_snapshot.views()`; set when only that pane's
-    /// placeholder flag changed since the last composition.
-    placeholder_dirty: [max_panes]bool = undefined,
-    /// Title or label width on each visible pane's top border, indexed like
-    /// `layout_snapshot.views()`, so an animation tick can redraw only the
-    /// progress thread after it.
-    title_widths: [max_panes]u16 = undefined,
     pane_count: u8 = 0,
-    focused_pane: schema.PaneId = .invalid,
     progress_animation_frame: u8 = 0,
-    foreground_revision: u64 = 0,
-    progress_revision: u64 = 0,
     invalidated: bool = true,
 
     /// Creates an empty composition cache. Buffer allocation is deferred
@@ -434,8 +397,6 @@ pub const Compositor = struct {
         const previous_copy = compositor.copy;
         const copy_changed = !std.meta.eql(previous_copy, options.copy);
         const progress_animation_changed = compositor.progress_animation_frame != options.progress_animation_frame;
-        const progress_changed = compositor.progress_revision != options.progress_revision;
-        const foreground_changed = compositor.foreground_revision != options.foreground_revision;
         const border_theme: BorderTheme = .{
             .focused = options.palette.accent,
             .unfocused = options.palette.overlay0,
@@ -457,8 +418,7 @@ pub const Compositor = struct {
             compositor.source = model.location;
             compositor.invalidated = true;
         }
-        const reservation_changed = !std.meta.eql(compositor.bottom_reservation, options.bottom_reservation);
-        if (reservation_changed) {
+        if (!std.meta.eql(compositor.bottom_reservation, options.bottom_reservation)) {
             compositor.bottom_reservation = options.bottom_reservation;
             compositor.invalidated = true;
         }
@@ -467,27 +427,14 @@ pub const Compositor = struct {
             compositor.invalidated = true;
         }
 
-        if (compositor.layout_snapshot.geometry_revision != model.layout.geometryRevision()) {
+        if (compositor.layout_snapshot.revision != model.layout.currentRevision()) {
             compositor.invalidated = true;
         }
-        // The snapshot is retaken when its inputs moved. A bottom reservation
-        // carves its pane out of the snapshot in place, so it is retaken on
-        // every frame that has or just lost one.
-        if (compositor.layout_snapshot.revision != model.layout.currentRevision() or
-            !std.meta.eql(compositor.layout_snapshot.area, options.area) or
-            reservation_changed or options.bottom_reservation != null)
-        {
-            model.layout.snapshot(options.area, &compositor.layout_snapshot);
-        }
+        model.layout.snapshot(options.area, &compositor.layout_snapshot);
         compositor.bottom_reservation_area = compositor.layout_snapshot.reserveBelowPane(options.bottom_reservation);
         if (compositor.paneProjectionChanged(model)) {
             compositor.invalidated = true;
         }
-        // Focus only restyles two borders and moves the cursor; the cells
-        // under it are unchanged, so it never rebuilds the composition.
-        const previous_focus = compositor.focused_pane;
-        compositor.focused_pane = focusedPane(&compositor.layout_snapshot);
-        const focus_changed = previous_focus != compositor.focused_pane;
         const target = &compositor.composed.?;
         var commit: PresentationCommit = .{ .location = model.location };
         for (&model.panes) |*slot| {
@@ -497,13 +444,13 @@ pub const Compositor = struct {
         const stats = if (compositor.invalidated) full: {
             target.clear(.{});
             screen.cursor = null;
-            var full_stats: RenderStats = .{ .full = true, .damage_bounds = target.area() };
+            var full_stats: RenderStats = .{ .full = true };
             compositor.fullscreen_labels = .{};
-            for (compositor.layout_snapshot.views(), 0..) |view, index| {
+            for (compositor.layout_snapshot.views()) |view| {
                 const pane = model.findConst(view.pane_id) orelse continue;
                 full_stats.panes += 1;
                 if (model.layout.hasBorders()) {
-                    const drawing = drawBorder(target, .{
+                    compositor.fullscreen_labels = drawBorder(target, .{
                         .view = view,
                         .foreground_name = pane.foregroundName(),
                         .fullscreen_model = if (model.layout.isFullscreen()) model else null,
@@ -512,8 +459,6 @@ pub const Compositor = struct {
                         .animation_frame = options.progress_animation_frame,
                         .palette = options.palette,
                     });
-                    compositor.fullscreen_labels = drawing.plan;
-                    compositor.title_widths[index] = drawing.title_width;
                 }
 
                 target.pushClip(view.content);
@@ -559,21 +504,14 @@ pub const Compositor = struct {
                 .target = target,
                 .previous_copy = previous_copy,
                 .copy_changed = copy_changed,
-                .previous_focus = if (focus_changed) previous_focus else null,
-                .options = options,
             };
-            var incremental_stats = try compositor.composeIncremental(&context);
-            if (progress_changed or foreground_changed) {
-                try compositor.composeBorderRows(&context, .{ .stats = &incremental_stats });
-            } else if (progress_animation_changed) {
-                try compositor.composeProgressThreads(&context, &incremental_stats);
+            if (progress_animation_changed) {
+                try compositor.composeProgressBorders(&context, options);
             }
-            break :incremental incremental_stats;
+            break :incremental try compositor.composeIncremental(&context);
         };
 
         compositor.progress_animation_frame = options.progress_animation_frame;
-        compositor.progress_revision = options.progress_revision;
-        compositor.foreground_revision = options.foreground_revision;
         compositor.invalidated = false;
         return .{ .stats = stats, .commit = commit };
     }
@@ -643,17 +581,11 @@ pub const Compositor = struct {
     fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition) !RenderStats {
         var stats: RenderStats = .{};
         context.screen.cursor = null;
-        for (compositor.layout_snapshot.views(), 0..) |view, index| {
+        for (compositor.layout_snapshot.views()) |view| {
             const pane = context.model.findConst(view.pane_id) orelse continue;
             stats.panes += 1;
             const rows = @min(view.content.h, pane.buffer.h);
             const cols = @min(view.content.w, pane.buffer.w);
-            if (context.previous_focus) |previous| {
-                if (view.focused or view.pane_id == previous) {
-                    stats.damaged_cells += try compositor.composePaneBorder(context, .{ .view = view, .pane = pane });
-                    stats.noteDamage(view.outer);
-                }
-            }
             if (context.copy_changed) {
                 try compositor.composeCopyChange(context, .{
                     .pane = pane,
@@ -688,18 +620,6 @@ pub const Compositor = struct {
                     .end = end,
                     .copy = copyView(compositor.copy, pane.id),
                 });
-                stats.noteDamage(.{ .x = view.content.x + start, .y = view.content.y + y, .w = end - start, .h = 1 });
-            }
-            if (compositor.placeholder_dirty[index]) {
-                stats.cells += @as(usize, rows) * cols;
-                stats.noteDamage(view.content);
-                stats.damaged_cells += try compositor.composePaneContent(context, .{
-                    .pane = pane,
-                    .view = view,
-                    .rows = rows,
-                    .cols = cols,
-                    .stats = &stats,
-                });
             }
             if (view.focused) {
                 setPaneCursor(context.screen, pane, .{
@@ -712,134 +632,28 @@ pub const Compositor = struct {
         return stats;
     }
 
-    /// Redraws the top border of every visible pane and syncs only that row.
-    /// Titles, fullscreen labels and progress threads all live there.
-    fn composeBorderRows(compositor: *Compositor, context: *IncrementalComposition, selection: BorderRowSelection) !void {
+    fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposition, options: CompositionInput) !void {
         if (!context.model.layout.hasBorders()) {
             return;
         }
 
         for (compositor.layout_snapshot.views()) |view| {
             const pane = context.model.findConst(view.pane_id) orelse continue;
-            compositor.drawPaneBorder(context, .{ .view = view, .pane = pane });
-            selection.stats.damaged_cells += try syncComposedRow(context.screen, context.target, view.outer.y);
-            selection.stats.noteDamage(view.outer.row(0));
-        }
-    }
-
-    /// Redraws one pane's whole border frame and syncs its four sides. A
-    /// focus change restyles the frame without touching the cells inside.
-    fn composePaneBorder(compositor: *Compositor, context: *IncrementalComposition, border: BorderComposition) !usize {
-        if (!context.model.layout.hasBorders()) {
-            return 0;
-        }
-
-        compositor.drawPaneBorder(context, border);
-        const outer = border.view.outer;
-        if (outer.w == 0 or outer.h == 0) {
-            return 0;
-        }
-
-        const left = outer.x;
-        const right = outer.x + outer.w;
-        var damaged = try syncComposedRange(context.screen, context.target, .{ .y = outer.y, .start = left, .end = right });
-        if (outer.h > 1) {
-            damaged += try syncComposedRange(context.screen, context.target, .{ .y = outer.y + outer.h - 1, .start = left, .end = right });
-        }
-
-        var y = outer.y + 1;
-        while (y + 1 < outer.y + outer.h) : (y += 1) {
-            damaged += try syncComposedRange(context.screen, context.target, .{ .y = y, .start = left, .end = left + 1 });
-            if (outer.w > 1) {
-                damaged += try syncComposedRange(context.screen, context.target, .{ .y = y, .start = right - 1, .end = right });
-            }
-        }
-        return damaged;
-    }
-
-    fn drawPaneBorder(compositor: *Compositor, context: *IncrementalComposition, border: BorderComposition) void {
-        const drawing = drawBorder(context.target, compositor.borderInput(context, border));
-        compositor.fullscreen_labels = drawing.plan;
-        if (compositor.layout_snapshot.index.get(schema.id.raw(border.view.pane_id))) |index| {
-            compositor.title_widths[index] = drawing.title_width;
-        }
-    }
-
-    fn borderInput(compositor: *const Compositor, context: *IncrementalComposition, border: BorderComposition) BorderInput {
-        _ = compositor;
-        return .{
-            .view = border.view,
-            .foreground_name = border.pane.foregroundName(),
-            .fullscreen_model = if (context.model.layout.isFullscreen()) context.model else null,
-            .progress_state = border.pane.progress_state,
-            .progress_percent = border.pane.progress_percent,
-            .animation_frame = context.options.progress_animation_frame,
-            .palette = context.options.palette,
-        };
-    }
-
-    /// Advances the progress threads on visible borders for one animation
-    /// tick. Titles and fullscreen labels are left as drawn; only the thread
-    /// span of each animated pane is redrawn and synced.
-    fn composeProgressThreads(compositor: *Compositor, context: *IncrementalComposition, stats: *RenderStats) !void {
-        if (!context.model.layout.hasBorders()) {
-            return;
-        }
-
-        for (compositor.layout_snapshot.views(), 0..) |view, index| {
-            const pane = context.model.findConst(view.pane_id) orelse continue;
-            if (pane.progress_state != .set and pane.progress_state != .indeterminate) {
+            if (pane.progress_state == .remove) {
                 continue;
             }
 
-            const input = compositor.borderInput(context, .{ .view = view, .pane = pane });
-            const span = redrawProgress(context.target, input, compositor.title_widths[index]);
-            if (span.isEmpty()) {
-                continue;
-            }
-
-            stats.damaged_cells += try syncComposedRange(context.screen, context.target, .{
-                .y = span.y,
-                .start = span.x,
-                .end = span.x + span.w,
+            compositor.fullscreen_labels = drawBorder(context.target, .{
+                .view = view,
+                .foreground_name = pane.foregroundName(),
+                .fullscreen_model = if (context.model.layout.isFullscreen()) context.model else null,
+                .progress_state = pane.progress_state,
+                .progress_percent = pane.progress_percent,
+                .animation_frame = options.progress_animation_frame,
+                .palette = options.palette,
             });
-            stats.noteDamage(span);
+            _ = try syncComposedRow(context.screen, context.target, view.outer.y);
         }
-    }
-
-    /// Recomposes one pane's content rows and its placeholder overlay. Runs
-    /// when the placeholder flag flips; the rest of the screen is untouched.
-    fn composePaneContent(compositor: *Compositor, context: *IncrementalComposition, input: CopyChangeComposition) !usize {
-        var damaged: usize = 0;
-        if (input.cols == 0) {
-            return 0;
-        }
-
-        var source_y: u16 = 0;
-        while (source_y < input.rows) : (source_y += 1) {
-            damaged += try syncPaneRange(.{
-                .screen = context.screen,
-                .composed = context.target,
-                .pane = input.pane,
-                .destination_x = input.view.content.x,
-                .destination_y = input.view.content.y + source_y,
-                .source_y = source_y,
-                .start = 0,
-                .end = input.cols,
-                .copy = copyView(compositor.copy, input.pane.id),
-            });
-        }
-
-        if (input.pane.graphics_placeholder) {
-            drawGraphicsPlaceholder(context.target, input.view.content, context.options.palette);
-            const content = input.view.content;
-            damaged += try syncComposedRange(context.screen, context.target, .{
-                .y = content.y + content.h / 2,
-                .start = content.x,
-                .end = content.x + content.w,
-            });
-        }
-        return damaged;
     }
 
     fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, input: CopyChangeComposition) !void {
@@ -871,7 +685,6 @@ pub const Compositor = struct {
             }
 
             input.stats.cells += end - start;
-            input.stats.noteDamage(.{ .x = input.view.content.x + start, .y = input.view.content.y + source_y, .w = end - start, .h = 1 });
             input.stats.damaged_cells += try syncPaneRange(.{
                 .screen = context.screen,
                 .composed = context.target,
@@ -886,9 +699,6 @@ pub const Compositor = struct {
         }
     }
 
-    /// Reports whether the pane set or any pane geometry changed, which needs
-    /// a full composition. A placeholder flip alone is recorded per pane in
-    /// `placeholder_dirty` for a pane-local recomposition instead.
     fn paneProjectionChanged(compositor: *Compositor, model: *const Model) bool {
         var next: [max_panes]PaneProjection = undefined;
         var next_count: u8 = 0;
@@ -900,22 +710,19 @@ pub const Compositor = struct {
                 .rows = pane.buffer.h,
                 .scroll_offset = highlightedScrollOffset(compositor.copy, pane),
                 .graphics_placeholder = pane.graphics_placeholder,
+                .progress_state = pane.progress_state,
+                .progress_percent = pane.progress_percent,
             };
             next_count += 1;
         }
 
-        @memset(compositor.placeholder_dirty[0..next_count], false);
         var changed = compositor.pane_count != next_count;
         if (!changed) {
-            for (compositor.panes[0..compositor.pane_count], next[0..next_count], 0..) |previous, current, index| {
-                if (previous.pane_id != current.pane_id or previous.cols != current.cols or
-                    previous.rows != current.rows or previous.scroll_offset != current.scroll_offset)
-                {
+            for (compositor.panes[0..compositor.pane_count], next[0..next_count]) |previous, current| {
+                if (!std.meta.eql(previous, current)) {
                     changed = true;
                     break;
                 }
-
-                compositor.placeholder_dirty[index] = previous.graphics_placeholder != current.graphics_placeholder;
             }
         }
         @memcpy(compositor.panes[0..next_count], next[0..next_count]);
@@ -930,6 +737,8 @@ const PaneProjection = struct {
     rows: u16,
     scroll_offset: u32,
     graphics_placeholder: bool,
+    progress_state: schema.PaneProgressState,
+    progress_percent: ?u8,
 };
 
 const IncrementalComposition = struct {
@@ -938,35 +747,7 @@ const IncrementalComposition = struct {
     target: *ui.Buffer,
     previous_copy: ?CopyProjection,
     copy_changed: bool,
-    /// The pane that lost focus this frame, when focus moved.
-    previous_focus: ?schema.PaneId = null,
-    options: CompositionInput,
 };
-
-const BorderComposition = struct {
-    view: layout_mod.View,
-    pane: *const Pane,
-};
-
-/// One horizontal range of a composed row, `[start, end)` on row `y`.
-const RowSpan = struct {
-    y: u16,
-    start: u16,
-    end: u16,
-};
-
-const BorderRowSelection = struct {
-    stats: *RenderStats,
-};
-
-fn focusedPane(snapshot: *const layout_mod.Snapshot) schema.PaneId {
-    for (snapshot.views()) |view| {
-        if (view.focused) {
-            return view.pane_id;
-        }
-    }
-    return .invalid;
-}
 
 const CopyChangeComposition = struct {
     pane: *const Pane,
@@ -1642,21 +1423,8 @@ fn syncComposed(screen: *term.Screen, composed: *const ui.Buffer) !usize {
 }
 
 fn syncComposedRow(screen: *term.Screen, composed: *const ui.Buffer, y: u16) !usize {
-    return syncComposedRange(screen, composed, .{ .y = y, .start = 0, .end = composed.w });
-}
-
-/// Syncs one span of a composed row into the screen, clipped to the composed
-/// width. Example: `_ = try syncComposedRange(screen, composed, .{ .y = y, .start = x, .end = x + w });`.
-fn syncComposedRange(screen: *term.Screen, composed: *const ui.Buffer, span: RowSpan) !usize {
     std.debug.assert(screen.sizeMatches(composed.w, composed.h));
-    const y = span.y;
     if (y >= composed.h) {
-        return 0;
-    }
-
-    const start = span.start;
-    const clipped_end = @min(span.end, composed.w);
-    if (start >= clipped_end) {
         return 0;
     }
 
@@ -1670,8 +1438,8 @@ fn syncComposedRange(screen: *term.Screen, composed: *const ui.Buffer, span: Row
     return diff.syncRow(.{
         .source = source_row,
         .reference = screen.back.cells[row_start..][0..composed.w],
-        .start = start,
-        .end = clipped_end,
+        .start = 0,
+        .end = composed.w,
     }, &sink);
 }
 
@@ -1695,27 +1463,17 @@ const BorderInput = struct {
     palette: *const theme.Palette,
 };
 
-const BorderDrawing = struct {
-    plan: presentation.pane_labels.Plan = .{},
-    /// Cells the title or label strip occupies on the top row; the progress
-    /// thread starts after it.
-    title_width: u16 = 0,
-};
-
-fn borderStyle(input: BorderInput) ui.Style {
-    return if (input.view.focused)
+fn drawBorder(buffer: *ui.Buffer, input: BorderInput) presentation.pane_labels.Plan {
+    const style: ui.Style = if (input.view.focused)
         .{ .fg = input.palette.accent, .flags = .{ .bold = true } }
     else
         .{ .fg = input.palette.overlay0 };
-}
 
-fn drawBorder(buffer: *ui.Buffer, input: BorderInput) BorderDrawing {
-    const style = borderStyle(input);
     if (input.fullscreen_model != null) {
         buffer.box(input.view.outer, .{ .style = style });
         const tabs = drawFullscreenTabs(buffer, input);
         drawProgress(buffer, input, tabs.width);
-        return .{ .plan = tabs.plan, .title_width = tabs.width };
+        return tabs.plan;
     }
 
     var title_buffer: [schema.max_foreground_name_bytes + 32]u8 = undefined;
@@ -1725,33 +1483,8 @@ fn drawBorder(buffer: *ui.Buffer, input: BorderInput) BorderDrawing {
         .{ input.view.display_index, if (input.foreground_name.len == 0) "shell" else input.foreground_name },
     ) catch " pane ";
     buffer.box(input.view.outer, .{ .style = style, .title = text });
-    const title_width = ui.measure(text);
-    drawProgress(buffer, input, title_width);
-    return .{ .title_width = title_width };
-}
-
-/// Redraws only the progress thread span of an existing border: the line
-/// under it is restored first, so a moved shuttle leaves no trail. Returns
-/// the redrawn span, empty when the pane has no thread.
-fn redrawProgress(buffer: *ui.Buffer, input: BorderInput, title_width: u16) ui.Rect {
-    const outer = input.view.outer;
-    if (input.progress_state == .remove or outer.w < 8) {
-        return .{};
-    }
-
-    const start = outer.x + 2 + @min(title_width, outer.w -| 4);
-    const right = outer.x + outer.w - 1;
-    if (start >= right) {
-        return .{};
-    }
-
-    const style = borderStyle(input);
-    var x = start;
-    while (x < right) : (x += 1) {
-        buffer.setCell(.{ .x = x, .y = outer.y }, .{ .text = "─", .width = 1, .style = style });
-    }
-    drawProgress(buffer, input, title_width);
-    return .{ .x = start, .y = outer.y, .w = right - start, .h = 1 };
+    drawProgress(buffer, input, ui.measure(text));
+    return .{};
 }
 
 fn drawFullscreenTabs(buffer: *ui.Buffer, input: BorderInput) fullscreen_tabs.Result {
@@ -1895,9 +1628,6 @@ const TestingComposition = struct {
     palette: *const theme.Palette = &theme.default_theme.palette,
     copy: ?CopyProjection = null,
     bottom_reservation: ?layout_mod.PaneBottomReservation = null,
-    foreground_revision: u64 = 0,
-    progress_revision: u64 = 0,
-    progress_animation_frame: u8 = 0,
     force: bool = false,
 };
 
@@ -1910,9 +1640,6 @@ fn testingRender(compositor: *Compositor, composition: TestingComposition) !Rend
             .palette = composition.palette,
             .copy = composition.copy,
             .bottom_reservation = composition.bottom_reservation,
-            .foreground_revision = composition.foreground_revision,
-            .progress_revision = composition.progress_revision,
-            .progress_animation_frame = composition.progress_animation_frame,
             .force = composition.force,
         },
     });
@@ -2600,7 +2327,7 @@ test "unchanged composition produces no terminal damage" {
     try std.testing.expectEqual(@as(usize, 1), changed_flush.scanned);
 }
 
-test "focus changes restyle two borders without a full composition" {
+test "compositor detects focus changes while stable focus stays incremental" {
     const gpa = std.testing.allocator;
     var model = Model.init(gpa);
     defer model.deinit();
@@ -2616,19 +2343,8 @@ test "focus changes restyle two borders without a full composition" {
     defer compositor.deinit();
 
     try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
-    const accent = theme.default_theme.palette.accent;
-    try std.testing.expectEqualDeep(accent, screen.back.at(20, 0).?.style.fg);
-    try std.testing.expect(!std.meta.eql(accent, screen.back.at(0, 0).?.style.fg));
-
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
-    const refocused = try testingRenderDefault(&compositor, &model, &screen);
-    try std.testing.expect(!refocused.full);
-    try std.testing.expect(refocused.damaged_cells != 0);
-    try std.testing.expectEqualDeep(accent, screen.back.at(0, 0).?.style.fg);
-    try std.testing.expectEqualDeep(accent, screen.back.at(0, 5).?.style.fg);
-    try std.testing.expectEqualDeep(accent, screen.back.at(0, 3).?.style.fg);
-    try std.testing.expect(!std.meta.eql(accent, screen.back.at(20, 0).?.style.fg));
-    try std.testing.expect(!std.meta.eql(accent, screen.back.at(39, 3).?.style.fg));
+    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
     try std.testing.expect(model.focusPane(@enumFromInt(1)));
     const stable = try testingRenderDefault(&compositor, &model, &screen);
     try std.testing.expect(!stable.full);
@@ -2684,14 +2400,7 @@ test "compositor detects pane projection changes without model cache flags" {
     try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
 
     pane.graphics_placeholder = true;
-    const placeholder = try testingRenderDefault(&compositor, &model, &screen);
-    try std.testing.expect(!placeholder.full);
-    try std.testing.expect(placeholder.damaged_cells != 0);
-    try std.testing.expectEqualStrings("[", screen.back.at(1, 1).?.text());
-    pane.graphics_placeholder = false;
-    const cleared = try testingRenderDefault(&compositor, &model, &screen);
-    try std.testing.expect(!cleared.full);
-    try std.testing.expectEqualStrings(" ", screen.back.at(1, 1).?.text());
+    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
 
     const stable = try testingRenderDefault(&compositor, &model, &screen);
     try std.testing.expect(!stable.full);
@@ -2818,134 +2527,4 @@ test "focused pane mouse planning ignores missing and empty pane content" {
 
     try std.testing.expect(model.removePane(pane_id));
     try std.testing.expect(model.planFocusedPaneMouse(area) == null);
-}
-
-test "foreground titles and progress threads redraw only border rows" {
-    const gpa = std.testing.allocator;
-    var model = Model.init(gpa);
-    defer model.deinit();
-    const location: schema.TabLocation = .{
-        .workspace = .{ .workspace = @enumFromInt(1) },
-        .tab_id = @enumFromInt(1),
-    };
-    try model.addRoot(.{ .pane_id = @enumFromInt(10), .location = location, .size = .{ .cols = 18, .rows = 4 } });
-    try model.split(.{ .existing_pane = @enumFromInt(10), .new_pane = @enumFromInt(41), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 6 } });
-    const first = model.find(@enumFromInt(10)).?;
-    _ = model.setPaneForeground(first.id, "zsh");
-    var screen = try term.Screen.init(gpa, 40, 6);
-    defer screen.deinit();
-    var compositor = Compositor.init(gpa);
-    defer compositor.deinit();
-    try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
-    try std.testing.expectEqualStrings("z", screen.back.at(5, 0).?.text());
-
-    _ = model.setPaneForeground(first.id, "vim");
-    const retitled = try testingRender(&compositor, .{
-        .model = &model,
-        .screen = &screen,
-        .area = screen.back.area(),
-        .foreground_revision = 1,
-    });
-    try std.testing.expect(!retitled.full);
-    try std.testing.expect(retitled.damaged_cells != 0);
-    try std.testing.expectEqualStrings("v", screen.back.at(5, 0).?.text());
-
-    try std.testing.expect(first.setProgress(.{ .pane_id = first.id, .state = .set, .percent = 50 }));
-    const woven = try testingRender(&compositor, .{
-        .model = &model,
-        .screen = &screen,
-        .area = screen.back.area(),
-        .foreground_revision = 1,
-        .progress_revision = 1,
-    });
-    try std.testing.expect(!woven.full);
-    var thread = false;
-    for (screen.back.cells[0..20]) |cell| {
-        thread = thread or std.mem.eql(u8, cell.text(), "━");
-    }
-    try std.testing.expect(thread);
-
-    try std.testing.expect(first.setProgress(.{ .pane_id = first.id, .state = .remove }));
-    const cleared = try testingRender(&compositor, .{
-        .model = &model,
-        .screen = &screen,
-        .area = screen.back.area(),
-        .foreground_revision = 1,
-        .progress_revision = 2,
-    });
-    try std.testing.expect(!cleared.full);
-    try std.testing.expect(cleared.damaged_cells != 0);
-    for (screen.back.cells[0..20]) |cell| {
-        try std.testing.expect(!std.mem.eql(u8, cell.text(), "━"));
-    }
-
-    const stable = try testingRender(&compositor, .{
-        .model = &model,
-        .screen = &screen,
-        .area = screen.back.area(),
-        .foreground_revision = 1,
-        .progress_revision = 2,
-    });
-    try std.testing.expect(!stable.full);
-    try std.testing.expectEqual(@as(usize, 0), stable.damaged_cells);
-}
-
-test "an animation tick redraws progress threads without rebuilding fullscreen labels" {
-    const gpa = std.testing.allocator;
-    var model = Model.init(gpa);
-    defer model.deinit();
-    const location: schema.TabLocation = .{
-        .workspace = .{ .workspace = @enumFromInt(1) },
-        .tab_id = @enumFromInt(1),
-    };
-    try model.addRoot(.{ .pane_id = @enumFromInt(10), .location = location, .size = .{ .cols = 38, .rows = 4 } });
-    try model.split(.{ .existing_pane = @enumFromInt(10), .new_pane = @enumFromInt(41), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 6 } });
-    _ = model.setPaneForeground(@enumFromInt(10), "zsh");
-    _ = model.setPaneForeground(@enumFromInt(41), "vim");
-    try std.testing.expect(model.layout.toggleFullscreen());
-    const focused = model.focusedPane().?;
-    try std.testing.expect(focused.setProgress(.{ .pane_id = focused.id, .state = .indeterminate }));
-    var screen = try term.Screen.init(gpa, 40, 6);
-    defer screen.deinit();
-    var compositor = Compositor.init(gpa);
-    defer compositor.deinit();
-    try std.testing.expect((try testingRender(&compositor, .{
-        .model = &model,
-        .screen = &screen,
-        .area = screen.back.area(),
-        .progress_revision = 1,
-    })).full);
-    const labels = compositor.fullscreenLabels().*;
-    try std.testing.expect(labels.slice().len == 2);
-    var head_before: ?u16 = null;
-    for (screen.back.cells[0..40], 0..) |cell, x| {
-        if (std.mem.eql(u8, cell.text(), "◆")) {
-            head_before = @intCast(x);
-        }
-    }
-    try std.testing.expect(head_before != null);
-
-    const ticked = try testingRender(&compositor, .{
-        .model = &model,
-        .screen = &screen,
-        .area = screen.back.area(),
-        .progress_revision = 1,
-        .progress_animation_frame = 64,
-    });
-    try std.testing.expect(!ticked.full);
-    try std.testing.expect(ticked.damaged_cells != 0);
-    try std.testing.expect(ticked.damaged_cells < 40);
-    try std.testing.expect(compositor.fullscreenLabels().sameText(&labels));
-    var head_after: ?u16 = null;
-    var heads: usize = 0;
-    for (screen.back.cells[0..40], 0..) |cell, x| {
-        if (std.mem.eql(u8, cell.text(), "◆") or std.mem.eql(u8, cell.text(), "◇")) {
-            head_after = @intCast(x);
-            heads += 1;
-        }
-    }
-    try std.testing.expectEqual(@as(usize, 1), heads);
-    try std.testing.expect(head_after.? != head_before.?);
-    try std.testing.expectEqualStrings("1", screen.back.at(labels.area.x + labels.slice()[0].offset + 1, 0).?.text());
-    try std.testing.expectEqualStrings("z", screen.back.at(labels.area.x + labels.slice()[0].offset + 3, 0).?.text());
 }

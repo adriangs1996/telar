@@ -24,40 +24,6 @@ pub const ReadFrameError = Io.Reader.Error || error{
     BufferTooSmall,
 };
 
-/// Encodes the length prefix that precedes every frame on the wire.
-///
-/// ```zig
-/// writePrefix(buffer[0..length_prefix_size], payload.len);
-/// ```
-pub fn writePrefix(prefix: *[length_prefix_size]u8, payload_len: usize) void {
-    std.mem.writeInt(u32, prefix, @intCast(payload_len), .little);
-}
-
-/// Walks the frames of a batch produced by prefixing each payload, as one
-/// `sendFramed` carries them. A truncated tail ends the walk.
-///
-/// ```zig
-/// var frames = FrameIterator{ .batch = batch };
-/// while (frames.next()) |payload| handle(payload);
-/// ```
-pub const FrameIterator = struct {
-    batch: []const u8,
-    offset: usize = 0,
-
-    pub fn next(frames: *FrameIterator) ?[]const u8 {
-        if (frames.offset + length_prefix_size > frames.batch.len) {
-            return null;
-        }
-        const len = std.mem.readInt(u32, frames.batch[frames.offset..][0..length_prefix_size], .little);
-        if (frames.offset + length_prefix_size + len > frames.batch.len) {
-            return null;
-        }
-        const payload = frames.batch[frames.offset + length_prefix_size ..][0..len];
-        frames.offset += length_prefix_size + len;
-        return payload;
-    }
-};
-
 /// Writes one complete frame. No bytes are written when the payload is too
 /// large, so callers can recover from that local programming error.
 pub fn writeFrame(writer: *Io.Writer, payload: []const u8) WriteFrameError!void {
@@ -66,7 +32,7 @@ pub fn writeFrame(writer: *Io.Writer, payload: []const u8) WriteFrameError!void 
     }
 
     var prefix: [length_prefix_size]u8 = undefined;
-    writePrefix(&prefix, payload.len);
+    std.mem.writeInt(u32, &prefix, @intCast(payload.len), .little);
     // One vectored write instead of two: this path carries per-keystroke
     // messages, so the prefix must not cost its own syscall.
     var parts = [2][]const u8{ &prefix, payload };
@@ -107,18 +73,6 @@ pub fn readFrame(reader: *Io.Reader, buffer: []u8) ReadFrameError![]u8 {
 /// byte prefix never costs its own `read`.
 pub const read_buffer_size = 64 * 1024;
 
-/// Kernel buffer requested on each end of a connection. A stream socket
-/// reports the peer's receive space as its send space, so both ends ask for
-/// the same size.
-pub const socket_buffer_size = 256 * 1024;
-
-/// Send low-water mark. A positive writable poll then means at least this
-/// much room, and a blocking send of at most this many bytes returns without
-/// sleeping. It never exceeds the platform's default stream buffer, so a peer
-/// that kept the default cannot leave a larger blocked send waiting for room
-/// that can never exist.
-pub const inline_send_low_water = 8 * 1024;
-
 /// Owns a connected raw socket. A channel supports one concurrent reader and
 /// one concurrent writer. It must not be copied after ownership is handed to
 /// another component.
@@ -130,49 +84,9 @@ pub const SocketChannel = struct {
     read_buffer: []u8 = &.{},
     /// The persistent reader over `read_buffer`, bound on first buffered read.
     reader: ?Io.net.Stream.Reader = null,
-    /// Bytes a positive writable poll lets a blocking send take without
-    /// sleeping. Zero until `configure` established the low-water mark.
-    inline_send_limit: usize = 0,
 
     pub fn init(stream: Io.net.Stream) SocketChannel {
         return .{ .stream = stream };
-    }
-
-    /// Sizes the kernel buffers and sets the send low-water mark behind
-    /// `canSendInline`. Best effort: a kernel that refuses the mark keeps
-    /// the channel on actor sends only.
-    ///
-    /// ```zig
-    /// channel.configure();
-    /// ```
-    pub fn configure(channel: *SocketChannel) void {
-        const fd = channel.stream.socket.handle;
-        _ = setOption(fd, std.c.SO.SNDBUF, socket_buffer_size);
-        _ = setOption(fd, std.c.SO.RCVBUF, socket_buffer_size);
-        if (!setOption(fd, std.c.SO.SNDLOWAT, inline_send_low_water)) {
-            return;
-        }
-
-        const low_water = getOption(fd, std.c.SO.SNDLOWAT) orelse return;
-        channel.inline_send_limit = @min(low_water, inline_send_low_water);
-    }
-
-    /// Whether a blocking send of `payload` completes right now without
-    /// sleeping: the payload fits under the low-water mark and the kernel
-    /// reports that much room. The answer is only valid while no other
-    /// writer touches the socket.
-    ///
-    /// ```zig
-    /// if (channel.canSendInline(batch)) { try channel.sendFramed(io, batch); }
-    /// ```
-    pub fn canSendInline(channel: *const SocketChannel, payload: []const u8) bool {
-        if (payload.len == 0 or payload.len > channel.inline_send_limit or !channel.isActive()) {
-            return false;
-        }
-
-        var polling = [1]std.c.pollfd{.{ .fd = channel.stream.socket.handle, .events = std.posix.POLL.OUT, .revents = 0 }};
-        const ready = std.c.poll(&polling, polling.len, 0);
-        return ready > 0 and polling[0].revents & std.posix.POLL.OUT != 0;
     }
 
     /// Gives the channel read-ahead storage it does not own. Bind after the
@@ -193,22 +107,6 @@ pub const SocketChannel = struct {
         }
         var stream_writer = channel.stream.writer(io, &.{});
         try writeFrame(&stream_writer.interface, payload);
-    }
-
-    /// Writes bytes that already carry their frame prefixes, so a batch of
-    /// messages leaves in one syscall. The receiver reads them one frame at
-    /// a time as usual.
-    ///
-    /// ```zig
-    /// try channel.sendFramed(io, batch);
-    /// ```
-    pub fn sendFramed(channel: *SocketChannel, io: Io, framed: []const u8) WriteFrameError!void {
-        if (!channel.isActive()) {
-            return error.ConnectionClosed;
-        }
-        var stream_writer = channel.stream.writer(io, &.{});
-        try stream_writer.interface.writeAll(framed);
-        try stream_writer.interface.flush();
     }
 
     pub fn receive(channel: *SocketChannel, io: Io, buffer: []u8) ReadFrameError![]u8 {
@@ -254,71 +152,6 @@ pub const SocketChannel = struct {
         channel.stream.close(io);
     }
 };
-
-fn setOption(fd: std.c.fd_t, option: u32, value: c_int) bool {
-    return std.c.setsockopt(fd, std.c.SOL.SOCKET, option, &value, @sizeOf(c_int)) == 0;
-}
-
-fn getOption(fd: std.c.fd_t, option: u32) ?usize {
-    var value: c_int = 0;
-    var len: std.c.socklen_t = @sizeOf(c_int);
-    if (std.c.getsockopt(fd, std.c.SOL.SOCKET, option, &value, &len) != 0 or value <= 0) {
-        return null;
-    }
-
-    return @intCast(value);
-}
-
-fn testSocketPair() ![2]SocketChannel {
-    var sockets: [2]std.c.fd_t = undefined;
-    if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0) {
-        return error.SocketPairFailed;
-    }
-
-    return .{
-        .init(.{ .socket = .{ .handle = sockets[0], .address = .{ .ip4 = .loopback(0) } } }),
-        .init(.{ .socket = .{ .handle = sockets[1], .address = .{ .ip4 = .loopback(0) } } }),
-    };
-}
-
-test "an unconfigured channel never offers an inline send" {
-    var pair = try testSocketPair();
-    defer for (&pair) |*channel| channel.deinit(std.testing.io);
-
-    try std.testing.expect(!pair[0].canSendInline("x"));
-}
-
-test "a configured channel offers inline sends only under the low-water mark and while room exists" {
-    const io = std.testing.io;
-    var pair = try testSocketPair();
-    defer for (&pair) |*channel| channel.deinit(io);
-    pair[0].configure();
-    pair[1].configure();
-    try std.testing.expect(pair[0].inline_send_limit > 0);
-    try std.testing.expect(pair[0].inline_send_limit <= inline_send_low_water);
-
-    const small = [_]u8{'x'} ** 64;
-    const oversized = [_]u8{'x'} ** (inline_send_low_water + 1);
-    try std.testing.expect(pair[0].canSendInline(&small));
-    try std.testing.expect(!pair[0].canSendInline(&oversized));
-    try std.testing.expect(!pair[0].canSendInline(""));
-
-    // Fill the peer's receive space without reading; every guarded send
-    // must return, and the offer must stop before a send could sleep.
-    var filled: usize = 0;
-    while (pair[0].canSendInline(&small)) {
-        var stream_writer = pair[0].stream.writer(io, &.{});
-        try stream_writer.interface.writeAll(&small);
-        try stream_writer.interface.flush();
-        filled += small.len;
-        try std.testing.expect(filled <= 2 * socket_buffer_size);
-    }
-
-    try std.testing.expect(filled >= pair[0].inline_send_limit);
-    var drain: [4096]u8 = undefined;
-    var stream_reader = pair[1].stream.reader(io, &drain);
-    _ = try stream_reader.interface.readSliceShort(&drain);
-}
 
 test "frame encoding uses a little-endian length prefix" {
     var bytes: [64]u8 = undefined;

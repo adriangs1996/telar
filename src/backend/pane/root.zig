@@ -282,10 +282,6 @@ pub const TitleState = struct {
     bytes: [schema.max_pane_title_bytes]u8 = undefined,
     len: u16 = 0,
     revision: u64 = 1,
-    /// The raw emulator title last observed, so an unchanged title skips
-    /// sanitizing on every PTY burst.
-    raw: [schema.max_pane_title_bytes]u8 = undefined,
-    raw_len: u16 = 0,
 
     pub fn slice(state: *const TitleState) []const u8 {
         return state.bytes[0..state.len];
@@ -297,20 +293,6 @@ pub const TitleState = struct {
     /// if (state.observe(terminal.getTitle() orelse "")) publish();
     /// ```
     pub fn observe(state: *TitleState, raw: []const u8) bool {
-        // The emulator's title is read after every PTY burst; sanitizing it
-        // is only worth doing when the raw bytes moved.
-        if (raw.len == state.raw_len and std.mem.eql(u8, state.raw[0..state.raw_len], raw)) {
-            return false;
-        }
-        const raw_len = @min(raw.len, state.raw.len);
-        @memcpy(state.raw[0..raw_len], raw[0..raw_len]);
-        state.raw_len = @intCast(raw_len);
-        if (raw_len != raw.len) {
-            // Longer than the copy: the next observation compares unequal and
-            // sanitizes again, which is the only cost of a title this long.
-            state.raw_len = 0;
-        }
-
         var candidate: [schema.max_pane_title_bytes]u8 = undefined;
         const len = sanitizeTitle(&candidate, raw);
         if (std.mem.eql(u8, state.slice(), candidate[0..len])) {
@@ -1297,10 +1279,7 @@ pub const Pane = struct {
     /// ```
     pub fn processHistoryObservation(pane: *Pane, context: struct { size: schema.TerminalSize, provider: schema.AgentProvider }, stats: *history.observer.Stats) void {
         var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const cwd = if (pane.history_observer.cwdProbeDue(context.size))
-            agent_process.cwd(pane.session.processId(), &cwd_buffer)
-        else
-            null;
+        const cwd = agent_process.cwd(pane.session.processId(), &cwd_buffer);
         var capture_context: CaptureContext = .{ .pane = pane, .observation_stats = stats };
         pane.history_observer.processSealed(.{
             .cwd = cwd,
@@ -1308,19 +1287,6 @@ pub const Pane = struct {
             .stats = stats,
             .provider = context.provider,
         }, &capture_context);
-    }
-
-    /// Whether the shell itself, not a job it launched, owns the terminal,
-    /// as last observed by the process probe. The interactive paths tag
-    /// history with this instead of asking the kernel per keystroke.
-    ///
-    /// ```zig
-    /// const shell_foreground = pane.shellForegroundHint();
-    /// ```
-    pub fn shellForegroundHint(pane: *const Pane) ?bool {
-        const group = pane.agent_process_cache.process_group_id orelse return null;
-        const shell = std.math.cast(u32, pane.session.processId()) orelse return null;
-        return group == shell;
     }
 
     fn updateObservedCwd(pane: *Pane) bool {
@@ -1374,7 +1340,7 @@ pub const Pane = struct {
     /// would otherwise outlive it until the next job replaced it.
     ///
     /// ```zig
-    /// pane.expireProgress(pane.shellForegroundHint() orelse false);
+    /// pane.expireProgress(pane.session.shellForeground() orelse false);
     /// ```
     pub fn expireProgress(pane: *Pane, shell_foreground: bool) void {
         if (!shell_foreground) {

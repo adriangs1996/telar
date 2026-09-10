@@ -326,7 +326,7 @@ pub const Repository = struct {
         var stalest: ?*Workspace = null;
         for (&repository.state.items) |*slot| {
             const workspace = if (slot.*) |*value| value else continue;
-            if (request.now_ms -| workspace.git_checked_at_ms < workspace.gitProbeInterval(request.interval_ms)) {
+            if (request.now_ms -| workspace.git_checked_at_ms < request.interval_ms) {
                 continue;
             }
 

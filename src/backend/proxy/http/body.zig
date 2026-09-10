@@ -58,22 +58,6 @@ const Exact = struct {
     direction: Direction,
     count: usize,
     payload: bool,
-    /// Framing bytes written ahead of the first data read, in the same
-    /// record.
-    prefix: []const u8 = "",
-};
-
-/// One CRLF-terminated line read without writing, plus the framing bytes
-/// still held back that must precede it if consumed bytes are forwarded on
-/// failure.
-const LineRead = struct {
-    buffer: []u8,
-    held: []const u8,
-};
-
-const Partial = struct {
-    held: []const u8,
-    partial: []const u8,
 };
 
 fn relayUntilClose(session: anytype, direction: Direction, observer: anytype) bool {
@@ -90,83 +74,37 @@ fn relayUntilClose(session: anytype, direction: Direction, observer: anytype) bo
     return true;
 }
 
-/// Forwards `exact.count` bytes; the first write also carries `exact.prefix`,
-/// so chunk framing leaves in the same TLS record as the data it frames.
 fn relayExact(session: anytype, exact: Exact, observer: anytype) bool {
     var left = exact.count;
     var buffer: [16 * 1024]u8 = undefined;
-    std.debug.assert(exact.prefix.len < buffer.len);
-    var lead = exact.prefix.len;
-    @memcpy(buffer[0..lead], exact.prefix);
 
     while (left != 0) {
-        const len = session.read(exact.direction.from, buffer[lead..][0..@min(left, buffer.len - lead)]) orelse {
-            if (lead != 0) {
-                _ = session.writeAll(exact.direction.to, buffer[0..lead]);
-            }
-            return false;
-        };
+        const len = session.read(exact.direction.from, buffer[0..@min(left, buffer.len)]) orelse return false;
 
-        if (!session.writeAll(exact.direction.to, buffer[0 .. lead + len])) {
+        if (!session.writeAll(exact.direction.to, buffer[0..len])) {
             return false;
         }
 
         observer.observe(.{
-            .payload = if (exact.payload) buffer[lead..][0..len] else "",
+            .payload = if (exact.payload) buffer[0..len] else "",
             .forwarded_bytes = len,
         });
         left -= len;
-        lead = 0;
     }
 
     return true;
 }
 
-/// A chunk's trailing CRLF and the next size line are held back and written
-/// with the following data, so one chunk costs one record instead of three.
-const Framing = struct {
-    bytes: [2 + max_chunk_line_bytes]u8 = undefined,
-    len: usize = 0,
-    /// The held bytes start with a chunk's trailing CRLF, which counts as
-    /// forwarded body activity once written.
-    carried_crlf: bool = false,
-
-    fn slice(pending: *const Framing) []const u8 {
-        return pending.bytes[0..pending.len];
-    }
-
-    fn append(pending: *Framing, bytes: []const u8) void {
-        @memcpy(pending.bytes[pending.len..][0..bytes.len], bytes);
-        pending.len += bytes.len;
-    }
-
-    fn observeCrlf(pending: *Framing, observer: anytype) void {
-        if (pending.carried_crlf) {
-            observer.observe(.{ .payload = "", .forwarded_bytes = 2 });
-        }
-        pending.* = .{};
-    }
-};
-
 fn relayChunked(session: anytype, direction: Direction, observer: anytype) bool {
     var line: [max_chunk_line_bytes]u8 = undefined;
-    var pending: Framing = .{};
 
     while (true) {
-        const line_len = readLine(session, direction, .{ .buffer = &line, .held = pending.slice() }) orelse return false;
+        const line_len = relayLine(session, direction, &line) orelse return false;
         const trimmed = std.mem.trim(u8, line[0..line_len], " \t\r\n");
         const extension = std.mem.indexOfScalar(u8, trimmed, ';') orelse trimmed.len;
-        pending.append(line[0..line_len]);
-        const chunk_len = std.fmt.parseInt(usize, trimmed[0..extension], 16) catch {
-            _ = session.writeAll(direction.to, pending.slice());
-            return false;
-        };
+        const chunk_len = std.fmt.parseInt(usize, trimmed[0..extension], 16) catch return false;
 
         if (chunk_len == 0) {
-            if (!session.writeAll(direction.to, pending.slice())) {
-                return false;
-            }
-            pending.observeCrlf(observer);
             return relayTrailers(session, direction, &line);
         }
 
@@ -174,65 +112,17 @@ fn relayChunked(session: anytype, direction: Direction, observer: anytype) bool 
             .direction = direction,
             .count = chunk_len,
             .payload = true,
-            .prefix = pending.slice(),
         }, observer)) {
             return false;
         }
-        pending.observeCrlf(observer);
 
-        // The CRLF after the data travels with the next size line.
-        var crlf: [2]u8 = undefined;
-        var read_len: usize = 0;
-        while (read_len < crlf.len) {
-            const len = session.read(direction.from, crlf[read_len..]) orelse {
-                if (read_len != 0) {
-                    _ = session.writeAll(direction.to, crlf[0..read_len]);
-                }
-                return false;
-            };
-            read_len += len;
+        if (!relayExact(session, .{
+            .direction = direction,
+            .count = 2,
+            .payload = false,
+        }, observer)) {
+            return false;
         }
-        pending.append(&crlf);
-        pending.carried_crlf = true;
-    }
-}
-
-/// Reads one CRLF-terminated line without writing it. On failure the held
-/// framing and the partial line are forwarded so consumed bytes never vanish.
-fn readLine(session: anytype, direction: Direction, read: LineRead) ?usize {
-    const buffer = read.buffer;
-    var len: usize = 0;
-
-    while (len < buffer.len) {
-        const read_len = session.read(direction.from, buffer[len..][0..1]) orelse {
-            forwardPartial(session, direction, .{ .held = read.held, .partial = buffer[0..len] });
-            return null;
-        };
-
-        if (read_len != 1) {
-            forwardPartial(session, direction, .{ .held = read.held, .partial = buffer[0..len] });
-            return null;
-        }
-
-        len += 1;
-
-        if (len >= 2 and std.mem.eql(u8, buffer[len - 2 .. len], "\r\n")) {
-            return len;
-        }
-    }
-
-    // Preserve the consumed prefix even when framing fails at its bound.
-    forwardPartial(session, direction, .{ .held = read.held, .partial = buffer[0..len] });
-    return null;
-}
-
-fn forwardPartial(session: anytype, direction: Direction, bytes: Partial) void {
-    var joined: [2 + 2 * max_chunk_line_bytes]u8 = undefined;
-    @memcpy(joined[0..bytes.held.len], bytes.held);
-    @memcpy(joined[bytes.held.len..][0..bytes.partial.len], bytes.partial);
-    const total = bytes.held.len + bytes.partial.len;
-    if (total != 0) {
-        _ = session.writeAll(direction.to, joined[0..total]);
     }
 }
 
@@ -274,19 +164,17 @@ fn relayLine(session: anytype, direction: Direction, buffer: []u8) ?usize {
     return null;
 }
 
-test "chunk framing shares a write with its data and preserves single-byte input boundaries" {
+test "chunk lines use one write each and preserve single-byte input boundaries" {
     const FakeSession = @import("test_support.zig").FakeSession;
     const encoded = "1\r\nx\r\n0\r\n\r\n";
     var fake: FakeSession = .{ .origin_input = encoded, .max_read_bytes = 1 };
     var activity: Activity = .{};
     try std.testing.expect(relay(&fake, testRoute(.origin, .child, .chunked), &activity));
     try std.testing.expectEqualStrings(encoded, fake.childOutput());
-    // Size line with its data, the carried CRLF with the last-chunk line,
-    // and the trailer terminator: three records for the whole body.
-    try std.testing.expectEqual(@as(usize, 3), fake.write_calls);
+    try std.testing.expectEqual(@as(usize, 6), fake.write_calls);
     try std.testing.expectEqualStrings("x", activity.payload[0..activity.payload_len]);
 
-    for (0..3) |failure| {
+    for (0..6) |failure| {
         fake = .{ .origin_input = encoded, .max_read_bytes = 1, .fail_write_at = failure };
         activity = .{};
         try std.testing.expect(!relay(&fake, testRoute(.origin, .child, .chunked), &activity));

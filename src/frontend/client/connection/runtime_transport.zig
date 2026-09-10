@@ -25,16 +25,6 @@ pub const State = struct {
     read_buffer: []u8,
     outbox: client_outbox.Outbox = .{},
     receive_pending: bool = false,
-    /// Result of a send the event loop completed itself, settled as an
-    /// ordinary send completion after the current event.
-    inline_sent: ?anyerror!void = null,
-
-    /// Takes the pending inline result, if any.
-    /// Example: `while (state.takeInlineSent()) |result| try handleSent(client, result);`.
-    pub fn takeInlineSent(state: *State) ?anyerror!void {
-        defer state.inline_sent = null;
-        return state.inline_sent;
-    }
 
     /// Reserves the single receive buffer before a read actor starts.
     /// Example: `if (!state.beginRead()) return;`.
@@ -79,10 +69,10 @@ pub const State = struct {
         state.outbox.sendFailed();
     }
 
-    /// Sends the reserved batch of frames without knowing the client event
-    /// protocol. Example: `try state.send(io, bytes);`.
+    /// Sends the reserved frame without knowing the client event protocol.
+    /// Example: `try state.send(io, bytes);`.
     pub fn send(state: *State, io: Io, bytes: []const u8) !void {
-        try state.connection.sendFramed(io, bytes);
+        try state.connection.send(io, bytes);
     }
 
     /// Allocates the bounded frame buffers around one connected channel.
@@ -194,19 +184,16 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
         .client_identity = @enumFromInt(9),
     });
 
-    // The three bootstrap messages leave in one framed batch, in order.
-    var frames: core.transport.FrameIterator = .{ .batch = (try state.prepareSend()).? };
-    const configure = try schema.decodeClient(frames.next().?);
+    const configure = try schema.decodeClient((try state.prepareSend()).?);
     try std.testing.expect(configure == .configure_graphics);
     try std.testing.expect(configure.configure_graphics.shared);
 
-    const colors = try schema.decodeClient(frames.next().?);
+    try state.outbox.finishSend({});
+    const colors = try schema.decodeClient((try state.prepareSend()).?);
     try std.testing.expect(colors == .configure_terminal_colors);
+    try state.outbox.finishSend({});
 
-    const runtime_state = try schema.decodeClient(frames.next().?);
+    const runtime_state = try schema.decodeClient((try state.prepareSend()).?);
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(@as(schema.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
-    try std.testing.expect(frames.next() == null);
-    try state.outbox.finishSend({});
-    try std.testing.expect((try state.prepareSend()) == null);
 }

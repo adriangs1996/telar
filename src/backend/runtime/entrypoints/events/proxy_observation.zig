@@ -58,9 +58,6 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
         /// Rearms successful proxy receives before validating their pane
         /// generation. Live inference events are translated into agent-domain
         /// evidence; receive failures and auxiliary traffic are discarded.
-        /// Clients are pumped only when the evidence changed an agent, so a
-        /// stream of activity that confirms a known state costs no delivery
-        /// scan.
         ///
         /// ```zig
         /// try adapter.handle(receive_result);
@@ -79,11 +76,9 @@ pub fn Adapter(comptime Context: type, comptime port: RuntimePort(Context)) type
             }
 
             const observation = translate(event, pane) orelse return;
-            const changed = adapter.resources.agents.observeProxy(observation);
+            _ = adapter.resources.agents.observeProxy(observation);
             port.schedule_description(adapter.context);
-            if (changed) {
-                port.pump_clients(adapter.context);
-            }
+            port.pump_clients(adapter.context);
         }
     };
 }
@@ -369,7 +364,7 @@ test "Claude provider completion projects ready for each HTTP protocol" {
     }
 }
 
-test "an unmatched lifecycle event schedules descriptions but pumps no client" {
+test "an unmatched lifecycle event still runs the established downstream policy" {
     var fixture: Fixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -377,7 +372,7 @@ test "an unmatched lifecycle event schedules descriptions but pumps no client" {
 
     try adapter.handle(fixture.event(.response_finished, .http11));
 
-    try expectSteps(&fixture.capture, &.{ .rearm_receive, .schedule_description });
+    try expectSteps(&fixture.capture, &.{ .rearm_receive, .schedule_description, .pump_clients });
     try std.testing.expect(fixture.support.agents.projectedStatus(fixture.support.pane.key()) == null);
     try std.testing.expectEqual(expectedProxyObservations(), fixture.support.metrics.proxy_observations);
 }

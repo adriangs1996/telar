@@ -27,7 +27,7 @@ const ScheduleCapture = struct {
     observation_failure: ?anyerror = null,
     input_failure: ?anyerror = null,
     observation_saw_history: bool = false,
-    observation_saw_input_scheduled: bool = false,
+    observation_saw_empty_input_queue: bool = false,
     input_saw_history: bool = false,
     expected_input: ?[]const u8 = null,
     input_matched: bool = false,
@@ -44,7 +44,7 @@ const ScheduleCapture = struct {
         const capture: *ScheduleCapture = @ptrCast(@alignCast(context));
         capture.record(.observation);
         capture.observation_saw_history = pane.history_observer.hasPending();
-        capture.observation_saw_input_scheduled = capture.len == 2 and capture.steps[0] == .input;
+        capture.observation_saw_empty_input_queue = pane.input_queue.nextChunk() == null;
 
         if (capture.observation_failure) |failure| {
             return failure;
@@ -158,11 +158,11 @@ test "PaneInputHandler preserves input handling until the pane exit is observed"
     const result = try handler.execute(.{ .pane_id = fixture.pane.id, .bytes = "x" });
 
     try std.testing.expectEqual(pane_input_commands.PaneInputResult.handled, result);
-    try std.testing.expectEqualSlices(ScheduleStep, &.{ .input, .observation }, capture.steps[0..capture.len]);
+    try std.testing.expectEqualSlices(ScheduleStep, &.{ .observation, .input }, capture.steps[0..capture.len]);
     try std.testing.expect(capture.input_matched);
 }
 
-test "pane input crosses controller and handler with history queued before the PTY write" {
+test "pane input crosses controller and handler in observation-before-PTY order" {
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
@@ -174,9 +174,9 @@ test "pane input crosses controller and handler with history queued before the P
 
     _ = try controller.paneInput(.{ .pane_id = fixture.pane.id, .bytes = &input });
 
-    try std.testing.expectEqualSlices(ScheduleStep, &.{ .input, .observation }, capture.steps[0..capture.len]);
+    try std.testing.expectEqualSlices(ScheduleStep, &.{ .observation, .input }, capture.steps[0..capture.len]);
     try std.testing.expect(capture.observation_saw_history);
-    try std.testing.expect(capture.observation_saw_input_scheduled);
+    try std.testing.expect(capture.observation_saw_empty_input_queue);
     try std.testing.expect(capture.input_saw_history);
     try std.testing.expect(capture.input_matched);
     try expectHandledMetrics(&fixture.metrics, input.len);
@@ -203,11 +203,11 @@ test "PaneInputHandler leaves agent input untouched when descriptions are disabl
     try std.testing.expect(capture.input_matched);
 }
 
-test "PaneInputHandler reports an observation scheduling failure after the PTY write is scheduled" {
+test "PaneInputHandler stops before the PTY queue when observation scheduling fails" {
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    var capture: ScheduleCapture = .{ .observation_failure = error.ObserverUnavailable, .expected_input = "x" };
+    var capture: ScheduleCapture = .{ .observation_failure = error.ObserverUnavailable };
     var handler = handlerFor(&fixture, &capture, false);
 
     try std.testing.expectError(error.ObserverUnavailable, handler.execute(.{
@@ -215,10 +215,10 @@ test "PaneInputHandler reports an observation scheduling failure after the PTY w
         .bytes = "x",
     }));
 
-    try std.testing.expectEqualSlices(ScheduleStep, &.{ .input, .observation }, capture.steps[0..capture.len]);
+    try std.testing.expectEqualSlices(ScheduleStep, &.{.observation}, capture.steps[0..capture.len]);
     try std.testing.expect(capture.observation_saw_history);
-    try std.testing.expect(capture.input_matched);
-    try std.testing.expectEqualStrings("x", fixture.pane.input_queue.nextChunk().?);
+    try std.testing.expect(capture.observation_saw_empty_input_queue);
+    try std.testing.expect(fixture.pane.input_queue.nextChunk() == null);
     try expectHandledMetrics(&fixture.metrics, 1);
 }
 
@@ -237,7 +237,7 @@ test "PaneInputHandler preserves queued bytes when input scheduling fails" {
         .bytes = "x",
     }));
 
-    try std.testing.expectEqualSlices(ScheduleStep, &.{.input}, capture.steps[0..capture.len]);
+    try std.testing.expectEqualSlices(ScheduleStep, &.{ .observation, .input }, capture.steps[0..capture.len]);
     try std.testing.expect(capture.input_matched);
     try std.testing.expectEqualStrings("x", fixture.pane.input_queue.nextChunk().?);
     try expectHandledMetrics(&fixture.metrics, 1);
@@ -258,7 +258,7 @@ test "PaneInputHandler drops one whole saturated message and schedules the backl
         try handler.execute(.{ .pane_id = fixture.pane.id, .bytes = "drop" }),
     );
 
-    try std.testing.expectEqualSlices(ScheduleStep, &.{ .input, .observation }, capture.steps[0..capture.len]);
+    try std.testing.expectEqualSlices(ScheduleStep, &.{ .observation, .input }, capture.steps[0..capture.len]);
     try std.testing.expectEqual(@as(usize, pane_mod.PaneInputQueue.capacity), fixture.pane.input_queue.len);
     try std.testing.expectEqual(@as(u64, "drop".len), fixture.pane.input_queue.dropped_bytes);
     try expectHandledMetrics(&fixture.metrics, "drop".len);

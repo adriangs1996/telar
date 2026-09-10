@@ -123,15 +123,6 @@ pub const Application = struct {
     session: session_checkpoint.State = .{},
     session_name_probe_in_flight: bool = false,
     input_sequence: u64 = 0,
-    /// The inherited HOME, resolved once: delivery shortens agent cwd labels
-    /// with it on every pump.
-    home: ?[]const u8,
-    /// Set when pane collection changed runtime state that every client must
-    /// hear about, so the next targeted pump widens to all clients.
-    pump_all_pending: bool = false,
-    /// Some session holds an `inline_sent` result awaiting its completion
-    /// dispatch after the current event.
-    inline_sends_pending: bool = false,
 
     /// Composes application state from stable, runtime-owned capabilities.
     ///
@@ -150,7 +141,6 @@ pub const Application = struct {
             .history_service = initialization.history_service,
             .child_environment = initialization.child_environment,
             .inherited_environment = initialization.inherited_environment,
-            .home = initialization.inherited_environment.getPosix("HOME"),
             .socket_path = initialization.socket_path,
             .executable_path = executable_path,
             .executable_path_len = executable_path_len,
@@ -222,9 +212,7 @@ pub const Application = struct {
     /// application.collect();
     /// ```
     pub fn collect(application: *Application) void {
-        if (application.collectFinished()) {
-            application.pump_all_pending = true;
-        }
+        application.collectFinished();
     }
 
     /// Revokes the proxy credential associated with a pane, when enabled.
@@ -394,16 +382,14 @@ pub const Application = struct {
     /// Reaps panes whose child exited and which no actor still borrows, then
     /// closes tabs that ran out of panes. Spans three stores, which is why it
     /// lives on the application rather than on any one of them.
-    /// Destroys panes no client still holds and reports whether any left.
-    fn collectFinished(application: *Application) bool {
+    fn collectFinished(application: *Application) void {
         const store = &application.model.panes;
         var workspaces = application.workspaceRepository();
 
         if (store.exited_count == 0) {
-            return false;
+            return;
         }
 
-        var destroyed = false;
         for (&store.items) |*slot| {
             const pane = slot.* orelse continue;
 
@@ -430,7 +416,6 @@ pub const Application = struct {
                 application.revokePaneCredential(pane);
                 pane.destroy();
                 application.noteSessionChange();
-                destroyed = true;
 
                 if (!store.hasAt(location) and workspaces.reader().contains(location)) {
                     const removed = workspace_mod.removeTab(&workspaces, location).?;
@@ -440,7 +425,6 @@ pub const Application = struct {
                 application.completeEmptyWorkspaceDepartures(location.workspace);
             }
         }
-        return destroyed;
     }
 
     /// Starts idempotent client teardown and removes it after actor claims end.
@@ -764,7 +748,6 @@ pub const Application = struct {
     /// application.pumpAll();
     /// ```
     pub fn pumpAll(application: *Application) void {
-        application.pump_all_pending = false;
         for (&application.clients.items) |*slot| {
             const session = slot.* orelse continue;
             const key = session.key;
@@ -774,31 +757,6 @@ pub const Application = struct {
             const pane = slot orelse continue;
             application.settlePaneDamage(pane);
         }
-    }
-
-    /// Pumps only the clients attached to `pane` after its output changed,
-    /// then settles that pane's damage. Widens to every client when pane
-    /// collection changed state the others must hear about.
-    ///
-    /// ```zig
-    /// application.pumpPaneClients(pane);
-    /// ```
-    pub fn pumpPaneClients(application: *Application, pane: *Pane) void {
-        if (application.pump_all_pending) {
-            application.pumpAll();
-            return;
-        }
-
-        for (&application.clients.items) |*slot| {
-            const session = slot.* orelse continue;
-            if (session.attachments.find(pane.id) == null) {
-                continue;
-            }
-
-            const key = session.key;
-            application.pump(session) catch application.dropClient(key);
-        }
-        application.settlePaneDamage(pane);
     }
 
     fn settlePaneDamage(application: *Application, pane: *Pane) void {
@@ -851,74 +809,41 @@ pub const Application = struct {
             return;
         }
 
-        // Assemble one write from every payload delivery has ready, oldest
-        // lane first. Each staged frame is committed before the next is
-        // prepared, so a client that fell behind still receives one message
-        // per queued change rather than a replay, and a transaction whose
-        // completion must run after the write ends the batch.
-        const outbound = &session.delivery;
-        const prefix_size = core.transport.length_prefix_size;
-        var batch_len: usize = 0;
-        outbound.stage_offset = prefix_size;
-        defer outbound.stage_offset = 0;
-        while (true) {
-            const prepared = (try outbound.prepare(.{
-                .io = application.io,
-                .attachments = &session.attachments,
-                .sources = .{
-                    .panes = &application.model.panes,
-                    .workspaces = application.workspaceReader(),
-                    .agents = &application.model.agents,
-                    .manifests = application.agent_manifests,
-                    .system_metrics = &application.system_metrics,
-                    .proxy_active = application.proxy_runtime.active(),
-                    .proxy_scope = application.proxy_runtime.interceptionScope(),
-                    .proxy_system_trusted = application.proxy_runtime.systemTrusted(),
-                    .home = application.home,
-                    .client_layouts = &application.model.client_layouts,
-                },
-                .metrics = &application.metrics,
-            })) orelse break;
-            core.transport.writePrefix(outbound.send_buffer[batch_len..][0..prefix_size], prepared.payload.len);
-            batch_len += prefix_size + prepared.payload.len;
-            outbound.commit(.{
-                .prepared = prepared,
-                .attachments = &session.attachments,
-                .metrics = &application.metrics,
-            });
-            if (outbound.completionPending()) {
-                break;
-            }
+        const pending = try session.delivery.prepare(.{
+            .io = application.io,
+            .attachments = &session.attachments,
+            .sources = .{
+                .panes = &application.model.panes,
+                .workspaces = application.workspaceReader(),
+                .agents = &application.model.agents,
+                .manifests = application.agent_manifests,
+                .system_metrics = &application.system_metrics,
+                .proxy_active = application.proxy_runtime.active(),
+                .proxy_scope = application.proxy_runtime.interceptionScope(),
+                .proxy_system_trusted = application.proxy_runtime.systemTrusted(),
+                .home = application.inherited_environment.getPosix("HOME"),
+                .client_layouts = &application.model.client_layouts,
+            },
+            .metrics = &application.metrics,
+        });
+        errdefer if (pending) |prepared| {
+            session.delivery.abort(prepared);
+        };
 
-            outbound.stage_offset = batch_len + prefix_size;
-            if (!outbound.canStageAnother()) {
-                break;
-            }
-            outbound.continueBatch();
-        }
-
-        try application.schedulePendingMedia(session);
-        if (batch_len == 0) {
-            return;
-        }
-
-        if (outbound.phase == .ready) {
-            outbound.resumeInFlight();
-        }
-        try Operations.startSessionSendFramed(application, session, outbound.send_buffer[0..batch_len]);
-    }
-
-    fn schedulePendingMedia(application: *Application, session: *ClientSession) !void {
-        var remaining = session.attachments.len();
-        var index: usize = 0;
-        while (remaining != 0) : (remaining -= 1) {
-            index = session.attachments.occupiedFrom(index) orelse break;
-            defer index += 1;
-            const attachment = session.attachments.at(index).?;
+        for (0..attachment_mod.AttachmentStore.capacity) |index| {
+            const attachment = session.attachments.at(index) orelse continue;
             if (attachment.pane.media.hasPending()) {
                 try RuntimeEvents.schedulePaneMedia(application, attachment.pane);
             }
         }
+
+        const prepared = pending orelse return;
+        try Operations.startSessionSend(application, session, prepared.payload);
+        session.delivery.commit(.{
+            .prepared = prepared,
+            .attachments = &session.attachments,
+            .metrics = &application.metrics,
+        });
     }
 
     /// Routes a decoded client message through a request-scoped dispatcher.
@@ -937,29 +862,13 @@ const RequestDispatcher = request_dispatch.Dispatcher(Application, Operations.re
 pub const EventResources = RuntimeEvents.EventResources;
 
 /// Delegates one runtime event to the capability that owns it and reports
-/// whether a requested shutdown has reached every client. Writes the event
-/// loop completed itself are settled here as ordinary send completions, so
-/// their handlers never re-enter the pump that started them.
+/// whether a requested shutdown has reached every client.
 ///
 /// ```zig
 /// const should_stop = try handle(&application, event, resources);
 /// ```
 pub fn handle(application: *Application, event: RuntimeEvent, resources: EventResources) !bool {
-    var should_stop = try RuntimeEvents.handle(application, event, resources);
-    while (application.inline_sends_pending) {
-        application.inline_sends_pending = false;
-        for (&application.clients.items) |*slot| {
-            const session = slot.* orelse continue;
-            const result = session.inline_sent orelse continue;
-            session.inline_sent = null;
-            const completion: RuntimeEvent = .{ .client_sent = .{ .client = session.key, .result = result } };
-            if (try RuntimeEvents.handle(application, completion, resources)) {
-                should_stop = true;
-            }
-        }
-    }
-
-    return should_stop;
+    return RuntimeEvents.handle(application, event, resources);
 }
 
 fn deinitWorkspaces(application: *Application) void {

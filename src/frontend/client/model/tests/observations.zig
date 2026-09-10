@@ -477,30 +477,3 @@ test "a host background report resolves the appearance by luminance" {
     try std.testing.expectEqual(client_model.HostAppearance.dark, dim.appearance);
     try std.testing.expectEqual(client_model.HostAppearance.dark, dim.withExpiredProbes().appearance);
 }
-
-test "animation ticks stop when no spinner or progress thread is visible" {
-    var model = client_model.Model.init(std.testing.allocator, true);
-    defer model.deinit();
-    const agent: agents.AgentInput = .{
-        .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
-        .location = .{
-            .workspace = .{ .workspace = @enumFromInt(1) },
-            .tab_id = @enumFromInt(1),
-        },
-        .pane_index = 1,
-        .provider = .codex,
-        .status = .working,
-    };
-    _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{agent} });
-    try std.testing.expect(model.sidebarVisible());
-    try std.testing.expect(model.chromeAnimationActive());
-    try std.testing.expect(model.sidebarAnimationActive());
-
-    // A working agent behind a hidden sidebar animates nothing on screen.
-    _ = model.toggleSidebar();
-    try std.testing.expect(!model.sidebarVisible());
-    try std.testing.expect(!model.chromeAnimationActive());
-    try std.testing.expect(!model.paneAnimationActive());
-    try std.testing.expect(!model.sidebarAnimationActive());
-    try std.testing.expect(model.advanceSidebarAnimation() == null);
-}

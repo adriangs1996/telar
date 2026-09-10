@@ -36,7 +36,7 @@ test "FrameAckHandler accepts only the exact outstanding frame" {
     var buffer: [16 * 1024]u8 = undefined;
     const frame_id = try prepareOutstandingFrame(&fixture, &buffer);
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    const received_at_ns = attachment.cells.lastSentNs().? + 37;
+    const received_at_ns = attachment.cells.outstanding.?.sent_ns + 37;
     var handler: frame_ack_commands.FrameAckHandler = .{
         .attachments = &fixture.attachments,
     };

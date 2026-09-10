@@ -7,11 +7,6 @@ const middleware = @import("middleware.zig");
 const Io = std.Io;
 
 pub const capacity = 256;
-/// Slots that streaming activity may never fill, so the transitions that end
-/// a turn or a response still reach the runtime while a response floods the
-/// channel. Dropping obsolete activity is cheap; dropping a completion is
-/// an agent stuck in `working`.
-pub const transition_reserve = 32;
 
 pub const CredentialGate = struct {
     context: *anyopaque,
@@ -110,7 +105,7 @@ pub const Channel = struct {
 
         // A waiting receiver may consume a direct handoff before `put`
         // returns, so depth must be reserved before publication.
-        const depth = channel.reserve(event.phase) orelse {
+        const depth = channel.reserve() orelse {
             _ = channel.dropped.fetchAdd(1, .monotonic);
             return;
         };
@@ -125,11 +120,10 @@ pub const Channel = struct {
         _ = channel.high_water.fetchMax(depth, .monotonic);
     }
 
-    fn reserve(channel: *Channel, phase: middleware.Phase) ?u64 {
-        const limit: u64 = if (phase == .response_activity) capacity - transition_reserve else capacity;
+    fn reserve(channel: *Channel) ?u64 {
         var current = channel.queued.load(.monotonic);
 
-        while (current < limit) {
+        while (current < capacity) {
             if (channel.queued.cmpxchgWeak(current, current + 1, .monotonic, .monotonic)) |observed| {
                 current = observed;
                 continue;
@@ -304,29 +298,4 @@ test "closure wakes a receiver waiting on an empty channel" {
     channel.close(std.testing.io);
 
     try std.testing.expectError(error.Closed, receiver.await(std.testing.io));
-}
-
-test "streaming activity leaves room for lifecycle transitions" {
-    var state: GateState = .{};
-    var channel: Channel = undefined;
-    channel.init(state.gate());
-
-    for (0..capacity) |index| {
-        var event = testEvent(1, index);
-        event.phase = .response_activity;
-        channel.publish(std.testing.io, event);
-    }
-    try std.testing.expectEqual(@as(u64, capacity - transition_reserve), channel.metrics().queued);
-    try std.testing.expectEqual(@as(u64, transition_reserve), channel.metrics().dropped);
-
-    var finished = testEvent(1, capacity);
-    finished.phase = .response_finished;
-    channel.publish(std.testing.io, finished);
-    try std.testing.expectEqual(@as(u64, capacity - transition_reserve + 1), channel.metrics().queued);
-    try std.testing.expectEqual(@as(u64, transition_reserve), channel.metrics().dropped);
-
-    for (0..capacity - transition_reserve + 1) |_| {
-        var event = try channel.receive(std.testing.io);
-        std.crypto.secureZero(u8, &event.credential.token);
-    }
 }

@@ -1134,61 +1134,23 @@ pub const Model = struct {
         return key;
     }
 
-    /// Reports whether anything on screen animates: a sidebar spinner, the
-    /// tab bar's bouncing progress or a progress thread on a visible pane
-    /// border. Working agents behind a hidden sidebar and progress in inactive
-    /// tabs schedule no ticks.
+    /// Reports whether the latest runtime state requires sidebar animation.
     ///
     /// ```zig
     /// if (model.sidebarAnimationActive()) scheduleTick();
     /// ```
     pub fn sidebarAnimationActive(model: *const Model) bool {
-        return model.chromeAnimationActive() or model.paneAnimationActive();
-    }
-
-    /// Reports whether the chrome itself animates and needs a redraw per
-    /// tick: the sidebar's working spinners, or the tab bar's bouncing
-    /// progress of a single-pane active tab.
-    ///
-    /// ```zig
-    /// if (model.chromeAnimationActive()) view.invalidate();
-    /// ```
-    pub fn chromeAnimationActive(model: *const Model) bool {
-        if (model.sidebar_visible and model.agent_snapshot.hasWorkingAgent()) {
+        if (model.agent_snapshot.hasWorkingAgent()) {
             return true;
         }
 
-        const active = model.workspace.activeConst() orelse return false;
-        if (active.model.layout.count() != 1) {
-            return false;
-        }
-
-        const pane = active.model.focusedPaneConst() orelse return false;
-        return pane.progress_state == .indeterminate;
-    }
-
-    /// Reports whether a pane border in the active tab carries an animated
-    /// progress thread. In fullscreen only the focused pane's border shows.
-    ///
-    /// ```zig
-    /// const animating = model.paneAnimationActive();
-    /// ```
-    pub fn paneAnimationActive(model: *const Model) bool {
-        const active = model.workspace.activeConst() orelse return false;
-        const layout = &active.model.layout;
-        if (!layout.hasBorders()) {
-            return false;
-        }
-
-        if (layout.isFullscreen()) {
-            const pane = active.model.focusedPaneConst() orelse return false;
-            return progressAnimates(pane.progress_state);
-        }
-
-        for (&active.model.panes) |pane_slot| {
-            const pane = pane_slot orelse continue;
-            if (progressAnimates(pane.progress_state)) {
-                return true;
+        for (&model.workspace.items) |tab_slot| {
+            const tab = tab_slot orelse continue;
+            for (&tab.model.panes) |pane_slot| {
+                const pane = pane_slot orelse continue;
+                if (pane.progress_state == .set or pane.progress_state == .indeterminate) {
+                    return true;
+                }
             }
         }
         return false;
@@ -3131,8 +3093,4 @@ test "copy mode frame reconciliation and pane release are exact" {
     try std.testing.expect(model.releaseCopyMode(pane_id));
     try std.testing.expect(!model.copyModeActive());
     try std.testing.expectEqual(version.copy + 2, model.version().copy);
-}
-
-fn progressAnimates(state: schema.PaneProgressState) bool {
-    return state == .set or state == .indeterminate;
 }

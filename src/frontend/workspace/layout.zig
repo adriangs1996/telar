@@ -91,7 +91,6 @@ pub const PaneSet = struct {
 const SnapshotReset = struct {
     area: ui.Rect,
     revision: u64,
-    geometry_revision: u64,
     pane_gaps: bool,
 };
 
@@ -112,8 +111,6 @@ const SplitGeometry = struct {
 pub const Snapshot = struct {
     area: ui.Rect = .{},
     revision: u64 = 0,
-    /// Advances only when pane rectangles change, never on focus alone.
-    geometry_revision: u64 = 0,
     pane_gaps: bool = true,
     storage: [max_panes]View = undefined,
     len: u8 = 0,
@@ -245,7 +242,6 @@ pub const Snapshot = struct {
     fn reset(snapshot: *Snapshot, state: SnapshotReset) void {
         snapshot.area = state.area;
         snapshot.revision = state.revision;
-        snapshot.geometry_revision = state.geometry_revision;
         snapshot.pane_gaps = state.pane_gaps;
         snapshot.len = 0;
         snapshot.index.reset();
@@ -267,10 +263,6 @@ pub const Layout = struct {
     fullscreen: bool = false,
     pane_gaps: bool = true,
     revision: u64 = 1,
-    /// Advances with `revision` for every structural change and stays put
-    /// when only focus moves, so a compositor can keep its cells across a
-    /// focus change and redraw borders alone.
-    geometry_revision: u64 = 1,
 
     pub fn count(layout: *const Layout) usize {
         return layout.pane_count;
@@ -282,11 +274,6 @@ pub const Layout = struct {
 
     pub fn currentRevision(layout: *const Layout) u64 {
         return layout.revision;
-    }
-
-    /// Example: `if (snapshot.geometry_revision != layout.geometryRevision()) rebuild();`.
-    pub fn geometryRevision(layout: *const Layout) u64 {
-        return layout.geometry_revision;
     }
 
     pub fn isFullscreen(layout: *const Layout) bool {
@@ -456,7 +443,6 @@ pub const Layout = struct {
         var restored: Layout = .{
             .pane_gaps = layout.pane_gaps,
             .revision = layout.revision,
-            .geometry_revision = layout.geometry_revision,
         };
         try restored.addRoot(pane_ids[0]);
         var previous = pane_ids[0];
@@ -510,7 +496,6 @@ pub const Layout = struct {
         var restored = saved;
         restored.pane_gaps = layout.pane_gaps;
         restored.revision = layout.revision;
-        restored.geometry_revision = layout.geometry_revision;
         restored.focused_pane = panes.focused;
         restored.changed();
         layout.* = restored;
@@ -608,11 +593,7 @@ pub const Layout = struct {
             return true;
         }
         layout.focused_pane = pane_id;
-        if (layout.fullscreen) {
-            layout.changed();
-        } else {
-            layout.focusChanged();
-        }
+        layout.changed();
         return true;
     }
 
@@ -733,7 +714,7 @@ pub const Layout = struct {
         if (!layout.fullscreen) {
             return layout.snapshotTiled(area, output);
         }
-        output.reset(.{ .area = area, .revision = layout.revision, .geometry_revision = layout.geometry_revision, .pane_gaps = layout.pane_gaps });
+        output.reset(.{ .area = area, .revision = layout.revision, .pane_gaps = layout.pane_gaps });
         const pane_id = layout.focused() orelse return;
         output.append(.{
             .pane_id = pane_id,
@@ -745,7 +726,7 @@ pub const Layout = struct {
     }
 
     fn snapshotTiled(layout: *const Layout, area: ui.Rect, output: *Snapshot) void {
-        output.reset(.{ .area = area, .revision = layout.revision, .geometry_revision = layout.geometry_revision, .pane_gaps = layout.pane_gaps });
+        output.reset(.{ .area = area, .revision = layout.revision, .pane_gaps = layout.pane_gaps });
         const root = layout.root orelse return;
         const Pending = struct { node: NodeIndex, area: ui.Rect };
         var stack: [max_nodes]Pending = undefined;
@@ -902,14 +883,6 @@ pub const Layout = struct {
     }
 
     fn changed(layout: *Layout) void {
-        layout.focusChanged();
-        layout.geometry_revision +%= 1;
-        if (layout.geometry_revision == 0) {
-            layout.geometry_revision = 1;
-        }
-    }
-
-    fn focusChanged(layout: *Layout) void {
         layout.revision +%= 1;
         if (layout.revision == 0) {
             layout.revision = 1;
@@ -1382,24 +1355,6 @@ test "snapshot indexes colliding pane ids and records its source revision" {
     try std.testing.expectEqual(@as(u16, 39), geometry.find(@enumFromInt(1)).?.outer.w);
     try std.testing.expectEqual(@as(u16, 40), geometry.find(@enumFromInt(129)).?.outer.w);
     try std.testing.expectEqual(@as(?View, null), geometry.find(@enumFromInt(257)));
-}
-
-test "focus changes keep the geometry revision unless fullscreen" {
-    var layout: Layout = .{};
-    try layout.addRoot(@enumFromInt(1));
-    try layout.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .axis = .horizontal });
-    const geometry = layout.geometryRevision();
-    const revision = layout.currentRevision();
-
-    try std.testing.expect(layout.focusPane(@enumFromInt(1)));
-    try std.testing.expect(layout.currentRevision() != revision);
-    try std.testing.expectEqual(geometry, layout.geometryRevision());
-
-    try std.testing.expect(layout.toggleFullscreen());
-    const fullscreen_geometry = layout.geometryRevision();
-    try std.testing.expect(fullscreen_geometry != geometry);
-    try std.testing.expect(layout.focusPane(@enumFromInt(2)));
-    try std.testing.expect(layout.geometryRevision() != fullscreen_geometry);
 }
 
 test "focus changes advance the layout revision" {

@@ -192,15 +192,17 @@ pub const Processor = struct {
             media.free(placeholder);
             return false;
         }
-        // The mapping that received the copy becomes the emulator's own
-        // read-only view: no second open and map of the object just written.
-        const frozen = shared_transfer.freezeSharedPixelsMapped(child.pixels) orelse {
+        const name = shared_transfer.freezeSharedPixels(child.pixels) orelse {
             processor.media_allocator.releaseManual(frame.byte_len);
             media.free(placeholder);
             return false;
         };
-        const name = frozen.name;
-        const storage = frozen.pixels;
+        const storage = shared_transfer.mapOwnObject(name, frame.byte_len) orelse {
+            _ = std.c.shm_unlink(name.sliceZ());
+            processor.media_allocator.releaseManual(frame.byte_len);
+            media.free(placeholder);
+            return false;
+        };
         if (!processor.media_allocator.adoptMapping(placeholder, storage)) {
             std.posix.munmap(storage);
             _ = std.c.shm_unlink(name.sliceZ());

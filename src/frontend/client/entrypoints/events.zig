@@ -51,7 +51,6 @@ pub fn handle(client: *Client, event: Event, resources: Resources) !Outcome {
 
     switch (try route(client, event, resources)) {
         .keep_running => {
-            try runtime_transport.settleInlineSends(client);
             if (try client_startup.advance(client)) {
                 return .{ .exit = 0 };
             }

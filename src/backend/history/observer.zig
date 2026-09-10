@@ -124,19 +124,6 @@ const Batch = struct {
     }
 };
 
-/// Batches between kernel working-directory probes. A shell's cwd moves with
-/// a command boundary, and every batch of a busy pane is not one.
-const cwd_probe_batches = 8;
-
-/// One screen's heuristic verdicts and the fingerprint they belong to.
-const ScreenScan = struct {
-    valid: bool = false,
-    fingerprint: u64 = 0,
-    phrase: ?agent_detection.Signal = null,
-    codex: ?agent_detection.Signal = null,
-    prompt: ?agent_detection.Signal = null,
-};
-
 pub const Observer = struct {
     gpa: std.mem.Allocator,
     terminal: vt.Terminal,
@@ -155,17 +142,6 @@ pub const Observer = struct {
     last_signal: ?agent_detection.Signal = null,
     last_signal_ms: i64 = 0,
     codex_screen_lost: bool = false,
-    /// Whether the tracker retains command output; survives an overflow
-    /// reset, which rebuilds the tracker.
-    capture_output: bool = false,
-    /// Heuristic results for the last sampled screen, keyed by its hash and
-    /// cursor state, so a repainting spinner is scanned once.
-    scan: ScreenScan = .{},
-    /// Screens actually run through the heuristics, for tests and telemetry.
-    scans: u64 = 0,
-    /// Batches processed since the shell's working directory was last read
-    /// from the kernel; OSC 7 keeps the tracker current in between.
-    batches_since_cwd_probe: u8 = cwd_probe_batches,
 
     /// Initializes the disposable history emulator and its bounded event
     /// buffers for one pane.
@@ -206,10 +182,6 @@ pub const Observer = struct {
         observer.last_signal = null;
         observer.last_signal_ms = 0;
         observer.codex_screen_lost = false;
-        observer.capture_output = initialization.capture_output;
-        observer.scan = .{};
-        observer.scans = 0;
-        observer.batches_since_cwd_probe = cwd_probe_batches;
     }
 
     pub fn deinit(observer: *Observer) void {
@@ -310,7 +282,6 @@ pub const Observer = struct {
         const index = observer.worker orelse return;
         const batch = &observer.batches[index];
         var latest_clock: ?terminal_history.Clock = null;
-        var latest_shell_foreground: ?bool = null;
         if (batch.reset_before) {
             const reset_cwd = cwd orelse if (observer.enabled)
                 observer.tracker.currentCwd()
@@ -343,7 +314,6 @@ pub const Observer = struct {
             .output => |output| {
                 const start: usize = output.offset;
                 latest_clock = output.clock;
-                latest_shell_foreground = output.shell_foreground;
                 observer.observeOutput(.{
                     .bytes = batch.bytes[start..][0..output.len],
                     .clock = output.clock,
@@ -367,23 +337,17 @@ pub const Observer = struct {
         if (!observer.stream.ground() or observer.terminal.modes.get(.synchronized_output)) {
             return;
         }
-        // A screen cannot create an agent on its own: with the shell in the
-        // foreground, no process evidence and no agent seen before, plain
-        // output such as a long listing is never worth three scans.
-        if (latest_shell_foreground == true and processing.provider == .unknown and observer.last_signal == null) {
-            return;
-        }
 
-        const scan = observer.scanScreen();
-        const phrase_signal = scan.phrase;
-        const codex = scan.codex;
+        observer.sample.capture(&observer.terminal);
+        const phrase_signal = observer.sample.signal(observer.manifests);
+        const codex = codex_screen.scan(&observer.terminal, observer.manifests);
         const signal = if (processing.provider == .codex or
             (processing.provider == .unknown and codex != null and codex.?.identity_confirmed))
             codex
         else if (processing.provider == .unknown and phrase_signal != null and phrase_signal.?.provider == .codex)
             null
         else
-            mergeSignals(observer.manifests, phrase_signal, scan.prompt);
+            mergeSignals(observer.manifests, phrase_signal, prompt_scan.scanReadyPrompt(&observer.terminal));
         if (signal) |candidate| {
             if (candidate.provider == .codex) {
                 if (candidate.status == .working) {
@@ -399,49 +363,6 @@ pub const Observer = struct {
         if (observer.publishSignal(signal, clock.real_ms)) |published| {
             stats.agent_observation = .{ .signal = published, .observed_at_ms = clock.real_ms, .observed_at_ns = clock.awake_ns };
         }
-    }
-
-    /// Whether the next batch should read the shell's cwd from the kernel.
-    /// Every eighth batch does, and any batch that changed the terminal's
-    /// size, so a resize never waits on a stale directory.
-    ///
-    /// ```zig
-    /// const cwd = if (observer.cwdProbeDue(size)) agent_process.cwd(pid, &buffer) else null;
-    /// ```
-    pub fn cwdProbeDue(observer: *Observer, size: schema.TerminalSize) bool {
-        _ = size;
-        observer.batches_since_cwd_probe +|= 1;
-        if (observer.batches_since_cwd_probe < cwd_probe_batches) {
-            return false;
-        }
-        observer.batches_since_cwd_probe = 0;
-        return true;
-    }
-
-    /// Runs the screen heuristics, or reuses the last verdicts when the
-    /// sampled text and cursor state are unchanged since they were computed.
-    fn scanScreen(observer: *Observer) ScreenScan {
-        observer.sample.capture(&observer.terminal);
-        const cursor = observer.terminal.screens.active.cursor;
-        var hasher = std.hash.Wyhash.init(0);
-        hasher.update(observer.sample.text());
-        hasher.update(std.mem.asBytes(&cursor.x));
-        hasher.update(std.mem.asBytes(&cursor.y));
-        hasher.update(&.{@intFromBool(observer.terminal.modes.get(.cursor_visible))});
-        const fingerprint = hasher.final();
-        if (observer.scan.valid and observer.scan.fingerprint == fingerprint) {
-            return observer.scan;
-        }
-
-        observer.scans +|= 1;
-        observer.scan = .{
-            .valid = true,
-            .fingerprint = fingerprint,
-            .phrase = observer.sample.signal(observer.manifests),
-            .codex = codex_screen.scan(&observer.terminal, observer.manifests),
-            .prompt = prompt_scan.scanReadyPrompt(&observer.terminal),
-        };
-        return observer.scan;
     }
 
     /// Hands one screen signal to the runtime when it differs from the last
@@ -533,7 +454,6 @@ pub const Observer = struct {
         observer.last_signal = null;
         observer.last_signal_ms = 0;
         observer.codex_screen_lost = true;
-        observer.scan = .{};
         observer.terminal.fullReset();
         var handler = observer.terminal.vtHandler();
         handler.apc_handler.enable(.kitty, false);
@@ -541,11 +461,7 @@ pub const Observer = struct {
         observer.stream = .init(.{ .allocator = observer.gpa, .handler = handler });
         errdefer observer.stream.deinit();
         try observer.stream.handler.resize(vtResize(size));
-        observer.tracker = try .init(observer.gpa, .{
-            .cwd = cwd,
-            .terminal = &observer.terminal,
-            .capture_output = observer.capture_output,
-        });
+        observer.tracker = try .init(observer.gpa, .{ .cwd = cwd, .terminal = &observer.terminal });
         observer.enabled = true;
     }
 };
@@ -816,45 +732,4 @@ test "observation loss cannot manufacture an idle Codex screen from a partial re
     try std.testing.expectEqual(agent_detection.Status.working, recovered.agent_observation.?.signal.status);
     const idle = try codexTestBatch(&observer, "\x1b[1;1H\x1b[2K\x1b[4;3H", 400);
     try std.testing.expect(idle.agent_observation.?.signal.ready_confirmed);
-}
-
-test "an unchanged screen is scanned once and a shell in the foreground is not scanned" {
-    const size: schema.TerminalSize = .{ .cols = 40, .rows = 8, .cell_width_px = 0, .cell_height_px = 0 };
-    var observer: Observer = undefined;
-    try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = size });
-    defer observer.deinit();
-    var sink: CodexTestSink = .{};
-    const Repaint = struct {
-        fn run(target: *Observer, bytes: []const u8, now_ms: i64) !void {
-            var noop: CodexTestSink = .{};
-            target.queueOutput(.{ .bytes = bytes, .shell_foreground = false, .clock = .{ .real_ms = now_ms, .awake_ns = @intCast(now_ms * 1_000_000) } });
-            try std.testing.expect(target.seal());
-            var batch_stats: Stats = .{};
-            target.processSealed(.{ .cwd = null, .current_size = size, .stats = &batch_stats }, &noop);
-            target.finishSealed();
-        }
-    };
-
-    try Repaint.run(&observer, "Working (1s, esc to interrupt)", 1);
-    try std.testing.expectEqual(@as(u64, 1), observer.scans);
-    try std.testing.expect(observer.last_signal != null);
-
-    // A repaint that leaves the screen and cursor unchanged reuses the verdict.
-    try Repaint.run(&observer, "\x1b[1;1HWorking (1s, esc to interrupt)", 2);
-    try std.testing.expectEqual(@as(u64, 1), observer.scans);
-
-    try Repaint.run(&observer, "\r\x1b[2KWorking (2s, esc to interrupt)", 3);
-    try std.testing.expectEqual(@as(u64, 2), observer.scans);
-
-    // With the shell owning the terminal, no process evidence and nothing
-    // seen before, plain output is not scanned at all.
-    var quiet: Observer = undefined;
-    try quiet.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = size });
-    defer quiet.deinit();
-    quiet.queueOutput(.{ .bytes = "total 12\r\nfile.txt\r\n", .shell_foreground = true, .clock = .{ .real_ms = 1, .awake_ns = 1 } });
-    try std.testing.expect(quiet.seal());
-    var stats: Stats = .{};
-    quiet.processSealed(.{ .cwd = null, .current_size = size, .stats = &stats }, &sink);
-    quiet.finishSealed();
-    try std.testing.expectEqual(@as(u64, 0), quiet.scans);
 }

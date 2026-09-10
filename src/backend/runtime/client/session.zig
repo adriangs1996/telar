@@ -28,9 +28,6 @@ pub const Session = struct {
     role: Role = .undecided,
     read_pending: bool = false,
     send_pending: bool = false,
-    /// Result of a write the event loop completed itself; the dispatcher
-    /// settles it as an ordinary send completion after the current event.
-    inline_sent: ?anyerror!void = null,
     closing: bool = false,
     last_input_pane: core.schema.PaneId = .invalid,
     last_input_sequence: u64 = 0,
@@ -133,8 +130,6 @@ pub const Write = struct {
     key: Key,
     connection: *core.transport.SocketChannel,
     payload: []const u8,
-    /// The payload already carries one length prefix per frame.
-    framed: bool = false,
 };
 
 pub const Read = struct {
@@ -184,5 +179,5 @@ test "Session keeps its bounded buffers outside client store storage" {
 
     try std.testing.expectEqual(@as(u64, 1), session.key.id);
     try std.testing.expectEqual(core.transport.max_frame_size, session.receive_buffer.len);
-    try std.testing.expectEqual(core.transport.max_frame_size + delivery_mod.batch_slack, session.delivery.send_buffer.len);
+    try std.testing.expectEqual(core.transport.max_frame_size, session.delivery.send_buffer.len);
 }

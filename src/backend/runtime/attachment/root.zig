@@ -214,13 +214,8 @@ pub const Attachment = struct {
             return .{ .bytes = payload, .effect = .cells };
         }
 
-        if (attachment.cells.windowFull()) {
-            return null;
-        }
-
-        const viewport_moved = attachment.cells.viewport_moved;
-        if (!viewport_moved and !pane.render_pending and
-            attachment.cells.observed_revision == pane.cell_revision)
+        if (attachment.cells.hasOutstanding() or
+            (!pane.render_pending and attachment.cells.observed_revision == pane.cell_revision))
         {
             return null;
         }
@@ -230,7 +225,6 @@ pub const Attachment = struct {
             .buffer = preparation.buffer,
             .pane = pane,
             .force_snapshot = false,
-            .force_projection = viewport_moved,
             .metrics = preparation.metrics,
         })) orelse
             return null;
@@ -429,13 +423,8 @@ pub const AttachmentStore = struct {
     items: [max_panes]?Attachment = [_]?Attachment{null} ** max_panes,
     count: usize = 0,
     index: SlotIndex(2 * max_panes) = .{},
-    /// One bit per occupied slot, so a delivery lane visits the attached
-    /// panes instead of probing every slot.
-    occupied: OccupancyMask = 0,
     workspace: ?schema.WorkspaceLocation = null,
     shared_graphics: bool = false,
-
-    const OccupancyMask = std.meta.Int(.unsigned, max_panes);
 
     pub fn find(store: *AttachmentStore, pane_id: schema.PaneId) ?*Attachment {
         const slot = store.index.get(schema.id.raw(pane_id)) orelse return null;
@@ -535,23 +524,6 @@ pub const AttachmentStore = struct {
         return if (store.items[index]) |*attachment| attachment else null;
     }
 
-    /// Returns the first occupied slot at or after `from`, wrapping around,
-    /// or null when no pane is attached. Walking the store this way costs
-    /// the attached panes rather than the capacity.
-    ///
-    /// ```zig
-    /// var index = store.occupiedFrom(0) orelse return;
-    /// ```
-    pub fn occupiedFrom(store: *const AttachmentStore, from: usize) ?usize {
-        if (store.occupied == 0) {
-            return null;
-        }
-
-        const start: std.math.Log2Int(OccupancyMask) = @intCast(from % max_panes);
-        const rotated = std.math.rotr(OccupancyMask, store.occupied, start);
-        return (from % max_panes + @ctz(rotated)) % max_panes;
-    }
-
     pub fn iterator(store: *const AttachmentStore) Iterator {
         return .{ .store = store };
     }
@@ -602,7 +574,6 @@ pub const AttachmentStore = struct {
                 slot.* = try Attachment.init(gpa, pane);
                 slot.*.?.configureGraphics(store.shared_graphics);
                 store.index.put(schema.id.raw(pane.id), position);
-                store.occupied |= @as(OccupancyMask, 1) << @intCast(position);
                 if (store.workspace == null) {
                     store.workspace = pane.location.workspace;
                 }
@@ -633,7 +604,6 @@ pub const AttachmentStore = struct {
         attachment.deinit();
         store.index.remove(schema.id.raw(pane_id));
         store.items[position] = null;
-        store.occupied &= ~(@as(OccupancyMask, 1) << @intCast(position));
         store.count -= 1;
 
         return .{
@@ -690,7 +660,6 @@ pub const AttachmentStore = struct {
             slot.* = null;
         }
         store.index.reset();
-        store.occupied = 0;
         store.count = 0;
         store.workspace = null;
     }
@@ -722,11 +691,13 @@ pub fn enforceGraphicsCounts(io: Io, pane: *Pane, screen_key: vt.ScreenSet.Key) 
         terminal.screens.active = previous;
     }
     const storage = &screen.kitty_images;
-    if (storage.placements.count() > pane.graphics_limits.placements_per_pane) {
+    const placement_limit = pane.graphics_limits.placements_per_pane / 2;
+    if (storage.placements.count() > placement_limit) {
         storage.delete(io, pane.media_allocator.allocator(), terminal, .{ .all = false });
     }
 
-    while (storage.images.count() > pane.graphics_limits.images_per_pane) {
+    const image_limit = pane.graphics_limits.images_per_pane / 2;
+    while (storage.images.count() > image_limit) {
         var oldest_id: ?u32 = null;
         var oldest_generation: u64 = std.math.maxInt(u64);
         var iterator = storage.images.iterator();
@@ -769,19 +740,12 @@ fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsP
         attachment.graphics.target_revision = pane.graphics_revision;
         attachment.graphics.revision = @max(pane.graphics_revision, @as(u64, 1));
         attachment.graphics.batch_active = true;
-        attachment.graphics.placement_cursor = 0;
-    } else if (attachment.graphics.target_revision != pane.graphics_revision) {
-        // Storage moved under the batch; placements compared so far may
-        // have changed, so the walk starts over.
-        attachment.graphics.placement_cursor = 0;
     }
     const revision = attachment.graphics.revision;
 
     if (attachment.graphics.snapshot == .begin_pending) {
         attachment.graphics.known_images = [_]?graphics.Sync.KnownImage{null} ** core.graphics.max_images_per_pane;
         attachment.graphics.known_placements = [_]?graphics.Sync.KnownPlacement{null} ** core.graphics.max_placements_per_pane;
-        attachment.graphics.placement_index.reset();
-        attachment.graphics.placement_cursor = 0;
         attachment.freeTransfer();
         attachment.graphics.snapshot = .open;
         return try schema.encodeGraphicsSnapshot(buffer, .{
@@ -887,20 +851,12 @@ fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsP
         .idle => {},
     }
 
-    // One pass over storage marks which known placements still exist; the
-    // known table is then swept once instead of searching storage per entry.
-    var present: [core.graphics.max_placements_per_pane]bool = @splat(false);
-    var presence_iterator = storage.placements.iterator();
-    while (presence_iterator.next()) |entry| {
-        const slot = attachment.graphics.placement_index.get(placementVirtualId(entry.key_ptr.*)) orelse continue;
-        present[slot] = true;
-    }
-    for (&attachment.graphics.known_placements, 0..) |*slot, index| {
+    for (&attachment.graphics.known_placements) |*slot| {
         const known = slot.* orelse continue;
-        if (present[index]) {
+        if (findPlacement(storage, known.placement.virtual_id) != null) {
             continue;
         }
-        forgetPlacementSlot(attachment, index);
+        slot.* = null;
         return try schema.encodeGraphicsDeletePlacement(buffer, .{
             .pane_id = pane.id,
             .revision = revision,
@@ -911,12 +867,7 @@ fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsP
     }
 
     var placement_iterator = storage.placements.iterator();
-    var position: usize = 0;
     while (placement_iterator.next()) |entry| {
-        defer position += 1;
-        if (position < attachment.graphics.placement_cursor) {
-            continue;
-        }
         const image = storage.imageById(entry.key_ptr.image_id) orelse continue;
         if (!knowsImage(attachment, .{ .image_id = image.id, .generation = image.generation })) {
             continue;
@@ -931,7 +882,6 @@ fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsP
         } else {
             try rememberPlacement(attachment, placement);
         }
-        attachment.graphics.placement_cursor = position + 1;
         attachment.graphics.sent_placements +|= 1;
         return try schema.encodeGraphicsPlacement(buffer, .{
             .pane_id = pane.id,
@@ -940,7 +890,6 @@ fn encodeNextGraphics(attachment: *Attachment, preparation: Attachment.GraphicsP
         });
     }
 
-    attachment.graphics.placement_cursor = 0;
     attachment.graphics.observed_revision = attachment.graphics.target_revision;
     attachment.graphics.batch_active = false;
     if (attachment.graphics.snapshot == .open) {
@@ -1053,7 +1002,6 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
                 return .blocked;
             }
         }
-        transfer.placements = try attachment.graphics.gpa.alloc(core.graphics.Placement, core.graphics.max_placements_per_pane);
         attachment.graphics.credit -= pixels.len;
         attachment.graphics.transfer = transfer;
         var placement_iterator = storage.placements.iterator();
@@ -1113,29 +1061,27 @@ fn forgetReplacedGenerations(attachment: *Attachment, current: core.graphics.Ima
 }
 
 pub fn forgetPlacementsForImage(attachment: *Attachment, key: core.graphics.ImageKey) void {
-    for (&attachment.graphics.known_placements, 0..) |*slot, index| {
+    for (&attachment.graphics.known_placements) |*slot| {
         const known = slot.* orelse continue;
         if (std.meta.eql(known.placement.key, key)) {
-            forgetPlacementSlot(attachment, index);
+            slot.* = null;
         }
     }
 }
 
-fn forgetPlacementSlot(attachment: *Attachment, index: usize) void {
-    const known = attachment.graphics.known_placements[index] orelse return;
-    attachment.graphics.placement_index.remove(known.placement.virtual_id);
-    attachment.graphics.known_placements[index] = null;
-}
-
 pub fn knownPlacement(attachment: *Attachment, virtual_id: u64) ?*graphics.Sync.KnownPlacement {
-    const slot = attachment.graphics.placement_index.get(virtual_id) orelse return null;
-    return if (attachment.graphics.known_placements[slot]) |*known| known else null;
+    for (&attachment.graphics.known_placements) |*slot| {
+        const known = if (slot.*) |*value| value else continue;
+        if (known.placement.virtual_id == virtual_id) {
+            return known;
+        }
+    }
+    return null;
 }
 
 pub fn rememberPlacement(attachment: *Attachment, placement: core.graphics.Placement) !void {
-    for (&attachment.graphics.known_placements, 0..) |*slot, index| if (slot.* == null) {
+    for (&attachment.graphics.known_placements) |*slot| if (slot.* == null) {
         slot.* = .{ .placement = placement };
-        attachment.graphics.placement_index.put(placement.virtual_id, index);
         return;
     };
     return error.GraphicsPlacementLimitReached;
@@ -1217,15 +1163,7 @@ test "attachment store reports and commits workspace departure on the last pane"
     try std.testing.expect(!store.leaveWorkspace(workspace));
     try std.testing.expect(store.detach(try schema.id.pane(99)) == null);
 
-    // The occupancy walk visits both slots from any start and wraps around.
-    try std.testing.expectEqual(@as(?usize, 0), store.occupiedFrom(0));
-    try std.testing.expectEqual(@as(?usize, 1), store.occupiedFrom(1));
-    try std.testing.expectEqual(@as(?usize, 0), store.occupiedFrom(2));
-    try std.testing.expectEqual(@as(?usize, 0), store.occupiedFrom(AttachmentStore.capacity - 1));
-
     const first_detached = store.detach(first.id).?;
-    try std.testing.expectEqual(@as(?usize, 1), store.occupiedFrom(0));
-    try std.testing.expectEqual(@as(?usize, 1), store.occupiedFrom(2));
 
     try std.testing.expectEqual(first.id, first_detached.pane_id);
     try std.testing.expectEqualDeep(workspace, first_detached.workspace);
@@ -1239,7 +1177,6 @@ test "attachment store reports and commits workspace departure on the last pane"
 
     try std.testing.expect(second_detached.last_attachment);
     try std.testing.expectEqual(@as(usize, 0), store.len());
-    try std.testing.expect(store.occupiedFrom(0) == null);
     try std.testing.expect(store.observes(workspace));
     try std.testing.expect(!store.leaveWorkspace(.{ .workspace = try schema.id.workspace(2) }));
     try std.testing.expect(store.leaveWorkspace(workspace));
@@ -1271,12 +1208,6 @@ test "pointer-only frames coalesce independently and survive snapshot recovery" 
     try std.testing.expectEqual(initial.frame_id, changed.base_frame_id);
     _ = first.acknowledgeFrame(changed.frame_id, 0);
     try std.testing.expect((try first.prepareNextCells(preparation)) == null);
-    // The slow client has one more window slot: the pointer change follows
-    // its unacknowledged frame as a dependent patch.
-    const slow_pointer = (try schema.decodeServer((try second.prepareNextCells(preparation)).?.bytes)).pane_frame;
-    try std.testing.expectEqual(schema.frame.PointerShape.pointer, slow_pointer.pointer_shape);
-    try std.testing.expectEqual(@as(u16, 0), slow_pointer.span_count);
-    try std.testing.expectEqual(slow_id, slow_pointer.base_frame_id);
     try std.testing.expect((try second.prepareNextCells(preparation)) == null);
 
     _ = try fixture.pane.ingest(std.testing.io, "\x1b]22;wait\x1b\\\x1b]22;zoom-in\x1b\\");
@@ -1284,13 +1215,12 @@ test "pointer-only frames coalesce independently and survive snapshot recovery" 
     try std.testing.expectEqual(schema.frame.PointerShape.zoom_in, latest.pointer_shape);
     try std.testing.expectEqual(@as(u16, 0), latest.span_count);
     _ = first.acknowledgeFrame(latest.frame_id, 0);
-    // The slow client's window is full until it acknowledges something.
     try std.testing.expect((try second.prepareNextCells(preparation)) == null);
     _ = second.acknowledgeFrame(slow_id, 0);
     const caught_up = (try schema.decodeServer((try second.prepareNextCells(preparation)).?.bytes)).pane_frame;
     try std.testing.expectEqual(schema.frame.PointerShape.zoom_in, caught_up.pointer_shape);
     try std.testing.expectEqual(@as(u16, 0), caught_up.span_count);
-    try std.testing.expectEqual(slow_pointer.frame_id, caught_up.base_frame_id);
+    try std.testing.expectEqual(slow_id, caught_up.base_frame_id);
 
     first.requestCellSnapshot();
     const recovered = (try schema.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
@@ -1638,7 +1568,7 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
         .launch_cwd = "/",
         .workspace_path = "/",
         .size = .{ .cols = 20, .rows = 5 },
-        .graphics_limits = .{ .images_per_pane = 2 },
+        .graphics_limits = .{ .images_per_pane = 4 },
     });
     defer {
         pane.session.shutdown();
@@ -1659,8 +1589,8 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
     }
     try std.testing.expectEqual(@as(usize, 3), screen.kitty_images.images.count());
 
-    // The pass runs after this pane's own ingest completes and evicts by
-    // oldest generation down to the configured maximum.
+    // The pass runs after this pane's own ingest completes; the limit is
+    // half the configured maximum, evicting by oldest generation.
     enforceGraphicsQuotas(io, pane);
     try std.testing.expectEqual(@as(usize, 2), screen.kitty_images.images.count());
     try std.testing.expect(screen.kitty_images.imageById(1) == null);
