@@ -1,0 +1,35 @@
+benchmark                                  baseline    candidate     change           payload
+backend.damage.one_cell                      672 ns       668 ns     -0.60%                 -
+backend.damage.fragmented                  20376 ns     20792 ns     +2.04%                 -
+backend.damage.full_screen                  7522 ns      7796 ns     +3.64%                 -
+backend.frame.fragmented                   26500 ns     26553 ns     +0.20%    2787 -> 2787 B
+backend.history.input_scan                    49 ns        48 ns     -2.04%                 -
+schema.encode.one_cell                        15 ns        16 ns     +6.67%        76 -> 76 B
+schema.encode.fragmented                    3427 ns      3438 ns     +0.32%    4868 -> 4868 B
+schema.encode.full_screen                  36276 ns     37395 ns     +3.08%  13360 -> 13360 B
+schema.decode.one_cell                        14 ns        15 ns     +7.14%        76 -> 76 B
+schema.decode.fragmented                     448 ns       459 ns     +2.46%    4868 -> 4868 B
+schema.decode.full_screen                     15 ns        15 ns     +0.00%  13360 -> 13360 B
+frontend.pipeline.one_cell                   134 ns       137 ns     +2.24%        76 -> 76 B
+frontend.pipeline.fragmented               20974 ns     21363 ns     +1.85%    4868 -> 4868 B
+frontend.pipeline.full_screen              81054 ns     83999 ns     +3.63%  13360 -> 13360 B
+frontend.outbox.input                         11 ns        11 ns     +0.00%                 -
+frontend.keybind.route                       219 ns       240 ns     +9.59%                 -
+frontend.lua.callback                        539 ns       601 ns    +11.50%                 -
+frontend.pacer.late_frame                      2 ns         2 ns     +0.00%                 -
+frontend.flush.cursor_only                   138 ns       103 ns    -25.36%                 -
+frontend.client_ui.chrome.tabs_1           22526 ns     25697 ns    +14.08%                 -
+frontend.client_ui.chrome.tabs_8           25579 ns     28787 ns    +12.54%                 -
+frontend.client_ui.chrome.tabs_64          29916 ns     28432 ns     -4.96%                 -
+frontend.layout.directional_focus            119 ns       133 ns    +11.76%                 -
+frontend.multiplexer.compose_four          45587 ns     52383 ns    +14.91%                 -
+frontend.multiplexer.patch_one_cell          140 ns       146 ns     +4.29%                 -
+backend.kitty.ingest_zlib_rgba_1920x1080   3990851 ns   4177620 ns     +4.68%  43344 -> 43344 B
+backend.kitty.shared_frame_3840x2160.publish   2585214 ns   2873509 ns    +11.15%                 -
+backend.kitty.shared_frame_3840x2160.ingest   7579141 ns   8170895 ns     +7.81%                 -
+backend.kitty.shared_frame_3840x2160.freeze   2639598 ns   2861394 ns     +8.40%                 -
+frontend.kitty.transmit_rgba_64x64          4740 ns      5134 ns     +8.31%  22001 -> 22001 B
+frontend.kitty.idle                            6 ns         7 ns    +16.67%                 -
+frontend.kitty.transmit_rgba_480x360      190333 ns    213542 ns    +12.19% 923730 -> 923730 B
+frontend.kitty.transmit_rgba_480x360_zlib   2288151 ns   2416005 ns     +5.59%  49157 -> 49157 B
+frontend.text.rasterize_jetbrains_mono    576722 ns    611239 ns     +5.99%                 -

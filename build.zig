@@ -117,6 +117,8 @@ pub fn build(b: *std.Build) void {
     });
     core.addImport("unicode", unicode);
     coverage.instrumentModule(core);
+    const client = addClientModule(b, core);
+    coverage.instrumentModule(client);
 
     const backend = b.addModule("telar-backend", .{
         .root_source_file = b.path("src/backend/root.zig"),
@@ -147,6 +149,7 @@ pub fn build(b: *std.Build) void {
     });
     const freetype = addFreeType(b, .{ .target = target, .optimize = optimize, .disable_coverage = coverage.enabled });
     frontend.addImport("telar-core", core);
+    frontend.addImport("telar-client", client);
     frontend.addImport("kitty_protocol", kitty_protocol);
     frontend.addImport("telar-lua", telar_lua);
     frontend.addImport("lua-api", lua_api);
@@ -258,6 +261,7 @@ pub fn build(b: *std.Build) void {
     });
     const bench_freetype = addFreeType(b, .{ .target = target, .optimize = bench_optimize, .disable_coverage = false });
     bench_frontend.addImport("telar-core", bench_core);
+    bench_frontend.addImport("telar-client", addClientModule(b, bench_core));
     bench_frontend.addImport("kitty_protocol", bench_kitty_protocol);
     bench_frontend.addImport("lua-api", bench_lua_api);
     bench_frontend.addImport("telar-lua", bench_lua);
@@ -402,11 +406,18 @@ pub fn build(b: *std.Build) void {
     // ---------------------------------------------------------------------
 
     const test_step = b.step("test", "Run the tests");
+    const client_tests = b.addTest(.{ .root_module = client });
+    coverage.instrumentTest(client_tests);
+    const run_client_tests = b.addRunArtifact(client_tests);
+    b.step("test-client", "Run renderer-independent client tests").dependOn(&run_client_tests.step);
+    test_step.dependOn(&run_client_tests.step);
     // zls auto-enables build-on-save when a step named "check" exists, giving
     // editors real compiler diagnostics on every save. The step compiles twin
     // instances of the test suites that nothing installs or runs, so Zig stops
     // after semantic analysis and a save never pays for codegen or linking.
     const check_step = b.step("check", "Semantic-analyze the test suites without running them");
+    const client_check = b.addTest(.{ .root_module = client });
+    check_step.dependOn(&client_check.step);
     const codestyle_exe = b.addExecutable(.{
         .name = "codestyle",
         .root_module = b.createModule(.{
@@ -519,6 +530,7 @@ pub fn build(b: *std.Build) void {
         .core = core,
         .backend = backend,
         .frontend = frontend,
+        .client = client,
         .kitty_protocol = kitty_protocol,
         .lua_api = lua_api,
         .telar_lua = telar_lua,
@@ -757,6 +769,17 @@ const Suite = struct {
     isolated: bool = false,
 };
 
+fn addClientModule(b: *std.Build, core: *std.Build.Module) *std.Build.Module {
+    const client = b.createModule(.{
+        .root_source_file = b.path("src/client/root.zig"),
+        .target = core.resolved_target,
+        .optimize = core.optimize,
+    });
+
+    client.addImport("telar-core", core);
+    return client;
+}
+
 // The shared modules every test suite links against, so the run instances and
 // the analysis-only `check` twins are wired identically from one place.
 const SuiteModules = struct {
@@ -764,6 +787,7 @@ const SuiteModules = struct {
     core: *std.Build.Module,
     backend: *std.Build.Module,
     frontend: *std.Build.Module,
+    client: *std.Build.Module,
     kitty_protocol: *std.Build.Module,
     lua_api: *std.Build.Module,
     telar_lua: *std.Build.Module,
@@ -790,6 +814,7 @@ const SuiteModules = struct {
         tests.root_module.addImport("telar-core", modules.core);
         tests.root_module.addImport("telar-backend", modules.backend);
         tests.root_module.addImport("telar-frontend", modules.frontend);
+        tests.root_module.addImport("telar-client", modules.client);
         tests.root_module.addImport("kitty_protocol", modules.kitty_protocol);
         tests.root_module.addImport("lua-api", modules.lua_api);
         tests.root_module.addImport("telar-lua", modules.telar_lua);

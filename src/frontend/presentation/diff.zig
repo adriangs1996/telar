@@ -9,31 +9,10 @@
 const std = @import("std");
 const ui = @import("telar-core").ui;
 
-/// One row's dirty range. Empty until marked; `maxInt > 0` makes the default
-/// scan `while (x < end)` skip a clean row with no separate flag.
-pub const DamageRow = struct {
-    start: u16 = std.math.maxInt(u16),
-    end: u16 = 0,
-
-    pub fn mark(row: *DamageRow, start: u16, end: u16) void {
-        std.debug.assert(start < end);
-        row.start = @min(row.start, start);
-        row.end = @max(row.end, end);
-    }
-
-    pub fn clear(row: *DamageRow) void {
-        row.* = .{};
-    }
-
-    pub fn dirty(row: DamageRow) bool {
-        return row.start < row.end;
-    }
-};
-
-pub const CellSpan = struct {
-    start: usize,
-    count: usize,
-};
+const damage = @import("telar-client").panes.damage;
+pub const DamageRow = damage.DamageRow;
+pub const CellSpan = damage.CellSpan;
+pub const markRows = damage.markRows;
 
 pub const RowSync = struct {
     source: []const ui.Cell,
@@ -41,27 +20,6 @@ pub const RowSync = struct {
     start: u16,
     end: u16,
 };
-
-/// Marks every damage row a linear cell span [start, start+count) touches,
-/// splitting the span at row boundaries. The caller validates bounds; this
-/// assumes `start + count` lies inside `damage_rows.len * width`.
-/// For example: `markRows(rows, width, .{ .start = first, .count = len });`.
-pub fn markRows(damage_rows: []DamageRow, width: usize, span: CellSpan) void {
-    if (span.count == 0) {
-        return;
-    }
-    var cursor = span.start;
-    const end = span.start + span.count;
-    while (cursor < end) {
-        const row = cursor / width;
-        const row_end = @min(end, (row + 1) * width);
-        damage_rows[row].mark(
-            @intCast(cursor % width),
-            @intCast(row_end - row * width),
-        );
-        cursor = row_end;
-    }
-}
 
 /// Walks [start, end) of one row, finds each run where `source` and
 /// `reference` disagree, and hands it to `sink.copyRun(run_start, count)`.
@@ -94,28 +52,6 @@ pub fn syncRow(sync: RowSync, sink: anytype) !usize {
 // ---------------------------------------------------------------------------
 
 const testing = std.testing;
-
-test "a span crossing rows marks exact damage on each" {
-    var rows = [_]DamageRow{.{}} ** 3;
-    markRows(&rows, 10, .{ .start = 8, .count = 4 });
-    try testing.expect(rows[0].dirty());
-    try testing.expectEqual(@as(u16, 8), rows[0].start);
-    try testing.expectEqual(@as(u16, 10), rows[0].end);
-    try testing.expect(rows[1].dirty());
-    try testing.expectEqual(@as(u16, 0), rows[1].start);
-    try testing.expectEqual(@as(u16, 2), rows[1].end);
-    try testing.expect(!rows[2].dirty());
-}
-
-test "marks accumulate as one conservative range" {
-    var rows = [_]DamageRow{.{}} ** 1;
-    markRows(&rows, 10, .{ .start = 1, .count = 1 });
-    markRows(&rows, 10, .{ .start = 8, .count = 1 });
-    try testing.expectEqual(@as(u16, 1), rows[0].start);
-    try testing.expectEqual(@as(u16, 9), rows[0].end);
-    rows[0].clear();
-    try testing.expect(!rows[0].dirty());
-}
 
 test "run diffing copies exactly the disagreeing runs" {
     var source = [_]ui.Cell{.{}} ** 8;

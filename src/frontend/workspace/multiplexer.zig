@@ -6,14 +6,14 @@ const presentation = @import("../presentation/root.zig");
 const input_capability = @import("../input/root.zig");
 const diff = presentation.diff;
 const copy_mode = input_capability.copy_mode;
-const frame_apply = presentation.frame;
+const client_panes = @import("telar-client").panes;
+const frame_apply = client_panes.frame;
 const layout_mod = @import("layout.zig");
 const fullscreen_tabs = @import("fullscreen_tabs.zig");
 const term = presentation.screen;
 const theme = @import("../ui/root.zig").theme;
 
 const schema = core.schema;
-const max_cwd_name_bytes = 48;
 const ui = core.ui;
 
 pub const max_panes = layout_mod.max_panes;
@@ -24,7 +24,6 @@ pub const MetadataChange = enum {
     display_changed,
 };
 
-const DamageRow = diff.DamageRow;
 const pane_index_capacity = max_panes * 2;
 const PaneIndex = core.fixed_index.SlotIndex(pane_index_capacity);
 
@@ -35,11 +34,7 @@ const BorderTheme = struct {
     selected_tab_text: ui.Color,
 };
 
-pub const PaneSpec = struct {
-    pane_id: schema.PaneId,
-    location: schema.TabLocation,
-    size: schema.TerminalSize,
-};
+pub const PaneSpec = client_panes.Spec;
 
 pub const PaneSplit = struct {
     existing_pane: schema.PaneId,
@@ -55,145 +50,7 @@ pub const DiscoveredPane = struct {
     area: ui.Rect,
 };
 
-const PaneInit = struct {
-    spec: PaneSpec,
-    attached: bool,
-};
-
-pub const Pane = struct {
-    gpa: std.mem.Allocator,
-    id: schema.PaneId,
-    location: schema.TabLocation,
-    buffer: ui.Buffer,
-    damage_rows: []DamageRow,
-    attached: bool,
-    cursor: schema.frame.Cursor = .{},
-    mouse: schema.frame.Mouse = .{},
-    input_modes: schema.frame.InputModes = .{},
-    pointer_shape: schema.frame.PointerShape = .default,
-    scroll: schema.frame.Scroll,
-    applied_frame_id: u64 = 0,
-    pending_frame_id: u64 = 0,
-    graphics_placeholder: bool = false,
-    cwd: []u8 = &.{},
-    foreground_name: [schema.max_foreground_name_bytes]u8 = @splat(0),
-    foreground_name_len: u8 = 0,
-    progress_state: schema.PaneProgressState = .remove,
-    progress_percent: ?u8 = null,
-    /// Owned copy of the child's window title; empty until the runtime
-    /// reports one. Allocated on change so idle panes cost nothing.
-    title: []u8 = &.{},
-
-    fn init(gpa: std.mem.Allocator, input: PaneInit) !Pane {
-        var buffer = try ui.Buffer.init(gpa, input.spec.size.cols, input.spec.size.rows);
-        errdefer buffer.deinit();
-
-        const damage_rows = try gpa.alloc(DamageRow, input.spec.size.rows);
-        @memset(damage_rows, .{});
-
-        return .{
-            .gpa = gpa,
-            .id = input.spec.pane_id,
-            .location = input.spec.location,
-            .buffer = buffer,
-            .damage_rows = damage_rows,
-            .attached = input.attached,
-            .scroll = .{ .total_rows = input.spec.size.rows, .offset = 0 },
-        };
-    }
-
-    fn deinit(pane: *Pane) void {
-        if (pane.cwd.len != 0) {
-            pane.gpa.free(pane.cwd);
-        }
-        if (pane.title.len != 0) {
-            pane.gpa.free(pane.title);
-        }
-        pane.gpa.free(pane.damage_rows);
-        pane.buffer.deinit();
-    }
-
-    fn clearDamage(pane: *Pane) void {
-        for (pane.damage_rows) |*row| row.clear();
-    }
-
-    fn markSpan(pane: *Pane, start: u32, count: u32) void {
-        diff.markRows(pane.damage_rows, pane.buffer.w, .{ .start = start, .count = count });
-    }
-
-    fn setCwd(pane: *Pane, path: []const u8) !bool {
-        std.debug.assert(path.len != 0 and path.len <= schema.max_cwd_bytes);
-        if (std.mem.eql(u8, pane.cwd, path)) {
-            return false;
-        }
-
-        const display_changed = !std.mem.eql(u8, pane.cwdName(), displayCwdName(path));
-        const replacement = try pane.gpa.dupe(u8, path);
-        if (pane.cwd.len != 0) {
-            pane.gpa.free(pane.cwd);
-        }
-
-        pane.cwd = replacement;
-        return display_changed;
-    }
-
-    pub fn cwdName(pane: *const Pane) []const u8 {
-        return displayCwdName(pane.cwd);
-    }
-
-    pub fn cwdSlice(pane: *const Pane) []const u8 {
-        return pane.cwd;
-    }
-
-    fn setForegroundName(pane: *Pane, name: []const u8) bool {
-        std.debug.assert(name.len != 0 and name.len <= pane.foreground_name.len);
-        if (std.mem.eql(u8, pane.foregroundName(), name)) {
-            return false;
-        }
-
-        @memcpy(pane.foreground_name[0..name.len], name);
-        pane.foreground_name_len = @intCast(name.len);
-        return true;
-    }
-
-    pub fn foregroundName(pane: *const Pane) []const u8 {
-        return pane.foreground_name[0..pane.foreground_name_len];
-    }
-
-    /// Replaces the latest semantic progress report without allocating.
-    ///
-    /// ```zig
-    /// _ = pane.setProgress(progress);
-    /// ```
-    pub fn setProgress(pane: *Pane, progress: schema.PaneProgress) bool {
-        if (pane.progress_state == progress.state and pane.progress_percent == progress.percent) {
-            return false;
-        }
-
-        pane.progress_state = progress.state;
-        pane.progress_percent = progress.percent;
-        return true;
-    }
-
-    fn setTitle(pane: *Pane, title: []const u8) !bool {
-        std.debug.assert(title.len <= schema.max_pane_title_bytes);
-        if (std.mem.eql(u8, pane.title, title)) {
-            return false;
-        }
-
-        const replacement = if (title.len != 0) try pane.gpa.dupe(u8, title) else &[_]u8{};
-        if (pane.title.len != 0) {
-            pane.gpa.free(pane.title);
-        }
-
-        pane.title = @constCast(replacement);
-        return true;
-    }
-
-    pub fn titleSlice(pane: *const Pane) []const u8 {
-        return pane.title;
-    }
-};
+pub const Pane = client_panes.Pane;
 
 pub const PaneMousePlan = struct {
     pane_id: schema.PaneId,
@@ -203,73 +60,6 @@ pub const PaneMousePlan = struct {
     at_bottom: bool,
 };
 
-fn displayCwdName(path: []const u8) []const u8 {
-    if (path.len == 0) {
-        return "";
-    }
-    const basename = cwdBaseName(path);
-    if (!validCwdName(basename)) {
-        return "";
-    }
-    return truncateCwdName(basename);
-}
-
-fn cwdBaseName(path: []const u8) []const u8 {
-    var end = path.len;
-    while (end > 1 and isPathSeparator(path[end - 1])) end -= 1;
-    const trimmed = path[0..end];
-    if (trimmed.len == 1 and isPathSeparator(trimmed[0])) {
-        return trimmed;
-    }
-    const separator = std.mem.lastIndexOfAny(u8, trimmed, "/\\") orelse return trimmed;
-    const name = trimmed[separator + 1 ..];
-    return if (name.len == 0) trimmed else name;
-}
-
-fn truncateCwdName(name: []const u8) []const u8 {
-    if (name.len <= max_cwd_name_bytes) {
-        return name;
-    }
-    var end: usize = max_cwd_name_bytes;
-    while (end > 0 and name[end] & 0b1100_0000 == 0b1000_0000) end -= 1;
-    return name[0..end];
-}
-
-fn validCwdName(name: []const u8) bool {
-    if (!std.unicode.utf8ValidateSlice(name)) {
-        return false;
-    }
-    for (name) |byte| if (byte < 0x20 or byte == 0x7f) return false;
-    return true;
-}
-
-fn isPathSeparator(byte: u8) bool {
-    return byte == '/' or byte == '\\';
-}
-
-test "pane cwd names use a bounded basename" {
-    try std.testing.expectEqualStrings("telar", cwdBaseName("/work/telar"));
-    try std.testing.expectEqualStrings("telar", cwdBaseName("/work/telar/"));
-    try std.testing.expectEqualStrings("/", cwdBaseName("/"));
-    try std.testing.expectEqualStrings("api", cwdBaseName("C:\\work\\api\\"));
-    try std.testing.expectEqualStrings("relative", cwdBaseName("relative"));
-
-    var pane: Pane = undefined;
-    pane.gpa = std.testing.allocator;
-    pane.cwd = &.{};
-    defer if (pane.cwd.len != 0) pane.gpa.free(pane.cwd);
-    const long_name = [_]u8{'x'} ** (max_cwd_name_bytes + 1);
-    try std.testing.expect(try pane.setCwd("/work/telar"));
-    try std.testing.expectEqualStrings("telar", pane.cwdName());
-    try std.testing.expect(try pane.setCwd(&long_name));
-    try std.testing.expectEqual(@as(usize, max_cwd_name_bytes), pane.cwdName().len);
-    try std.testing.expect(try pane.setCwd("/work/\xff"));
-    try std.testing.expectEqualStrings("", pane.cwdName());
-    try std.testing.expect(!try pane.setCwd("/work/\x1b[31m"));
-    try std.testing.expect(!try pane.setCwd("/other/\x1b[31m"));
-    try std.testing.expectEqualStrings("/other/\x1b[31m", pane.cwdSlice());
-}
-
 pub const RenderStats = struct {
     panes: usize = 0,
     cells: usize = 0,
@@ -277,36 +67,7 @@ pub const RenderStats = struct {
     full: bool = false,
 };
 
-pub const PresentationCommit = struct {
-    location: ?schema.TabLocation = null,
-    panes: [max_panes]PaneCommit = undefined,
-    len: u8 = 0,
-
-    pub const PaneCommit = struct {
-        pane_id: schema.PaneId,
-        frame_id: u64,
-        attached: bool,
-    };
-
-    /// Returns the panes whose damage and pending frame are safe to retire
-    /// after one successful host presentation.
-    ///
-    /// ```zig
-    /// for (commit.slice()) |pane| acknowledge(pane);
-    /// ```
-    pub fn slice(commit: *const PresentationCommit) []const PaneCommit {
-        return commit.panes[0..commit.len];
-    }
-
-    fn append(commit: *PresentationCommit, pane: *const Pane) void {
-        commit.panes[commit.len] = .{
-            .pane_id = pane.id,
-            .frame_id = pane.pending_frame_id,
-            .attached = pane.attached,
-        };
-        commit.len += 1;
-    }
-};
+pub const PresentationCommit = client_panes.PresentationCommit;
 
 pub const CopyProjection = struct {
     pane_id: schema.PaneId,
@@ -1104,31 +865,7 @@ pub const Model = struct {
 
     pub fn applyFrame(model: *Model, frame: schema.frame.FrameView) !frame_apply.Applied {
         const pane = model.find(frame.pane_id) orelse return error.PaneNotFound;
-        if (frame.base_frame_id != 0 and frame.base_frame_id != pane.applied_frame_id) {
-            return error.FrameBaseMismatch;
-        }
-        const resized = pane.buffer.w != frame.cols or pane.buffer.h != frame.rows;
-        const replacement_damage = if (resized)
-            try model.gpa.alloc(DamageRow, frame.rows)
-        else
-            null;
-        errdefer if (replacement_damage) |rows| model.gpa.free(rows);
-        const applied = try frame_apply.applyBuffer(&pane.buffer, &pane.cursor, frame);
-        pane.mouse = frame.mouse;
-        pane.input_modes = frame.input_modes;
-        pane.pointer_shape = frame.pointer_shape;
-        pane.scroll = frame.scroll;
-        if (replacement_damage) |rows| {
-            @memset(rows, .{});
-            model.gpa.free(pane.damage_rows);
-            pane.damage_rows = rows;
-        } else {
-            var spans = frame.spans();
-            while (try spans.next()) |span| pane.markSpan(span.start, span.cell_count);
-        }
-        pane.applied_frame_id = frame.frame_id;
-        pane.pending_frame_id = frame.frame_id;
-        return applied;
+        return pane.applyFrame(frame);
     }
 
     pub fn contentSize(self: *Model, pane_id: schema.PaneId, area: ui.Rect) ?schema.TerminalSize {
@@ -1240,12 +977,7 @@ pub const Model = struct {
 
         for (commit.slice()) |presented| {
             const pane = model.find(presented.pane_id) orelse continue;
-            if (pane.pending_frame_id != presented.frame_id) {
-                continue;
-            }
-
-            pane.clearDamage();
-            pane.pending_frame_id = 0;
+            pane.commitPresentation(presented.frame_id);
         }
     }
 

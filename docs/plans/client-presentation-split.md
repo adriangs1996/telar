@@ -8,7 +8,8 @@ No incorpora Native SDK ni el fork de Ghostty.
 
 - [x] 0. Referencia funcional y medición local registradas en
   [client-split-baseline](../performance/client-split-baseline/README.md).
-- [ ] 1. Valores y estado de panes.
+- [x] 1. Valores y estado de panes. Validación y limitaciones en
+  [client-split-step1](../performance/client-split-step1/README.md).
 - [ ] 2. Modelo y geometría de presentación.
 - [ ] 3. Aplicación, entrada y recursos comunes.
 - [ ] 4. Gráficos y efectos del host.

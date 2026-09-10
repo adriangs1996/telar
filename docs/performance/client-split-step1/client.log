@@ -1,0 +1,24 @@
+Build Summary: 17/17 steps succeeded; 14/14 tests passed
+test-client success
++- run test 14 pass (14 total) 317ms MaxRSS:2M
+   +- compile test ReleaseSafe native success 6s MaxRSS:422M
+      +- WriteFile  cached
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 cached 55ms MaxRSS:34M
+      |  +- WriteFile libc.txt cached
+      +- WriteFile hwy cached
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 cached 46ms MaxRSS:35M
+      |  +- WriteFile libc.txt (reused)
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options cached
+      +- options cached
+      +- WriteFile props.zig cached
+      |  +- run exe props-unigen cached
+      |  |  +- compile exe props-unigen Debug native cached 57ms MaxRSS:35M
+      |  |     +- run exe uucode_generate (tables.zig) cached
+      |  |        +- compile exe uucode_generate Debug native cached 60ms MaxRSS:35M
+      |  +- run exe symbols-unigen cached
+      |     +- compile exe symbols-unigen Debug native cached 57ms MaxRSS:35M
+      |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)

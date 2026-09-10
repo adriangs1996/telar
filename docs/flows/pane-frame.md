@@ -44,8 +44,10 @@ detach and compares patch bases with the last applied frame. A broken base
 returns the pane identity and known frame id without changing the model.
 
 A valid frame applies cells, cursor, mouse mode, input modes and scroll state
-through `multiplexer.Model.applyFrame`. It also reconciles active copy state
-against retained-history pruning before publishing one frame revision. The
+through `multiplexer.Model.applyFrame`, which delegates identity/base admission,
+cell ownership, damage and child modes to `telar-client.panes.Pane.applyFrame`.
+That pane capability has no renderer dependency. `ClientModel` also reconciles
+active copy state against retained-history pruning before publishing one frame revision. The
 returned commit contains values only: pane and tab identity, frame id,
 visibility, snapshot status, applied work and the exact workspace, tab,
 active-tab, pane and frame revisions.
@@ -101,7 +103,10 @@ reached the host terminal.
 - `src/frontend/client/client_test.zig` proves recovery IPC, resource
   synchronization, presenter-owned scheduling and acknowledgement after
   presentation.
-- `src/frontend/workspace/multiplexer.zig` proves bounded frame application,
-  damage tracking and pending-frame consumption.
+- `src/client/panes/tests.zig` proves owned cells, child modes, base and identity
+  rejection, resize admission, stale presentation retirement, allocation-free
+  same-size patches and allocation-failure cleanup without a terminal.
+- `src/frontend/workspace/multiplexer.zig` retains composition and integration
+  tests against that shared pane capability.
 - `src/backend/runtime/encoder.zig` and runtime attachment tests prove diff
   publication against acknowledged bases.

@@ -9,7 +9,7 @@ const std = @import("std");
 const key_lease = @import("key_lease.zig");
 const term = @import("../presentation/root.zig").screen;
 
-pub const Key = term.Event.Key;
+pub const Key = @import("telar-client").input.Key;
 
 pub const Control = enum {
     continue_routing,

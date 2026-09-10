@@ -6,8 +6,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const term = @import("../presentation/root.zig").screen;
-
-pub const Key = term.Event.Key;
+pub const Key = @import("telar-client").input.Key;
 pub const Modes = core.schema.frame.InputModes;
 
 pub fn encodeKey(buffer: []u8, key: Key, modes: Modes) ![]const u8 {
