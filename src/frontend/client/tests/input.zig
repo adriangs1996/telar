@@ -506,7 +506,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     try std.testing.expect(!prompt.pasting);
     try std.testing.expectEqualStrings("main one ", prompt.field.text());
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(0, client.runtime_transport.outbox.len);
 
     try handler.key(try keybind.parseKey("escape"));
     try std.testing.expect(!client.model.name_prompt.active());
@@ -518,7 +518,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(0, client.runtime_transport.outbox.len);
 }
 
 test "name prompt rejects pointer routing after host telemetry" {
@@ -743,7 +743,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     const bottom_version = client.model.version();
     try testingHostInput(client, "\x02=");
     try std.testing.expectEqualDeep(bottom_version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(0, client.runtime_transport.outbox.len);
 }
 
 test "held scroll suffixes pace both viewport directions without queued steps" {
@@ -969,7 +969,7 @@ test "focused scroll without an active pane has no effects" {
     _ = try client_actions.apply(client, .{ .scroll_pane = .down });
 
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(0, client.runtime_transport.outbox.len);
 }
 
 test "focused scroll retires copy mode before moving the restored viewport" {
@@ -1093,4 +1093,32 @@ test "configured action routing observes the client presentation mode" {
     _ = try handler.action(.toggle_agent_mode);
 
     try std.testing.expectEqual(.normal, client.model.mode);
+}
+
+test "a small input batch leaves from the event loop and settles without a send actor" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    try harness.bootstrap();
+    const client = harness.client;
+    harness.connection.configure();
+    harness.peer.configure();
+    try std.testing.expect(harness.connection.inline_send_limit > 0);
+
+    try runtime_transport.enqueueInput(client, TestHarness.bootstrap_pane, "x");
+
+    // The bytes are on the wire before any completion is dispatched, and
+    // the single send token stays claimed until the event settles.
+    try std.testing.expect(client.runtime_transport.outbox.inFlight());
+    try std.testing.expect(client.runtime_transport.inline_sent != null);
+    var buffer: [256]u8 = undefined;
+    const message = try harness.nextClientMessage(&buffer);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, message.pane_input.pane_id);
+    try std.testing.expectEqualStrings("x", message.pane_input.bytes);
+
+    try runtime_transport.settleInlineSends(client);
+
+    try std.testing.expect(!client.runtime_transport.outbox.inFlight());
+    try std.testing.expectEqual(0, client.runtime_transport.outbox.len);
+    try std.testing.expect(client.runtime_transport.inline_sent == null);
 }

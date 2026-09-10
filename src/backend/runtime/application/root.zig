@@ -129,6 +129,9 @@ pub const Application = struct {
     /// Set when pane collection changed runtime state that every client must
     /// hear about, so the next targeted pump widens to all clients.
     pump_all_pending: bool = false,
+    /// Some session holds an `inline_sent` result awaiting its completion
+    /// dispatch after the current event.
+    inline_sends_pending: bool = false,
 
     /// Composes application state from stable, runtime-owned capabilities.
     ///
@@ -934,13 +937,29 @@ const RequestDispatcher = request_dispatch.Dispatcher(Application, Operations.re
 pub const EventResources = RuntimeEvents.EventResources;
 
 /// Delegates one runtime event to the capability that owns it and reports
-/// whether a requested shutdown has reached every client.
+/// whether a requested shutdown has reached every client. Writes the event
+/// loop completed itself are settled here as ordinary send completions, so
+/// their handlers never re-enter the pump that started them.
 ///
 /// ```zig
 /// const should_stop = try handle(&application, event, resources);
 /// ```
 pub fn handle(application: *Application, event: RuntimeEvent, resources: EventResources) !bool {
-    return RuntimeEvents.handle(application, event, resources);
+    var should_stop = try RuntimeEvents.handle(application, event, resources);
+    while (application.inline_sends_pending) {
+        application.inline_sends_pending = false;
+        for (&application.clients.items) |*slot| {
+            const session = slot.* orelse continue;
+            const result = session.inline_sent orelse continue;
+            session.inline_sent = null;
+            const completion: RuntimeEvent = .{ .client_sent = .{ .client = session.key, .result = result } };
+            if (try RuntimeEvents.handle(application, completion, resources)) {
+                should_stop = true;
+            }
+        }
+    }
+
+    return should_stop;
 }
 
 fn deinitWorkspaces(application: *Application) void {

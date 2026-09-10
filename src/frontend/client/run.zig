@@ -10,6 +10,7 @@ const diagnostics = core.diagnostics;
 
 const Client = @import("client.zig");
 const client_events = @import("entrypoints/events.zig");
+const runtime_transport = @import("entrypoints/runtime_io.zig");
 const client_startup = @import("controllers/session/client_startup.zig");
 const host_resizes = @import("controllers/host/host_resizes.zig");
 const Options = Client.Options;
@@ -87,6 +88,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
     defer client.deinit();
 
     try client_startup.start(client, .{ .resize_watcher = &watcher });
+    try runtime_transport.settleInlineSends(client);
 
     while (true) {
         const event = try client.select.await();

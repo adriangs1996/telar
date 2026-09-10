@@ -338,8 +338,15 @@ which calls, in order:
    `src/core/transport/root.zig`.
 
 The outbox is bounded, owns copied input bytes and coalesces adjacent input for
-the same pane. Only one socket send is in flight. When the viewport changes,
-wire order is `set_pane_viewport` followed by `pane_input`.
+the same pane. Only one socket send is in flight. A batch under the socket's
+send low-water mark, while `poll` reports that much room, is written by the
+event loop itself instead of the send actor: the kernel then promises the
+blocking send returns without sleeping, and the keystroke skips one thread
+wake. Its completion is settled by `settleInlineSends` after the current
+event, exactly as the actor's `.sent` completion would be, so the handler
+never re-enters the enqueue that started it. Anything larger, or a socket
+without room, keeps the actor. When the viewport changes, wire order is
+`set_pane_viewport` followed by `pane_input`.
 
 A release never changes the viewport. It is encoded only when the exact pane's
 acknowledged Kitty flags request event types; otherwise it is a zero-byte no-op
@@ -425,9 +432,13 @@ that client's prior frame has been acknowledged. `Delivery.prepare` selects
 the attachment cell lane and calls `Attachment.prepareNextCells`. The internal
 `cell.Sync.prepare` in `src/backend/runtime/attachment/cell.zig` renders the
 pending VT state, computes a bounded cell diff against that attachment's
-acknowledged buffer and calls `schema.encodePaneFrame`. `startSessionSend`
-writes the `.pane_frame` message to that client. Intermediate visual states may
-be folded; they are not queued as a replay.
+acknowledged buffer and calls `schema.encodePaneFrame`. `startSessionSendFramed`
+writes the batch to that client. A batch under the socket's send low-water
+mark, while `poll` reports that much room, leaves from the event loop itself;
+`Application.handle` then settles it as an ordinary `.client_sent` completion
+after the event, so no handler re-enters the pump that staged it. Larger
+batches and a socket without room keep the send actor. Intermediate visual
+states may be folded; they are not queued as a replay.
 
 ## 6. Client frame and host presentation
 

@@ -25,6 +25,16 @@ pub const State = struct {
     read_buffer: []u8,
     outbox: client_outbox.Outbox = .{},
     receive_pending: bool = false,
+    /// Result of a send the event loop completed itself, settled as an
+    /// ordinary send completion after the current event.
+    inline_sent: ?anyerror!void = null,
+
+    /// Takes the pending inline result, if any.
+    /// Example: `while (state.takeInlineSent()) |result| try handleSent(client, result);`.
+    pub fn takeInlineSent(state: *State) ?anyerror!void {
+        defer state.inline_sent = null;
+        return state.inline_sent;
+    }
 
     /// Reserves the single receive buffer before a read actor starts.
     /// Example: `if (!state.beginRead()) return;`.

@@ -28,6 +28,9 @@ pub const Session = struct {
     role: Role = .undecided,
     read_pending: bool = false,
     send_pending: bool = false,
+    /// Result of a write the event loop completed itself; the dispatcher
+    /// settles it as an ordinary send completion after the current event.
+    inline_sent: ?anyerror!void = null,
     closing: bool = false,
     last_input_pane: core.schema.PaneId = .invalid,
     last_input_sequence: u64 = 0,

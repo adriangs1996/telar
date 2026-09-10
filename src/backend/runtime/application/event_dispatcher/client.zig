@@ -161,6 +161,12 @@ pub fn Dispatcher(comptime Application: type) type {
         fn startWrite(application: *Application, session: *ClientSession, write: SessionWrite) !void {
             std.debug.assert(!session.send_pending);
             session.send_pending = true;
+            if (write.framed and write.connection.canSendInline(write.payload)) {
+                session.inline_sent = sendSession(write).result;
+                application.inline_sends_pending = true;
+                return;
+            }
+
             application.select.concurrent(.client_sent, sendSession, .{write}) catch |err| {
                 session.send_pending = false;
                 return err;

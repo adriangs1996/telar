@@ -9,7 +9,10 @@ terminal state.
 
 `runtime_transport.State` owns the client side of runtime I/O:
 
-- one borrowed `SocketChannel` for the client's lifetime;
+- one borrowed `SocketChannel` for the client's lifetime, configured on
+  connect with `core.transport.socket_buffer_size` kernel buffers and the
+  `core.transport.inline_send_low_water` send mark; the runtime configures
+  its accepted end the same way;
 - one receive buffer and one send buffer, each exactly
   `core.transport.max_frame_size` bytes; the send buffer carries a batch of
   framed messages, so one write may hold every message that fits;
@@ -67,8 +70,13 @@ Outbox.finishSend -> next send -> host input capacity check
 
 `Outbox.beginSend` claims every queued message that fits the shared send
 buffer, oldest first, encodes each as its own wire frame and lends the batch to
-one write actor. No producer can mutate a claimed message or reuse that buffer
-until `.sent` releases the claim; messages queued behind the claim still fold.
+one write actor. A batch under the send low-water mark, while `poll` reports
+that much room, is written by the event loop itself and its result parked in
+`State.inline_sent`; `settleInlineSends` releases it through `handleSent`
+after the current event, so the completion order and the single send token
+are unchanged and no handler re-enters the enqueue that started it. No
+producer can mutate a claimed message or reuse that buffer until the claim is
+released; messages queued behind the claim still fold.
 Queue insertion may fold pane input, resize, viewport and frame
 acknowledgements only where their ordering rules permit it.
 
@@ -77,7 +85,10 @@ batch, pumps its successor and asks `host_inputs` to resume only if capacity
 still exists. The runtime assembles its deliveries the same way: `pump`
 prepares and commits payloads behind one another in the session's send buffer
 while a maximum frame still fits, stops at a transaction whose completion
-must run after the write, and sends the batch with one framed write. Request correlation rolls back when an enqueue fails; transport does
+must run after the write, and sends the batch with one framed write. A batch
+under the low-water mark with room reported leaves from the event loop, and
+`Application.handle` settles it as a `.client_sent` completion after the
+event; larger batches keep the send actor. Request correlation rolls back when an enqueue fails; transport does
 not invent or consume continuations.
 
 Graphics memory credit follows the same queue. The graphics store retains a
