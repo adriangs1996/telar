@@ -7,7 +7,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const widget = @import("context.zig");
-const agents = @import("../agents/root.zig");
+const agents = @import("telar-client").agents;
 const workspace_capability = @import("../workspace/root.zig");
 const ui = @import("../ui/root.zig");
 

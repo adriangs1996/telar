@@ -35,7 +35,7 @@ pub fn apply(client: *Client, model: *multiplexer.Model, command: Command) !Outc
     var context: Context = .{
         .client = client,
         .model = model,
-        .area = client.view.workbench(),
+        .area = client.geometry().area,
     };
     var use_case: pane_mouse.PaneMouseHandler = .{
         .plans = .{

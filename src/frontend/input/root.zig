@@ -3,12 +3,12 @@
 /// Maximum encoded input chunk retained by the client outbox.
 pub const max_encoded_bytes: usize = 8 * 1024;
 
-pub const action = @import("action.zig");
-pub const copy_mode = @import("copy_mode.zig");
-pub const edit = @import("edit.zig");
+pub const action = @import("telar-client").input.action;
+pub const copy_mode = @import("telar-client").input.copy_mode;
+pub const edit = @import("telar-client").input.edit;
 pub const host = @import("host.zig");
 pub const keybind = @import("keybind.zig");
-pub const key_lease = @import("key_lease.zig");
+pub const key_lease = @import("telar-client").input.key_lease;
 pub const mouse_protocol = @import("mouse_protocol.zig");
 
 // Preserve the former `frontend.input` surface while making input a namespace.

@@ -145,7 +145,7 @@ fn focusPane(client: *Client, target: pane_focus.Target) !bool {
 
     return try use_case.execute(.{
         .target = target,
-        .area = client.view.workbench(),
+        .area = client.geometry().area,
     }) != null;
 }
 
@@ -187,7 +187,7 @@ fn beginSplit(client: *Client, axis: layout.Axis) !void {
     var use_case = pane_splits.requestHandler(client);
     _ = try use_case.execute(.{
         .axis = axis,
-        .area = client.view.workbench(),
+        .area = client.geometry().area,
     });
 }
 
@@ -196,14 +196,14 @@ fn resizePane(client: *Client, direction: layout.Direction) !void {
 
     _ = try use_case.execute(.{
         .direction = direction,
-        .area = client.view.workbench(),
+        .area = client.geometry().area,
     });
 }
 
 fn togglePaneFullscreen(client: *Client) !void {
     var use_case = pane_geometry.fullscreenHandler(client);
 
-    _ = try use_case.execute(.{ .area = client.view.workbench() });
+    _ = try use_case.execute(.{ .area = client.geometry().area });
 }
 
 fn toggleSidebar(client: *Client) !void {

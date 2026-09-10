@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const panes_application = @import("../../application/panes/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const active_pane_resources = @import("active_pane_resources.zig");
 const attachment_prompts = @import("../input/attachment_prompts.zig");
 const pane_geometry = @import("pane_geometry.zig");
@@ -35,7 +35,7 @@ pub fn apply(client: *Client, frame: schema.frame.FrameView) !client_model.PaneF
         }
         if (attachment_prompts.reconcileFrame(client, commit.pane_id)) {
             client.graphics_store.invalidatePlacements();
-            try pane_geometry.offerActive(client, client.view.workbench());
+            try pane_geometry.offerActive(client, client.geometry().area);
         }
     }
 

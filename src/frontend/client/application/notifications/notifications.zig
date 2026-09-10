@@ -1,8 +1,8 @@
 //! Application use cases for the client notification lifecycle.
 
 const std = @import("std");
-const notification_capability = @import("../../../notifications/root.zig");
-const client_model = @import("../../model/root.zig");
+const notification_capability = @import("telar-client").notifications;
+const client_model = @import("telar-client").model;
 
 pub const TimerEffects = struct {
     context: *anyopaque,

@@ -27,7 +27,7 @@ pub fn apply(client: *Client, model: *multiplexer.Model, event: term.Event.Mouse
     var context: Context = .{
         .client = client,
         .model = model,
-        .area = client.view.workbench(),
+        .area = client.geometry().area,
     };
 
     var use_case: copy_mode_pointer.CopyModePointerHandler = .{

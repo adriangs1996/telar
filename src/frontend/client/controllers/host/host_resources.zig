@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const host_application = @import("../../application/host/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const pane_graphics = @import("../panes/pane_graphics.zig");
 const tab_snapshots = @import("../tabs/tab_snapshots.zig");
@@ -75,7 +75,7 @@ fn configureSidebar(raw_context: *anyopaque, configuration: host_resource_delive
     try client.view.configureSidebar(
         client.sidebar_rendering,
         .{
-            .support = configuration.capabilities.kitty_graphics,
+            .support = configuration.capabilities.images,
             .cell_width = configuration.size.cell_width_px,
             .cell_height = configuration.size.cell_height_px,
         },
@@ -103,6 +103,6 @@ fn resizeView(raw_context: *anyopaque, size: schema.TerminalSize) !void {
 fn syncPaneGeometry(raw_context: *anyopaque) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
-    try pane_geometry.offerActive(client, client.view.workbench());
-    try tab_snapshots.attachActive(client, client.view.workbench());
+    try pane_geometry.offerActive(client, client.geometry().area);
+    try tab_snapshots.attachActive(client, client.geometry().area);
 }

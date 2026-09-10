@@ -5,8 +5,8 @@ const core = @import("telar-core");
 const ui = @import("../ui/root.zig");
 const theme = ui.theme;
 const icons = ui.icons;
-const notifications = @import("../notifications/root.zig");
-const agents = @import("../agents/root.zig");
+const notifications = @import("telar-client").notifications;
+const agents = @import("telar-client").agents;
 const attachments = @import("../attachments/root.zig");
 
 const schema = core.schema;

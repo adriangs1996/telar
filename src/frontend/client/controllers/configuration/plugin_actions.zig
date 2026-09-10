@@ -5,8 +5,8 @@ const config = @import("../../../config/root.zig");
 const input = @import("../../../input/root.zig");
 const plugin_broker = @import("../../../plugins/root.zig");
 const input_application = @import("../../application/input/root.zig");
-const client_model = @import("../../model/root.zig");
-const notifications = @import("../../../notifications/root.zig");
+const client_model = @import("telar-client").model;
+const notifications = @import("telar-client").notifications;
 
 const Client = @import("../../client.zig");
 const client_actions = @import("../input/actions.zig");

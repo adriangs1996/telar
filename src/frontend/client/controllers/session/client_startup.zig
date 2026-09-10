@@ -37,7 +37,7 @@ pub const Request = struct {
 /// try start(client, .{ .resize_watcher = &watcher });
 /// ```
 pub fn start(client: *Client, request: Request) !void {
-    _ = workspace.multiplexer.rectSize(client.view.workbench()) orelse
+    _ = workspace.multiplexer.rectSize(client.geometry().area) orelse
         return error.TerminalTooSmall;
     client.startup.phase = .probing;
     try host_capabilities.begin(client);

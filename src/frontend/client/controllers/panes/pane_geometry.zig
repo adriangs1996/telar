@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const workspace_capability = @import("../../../workspace/root.zig");
 const panes_application = @import("../../application/panes/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const tab_snapshots = @import("../tabs/tab_snapshots.zig");
 
@@ -17,7 +17,7 @@ const ui = core.ui;
 /// Offers the current visible size of every attached pane to the runtime.
 ///
 /// ```zig
-/// try offerAttached(client, model, client.view.workbench());
+/// try offerAttached(client, model, client.geometry().area);
 /// ```
 pub fn offerAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) !void {
     var use_case: pane_geometry_delivery.OfferPaneGeometryHandler = .{
@@ -30,7 +30,7 @@ pub fn offerAttached(client: *Client, model: *multiplexer.Model, area: ui.Rect) 
 /// Selects the active tab and offers its attached visible pane geometry.
 ///
 /// ```zig
-/// try offerActive(client, client.view.workbench());
+/// try offerActive(client, client.geometry().area);
 /// ```
 pub fn offerActive(client: *Client, area: ui.Rect) !void {
     var use_case: pane_geometry_delivery.OfferActivePaneGeometryHandler = .{

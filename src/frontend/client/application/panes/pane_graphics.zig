@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 
 const schema = core.schema;
 
@@ -88,7 +88,7 @@ pub const ReconcilePaneGraphicsHandler = struct {
                     .pane_id = pane_id,
                     .fallback = handler.model.setPaneGraphicsFallback(
                         pane_id,
-                        handler.model.hostCapabilities().kitty_graphics != .supported and
+                        handler.model.hostCapabilities().images != .supported and
                             state.has_graphics,
                     ),
                 } };
@@ -125,7 +125,7 @@ pub const SyncPaneGraphicsFallbacksHandler = struct {
     /// handler.execute();
     /// ```
     pub fn execute(handler: *SyncPaneGraphicsFallbacksHandler) void {
-        const fallback_required = handler.model.hostCapabilities().kitty_graphics != .supported;
+        const fallback_required = handler.model.hostCapabilities().images != .supported;
         var inspected: usize = 0;
         var tabs = handler.model.workspace.tabIterator();
         while (tabs.next()) |tab| {
@@ -341,7 +341,7 @@ test "supported pane graphics clears fallbacks without querying physical resourc
     _ = testing.model.setPaneGraphicsFallback(testing.first, true).?;
     _ = testing.model.setPaneGraphicsFallback(testing.second, true).?;
     _ = testing.model.setPaneGraphicsFallback(testing.third, true).?;
-    _ = (try testing.model.observeHostCapability(.{ .kitty_graphics = .supported })).?;
+    _ = (try testing.model.observeHostCapability(.{ .images = .supported })).?;
     const version = testing.model.version();
     const with_graphics = [_]schema.PaneId{ testing.first, testing.second, testing.third };
     var capture: FallbackCapture = .{ .with_graphics = &with_graphics };
@@ -383,7 +383,7 @@ test "pane graphics commits fallback after physical resource application" {
 test "pane graphics derives fallback from committed host support" {
     var testing = try TestingModel.init();
     defer testing.deinit();
-    _ = (try testing.model.observeHostCapability(.{ .kitty_graphics = .supported })).?;
+    _ = (try testing.model.observeHostCapability(.{ .images = .supported })).?;
     var capture: EffectsCapture = .{
         .model = testing.model,
         .result = .{ .changed = .{ .pane_id = testing.pane_id, .has_graphics = true } },

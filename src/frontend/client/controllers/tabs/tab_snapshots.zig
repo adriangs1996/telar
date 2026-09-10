@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const tabs_application = @import("../../application/tabs/root.zig");
 const panes_application = @import("../../application/panes/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
@@ -64,7 +64,7 @@ pub fn apply(client: *Client, snapshot: schema.TabSnapshotView) !Outcome {
 /// geometry gives it room.
 ///
 /// ```zig
-/// try attachActive(client, client.view.workbench());
+/// try attachActive(client, client.geometry().area);
 /// ```
 pub fn attachActive(client: *Client, area: ui.Rect) !void {
     var use_case: pane_attachment_requests.RequestActivePaneAttachmentsHandler = .{
@@ -82,7 +82,7 @@ pub fn attachActive(client: *Client, area: ui.Rect) !void {
 fn reconciliationHandler(client: *Client) tab_snapshot.ApplyTabSnapshotHandler {
     return .{
         .model = &client.model,
-        .area = client.view.workbench(),
+        .area = client.geometry().area,
         .effects = .{
             .context = client,
             .deliver = deliverReconciliation,

@@ -13,7 +13,7 @@ const PlacementState = presentation.PlacementState;
 const capture_mod = @import("capture.zig");
 pub const captureClipboard = capture_mod.captureClipboard;
 pub const platformSupported = capture_mod.platformSupported;
-const types = @import("types.zig");
+const types = @import("telar-client").attachments.types;
 pub const max_items = types.max_items;
 pub const max_source_bytes = types.max_source_bytes;
 pub const max_png_bytes = types.max_png_bytes;
@@ -64,7 +64,7 @@ pub const promptContinuesAtCursor = markers.promptContinuesAtCursor;
 const editorCursor = markers.editorCursor;
 const atomicSteps = markers.atomicSteps;
 
-pub const path_marker = @import("path_marker.zig");
+pub const path_marker = @import("telar-client").attachments.path_marker;
 
 const Io = std.Io;
 const schema = core.schema;

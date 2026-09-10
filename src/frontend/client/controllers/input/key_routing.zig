@@ -100,7 +100,7 @@ fn routePane(raw_context: *anyopaque, command: key_routing.PaneCommand) !?schema
     const completed = delivery orelse return null;
     if (attachment_prompts.observe(client, completed.pane_id, command.input)) {
         client.graphics_store.invalidatePlacements();
-        try pane_geometry.offerActive(client, client.view.workbench());
+        try pane_geometry.offerActive(client, client.geometry().area);
     }
 
     return completed.pane_id;

@@ -51,7 +51,7 @@ pub fn pointer(client: *Client, model: *multiplexer.Model, event: term.Event.Mou
         .left_button = event.button & 0b11 == 0,
     };
     const target = if (command.kind == .press and command.left_button and event.button & 4 == 0)
-        targetAt(model, event, client.view.workbench())
+        targetAt(model, event, client.geometry().area)
     else
         null;
     const outcome = client.link_pointer.handle(command, target);

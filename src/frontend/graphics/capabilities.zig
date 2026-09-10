@@ -15,7 +15,7 @@ pub const query =
     "\x1b_Gi=32,s=1,v=1,a=q,t=d,f=24,o=z;eJxjYGAAAAADAAE=\x1b\\" ++
     "\x1b[14t\x1b[16t\x1b[?1016$p\x1b[c";
 
-pub const Support = enum { unknown, unsupported, supported };
+pub const Support = @import("telar-client").environment.Support;
 
 pub const SidebarRendering = enum {
     automatic,

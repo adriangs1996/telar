@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const target_mod = @import("target.zig");
+const target_mod = @import("telar-client").links.target;
 
 const Io = std.Io;
 

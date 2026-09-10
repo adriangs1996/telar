@@ -1,7 +1,7 @@
 //! Adapts runtime pane metadata messages to the client application boundary.
 
 const core = @import("telar-core");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 
 const Client = @import("../../client.zig");
 const schema = core.schema;

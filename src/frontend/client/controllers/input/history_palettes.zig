@@ -4,7 +4,7 @@
 
 const core = @import("telar-core");
 const std = @import("std");
-const history_palette = @import("../../model/history_palette.zig");
+const history_palette = @import("telar-client").model.history_palette;
 const name_prompts = @import("name_prompts.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");

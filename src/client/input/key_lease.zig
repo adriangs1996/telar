@@ -1,9 +1,7 @@
 //! Bounded ownership for host keys that report a physical lifecycle.
 
 const std = @import("std");
-const term = @import("../presentation/root.zig").screen;
-
-pub const Identity = term.Event.Key.Physical;
+pub const Identity = @import("root.zig").Key.Physical;
 
 /// Stores at most `capacity` simultaneously pressed physical keys.
 ///

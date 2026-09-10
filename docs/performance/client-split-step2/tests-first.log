@@ -1,0 +1,277 @@
+test-isolation
++- run test w
+PERF search_complete n=20 p50_ns=452458 p95_ns=553958 p99_ns=652958
+PERF search_incremental_total n=20 p50_ns=436000 p95_ns=946833 p99_ns=1112791
+PERF search_max_turn n=20 p50_ns=21833 p95_ns=372916 p99_ns=617000
+PERF graphics_runtime_stage_4k n=20 p50_ns=2375 p95_ns=4750 p99_ns=10041
+PERF graphics_total_prepare_4k n=20 p50_ns=5092125 p95_ns=10577833 p99_ns=11782959
+PERF metrics_ticks ticks=100 inline_reads=0 scheduled_jobs=1 client_pumps=0
+PERF chunk_framing wire_bytes=279 tls_facing_writes=6
+PERF history_burst queued=32 sqlite_queries=1 elapsed_ns=206083
+failed command: ./.zig-cache/o/59f3c909554eb022bc9b72cf66d85c73/test --cache-dir=./.zig-cache --seed=0x536bb912 --listen=-
+
+test-compression-isolation
++- run test w
+PERF compression_max_turn n=20 p50_ns=90792 p95_ns=143250 p99_ns=428042
+PERF compression_total n=20 p50_ns=2248542 p95_ns=2725792 p99_ns=2839458
+failed command: ./.zig-cache/o/20c622bd5cd53c618662252415e7aa95/test --cache-dir=./.zig-cache --seed=0x536bb912 --listen=-
+
+test-schema
++- run test 28 pass, 1 fail (29 total)
+error: 'transport_integration_test.test.two clients observe one pane with independent frame acknowledgement' failed:
+       expected .crosshair, found .text
+failed command: ./.zig-cache/o/94cfb9e181a58e278ffc139d2e761aa6/test --cache-dir=./.zig-cache --seed=0x536bb912 --listen=-
+
+test-frontend
++- run test w
+PERF compression_max_turn n=20 p50_ns=416709 p95_ns=475875 p99_ns=486000
+PERF compression_total n=20 p50_ns=3010875 p95_ns=3411083 p99_ns=3841208
+failed command: ./.zig-cache/o/0c25f8e38b4be18d402e0f030748c97a/test --cache-dir=./.zig-cache --seed=0x536bb912 --listen=-
+
+Build Summary: 70/72 steps succeeded (1 failed); 1708/1709 tests passed (1 failed)
+test-client success
++- run test 246 pass (246 total) 195ms MaxRSS:14M
+   +- compile test ReleaseSafe native cached 99ms MaxRSS:36M
+      +- WriteFile  cached
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 cached 20ms MaxRSS:34M
+      |  +- WriteFile libc.txt cached
+      +- WriteFile hwy cached
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 cached 57ms MaxRSS:35M
+      |  +- WriteFile libc.txt (reused)
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options cached
+      +- options cached
+      +- WriteFile props.zig cached
+      |  +- run exe props-unigen cached
+      |  |  +- compile exe props-unigen Debug native cached 68ms MaxRSS:35M
+      |  |     +- run exe uucode_generate (tables.zig) cached
+      |  |        +- compile exe uucode_generate Debug native cached 68ms MaxRSS:35M
+      |  +- run exe symbols-unigen cached
+      |     +- compile exe symbols-unigen Debug native cached 64ms MaxRSS:35M
+      |        +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+test-frontend success
++- run test 1208 pass (1208 total) 9s MaxRSS:55M
+   +- compile test ReleaseSafe native success 46s MaxRSS:1G
+      +- WriteFile cached
+      +- compile lib lua ReleaseSafe native cached 34ms MaxRSS:34M
+      +- compile lib lua ReleaseSafe native (reused)
+      +- WriteFile  (reused)
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- WriteFile hwy (reused)
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- translate-c wuffs_c.h cached
+      |  +- compile exe translate-c Debug native cached 68ms MaxRSS:35M
+      |  |  +- options cached
+      |  |  +- options cached
+      |  |  +- options cached
+      |  |  +- run exe generate-def (aarch64.zig) cached
+      |  |  |  +- compile exe generate-def Debug native cached 68ms MaxRSS:35M
+      |  |  +- run exe generate-def (amdgcn.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (arm.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (bpf.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (common.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (hexagon.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (loongarch.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (mips.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (neon.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (nvptx.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (powerpc.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (riscv.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (s390x.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (ve.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (wasm.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (x86_64.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (x86.zig) cached
+      |  |  |  +- compile exe generate-def Debug native (reused)
+      |  |  +- run exe generate-def (xcore.zig) cached
+      |  |     +- compile exe generate-def Debug native (reused)
+      |  +- WriteFile libc.txt (reused)
+      |  +- WriteFile wuffs_c.h cached
+      +- options (reused)
+      +- options (reused)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+test-schema transitive failure
++- run test 28 pass, 1 fail (29 total)
+   +- compile test ReleaseSafe native success 50s MaxRSS:1G
+   |  +- WriteFile (reused)
+   |  +- compile lib lua ReleaseSafe native (reused)
+   |  +- compile lib lua ReleaseSafe native (reused)
+   |  +- WriteFile  (reused)
+   |  +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- WriteFile hwy (reused)
+   |  +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+   |  +- translate-c wuffs_c.h (+3 more reused dependencies)
+   |  +- options (reused)
+   |  +- options (reused)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- WriteFile props.zig (+2 more reused dependencies)
+   |  +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+   +- run schema test prerequisites success
+      +- run test 2 pass (2 total) 74ms MaxRSS:8M
+      |  +- compile test ReleaseSafe native cached 171ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseSafe native (reused)
+      |     +- compile lib lua ReleaseSafe native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 4 pass (4 total) 21ms MaxRSS:9M
+      |  +- compile test ReleaseSafe native cached 174ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseSafe native (reused)
+      |     +- compile lib lua ReleaseSafe native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 93 pass (93 total) 146ms MaxRSS:18M
+         +- compile test ReleaseSafe native cached 189ms MaxRSS:36M
+            +- WriteFile (reused)
+            +- compile lib lua ReleaseSafe native (reused)
+            +- compile lib lua ReleaseSafe native (reused)
+            +- WriteFile  (reused)
+            +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+            +- WriteFile hwy (reused)
+            +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+            +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+            +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+            +- translate-c wuffs_c.h (+3 more reused dependencies)
+            +- options (reused)
+            +- options (reused)
+            +- WriteFile props.zig (+2 more reused dependencies)
+            +- WriteFile props.zig (+2 more reused dependencies)
+            +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+test-transport success
++- run test 29 pass (29 total) 3s MaxRSS:123M
+   +- compile test ReleaseSafe native (+15 more reused dependencies)
+   +- run transport test prerequisites success
+      +- run test 8 pass (8 total) 20ms MaxRSS:9M
+      |  +- compile test ReleaseSafe native cached 81ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseSafe native (reused)
+      |     +- compile lib lua ReleaseSafe native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 1 pass (1 total) 10ms MaxRSS:9M
+      |  +- compile test ReleaseSafe native cached 101ms MaxRSS:36M
+      |     +- WriteFile (reused)
+      |     +- compile lib lua ReleaseSafe native (reused)
+      |     +- compile lib lua ReleaseSafe native (reused)
+      |     +- WriteFile  (reused)
+      |     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- WriteFile hwy (reused)
+      |     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      |     +- translate-c wuffs_c.h (+3 more reused dependencies)
+      |     +- options (reused)
+      |     +- options (reused)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- WriteFile props.zig (+2 more reused dependencies)
+      |     +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+      +- run test 5 pass (5 total) 15ms MaxRSS:9M
+         +- compile test ReleaseSafe native cached 106ms MaxRSS:36M
+            +- WriteFile (reused)
+            +- compile lib lua ReleaseSafe native (reused)
+            +- compile lib lua ReleaseSafe native (reused)
+            +- WriteFile  (reused)
+            +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+            +- WriteFile hwy (reused)
+            +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+            +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+            +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+            +- translate-c wuffs_c.h (+3 more reused dependencies)
+            +- options (reused)
+            +- options (reused)
+            +- WriteFile props.zig (+2 more reused dependencies)
+            +- WriteFile props.zig (+2 more reused dependencies)
+            +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+test-isolation success
++- run test 42 pass (42 total) 489ms MaxRSS:83M
+   +- compile test ReleaseSafe native cached 290ms MaxRSS:36M
+      +- WriteFile (reused)
+      +- compile lib lua ReleaseSafe native (reused)
+      +- compile lib lua ReleaseSafe native (reused)
+      +- WriteFile  (reused)
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- WriteFile hwy (reused)
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options (reused)
+      +- options (reused)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- translate-c wuffs_c.h (+3 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+test-compression-isolation success
++- run test 42 pass (42 total) 419ms MaxRSS:12M
+   +- compile test ReleaseSafe native success 9s MaxRSS:381M
+      +- WriteFile (reused)
+      +- compile lib lua ReleaseSafe native (reused)
+      +- compile lib lua ReleaseSafe native (reused)
+      +- WriteFile  (reused)
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- WriteFile hwy (reused)
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib simdutf ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- compile lib highway ReleaseSafe aarch64-macos.13.0 (+1 more reused dependencies)
+      +- options (reused)
+      +- options (reused)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- WriteFile props.zig (+2 more reused dependencies)
+      +- run exe uucode_generate (tables.zig) (+1 more reused dependencies)
+
+error: the following build command failed with exit code 1:
+.zig-cache/o/2494653b01de0614c84dbb721511196e/build /opt/homebrew/Cellar/zig/0.16.0_1/bin/zig /opt/homebrew/Cellar/zig/0.16.0_1/lib/zig /Users/adriangonzalez/sandbox/telar .zig-cache /Users/adriangonzalez/.cache/zig --seed 0x536bb912 -Z85896c40ca089bc5 test-client test-frontend test-schema test-transport test-isolation test-compression-isolation -Doptimize=ReleaseSafe --summary all

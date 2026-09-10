@@ -4,7 +4,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const keybind = @import("keybind.zig");
+const keybind = @import("root.zig");
 
 const schema = core.schema;
 const ui = core.ui;

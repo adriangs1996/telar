@@ -28,7 +28,7 @@ pub fn apply(client: *Client, command: schema.PaneFocusCommand) !void {
     var use_case = pane_focus.handler(client);
     const focus = try use_case.execute(.{
         .target = .{ .direction = direction(command.direction) },
-        .area = client.view.workbench(),
+        .area = client.geometry().area,
     });
     if (focus) |changed| {
         return complete(client, command, .{ .outcome = .focused, .focused_pane_id = changed.focused });

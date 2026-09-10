@@ -3,7 +3,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const Client = @import("../client.zig");
-const client_model = @import("../model/root.zig");
+const client_model = @import("telar-client").model;
 const runtime_transport = @import("../entrypoints/runtime_io.zig");
 const kitty = @import("../../graphics/root.zig").kitty;
 const pace = @import("../../presentation/root.zig").pace;
@@ -155,6 +155,7 @@ pub const Snapshot = struct {
     media_pending: bool,
     outbox: runtime_transport.Snapshot,
     capabilities: client_model.HostCapabilities,
+    zlib_support: kitty.Support = .unknown,
     sidebar_rendering: kitty.ResolvedSidebarRendering,
     lua_used: usize,
     lua_limit: usize,
@@ -221,9 +222,9 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         state.outbox.coalesced_resize,
         state.outbox.coalesced_ack,
         state.outbox.coalesced_client_layout,
-        @tagName(state.capabilities.kitty_graphics),
-        @tagName(state.capabilities.kitty_zlib),
-        @tagName(state.capabilities.mouse_pixels),
+        @tagName(state.capabilities.images),
+        @tagName(state.zlib_support),
+        @tagName(state.capabilities.pointer_pixels),
         @tagName(state.sidebar_rendering),
         state.capabilities.cell_width_px,
         state.capabilities.cell_height_px,
@@ -437,6 +438,7 @@ fn capture(client: *Client, heap: diagnostics.Heap.Snapshot) ?Snapshot {
         .media_pending = client.presenter.media_tick_pending,
         .outbox = runtime_transport.snapshot(client),
         .capabilities = client.model.hostCapabilities(),
+        .zlib_support = client.host_negotiation.zlib_support,
         .sidebar_rendering = client.view.sidebar_rendering,
         .lua_used = if (client.lua_generation) |generation| generation.vm.meter.used else 0,
         .lua_limit = if (client.lua_generation) |generation| generation.vm.meter.limit else 0,

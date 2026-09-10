@@ -65,7 +65,7 @@ fn resolve(context: *Context, event: term.Event.Mouse) pointer_routing.Authority
 
     const capabilities = context.client.model.hostCapabilities();
     const host_size = context.client.model.hostSize();
-    const exterior_pixels = capabilities.mouse_pixels == .supported and
+    const exterior_pixels = capabilities.pointer_pixels == .supported and
         host_size.cell_width_px != 0 and host_size.cell_height_px != 0;
     var cell_event = event;
     if (exterior_pixels) {
@@ -96,7 +96,7 @@ fn view(raw_context: *anyopaque, command: pointer_routing.PointerCommand) !point
 
     return .{
         .consume_pane_input = outcome.consume_pane_input,
-        .pointer_inside = context.client.view.workbench().contains(command.event.x, command.event.y),
+        .pointer_inside = context.client.geometry().area.contains(command.event.x, command.event.y),
     };
 }
 

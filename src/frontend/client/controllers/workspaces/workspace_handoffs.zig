@@ -5,7 +5,7 @@ const workspace_capability = @import("../../../workspace/root.zig");
 const panes_application = @import("../../application/panes/root.zig");
 const tabs_application = @import("../../application/tabs/root.zig");
 const workspaces_application = @import("../../application/workspaces/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
 const pane_pastes = @import("../input/pane_pastes.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
@@ -75,7 +75,7 @@ fn request(client: *Client, target: workspace_handoff_targeting.Target, authorit
     return handler.execute(.{
         .target = plan.target,
         .fallback_workspace = plan.fallback_workspace,
-        .size = multiplexer.rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+        .size = multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
     }, authority);
 }
 
@@ -173,7 +173,7 @@ pub fn arrival(client: *Client, opened: pane_open_delivery.OpenedPane) !client_m
     return workspace_transitions.arrival(
         client,
         opened,
-        multiplexer.rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+        multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
     );
 }
 
@@ -295,7 +295,7 @@ fn retryWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {
         .message = .{ .open_pane = .{
             .request_id = request_id,
             .target = .{ .workspace = workspace },
-            .size = multiplexer.rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+            .size = multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
             .launch = null,
         } },
     });

@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const notifications = @import("../../../notifications/root.zig");
+const notifications = @import("telar-client").notifications;
 const client_requests = @import("../../connection/requests.zig");
 
 const schema = core.schema;

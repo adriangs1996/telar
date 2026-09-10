@@ -1,7 +1,7 @@
 //! Adapts runtime progress reports to pane state and the shared animation clock.
 
 const core = @import("telar-core");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const sidebar_animations = @import("../notifications/sidebar_animations.zig");
 
 const Client = @import("../../client.zig");

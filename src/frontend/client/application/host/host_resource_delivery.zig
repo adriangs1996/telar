@@ -3,7 +3,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 
 const schema = core.schema;
 
@@ -46,8 +46,8 @@ pub const DeliverHostResourcesHandler = struct {
                 try handler.effects.apply_appearance(handler.effects.context, capabilities.current.appearance);
             }
 
-            const graphics_changed = capabilities.previous.kitty_graphics !=
-                capabilities.current.kitty_graphics;
+            const graphics_changed = capabilities.previous.images !=
+                capabilities.current.images;
             if (graphics_changed) {
                 handler.effects.sync_graphics_fallbacks(handler.effects.context);
                 try handler.effects.configure_sidebar(handler.effects.context, .{
@@ -248,7 +248,7 @@ fn resizeCommit(model: *client_model.Model) !client_model.HostCommit {
 test "DeliverHostResourcesHandler orders graphics capability resources" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const commit = (try model.observeHostCapability(.{ .kitty_graphics = .supported })).?;
+    const commit = (try model.observeHostCapability(.{ .images = .supported })).?;
     var capture: EffectCapture = .{ .model = &model, .commit = commit };
     var handler: DeliverHostResourcesHandler = .{
         .model = &model,
@@ -348,7 +348,7 @@ test "DeliverHostResourcesHandler selects grid and cell-size branches independen
 test "DeliverHostResourcesHandler skips resources for nonvisual capability changes" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const commit = (try model.observeHostCapability(.{ .mouse_pixels = .supported })).?;
+    const commit = (try model.observeHostCapability(.{ .pointer_pixels = .supported })).?;
     var capture: EffectCapture = .{ .model = &model, .commit = commit };
     var handler: DeliverHostResourcesHandler = .{
         .model = &model,
@@ -363,8 +363,8 @@ test "DeliverHostResourcesHandler skips resources for nonvisual capability chang
 test "DeliverHostResourcesHandler rejects empty and stale commits before effects" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const stale = (try model.observeHostCapability(.{ .kitty_graphics = .supported })).?;
-    _ = (try model.observeHostCapability(.{ .kitty_zlib = .supported })).?;
+    const stale = (try model.observeHostCapability(.{ .images = .supported })).?;
+    _ = (try model.observeHostCapability(.{ .pointer_pixels = .supported })).?;
     var capture: EffectCapture = .{ .model = &model, .commit = stale };
     var handler: DeliverHostResourcesHandler = .{
         .model = &model,
@@ -423,7 +423,7 @@ test "DeliverHostResourcesHandler stops resize delivery at each failed effect" {
 test "DeliverHostResourcesHandler stops graphics delivery before invalidation" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    const commit = (try model.observeHostCapability(.{ .kitty_graphics = .supported })).?;
+    const commit = (try model.observeHostCapability(.{ .images = .supported })).?;
     var capture: EffectCapture = .{
         .model = &model,
         .commit = commit,

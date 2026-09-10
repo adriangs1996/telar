@@ -2,12 +2,12 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const agents = @import("../../agents/root.zig");
+const agents = @import("telar-client").agents;
 const attachments = @import("../../attachments/root.zig");
 const graphics = @import("../../graphics/root.zig");
 const input_capability = @import("../../input/root.zig");
 const lua_config = @import("../../config/root.zig");
-const notifications = @import("../../notifications/root.zig");
+const notifications = @import("telar-client").notifications;
 const platform = @import("../../platform/root.zig");
 const plugin_broker = @import("../../plugins/root.zig");
 const presentation = @import("../../presentation/root.zig");
@@ -31,7 +31,7 @@ const session_application = @import("../application/session/root.zig");
 const client_events = @import("../entrypoints/events.zig");
 const client_startup = @import("../controllers/session/client_startup.zig");
 const client_outbox = @import("../connection/outbox.zig");
-const client_model = @import("../model/root.zig");
+const client_model = @import("telar-client").model;
 const client_telemetry = @import("../resources/telemetry.zig");
 const clipboard_images = @import("../controllers/host/clipboard_images.zig");
 const client_clock = @import("../resources/clock.zig");

@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const bars = @import("../bars/root.zig");
 const input = @import("../input/root.zig");
 const sound = @import("../sound/root.zig");
-const notifications = @import("../notifications/root.zig");
+const notifications = @import("telar-client").notifications;
 const action = input.action;
 const keybind = input.keybind;
 const kitty = @import("../graphics/root.zig").kitty;
@@ -43,20 +43,7 @@ pub const max_agent_description_timeout_ms: u32 = 60_000;
 
 pub const ConfiguredBinding = keybind.Binding(action.Action, max_binding_keys);
 
-pub const Diagnostic = struct {
-    buffer: [512]u8 = undefined,
-    len: usize = 0,
-
-    pub fn message(diagnostic: *const Diagnostic) []const u8 {
-        return diagnostic.buffer[0..diagnostic.len];
-    }
-
-    pub fn set(diagnostic: *Diagnostic, comptime format: []const u8, args: anytype) void {
-        const rendered = std.fmt.bufPrint(&diagnostic.buffer, format, args) catch
-            "configuration error";
-        diagnostic.len = rendered.len;
-    }
-};
+pub const Diagnostic = @import("telar-client").config.Diagnostic;
 
 pub const PluginSpec = struct {
     path_bytes: [max_plugin_path_bytes]u8 = undefined,
@@ -339,13 +326,7 @@ pub const Snapshot = struct {
     }
 };
 
-pub const CallbackContext = struct {
-    sidebar_visible: bool,
-    tab_count: u16,
-    active_tab_index: u16,
-    pane_count: u16,
-    focused_pane_id: u64,
-};
+pub const CallbackContext = @import("telar-client").config.CallbackContext;
 
 pub const BarTime = struct {
     unix_seconds: i64,

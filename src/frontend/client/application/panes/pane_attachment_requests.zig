@@ -4,7 +4,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const workspace_capability = @import("../../../workspace/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 
 const schema = core.schema;
 const tabs_mod = workspace_capability.tabs;

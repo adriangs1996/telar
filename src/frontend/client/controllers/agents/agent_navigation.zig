@@ -1,9 +1,9 @@
 //! Wires sidebar agent navigation to local focus and runtime handoff adapters.
 
 const core = @import("telar-core");
-const agents = @import("../../../agents/root.zig");
+const agents = @import("telar-client").agents;
 const agents_application = @import("../../application/agents/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const pane_focus = @import("../panes/pane_focus.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
@@ -57,7 +57,7 @@ fn focusPane(context: *anyopaque, pane_id: schema.PaneId) !void {
 
     _ = try use_case.execute(.{
         .target = .{ .pane_id = pane_id },
-        .area = client.view.workbench(),
+        .area = client.geometry().area,
     });
 }
 

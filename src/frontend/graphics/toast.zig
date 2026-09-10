@@ -14,7 +14,7 @@ const raster = @import("rasterizer.zig");
 const ui_icons = @import("../ui/root.zig").icons;
 const theme = @import("../ui/root.zig").theme;
 const widgets = @import("../widgets/root.zig");
-const notifications = @import("../notifications/root.zig");
+const notifications = @import("telar-client").notifications;
 const toast = widgets.toast;
 
 const ui = core.ui;

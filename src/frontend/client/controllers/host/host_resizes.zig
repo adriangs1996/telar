@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const platform = @import("../../../platform/root.zig");
 const host_application = @import("../../application/host/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const host_resources = @import("host_resources.zig");
 const host_capabilities = @import("host_capabilities.zig");
 

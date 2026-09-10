@@ -10,6 +10,7 @@ pub const color_query = "\x1b]10;?\x07\x1b]11;?\x07";
 pub const Color = enum { foreground, background };
 
 pub const State = struct {
+    zlib_support: @import("telar-client").environment.Support = .unknown,
     deadline_ns: ?u64 = null,
     received: std.EnumSet(Color) = .initEmpty(),
     initial_settled: bool = false,
@@ -53,6 +54,30 @@ pub const State = struct {
         return true;
     }
 };
+
+/// Resolves unanswered terminal probes without putting probe policy in the model.
+/// Example: `const next = settledCapabilities(current);`.
+pub fn settledCapabilities(current: @import("telar-client").model.HostCapabilities) @import("telar-client").model.HostCapabilities {
+    var next = current;
+    if (next.images == .unknown) {
+        next.images = .unsupported;
+    }
+
+    if (next.pointer_pixels == .unknown) {
+        next.pointer_pixels = .unsupported;
+    }
+
+    return next;
+}
+
+test "probe fallback retains resolved capabilities" {
+    const current: @import("telar-client").model.HostCapabilities = .{ .images = .supported, .appearance = .dark };
+    const next = settledCapabilities(current);
+    try std.testing.expectEqual(.supported, next.images);
+    try std.testing.expectEqual(.unsupported, next.pointer_pixels);
+    try std.testing.expectEqual(.dark, next.appearance);
+    try std.testing.expectEqualDeep(next, settledCapabilities(next));
+}
 
 test "color probes settle independently of graphics and reject stale reports" {
     var state: State = .{};

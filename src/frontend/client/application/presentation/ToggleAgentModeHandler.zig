@@ -1,4 +1,4 @@
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 
 const ToggleAgentModeHandler = @This();
 

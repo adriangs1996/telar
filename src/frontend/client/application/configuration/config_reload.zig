@@ -3,7 +3,7 @@
 const std = @import("std");
 const bars = @import("../../../bars/root.zig");
 const client_diagnostic = @import("client_diagnostic.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 
 pub const Command = struct {
     configuration: client_model.ConfigurationInput,

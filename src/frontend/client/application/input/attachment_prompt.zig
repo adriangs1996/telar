@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const attachments = @import("../../../attachments/root.zig");
 const input_capability = @import("../../../input/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const key_routing = @import("key_routing.zig");
 
 const Key = input_capability.keybind.Key;

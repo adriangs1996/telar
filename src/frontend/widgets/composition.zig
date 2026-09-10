@@ -5,7 +5,7 @@
 
 const workspace = @import("../workspace/root.zig");
 const core = @import("telar-core");
-const agents = @import("../agents/root.zig");
+const agents = @import("telar-client").agents;
 const bars = @import("../bars/root.zig");
 const layout_mod = workspace.layout;
 const multiplexer = workspace.multiplexer;

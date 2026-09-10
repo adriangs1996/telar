@@ -6,20 +6,20 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client_clock = @import("../resources/clock.zig");
-const agents = @import("../../agents/root.zig");
+const agents = @import("telar-client").agents;
 const graphics = @import("../../graphics/root.zig");
 const attachments = @import("../../attachments/root.zig");
 const bars = @import("../../bars/root.zig");
-const notifications = @import("../../notifications/root.zig");
+const notifications = @import("telar-client").notifications;
 const presentation = @import("../../presentation/root.zig");
 const workspace_capability = @import("../../workspace/root.zig");
 const widgets = @import("../../widgets/root.zig");
 const client_telemetry = @import("../resources/telemetry.zig");
-const client_model = @import("../model/root.zig");
+const client_model = @import("telar-client").model;
 const client_view = @import("view.zig");
-const name_prompt = @import("../model/name_prompt.zig");
-const history_palette_state = @import("../model/history_palette.zig");
-const suggestion_state = @import("../model/suggestion.zig");
+const name_prompt = @import("telar-client").model.name_prompt;
+const history_palette_state = @import("telar-client").model.history_palette;
+const suggestion_state = @import("telar-client").model.suggestion;
 const kitty = graphics.kitty;
 const modal_graphics = graphics.modal;
 const pill_graphics = graphics.pill;
@@ -441,7 +441,6 @@ pub fn presentMedia(presenter: *Presenter, projection: Projection, resources: Re
         return;
     }
 
-    resources.graphics_store.setHostZlib(projection.host_capabilities.kitty_zlib == .supported);
     var graphics_writer: CombinedGraphicsWriter = .{
         .panes = .{
             .store = resources.graphics_store,
@@ -505,7 +504,7 @@ fn notePaneGraphics(presenter: *Presenter, graphics_stats: kitty.KittyGraphicsWr
 /// chunked transfer owns the graphics stream, so the frame stays clean until
 /// the bulk pass closes it.
 fn controlGraphicsReady(projection: Projection, resources: Resources) bool {
-    const pane_control = projection.host_capabilities.kitty_graphics == .supported and resources.graphics_store.damage;
+    const pane_control = projection.host_capabilities.images == .supported and resources.graphics_store.damage;
     if ((!pane_control and !resources.view.kittyPill().retirementPending()) or resources.graphics_store.partial != null) {
         return false;
     }
@@ -520,7 +519,7 @@ fn controlGraphicsReady(projection: Projection, resources: Resources) bool {
 
 fn mediaWorkPending(projection: Projection, resources: Resources) bool {
     return resources.view.kittyPill().damaged() or resources.view.kittyAttachments().cleanupPending() or
-        (projection.host_capabilities.kitty_graphics == .supported and
+        (projection.host_capabilities.images == .supported and
             (resources.view.graphicsPreparationPending() or resources.graphics_store.damage or
                 resources.view.kittySidebar().damaged() or resources.view.kittyIcons().damaged() or
                 resources.view.kittyToasts().damaged() or resources.view.kittyModal().damaged() or
@@ -629,7 +628,7 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
     // this synchronized update, after the cells and before the cursor. Pixel
     // streams and UI rasters wait for the byte-bounded bulk media pass.
     var control_writer: CellGraphicsWriter = .{
-        .panes = if (input.projection.host_capabilities.kitty_graphics == .supported) .{
+        .panes = if (input.projection.host_capabilities.images == .supported) .{
             .store = input.resources.graphics_store,
             .layout_snapshot = presenter.compositor.layoutSnapshot(),
             .cell_width = input.projection.host_size.cell_width_px,

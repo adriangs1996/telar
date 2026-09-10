@@ -3,7 +3,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const center = @import("root.zig");
+const center = @import("telar-client").notifications;
 
 const Io = std.Io;
 

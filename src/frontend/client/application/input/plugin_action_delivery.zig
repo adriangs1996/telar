@@ -2,9 +2,9 @@
 
 const std = @import("std");
 const config = @import("../../../config/root.zig");
-const notification_capability = @import("../../../notifications/root.zig");
+const notification_capability = @import("telar-client").notifications;
 const client_diagnostic = @import("../configuration/client_diagnostic.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const plugin_action = @import("plugin_action.zig");
 
 pub const Effects = struct {

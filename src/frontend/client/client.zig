@@ -13,12 +13,12 @@ const bars_capability = @import("../bars/root.zig");
 const client_telemetry = @import("resources/telemetry.zig");
 const client_layout_resource = @import("resources/client_layouts.zig");
 const client_view = @import("presentation/view.zig");
-const client_model = @import("model/root.zig");
+const client_model = @import("telar-client").model;
 const lua_config = @import("../config/root.zig");
 const link_capability = @import("../links/root.zig");
 const sound_capability = @import("../sound/root.zig");
 const theme_capability = @import("../ui/theme.zig");
-const notification_capability = @import("../notifications/root.zig");
+const notification_capability = @import("telar-client").notifications;
 const keybind = input_capability.keybind;
 const kitty = graphics.kitty;
 const toast_graphics = graphics.toast;
@@ -213,7 +213,7 @@ pub fn init(params: Params) !*Client {
     try view.configureSidebar(
         params.options.sidebar_rendering,
         .{
-            .support = capabilities.kitty_graphics,
+            .support = capabilities.images,
             .cell_width = cell_size.width,
             .cell_height = cell_size.height,
         },
@@ -329,6 +329,12 @@ fn waitForPresentation(io: Io, deadline_ns: u64) anyerror!void {
 /// Cancels every in-flight select task first — the reload task publishes
 /// into the orphan slots — then releases the orphans, the owned
 /// configuration objects, and every buffer.
+/// Returns the presentation-supplied region for a synchronous application call.
+/// Example: `const region = client.geometry();`.
+pub fn geometry(client: *const Client) @import("telar-client").workspace.geometry.Region {
+    return client.view.geometry();
+}
+
 pub fn deinit(client: *Client) void {
     const gpa = client.gpa;
     client.select.cancelDiscard();

@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const panes_application = @import("../../application/panes/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
@@ -59,7 +59,7 @@ pub fn confirmationHandler(client: *Client) split_pane.ConfirmPaneSplitHandler {
 pub fn recoveryHandler(client: *Client) split_pane.RecoverPaneSplitHandler {
     return .{
         .model = &client.model,
-        .area = client.view.workbench(),
+        .area = client.geometry().area,
         .effects = .{
             .context = client,
             .resize = resizePane,

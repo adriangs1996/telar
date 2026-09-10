@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const ui_icons = @import("../ui/root.zig").icons;
+const ui_icons = @import("../layout/root.zig").icons;
 
 const ui = core.ui;
 

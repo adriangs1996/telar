@@ -6,7 +6,7 @@ const input_capability = @import("../../../input/root.zig");
 const notification_capability = @import("../../../notifications/root.zig");
 const notifications_application = @import("../../application/notifications/root.zig");
 const client_clock = @import("../../resources/clock.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const notification_timers = @import("../../resources/notification_timers.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
@@ -246,7 +246,7 @@ fn navigate(context: *anyopaque, target: notification_capability.Target) !void {
 
             _ = try use_case.execute(.{
                 .target = .{ .pane_id = pane_id },
-                .area = client.view.workbench(),
+                .area = client.geometry().area,
             });
         },
     }

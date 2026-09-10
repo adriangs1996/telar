@@ -1,17 +1,17 @@
 const std = @import("std");
 const core = @import("telar-core");
-const agents = @import("../../../agents/root.zig");
-const attachments = @import("../../../attachments/root.zig");
-const lua_config = @import("../../../config/root.zig");
-const graphics = @import("../../../graphics/root.zig");
-const input_capability = @import("../../../input/root.zig");
-const notifications = @import("../../../notifications/root.zig");
-const workspace_capability = @import("../../../workspace/root.zig");
+const agents = @import("../../agents/root.zig");
+const attachments = @import("../../attachments/root.zig");
+const lua_config = @import("../../config/root.zig");
+const graphics = @import("../../environment/root.zig");
+const input_capability = @import("../../input/root.zig");
+const notifications = @import("../../notifications/root.zig");
+const workspace_capability = @import("../../workspace/root.zig");
 const client_model = @import("../root.zig");
 
 const copy_mode = input_capability.copy_mode;
-const keybind = input_capability.keybind;
-const kitty = graphics.kitty;
+const keybind = input_capability;
+const capability_support = graphics;
 const schema = core.schema;
 const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
@@ -322,27 +322,19 @@ test "host resize rejects invalid and oversized grids without partial state" {
     try std.testing.expectEqualDeep(version, model.version());
 }
 
-test "host support probes commit independently and expiry settles only unknown values" {
+test "presentation capabilities commit independently without probe policy" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const graphics_commit = (try model.observeHostCapability(.{
-        .kitty_graphics = .supported,
-    })).?;
+    const graphics_commit = (try model.observeHostCapability(.{ .images = .supported })).?;
     try std.testing.expect(graphics_commit.resize == null);
-    try std.testing.expectEqual(kitty.Support.supported, model.hostCapabilities().kitty_graphics);
-    try std.testing.expectEqual(kitty.Support.unknown, model.hostCapabilities().kitty_zlib);
+    try std.testing.expectEqual(capability_support.Support.supported, model.hostCapabilities().images);
+    try std.testing.expectEqual(capability_support.Support.unknown, model.hostCapabilities().pointer_pixels);
 
-    _ = try model.observeHostCapability(.{ .kitty_zlib = .unsupported });
-    const expired = (try model.expireHostCapabilities()).?;
-
-    try std.testing.expect(expired.resize == null);
-    try std.testing.expectEqual(kitty.Support.supported, model.hostCapabilities().kitty_graphics);
-    try std.testing.expectEqual(kitty.Support.unsupported, model.hostCapabilities().kitty_zlib);
-    try std.testing.expectEqual(kitty.Support.unsupported, model.hostCapabilities().mouse_pixels);
-    try std.testing.expectEqual(client_model.Version{ .host_capabilities = 3 }, model.version());
-    try std.testing.expect((try model.expireHostCapabilities()) == null);
-    try std.testing.expectEqual(client_model.Version{ .host_capabilities = 3 }, model.version());
+    _ = try model.observeHostCapability(.{ .pointer_pixels = .unsupported });
+    const version = model.version();
+    try std.testing.expect((try model.observeHostCapability(.{ .pointer_pixels = .unsupported })) == null);
+    try std.testing.expectEqualDeep(version, model.version());
 }
 
 test "host pixel observations commit raw measurements and resolved geometry atomically" {

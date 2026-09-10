@@ -77,7 +77,7 @@ fn applyIntent(raw_context: *anyopaque, intent: view_interaction.Intent) !view_i
 
             _ = try use_case.execute(.{
                 .target = .{ .pane_id = pane_id },
-                .area = client.view.workbench(),
+                .area = client.geometry().area,
             });
         },
         .rename_tab => |tab_id| _ = name_prompts.beginTabRename(client, tab_id),
@@ -99,5 +99,5 @@ fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
 fn offerPaneGeometry(raw_context: *anyopaque) !void {
     const context: *Context = @ptrCast(@alignCast(raw_context));
 
-    try pane_geometry.offerAttached(context.client, context.model, context.client.view.workbench());
+    try pane_geometry.offerAttached(context.client, context.model, context.client.geometry().area);
 }

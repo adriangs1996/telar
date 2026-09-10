@@ -1,7 +1,7 @@
 //! Bounded latest-wins state for host link-opening workers.
 
 const std = @import("std");
-const target_mod = @import("target.zig");
+const target_mod = @import("telar-client").links.target;
 
 pub const Request = union(enum) {
     start: target_mod.Target,

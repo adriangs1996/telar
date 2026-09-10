@@ -1,7 +1,7 @@
 //! Owns one asynchronous reservation and rejects obsolete completions.
 const std = @import("std");
 const types = @import("types.zig");
-const attachments = @import("../../attachments/root.zig");
+const attachments = @import("../attachments/root.zig");
 const PluginExecution = types.PluginExecution;
 const PluginExecutionId = types.PluginExecutionId;
 const ClipboardCapture = types.ClipboardCapture;

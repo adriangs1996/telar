@@ -5,7 +5,7 @@ const graphics = @import("../../../graphics/root.zig");
 const presentation = @import("../../../presentation/root.zig");
 const host_application = @import("../../application/host/root.zig");
 const client_clock = @import("../../resources/clock.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const host_resources = @import("host_resources.zig");
 const negotiation = @import("../../resources/host_negotiation.zig");
 const deadline_timer = @import("../../resources/deadline_timer.zig");
@@ -86,6 +86,12 @@ pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?client_
         }
     }
 
+    if (response == .kitty_graphics and response.kitty_graphics.image_id == kitty.zlib_query_image_id) {
+        client.host_negotiation.zlib_support = if (response.kitty_graphics.supported) .supported else .unsupported;
+        client.graphics_store.setHostZlib(response.kitty_graphics.supported);
+        return null;
+    }
+
     const observation = translate(response) orelse return null;
     var use_case = handler(client);
 
@@ -100,7 +106,13 @@ pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?client_
 pub fn expire(client: *Client) !?client_model.HostCommit {
     var use_case = handler(client);
 
-    return use_case.expire();
+    const capabilities = negotiation.settledCapabilities(client.model.hostCapabilities());
+
+    if (client.host_negotiation.zlib_support == .unknown) {
+        client.host_negotiation.zlib_support = .unsupported;
+    }
+
+    return use_case.reconcile(capabilities);
 }
 
 fn handler(client: *Client) host_capability.Handler {
@@ -121,9 +133,7 @@ fn handler(client: *Client) host_capability.Handler {
 pub fn translate(response: term.Event.TerminalResponse) ?client_model.HostCapabilityObservation {
     return switch (response) {
         .kitty_graphics => |reply| if (reply.image_id == kitty.query_image_id)
-            .{ .kitty_graphics = support(reply.supported) }
-        else if (reply.image_id == kitty.zlib_query_image_id)
-            .{ .kitty_zlib = support(reply.supported) }
+            .{ .images = support(reply.supported) }
         else
             null,
         .window_pixels => |size| .{ .window_pixels = .{
@@ -134,7 +144,7 @@ pub fn translate(response: term.Event.TerminalResponse) ?client_model.HostCapabi
             .width = size.width,
             .height = size.height,
         } },
-        .mouse_pixels => |reply| .{ .mouse_pixels = support(reply.supported) },
+        .mouse_pixels => |reply| .{ .pointer_pixels = support(reply.supported) },
         .foreground_color => |color| .{ .foreground = .{ .r = color.r, .g = color.g, .b = color.b } },
         .background_color => |color| .{ .background = .{ .r = color.r, .g = color.g, .b = color.b } },
         .primary_device_attributes => null,
@@ -153,19 +163,16 @@ fn deliverResources(raw_context: *anyopaque, commit: client_model.HostCommit) !v
 
 test "Kitty probe replies translate by reserved image identity" {
     try std.testing.expectEqual(
-        client_model.HostCapabilityObservation{ .kitty_graphics = .supported },
+        client_model.HostCapabilityObservation{ .images = .supported },
         translate(.{ .kitty_graphics = .{
             .image_id = kitty.query_image_id,
             .supported = true,
         } }).?,
     );
-    try std.testing.expectEqual(
-        client_model.HostCapabilityObservation{ .kitty_zlib = .unsupported },
-        translate(.{ .kitty_graphics = .{
-            .image_id = kitty.zlib_query_image_id,
-            .supported = false,
-        } }).?,
-    );
+    try std.testing.expect(translate(.{ .kitty_graphics = .{
+        .image_id = kitty.zlib_query_image_id,
+        .supported = false,
+    } }) == null);
     try std.testing.expect(translate(.{ .kitty_graphics = .{
         .image_id = 999,
         .supported = true,
@@ -188,7 +195,7 @@ test "Geometry and mouse replies translate without protocol types" {
         translate(.{ .cell_pixels = .{ .width = 10, .height = 20 } }).?,
     );
     try std.testing.expectEqual(
-        client_model.HostCapabilityObservation{ .mouse_pixels = .supported },
+        client_model.HostCapabilityObservation{ .pointer_pixels = .supported },
         translate(.{ .mouse_pixels = .{ .supported = true } }).?,
     );
     try std.testing.expect(translate(.primary_device_attributes) == null);

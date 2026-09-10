@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const target_mod = @import("target.zig");
+const target_mod = @import("telar-client").links.target;
 
 const link = core.link;
 

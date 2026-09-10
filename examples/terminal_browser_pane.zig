@@ -449,7 +449,7 @@ fn observeHostCapability(capabilities: *HostCapabilities, response: term.Event.T
 }
 
 fn expireHostCapabilities(capabilities: *HostCapabilities) bool {
-    const next = capabilities.withExpiredProbes();
+    const next = frontend.client.settledHostCapabilities(capabilities.*);
     if (std.meta.eql(capabilities.*, next)) {
         return false;
     }
@@ -618,7 +618,7 @@ fn present(context: PresentContext) !void {
         .cell_width = cell.width,
         .cell_height = cell.height,
     } };
-    if (capabilities.kitty_graphics == .supported and
+    if (capabilities.images == .supported and
         cell.width != 0 and cell.height != 0 and graphics_store.damage)
     {
         screen.graphics = .{
@@ -638,7 +638,7 @@ const GraphicsReadiness = struct {
 
 fn graphicsReady(state: GraphicsReadiness) bool {
     const cell = state.capabilities.cellSize(0, 0);
-    if (state.capabilities.kitty_graphics != .supported or cell.width == 0 or cell.height == 0) {
+    if (state.capabilities.images != .supported or cell.width == 0 or cell.height == 0) {
         return false;
     }
     return state.store.damage or state.mirror.ready(state.emulator);
@@ -791,7 +791,7 @@ pub fn main(init: std.process.Init) !void {
             .cell_width = cell.width,
             .cell_height = cell.height,
         } };
-        if (capabilities.kitty_graphics == .supported) {
+        if (capabilities.images == .supported) {
             screen.graphics = .{ .context = &exterior, .write = ExteriorGraphics.writeOpaque };
             _ = screen.flush(writer) catch {};
         }

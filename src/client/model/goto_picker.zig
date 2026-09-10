@@ -4,8 +4,8 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const agents = @import("../../agents/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
+const agents = @import("../agents/root.zig");
+const workspace_capability = @import("../workspace/root.zig");
 
 const schema = core.schema;
 const workspace_list = workspace_capability.workspace_list;

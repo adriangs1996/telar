@@ -3,8 +3,8 @@
 const std = @import("std");
 const attachments = @import("../../../attachments/root.zig");
 const input_application = @import("../../application/input/root.zig");
-const client_model = @import("../../model/root.zig");
-const notification_capability = @import("../../../notifications/root.zig");
+const client_model = @import("telar-client").model;
+const notification_capability = @import("telar-client").notifications;
 const notification_flow = @import("../notifications/notifications.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 
@@ -128,7 +128,7 @@ fn adopt(raw_context: *anyopaque) !bool {
 fn resize(raw_context: *anyopaque) !void {
     const context: *CompletionContext = @ptrCast(@alignCast(raw_context));
 
-    try pane_geometry.offerActive(context.client, context.client.view.workbench());
+    try pane_geometry.offerActive(context.client, context.client.geometry().area);
 }
 
 fn deliverOutcome(raw_context: *anyopaque, outcome: clipboard_image.CompletionOutcome) !void {

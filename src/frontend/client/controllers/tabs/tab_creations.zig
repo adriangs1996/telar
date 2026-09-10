@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace_capability = @import("../../../workspace/root.zig");
 const tabs_application = @import("../../application/tabs/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
 const pane_pastes = @import("../input/pane_pastes.zig");
@@ -104,7 +104,7 @@ fn sendCreation(context: *anyopaque, intent: create_tab.TabCreationIntent) !void
         .request_id = request_id,
         .workspace = intent.workspace,
         .label = intent.label,
-        .size = multiplexer.rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+        .size = multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
         .launch = .{
             .cwd = client.options.cwd,
             .cwd_source = intent.cwd_source,

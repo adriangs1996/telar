@@ -1,7 +1,7 @@
 //! Mouse-gesture ownership for textual links inside pane content.
 
 const std = @import("std");
-const target_mod = @import("target.zig");
+const target_mod = @import("telar-client").links.target;
 
 pub const Kind = enum {
     press,

@@ -2,20 +2,20 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const agents = @import("../../agents/root.zig");
-const attachments = @import("../../attachments/root.zig");
-const bars = @import("../../bars/root.zig");
-const lua_config = @import("../../config/root.zig");
-const graphics = @import("../../graphics/root.zig");
-const input_capability = @import("../../input/root.zig");
-const link_capability = @import("../../links/root.zig");
-const notifications = @import("../../notifications/root.zig");
-const frontend_ui = @import("../../ui/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
+const agents = @import("../agents/root.zig");
+const attachments = @import("../attachments/root.zig");
+const bars = @import("../bars/root.zig");
+const lua_config = @import("../config/root.zig");
+const graphics = @import("../environment/root.zig");
+const input_capability = @import("../input/root.zig");
+const link_capability = @import("../links/root.zig");
+const notifications = @import("../notifications/root.zig");
+const frontend_ui = @import("../layout/root.zig");
+const workspace_capability = @import("../workspace/root.zig");
 
 const copy_mode = input_capability.copy_mode;
-const keybind = input_capability.keybind;
-const kitty = graphics.kitty;
+const keybind = input_capability;
+const capability_support = graphics;
 const schema = core.schema;
 const layout_mod = workspace_capability.layout;
 const multiplexer = workspace_capability.multiplexer;
@@ -312,13 +312,12 @@ pub const InitialClientState = struct {
 pub const HostAppearance = enum { unknown, light, dark };
 
 pub const HostCapabilities = struct {
-    kitty_graphics: kitty.Support = .unknown,
-    kitty_zlib: kitty.Support = .unknown,
+    images: capability_support.Support = .unknown,
     window_width_px: u32 = 0,
     window_height_px: u32 = 0,
     cell_width_px: u32 = 0,
     cell_height_px: u32 = 0,
-    mouse_pixels: kitty.Support = .unknown,
+    pointer_pixels: capability_support.Support = .unknown,
     appearance: HostAppearance = .unknown,
     terminal_colors: schema.TerminalColors = .{},
 
@@ -350,13 +349,12 @@ pub const HostCapabilities = struct {
     /// Returns the complete capability value after one recognized reply.
     ///
     /// ```zig
-    /// const next = capabilities.withObservation(.{ .mouse_pixels = .supported });
+    /// const next = capabilities.withObservation(.{ .pointer_pixels = .supported });
     /// ```
     pub fn withObservation(capabilities: HostCapabilities, observation: HostCapabilityObservation) HostCapabilities {
         var next = capabilities;
         switch (observation) {
-            .kitty_graphics => |support| next.kitty_graphics = observedSupport(support),
-            .kitty_zlib => |support| next.kitty_zlib = observedSupport(support),
+            .images => |support| next.images = observedSupport(support),
             .window_pixels => |size| {
                 next.window_width_px = size.width;
                 next.window_height_px = size.height;
@@ -365,7 +363,7 @@ pub const HostCapabilities = struct {
                 next.cell_width_px = size.width;
                 next.cell_height_px = size.height;
             },
-            .mouse_pixels => |support| next.mouse_pixels = observedSupport(support),
+            .pointer_pixels => |support| next.pointer_pixels = observedSupport(support),
             .foreground => |color| next.terminal_colors.foreground = .{ color.r, color.g, color.b },
             .background => |color| {
                 next.terminal_colors.background = .{ color.r, color.g, color.b };
@@ -377,41 +375,20 @@ pub const HostCapabilities = struct {
 
         return next;
     }
-
-    /// Returns the complete capability value after unanswered probes expire.
-    ///
-    /// ```zig
-    /// const next = capabilities.withExpiredProbes();
-    /// ```
-    pub fn withExpiredProbes(capabilities: HostCapabilities) HostCapabilities {
-        var next = capabilities;
-        if (next.kitty_graphics == .unknown) {
-            next.kitty_graphics = .unsupported;
-        }
-        if (next.kitty_zlib == .unknown) {
-            next.kitty_zlib = .unsupported;
-        }
-        if (next.mouse_pixels == .unknown) {
-            next.mouse_pixels = .unsupported;
-        }
-
-        return next;
-    }
 };
 
 pub const HostCapabilitySupport = enum { unsupported, supported };
 
 pub const HostCapabilityObservation = union(enum) {
-    kitty_graphics: HostCapabilitySupport,
-    kitty_zlib: HostCapabilitySupport,
+    images: HostCapabilitySupport,
     window_pixels: PixelSize,
     cell_pixels: PixelSize,
-    mouse_pixels: HostCapabilitySupport,
+    pointer_pixels: HostCapabilitySupport,
     foreground: struct { r: u8, g: u8, b: u8 },
     background: struct { r: u8, g: u8, b: u8 },
 };
 
-fn observedSupport(support: HostCapabilitySupport) kitty.Support {
+fn observedSupport(support: HostCapabilitySupport) capability_support.Support {
     return switch (support) {
         .unsupported => .unsupported,
         .supported => .supported,

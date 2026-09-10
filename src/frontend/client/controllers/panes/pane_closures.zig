@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const panes_application = @import("../../application/panes/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
@@ -128,5 +128,5 @@ fn synchronizeActiveResources(context: *anyopaque) !void {
 fn activeGeometryArea(context: *anyopaque) core.ui.Rect {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    return client.view.workbench();
+    return client.geometry().area;
 }

@@ -73,19 +73,6 @@ pub const State = struct {
         });
     }
 
-    /// Example: `const result = state.expireHostCapabilities(...);`.
-    pub fn expireHostCapabilities(state: *State) !?HostCommit {
-        const capabilities = state.host_capabilities.withExpiredProbes();
-        if (std.meta.eql(state.host_capabilities, capabilities)) {
-            return null;
-        }
-
-        return state.reconcileHost(.{
-            .capabilities = capabilities,
-            .size = state.resolveHostSize(capabilities),
-        });
-    }
-
     fn resolveHostSize(state: *const State, capabilities: HostCapabilities) schema.TerminalSize {
         const cell_size = capabilities.cellSize(state.host_size.cols, state.host_size.rows);
 

@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const Io = std.Io;
 const schema = core.schema;
 const ui = core.ui;
-const path_marker = @import("path_marker.zig");
+const path_marker = @import("telar-client").attachments.path_marker;
 const kitty = @import("../graphics/root.zig").kitty;
 const Size = struct { width: u32, height: u32 };
 

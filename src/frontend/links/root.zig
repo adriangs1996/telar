@@ -1,10 +1,10 @@
 //! Client-owned link extraction, gesture state and host opening adapters.
 
-const cells = @import("cells.zig");
+const cells = @import("telar-client").links.cells;
 const file_uri = @import("file_uri.zig");
 const opening = @import("opening.zig");
 const pointer = @import("pointer.zig");
-const target = @import("target.zig");
+const target = @import("telar-client").links.target;
 
 pub const Target = target.Target;
 pub const Position = cells.Position;

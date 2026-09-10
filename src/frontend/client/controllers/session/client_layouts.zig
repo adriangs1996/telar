@@ -41,7 +41,7 @@ pub fn apply(client: *Client, snapshot: schema.ClientLayoutSnapshotView) !void {
         client.navigation_history = history;
     }
 
-    const size = workspace.multiplexer.rectSize(client.view.workbench()) orelse
+    const size = workspace.multiplexer.rectSize(client.geometry().area) orelse
         return error.TerminalTooSmall;
     const request = initialRequest(client, restored, size);
     try request_lifecycle.deliver(client, request);

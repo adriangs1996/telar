@@ -2,12 +2,12 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const agents = @import("../../agents/root.zig");
+const agents = @import("telar-client").agents;
 const attachments = @import("../../attachments/root.zig");
 const graphics = @import("../../graphics/root.zig");
 const input_capability = @import("../../input/root.zig");
 const lua_config = @import("../../config/root.zig");
-const notifications = @import("../../notifications/root.zig");
+const notifications = @import("telar-client").notifications;
 const platform = @import("../../platform/root.zig");
 const plugin_broker = @import("../../plugins/root.zig");
 const presentation = @import("../../presentation/root.zig");
@@ -31,7 +31,7 @@ const session_application = @import("../application/session/root.zig");
 const client_events = @import("../entrypoints/events.zig");
 const client_startup = @import("../controllers/session/client_startup.zig");
 const client_outbox = @import("../connection/outbox.zig");
-const client_model = @import("../model/root.zig");
+const client_model = @import("telar-client").model;
 const client_telemetry = @import("../resources/telemetry.zig");
 const clipboard_images = @import("../controllers/host/clipboard_images.zig");
 const client_clock = @import("../resources/clock.zig");
@@ -292,7 +292,7 @@ test "a Kitty capability response commits before fallback projection and present
         .supported = true,
     } });
 
-    try std.testing.expectEqual(kitty.Support.supported, client.model.hostCapabilities().kitty_graphics);
+    try std.testing.expectEqual(kitty.Support.supported, client.model.hostCapabilities().images);
     try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
     try std.testing.expectEqual(version.host_capabilities + 1, client.model.version().host_capabilities);
     try std.testing.expectEqual(version.pane_graphics + 1, client.model.version().pane_graphics);
@@ -301,6 +301,30 @@ test "a Kitty capability response commits before fallback projection and present
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
+}
+
+test "compression negotiation belongs to the TUI and does not revise the semantic model" {
+    var harness: TestHarness = undefined;
+    try harness.init();
+    defer harness.deinit();
+    const client = harness.client;
+    const version = client.model.version();
+    var handler: InputHandler = .{ .client = client };
+
+    try handler.terminalResponse(.{ .kitty_graphics = .{
+        .image_id = kitty.zlib_query_image_id,
+        .supported = true,
+    } });
+    try std.testing.expectEqual(kitty.Support.supported, client.host_negotiation.zlib_support);
+    try std.testing.expect(client.graphics_store.host_zlib);
+    try std.testing.expectEqualDeep(version, client.model.version());
+
+    try handler.terminalResponse(.{ .kitty_graphics = .{
+        .image_id = kitty.zlib_query_image_id,
+        .supported = false,
+    } });
+    try std.testing.expect(!client.graphics_store.host_zlib);
+    try std.testing.expectEqualDeep(version, client.model.version());
 }
 
 test "client event dispatch observes a completed capability expiry" {
@@ -320,9 +344,9 @@ test "client event dispatch observes a completed capability expiry" {
 
     try std.testing.expect(first == .keep_running);
     const capabilities = client.model.hostCapabilities();
-    try std.testing.expectEqual(kitty.Support.unsupported, capabilities.kitty_graphics);
-    try std.testing.expectEqual(kitty.Support.unsupported, capabilities.kitty_zlib);
-    try std.testing.expectEqual(kitty.Support.unsupported, capabilities.mouse_pixels);
+    try std.testing.expectEqual(kitty.Support.unsupported, capabilities.images);
+    try std.testing.expectEqual(kitty.Support.unsupported, client.host_negotiation.zlib_support);
+    try std.testing.expectEqual(kitty.Support.unsupported, capabilities.pointer_pixels);
     try std.testing.expectEqual(client_model.Version{
         .host_capabilities = 1,
     }, client.model.version());
@@ -396,7 +420,7 @@ test "capability effect failure retains the committed fallback" {
         host_capabilities.handleExpiry(client, {}),
     );
 
-    try std.testing.expectEqual(kitty.Support.unsupported, client.model.hostCapabilities().kitty_graphics);
+    try std.testing.expectEqual(kitty.Support.unsupported, client.model.hostCapabilities().images);
     try std.testing.expectEqual(client_model.Version{
         .host_capabilities = 1,
     }, client.model.version());

@@ -1,24 +1,28 @@
 //! Passive state owned by one disposable client.
 
+test {
+    _ = @import("tests/root.zig");
+}
+
 const std = @import("std");
 const core = @import("telar-core");
-const agents = @import("../../agents/root.zig");
-const attachments = @import("../../attachments/root.zig");
-const bars_capability = @import("../../bars/root.zig");
-const lua_config = @import("../../config/root.zig");
-const graphics = @import("../../graphics/root.zig");
-const input_capability = @import("../../input/root.zig");
-const link_capability = @import("../../links/root.zig");
-const notifications = @import("../../notifications/root.zig");
-const frontend_ui = @import("../../ui/root.zig");
+const agents = @import("../agents/root.zig");
+const attachments = @import("../attachments/root.zig");
+const bars_capability = @import("../bars/root.zig");
+const lua_config = @import("../config/root.zig");
+const graphics = @import("../environment/root.zig");
+const input_capability = @import("../input/root.zig");
+const link_capability = @import("../links/root.zig");
+const notifications = @import("../notifications/root.zig");
+const frontend_ui = @import("../layout/root.zig");
 const history_palette_mod = @import("history_palette.zig");
 const suggestion_mod = @import("suggestion.zig");
-const name_prompt = @import("name_prompt.zig");
-const workspace_capability = @import("../../workspace/root.zig");
+pub const name_prompt = @import("name_prompt.zig");
+const workspace_capability = @import("../workspace/root.zig");
 
 const copy_mode = input_capability.copy_mode;
-const keybind = input_capability.keybind;
-const kitty = graphics.kitty;
+const keybind = input_capability;
+const capability_support = graphics;
 const schema = core.schema;
 const layout_mod = workspace_capability.layout;
 const navigation = workspace_capability.navigation;
@@ -560,15 +564,6 @@ pub const Model = struct {
     /// ```
     pub fn observeHostCapability(model: *Model, observation: HostCapabilityObservation) !?HostCommit {
         return model.applyHostCommit(try model.host.observeHostCapability(observation));
-    }
-
-    /// Settles every unanswered support probe as unsupported.
-    ///
-    /// ```zig
-    /// const commit = try model.expireHostCapabilities() orelse return;
-    /// ```
-    pub fn expireHostCapabilities(model: *Model) !?HostCommit {
-        return model.applyHostCommit(try model.host.expireHostCapabilities());
     }
 
     fn applyHostCommit(model: *Model, commit: ?HostCommit) ?HostCommit {
@@ -3094,3 +3089,17 @@ test "copy mode frame reconciliation and pane release are exact" {
     try std.testing.expect(!model.copyModeActive());
     try std.testing.expectEqual(version.copy + 2, model.version().copy);
 }
+
+pub const types = @import("types.zig");
+
+pub const goto_picker = @import("goto_picker.zig");
+
+pub const history_palette = @import("history_palette.zig");
+
+pub const suggestion = @import("suggestion.zig");
+
+pub const host = @import("host.zig");
+
+pub const clipboard_capture = @import("clipboard_capture.zig");
+
+pub const plugin_execution = @import("plugin_execution.zig");

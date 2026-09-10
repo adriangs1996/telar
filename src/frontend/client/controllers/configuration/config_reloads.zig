@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const configuration_application = @import("../../application/configuration/root.zig");
-const client_model = @import("../../model/root.zig");
-const notifications = @import("../../../notifications/root.zig");
+const client_model = @import("telar-client").model;
+const notifications = @import("telar-client").notifications;
 const bar_updates = @import("bar_updates.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
@@ -52,7 +52,7 @@ pub fn handle(client: *Client, result: anyerror!reload_worker.ConfigReload) !Out
         .gpa = client.gpa,
         .reload = reload,
         .checks = .{
-            .kitty_support = client.model.hostCapabilities().kitty_graphics,
+            .kitty_support = client.model.hostCapabilities().images,
             .sidebar_renderer_locked = client.options.sidebar_renderer_locked,
             .current_sidebar = client.sidebar_rendering,
         },
@@ -206,7 +206,7 @@ fn configureSidebar(raw_context: *anyopaque) !void {
     try client.view.configureSidebar(
         client.sidebar_rendering,
         .{
-            .support = client.model.hostCapabilities().kitty_graphics,
+            .support = client.model.hostCapabilities().images,
             .cell_width = host_size.cell_width_px,
             .cell_height = host_size.cell_height_px,
         },
@@ -227,7 +227,7 @@ fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
 fn offerActivePaneGeometry(raw_context: *anyopaque) !void {
     const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
 
-    try pane_geometry.offerActive(context.client, context.client.view.workbench());
+    try pane_geometry.offerActive(context.client, context.client.geometry().area);
 }
 
 fn applyAdoption(raw_context: *anyopaque) !client_model.ConfigurationCommit {

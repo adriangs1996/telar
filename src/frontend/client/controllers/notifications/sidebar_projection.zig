@@ -2,7 +2,7 @@
 
 const workspace_capability = @import("../../../workspace/root.zig");
 const notifications_application = @import("../../application/notifications/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const pane_geometry = @import("../panes/pane_geometry.zig");
 
 const Client = @import("../../client.zig");
@@ -44,5 +44,5 @@ fn invalidateGraphicsPlacements(context: *anyopaque) void {
 fn offerPaneGeometry(context: *anyopaque, model: *multiplexer.Model) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    try pane_geometry.offerAttached(client, model, client.view.workbench());
+    try pane_geometry.offerAttached(client, model, client.geometry().area);
 }

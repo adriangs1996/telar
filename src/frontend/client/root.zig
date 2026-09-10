@@ -6,7 +6,7 @@
 const std = @import("std");
 const input_capability = @import("../input/root.zig");
 const client_view = @import("presentation/view.zig");
-const client_model = @import("model/root.zig");
+const client_model = @import("telar-client").model;
 const host_capability_adapter = @import("controllers/host/host_capabilities.zig");
 const lua_config = @import("../config/root.zig");
 const action_mod = input_capability.action;
@@ -27,6 +27,7 @@ pub const HostCapabilities = client_model.HostCapabilities;
 pub const HostCapabilityObservation = client_model.HostCapabilityObservation;
 pub const HostCapabilitySupport = client_model.HostCapabilitySupport;
 pub const translateHostCapability = host_capability_adapter.translate;
+pub const settledHostCapabilities = @import("resources/host_negotiation.zig").settledCapabilities;
 
 const InputRouter = Client.InputRouter;
 const defaultBindings = lua_config.loadDefaultBindings;
@@ -42,9 +43,9 @@ test {
     _ = @import("entrypoints/events.zig");
     _ = @import("tests/root.zig");
     _ = @import("entrypoints/runtime_messages.zig");
-    _ = @import("model/root.zig");
-    _ = @import("model/name_prompt.zig");
-    _ = @import("model/tests/root.zig");
+    _ = @import("telar-client").model;
+    _ = @import("telar-client").model.name_prompt;
+    _ = @import("telar-client").model;
     _ = @import("presentation/root.zig");
     _ = @import("resources/root.zig");
     _ = @import("run.zig");

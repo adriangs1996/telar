@@ -1,11 +1,11 @@
 //! Adapts runtime agent messages to the client application boundary.
 
 const core = @import("telar-core");
-const agents = @import("../../../agents/root.zig");
+const agents = @import("telar-client").agents;
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const agents_application = @import("../../application/agents/root.zig");
-const client_model = @import("../../model/root.zig");
-const notifications = @import("../../../notifications/root.zig");
+const client_model = @import("telar-client").model;
+const notifications = @import("telar-client").notifications;
 const notification_flow = @import("../notifications/notifications.zig");
 const sidebar_animations = @import("../notifications/sidebar_animations.zig");
 

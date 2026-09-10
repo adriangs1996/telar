@@ -3,17 +3,17 @@
 const std = @import("std");
 const core = @import("telar-core");
 const bars = @import("../../bars/root.zig");
-const agents = @import("../../agents/root.zig");
+const agents = @import("telar-client").agents;
 const attachments = @import("../../attachments/root.zig");
-const notifications = @import("../../notifications/root.zig");
+const notifications = @import("telar-client").notifications;
 const presentation = @import("../../presentation/root.zig");
 const workspace_capability = @import("../../workspace/root.zig");
 const input_application = @import("../application/input/root.zig");
-const client_model = @import("../model/root.zig");
-const name_prompt = @import("../model/name_prompt.zig");
-const goto_picker_model = @import("../model/goto_picker.zig");
-const history_palette_state = @import("../model/history_palette.zig");
-const suggestion_state = @import("../model/suggestion.zig");
+const client_model = @import("telar-client").model;
+const name_prompt = @import("telar-client").model.name_prompt;
+const goto_picker_model = @import("telar-client").model.goto_picker;
+const history_palette_state = @import("telar-client").model.history_palette;
+const suggestion_state = @import("telar-client").model.suggestion;
 const diff = presentation.diff;
 const pointer = presentation.pointer;
 const icon_graphics = @import("../../graphics/root.zig").icons;
@@ -102,6 +102,7 @@ const GraphicsPlan = struct {
 pub const State = struct {
     scratch: ui.Buffer,
     regions: Regions,
+    geometry_state: @import("telar-client").workspace.geometry.State,
     theme: theme_mod.Theme,
     icon_theme: ui.icons.Theme,
     hits: Hits = .{},
@@ -150,12 +151,15 @@ pub const State = struct {
     /// var view = try State.initWithAppearance(gpa, .{ .width = 80, .height = 24 }, .{ .theme = theme, .icons = .nerd_font });
     /// ```
     pub fn initWithAppearance(gpa: std.mem.Allocator, dimensions: Dimensions, appearance: Appearance) !State {
+        const regions: Regions = .calculate(dimensions.width, dimensions.height, .{
+            .visible = true,
+            .preferred_width = sidebar_width,
+        });
+
         return .{
             .scratch = try .init(gpa, dimensions.width, dimensions.height),
-            .regions = .calculate(dimensions.width, dimensions.height, .{
-                .visible = true,
-                .preferred_width = sidebar_width,
-            }),
+            .regions = regions,
+            .geometry_state = .{ .current = .{ .area = regions.workbench, .revision = 1 } },
             .theme = appearance.theme,
             .icon_theme = appearance.icons,
             .kitty_sidebar = .init(gpa),
@@ -187,7 +191,12 @@ pub const State = struct {
     }
 
     pub fn workbench(state: *const State) ui.Rect {
-        return state.regions.workbench;
+        return state.geometry().area;
+    }
+
+    /// Example: `const region = view.geometry();`.
+    pub fn geometry(state: *const State) @import("telar-client").workspace.geometry.Region {
+        return state.geometry_state.current;
     }
 
     /// Returns the revision of disposable view state changed by host input.
@@ -205,6 +214,7 @@ pub const State = struct {
             .visible = state.sidebar_requested,
             .preferred_width = state.sidebar_preferred_width,
         });
+        state.geometry_state.update(state.regions.workbench);
     }
 
     pub fn palette(state: *const State) *const theme_mod.Palette {

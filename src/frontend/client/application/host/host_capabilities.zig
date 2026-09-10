@@ -1,7 +1,7 @@
-//! Application use cases for host-capability observations and expiry.
+//! Application use cases for host-capability presentation capability observations.
 
 const std = @import("std");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 
 pub const Effects = struct {
     context: *anyopaque,
@@ -24,13 +24,14 @@ pub const Handler = struct {
         return commit;
     }
 
-    /// Settles unanswered probes before synchronizing their fallback resources.
-    ///
-    /// ```zig
-    /// const commit = try handler.expire() orelse return;
-    /// ```
-    pub fn expire(handler: *Handler) !?client_model.HostCommit {
-        const commit = try handler.model.expireHostCapabilities() orelse return null;
+    /// Commits a complete adapter observation before delivering resources.
+    /// Example: `_ = try handler.reconcile(capabilities);`.
+    pub fn reconcile(handler: *Handler, capabilities: client_model.HostCapabilities) !?client_model.HostCommit {
+        var size = handler.model.hostSize();
+        const cell_size = capabilities.cellSize(size.cols, size.rows);
+        size.cell_width_px = cell_size.width;
+        size.cell_height_px = cell_size.height;
+        const commit = try handler.model.reconcileHost(.{ .capabilities = capabilities, .size = size }) orelse return null;
 
         try handler.effects.deliver(handler.effects.context, commit);
         return commit;
@@ -72,7 +73,7 @@ test "Handler commits an observation before synchronizing resources" {
         .effects = capture.port(),
     };
 
-    const commit = (try handler.observe(.{ .kitty_graphics = .supported })).?;
+    const commit = (try handler.observe(.{ .images = .supported })).?;
 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
@@ -86,7 +87,7 @@ test "Handler commits an observation before synchronizing resources" {
     );
 }
 
-test "Handler suppresses repeated observations and expiry" {
+test "Handler suppresses repeated presentation capability observations" {
     var model = client_model.Model.init(std.testing.allocator, true);
     defer model.deinit();
     var capture: EffectsCapture = .{ .model = &model };
@@ -95,13 +96,13 @@ test "Handler suppresses repeated observations and expiry" {
         .effects = capture.port(),
     };
 
-    _ = try handler.observe(.{ .kitty_graphics = .supported });
-    _ = try handler.expire();
+    _ = try handler.observe(.{ .images = .supported });
+    _ = try handler.reconcile(model.hostCapabilities().withObservation(.{ .pointer_pixels = .unsupported }));
     const calls = capture.calls;
     const version = model.version();
 
-    try std.testing.expect((try handler.observe(.{ .kitty_graphics = .supported })) == null);
-    try std.testing.expect((try handler.expire()) == null);
+    try std.testing.expect((try handler.observe(.{ .images = .supported })) == null);
+    try std.testing.expect((try handler.reconcile(model.hostCapabilities().withObservation(.{ .pointer_pixels = .unsupported }))) == null);
     try std.testing.expectEqual(calls, capture.calls);
     try std.testing.expectEqualDeep(version, model.version());
 }
@@ -120,7 +121,7 @@ test "Handler retains a capability commit after effect failure" {
 
     try std.testing.expectError(
         error.HostCapabilityEffectsFailed,
-        handler.observe(.{ .mouse_pixels = .supported }),
+        handler.observe(.{ .pointer_pixels = .supported }),
     );
 
     try std.testing.expect(capture.observed_commit);
@@ -129,7 +130,7 @@ test "Handler retains a capability commit after effect failure" {
         model.version(),
     );
     try std.testing.expectEqual(
-        @as(@TypeOf(model.hostCapabilities().mouse_pixels), .supported),
-        model.hostCapabilities().mouse_pixels,
+        @as(@TypeOf(model.hostCapabilities().pointer_pixels), .supported),
+        model.hostCapabilities().pointer_pixels,
     );
 }

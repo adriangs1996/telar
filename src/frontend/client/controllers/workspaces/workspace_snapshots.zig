@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const workspace_capability = @import("../../../workspace/root.zig");
 const workspaces_application = @import("../../application/workspaces/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const active_pane_resources = @import("../panes/active_pane_resources.zig");
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
@@ -70,7 +70,7 @@ fn deliverReconciliation(context: *anyopaque, reconciliation: *const client_mode
     const client: *Client = @ptrCast(@alignCast(context));
     var use_case: workspace_snapshot_delivery.DeliverWorkspaceSnapshotHandler = .{
         .model = &client.model,
-        .area = client.view.workbench(),
+        .area = client.geometry().area,
         .geometry_effects = pane_geometry.offerEffects(client),
         .effects = .{
             .context = client,

@@ -1,7 +1,7 @@
 //! Application policy for delivering one classified clipboard image result.
 
 const std = @import("std");
-const notification_capability = @import("../../../notifications/root.zig");
+const notification_capability = @import("telar-client").notifications;
 const clipboard_image = @import("clipboard_image.zig");
 
 pub const Effects = struct {

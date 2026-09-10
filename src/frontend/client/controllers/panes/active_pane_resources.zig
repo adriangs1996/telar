@@ -1,10 +1,10 @@
 //! Adapts active-pane resource commands to one concrete client.
 
 const core = @import("telar-core");
-const agents = @import("../../../agents/root.zig");
+const agents = @import("telar-client").agents;
 const attachments = @import("../../../attachments/root.zig");
 const panes_application = @import("../../application/panes/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const pane_focus_reports = @import("pane_focus_reports.zig");
 const pane_geometry = @import("pane_geometry.zig");
 const tab_snapshots = @import("../tabs/tab_snapshots.zig");
@@ -78,7 +78,7 @@ fn syncAttachmentTarget(raw_context: *anyopaque, target: ?attachments.Target) ?u
         return null;
     }
 
-    return client.view.workbench();
+    return client.geometry().area;
 }
 
 fn syncFocusReporting(raw_context: *anyopaque) !void {

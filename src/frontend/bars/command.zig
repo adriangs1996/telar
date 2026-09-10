@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const model = @import("model.zig");
+const model = @import("telar-client").bars.model;
 
 const Io = std.Io;
 

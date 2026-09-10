@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const workspace_capability = @import("../../../workspace/root.zig");
 const panes_application = @import("../../application/panes/root.zig");
 const workspaces_application = @import("../../application/workspaces/root.zig");
-const client_model = @import("../../model/root.zig");
+const client_model = @import("telar-client").model;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const workspace_transitions = @import("workspace_transitions.zig");
 
@@ -76,7 +76,7 @@ fn sendCreation(context: *anyopaque, creation: create_workspace.WorkspaceCreatio
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliverCreateWorkspace(client, .{
         .request_id = request_id,
-        .size = multiplexer.rectSize(client.view.workbench()) orelse return error.TerminalTooSmall,
+        .size = multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
         .name = creation.name,
         .launch = .{
             .cwd = client.options.cwd,

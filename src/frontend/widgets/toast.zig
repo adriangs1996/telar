@@ -1,6 +1,6 @@
 //! Toast overlay rendering for the client notification center.
 
-const notifications = @import("../notifications/root.zig");
+const notifications = @import("telar-client").notifications;
 const widget = @import("context.zig");
 const ui = @import("../ui/root.zig");
 

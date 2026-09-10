@@ -1,6 +1,6 @@
 //! Configurable, bounded top and bottom bar capability.
 
-const model = @import("model.zig");
+const model = @import("telar-client").bars.model;
 
 pub const command = @import("command.zig");
 pub const max_segments = model.max_segments;
