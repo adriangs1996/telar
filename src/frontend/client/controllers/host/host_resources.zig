@@ -1,7 +1,7 @@
 //! Adapts committed host-resource commands to one concrete client.
 
 const core = @import("telar-core");
-const host_application = @import("../../application/host/root.zig");
+const host_application = @import("telar-client").application.host;
 const client_model = @import("telar-client").model;
 const pane_geometry = @import("../panes/pane_geometry.zig");
 const pane_graphics = @import("../panes/pane_graphics.zig");

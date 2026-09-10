@@ -1,7 +1,7 @@
 //! Projects committed sidebar visibility into disposable client resources.
 
 const workspace_capability = @import("../../../workspace/root.zig");
-const notifications_application = @import("../../application/notifications/root.zig");
+const notifications_application = @import("telar-client").application.notifications;
 const client_model = @import("telar-client").model;
 const pane_geometry = @import("../panes/pane_geometry.zig");
 

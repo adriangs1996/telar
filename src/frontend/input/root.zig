@@ -9,7 +9,7 @@ pub const edit = @import("telar-client").input.edit;
 pub const host = @import("host.zig");
 pub const keybind = @import("keybind.zig");
 pub const key_lease = @import("telar-client").input.key_lease;
-pub const mouse_protocol = @import("mouse_protocol.zig");
+pub const mouse_protocol = @import("telar-client").input.mouse_protocol;
 
 // Preserve the former `frontend.input` surface while making input a namespace.
 pub const Key = host.Key;

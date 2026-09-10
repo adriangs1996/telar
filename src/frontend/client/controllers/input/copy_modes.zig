@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const pane_viewports = @import("../panes/pane_viewports.zig");
 const link_openings = @import("link_openings.zig");
 
@@ -114,7 +114,7 @@ fn handler(client: *Client) copy_mode.CopyModeHandler {
     };
 }
 
-fn openLink(context: *anyopaque, target: @import("../../../links/root.zig").Target) !void {
+fn openLink(context: *anyopaque, target: @import("telar-client").links.Target) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     _ = try link_openings.apply(client, target);

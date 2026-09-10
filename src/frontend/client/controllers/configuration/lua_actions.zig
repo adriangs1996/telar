@@ -2,7 +2,7 @@
 
 const lua_config = @import("../../../config/root.zig");
 const input = @import("../../../input/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 
 const Client = @import("../../client.zig");
 const client_actions = @import("../input/actions.zig");

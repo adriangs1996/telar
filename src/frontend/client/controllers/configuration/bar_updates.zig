@@ -4,9 +4,9 @@ const std = @import("std");
 const bars = @import("../../../bars/root.zig");
 const lua_config = @import("../../../config/root.zig");
 const platform = @import("../../../platform/root.zig");
-const configuration_application = @import("../../application/configuration/root.zig");
-const client_clock = @import("../../resources/clock.zig");
-const deadline_timer = @import("../../resources/deadline_timer.zig");
+const configuration_application = @import("telar-client").application.configuration;
+const client_clock = @import("telar-client").resources.clock;
+const deadline_timer = @import("telar-client").resources.deadline_timer;
 
 const Client = @import("../../client.zig");
 const apply_bar_update = configuration_application.bar_update;

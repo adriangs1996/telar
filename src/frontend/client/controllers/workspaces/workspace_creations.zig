@@ -2,8 +2,8 @@
 
 const core = @import("telar-core");
 const workspace_capability = @import("../../../workspace/root.zig");
-const panes_application = @import("../../application/panes/root.zig");
-const workspaces_application = @import("../../application/workspaces/root.zig");
+const panes_application = @import("telar-client").application.panes;
+const workspaces_application = @import("telar-client").application.workspaces;
 const client_model = @import("telar-client").model;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 const workspace_transitions = @import("workspace_transitions.zig");

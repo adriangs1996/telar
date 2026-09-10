@@ -1,6 +1,6 @@
 //! Adapts one model-owned pane paste to the existing pane-input boundary.
 
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const pane_inputs = @import("pane_inputs.zig");
 
 const Client = @import("../../client.zig");

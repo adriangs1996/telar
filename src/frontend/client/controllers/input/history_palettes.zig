@@ -8,12 +8,12 @@ const history_palette = @import("telar-client").model.history_palette;
 const name_prompts = @import("name_prompts.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const connection_outbox = @import("../../connection/outbox.zig");
+const connection_outbox = @import("telar-client").connection.outbox;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 const Client = @import("../../client.zig");
 const schema = core.schema;
-const history_application = @import("../../application/input/root.zig").history_browser;
+const history_application = @import("telar-client").application.input.history_browser;
 const inspection = @import("../../presentation/root.zig").history_inspection;
 
 fn handler(client: *Client) history_application.Handler {
@@ -214,7 +214,7 @@ pub fn canSubmit(client: *Client, selection: u16) bool {
     };
     const active = client.model.workspace.activeConst() orelse return false;
     const pane = active.model.focusedPaneConst() orelse return false;
-    const pane_input = @import("../../application/input/root.zig").pane_input;
+    const pane_input = @import("telar-client").application.input.pane_input;
     pane_input.validateHistoryText(command, pane.input_modes.bracketed_paste) catch |err| {
         handler(client).reject(if (err == error.UnframedHistoryText) "Multiline/tab paste requires shell bracketed-paste support" else "Command contains terminal controls; cannot paste");
         return false;

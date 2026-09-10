@@ -49,10 +49,7 @@ pub const RenderStats = struct {
 
 pub const PresentationCommit = client_panes.PresentationCommit;
 
-pub const CopyProjection = struct {
-    pane_id: schema.PaneId,
-    view: copy_mode.View,
-};
+pub const CopyProjection = @import("telar-client").workspace.multiplexer.CopyProjection;
 
 pub const CompositionInput = struct {
     area: ui.Rect,

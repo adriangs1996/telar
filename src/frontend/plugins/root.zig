@@ -5,7 +5,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const action_mod = @import("../input/root.zig").action;
+const action_mod = @import("telar-client").input.action;
 const lua_config = @import("../config/root.zig");
 const protocol = @import("protocol.zig");
 

@@ -3,12 +3,12 @@
 const std = @import("std");
 const graphics = @import("../../../graphics/root.zig");
 const presentation = @import("../../../presentation/root.zig");
-const host_application = @import("../../application/host/root.zig");
-const client_clock = @import("../../resources/clock.zig");
+const host_application = @import("telar-client").application.host;
+const client_clock = @import("telar-client").resources.clock;
 const client_model = @import("telar-client").model;
 const host_resources = @import("host_resources.zig");
 const negotiation = @import("../../resources/host_negotiation.zig");
-const deadline_timer = @import("../../resources/deadline_timer.zig");
+const deadline_timer = @import("telar-client").resources.deadline_timer;
 
 const Client = @import("../../client.zig");
 const host_capability = host_application.host_capabilities;

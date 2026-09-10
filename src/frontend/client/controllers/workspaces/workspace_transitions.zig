@@ -1,8 +1,8 @@
 //! Adapts committed workspace transitions to navigation and client ports.
 
 const core = @import("telar-core");
-const panes_application = @import("../../application/panes/root.zig");
-const workspaces_application = @import("../../application/workspaces/root.zig");
+const panes_application = @import("telar-client").application.panes;
+const workspaces_application = @import("telar-client").application.workspaces;
 const client_model = @import("telar-client").model;
 const host_inputs = @import("../input/host_inputs.zig");
 const active_pane_resources = @import("../panes/active_pane_resources.zig");

@@ -1,7 +1,7 @@
 //! Wires pane closure and exit use cases to one disposable client.
 
 const core = @import("telar-core");
-const panes_application = @import("../../application/panes/root.zig");
+const panes_application = @import("telar-client").application.panes;
 const client_model = @import("telar-client").model;
 const active_pane_resources = @import("active_pane_resources.zig");
 const pane_geometry = @import("pane_geometry.zig");

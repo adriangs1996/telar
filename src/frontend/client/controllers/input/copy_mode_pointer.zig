@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const presentation = @import("../../../presentation/root.zig");
 const workspace_capability = @import("../../../workspace/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const copy_modes = @import("copy_modes.zig");
 
 const Client = @import("../../client.zig");
@@ -84,7 +84,7 @@ fn cancelPointer(raw_context: *anyopaque) !void {
     _ = try copy_modes.cancelPointer(context.client);
 }
 
-fn pointer(raw_context: *anyopaque, motion: @import("../../../input/root.zig").copy_mode.PointerMotion) !void {
+fn pointer(raw_context: *anyopaque, motion: @import("telar-client").input.copy_mode.PointerMotion) !void {
     const context: *Context = @ptrCast(@alignCast(raw_context));
 
     _ = try copy_modes.pointer(context.client, motion);

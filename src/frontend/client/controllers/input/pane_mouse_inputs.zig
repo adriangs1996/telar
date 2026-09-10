@@ -4,10 +4,10 @@ const std = @import("std");
 const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
 const workspace_capability = @import("../../../workspace/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const pane_inputs = @import("pane_inputs.zig");
 const copy_modes = @import("copy_modes.zig");
-const clock = @import("../../resources/clock.zig");
+const clock = @import("telar-client").resources.clock;
 const pane_viewports = @import("../panes/pane_viewports.zig");
 
 const Client = @import("../../client.zig");

@@ -2,7 +2,7 @@
 //! requested them and delivers one translated confirmation.
 
 const core = @import("telar-core");
-const panes_application = @import("../../application/panes/root.zig");
+const panes_application = @import("telar-client").application.panes;
 
 const Client = @import("../../client.zig");
 const pane_attachments = @import("pane_attachments.zig");

@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const link_capability = @import("../../../links/root.zig");
 const presentation = @import("../../../presentation/root.zig");
 const workspace_capability = @import("../../../workspace/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const notification_flow = @import("../notifications/notifications.zig");
 const tab_creations = @import("../tabs/tab_creations.zig");
 

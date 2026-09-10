@@ -1,7 +1,7 @@
 //! Wires configured actions to native, Lua, plugin and semantic input ports.
 
 const input = @import("../../../input/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const client_actions = @import("actions.zig");
 const key_routing = @import("key_routing.zig");
 const lua_actions = @import("../configuration/lua_actions.zig");

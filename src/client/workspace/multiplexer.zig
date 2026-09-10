@@ -501,3 +501,8 @@ pub fn rectSize(rect: ui.Rect) ?schema.TerminalSize {
 }
 
 const placeholder_size: schema.TerminalSize = .{ .cols = 1, .rows = 1 };
+
+pub const CopyProjection = struct {
+    pane_id: schema.PaneId,
+    view: input.copy_mode.View,
+};

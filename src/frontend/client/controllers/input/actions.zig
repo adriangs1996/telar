@@ -4,7 +4,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const input = @import("../../../input/root.zig");
 const workspace = @import("../../../workspace/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 
 const Client = @import("../../client.zig");
 const client_detachments = @import("../session/client_detachments.zig");
@@ -26,7 +26,7 @@ const tab_moves = @import("../tabs/tab_moves.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const pane_mouse_input = @import("pane_mouse_inputs.zig");
-const presentation = @import("../../application/presentation/root.zig");
+const presentation = @import("telar-client").application.presentation;
 
 const Action = input.action.Action;
 const keybind = input.keybind;

@@ -79,7 +79,7 @@ const plugin_actions = @import("controllers/configuration/plugin_actions.zig");
 const presentation_lifecycle = @import("presentation/presentation_lifecycle.zig");
 const presenter_mod = @import("presentation/presenter.zig");
 const request_lifecycle_mod = @import("connection/request_lifecycle.zig");
-const runtime_transport_mod = @import("connection/runtime_transport.zig");
+const runtime_transport_mod = @import("telar-client").connection.runtime_transport;
 const sidebar_animations = @import("controllers/notifications/sidebar_animations.zig");
 const host_output = @import("resources/host_output.zig");
 

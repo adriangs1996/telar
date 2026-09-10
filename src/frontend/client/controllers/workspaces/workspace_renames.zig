@@ -1,6 +1,6 @@
 //! Client adapters for workspace-rename requests.
 
-const workspaces_application = @import("../../application/workspaces/root.zig");
+const workspaces_application = @import("telar-client").application.workspaces;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
 
 const Client = @import("../../client.zig");

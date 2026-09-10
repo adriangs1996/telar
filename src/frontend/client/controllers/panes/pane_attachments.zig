@@ -1,8 +1,8 @@
 //! Wires per-pane attachment confirmation and canonical recovery to a client.
 
 const core = @import("telar-core");
-const panes_application = @import("../../application/panes/root.zig");
-const tabs_application = @import("../../application/tabs/root.zig");
+const panes_application = @import("telar-client").application.panes;
+const tabs_application = @import("telar-client").application.tabs;
 
 const Client = @import("../../client.zig");
 const attach_pane = panes_application.attach_pane;

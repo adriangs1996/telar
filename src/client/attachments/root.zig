@@ -28,3 +28,5 @@ pub const Plan = types.Plan;
 test {
     @import("std").testing.refAllDecls(@This());
 }
+pub const markers = @import("markers.zig");
+pub const promptContinuesAtCursor = markers.promptContinuesAtCursor;

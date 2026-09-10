@@ -1,7 +1,7 @@
 //! Wires semantic view interactions to existing client use cases.
 
 const workspace_capability = @import("../../../workspace/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const agent_navigation = @import("../agents/agent_navigation.zig");
 const attachment_prompts = @import("attachment_prompts.zig");
 const name_prompts = @import("name_prompts.zig");

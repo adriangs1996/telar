@@ -11,7 +11,7 @@ const bars = @import("../bars/root.zig");
 const bar_content = @import("bar_content.zig");
 const status_bar = @import("status_bar.zig");
 const widget = @import("context.zig");
-const workspace_list = @import("../workspace/root.zig").workspace_list;
+const workspace_list = @import("telar-client").workspace.workspace_list;
 const ui = @import("../ui/root.zig");
 
 const schema = core.schema;

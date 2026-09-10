@@ -5,9 +5,9 @@ const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
 const lua_config = @import("../../../config/root.zig");
 const widgets = @import("../../../widgets/root.zig");
-const input_application = @import("../../application/input/root.zig");
-const client_clock = @import("../../resources/clock.zig");
-const deadline_timer = @import("../../resources/deadline_timer.zig");
+const input_application = @import("telar-client").application.input;
+const client_clock = @import("telar-client").resources.clock;
+const deadline_timer = @import("telar-client").resources.deadline_timer;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 const Client = @import("../../client.zig");

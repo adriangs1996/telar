@@ -1,6 +1,6 @@
 //! Wires streamed host paste ownership to prompt and pane paste use cases.
 
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const name_prompts = @import("name_prompts.zig");
 const pane_pastes = @import("pane_pastes.zig");
 

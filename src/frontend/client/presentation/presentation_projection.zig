@@ -2,7 +2,7 @@
 //! one synchronous client frame.
 
 const presenter = @import("presenter.zig");
-const multiplexer = @import("../../workspace/root.zig").multiplexer;
+const multiplexer = @import("telar-client").workspace.multiplexer;
 
 const Client = @import("../client.zig");
 

@@ -3,9 +3,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("telar-core");
-const session_application = @import("../../application/session/root.zig");
+const session_application = @import("telar-client").application.session;
 const notifications = @import("telar-client").notifications;
-const client_requests = @import("../../connection/requests.zig");
+const client_requests = @import("telar-client").connection.requests;
 
 const Client = @import("../../client.zig");
 const notification_flow = @import("../notifications/notifications.zig");

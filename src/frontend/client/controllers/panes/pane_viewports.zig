@@ -1,7 +1,7 @@
 //! Wires committed pane viewports to graphics and the runtime attachment.
 
 const core = @import("telar-core");
-const panes_application = @import("../../application/panes/root.zig");
+const panes_application = @import("telar-client").application.panes;
 const client_model = @import("telar-client").model;
 
 const Client = @import("../../client.zig");

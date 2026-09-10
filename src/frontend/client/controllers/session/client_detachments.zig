@@ -1,7 +1,7 @@
 //! Detaches every runtime pane attachment owned by one client.
 
 const core = @import("telar-core");
-const session_application = @import("../../application/session/root.zig");
+const session_application = @import("telar-client").application.session;
 
 const Client = @import("../../client.zig");
 const tab_attachments = @import("../tabs/tab_attachments.zig");

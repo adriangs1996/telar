@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const keybind = @import("../../input/root.zig").keybind;
+const keybind = @import("telar-client").input.keybind;
 const TestHarness = @import("support.zig").TestHarness;
 const InputHandler = @import("../resources/input_handler.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");

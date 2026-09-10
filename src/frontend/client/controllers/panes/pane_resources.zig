@@ -1,7 +1,7 @@
 //! Disposable client resources keyed by pane identity.
 
 const core = @import("telar-core");
-const panes_application = @import("../../application/panes/root.zig");
+const panes_application = @import("telar-client").application.panes;
 
 const Client = @import("../../client.zig");
 const pane_resource_release = panes_application.pane_resource_release;

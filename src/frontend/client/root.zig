@@ -22,7 +22,7 @@ pub const View = client_view.State;
 pub const sidebar_width = client_view.sidebar_width;
 pub const ConfiguredBinding = lua_config.ConfiguredBinding;
 pub const trustWatchFingerprint = @import("resources/config_reload.zig").trustWatchFingerprint;
-pub const Outbox = @import("connection/outbox.zig").Outbox;
+pub const Outbox = @import("telar-client").connection.outbox.Outbox;
 pub const HostCapabilities = client_model.HostCapabilities;
 pub const HostCapabilityObservation = client_model.HostCapabilityObservation;
 pub const HostCapabilitySupport = client_model.HostCapabilitySupport;
@@ -36,7 +36,7 @@ const mouseTracked = mouse_protocol.tracked;
 
 test {
     // The client capability's own files, collected for the suite.
-    _ = @import("application/root.zig");
+    _ = @import("telar-client").application;
     _ = @import("client.zig");
     _ = @import("connection/root.zig");
     _ = @import("controllers/root.zig");

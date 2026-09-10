@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const agents = @import("telar-client").agents;
-const agents_application = @import("../../application/agents/root.zig");
+const agents_application = @import("telar-client").application.agents;
 const client_model = @import("telar-client").model;
 const pane_focus = @import("../panes/pane_focus.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");

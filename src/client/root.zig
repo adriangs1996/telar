@@ -17,3 +17,8 @@ pub const notifications = @import("notifications/root.zig");
 test {
     @import("std").testing.refAllDecls(@This());
 }
+pub const connection = @import("connection/root.zig");
+pub const resources = @import("resources/root.zig");
+pub const application = @import("application/root.zig");
+
+pub const entrypoints = @import("entrypoints/root.zig");

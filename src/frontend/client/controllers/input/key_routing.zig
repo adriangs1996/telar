@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const attachment_prompts = @import("attachment_prompts.zig");
 const clipboard_images = @import("../host/clipboard_images.zig");
 const copy_modes = @import("copy_modes.zig");

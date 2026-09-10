@@ -2,7 +2,7 @@
 //! no request ID, so probes never overlap and unsolicited reports are ignored.
 
 const std = @import("std");
-const deadline_timer = @import("deadline_timer.zig");
+const deadline_timer = @import("telar-client").resources.deadline_timer;
 
 pub const timeout_ns = 250 * std.time.ns_per_ms;
 pub const pixel_query = "\x1b[14t\x1b[16t";

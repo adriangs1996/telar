@@ -1,7 +1,7 @@
 //! Adapts runtime TLS interception state to the client application boundary.
 
 const core = @import("telar-core");
-const agents_application = @import("../../application/agents/root.zig");
+const agents_application = @import("telar-client").application.agents;
 const client_model = @import("telar-client").model;
 const notifications = @import("telar-client").notifications;
 

@@ -1,7 +1,7 @@
 //! Bounded one-shot protocol from a plugin worker back to the client broker.
 
 const std = @import("std");
-const action_mod = @import("../input/root.zig").action;
+const action_mod = @import("telar-client").input.action;
 const lua_config = @import("../config/root.zig");
 const core = @import("telar-core");
 

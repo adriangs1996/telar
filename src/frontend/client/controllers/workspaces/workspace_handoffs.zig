@@ -2,9 +2,9 @@
 
 const core = @import("telar-core");
 const workspace_capability = @import("../../../workspace/root.zig");
-const panes_application = @import("../../application/panes/root.zig");
-const tabs_application = @import("../../application/tabs/root.zig");
-const workspaces_application = @import("../../application/workspaces/root.zig");
+const panes_application = @import("telar-client").application.panes;
+const tabs_application = @import("telar-client").application.tabs;
+const workspaces_application = @import("telar-client").application.workspaces;
 const client_model = @import("telar-client").model;
 const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
 const pane_pastes = @import("../input/pane_pastes.zig");

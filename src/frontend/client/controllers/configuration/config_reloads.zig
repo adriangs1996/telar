@@ -1,7 +1,7 @@
 //! Adapts asynchronous configuration reloads to one client's application state.
 
 const std = @import("std");
-const configuration_application = @import("../../application/configuration/root.zig");
+const configuration_application = @import("telar-client").application.configuration;
 const client_model = @import("telar-client").model;
 const notifications = @import("telar-client").notifications;
 const bar_updates = @import("bar_updates.zig");

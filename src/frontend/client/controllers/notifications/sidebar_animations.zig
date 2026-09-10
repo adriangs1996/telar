@@ -1,8 +1,8 @@
 //! Connects the sidebar animation use case to the client timer.
 
 const std = @import("std");
-const notifications_application = @import("../../application/notifications/root.zig");
-const client_clock = @import("../../resources/clock.zig");
+const notifications_application = @import("telar-client").application.notifications;
+const client_clock = @import("telar-client").resources.clock;
 const client_model = @import("telar-client").model;
 
 const Client = @import("../../client.zig");

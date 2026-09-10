@@ -1,7 +1,7 @@
 //! Adapts tab attachment retirement to transport, requests and graphics.
 
 const core = @import("telar-core");
-const tabs_application = @import("../../application/tabs/root.zig");
+const tabs_application = @import("telar-client").application.tabs;
 const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
 const pane_pastes = @import("../input/pane_pastes.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");

@@ -1,6 +1,6 @@
 //! Adapts model-owned pane focus reporting and canonical retirement.
 
-const panes_application = @import("../../application/panes/root.zig");
+const panes_application = @import("telar-client").application.panes;
 
 const Client = @import("../../client.zig");
 const pane_focus_reporting = panes_application.pane_focus_reporting;

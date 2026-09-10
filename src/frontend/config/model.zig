@@ -16,9 +16,9 @@ pub const default_memory_limit: usize = 16 * 1024 * 1024;
 pub const default_load_instruction_limit: u64 = 1_000_000;
 pub const max_bindings = 256;
 pub const max_binding_keys = 5;
-pub const max_callback_effects = 16;
-pub const max_expression_keys = 16;
-pub const max_expression_paste_bytes = 4096;
+pub const max_callback_effects = @import("telar-client").config.effects.max_callback_effects;
+pub const max_expression_keys = @import("telar-client").config.effects.max_expression_keys;
+pub const max_expression_paste_bytes = @import("telar-client").config.effects.max_expression_paste_bytes;
 pub const max_plugins = 32;
 pub const max_plugin_path_bytes = 512;
 pub const max_history_path_bytes = 1024;
@@ -359,39 +359,13 @@ pub const BarInvocation = struct {
     context: BarCallbackContext,
 };
 
-pub const EffectBatch = struct {
-    items: [max_callback_effects]action.Action = undefined,
-    len: u8 = 0,
+pub const EffectBatch = @import("telar-client").config.effects.EffectBatch;
 
-    pub fn slice(batch: *const EffectBatch) []const action.Action {
-        return batch.items[0..batch.len];
-    }
-};
+pub const InputKeys = @import("telar-client").config.effects.InputKeys;
 
-pub const InputKeys = struct {
-    items: [max_expression_keys]keybind.Key = undefined,
-    len: u8 = 0,
+pub const InputPaste = @import("telar-client").config.effects.InputPaste;
 
-    pub fn slice(keys: *const InputKeys) []const keybind.Key {
-        return keys.items[0..keys.len];
-    }
-};
-
-pub const InputPaste = struct {
-    bytes: [max_expression_paste_bytes]u8 = undefined,
-    len: u16 = 0,
-
-    pub fn slice(paste: *const InputPaste) []const u8 {
-        return paste.bytes[0..paste.len];
-    }
-};
-
-pub const InputDecision = union(enum) {
-    consume,
-    forward_binding: InputKeys,
-    keys: InputKeys,
-    paste: InputPaste,
-};
+pub const InputDecision = @import("telar-client").config.effects.InputDecision;
 
 pub const Limits = struct {
     memory: usize = default_memory_limit,

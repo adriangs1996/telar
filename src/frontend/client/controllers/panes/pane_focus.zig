@@ -1,7 +1,7 @@
 //! Wires semantic pane focus to active-pane resource delivery.
 
 const core = @import("telar-core");
-const panes_application = @import("../../application/panes/root.zig");
+const panes_application = @import("telar-client").application.panes;
 const client_model = @import("telar-client").model;
 const active_pane_resources = @import("active_pane_resources.zig");
 

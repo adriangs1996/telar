@@ -1,7 +1,7 @@
 //! Owns the replaceable timer used by the client notification lifecycle.
 
-const client_clock = @import("clock.zig");
-const deadline_timer = @import("deadline_timer.zig");
+const client_clock = @import("telar-client").resources.clock;
+const deadline_timer = @import("telar-client").resources.deadline_timer;
 
 const Client = @import("../client.zig");
 

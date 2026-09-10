@@ -5,7 +5,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const client_clock = @import("../resources/clock.zig");
+const client_clock = @import("telar-client").resources.clock;
 const agents = @import("telar-client").agents;
 const graphics = @import("../../graphics/root.zig");
 const attachments = @import("../../attachments/root.zig");

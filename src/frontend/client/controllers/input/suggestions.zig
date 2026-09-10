@@ -8,7 +8,7 @@ const suggestion = @import("telar-client").model.suggestion;
 const name_prompts = @import("name_prompts.zig");
 const pane_inputs = @import("pane_inputs.zig");
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const connection_outbox = @import("../../connection/outbox.zig");
+const connection_outbox = @import("telar-client").connection.outbox;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 
 const Client = @import("../../client.zig");

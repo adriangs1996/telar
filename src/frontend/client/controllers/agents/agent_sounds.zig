@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const sound_capability = @import("../../../sound/root.zig");
-const agents_application = @import("../../application/agents/root.zig");
+const agents_application = @import("telar-client").application.agents;
 
 const Client = @import("../../client.zig");
 const agent_sound = agents_application.agent_sound;

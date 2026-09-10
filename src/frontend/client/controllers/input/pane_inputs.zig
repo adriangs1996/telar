@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const input_capability = @import("../../../input/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const pane_viewports = @import("../panes/pane_viewports.zig");
 const client_model = @import("telar-client").model;
 

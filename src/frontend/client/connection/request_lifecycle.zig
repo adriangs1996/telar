@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const client_requests = @import("requests.zig");
+const client_requests = @import("telar-client").connection.requests;
 const runtime_transport = @import("../entrypoints/runtime_io.zig");
 
 const Client = @import("../client.zig");
@@ -10,52 +10,13 @@ const schema = core.schema;
 
 /// The request that opens the first pane. Generated request identities start
 /// immediately after it.
-pub const initial_request_id: schema.RequestId = @enumFromInt(1);
+pub const initial_request_id = @import("telar-client").connection.lifecycle.initial_request_id;
 
-pub const Registration = struct {
-    request_id: schema.RequestId,
-    continuation: client_requests.Continuation,
-};
+pub const Registration = @import("telar-client").connection.lifecycle.Registration;
 
-pub const Delivery = struct {
-    registration: Registration,
-    message: runtime_transport.Message,
-};
+pub const Delivery = @import("telar-client").connection.lifecycle.Delivery;
 
-pub const State = struct {
-    next_request_id: u64 = 2,
-    tracker: client_requests.Tracker = .{},
-
-    /// Checks that one request slot and `id_count` consecutive identities
-    /// remain without changing either resource.
-    ///
-    /// ```zig
-    /// try state.ensureCanStart(2);
-    /// ```
-    pub fn ensureCanStart(state: *const State, id_count: u64) !void {
-        std.debug.assert(id_count != 0);
-        if (!state.tracker.hasCapacity()) {
-            return error.TooManyPendingRequests;
-        }
-        if (state.next_request_id == 0 or id_count > std.math.maxInt(u64) - state.next_request_id) {
-            return error.RequestIdExhausted;
-        }
-    }
-
-    /// Allocates one nonzero identity after checking correlation capacity.
-    ///
-    /// ```zig
-    /// const request_id = try state.nextId();
-    /// ```
-    pub fn nextId(state: *State) !schema.RequestId {
-        try state.ensureCanStart(1);
-
-        const request_id: schema.RequestId = @enumFromInt(state.next_request_id);
-        state.next_request_id += 1;
-
-        return request_id;
-    }
-};
+pub const State = @import("telar-client").connection.lifecycle.State;
 
 /// Registers the fixed bootstrap continuation before its synchronous open
 /// request leaves the client.

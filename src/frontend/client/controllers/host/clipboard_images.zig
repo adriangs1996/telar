@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const attachments = @import("../../../attachments/root.zig");
-const input_application = @import("../../application/input/root.zig");
+const input_application = @import("telar-client").application.input;
 const client_model = @import("telar-client").model;
 const notification_capability = @import("telar-client").notifications;
 const notification_flow = @import("../notifications/notifications.zig");

@@ -1,6 +1,6 @@
 //! Wires committed sidebar state to disposable client resources.
 
-const notifications_application = @import("../../application/notifications/root.zig");
+const notifications_application = @import("telar-client").application.notifications;
 const client_model = @import("telar-client").model;
 const sidebar_projection = @import("sidebar_projection.zig");
 

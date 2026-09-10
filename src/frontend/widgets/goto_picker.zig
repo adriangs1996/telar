@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const edit = @import("../input/root.zig").edit;
+const edit = @import("telar-client").input.edit;
 const modal = @import("modal.zig");
 const widget = @import("context.zig");
 const ui = @import("../ui/root.zig");
