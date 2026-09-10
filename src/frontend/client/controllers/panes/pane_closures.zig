@@ -116,7 +116,7 @@ fn clearPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
 fn invalidateGraphicsPlacements(context: *anyopaque) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    client.graphics_store.invalidatePlacements();
+    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
 }
 
 fn synchronizeActiveResources(context: *anyopaque) !void {

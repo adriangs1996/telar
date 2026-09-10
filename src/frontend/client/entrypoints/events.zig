@@ -97,7 +97,7 @@ fn route(client: *Client, event: Event, resources: Resources) !Outcome {
         .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
         .host_written => |result| try presentation_lifecycle.handleWritten(client, result),
         .compression_done => |job| {
-            client.graphics_store.completeCompression(job);
+            @import("../../graphics/root.zig").kitty.delivery.completeCompression(&client.graphics_store, job);
             try client.presenter.requestMedia();
         },
         .sidebar_animation_tick => |result| _ = try sidebar_animations.handleTick(client, result),

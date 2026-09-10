@@ -85,7 +85,7 @@ fn configureSidebar(raw_context: *anyopaque, configuration: host_resource_delive
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
-    client.graphics_store.invalidatePlacements();
+    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
 }
 
 fn resizePresenter(raw_context: *anyopaque, size: schema.TerminalSize) !void {

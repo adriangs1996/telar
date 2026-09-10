@@ -93,7 +93,7 @@ fn applyIntent(raw_context: *anyopaque, intent: view_interaction.Intent) !view_i
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const context: *Context = @ptrCast(@alignCast(raw_context));
 
-    context.client.graphics_store.invalidatePlacements();
+    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&context.client.graphics_store);
 }
 
 fn offerPaneGeometry(raw_context: *anyopaque) !void {

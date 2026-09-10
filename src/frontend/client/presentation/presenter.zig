@@ -505,12 +505,12 @@ fn notePaneGraphics(presenter: *Presenter, graphics_stats: kitty.KittyGraphicsWr
 /// the bulk pass closes it.
 fn controlGraphicsReady(projection: Projection, resources: Resources) bool {
     const pane_control = projection.host_capabilities.images == .supported and resources.graphics_store.damage;
-    if ((!pane_control and !resources.view.kittyPill().retirementPending()) or resources.graphics_store.partial != null) {
+    if ((!pane_control and !resources.view.kittyPill().retirementPending()) or resources.graphics_store.delivery.partial != null) {
         return false;
     }
 
     const view = resources.view;
-    return !view.kittyAttachments().transferInProgress() and
+    return !attachments.delivery.transferInProgress(view.kittyAttachments()) and
         !view.kittyModal().transferInProgress() and
         !view.kittyPill().transferInProgress() and
         !view.kittyToasts().transferInProgress() and
@@ -523,13 +523,13 @@ fn mediaWorkPending(projection: Projection, resources: Resources) bool {
             (resources.view.graphicsPreparationPending() or resources.graphics_store.damage or
                 resources.view.kittySidebar().damaged() or resources.view.kittyIcons().damaged() or
                 resources.view.kittyToasts().damaged() or resources.view.kittyModal().damaged() or
-                resources.view.kittyAttachments().damaged()));
+                attachments.delivery.damaged(resources.view.kittyAttachments())));
 }
 
 fn onlyWaitingForMediaIdle(resources: Resources, media_idle: bool) bool {
     return !media_idle and !resources.view.graphicsPreparationPending() and
         !resources.graphics_store.damage and !resources.view.kittySidebar().damaged() and
-        !resources.view.kittyIcons().damaged() and !resources.view.kittyAttachments().damaged() and
+        !resources.view.kittyIcons().damaged() and !attachments.delivery.damaged(resources.view.kittyAttachments()) and
         !resources.view.kittyModal().damaged() and !resources.view.kittyPill().damaged() and
         resources.view.kittyToasts().waitingForMediaIdle();
 }
@@ -723,8 +723,8 @@ const CombinedGraphicsWriter = struct {
         // KGP continuation chunks do not identify their image. Whichever
         // renderer opened a transfer owns the graphics stream until it closes;
         // a pane, toast, or icon atlas can never interleave another transfer.
-        if (self.attachments.transferInProgress()) {
-            attachment_bytes = try self.attachments.write(writer);
+        if (@import("../../attachments/root.zig").delivery.transferInProgress(self.attachments)) {
+            attachment_bytes = try @import("../../attachments/root.zig").delivery.write(self.attachments, writer);
         } else if (self.pill.transferInProgress()) {
             pill_bytes = try self.pill.write(writer);
         } else if (self.modal.transferInProgress()) {
@@ -738,10 +738,10 @@ const CombinedGraphicsWriter = struct {
             icon_bytes = try self.icons.write(writer);
         } else {
             pane_bytes = try self.panes.write(writer);
-            if (pane_bytes == 0 and self.panes.store.partial == null) {
+            if (pane_bytes == 0 and self.panes.store.delivery.partial == null) {
                 modal_bytes = try self.modal.write(writer);
                 if (modal_bytes == 0) {
-                    attachment_bytes = try self.attachments.write(writer);
+                    attachment_bytes = try @import("../../attachments/root.zig").delivery.write(self.attachments, writer);
                     if (attachment_bytes == 0) {
                         toast_bytes = try self.toasts.write(writer, self.allow_toast_transmission);
                         if (toast_bytes == 0) {

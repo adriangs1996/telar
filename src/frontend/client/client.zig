@@ -278,7 +278,7 @@ pub fn init(params: Params) !*Client {
     };
     if (client.output) |*value| {
         client.writer = &value.writer;
-        client.graphics_store.compression_scheduler = .{ .context = client, .start = scheduleCompression };
+        client.graphics_store.delivery.compression_scheduler = .{ .context = client, .start = scheduleCompression };
     }
 
     // The select's storage lives inside the heap-stable client, so the

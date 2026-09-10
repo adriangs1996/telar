@@ -452,8 +452,8 @@ fn capture(client: *Client, heap: diagnostics.Heap.Snapshot) ?Snapshot {
         .screen_bytes = (client.presenter.screen.front.cells.len +
             client.presenter.screen.back.cells.len) *
             @sizeOf(core.ui.Cell),
-        .shared_expiries = client.graphics_store.shared_expiries,
-        .shared_retire_latency = client.graphics_store.retire_latency,
+        .shared_expiries = client.graphics_store.delivery.shared_expiries,
+        .shared_retire_latency = client.graphics_store.delivery.retire_latency,
         .heap = heap,
     };
 }

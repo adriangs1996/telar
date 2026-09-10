@@ -30,3 +30,10 @@ test {
 }
 pub const markers = @import("markers.zig");
 pub const promptContinuesAtCursor = markers.promptContinuesAtCursor;
+
+pub const Catalog = @import("catalog.zig").Catalog;
+pub const retained = @import("retained.zig");
+
+test {
+    _ = @import("catalog_tests.zig");
+}

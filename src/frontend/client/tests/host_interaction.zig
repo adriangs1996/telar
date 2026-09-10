@@ -316,14 +316,14 @@ test "compression negotiation belongs to the TUI and does not revise the semanti
         .supported = true,
     } });
     try std.testing.expectEqual(kitty.Support.supported, client.host_negotiation.zlib_support);
-    try std.testing.expect(client.graphics_store.host_zlib);
+    try std.testing.expect(client.graphics_store.delivery.host_zlib);
     try std.testing.expectEqualDeep(version, client.model.version());
 
     try handler.terminalResponse(.{ .kitty_graphics = .{
         .image_id = kitty.zlib_query_image_id,
         .supported = false,
     } });
-    try std.testing.expect(!client.graphics_store.host_zlib);
+    try std.testing.expect(!client.graphics_store.delivery.host_zlib);
     try std.testing.expectEqualDeep(version, client.model.version());
 }
 

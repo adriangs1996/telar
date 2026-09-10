@@ -75,7 +75,7 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
     _ = try host_capabilities.observe(handler.client, response);
     switch (response) {
         .kitty_graphics => |reply| {
-            if (!handler.client.graphics_store.noteHostReply(reply.image_id, reply.supported)) {
+            if (!@import("../../graphics/root.zig").kitty.delivery.noteHostReply(&handler.client.graphics_store, reply.image_id, reply.supported)) {
                 return;
             }
             try runtime_transport.flushGraphicsCredits(handler.client);

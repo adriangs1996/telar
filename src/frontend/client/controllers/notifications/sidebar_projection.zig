@@ -38,7 +38,7 @@ fn projectView(context: *anyopaque, visible: bool, width: u16) void {
 fn invalidateGraphicsPlacements(context: *anyopaque) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    client.graphics_store.invalidatePlacements();
+    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
 }
 
 fn offerPaneGeometry(context: *anyopaque, model: *multiplexer.Model) !void {

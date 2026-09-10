@@ -88,7 +88,7 @@ pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?client_
 
     if (response == .kitty_graphics and response.kitty_graphics.image_id == kitty.zlib_query_image_id) {
         client.host_negotiation.zlib_support = if (response.kitty_graphics.supported) .supported else .unsupported;
-        client.graphics_store.setHostZlib(response.kitty_graphics.supported);
+        @import("../../../graphics/root.zig").kitty.delivery.setHostZlib(&client.graphics_store, response.kitty_graphics.supported);
         return null;
     }
 

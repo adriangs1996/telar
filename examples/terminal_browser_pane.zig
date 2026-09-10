@@ -666,7 +666,7 @@ fn applyPaneGeometry(context: PaneGeometryContext) !bool {
     });
     try context.emulator.resize(next);
     context.model.setCellSize(next.cell_width_px, next.cell_height_px);
-    context.graphics_store.invalidatePlacements();
+    kitty.delivery.invalidatePlacements(context.graphics_store);
     return true;
 }
 
@@ -879,7 +879,7 @@ pub fn main(init: std.process.Init) !void {
                     .frame = frame,
                     .capabilities = &capabilities,
                 });
-                graphics_store.invalidatePlacements();
+                kitty.delivery.invalidatePlacements(&graphics_store);
                 rebuild_frame = true;
                 redraw_cells = true;
             },

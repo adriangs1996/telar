@@ -13,10 +13,14 @@ const term = presentation.screen;
 /// try apply(client, clipboard);
 /// ```
 pub fn apply(client: *Client, clipboard: schema.PaneClipboard) !void {
-    if (clipboard.pane_id == .invalid) {
-        return error.UnexpectedPane;
-    }
+    const handler: @import("telar-client").application.panes.pane_clipboard.Handler = .{
+        .clipboard = .{ .context = client, .set = setClipboard },
+    };
+    try handler.execute(clipboard);
+}
 
-    try term.writeClipboard(client.writer, clipboard.bytes);
+fn setClipboard(context: *anyopaque, bytes: []const u8) !void {
+    const client: *Client = @ptrCast(@alignCast(context));
+    try term.writeClipboard(client.writer, bytes);
     try client.writer.flush();
 }

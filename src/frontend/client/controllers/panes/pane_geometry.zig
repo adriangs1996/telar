@@ -111,7 +111,7 @@ fn requestVisibleAttachments(raw_context: *anyopaque, area: ui.Rect) !void {
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
-    client.graphics_store.invalidatePlacements();
+    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
 }
 
 fn deliverResize(raw_context: *anyopaque, resize: core.schema.PaneResize) !void {

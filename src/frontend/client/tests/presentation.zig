@@ -406,13 +406,13 @@ test "shared pane graphics reach the host inside the cell frame" {
     try std.testing.expect(std.mem.indexOf(u8, host_bytes[transmit..place], "q=0;") != null);
     var images = client.graphics_store.images.iterator();
     const entry = images.next() orelse return error.ImageMissing;
-    try std.testing.expect(!entry.value_ptr.host_acked);
+    try std.testing.expect(!entry.value_ptr.delivery.host_acked);
     var handler: InputHandler = .{ .client = client };
     try handler.terminalResponse(.{ .kitty_graphics = .{
-        .image_id = entry.value_ptr.external_id,
+        .image_id = entry.value_ptr.delivery.external_id,
         .supported = true,
     } });
-    try std.testing.expect(entry.value_ptr.host_acked);
+    try std.testing.expect(entry.value_ptr.delivery.host_acked);
 }
 
 test "presentation worker failures release their scheduling tokens" {

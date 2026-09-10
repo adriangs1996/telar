@@ -221,7 +221,7 @@ fn applySidebar(raw_context: *anyopaque, change: client_model.SidebarLayout) !vo
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const context: *AdoptionContext = @ptrCast(@alignCast(raw_context));
 
-    context.client.graphics_store.invalidatePlacements();
+    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&context.client.graphics_store);
 }
 
 fn offerActivePaneGeometry(raw_context: *anyopaque) !void {

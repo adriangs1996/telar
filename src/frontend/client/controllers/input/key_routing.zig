@@ -99,7 +99,7 @@ fn routePane(raw_context: *anyopaque, command: key_routing.PaneCommand) !?schema
 
     const completed = delivery orelse return null;
     if (attachment_prompts.observe(client, completed.pane_id, command.input)) {
-        client.graphics_store.invalidatePlacements();
+        @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
         try pane_geometry.offerActive(client, client.geometry().area);
     }
 

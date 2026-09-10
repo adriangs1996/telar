@@ -325,7 +325,7 @@ pub const State = struct {
         const modal_changed = state.kitty_modal.configure(configuration);
         const pill_changed = state.kitty_pill.configure(configuration);
         const icons_changed = state.kitty_icons.configure(configuration);
-        const attachments_changed = state.attachment_store.configure(configuration);
+        const attachments_changed = @import("../../attachments/root.zig").delivery.configure(&state.attachment_store, configuration);
         if (state.sidebar_rendering != resolved or state.cell_width_px != configuration.cell_width or
             state.cell_height_px != configuration.cell_height or toast_changed or icons_changed or
             modal_changed or pill_changed or attachments_changed)
@@ -494,7 +494,7 @@ pub const State = struct {
             .palette = state.palette(),
             .icon_theme = state.icon_theme,
         });
-        state.attachment_store.prepare(state.graphics_plan.attachments);
+        @import("../../attachments/root.zig").delivery.prepare(&state.attachment_store, state.graphics_plan.attachments);
         state.kitty_modal.prepare(state.graphics_plan.modal_area, state.palette());
         state.kitty_pill.prepare(&state.graphics_plan.pill_labels, state.palette());
         try state.kitty_sidebar.prepare(.{

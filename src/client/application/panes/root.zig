@@ -2,6 +2,7 @@
 
 pub const active_pane_resource_delivery = @import("active_pane_resource_delivery.zig");
 pub const attach_pane = @import("attach_pane.zig");
+pub const pane_clipboard = @import("pane_clipboard.zig");
 pub const close_pane = @import("close_pane.zig");
 pub const focus_pane = @import("focus_pane.zig");
 pub const pane_closure_delivery = @import("pane_closure_delivery.zig");
@@ -21,6 +22,7 @@ pub const split_pane = @import("split_pane.zig");
 pub const toggle_pane_fullscreen = @import("toggle_pane_fullscreen.zig");
 
 test {
+    _ = pane_clipboard;
     _ = active_pane_resource_delivery;
     _ = attach_pane;
     _ = close_pane;

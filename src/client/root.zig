@@ -22,3 +22,5 @@ pub const resources = @import("resources/root.zig");
 pub const application = @import("application/root.zig");
 
 pub const entrypoints = @import("entrypoints/root.zig");
+
+pub const graphics = @import("graphics/root.zig");

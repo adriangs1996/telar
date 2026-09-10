@@ -34,7 +34,7 @@ pub fn apply(client: *Client, frame: schema.frame.FrameView) !client_model.PaneF
             client.telemetry.metrics.apply.observe(diagnostics.elapsed(started, diagnostics.now(client.io)));
         }
         if (attachment_prompts.reconcileFrame(client, commit.pane_id)) {
-            client.graphics_store.invalidatePlacements();
+            @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
             try pane_geometry.offerActive(client, client.geometry().area);
         }
     }
