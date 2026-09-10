@@ -19,35 +19,13 @@ pub const Metrics = struct {
     battery_percent: ?u8,
 };
 
-pub const max_prefix_hints = 8;
+pub const max_prefix_hints = @import("telar-client").input.hints.max_prefix_hints;
 
-pub const Hint = struct {
-    key: keybind.Key,
-    label: []const u8,
-};
+pub const Hint = @import("telar-client").input.hints.Hint;
 
-pub const Hints = struct {
-    items: [max_prefix_hints]Hint = undefined,
-    len: u8 = 0,
+pub const Hints = @import("telar-client").input.hints.Hints;
 
-    pub fn append(hints: *Hints, hint: Hint) void {
-        if (hints.len == hints.items.len) {
-            return;
-        }
-        hints.items[hints.len] = hint;
-        hints.len += 1;
-    }
-
-    pub fn slice(hints: *const Hints) []const Hint {
-        return hints.items[0..hints.len];
-    }
-};
-
-pub const Mode = union(enum) {
-    normal,
-    prefix: Hints,
-    copy,
-};
+pub const Mode = @import("telar-client").input.hints.Mode;
 
 pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
     if (area.isEmpty()) {

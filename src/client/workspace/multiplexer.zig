@@ -43,6 +43,17 @@ pub const PaneMousePlan = struct {
 };
 
 pub const Model = struct {
+    /// Captures all active-tab panes, including panes hidden by fullscreen.
+    /// Example: `const commit = model.presentationCommit();`.
+    pub fn presentationCommit(model: *const Model) PresentationCommit {
+        var commit: PresentationCommit = .{ .location = model.location };
+        for (&model.panes) |*slot| {
+            const pane = if (slot.*) |*value| value else continue;
+            commit.append(pane);
+        }
+        return commit;
+    }
+
     gpa: std.mem.Allocator,
     layout: layout_mod.Layout = .{},
     panes: [max_panes]?Pane = [_]?Pane{null} ** max_panes,
@@ -277,9 +288,16 @@ pub const Model = struct {
         return true;
     }
 
-    pub fn markAttached(model: *Model, pane_id: schema.PaneId) !void {
+    /// Installs an attachment identity allocated by the owning client model.
+    /// Example: `try model.markAttached(pane_id, generation);`.
+    pub fn markAttached(model: *Model, pane_id: schema.PaneId, generation: u64) !void {
         const pane = model.find(pane_id) orelse return error.PaneNotFound;
+        if (pane.attached) {
+            return;
+        }
+
         pane.attached = true;
+        pane.attachment_generation = generation;
     }
 
     pub fn removePane(model: *Model, pane_id: schema.PaneId) bool {
@@ -437,17 +455,26 @@ pub const Model = struct {
     /// host presentation. A stale commit cannot consume newer pane work.
     ///
     /// ```zig
-    /// model.commitPresentation(commit);
+    /// const acknowledged = model.commitPresentation(commit);
     /// ```
-    pub fn commitPresentation(model: *Model, commit: PresentationCommit) void {
+    pub fn commitPresentation(model: *Model, commit: PresentationCommit) PresentationCommit {
+        var accepted: PresentationCommit = .{ .location = commit.location };
         if (!std.meta.eql(model.location, commit.location)) {
-            return;
+            return accepted;
         }
 
         for (commit.slice()) |presented| {
             const pane = model.find(presented.pane_id) orelse continue;
+            if (pane.attached != presented.attached or pane.attachment_generation != presented.attachment_generation) {
+                continue;
+            }
+
             pane.commitPresentation(presented.frame_id);
+            accepted.panes[accepted.len] = presented;
+            accepted.len += 1;
         }
+
+        return accepted;
     }
 
     fn insertPane(model: *Model, spec: PaneSpec, attached: bool) !void {

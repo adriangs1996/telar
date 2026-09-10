@@ -174,11 +174,7 @@ pub const Compositor = struct {
             compositor.invalidated = true;
         }
         const target = &compositor.composed.?;
-        var commit: PresentationCommit = .{ .location = model.location };
-        for (&model.panes) |*slot| {
-            const pane = if (slot.*) |*value| value else continue;
-            commit.append(pane);
-        }
+        const commit = model.presentationCommit();
         const stats = if (compositor.invalidated) full: {
             target.clear(.{});
             screen.cursor = null;
@@ -898,7 +894,7 @@ fn testingRender(compositor: *Compositor, composition: TestingComposition) !Rend
             .force = composition.force,
         },
     });
-    composition.model.commitPresentation(rendered.commit);
+    _ = composition.model.commitPresentation(rendered.commit);
     return rendered.stats;
 }
 
@@ -1405,7 +1401,7 @@ test "composition damage retires only after its presentation commits" {
     try std.testing.expect(pane.damage_rows[0].dirty());
     try std.testing.expectEqual(@as(u64, 7), composed.commit.slice()[0].frame_id);
 
-    model.commitPresentation(composed.commit);
+    _ = model.commitPresentation(composed.commit);
 
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try std.testing.expect(!pane.damage_rows[0].dirty());
@@ -1437,7 +1433,7 @@ test "stale presentation commits preserve newer pane work" {
     pane.pending_frame_id = 8;
     pane.damage_rows[0].mark(1, 2);
 
-    model.commitPresentation(stale.commit);
+    _ = model.commitPresentation(stale.commit);
 
     try std.testing.expectEqual(@as(u64, 8), pane.pending_frame_id);
     try std.testing.expect(pane.damage_rows[0].dirty());
@@ -1489,7 +1485,7 @@ test "snapshot discovery does not imply a runtime attachment" {
 
     try std.testing.expect(model.find(@enumFromInt(1)).?.attached);
     try std.testing.expect(!model.find(@enumFromInt(2)).?.attached);
-    try model.markAttached(@enumFromInt(2));
+    try model.markAttached(@enumFromInt(2), 1);
     try std.testing.expect(model.find(@enumFromInt(2)).?.attached);
 }
 

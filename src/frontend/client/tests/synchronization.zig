@@ -260,7 +260,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
     try std.testing.expectEqual(pending_updates_before_departure + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try harness.settle();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     try std.testing.expectEqual(@as(usize, 0), client.presenter.pending_updates);
     for (client.presenter.screen.front.cells) |cell| {
         try std.testing.expectEqualStrings(" ", cell.text());
@@ -507,7 +507,7 @@ test "clicking a sidebar agent hands off directly to its pane" {
     try std.testing.expectEqual(pending_updates_before_arrival + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try harness.settle();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     try std.testing.expectEqualDeep(
         @as(?schema.WorkspaceLocation, agent.location.workspace),
         client.model.workspace.workspace,
@@ -822,7 +822,7 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
     }
 
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "an identical tab snapshot repairs resources without scheduling a frame" {
@@ -1171,7 +1171,7 @@ test "workspace snapshots commit semantic revisions before presentation" {
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = client.presenter.pending_updates;

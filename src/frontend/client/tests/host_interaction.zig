@@ -141,7 +141,7 @@ test "host resize commits before resources and presents by model version" {
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const version = client.model.version();
     const pending_after = client.presenter.pending_updates;
@@ -372,7 +372,7 @@ test "client event dispatch skips observation after terminal input" {
     defer harness.deinit();
     const client = harness.client;
     var heap = core.diagnostics.Heap.init(std.testing.allocator);
-    const observed = client.presenter.observed_model_version;
+    const observed = client.presenter.presentation_state.observed.model;
     const pending_updates = client.presenter.pending_updates;
     _ = try client.model.setDiagnostic("client is stopping", .{});
 
@@ -384,7 +384,7 @@ test "client event dispatch skips observation after terminal input" {
 
     try std.testing.expect(outcome == .exit);
     try std.testing.expectEqual(@as(u8, 0), outcome.exit);
-    try std.testing.expectEqualDeep(observed, client.presenter.observed_model_version);
+    try std.testing.expectEqualDeep(observed, client.presenter.presentation_state.observed.model);
     try std.testing.expectEqual(pending_updates, client.presenter.pending_updates);
     try std.testing.expect(!std.meta.eql(client.model.version(), observed));
 }
@@ -486,7 +486,7 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "native scroll actions reuse bounded viewport delivery without forwarding input" {
@@ -636,7 +636,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expect(client.presenter.compositor.copy == null);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     try harness.settle();
 
     var buffer: [256]u8 = undefined;

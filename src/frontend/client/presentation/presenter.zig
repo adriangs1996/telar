@@ -1,7 +1,7 @@
 //! Frame pacing and presentation: the draw-request → deadline → compose →
 //! cell-flush cycle, plus a lower-priority media pass. Owns the host-terminal
-//! back/front buffers. Frame acks come back to the caller as values; the
-//! client enqueues them.
+//! back/front buffers. Shared presentation tokens become commits only after
+//! the host output adapter reports successful delivery.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -39,47 +39,14 @@ const icon_graphics = graphics.icons;
 const ClientMetrics = client_telemetry.Metrics;
 
 const Presenter = @This();
+const lifecycle = @import("telar-client").presentation.lifecycle;
+pub const Token = lifecycle.Token;
 
-pub const Observation = struct {
-    model: client_model.Version,
-    graphics_ingress: u64,
-    attachment_ingress: u64,
-    presentation_ingress: PresentationIngress,
-};
+pub const Observation = @import("telar-client").presentation.Observation;
 
-pub const PresentationIngress = struct {
-    view_interaction: u64,
-    input_routing: u64,
-};
+pub const PresentationIngress = @import("telar-client").presentation.PresentationIngress;
 
-pub const Projection = struct {
-    version: client_model.Version,
-    presentation_ingress: PresentationIngress,
-    model: ?*const multiplexer.Model,
-    tabs: *const tabs.Model,
-    agents: *const agents.Snapshot,
-    sidebar_animation_frame: u8,
-    notifications: *const notifications.Center,
-    workspaces: *const workspace_list.Snapshot,
-    prompt: ?name_prompt.Prompt,
-    history: *const history_palette_state.State,
-    suggestion: *const suggestion_state.State,
-    proxy_tls_active: bool,
-    proxy_tls_scope: schema.ProxyScope,
-    proxy_system_trusted: bool,
-    system_metrics: ?client_model.SystemMetrics,
-    bar_state: *const bars.State,
-    status_mode: widgets.status_bar.Mode,
-    diagnostic: ?[]const u8,
-    copy: ?multiplexer.CopyProjection,
-    sidebar_visible: bool,
-    sidebar_width: u16,
-    workspace_list_collapsed: bool,
-    host_capabilities: client_model.HostCapabilities,
-    host_size: schema.TerminalSize,
-    /// Configured host window title template; empty leaves the host alone.
-    window_title_template: []const u8 = "",
-};
+pub const Projection = @import("telar-client").presentation.Projection;
 
 pub const Resources = struct {
     view: *client_view.State,
@@ -103,20 +70,7 @@ metrics: *ClientMetrics,
 screen: term.Screen,
 compositor: multiplexer.Compositor,
 pacer: pace.Pacer = .{},
-observed_model_version: client_model.Version = .{},
-presented_model_version: client_model.Version = .{},
-observed_graphics_ingress: u64 = 0,
-presented_graphics_ingress: u64 = 0,
-observed_attachment_ingress: u64 = 0,
-presented_attachment_ingress: u64 = 0,
-observed_presentation_ingress: PresentationIngress = .{
-    .view_interaction = 0,
-    .input_routing = 0,
-},
-presented_presentation_ingress: PresentationIngress = .{
-    .view_interaction = 0,
-    .input_routing = 0,
-},
+presentation_state: lifecycle.State = .{},
 window_title: presentation.window_title.State = .{},
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
@@ -172,24 +126,11 @@ pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
 /// try presenter.observe(observation);
 /// ```
 pub fn observe(presenter: *Presenter, observation: Observation) !void {
-    const newly_observed = !std.meta.eql(presenter.observed_model_version, observation.model) or
-        presenter.observed_graphics_ingress != observation.graphics_ingress or
-        presenter.observed_attachment_ingress != observation.attachment_ingress or
-        !std.meta.eql(presenter.observed_presentation_ingress, observation.presentation_ingress);
-    if (newly_observed) {
-        presenter.observed_model_version = observation.model;
-        presenter.observed_graphics_ingress = observation.graphics_ingress;
-        presenter.observed_attachment_ingress = observation.attachment_ingress;
-        presenter.observed_presentation_ingress = observation.presentation_ingress;
+    if (presenter.presentation_state.observe(observation)) {
         try presenter.requestDraw();
         return;
     }
-
-    const presentation_stale = !std.meta.eql(presenter.presented_model_version, observation.model) or
-        presenter.presented_graphics_ingress != observation.graphics_ingress or
-        presenter.presented_attachment_ingress != observation.attachment_ingress or
-        !std.meta.eql(presenter.presented_presentation_ingress, observation.presentation_ingress);
-    if (presentation_stale and !presenter.draw_pending) {
+    if (presenter.presentation_state.needsPreparation() and !presenter.draw_pending) {
         try presenter.requestDraw();
     }
 }
@@ -285,72 +226,72 @@ pub fn completeMediaTick(presenter: *Presenter, result: anyerror!void) !void {
 /// explicit empty state during startup and workspace handoff.
 ///
 /// ```zig
-/// const delivery = try presenter.presentDue(projection, resources) orelse return;
+/// const token = try presenter.presentDue(projection, resources) orelse return;
 /// ```
-pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Resources) !?Delivery {
+pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Resources) !?Token {
     if (comptime diagnostics.enabled) {
         presenter.metrics.draw_lateness.observe(monotonic(presenter.io) -| presenter.draw_due_ns);
     }
-    if (presenter.pending_updates == 0) {
+    if (presenter.pending_updates == 0 or presenter.presentation_state.active != null) {
         return null;
     }
 
-    std.debug.assert(std.meta.eql(projection.version, presenter.observed_model_version));
+    std.debug.assert(std.meta.eql(projection.version, presenter.presentation_state.observed.model));
     std.debug.assert(std.meta.eql(
         projection.presentation_ingress,
-        presenter.observed_presentation_ingress,
+        presenter.presentation_state.observed.presentation_ingress,
     ));
-    const workspace_changed = presenter.presented_model_version.workspace !=
+    const workspace_changed = presenter.presentation_state.prepared.model.workspace !=
         projection.version.workspace;
-    const configuration_changed = presenter.presented_model_version.configuration !=
+    const configuration_changed = presenter.presentation_state.prepared.model.configuration !=
         projection.version.configuration;
-    const diagnostic_changed = presenter.presented_model_version.diagnostic !=
+    const diagnostic_changed = presenter.presentation_state.prepared.model.diagnostic !=
         projection.version.diagnostic;
-    const host_changed = presenter.presented_model_version.host !=
+    const host_changed = presenter.presentation_state.prepared.model.host !=
         projection.version.host;
-    const workspace_list_changed = presenter.presented_model_version.workspace_list !=
+    const workspace_list_changed = presenter.presentation_state.prepared.model.workspace_list !=
         projection.version.workspace_list;
-    const agents_changed = presenter.presented_model_version.agents !=
+    const agents_changed = presenter.presentation_state.prepared.model.agents !=
         projection.version.agents;
-    const sidebar_animation_changed = presenter.presented_model_version.sidebar_animation !=
+    const sidebar_animation_changed = presenter.presentation_state.prepared.model.sidebar_animation !=
         projection.version.sidebar_animation;
-    const proxy_status_changed = presenter.presented_model_version.proxy_status !=
+    const proxy_status_changed = presenter.presentation_state.prepared.model.proxy_status !=
         projection.version.proxy_status;
-    const system_metrics_changed = presenter.presented_model_version.system_metrics !=
+    const system_metrics_changed = presenter.presentation_state.prepared.model.system_metrics !=
         projection.version.system_metrics;
-    const bars_changed = presenter.presented_model_version.bars != projection.version.bars;
-    const notifications_changed = presenter.presented_model_version.notifications !=
+    const bars_changed = presenter.presentation_state.prepared.model.bars != projection.version.bars;
+    const notifications_changed = presenter.presentation_state.prepared.model.notifications !=
         projection.version.notifications;
-    const tabs_changed = presenter.presented_model_version.tabs !=
+    const tabs_changed = presenter.presentation_state.prepared.model.tabs !=
         projection.version.tabs;
-    const active_tab_changed = presenter.presented_model_version.active_tab !=
+    const active_tab_changed = presenter.presentation_state.prepared.model.active_tab !=
         projection.version.active_tab;
-    const panes_changed = presenter.presented_model_version.panes !=
+    const panes_changed = presenter.presentation_state.prepared.model.panes !=
         projection.version.panes;
-    const pane_metadata_changed = presenter.presented_model_version.pane_metadata !=
+    const pane_metadata_changed = presenter.presentation_state.prepared.model.pane_metadata !=
         projection.version.pane_metadata;
-    const pane_foreground_changed = presenter.presented_model_version.pane_foreground !=
+    const pane_foreground_changed = presenter.presentation_state.prepared.model.pane_foreground !=
         projection.version.pane_foreground;
-    const pane_progress_changed = presenter.presented_model_version.pane_progress !=
+    const pane_progress_changed = presenter.presentation_state.prepared.model.pane_progress !=
         projection.version.pane_progress;
-    const pane_graphics_changed = presenter.presented_model_version.pane_graphics !=
+    const pane_graphics_changed = presenter.presentation_state.prepared.model.pane_graphics !=
         projection.version.pane_graphics;
-    const chrome_changed = presenter.presented_model_version.chrome !=
+    const chrome_changed = presenter.presentation_state.prepared.model.chrome !=
         projection.version.chrome;
-    const prompt_changed = presenter.presented_model_version.prompt !=
+    const prompt_changed = presenter.presentation_state.prepared.model.prompt !=
         projection.version.prompt;
-    const history_changed = presenter.presented_model_version.history !=
+    const history_changed = presenter.presentation_state.prepared.model.history !=
         projection.version.history;
-    const suggestion_changed = presenter.presented_model_version.suggestion !=
+    const suggestion_changed = presenter.presentation_state.prepared.model.suggestion !=
         projection.version.suggestion;
-    const viewport_changed = presenter.presented_model_version.viewport !=
+    const viewport_changed = presenter.presentation_state.prepared.model.viewport !=
         projection.version.viewport;
     const was_copy_mode = if (presenter.compositor.copy) |copy| !copy.view.pointer else false;
     const is_copy_mode = if (projection.copy) |copy| !copy.view.pointer else false;
     const copy_status_changed = was_copy_mode != is_copy_mode;
-    const view_interaction_changed = presenter.presented_presentation_ingress.view_interaction !=
+    const view_interaction_changed = presenter.presentation_state.prepared.presentation_ingress.view_interaction !=
         projection.presentation_ingress.view_interaction;
-    const input_routing_changed = presenter.presented_presentation_ingress.input_routing !=
+    const input_routing_changed = presenter.presentation_state.prepared.presentation_ingress.input_routing !=
         projection.presentation_ingress.input_routing;
     if (chrome_changed) {
         resources.view.setSidebarLayout(projection.sidebar_visible, projection.sidebar_width);
@@ -386,10 +327,14 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
         })
     else
         try presenter.presentEmpty(projection, resources);
-    presenter.presented_model_version = projection.version;
-    presenter.presented_graphics_ingress = presenter.observed_graphics_ingress;
-    presenter.presented_attachment_ingress = presenter.observed_attachment_ingress;
-    presenter.presented_presentation_ingress = projection.presentation_ingress;
+    var geometry = @import("telar-client").presentation.Geometry.capture(projection);
+    geometry.region = resources.view.geometry();
+    const token = try presenter.presentation_state.begin(.{
+        .observation = presenter.presentation_state.observed,
+        .commit = presented.commit,
+        .geometry = geometry,
+        .media_pending = projection.model != null and mediaWorkPending(projection, resources),
+    });
     presenter.observePresentation(presented.presented_ns);
     presenter.pacer.record(.{
         .now = presented.presented_ns,
@@ -398,11 +343,7 @@ pub fn presentDue(presenter: *Presenter, projection: Projection, resources: Reso
     });
     presenter.pending_updates = 0;
 
-    return .{
-        .frame_acks = presented.acks,
-        .commit = presented.commit,
-        .media_pending = projection.model != null and mediaWorkPending(projection, resources),
-    };
+    return token;
 }
 
 /// The bulk media event never composes cells. A pending or scheduled cell
@@ -544,29 +485,10 @@ fn observePresentation(presenter: *Presenter, presented_ns: u64) void {
     presenter.last_presented_ns = presented_ns;
 }
 
-pub const FrameAcks = struct {
-    items: [multiplexer.max_panes]schema.FrameAck = undefined,
-    len: usize = 0,
-
-    /// Returns the frame acknowledgements produced by one host flush.
-    ///
-    /// ```zig
-    /// for (delivery.frame_acks.slice()) |ack| send(ack);
-    /// ```
-    pub fn slice(acks: *const FrameAcks) []const schema.FrameAck {
-        return acks.items[0..acks.len];
-    }
-};
-
-pub const Delivery = struct {
-    frame_acks: FrameAcks,
-    commit: multiplexer.PresentationCommit,
-    media_pending: bool,
-};
+pub const Delivery = @import("telar-client").presentation.Delivery;
 
 const Presented = struct {
     presented_ns: u64,
-    acks: FrameAcks,
     commit: multiplexer.PresentationCommit,
 };
 
@@ -650,18 +572,8 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
     if (comptime diagnostics.enabled) {
         presenter.metrics.pill_graphics_flushed_bytes += control_writer.pill_bytes;
     }
-    var acks: FrameAcks = .{};
-    for (composed.commit.slice()) |pane| {
-        if (!pane.attached or pane.frame_id == 0) {
-            continue;
-        }
-
-        acks.items[acks.len] = .{ .pane_id = pane.pane_id, .frame_id = pane.frame_id };
-        acks.len += 1;
-    }
     return .{
         .presented_ns = monotonic(presenter.io),
-        .acks = acks,
         .commit = composed.commit,
     };
 }
@@ -683,7 +595,7 @@ fn presentEmpty(presenter: *Presenter, projection: Projection, resources: Resour
         presenter.metrics.pill_graphics_flushed_bytes += control_writer.pill_bytes;
     }
 
-    return .{ .presented_ns = monotonic(presenter.io), .acks = .{}, .commit = .{} };
+    return .{ .presented_ns = monotonic(presenter.io), .commit = .{} };
 }
 
 const CellGraphicsWriter = struct {

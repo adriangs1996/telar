@@ -145,9 +145,9 @@ test "pane focus commits before reports resize and presentation" {
 
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.observed.model);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = client.presenter.pending_updates;
@@ -524,9 +524,9 @@ test "pane resize publishes committed geometry before presentation" {
 
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.observed.model);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = client.presenter.pending_updates;
@@ -570,7 +570,7 @@ test "single-pane fullscreen publishes bordered and restored geometry" {
         try std.testing.expectEqual(expected, message.pane_resize.size);
         try presentation_lifecycle.observe(client);
         try harness.settleModelPresentation();
-        try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+        try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     }
 }
 
@@ -622,7 +622,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before_enter + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const version_before_exit = client.model.version();
     const pending_updates_before_exit = client.presenter.pending_updates;
@@ -648,7 +648,7 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before_exit + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "sidebar toggle commits chrome before geometry and presentation" {
@@ -690,7 +690,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
 
     try std.testing.expectEqual(pending_updates_before_hide + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     try std.testing.expect(!client.view.dirty);
 
     const version_before_show = client.model.version();
@@ -716,7 +716,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
 
     try std.testing.expectEqual(pending_updates_before_show + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "sidebar resize keybinding commits width before pane geometry" {
@@ -805,7 +805,7 @@ test "workspace list toggle is projected only by the presenter" {
     try std.testing.expectEqual(pending_updates_before_collapse + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(client.view.workspace_list_collapsed);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const version_before_expand = client.model.version();
     const pending_updates_before_expand = client.presenter.pending_updates;
@@ -822,7 +822,7 @@ test "workspace list toggle is projected only by the presenter" {
     try std.testing.expectEqual(pending_updates_before_expand + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(!client.view.workspace_list_collapsed);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "an active split commits once and presentation observes the model" {

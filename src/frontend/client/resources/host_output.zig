@@ -15,7 +15,7 @@ pub const Output = struct {
     buffers: [2][]u8,
     active: u1 = 0,
     pending: bool = false,
-    delivery: ?presenter.Delivery = null,
+    delivery: ?presenter.Token = null,
     draw_deferred: bool = false,
     media_deferred: bool = false,
     fast_write: ?FastWrite = null,
@@ -80,7 +80,7 @@ pub const Output = struct {
 
     /// Ends the borrow before propagating failure. Failed writes never ACK.
     /// Example: `const delivery = try output.complete(result);`.
-    pub fn complete(output: *Output, result: anyerror!void) !?presenter.Delivery {
+    pub fn complete(output: *Output, result: anyerror!void) !?presenter.Token {
         std.debug.assert(output.pending);
         output.pending = false;
         const delivery = output.delivery;
@@ -125,7 +125,7 @@ test "a nonblocking prefix and the output actor transmit each byte exactly once"
         var output = try Output.init(std.testing.allocator, &target);
         defer output.deinit();
         output.fast_write = .{ .context = &prefix, .write = PrefixWriter.write };
-        output.delivery = .{ .frame_acks = .{}, .commit = .{}, .media_pending = false };
+        output.delivery = @enumFromInt(1);
         try output.writer.writeAll("frame");
         const remaining = try output.tryWrite(output.begin().?);
         try std.testing.expectEqualStrings("frame"[limit..], remaining.bytes);
@@ -156,19 +156,18 @@ test "sealed bytes stay immutable while sideband output accumulates" {
     try std.testing.expectEqualStrings("firstsecond", target.buffered());
 }
 
-test "a completed write releases its exact acknowledgement batch" {
+test "a completed write releases its exact completion token" {
     var bytes: [64]u8 = undefined;
     var target: Io.Writer = .fixed(&bytes);
     var output = try Output.init(std.testing.allocator, &target);
     defer output.deinit();
     try output.writer.writeAll("frame");
-    output.delivery = .{ .frame_acks = .{ .len = 1 }, .commit = .{}, .media_pending = true };
-    output.delivery.?.frame_acks.items[0] = .{ .pane_id = @enumFromInt(7), .frame_id = 42 };
+    output.delivery = @enumFromInt(42);
     const work = output.begin().?;
     try std.testing.expectEqual(@as(usize, 0), target.end);
     try Output.write(work);
     const delivered = (try output.complete({})).?;
-    try std.testing.expectEqual(@as(u64, 42), delivered.frame_acks.items[0].frame_id);
+    try std.testing.expectEqual(@as(presenter.Token, @enumFromInt(42)), delivered);
     try std.testing.expect(output.delivery == null);
     try std.testing.expectError(error.HostFrameTooLarge, output.prepareFrame(1_000_000));
 }
@@ -177,7 +176,7 @@ test "a failed write cannot deliver a frame acknowledgement" {
     var output = try Output.init(std.testing.allocator, undefined);
     defer output.deinit();
     try output.writer.writeAll("frame");
-    output.delivery = .{ .frame_acks = .{ .len = 1 }, .commit = .{}, .media_pending = true };
+    output.delivery = @enumFromInt(42);
     _ = output.begin().?;
     try std.testing.expect(output.delivery != null);
     try std.testing.expectError(error.WriteFailed, output.complete(error.WriteFailed));

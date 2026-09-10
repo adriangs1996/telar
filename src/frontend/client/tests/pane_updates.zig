@@ -234,7 +234,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(!client.view.dirty);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const presented_version = client.model.version();
     const presented_updates = client.presenter.pending_updates;
@@ -294,7 +294,7 @@ test "pane foreground reaches presentation only after version observation" {
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(!client.view.dirty);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const presented_version = client.model.version();
     const presented_updates = client.presenter.pending_updates;
@@ -382,7 +382,7 @@ test "close pane request waits for the authoritative exit before committing" {
 
     try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     const committed_version = client.model.version();
     const pending_updates_after_commit = client.presenter.pending_updates;
 
@@ -441,7 +441,7 @@ test "an unrequested pane exit removes the pane silently" {
 
     try std.testing.expectEqual(pending_updates_before_exit + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "an inactive pane exit retires only inactive state" {

@@ -287,12 +287,12 @@ pub const TestHarness = struct {
         const attachment_target = harness.client.view.kittyAttachments().ingressVersion();
         const view_interaction_target = harness.client.view.interactionVersion();
         const input_routing_target = harness.client.host_input.presentationVersion();
-        while (!std.meta.eql(harness.client.presenter.presented_model_version, target) or
-            harness.client.presenter.presented_graphics_ingress != graphics_target or
-            harness.client.presenter.presented_attachment_ingress != attachment_target or
-            harness.client.presenter.presented_presentation_ingress.view_interaction !=
+        while (!std.meta.eql(harness.client.presenter.presentation_state.prepared.model, target) or
+            harness.client.presenter.presentation_state.prepared.graphics_ingress != graphics_target or
+            harness.client.presenter.presentation_state.prepared.attachment_ingress != attachment_target or
+            harness.client.presenter.presentation_state.prepared.presentation_ingress.view_interaction !=
                 view_interaction_target or
-            harness.client.presenter.presented_presentation_ingress.input_routing !=
+            harness.client.presenter.presentation_state.prepared.presentation_ingress.input_routing !=
                 input_routing_target)
         {
             switch (try harness.client.select.await()) {

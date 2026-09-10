@@ -11,8 +11,6 @@ const schema = core.schema;
 
 pub const Command = struct {
     commit: multiplexer.PresentationCommit,
-    /// Borrowed only for the synchronous delivery.
-    frame_acks: []const schema.FrameAck,
     media_pending: bool,
 };
 
@@ -38,15 +36,15 @@ pub const DeliverPresentationHandler = struct {
             return error.InvalidPresentationCommit;
         }
 
-        if (command.frame_acks.len > multiplexer.max_panes) {
-            return error.TooManyFrameAcknowledgements;
-        }
-
-        handler.model.commitPresentation(command.commit);
+        const accepted = handler.model.commitPresentation(command.commit);
         try handler.effects.flush_graphics_credits(handler.effects.context);
 
-        for (command.frame_acks) |ack| {
-            try handler.effects.acknowledge_frame(handler.effects.context, ack);
+        for (accepted.slice()) |pane| {
+            if (!pane.attached or pane.frame_id == 0) {
+                continue;
+            }
+
+            try handler.effects.acknowledge_frame(handler.effects.context, .{ .pane_id = pane.pane_id, .frame_id = pane.frame_id });
         }
 
         if (command.media_pending) {
@@ -155,14 +153,18 @@ fn presentationCommit(frame_id: u64) multiplexer.PresentationCommit {
         .frame_id = frame_id,
         .attached = true,
     };
-    commit.len = 1;
+    commit.panes[1] = .{ .pane_id = @enumFromInt(2), .frame_id = 9, .attached = true };
+    commit.len = 2;
 
     return commit;
 }
 
 fn prepareModel(model: *client_model.Model, frame_id: u64) !void {
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
+    const active = model.workspace.active().?;
+    try active.model.split(.{ .existing_pane = pane_id, .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 10, .h = 10 } });
     model.workspace.findPane(pane_id).?.pending_frame_id = frame_id;
+    model.workspace.findPane(@enumFromInt(2)).?.pending_frame_id = 9;
 }
 
 test "DeliverPresentationHandler commits before ordered delivery" {
@@ -181,7 +183,7 @@ test "DeliverPresentationHandler commits before ordered delivery" {
 
     try handler.execute(.{
         .commit = presentationCommit(7),
-        .frame_acks = &acknowledgements,
+
         .media_pending = true,
     });
 
@@ -200,24 +202,12 @@ test "DeliverPresentationHandler rejects unbounded input before commit" {
         .model = &model,
         .effects = capture.effects(),
     };
-    var acknowledgements: [multiplexer.max_panes + 1]schema.FrameAck = undefined;
-    @memset(&acknowledgements, .{ .pane_id = pane_id, .frame_id = 7 });
-
-    try std.testing.expectError(error.TooManyFrameAcknowledgements, handler.execute(.{
-        .commit = presentationCommit(7),
-        .frame_acks = &acknowledgements,
-        .media_pending = true,
-    }));
-
-    try std.testing.expectEqual(@as(u64, 7), model.workspace.findPane(pane_id).?.pending_frame_id);
-    try std.testing.expectEqual(@as(usize, 0), capture.event_count);
-
     var invalid_commit = presentationCommit(7);
     invalid_commit.len = multiplexer.max_panes + 1;
 
     try std.testing.expectError(error.InvalidPresentationCommit, handler.execute(.{
         .commit = invalid_commit,
-        .frame_acks = &.{},
+
         .media_pending = false,
     }));
 
@@ -252,11 +242,6 @@ test "DeliverPresentationHandler preserves applied effects across delivery failu
             .expected_acknowledgements = 2,
         },
     };
-    const acknowledgements = [_]schema.FrameAck{
-        .{ .pane_id = pane_id, .frame_id = 7 },
-        .{ .pane_id = @enumFromInt(2), .frame_id = 9 },
-    };
-
     for (scenarios) |scenario| {
         var model = client_model.Model.init(std.testing.allocator, true);
         defer model.deinit();
@@ -273,7 +258,7 @@ test "DeliverPresentationHandler preserves applied effects across delivery failu
 
         try std.testing.expectError(scenario.expected_error, handler.execute(.{
             .commit = presentationCommit(7),
-            .frame_acks = &acknowledgements,
+
             .media_pending = true,
         }));
 
@@ -296,9 +281,9 @@ test "DeliverPresentationHandler skips media without pending work" {
 
     try handler.execute(.{
         .commit = presentationCommit(7),
-        .frame_acks = &.{},
+
         .media_pending = false,
     });
 
-    try std.testing.expectEqualSlices(Event, &.{.credits}, capture.eventSlice());
+    try std.testing.expectEqualSlices(Event, &.{ .credits, .acknowledgement, .acknowledgement }, capture.eventSlice());
 }

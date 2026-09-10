@@ -306,7 +306,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.observed.model);
 }
 
 test "an unexpected notification delivery report is rejected without effects" {
@@ -448,7 +448,7 @@ test "toast activation commits by id before following its navigation target" {
             .palette = client.view.palette(),
         },
     });
-    active.commitPresentation(composed.commit);
+    _ = active.commitPresentation(composed.commit);
     _ = try client.view.render(&client.presenter.screen, .{
         .model = active,
         .compositor = &client.presenter.compositor,
@@ -505,7 +505,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
     try std.testing.expect(client.model.proxyTlsActive());
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
-    try std.testing.expectEqual(version_before.proxy_status, client.presenter.observed_model_version.proxy_status);
+    try std.testing.expectEqual(version_before.proxy_status, client.presenter.presentation_state.observed.model.proxy_status);
     try std.testing.expectEqual(pending_updates_before, client.presenter.pending_updates);
     try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
     try std.testing.expectEqualStrings(
@@ -525,10 +525,10 @@ test "proxy status commits before announcement and presenter-owned projection" {
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     try std.testing.expectEqual(
         enabled_version.proxy_status,
-        client.presenter.presented_model_version.proxy_status,
+        client.presenter.presentation_state.prepared.model.proxy_status,
     );
     const badge_index = @as(usize, client.presenter.screen.front.w) - 2;
     try std.testing.expectEqualStrings("\u{26e8}", client.presenter.screen.front.cells[badge_index].text());
@@ -556,10 +556,10 @@ test "proxy status commits before announcement and presenter-owned projection" {
     const disabled_version = client.model.version();
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     try std.testing.expectEqual(
         disabled_version.proxy_status,
-        client.presenter.presented_model_version.proxy_status,
+        client.presenter.presentation_state.prepared.model.proxy_status,
     );
     try std.testing.expect(!std.mem.eql(u8, "\u{26e8}", client.presenter.screen.front.cells[badge_index].text()));
 }
@@ -601,7 +601,7 @@ test "system metrics commit before presenter-owned projection" {
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     var bottom_text_buffer: [512]u8 = undefined;
     const sidebar = client.view.regions.sidebar;
@@ -675,7 +675,7 @@ test "workspace list snapshots commit before presenter-owned projection" {
 
     try std.testing.expectEqual(pending_updates_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     var found_second = false;
     for (0..client.presenter.screen.front.w) |x| {
         const action = client.view.hits.at(@intCast(x), 0) orelse continue;
@@ -781,7 +781,7 @@ test "an agent snapshot replaces the sidebar replica" {
     try std.testing.expectEqual(@as(u16, 0), harness.client.view.sidebar.scroll);
     try std.testing.expectEqual(
         harness.client.model.version(),
-        harness.client.presenter.presented_model_version,
+        harness.client.presenter.presentation_state.prepared.model,
     );
 }
 
@@ -818,7 +818,7 @@ test "sidebar animation commits model state before the presenter observes it" {
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.observed.model);
 }
 
 test "agent snapshot transitions raise bounded presentation alerts only once" {

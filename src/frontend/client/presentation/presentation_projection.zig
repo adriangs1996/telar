@@ -2,7 +2,6 @@
 //! one synchronous client frame.
 
 const presenter = @import("presenter.zig");
-const multiplexer = @import("telar-client").workspace.multiplexer;
 
 const Client = @import("../client.zig");
 
@@ -15,6 +14,7 @@ const Client = @import("../client.zig");
 pub fn observation(client: *Client) presenter.Observation {
     return .{
         .model = client.model.version(),
+        .geometry_revision = client.geometry().revision,
         .graphics_ingress = client.graphics_store.ingressVersion(),
         .attachment_ingress = client.view.kittyAttachments().ingressVersion(),
         .presentation_ingress = presentationIngress(client),
@@ -28,39 +28,11 @@ pub fn observation(client: *Client) presenter.Observation {
 /// const current = projection(client);
 /// ```
 pub fn projection(client: *const Client) presenter.Projection {
-    const copy: ?multiplexer.CopyProjection = if (client.model.copyModeProjection()) |value|
-        .{ .pane_id = value.pane_id, .view = value.view }
-    else
-        null;
-    const prompt = if (client.model.name_prompt.currentConst()) |value| value.* else null;
-
-    return .{
-        .version = client.model.version(),
+    return @import("telar-client").presentation.capture(&client.model, .{
         .presentation_ingress = presentationIngress(client),
-        .model = client.model.activeTabModelConst(),
-        .tabs = &client.model.workspace,
-        .agents = client.model.agentSnapshot(),
-        .sidebar_animation_frame = client.model.sidebarAnimationFrame(),
-        .notifications = client.model.notificationSnapshot(),
-        .workspaces = client.model.workspaceListSnapshot(),
-        .prompt = prompt,
-        .history = &client.model.history_palette,
-        .suggestion = &client.model.suggestion,
-        .proxy_tls_active = client.model.proxyTlsActive(),
-        .proxy_tls_scope = client.model.proxyTlsScope(),
-        .proxy_system_trusted = client.model.proxySystemTrusted(),
-        .system_metrics = client.model.systemMetrics(),
-        .bar_state = client.model.barState(),
         .status_mode = client.host_input.statusMode(client.model.copyModeActive()),
-        .diagnostic = client.model.diagnostic(),
-        .copy = copy,
-        .sidebar_visible = client.model.sidebarVisible(),
-        .sidebar_width = client.model.sidebarWidth(),
-        .workspace_list_collapsed = client.model.workspaceListCollapsed(),
-        .host_capabilities = client.model.hostCapabilities(),
-        .host_size = client.model.hostSize(),
-        .window_title_template = client.model.windowTitleTemplate(),
-    };
+        .geometry = client.geometry(),
+    });
 }
 
 fn presentationIngress(client: *const Client) presenter.PresentationIngress {

@@ -164,7 +164,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try std.testing.expect(tab_snapshot == .request_tab_snapshot);
     try std.testing.expectEqualDeep(new_location, tab_snapshot.request_tab_snapshot.location);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     // Return through the same runtime handoff used by workspace selection.
     client.request_lifecycle.tracker = .{};

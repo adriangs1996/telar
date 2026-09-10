@@ -198,7 +198,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     try std.testing.expectEqual(client_model.Version{
         .configuration = 2,
         .diagnostic = 2,
@@ -255,7 +255,7 @@ test "a configuration version alone schedules presenter observation" {
     try std.testing.expectEqual(pending_updates + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "dynamic bar ticks commit current Lua content before paced presentation" {
@@ -303,7 +303,7 @@ test "dynamic bar ticks commit current Lua content before paced presentation" {
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(client.model.version().bars, client.presenter.presented_model_version.bars);
+    try std.testing.expectEqual(client.model.version().bars, client.presenter.presentation_state.prepared.model.bars);
 }
 
 test "command completion from a replaced bar generation is discarded" {
@@ -590,7 +590,7 @@ test "Lua callback applies a validated batch through model observation" {
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expect(client.view.workspace_list_collapsed);
-    try std.testing.expectEqual(expected.diagnostic, client.presenter.presented_model_version.diagnostic);
+    try std.testing.expectEqual(expected.diagnostic, client.presenter.presentation_state.prepared.model.diagnostic);
 }
 
 test "Lua callback validates every plugin reference before native effects" {
@@ -758,7 +758,7 @@ test "Lua callback failure commits one diagnostic without direct presentation" {
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(expected.diagnostic, client.presenter.presented_model_version.diagnostic);
+    try std.testing.expectEqual(expected.diagnostic, client.presenter.presentation_state.prepared.model.diagnostic);
 }
 
 test "attachment modal captures semantic keys until escape closes it" {
@@ -812,7 +812,7 @@ test "attachment modal captures semantic keys until escape closes it" {
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
         client.view.interactionVersion(),
-        client.presenter.presented_presentation_ingress.view_interaction,
+        client.presenter.presentation_state.prepared.presentation_ingress.view_interaction,
     );
 }
 
@@ -860,14 +860,14 @@ test "clipboard image completion publishes resource ingress before presentation"
     try std.testing.expectEqual(@as(u64, 1), client.view.kittyAttachments().ingressVersion());
     try std.testing.expectEqual(@as(u8, 1), client.view.kittyAttachments().snapshot().len);
     try std.testing.expectEqual(pending_before, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(u64, 0), client.presenter.observed_attachment_ingress);
+    try std.testing.expectEqual(@as(u64, 0), client.presenter.presentation_state.observed.attachment_ingress);
 
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(u64, 1), client.presenter.observed_attachment_ingress);
+    try std.testing.expectEqual(@as(u64, 1), client.presenter.presentation_state.observed.attachment_ingress);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(@as(u64, 1), client.presenter.presented_attachment_ingress);
+    try std.testing.expectEqual(@as(u64, 1), client.presenter.presentation_state.prepared.attachment_ingress);
 }
 
 test "clipboard image from a retired agent target is consumed and freed" {

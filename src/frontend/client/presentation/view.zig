@@ -1179,7 +1179,7 @@ fn testingCompose(compositor: *multiplexer.Compositor, composition: TestingCompo
             .bottom_reservation = composition.bottom_reservation,
         },
     });
-    composition.model.commitPresentation(rendered.commit);
+    _ = composition.model.commitPresentation(rendered.commit);
 }
 
 test "visible regions reserve top bottom sidebar and workbench" {

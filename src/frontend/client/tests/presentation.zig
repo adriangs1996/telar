@@ -115,7 +115,7 @@ test "presentation folds repeated observations into one draw task" {
 
     try std.testing.expect(!client.presenter.draw_pending);
     try std.testing.expectEqual(@as(usize, 0), client.presenter.pending_updates);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "an observation with pacer credit presents inline without a draw task" {
@@ -134,7 +134,7 @@ test "an observation with pacer credit presents inline without a draw task" {
     try std.testing.expect(!client.presenter.draw_pending);
     try std.testing.expectEqual(@as(usize, 0), client.presenter.pending_updates);
     try std.testing.expectEqual(drawn_before + 1, client.presenter.pacer.stats.drawn);
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "host input presentation state schedules only through observation" {
@@ -169,7 +169,7 @@ test "host input presentation state schedules only through observation" {
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
         client.host_input.presentationVersion(),
-        client.presenter.presented_presentation_ingress.input_routing,
+        client.presenter.presentation_state.prepared.presentation_ingress.input_routing,
     );
 }
 
@@ -273,7 +273,7 @@ test "presentation flushes an explicit empty model before bootstrap" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
     for (client.presenter.screen.front.cells) |cell| {
         try std.testing.expectEqualStrings(" ", cell.text());
         try std.testing.expectEqual(@as(u8, 1), cell.width);
@@ -434,4 +434,43 @@ test "presentation worker failures release their scheduling tokens" {
         presentation_lifecycle.handleMediaTick(client, error.MediaWorkerFailed),
     );
     try std.testing.expect(!client.presenter.media_tick_pending);
+}
+
+test "the TUI write boundary alone completes the shared presentation token" {
+    const Output = @import("../resources/root.zig").host_output.Output;
+    for ([_]bool{ false, true }) |fail| {
+        var harness: TestHarness = undefined;
+        try harness.init();
+        defer harness.deinit();
+        try harness.bootstrap();
+        try harness.settleModelPresentation();
+        const client = harness.client;
+        const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+        pane.pending_frame_id = 7;
+        const before = client.presenter.presentation_state.delivered;
+        const token = try client.presenter.presentation_state.begin(.{
+            .observation = client.presenter.presentation_state.observed,
+            .commit = client.model.activeTabModelConst().?.presentationCommit(),
+        });
+        client.output = try Output.init(std.testing.allocator, client.writer);
+        const output = &client.output.?;
+        output.delivery = token;
+        try output.writer.writeAll("frame");
+        const work = output.begin().?;
+        try std.testing.expectEqual(@as(u64, 7), pane.pending_frame_id);
+        try std.testing.expectEqualDeep(before, client.presenter.presentation_state.delivered);
+        if (fail) {
+            try std.testing.expectError(error.WriteFailed, presentation_lifecycle.handleWritten(client, error.WriteFailed));
+            try std.testing.expectEqual(@as(u64, 7), pane.pending_frame_id);
+            try std.testing.expect(client.presenter.presentation_state.preparation_invalid);
+        } else {
+            try Output.write(work);
+            try presentation_lifecycle.handleWritten(client, {});
+            try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
+            var wire: [1024]u8 = undefined;
+            try std.testing.expectEqual(@as(u64, 7), (try harness.nextClientMessage(&wire)).frame_ack.frame_id);
+        }
+        try std.testing.expect(client.presenter.presentation_state.active == null);
+        try std.testing.expect(!output.pending);
+    }
 }

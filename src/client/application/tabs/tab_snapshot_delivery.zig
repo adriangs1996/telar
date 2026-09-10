@@ -335,7 +335,7 @@ test "DeliverTabSnapshotHandler releases retired resources before active synchro
     const all = [_]schema.PaneId{ testing.root, testing.discovered, testing.other_pane };
     _ = try testing.reconcile(&all);
     const tab = testing.model.workspace.find(testing.target.tab_id).?;
-    try tab.model.markAttached(testing.discovered);
+    try tab.model.markAttached(testing.discovered, 1);
     try std.testing.expect(tab.model.focusPane(testing.discovered));
     const pane = tab.model.find(testing.discovered).?;
     pane.input_modes.bracketed_paste = true;

@@ -227,7 +227,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expect(detached == .detach_pane);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, detached.detach_pane.pane_id);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     // Renamed.
     const version_before_rename = client.model.version();
@@ -252,7 +252,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
 
     try std.testing.expectEqual(pending_updates_before_rename + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     // Moved to the front.
     try client.request_lifecycle.tracker.add(@enumFromInt(6), .{ .move_tab = second_location });
@@ -310,7 +310,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         survivor_snapshot.request_tab_snapshot.location,
     );
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     // An unknown close request is rejected.
     const unexpected = try schema.encodeTabClosed(&payload, .{
@@ -508,10 +508,10 @@ test "move tab waits for the canonical response and preserves active identity" {
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.observed_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.observed.model);
     try std.testing.expectEqual(pending_updates_before_response + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "pending tab operation suppresses a move request" {
@@ -678,7 +678,7 @@ test "select tab closes captured paste before detaching and requesting the targe
     try std.testing.expect(snapshot == .request_tab_snapshot);
     try std.testing.expectEqualDeep(second, snapshot.request_tab_snapshot.location);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "tab selection offset wraps while full turns remain no-ops" {
@@ -1029,7 +1029,7 @@ test "inactive tab lifecycle closure changes only the tab collection" {
 
     try std.testing.expectEqual(pending_updates_before_close + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 }
 
 test "invalid last tab closure has no semantic or cleanup effects" {

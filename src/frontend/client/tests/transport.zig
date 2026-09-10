@@ -505,7 +505,7 @@ test "bootstrap answers the initial open with both snapshot requests" {
     try std.testing.expectEqual(@as(u64, 1), harness.client.model.version().panes);
     try std.testing.expectEqualDeep(
         harness.client.model.version(),
-        harness.client.presenter.presented_model_version,
+        harness.client.presenter.presentation_state.prepared.model,
     );
 }
 

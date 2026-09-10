@@ -26,3 +26,5 @@ pub const Modes = encoding.Modes;
 pub const encodeKey = encoding.encodeKey;
 pub const encodePaste = encoding.encodePaste;
 pub const max_encoded_bytes: usize = 8 * 1024;
+
+pub const hints = @import("hints.zig");

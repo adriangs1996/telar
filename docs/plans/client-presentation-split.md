@@ -16,7 +16,8 @@ No incorpora Native SDK ni el fork de Ghostty.
   `../performance/client-split-step3/README.md`.
 - [x] 4. Gráficos y efectos del host. Validación y propiedad de recursos en
   `../performance/client-split-step4/README.md`.
-- [ ] 5. Presentación intercambiable.
+- [x] 5. Presentación intercambiable. Contratos y pruebas en
+  `../performance/client-split-step5/README.md`.
 - [ ] 6. Dependencias y equivalencia.
 
 ## Resultado buscado

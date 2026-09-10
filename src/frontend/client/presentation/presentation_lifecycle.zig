@@ -54,6 +54,7 @@ pub fn presentNow(client: *Client) !void {
         presentation_projection.projection(client),
         presentation_projection.resources(client),
     ) orelse return;
+    errdefer _ = client.presenter.presentation_state.complete(delivery, .failed);
 
     if (client.output) |*output| {
         if (output.writer.end != 0) {
@@ -66,14 +67,14 @@ pub fn presentNow(client: *Client) !void {
     try deliver(client, delivery);
 }
 
-fn deliver(client: *Client, delivery: @import("presenter.zig").Delivery) !void {
+fn deliver(client: *Client, token: @import("presenter.zig").Token) !void {
+    const delivery = client.presenter.presentation_state.complete(token, .delivered) orelse return;
     var use_case: presentation_delivery.DeliverPresentationHandler = .{
         .model = &client.model,
         .effects = deliveryEffects(client),
     };
     try use_case.execute(.{
         .commit = delivery.commit,
-        .frame_acks = delivery.frame_acks.slice(),
         .media_pending = delivery.media_pending,
     });
 }
@@ -120,7 +121,14 @@ pub fn pumpOutput(client: *Client) anyerror!void {
 pub fn handleWritten(client: *Client, result: anyerror!void) !void {
     core.echo_trace.mark(client.io, .host_flush_done);
     const output = if (client.output) |*output| output else unreachable;
-    if (try output.complete(result)) |delivery| {
+    const token = output.delivery;
+    const completed = output.complete(result) catch |err| {
+        if (token) |value| {
+            _ = client.presenter.presentation_state.complete(value, .failed);
+        }
+        return err;
+    };
+    if (completed) |delivery| {
         try deliver(client, delivery);
     }
 

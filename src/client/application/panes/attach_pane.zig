@@ -171,7 +171,7 @@ test "RecoverPaneAttachmentHandler refreshes only an attachment still needed" {
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqualDeep(testing.location, capture.location.?);
 
-    _ = testing.model.confirmPaneAttachment(attachment);
+    _ = try testing.model.confirmPaneAttachment(attachment);
     try std.testing.expect(!try handler.execute(attachment));
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
 }

@@ -106,7 +106,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
     try presentation_lifecycle.observe(client);
     try std.testing.expectEqual(pending_updates_before_prompt + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const version_before_request = client.model.version();
     const pending_updates_before_request = client.presenter.pending_updates;
@@ -150,7 +150,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
 
     try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = client.presenter.pending_updates;
@@ -353,7 +353,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
 
     try std.testing.expectEqual(pending_updates_before_request + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(client.model.version(), client.presenter.presentation_state.prepared.model);
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = client.presenter.pending_updates;
@@ -519,7 +519,7 @@ test "client telemetry writes one snapshot without mutating semantic state" {
     try harness.bootstrap();
     const client = harness.client;
     const model_version = client.model.version();
-    const presented_version = client.presenter.presented_model_version;
+    const presented_version = client.presenter.presentation_state.prepared.model;
     const file = try temp.dir.createFile(io, "client.log", .{});
     client.telemetry.sink.deinit(io);
     client.telemetry.sink = .{ .file = file };
@@ -543,7 +543,7 @@ test "client telemetry writes one snapshot without mutating semantic state" {
     try std.testing.expect(client.telemetry.enabled);
     try std.testing.expect(client.telemetry.sink.available());
     try std.testing.expectEqualDeep(model_version, client.model.version());
-    try std.testing.expectEqualDeep(presented_version, client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(presented_version, client.presenter.presentation_state.prepared.model);
 
     client_telemetry.handleTick(client, error.TickFailed, .{});
     try std.testing.expect(!client.telemetry.enabled);

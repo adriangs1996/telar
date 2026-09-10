@@ -152,7 +152,7 @@ test "pane graphics commit their cell fallback before presenter observation" {
 
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(committed, client.presenter.presented_model_version);
+    try std.testing.expectEqualDeep(committed, client.presenter.presentation_state.prepared.model);
 }
 
 test "presenter observes physical graphics without a semantic fallback" {
@@ -186,9 +186,9 @@ test "presenter observes physical graphics without a semantic fallback" {
     try presentation_lifecycle.observe(client);
 
     try std.testing.expectEqual(pending_before + 1, client.presenter.pending_updates);
-    try std.testing.expectEqual(@as(u64, 1), client.presenter.observed_graphics_ingress);
+    try std.testing.expectEqual(@as(u64, 1), client.presenter.presentation_state.observed.graphics_ingress);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(@as(u64, 1), client.presenter.presented_graphics_ingress);
+    try std.testing.expectEqual(@as(u64, 1), client.presenter.presentation_state.prepared.graphics_ingress);
 
     const pending_after = client.presenter.pending_updates;
     const stale = try schema.encodeGraphicsDeleteImage(&payload, .{

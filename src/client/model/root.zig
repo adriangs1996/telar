@@ -195,6 +195,7 @@ pub const Model = struct {
     selection_gesture: ?schema.PaneId = null,
     copy_revision: u64 = 0,
     reported_pane_focus: ?ReportedPaneFocus = null,
+    next_attachment_generation: u64 = 1,
     pane_paste: ?PanePasteSession = null,
     frame_revision: u64 = 0,
     pane_metadata_revision: u64 = 0,
@@ -339,16 +340,16 @@ pub const Model = struct {
     /// successful host presentation without advancing semantic versions.
     ///
     /// ```zig
-    /// model.commitPresentation(commit);
+    /// const acknowledged = model.commitPresentation(commit);
     /// ```
-    pub fn commitPresentation(model: *Model, commit: multiplexer.PresentationCommit) void {
-        const location = commit.location orelse return;
-        const tab = model.workspace.find(location.tab_id) orelse return;
+    pub fn commitPresentation(model: *Model, commit: multiplexer.PresentationCommit) multiplexer.PresentationCommit {
+        const location = commit.location orelse return .{};
+        const tab = model.workspace.find(location.tab_id) orelse return .{};
         if (!std.meta.eql(tab.location, location)) {
-            return;
+            return .{};
         }
 
-        tab.model.commitPresentation(commit);
+        return tab.model.commitPresentation(commit);
     }
 
     /// Returns the active configuration generation owned by this client.
@@ -1503,8 +1504,10 @@ pub const Model = struct {
             } };
         }
 
+        const generation = if (pane.attachment_generation == 0) try model.allocateAttachmentGeneration() else pane.attachment_generation;
         const previous_scroll_offset = pane.scroll.offset;
         const applied = try tab.model.applyFrame(frame);
+        pane.attachment_generation = generation;
         _ = model.reconcileCopyModeFrame(.{
             .pane_id = frame.pane_id,
             .previous_offset = previous_scroll_offset,
@@ -2337,7 +2340,7 @@ pub const Model = struct {
     /// ```zig
     /// const result = model.confirmPaneAttachment(attachment);
     /// ```
-    pub fn confirmPaneAttachment(model: *Model, attachment: PaneAttachment) PaneAttachmentConfirmation {
+    pub fn confirmPaneAttachment(model: *Model, attachment: PaneAttachment) !PaneAttachmentConfirmation {
         const active = model.workspace.active() orelse return .stale;
         if (!std.meta.eql(active.location, attachment.location)) {
             return .stale;
@@ -2348,8 +2351,18 @@ pub const Model = struct {
             return .stale;
         }
 
-        active.model.markAttached(attachment.pane_id) catch unreachable;
+        try active.model.markAttached(attachment.pane_id, try model.allocateAttachmentGeneration());
         return .confirmed;
+    }
+
+    fn allocateAttachmentGeneration(model: *Model) !u64 {
+        if (model.next_attachment_generation == std.math.maxInt(u64)) {
+            return error.AttachmentGenerationExhausted;
+        }
+
+        const generation = model.next_attachment_generation;
+        model.next_attachment_generation += 1;
+        return generation;
     }
 
     /// Reports whether the active client replica still needs the requested
@@ -2583,7 +2596,7 @@ pub const Model = struct {
 
             const pane = tab.model.find(command.new_pane).?;
             if (active) {
-                try tab.model.markAttached(command.new_pane);
+                try tab.model.markAttached(command.new_pane, try model.allocateAttachmentGeneration());
             } else {
                 detachPane(pane);
             }
@@ -2599,7 +2612,7 @@ pub const Model = struct {
             try tab.model.split(.{ .existing_pane = command.split.target_pane, .new_pane = command.new_pane, .location = command.split.location, .axis = command.split.axis, .area = command.split.area });
         } else {
             try tab.model.addDiscovered(.{ .pane_id = command.new_pane, .location = command.split.location, .area = command.split.area });
-            try tab.model.markAttached(command.new_pane);
+            try tab.model.markAttached(command.new_pane, try model.allocateAttachmentGeneration());
         }
 
         if (!active) {

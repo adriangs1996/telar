@@ -13,6 +13,7 @@ pub const PresentationCommit = struct {
         pane_id: schema.PaneId,
         frame_id: u64,
         attached: bool,
+        attachment_generation: u64 = 0,
     };
 
     /// Borrows the exact completed pane identities. Example: for (commit.slice()) |pane| acknowledge(pane);
@@ -28,6 +29,7 @@ pub const PresentationCommit = struct {
             .pane_id = pane.id,
             .frame_id = pane.pending_frame_id,
             .attached = pane.attached,
+            .attachment_generation = pane.attachment_generation,
         };
         commit.len += 1;
     }

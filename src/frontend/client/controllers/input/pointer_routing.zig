@@ -62,6 +62,15 @@ fn resolve(context: *Context, event: term.Event.Mouse) pointer_routing.Authority
     }
 
     context.model = context.client.model.activeTabModel() orelse return .unavailable;
+    const begins_gesture = event.kind == .press or event.kind == .scroll_up or event.kind == .scroll_down;
+    if (begins_gesture and !captured and context.client.presenter.presentation_state.active != null) {
+        const delivered = context.client.presenter.presentation_state.delivered_geometry orelse return .unavailable;
+        const projection = @import("telar-client").presentation.capture(&context.client.model, .{ .geometry = context.client.geometry() });
+        const current = @import("telar-client").presentation.Geometry.capture(projection);
+        if (!delivered.matches(&current)) {
+            return .unavailable;
+        }
+    }
 
     const capabilities = context.client.model.hostCapabilities();
     const host_size = context.client.model.hostSize();

@@ -755,12 +755,12 @@ test "pane attachment confirmation changes only active operational state" {
     const attachment: client_model.PaneAttachment = .{ .pane_id = discovered, .location = location };
 
     try std.testing.expect(model.needsPaneAttachment(attachment));
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.confirmed, model.confirmPaneAttachment(attachment));
+    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.confirmed, try model.confirmPaneAttachment(attachment));
     try std.testing.expect(!model.needsPaneAttachment(attachment));
     try std.testing.expect(model.workspace.findPane(discovered).?.attached);
     try std.testing.expectEqualDeep(client_model.Version{}, model.version());
 
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, model.confirmPaneAttachment(attachment));
+    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(attachment));
     try std.testing.expectEqualDeep(client_model.Version{}, model.version());
 }
 
@@ -783,15 +783,15 @@ test "pane attachment confirmation ignores inactive missing and wrong-location p
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
 
     const inactive: client_model.PaneAttachment = .{ .pane_id = discovered, .location = first };
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, model.confirmPaneAttachment(inactive));
+    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(inactive));
     try std.testing.expect(!model.needsPaneAttachment(inactive));
     try std.testing.expect(!model.workspace.findPane(discovered).?.attached);
 
     try std.testing.expect(model.workspace.select(first.tab_id));
     const missing: client_model.PaneAttachment = .{ .pane_id = @enumFromInt(9), .location = first };
     const wrong_location: client_model.PaneAttachment = .{ .pane_id = discovered, .location = second };
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, model.confirmPaneAttachment(missing));
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, model.confirmPaneAttachment(wrong_location));
+    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(missing));
+    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(wrong_location));
     try std.testing.expect(!model.needsPaneAttachment(missing));
     try std.testing.expect(!model.needsPaneAttachment(wrong_location));
     try std.testing.expect(!model.workspace.findPane(discovered).?.attached);

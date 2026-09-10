@@ -21,6 +21,7 @@ pub const Pane = struct {
     buffer: ui.Buffer,
     damage_rows: []damage.DamageRow,
     attached: bool,
+    attachment_generation: u64 = 0,
     cursor: schema.frame.Cursor = .{},
     mouse: schema.frame.Mouse = .{},
     input_modes: schema.frame.InputModes = .{},
