@@ -100,6 +100,10 @@ pub const Renderer = struct {
                 return;
             }
 
+            // Same content at a new position: keep the pixels, follow the area,
+            // otherwise retirement compares the emitted placement against the
+            // area of the plan that was rasterized and never settles.
+            renderer.plan.area = plan.area;
             renderer.desired = plan.area;
             renderer.image_dirty = !renderer.image_emitted or renderer.generation != renderer.emitted_generation;
             return;
@@ -442,6 +446,36 @@ test "small labels use JetBrains Mono and a centered three-quarter-height pill" 
     writer = Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=t") == null);
+    try std.testing.expect(renderer.covers(&plan, palette));
+}
+
+test "a position-only move settles after one placement instead of retiring every pass" {
+    var renderer = Renderer.init(std.testing.allocator);
+    defer renderer.deinit();
+    const palette = &theme.default_theme.palette;
+    _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
+    var plan = testingPlan(&.{ "zsh", "nvim" }, 1);
+    renderer.prepare(&plan, palette);
+    var storage: [128 * 1024]u8 = undefined;
+    var writer = Io.Writer.fixed(&storage);
+    _ = try renderer.write(&writer);
+    try std.testing.expect(!renderer.damaged());
+
+    // The sidebar grew: same text and focus, the strip only shifted right.
+    plan.area.x += 6;
+    renderer.observe(&plan, palette);
+    renderer.prepare(&plan, palette);
+    writer = Io.Writer.fixed(&storage);
+    _ = try renderer.write(&writer);
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, writer.buffered(), "a=p"));
+    try std.testing.expect(renderer.covers(&plan, palette));
+    try std.testing.expect(!renderer.retirementPending());
+    try std.testing.expect(!renderer.damaged());
+
+    renderer.observe(&plan, palette);
+    renderer.prepare(&plan, palette);
+    writer = Io.Writer.fixed(&storage);
+    try std.testing.expectEqual(@as(usize, 0), try renderer.write(&writer));
     try std.testing.expect(renderer.covers(&plan, palette));
 }
 
