@@ -22,11 +22,16 @@ const client_module = @import("cli/client.zig");
 
 const version = "0.0.0";
 
+// Zig tests use the compiler runner as root, not this bootstrap. Check the
+// declarations here; executable probes exercise their root-level effects.
 test "the executable preserves diagnostic and trace root contracts" {
+    inline for (.{ "std_options", "telar_diagnostics", "telar_echo_trace", "telar_echo_trace_cpu", "echo_recorder" }) |name| {
+        _ = std.meta.declarationInfo(@This(), name);
+    }
+
     try std.testing.expectEqual(build_options.diagnostics, telar_diagnostics);
     try std.testing.expectEqual(build_options.echo_trace, telar_echo_trace);
     try std.testing.expectEqual(build_options.echo_trace_cpu, telar_echo_trace_cpu);
-    try std.testing.expectEqual(@import("builtin").mode == .Debug or telar_diagnostics, @import("telar-core").enabled);
 }
 
 // Library warnings cannot be written over a live frame. A later runtime can
