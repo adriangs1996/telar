@@ -5,10 +5,21 @@ y: u16 = 0,
 w: u16 = 0,
 h: u16 = 0,
 
+// Returns a rectangle with width w and height h that
+// is inner to self and is equidistant in both axis
+pub fn innerCenter(self: Rect, w: u16, h: u16) Rect {
+    const space_x = (self.w - w) / 2;
+    const space_y = (self.h - h) / 2;
+
+    const x = self.x + space_x;
+    const y = self.y + space_y;
+
+    return .{ .x = x, .y = y, .w = w, .h = h };
+}
+
 // `x + w` and `y + h` may exceed maxInt(u16), so every edge sum below is
 // computed in u32. Positions past maxInt(u16) are unaddressable; rects
 // whose derived origin would land there come back empty.
-
 pub fn contains(r: Rect, x: u16, y: u16) bool {
     return x >= r.x and x < @as(u32, r.x) + r.w and
         y >= r.y and y < @as(u32, r.y) + r.h;

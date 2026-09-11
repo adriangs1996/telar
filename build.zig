@@ -173,12 +173,15 @@ pub fn build(b: *std.Build) void {
     exe_options.addOption(bool, "echo_trace", b.option(bool, "echo-trace", "Record bounded echo phase timestamps until shutdown") orelse false);
     exe_options.addOption(bool, "echo_trace_cpu", b.option(bool, "echo-trace-cpu", "Include thread CPU clocks in diagnostic echo traces") orelse false);
     exe.root_module.addOptions("build_options", exe_options);
-    b.installArtifact(exe);
+    // `zig build` installs only the shipped binary. Examples and probes get
+    // their own steps so the default build and `run` never wait on them.
+    const install_exe = b.addInstallArtifact(exe, .{});
+    b.getInstallStep().dependOn(&install_exe.step);
 
     const run_exe = b.addRunArtifact(exe);
     // Build-runner color overrides leak into panes and can downgrade truecolor.
     run_exe.color = .manual;
-    run_exe.step.dependOn(b.getInstallStep());
+    run_exe.step.dependOn(&install_exe.step);
     run_exe.setEnvironmentVariable(
         "TELAR_DEVELOPMENT_CONFIG",
         b.pathFromRoot("dev/config.lua"),
@@ -304,6 +307,19 @@ pub fn build(b: *std.Build) void {
     // The example
     // ---------------------------------------------------------------------
 
+    const experiment_module = b.createModule(.{
+        .root_source_file = b.path("exper.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    experiment_module.addImport("telar-frontend", frontend);
+    const experiment = b.addExecutable(.{ .name = "exper", .root_module = experiment_module });
+    const run_experiment = b.addRunArtifact(experiment);
+    b.step("exper", "Run the frontend execution experiment").dependOn(&run_experiment.step);
+    const experiment_tests = b.addTest(.{ .root_module = experiment_module });
+    b.step("test-exper", "Test the frontend execution experiment").dependOn(&b.addRunArtifact(experiment_tests).step);
+
     const sidebar = b.addExecutable(.{
         .name = "sidebar",
         .root_module = b.createModule(.{
@@ -316,10 +332,8 @@ pub fn build(b: *std.Build) void {
     sidebar.root_module.addImport("telar-frontend", frontend);
     sidebar.root_module.addImport("telar-client", client);
     sidebar.root_module.addImport("telar-core", core);
-    b.installArtifact(sidebar);
 
     const run_sidebar = b.addRunArtifact(sidebar);
-    run_sidebar.step.dependOn(b.getInstallStep());
     b.step("sidebar", "Run the example").dependOn(&run_sidebar.step);
 
     const history_preview = b.addExecutable(.{
@@ -354,7 +368,6 @@ pub fn build(b: *std.Build) void {
     terminal_browser_pane.root_module.addImport("telar-frontend", frontend);
     terminal_browser_pane.root_module.addImport("telar-client", client);
     terminal_browser_pane.root_module.addImport("ghostty-vt", ghostty_vt);
-    b.installArtifact(terminal_browser_pane);
 
     // A deterministic terminal-browser stand-in: publishes shared-memory
     // frames of a chosen size at a chosen rate, so the graphics pipeline can
@@ -368,7 +381,7 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         }),
     });
-    b.installArtifact(frame_source);
+    b.step("frame-source", "Install the deterministic terminal-browser frame source").dependOn(&b.addInstallArtifact(frame_source, .{}).step);
 
     const asteroids = b.addExecutable(.{
         .name = "asteroids",
@@ -384,7 +397,6 @@ pub fn build(b: *std.Build) void {
     b.step("asteroids", "Run the Asteroids example").dependOn(&run_asteroids.step);
 
     const run_terminal_browser_pane = b.addRunArtifact(terminal_browser_pane);
-    run_terminal_browser_pane.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
         run_terminal_browser_pane.addArgs(args);
     }
@@ -498,7 +510,7 @@ pub fn build(b: *std.Build) void {
     release_benchmarks.addArgs(&.{ "--samples", "8", "--sample-ms", "20", "--enforce" });
     release_step.dependOn(test_step);
     release_step.dependOn(&release_benchmarks.step);
-    release_step.dependOn(b.getInstallStep());
+    release_step.dependOn(&install_exe.step);
 
     const suites = [_]Suite{
         .{ .path = "src/kitty_protocol/kitty_protocol.zig" },

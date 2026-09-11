@@ -237,6 +237,10 @@ def main() -> int:
         # Measurement wants the shipped optimization level with the telemetry
         # counters still compiled in; the plain check keeps the Debug build.
         zig_build = ["zig", "build"]
+        if browser_root is None:
+            # The synthetic source is an example binary outside the default
+            # install; ask for its step alongside the telar install.
+            zig_build += ["install", "frame-source"]
         if args.measure > 0:
             zig_build += ["-Doptimize=ReleaseFast", "-Ddiagnostics=true"]
         run(zig_build, cwd=telar_root)
