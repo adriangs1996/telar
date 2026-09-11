@@ -2,31 +2,24 @@
 //! projections for the goto picker. Deterministic for one (sources, query)
 //! pair, so the renderer and the submit path always agree on ordering.
 
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const TabIdType = @import("telar-core").TabId;
+const AgentKeyType = @import("../agents/AgentKey.zig");
+const Sources = @import("Sources.zig");
+const Results = @import("Results.zig");
+const Scorer = @import("Scorer.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../agents/root.zig");
-const workspace_capability = @import("../workspace/root.zig");
-
-const schema = core.schema;
-pub const workspace_list = workspace_capability.workspace_list;
-pub const tabs_mod = workspace_capability.tabs;
+const SnapshotType = @import("../agents/AgentSnapshot.zig");
+const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
 
 pub const max_results = 64;
 pub const max_label_bytes = 160;
 
 pub const Item = union(enum) {
-    workspace: schema.WorkspaceId,
-    tab: schema.TabId,
-    agent: agents.AgentKey,
+    workspace: WorkspaceIdType,
+    tab: TabIdType,
+    agent: AgentKeyType,
 };
-
-pub const Match = @import("Match.zig");
-
-pub const Results = @import("Results.zig");
-
-pub const Sources = @import("Sources.zig");
-
-const Scorer = @import("Scorer.zig");
 
 /// Fills `results` with every candidate matching `query`, best score first.
 /// An empty query lists everything in canonical order: workspaces, then the
@@ -105,9 +98,6 @@ pub fn describe(sources: Sources, item: Item, buffer: *[max_label_bytes]u8) []co
     return writer.buffered();
 }
 
-/// Shared subsequence scorer; see `telar-core`'s `fuzzy.score`.
-pub const score = core.fuzzy.score;
-
 fn insert(results: *Results, item: Item, item_score: u32) void {
     var index: usize = results.len;
     while (index > 0 and results.matches[index - 1].score < item_score) {
@@ -131,8 +121,8 @@ fn insert(results: *Results, item: Item, item_score: u32) void {
 
 test "collect keeps matches ordered by score with a stable bound" {
     var results: Results = .{};
-    var snapshot: agents.Snapshot = .{};
-    var workspaces: workspace_list.Snapshot = .{};
+    var snapshot: SnapshotType = .{};
+    var workspaces: WorkspaceListSnapshot = .{};
     const sources: Sources = .{
         .agents = &snapshot,
         .workspaces = &workspaces,

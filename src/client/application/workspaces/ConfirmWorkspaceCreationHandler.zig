@@ -1,8 +1,10 @@
-const ConfirmWorkspaceCreationHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const WorkspaceCreationDelivery = @import("WorkspaceCreationDelivery.zig");
 const ConfirmWorkspaceCreation = @import("ConfirmWorkspaceCreation.zig");
-model: *client_model.Model,
+const WorkspaceReplacementType = @import("../../model/WorkspaceReplacement.zig");
+const ConfirmWorkspaceCreationHandler = @This();
+
+model: *ModelType,
 delivery: WorkspaceCreationDelivery,
 
 /// Replaces the current projection in one commit before delegating its
@@ -11,7 +13,7 @@ delivery: WorkspaceCreationDelivery,
 /// ```zig
 /// const replacement = try handler.execute(command);
 /// ```
-pub fn execute(handler: *ConfirmWorkspaceCreationHandler, command: ConfirmWorkspaceCreation) !client_model.WorkspaceReplacement {
+pub fn execute(handler: *ConfirmWorkspaceCreationHandler, command: ConfirmWorkspaceCreation) !WorkspaceReplacementType {
     if (!command.created) {
         return error.UnexpectedRequest;
     }

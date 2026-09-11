@@ -1,6 +1,8 @@
+const id = @import("../id.zig");
+const HistoryEntryType = @import("../HistoryEntry.zig");
 const HistoryResults = @This();
-const source_namespace = @import("history.zig");
-request_id: source_namespace.RequestId,
-entries: []const source_namespace.HistoryEntry,
+
+request_id: id.RequestId,
+entries: []const HistoryEntryType,
 snapshot_id: u64 = 0,
 has_more: bool = false,

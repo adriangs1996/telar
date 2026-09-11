@@ -1,4 +1,6 @@
+const RequestIdType = @import("telar-core").RequestId;
+const requests = @import("requests.zig");
 const Entry = @This();
-const source_namespace = @import("requests.zig");
-request_id: source_namespace.schema.RequestId,
-continuation: source_namespace.Continuation,
+
+request_id: RequestIdType,
+continuation: requests.Continuation,

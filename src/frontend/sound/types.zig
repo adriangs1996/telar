@@ -1,11 +1,7 @@
 //! Semantic host-sound values and local playback policy.
 
+const Config = @import("Config.zig");
 const std = @import("std");
-const core = @import("telar-core");
-
-pub const Kind = core.schema.AgentSound;
-
-pub const Config = @import("Config.zig");
 
 test "sound configuration can disable each transition independently" {
     const configuration: Config = .{ .ready = false };

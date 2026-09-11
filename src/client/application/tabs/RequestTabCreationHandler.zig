@@ -1,12 +1,13 @@
-const RequestTabCreationHandler = @This();
-const client_model = @import("../../root.zig").model;
-const TabOperationGate = @import("CreateTabTabOperationGate.zig");
+const ModelType = @import("../../model/Model.zig");
+const CreateTabOperationGate = @import("CreateTabOperationGate.zig");
 const CreationRequestEffects = @import("CreationRequestEffects.zig");
 const RequestTabCreation = @import("RequestTabCreation.zig");
-const source_namespace = @import("create_tab.zig");
+const create_tab = @import("create_tab.zig");
 const TabCreationIntent = @import("TabCreationIntent.zig");
-model: *const client_model.Model,
-gate: TabOperationGate,
+const RequestTabCreationHandler = @This();
+
+model: *const ModelType,
+gate: CreateTabOperationGate,
 effects: CreationRequestEffects,
 
 /// Plans a tab launch from the attached focused pane and delivers one
@@ -20,7 +21,7 @@ pub fn execute(handler: *RequestTabCreationHandler, request: RequestTabCreation)
         return false;
     }
 
-    try source_namespace.validateLabel(request.label);
+    try create_tab.validateLabel(request.label);
     const plan = handler.model.planTabCreation() orelse return false;
     const intent: TabCreationIntent = .{
         .workspace = plan.workspace,

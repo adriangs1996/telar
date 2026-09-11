@@ -1,9 +1,9 @@
-const std = @import("std");
-pub const Io = std.Io;
-pub const net = std.Io.net;
-
+const InterceptResources = @import("InterceptResources.zig");
+const InterceptConnection = @import("InterceptConnection.zig");
+const Session = @import("Session.zig");
 const tlsz = @import("tls");
-const ca = @import("ca.zig");
+const std = @import("std");
+const Cursor = @import("Cursor.zig");
 
 // TLS termination, both ends.
 //
@@ -44,14 +44,6 @@ pub const Error = error{
 const alpn_offer = [_][]const u8{ "h2", "http/1.1" };
 const alpn_h2_only = [_][]const u8{"h2"};
 const alpn_http11_only = [_][]const u8{"http/1.1"};
-
-pub const Roots = @import("Roots.zig");
-
-pub const Session = @import("Session.zig");
-
-pub const InterceptResources = @import("InterceptResources.zig");
-
-pub const InterceptConnection = @import("InterceptConnection.zig");
 
 pub fn intercept(resources: InterceptResources, connection: InterceptConnection, cause: *anyerror) Error!*Session {
     const io = resources.io;
@@ -97,7 +89,7 @@ pub fn intercept(resources: InterceptResources, connection: InterceptConnection,
         .{
             .host = host,
             .root_ca = roots.bundle,
-            .now = Io.Clock.real.now(io),
+            .now = std.Io.Clock.real.now(io),
             .rng = self.rng_source.interface(),
             .alpn_protocols = offer,
         },
@@ -114,7 +106,7 @@ pub fn intercept(resources: InterceptResources, connection: InterceptConnection,
         &self.child.writer.interface,
         .{
             .auth = &self.auth,
-            .now = Io.Clock.real.now(io),
+            .now = std.Io.Clock.real.now(io),
             .rng = self.rng_source.interface(),
             .alpn_protocols = mirroredAlpn(self.origin.conn.alpn_protocol),
             // The child does not get to pick the version the way it picks the
@@ -159,11 +151,11 @@ pub fn explain(cause: anyerror) ?[]const u8 {
 /// handshake that runs afterwards still sees the record untouched. Anything
 /// unparseable falls back to offering both, which is what this did before it
 /// looked at all.
-fn peekAlpnOffer(reader: *Io.Reader) []const []const u8 {
+fn peekAlpnOffer(reader: *std.Io.Reader) []const []const u8 {
     return parseAlpnOffer(reader) catch &alpn_offer;
 }
 
-fn parseAlpnOffer(reader: *Io.Reader) !([]const []const u8) {
+fn parseAlpnOffer(reader: *std.Io.Reader) !([]const []const u8) {
     const header = try reader.peek(tls_record_header_len);
     if (header[0] != handshake_record) {
         return error.NotAHandshake;
@@ -236,8 +228,6 @@ const handshake_record: u8 = 0x16;
 const client_hello: u8 = 0x01;
 const alpn_extension: u16 = 16;
 
-const Cursor = @import("Cursor.zig");
-
 /// Mints a leaf for `host` and turns it into something a Zig TLS stack accepts.
 ///
 /// The chain is leaf then CA: a client that pinned only the root still needs the
@@ -280,8 +270,6 @@ fn mintAuth(resources: InterceptResources, host: []const u8, cause: *anyerror) E
 // attacker controls. These cover what it must extract and, more importantly,
 // that malformed input falls back rather than reading past the buffer.
 // ---------------------------------------------------------------------------
-
-const testing = std.testing;
 
 /// Builds a ClientHello carrying `protocols` as its ALPN list, or no ALPN
 /// extension at all when the list is empty.
@@ -338,30 +326,30 @@ test "the child's ALPN list is read out of its ClientHello" {
     var buf: [512]u8 = undefined;
 
     const both = offerOf(fakeClientHello(&buf, &.{ "h2", "http/1.1" }));
-    try testing.expectEqual(@as(usize, 2), both.len);
-    try testing.expectEqualStrings("h2", both[0]);
-    try testing.expectEqualStrings("http/1.1", both[1]);
+    try std.testing.expectEqual(@as(usize, 2), both.len);
+    try std.testing.expectEqualStrings("h2", both[0]);
+    try std.testing.expectEqualStrings("http/1.1", both[1]);
 
     const h2 = offerOf(fakeClientHello(&buf, &.{"h2"}));
-    try testing.expectEqual(@as(usize, 1), h2.len);
-    try testing.expectEqualStrings("h2", h2[0]);
+    try std.testing.expectEqual(@as(usize, 1), h2.len);
+    try std.testing.expectEqualStrings("h2", h2[0]);
 
     const http11 = offerOf(fakeClientHello(&buf, &.{"http/1.1"}));
-    try testing.expectEqual(@as(usize, 1), http11.len);
-    try testing.expectEqualStrings("http/1.1", http11[0]);
+    try std.testing.expectEqual(@as(usize, 1), http11.len);
+    try std.testing.expectEqualStrings("http/1.1", http11[0]);
 }
 
 test "a client that sent no ALPN is not given one" {
     // Inventing an offer here would make the origin pick a protocol the child
     // never asked for, and the child would then be told about it.
     var buf: [512]u8 = undefined;
-    try testing.expectEqual(@as(usize, 0), offerOf(fakeClientHello(&buf, &.{})).len);
+    try std.testing.expectEqual(@as(usize, 0), offerOf(fakeClientHello(&buf, &.{})).len);
 }
 
 test "protocols this relay cannot read are not forwarded" {
     var buf: [512]u8 = undefined;
     const hello = fakeClientHello(&buf, &.{ "h3", "spdy/3.1" });
-    try testing.expectEqual(@as(usize, 0), offerOf(hello).len);
+    try std.testing.expectEqual(@as(usize, 0), offerOf(hello).len);
 }
 
 test "the ordering the child asked for does not leak through" {
@@ -370,7 +358,7 @@ test "the ordering the child asked for does not leak through" {
     // the origin supports it.
     var buf: [512]u8 = undefined;
     const reversed = offerOf(fakeClientHello(&buf, &.{ "http/1.1", "h2" }));
-    try testing.expectEqualStrings("h2", reversed[0]);
+    try std.testing.expectEqualStrings("h2", reversed[0]);
 }
 
 test "malformed input falls back instead of reading past the buffer" {
@@ -381,17 +369,17 @@ test "malformed input falls back instead of reading past the buffer" {
     var cut: usize = 5;
     while (cut < hello.len) : (cut += 1) {
         const offer = offerOf(hello[0..cut]);
-        try testing.expect(offer.len == 2); // the both-protocols fallback
+        try std.testing.expect(offer.len == 2); // the both-protocols fallback
     }
 
     // Not a handshake record at all.
-    try testing.expectEqual(@as(usize, 2), offerOf("GET / HTTP/1.1\r\n\r\n").len);
+    try std.testing.expectEqual(@as(usize, 2), offerOf("GET / HTTP/1.1\r\n\r\n").len);
 
     // A length field claiming far more than the record holds.
     var lying: [512]u8 = undefined;
     @memcpy(lying[0..hello.len], hello);
     std.mem.writeInt(u16, lying[3..5], 0xffff, .big);
-    try testing.expectEqual(@as(usize, 2), offerOf(lying[0..hello.len]).len);
+    try std.testing.expectEqual(@as(usize, 2), offerOf(lying[0..hello.len]).len);
 }
 
 test "peeking leaves the ClientHello for the handshake to read" {
@@ -404,6 +392,6 @@ test "peeking leaves the ClientHello for the handshake to read" {
     _ = peekAlpnOffer(&reader);
 
     const rest = reader.buffered();
-    try testing.expectEqual(hello.len, rest.len);
-    try testing.expectEqual(handshake_record, rest[0]);
+    try std.testing.expectEqual(hello.len, rest.len);
+    try std.testing.expectEqual(handshake_record, rest[0]);
 }

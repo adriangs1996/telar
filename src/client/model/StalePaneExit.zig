@@ -1,6 +1,7 @@
+const PaneIdType = @import("telar-core").PaneId;
 const StalePaneExit = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 workspace_revision: u64,
 tabs_revision: u64,
 active_tab_revision: u64,

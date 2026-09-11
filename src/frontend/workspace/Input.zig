@@ -1,7 +1,8 @@
+const RectType = @import("telar-core").Rect;
+const PaletteType = @import("../ui/Palette.zig");
 const Input = @This();
-const source_namespace = @import("fullscreen_tabs.zig");
-const theme = @import("../ui/root.zig").theme;
-area: source_namespace.ui.Rect,
+
+area: RectType,
 names: []const []const u8,
 focused: usize,
-palette: *const theme.Palette,
+palette: *const PaletteType,

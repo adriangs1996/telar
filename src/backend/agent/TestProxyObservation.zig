@@ -1,6 +1,6 @@
-const TestProxyObservation = @This();
 const types = @import("types.zig");
-const source_namespace = @import("tracker_support.zig");
+const TestProxyObservation = @This();
+
 dialect: types.ApiDialect,
-phase: source_namespace.ProxyPhase,
+phase: types.ProxyPhase,
 observed_at_ms: i64,

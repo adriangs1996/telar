@@ -1,12 +1,14 @@
-const Pipeline = @This();
 const vt = @import("ghostty-vt");
 const std = @import("std");
 const Batch = @import("Batch.zig");
-const source_namespace = @import("root.zig");
+const media = @import("media.zig");
 const Initialization = @import("Initialization.zig");
 const png = @import("png.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const Processing = @import("Processing.zig");
 const SharedMemoryAvailability = @import("SharedMemoryAvailability.zig");
+const Pipeline = @This();
+
 terminal: vt.Terminal,
 stream: vt.TerminalStream,
 allocator: std.mem.Allocator,
@@ -15,7 +17,7 @@ payload_limit: usize,
 storage_limit: usize,
 batches: [2]Batch = .{ .{}, .{} },
 /// Batch bytes with answered file queries removed, when any were.
-scratch: [source_namespace.batch_bytes]u8 = undefined,
+scratch: [media.batch_bytes]u8 = undefined,
 active: u1 = 0,
 worker: ?u1 = null,
 enabled: bool,
@@ -49,12 +51,12 @@ pub fn init(pipeline: *Pipeline, initialization: Initialization) !void {
         .cols = size.cols,
         .rows = size.rows,
         .kitty_image_storage_limit = storage_limit,
-        .kitty_image_loading_limits = source_namespace.image_loading_limits,
+        .kitty_image_loading_limits = media.image_loading_limits,
     });
     errdefer pipeline.terminal.deinit(allocator);
     pipeline.stream = pipeline.newStream();
     errdefer pipeline.stream.deinit();
-    try pipeline.stream.handler.resize(source_namespace.vtResize(size));
+    try pipeline.stream.handler.resize(media.vtResize(size));
     pipeline.batches = .{ .{}, .{} };
     pipeline.active = 0;
     pipeline.worker = null;
@@ -79,7 +81,7 @@ pub fn deinit(pipeline: *Pipeline) void {
 }
 
 pub fn queueOutput(pipeline: *Pipeline, bytes: []const u8) void {
-    if (bytes.len > source_namespace.batch_bytes) {
+    if (bytes.len > media.batch_bytes) {
         pipeline.dropActive(bytes.len, 1);
         return;
     }
@@ -92,7 +94,7 @@ pub fn queueOutput(pipeline: *Pipeline, bytes: []const u8) void {
     pipeline.observeQueueDepth();
 }
 
-pub fn queueResize(pipeline: *Pipeline, size: source_namespace.schema.TerminalSize) void {
+pub fn queueResize(pipeline: *Pipeline, size: TerminalSizeType) void {
     var batch = &pipeline.batches[pipeline.active];
     if (!batch.pushResize(size)) {
         pipeline.dropActive(0, 1);
@@ -154,8 +156,8 @@ pub fn processSealed(pipeline: *Pipeline, processing: Processing, sink: anytype)
         .output => |output| {
             const start: usize = output.offset;
             const bytes = batch.bytes[start..][0..output.len];
-            const remaining = source_namespace.stripFileQueries(bytes, &pipeline.scratch, sink);
-            const filtered = source_namespace.filterAtomicSharedFrames(.{
+            const remaining = media.stripFileQueries(bytes, &pipeline.scratch, sink);
+            const filtered = media.filterAtomicSharedFrames(.{
                 .bytes = remaining,
                 .storage_limit = pipeline.storage_limit,
             }, sink, SharedMemoryAvailability{});
@@ -166,7 +168,7 @@ pub fn processSealed(pipeline: *Pipeline, processing: Processing, sink: anytype)
             stats.file_frames +|= filtered.file;
             stats.output_bytes +|= bytes.len;
         },
-        .resize => |size| pipeline.stream.handler.resize(source_namespace.vtResize(size)) catch {
+        .resize => |size| pipeline.stream.handler.resize(media.vtResize(size)) catch {
             pipeline.failures +|= 1;
             stats.failed = true;
         },
@@ -192,7 +194,7 @@ fn observeQueueDepth(pipeline: *Pipeline) void {
     pipeline.queue_byte_high_water = @max(pipeline.queue_byte_high_water, bytes);
 }
 
-fn resetState(pipeline: *Pipeline, size: source_namespace.schema.TerminalSize) !void {
+fn resetState(pipeline: *Pipeline, size: TerminalSizeType) !void {
     if (pipeline.enabled) {
         pipeline.stream.deinit();
     }
@@ -200,7 +202,7 @@ fn resetState(pipeline: *Pipeline, size: source_namespace.schema.TerminalSize) !
     pipeline.terminal.fullReset();
     pipeline.stream = pipeline.newStream();
     errdefer pipeline.stream.deinit();
-    try pipeline.stream.handler.resize(source_namespace.vtResize(size));
+    try pipeline.stream.handler.resize(media.vtResize(size));
     pipeline.enabled = true;
 }
 

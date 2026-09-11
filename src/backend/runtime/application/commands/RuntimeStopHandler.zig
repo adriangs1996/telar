@@ -1,10 +1,11 @@
-const RuntimeStopHandler = @This();
-const shutdown_mod = @import("../../lifecycle/root.zig").shutdown_authority;
+const StateType = @import("../../lifecycle/State.zig");
 const Notifications = @import("Notifications.zig");
 const RuntimeStop = @import("RuntimeStop.zig");
-const source_namespace = @import("runtime_stop.zig");
+const runtime_stop = @import("runtime_stop.zig");
 const RuntimeStopExecutor = @import("RuntimeStopExecutor.zig");
-shutdown: *shutdown_mod.State,
+const RuntimeStopHandler = @This();
+
+shutdown: *StateType,
 notifications: Notifications,
 
 /// Commits first-writer shutdown authority before publishing exactly one
@@ -13,7 +14,7 @@ notifications: Notifications,
 /// ```zig
 /// const result = handler.execute(.{ .requester = client });
 /// ```
-pub fn execute(handler: *RuntimeStopHandler, command: RuntimeStop) source_namespace.RuntimeStopResult {
+pub fn execute(handler: *RuntimeStopHandler, command: RuntimeStop) runtime_stop.RuntimeStopResult {
     const event = handler.shutdown.request(command.requester) orelse {
         return .already_requested;
     };
@@ -31,7 +32,7 @@ pub fn executor(handler: *RuntimeStopHandler) RuntimeStopExecutor {
     return .{ .context = handler, .execute_fn = executeErased };
 }
 
-fn executeErased(context: *anyopaque, command: RuntimeStop) source_namespace.RuntimeStopResult {
+fn executeErased(context: *anyopaque, command: RuntimeStop) runtime_stop.RuntimeStopResult {
     const handler: *RuntimeStopHandler = @ptrCast(@alignCast(context));
     return handler.execute(command);
 }

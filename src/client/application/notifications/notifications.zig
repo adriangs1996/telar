@@ -1,41 +1,22 @@
 //! Application use cases for the client notification lifecycle.
 
+const DeliveryCapture = @import("DeliveryCapture.zig");
+const HandleNotificationDeliveryHandler = @import("HandleNotificationDeliveryHandler.zig");
 const std = @import("std");
-const notification_capability = @import("../../root.zig").notifications;
-const client_model = @import("../../root.zig").model;
-
-pub const TimerEffects = @import("TimerEffects.zig");
-
-pub const ActivationEffects = @import("ActivationEffects.zig");
-
-pub const PublishCommand = @import("PublishCommand.zig");
-
-pub const InteractionCommand = @import("InteractionCommand.zig");
-
-pub const DeliveryReport = @import("DeliveryReport.zig");
+const notification_capability = @import("../../notifications/notifications.zig");
+const ModelType = @import("../../model/Model.zig");
+const NotificationsEffectsCapture = @import("NotificationsEffectsCapture.zig");
+const PublishNotificationHandler = @import("PublishNotificationHandler.zig");
+const NavigationCapture = @import("NavigationCapture.zig");
+const ActivateNotificationHandler = @import("ActivateNotificationHandler.zig");
+const VersionType = @import("../../model/Version.zig");
+const AdvanceNotificationsHandler = @import("AdvanceNotificationsHandler.zig");
+const DismissNotificationHandler = @import("DismissNotificationHandler.zig");
 
 pub const DeliveryOutcome = enum {
     delivered,
     undelivered,
 };
-
-pub const DeliveryEffects = @import("DeliveryEffects.zig");
-
-pub const PublishNotificationHandler = @import("PublishNotificationHandler.zig");
-
-pub const AdvanceNotificationsHandler = @import("AdvanceNotificationsHandler.zig");
-
-pub const ActivateNotificationHandler = @import("ActivateNotificationHandler.zig");
-
-pub const DismissNotificationHandler = @import("DismissNotificationHandler.zig");
-
-pub const HandleNotificationDeliveryHandler = @import("HandleNotificationDeliveryHandler.zig");
-
-const EffectsCapture = @import("NotificationsEffectsCapture.zig");
-
-const DeliveryCapture = @import("DeliveryCapture.zig");
-
-const NavigationCapture = @import("NavigationCapture.zig");
 
 test "notification delivery publishes a failure only when every target rejected it" {
     var capture: DeliveryCapture = .{};
@@ -63,9 +44,9 @@ test "notification delivery propagates publication failure" {
 }
 
 test "notification handlers commit publication interaction and time before timer effects" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{ .model = &model, .expected_revision = 1 };
+    var capture: NotificationsEffectsCapture = .{ .model = &model, .expected_revision = 1 };
     const effects = capture.port();
     var publish: PublishNotificationHandler = .{ .model = &model, .effects = effects };
 
@@ -92,7 +73,7 @@ test "notification handlers commit publication interaction and time before timer
         .now_ns = notification_capability.transition_duration_ns,
     })).?;
 
-    try std.testing.expectEqual(client_model.Version{ .notifications = 2 }, model.version());
+    try std.testing.expectEqual(VersionType{ .notifications = 2 }, model.version());
     try std.testing.expectEqual(@as(notification_capability.Target, .{ .select_tab = @enumFromInt(7) }), activation.target);
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 2), capture.calls);
@@ -115,9 +96,9 @@ test "notification handlers commit publication interaction and time before timer
 }
 
 test "notification publication remains committed after timer failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{
+    var capture: NotificationsEffectsCapture = .{
         .model = &model,
         .expected_revision = 1,
         .fail = true,
@@ -133,7 +114,7 @@ test "notification publication remains committed after timer failure" {
     }));
 
     try std.testing.expect(capture.observed_commit);
-    try std.testing.expectEqual(client_model.Version{ .notifications = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .notifications = 1 }, model.version());
     try std.testing.expectEqualStrings("Failed", model.notificationSnapshot().itemAt(0).?.title());
 }
 
@@ -142,14 +123,14 @@ test "notification activation preserves its commit and effect order on failure" 
         .{ .timer = true, .navigation = false, .navigation_calls = 0 },
         .{ .timer = false, .navigation = true, .navigation_calls = 1 },
     }) |scenario| {
-        var model = client_model.Model.init(std.testing.allocator, true);
+        var model = ModelType.init(std.testing.allocator, true);
         defer model.deinit();
         const publication = model.publishNotification(0, .{
             .title = "Ready",
             .message = "Open pane",
             .target = .{ .focus_pane = @enumFromInt(7) },
         });
-        var timers: EffectsCapture = .{
+        var timers: NotificationsEffectsCapture = .{
             .model = &model,
             .expected_revision = 2,
             .fail = scenario.timer,
@@ -167,16 +148,16 @@ test "notification activation preserves its commit and effect order on failure" 
         }));
 
         try std.testing.expect(timers.observed_commit);
-        try std.testing.expectEqual(client_model.Version{ .notifications = 2 }, model.version());
+        try std.testing.expectEqual(VersionType{ .notifications = 2 }, model.version());
         try std.testing.expectEqual(@as(usize, 1), timers.calls);
         try std.testing.expectEqual(@as(usize, scenario.navigation_calls), navigation.calls);
     }
 }
 
 test "notification dismissal commits before its timer effect" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{ .model = &model, .expected_revision = 1 };
+    var capture: NotificationsEffectsCapture = .{ .model = &model, .expected_revision = 1 };
     const effects = capture.port();
     var publish: PublishNotificationHandler = .{ .model = &model, .effects = effects };
     const publication = try publish.execute(.{
@@ -202,10 +183,10 @@ test "notification dismissal commits before its timer effect" {
 }
 
 test "notification advance rearms its timer without inventing a model change" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     _ = model.publishNotification(0, .{ .title = "Waiting", .message = "Not moving yet" });
-    var capture: EffectsCapture = .{ .model = &model, .expected_revision = 1 };
+    var capture: NotificationsEffectsCapture = .{ .model = &model, .expected_revision = 1 };
     var advance: AdvanceNotificationsHandler = .{
         .model = &model,
         .effects = capture.port(),
@@ -215,5 +196,5 @@ test "notification advance rearms its timer without inventing a model change" {
 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expectEqual(client_model.Version{ .notifications = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .notifications = 1 }, model.version());
 }

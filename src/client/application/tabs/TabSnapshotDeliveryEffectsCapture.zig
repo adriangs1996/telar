@@ -1,20 +1,25 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_snapshot_delivery.zig");
-const Effects = @import("TabSnapshotDeliveryEffects.zig");
-const pane_geometry_delivery = @import("../panes/root.zig").pane_geometry_delivery;
+const ModelType = @import("../../model/Model.zig");
+const TabReconciliationType = @import("../../model/TabReconciliation.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const tab_snapshot_delivery = @import("tab_snapshot_delivery.zig");
+const PaneAttachmentRequestType = @import("../panes/PaneAttachmentRequest.zig");
+const TabSnapshotDeliveryEffects = @import("TabSnapshotDeliveryEffects.zig");
+const OfferEffectsType = @import("../panes/OfferEffects.zig");
+const PaneResizeType = @import("telar-core").PaneResize;
 const std = @import("std");
-model: *client_model.Model,
-reconciliation: *const client_model.TabReconciliation,
-pending_attachment: ?source_namespace.schema.PaneId = null,
-events: [10]source_namespace.Event = undefined,
+const EffectsCapture = @This();
+
+model: *ModelType,
+reconciliation: *const TabReconciliationType,
+pending_attachment: ?PaneIdType = null,
+events: [10]tab_snapshot_delivery.Event = undefined,
 event_count: usize = 0,
-attachment: ?source_namespace.PaneAttachmentRequest = null,
+attachment: ?PaneAttachmentRequestType = null,
 committed_state_observed: bool = true,
 resources_released_before_graphics: bool = true,
-failure: source_namespace.Failure = .none,
+failure: tab_snapshot_delivery.Failure = .none,
 
-pub fn effects(capture: *EffectsCapture) Effects {
+pub fn effects(capture: *EffectsCapture) TabSnapshotDeliveryEffects {
     return .{
         .context = capture,
         .ignore_pane_requests = ignorePaneRequests,
@@ -25,19 +30,19 @@ pub fn effects(capture: *EffectsCapture) Effects {
     };
 }
 
-pub fn geometryEffects(capture: *EffectsCapture) pane_geometry_delivery.OfferEffects {
+pub fn geometryEffects(capture: *EffectsCapture) OfferEffectsType {
     return .{
         .context = capture,
         .deliver_resize = deliverResize,
     };
 }
 
-fn ignorePaneRequests(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId) void {
+fn ignorePaneRequests(raw_context: *anyopaque, pane_id: PaneIdType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .ignore_pane = pane_id });
 }
 
-fn clearPaneGraphics(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId) void {
+fn clearPaneGraphics(raw_context: *anyopaque, pane_id: PaneIdType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .clear_graphics = pane_id });
     capture.resources_released_before_graphics = capture.resources_released_before_graphics and
@@ -52,7 +57,7 @@ fn synchronizeActiveResources(raw_context: *anyopaque) !void {
     }
 }
 
-fn deliverResize(raw_context: *anyopaque, resize: source_namespace.schema.PaneResize) !void {
+fn deliverResize(raw_context: *anyopaque, resize: PaneResizeType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .resize = resize.pane_id });
     if (capture.failure == .resize) {
@@ -60,14 +65,14 @@ fn deliverResize(raw_context: *anyopaque, resize: source_namespace.schema.PaneRe
     }
 }
 
-fn attachmentPending(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId) bool {
+fn attachmentPending(raw_context: *anyopaque, pane_id: PaneIdType) bool {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .attachment_pending = pane_id });
 
     return capture.pending_attachment == pane_id;
 }
 
-fn requestAttachment(raw_context: *anyopaque, request: source_namespace.PaneAttachmentRequest) !void {
+fn requestAttachment(raw_context: *anyopaque, request: PaneAttachmentRequestType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .request_attachment = request.pane_id });
     capture.attachment = request;
@@ -76,7 +81,7 @@ fn requestAttachment(raw_context: *anyopaque, request: source_namespace.PaneAtta
     }
 }
 
-fn append(capture: *EffectsCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectsCapture, event: tab_snapshot_delivery.Event) void {
     capture.observeCommit();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -104,6 +109,6 @@ fn observeCommit(capture: *EffectsCapture) void {
         version.panes == capture.reconciliation.panes_revision;
 }
 
-pub fn eventSlice(capture: *const EffectsCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectsCapture) []const tab_snapshot_delivery.Event {
     return capture.events[0..capture.event_count];
 }

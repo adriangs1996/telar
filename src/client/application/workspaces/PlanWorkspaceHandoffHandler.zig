@@ -1,8 +1,10 @@
-const PlanWorkspaceHandoffHandler = @This();
-const Bookmarks = @import("WorkspaceHandoffTargetingBookmarks.zig");
-const source_namespace = @import("workspace_handoff_targeting.zig");
+const WorkspaceHandoffTargetingBookmarks = @import("WorkspaceHandoffTargetingBookmarks.zig");
+const workspace_handoff_targeting = @import("workspace_handoff_targeting.zig");
 const Plan = @import("Plan.zig");
-bookmarks: Bookmarks,
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const PlanWorkspaceHandoffHandler = @This();
+
+bookmarks: WorkspaceHandoffTargetingBookmarks,
 
 /// Prefers a workspace's remembered pane while preserving its identity as
 /// fallback, or retains an explicit pane request exactly as supplied.
@@ -10,10 +12,10 @@ bookmarks: Bookmarks,
 /// ```zig
 /// const plan = handler.execute(.{ .workspace = workspace_id });
 /// ```
-pub fn execute(handler: *const PlanWorkspaceHandoffHandler, target: source_namespace.Target) Plan {
+pub fn execute(handler: *const PlanWorkspaceHandoffHandler, target: workspace_handoff_targeting.Target) Plan {
     return switch (target) {
         .workspace => |workspace| workspace: {
-            const destination: source_namespace.schema.WorkspaceLocation = .{ .workspace = workspace };
+            const destination: WorkspaceLocationType = .{ .workspace = workspace };
             const pane_id = handler.bookmarks.remembered_pane(
                 handler.bookmarks.context,
                 destination,

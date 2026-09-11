@@ -1,4 +1,5 @@
+const main = @import("main.zig");
 const Input = @This();
-const source_namespace = @import("main.zig");
-turn: source_namespace.Turn,
+
+turn: main.Turn,
 thrust: bool,

@@ -1,68 +1,172 @@
-const Model = @This();
-const source_namespace = @import("root.zig");
-const name_prompt_module = @import("name_prompt.zig");
-const history_palette_mod = @import("history_palette.zig");
-const suggestion_mod = @import("suggestion.zig");
+const model_namespace = @import("model_namespace.zig");
+const TabsModel = @import("../workspace/TabsModel.zig");
+const LayoutsType = @import("../workspace/Layouts.zig");
+const ClipboardCaptureState = @import("ClipboardCaptureState.zig");
+const PluginExecutionState = @import("PluginExecutionState.zig");
+const HostState = @import("HostState.zig");
+const NamePromptState = @import("NamePromptState.zig");
+const HistoryPaletteState = @import("HistoryPaletteState.zig");
+const SuggestionState = @import("SuggestionState.zig");
 const model_types = @import("types.zig");
-const lua_config = @import("../config/root.zig");
-const agents = @import("../agents/root.zig");
-const bars_capability = @import("../bars/root.zig");
-const notifications = @import("../notifications/root.zig");
-const frontend_ui = @import("../layout/root.zig");
-const core = @import("telar-core");
+const DiagnosticType = @import("../config/Diagnostic.zig");
+const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
+const SnapshotType = @import("../agents/AgentSnapshot.zig");
+const AgentKeyType = @import("../agents/AgentKey.zig");
+const ProxyScopeType = @import("telar-core").ProxyScope;
+const SystemMetricsType = @import("SystemMetrics.zig");
+const StateType = @import("../bars/State.zig");
+const CenterType = @import("../notifications/Center.zig");
+const sidebar_module = @import("../layout/sidebar.zig");
+const InputState = @import("../input/State.zig");
+const ClickTrackerType = @import("telar-core").ClickTracker;
+const PaneIdType = @import("telar-core").PaneId;
+const ReportedPaneFocusType = @import("ReportedPaneFocus.zig");
+const PanePasteSessionType = @import("PanePasteSession.zig");
 const std = @import("std");
-const attachments = @import("../attachments/root.zig");
-const link_capability = @import("../links/root.zig");
-mode: source_namespace.PresentationMode = .normal,
-workspace: source_namespace.tabs_mod.Model,
-saved_layouts: source_namespace.navigation.Layouts = .{},
-clipboard: @import("clipboard_capture.zig").State = .{},
-plugins: @import("plugin_execution.zig").State = .{},
-host: @import("host.zig").State,
-name_prompt: name_prompt_module.State = .{},
-history_palette: history_palette_mod.State = .{},
-suggestion: suggestion_mod.State = .{},
+const InitialClientStateType = @import("InitialClientState.zig");
+const VersionType = @import("Version.zig");
+const MultiplexerModel = @import("../workspace/MultiplexerModel.zig");
+const PresentationCommitType = @import("../panes/PresentationCommit.zig");
+const CallbackContextType = @import("../config/CallbackContext.zig");
+const raw_module = @import("telar-core").raw;
+const PluginExecutionType = @import("PluginExecution.zig");
+const ClipboardCaptureType = @import("ClipboardCapture.zig");
+const TargetType = @import("../attachments/AttachmentTarget.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const HostCapabilitiesType = @import("HostCapabilities.zig");
+const HostUpdateType = @import("HostUpdate.zig");
+const HostCommitType = @import("HostCommit.zig");
+const ConfigurationInputType = @import("ConfigurationInput.zig");
+const ConfigurationCommitType = @import("ConfigurationCommit.zig");
+const BarUpdateInputType = @import("BarUpdateInput.zig");
+const BarUpdateCommitType = @import("BarUpdateCommit.zig");
+const SidebarLayoutType = @import("SidebarLayout.zig");
+const WorkspaceListCollapseType = @import("WorkspaceListCollapse.zig");
+const SnapshotInputType = @import("../workspace/SnapshotInput.zig");
+const WorkspaceListCommitType = @import("WorkspaceListCommit.zig");
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const ProxyStatusType = @import("telar-core").ProxyStatus;
+const ProxyStatusCommitType = @import("ProxyStatusCommit.zig");
+const SystemMetricsCommitType = @import("SystemMetricsCommit.zig");
+const InputType = @import("../notifications/NotificationInput.zig");
+const NotificationPublicationType = @import("NotificationPublication.zig");
+const NotificationChangeType = @import("NotificationChange.zig");
+const notifications = @import("../notifications/notifications.zig");
+const NotificationActivationType = @import("NotificationActivation.zig");
+const AgentsSnapshotInput = @import("../agents/SnapshotInput.zig");
+const AgentSnapshotCommitType = @import("AgentSnapshotCommit.zig");
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const AgentStatusChangesType = @import("AgentStatusChanges.zig");
+const SidebarAnimationChangeType = @import("SidebarAnimationChange.zig");
+const AgentAttachmentMarkersType = @import("telar-core").AgentAttachmentMarkers;
+const PaneFocusReportTransitionType = @import("PaneFocusReportTransition.zig");
+const PaneInputPlanType = @import("PaneInputPlan.zig");
+const FrameViewType = @import("telar-core").FrameView;
+const PaneGraphicsFallbackCommitType = @import("PaneGraphicsFallbackCommit.zig");
+const PaneMetadataCommitType = @import("PaneMetadataCommit.zig");
+const PaneProgressType = @import("telar-core").PaneProgress;
+const PaneProgressCommitType = @import("PaneProgressCommit.zig");
+const PaneViewportCommandType = @import("PaneViewportCommand.zig");
+const PaneViewportChangeType = @import("PaneViewportChange.zig");
+const PointerPressType = @import("../input/PointerPress.zig");
+const CopyModeProjectionType = @import("CopyModeProjection.zig");
+const PointType = @import("../input/Point.zig");
+const CopyModePlanType = @import("CopyModePlan.zig");
+const copy_mode_module = @import("../input/copy_mode.zig");
+const cells_module = @import("../links/cells.zig");
+const CopySelectionType = @import("telar-core").CopySelection;
+const CopyModeCommitType = @import("CopyModeCommit.zig");
+const CopyModeFrameType = @import("CopyModeFrame.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabIdType = @import("telar-core").TabId;
+const TabCreationPlanType = @import("TabCreationPlan.zig");
+const WorkspaceDepartureType = @import("WorkspaceDeparture.zig");
+const WorkspaceArrivalType = @import("WorkspaceArrival.zig");
+const WorkspaceActivationType = @import("WorkspaceActivation.zig");
+const WorkspaceReplacementType = @import("WorkspaceReplacement.zig");
+const WorkspaceActivationSeedType = @import("WorkspaceActivationSeed.zig");
+const WorkspaceSnapshotInput = @import("../workspace/WorkspaceSnapshotInput.zig");
+const WorkspaceReconciliationType = @import("WorkspaceReconciliation.zig");
+const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
+const max_workspace_name_bytes_module = @import("telar-core").max_workspace_name_bytes;
+const PaneSnapshot = @import("../workspace/PaneSnapshot.zig");
+const RectType = @import("telar-core").Rect;
+const TabReconciliationType = @import("TabReconciliation.zig");
+const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
+const PaneAttachmentType = @import("PaneAttachment.zig");
+const TabDetachmentPlanType = @import("TabDetachmentPlan.zig");
+const PaneFocusRequestType = @import("PaneFocusRequest.zig");
+const PaneFocusType = @import("PaneFocus.zig");
+const ResizePaneRequestType = @import("ResizePaneRequest.zig");
+const PaneGeometryChangeType = @import("PaneGeometryChange.zig");
+const TogglePaneFullscreenRequestType = @import("TogglePaneFullscreenRequest.zig");
+const RequestPaneSplitType = @import("RequestPaneSplit.zig");
+const PaneSplitPlanType = @import("PaneSplitPlan.zig");
+const multiplexer_module = @import("../workspace/multiplexer.zig");
+const CommitPaneSplitType = @import("CommitPaneSplit.zig");
+const PaneSplitCommitType = @import("PaneSplitCommit.zig");
+const PaneSplitCommitStateType = @import("PaneSplitCommitState.zig");
+const RecoverPaneSplitType = @import("RecoverPaneSplit.zig");
+const PaneClosureType = @import("PaneClosure.zig");
+const RenameTabType = @import("RenameTab.zig");
+const NewTabType = @import("NewTab.zig");
+const TabCreationType = @import("TabCreation.zig");
+const RemoveTabType = @import("RemoveTab.zig");
+const RemovedPanesType = @import("RemovedPanes.zig");
+const TabSelectionType = @import("TabSelection.zig");
+const Model = @This();
+
+mode: model_namespace.PresentationMode = .normal,
+workspace: TabsModel,
+saved_layouts: LayoutsType = .{},
+clipboard: ClipboardCaptureState = .{},
+plugins: PluginExecutionState = .{},
+host: HostState,
+name_prompt: NamePromptState = .{},
+history_palette: HistoryPaletteState = .{},
+suggestion: SuggestionState = .{},
 workspace_revision: u64 = 0,
 configuration_generation: u64 = 0,
 window_title_template: [model_types.max_window_title_template_bytes]u8 = undefined,
 window_title_template_len: u8 = 0,
 configuration_revision: u64 = 0,
-client_diagnostic: lua_config.Diagnostic = .{},
+client_diagnostic: DiagnosticType = .{},
 diagnostic_revision: u64 = 0,
-workspace_list_snapshot: source_namespace.workspace_list_mod.Snapshot = .{},
+workspace_list_snapshot: WorkspaceListSnapshot = .{},
 workspace_list_revision: u64 = 0,
-agent_snapshot: agents.Snapshot = .{},
+agent_snapshot: SnapshotType = .{},
 agent_revision: u64 = 0,
 /// Operational state: the focused agent whose `done` status this client
 /// already acknowledged. It carries no presentation revision.
-acknowledged_agent: ?agents.AgentKey = null,
+acknowledged_agent: ?AgentKeyType = null,
 sidebar_animation_frame: u8 = 0,
 sidebar_animation_revision: u64 = 0,
 proxy_tls_active: bool = false,
-proxy_tls_scope: source_namespace.schema.ProxyScope = .exact,
+proxy_tls_scope: ProxyScopeType = .exact,
 proxy_system_trusted: bool = false,
 proxy_status_revision: u64 = 0,
-system_metrics: ?source_namespace.SystemMetrics = null,
+system_metrics: ?SystemMetricsType = null,
 system_metrics_revision: u64 = 0,
-bars: bars_capability.State = .{},
+bars: StateType = .{},
 bars_revision: u64 = 0,
-notification_center: notifications.Center = .{},
+notification_center: CenterType = .{},
 notifications_revision: u64 = 0,
 tabs_revision: u64 = 0,
 active_tab_revision: u64 = 0,
 panes_revision: u64 = 0,
 sidebar_visible: bool = true,
-sidebar_width: u16 = frontend_ui.sidebar.default_width,
+sidebar_width: u16 = sidebar_module.default_width,
 workspace_list_collapsed: bool = false,
 chrome_revision: u64 = 0,
-copy_state: ?source_namespace.copy_mode.State = null,
-selection_clicks: core.select.ClickTracker = .{},
-selection_click_pane: ?source_namespace.schema.PaneId = null,
-selection_gesture: ?source_namespace.schema.PaneId = null,
+copy_state: ?InputState = null,
+selection_clicks: ClickTrackerType = .{},
+selection_click_pane: ?PaneIdType = null,
+selection_gesture: ?PaneIdType = null,
 copy_revision: u64 = 0,
-reported_pane_focus: ?source_namespace.ReportedPaneFocus = null,
+reported_pane_focus: ?ReportedPaneFocusType = null,
 next_attachment_generation: u64 = 1,
-pane_paste: ?source_namespace.PanePasteSession = null,
+pane_paste: ?PanePasteSessionType = null,
 frame_revision: u64 = 0,
 pane_metadata_revision: u64 = 0,
 pane_foreground_revision: u64 = 0,
@@ -96,7 +200,7 @@ pub fn initWithConfiguration(gpa: std.mem.Allocator, pane_gaps: bool, generation
 /// ```zig
 /// var model = Model.initWithState(gpa, initial);
 /// ```
-pub fn initWithState(gpa: std.mem.Allocator, initial: source_namespace.InitialClientState) Model {
+pub fn initWithState(gpa: std.mem.Allocator, initial: InitialClientStateType) Model {
     initial.host_size.validate() catch unreachable;
     const cell_size = initial.host_capabilities.cellSize(
         initial.host_size.cols,
@@ -104,7 +208,7 @@ pub fn initWithState(gpa: std.mem.Allocator, initial: source_namespace.InitialCl
     );
     std.debug.assert(initial.host_size.cell_width_px == cell_size.width);
     std.debug.assert(initial.host_size.cell_height_px == cell_size.height);
-    var workspace = source_namespace.tabs_mod.Model.init(gpa);
+    var workspace = TabsModel.init(gpa);
     workspace.setPaneGaps(initial.pane_gaps);
     workspace.setCellSize(initial.host_size.cell_width_px, initial.host_size.cell_height_px);
 
@@ -113,7 +217,7 @@ pub fn initWithState(gpa: std.mem.Allocator, initial: source_namespace.InitialCl
         .configuration_generation = initial.configuration_generation,
         .bars = .init(initial.bars),
         .host = .{ .host_size = initial.host_size, .host_capabilities = initial.host_capabilities },
-        .sidebar_width = @max(frontend_ui.sidebar.minimum_width, initial.sidebar_width),
+        .sidebar_width = @max(sidebar_module.minimum_width, initial.sidebar_width),
     };
 }
 
@@ -130,7 +234,7 @@ pub fn deinit(model: *Model) void {
 
 /// Installs validated reconnect layouts before the initial pane arrives.
 /// Example: `model.restoreClientLayouts(layouts);`.
-pub fn restoreClientLayouts(model: *Model, layouts: source_namespace.navigation.Layouts) void {
+pub fn restoreClientLayouts(model: *Model, layouts: LayoutsType) void {
     model.saved_layouts = layouts;
 }
 
@@ -148,7 +252,7 @@ pub fn toggleAgentMode(self: *Model) void {
 /// ```zig
 /// const before = model.version();
 /// ```
-pub fn version(model: *const Model) source_namespace.Version {
+pub fn version(model: *const Model) VersionType {
     return .{
         .workspace = model.workspace_revision,
         .configuration = model.configuration_revision,
@@ -185,7 +289,7 @@ pub fn version(model: *const Model) source_namespace.Version {
 /// ```zig
 /// const active = model.activeTabModel() orelse return;
 /// ```
-pub fn activeTabModel(model: *Model) ?*source_namespace.multiplexer.Model {
+pub fn activeTabModel(model: *Model) ?*MultiplexerModel {
     const active = model.workspace.active() orelse return null;
 
     return &active.model;
@@ -196,7 +300,7 @@ pub fn activeTabModel(model: *Model) ?*source_namespace.multiplexer.Model {
 /// ```zig
 /// const active = model.activeTabModelConst() orelse return;
 /// ```
-pub fn activeTabModelConst(model: *const Model) ?*const source_namespace.multiplexer.Model {
+pub fn activeTabModelConst(model: *const Model) ?*const MultiplexerModel {
     const active = model.workspace.activeConst() orelse return null;
 
     return &active.model;
@@ -208,7 +312,7 @@ pub fn activeTabModelConst(model: *const Model) ?*const source_namespace.multipl
 /// ```zig
 /// const acknowledged = model.commitPresentation(commit);
 /// ```
-pub fn commitPresentation(model: *Model, commit: source_namespace.multiplexer.PresentationCommit) source_namespace.multiplexer.PresentationCommit {
+pub fn commitPresentation(model: *Model, commit: PresentationCommitType) PresentationCommitType {
     const location = commit.location orelse return .{};
     const tab = model.workspace.find(location.tab_id) orelse return .{};
     if (!std.meta.eql(tab.location, location)) {
@@ -245,7 +349,7 @@ pub fn diagnostic(model: *const Model) ?[]const u8 {
 /// ```zig
 /// _ = try model.replaceDiagnostic(diagnostic);
 /// ```
-pub fn replaceDiagnostic(model: *Model, diagnostic_value: lua_config.Diagnostic) !source_namespace.Change {
+pub fn replaceDiagnostic(model: *Model, diagnostic_value: DiagnosticType) !model_types.Change {
     if (diagnostic_value.len > diagnostic_value.buffer.len) {
         return error.InvalidClientDiagnostic;
     }
@@ -275,8 +379,8 @@ pub fn replaceDiagnostic(model: *Model, diagnostic_value: lua_config.Diagnostic)
 /// ```zig
 /// _ = try model.setDiagnostic("callback failed: {s}", .{@errorName(err)});
 /// ```
-pub fn setDiagnostic(model: *Model, comptime format: []const u8, args: anytype) !source_namespace.Change {
-    var diagnostic_value: lua_config.Diagnostic = .{};
+pub fn setDiagnostic(model: *Model, comptime format: []const u8, args: anytype) !model_types.Change {
+    var diagnostic_value: DiagnosticType = .{};
     diagnostic_value.set(format, args);
 
     return model.replaceDiagnostic(diagnostic_value);
@@ -287,7 +391,7 @@ pub fn setDiagnostic(model: *Model, comptime format: []const u8, args: anytype) 
 /// ```zig
 /// _ = model.clearDiagnostic();
 /// ```
-pub fn clearDiagnostic(model: *Model) source_namespace.Change {
+pub fn clearDiagnostic(model: *Model) model_types.Change {
     if (model.client_diagnostic.len == 0) {
         return .unchanged;
     }
@@ -302,7 +406,7 @@ pub fn clearDiagnostic(model: *Model) source_namespace.Change {
 /// ```zig
 /// const context = model.callbackContext();
 /// ```
-pub fn callbackContext(model: *const Model) lua_config.CallbackContext {
+pub fn callbackContext(model: *const Model) CallbackContextType {
     const active = model.workspace.activeConst() orelse return .{
         .sidebar_visible = model.sidebar_visible,
         .tab_count = 0,
@@ -317,7 +421,7 @@ pub fn callbackContext(model: *const Model) lua_config.CallbackContext {
         .tab_count = @intCast(model.workspace.count),
         .active_tab_index = @intCast(model.workspace.activeIndex() orelse 0),
         .pane_count = @intCast(active.model.pane_count),
-        .focused_pane_id = if (focused) |pane_id| source_namespace.schema.id.raw(pane_id) else 0,
+        .focused_pane_id = if (focused) |pane_id| raw_module(pane_id) else 0,
     };
 }
 
@@ -328,7 +432,7 @@ pub fn callbackContext(model: *const Model) lua_config.CallbackContext {
 ///     return;
 /// }
 /// ```
-pub fn pluginExecution(model: *const Model) ?source_namespace.PluginExecution {
+pub fn pluginExecution(model: *const Model) ?PluginExecutionType {
     return model.plugins.pluginExecution();
 }
 
@@ -337,7 +441,7 @@ pub fn pluginExecution(model: *const Model) ?source_namespace.PluginExecution {
 /// ```zig
 /// const execution = try model.beginPluginExecution() orelse return;
 /// ```
-pub fn beginPluginExecution(model: *Model) !?source_namespace.PluginExecution {
+pub fn beginPluginExecution(model: *Model) !?PluginExecutionType {
     return model.plugins.beginPluginExecution(model.configuration_generation);
 }
 
@@ -346,7 +450,7 @@ pub fn beginPluginExecution(model: *Model) !?source_namespace.PluginExecution {
 /// ```zig
 /// const execution = model.finishPluginExecution(id) orelse return;
 /// ```
-pub fn finishPluginExecution(model: *Model, id: source_namespace.PluginExecutionId) ?source_namespace.PluginExecution {
+pub fn finishPluginExecution(model: *Model, id: model_types.PluginExecutionId) ?PluginExecutionType {
     return model.plugins.finishPluginExecution(id);
 }
 
@@ -355,7 +459,7 @@ pub fn finishPluginExecution(model: *Model, id: source_namespace.PluginExecution
 /// ```zig
 /// const capture = model.clipboardCapture() orelse return;
 /// ```
-pub fn clipboardCapture(model: *const Model) ?source_namespace.ClipboardCapture {
+pub fn clipboardCapture(model: *const Model) ?ClipboardCaptureType {
     return model.clipboard.clipboardCapture();
 }
 
@@ -364,7 +468,7 @@ pub fn clipboardCapture(model: *const Model) ?source_namespace.ClipboardCapture 
 /// ```zig
 /// const capture = try model.beginClipboardCapture(target) orelse return;
 /// ```
-pub fn beginClipboardCapture(model: *Model, target: attachments.Target) !?source_namespace.ClipboardCapture {
+pub fn beginClipboardCapture(model: *Model, target: TargetType) !?ClipboardCaptureType {
     return model.clipboard.beginClipboardCapture(target);
 }
 
@@ -373,7 +477,7 @@ pub fn beginClipboardCapture(model: *Model, target: attachments.Target) !?source
 /// ```zig
 /// const capture = model.finishClipboardCapture(id) orelse return;
 /// ```
-pub fn finishClipboardCapture(model: *Model, id: source_namespace.ClipboardCaptureId) ?source_namespace.ClipboardCapture {
+pub fn finishClipboardCapture(model: *Model, id: model_types.ClipboardCaptureId) ?ClipboardCaptureType {
     return model.clipboard.finishClipboardCapture(id);
 }
 
@@ -384,7 +488,7 @@ pub fn finishClipboardCapture(model: *Model, id: source_namespace.ClipboardCaptu
 /// ```zig
 /// _ = model.cancelClipboardCapture(target);
 /// ```
-pub fn cancelClipboardCapture(model: *Model, target: attachments.Target) bool {
+pub fn cancelClipboardCapture(model: *Model, target: TargetType) bool {
     return model.clipboard.cancelClipboardCapture(target);
 }
 
@@ -402,7 +506,7 @@ pub fn paneGaps(model: *const Model) bool {
 /// ```zig
 /// const host_size = model.hostSize();
 /// ```
-pub fn hostSize(model: *const Model) source_namespace.schema.TerminalSize {
+pub fn hostSize(model: *const Model) TerminalSizeType {
     return model.host.hostSize();
 }
 
@@ -411,7 +515,7 @@ pub fn hostSize(model: *const Model) source_namespace.schema.TerminalSize {
 /// ```zig
 /// const capabilities = model.hostCapabilities();
 /// ```
-pub fn hostCapabilities(model: *const Model) source_namespace.HostCapabilities {
+pub fn hostCapabilities(model: *const Model) HostCapabilitiesType {
     return model.host.hostCapabilities();
 }
 
@@ -420,7 +524,7 @@ pub fn hostCapabilities(model: *const Model) source_namespace.HostCapabilities {
 /// ```zig
 /// const commit = try model.reconcileHost(update) orelse return;
 /// ```
-pub fn reconcileHost(model: *Model, update: source_namespace.HostUpdate) !?source_namespace.HostCommit {
+pub fn reconcileHost(model: *Model, update: HostUpdateType) !?HostCommitType {
     return model.applyHostCommit(try model.host.reconcileHost(update));
 }
 
@@ -429,11 +533,11 @@ pub fn reconcileHost(model: *Model, update: source_namespace.HostUpdate) !?sourc
 /// ```zig
 /// const commit = try model.observeHostCapability(observation) orelse return;
 /// ```
-pub fn observeHostCapability(model: *Model, observation: source_namespace.HostCapabilityObservation) !?source_namespace.HostCommit {
+pub fn observeHostCapability(model: *Model, observation: model_types.HostCapabilityObservation) !?HostCommitType {
     return model.applyHostCommit(try model.host.observeHostCapability(observation));
 }
 
-fn applyHostCommit(model: *Model, commit: ?source_namespace.HostCommit) ?source_namespace.HostCommit {
+fn applyHostCommit(model: *Model, commit: ?HostCommitType) ?HostCommitType {
     if (commit) |change| {
         if (change.resize) |resize| {
             model.workspace.setCellSize(resize.current.cell_width_px, resize.current.cell_height_px);
@@ -448,7 +552,7 @@ fn applyHostCommit(model: *Model, commit: ?source_namespace.HostCommit) ?source_
 /// ```zig
 /// const commit = try model.applyConfiguration(input);
 /// ```
-pub fn applyConfiguration(model: *Model, input: source_namespace.ConfigurationInput) !source_namespace.ConfigurationCommit {
+pub fn applyConfiguration(model: *Model, input: ConfigurationInputType) !ConfigurationCommitType {
     if (input.generation <= model.configuration_generation) {
         return error.StaleConfiguration;
     }
@@ -497,7 +601,7 @@ pub fn windowTitleTemplate(model: *const Model) []const u8 {
 /// ```zig
 /// const current = model.barState();
 /// ```
-pub fn barState(model: *const Model) *const bars_capability.State {
+pub fn barState(model: *const Model) *const StateType {
     return &model.bars;
 }
 
@@ -506,7 +610,7 @@ pub fn barState(model: *const Model) *const bars_capability.State {
 /// ```zig
 /// _ = try model.updateBar(input);
 /// ```
-pub fn updateBar(model: *Model, input: source_namespace.BarUpdateInput) !?source_namespace.BarUpdateCommit {
+pub fn updateBar(model: *Model, input: BarUpdateInputType) !?BarUpdateCommitType {
     if (input.generation != model.configuration_generation) {
         return error.StaleBarUpdate;
     }
@@ -550,7 +654,7 @@ pub fn sidebarWidth(model: *const Model) u16 {
 /// ```zig
 /// const change = model.setSidebarVisible(false) orelse return;
 /// ```
-pub fn setSidebarVisible(model: *Model, visible: bool) ?source_namespace.SidebarLayout {
+pub fn setSidebarVisible(model: *Model, visible: bool) ?SidebarLayoutType {
     return model.commitSidebarLayout(visible, model.sidebar_width);
 }
 
@@ -559,7 +663,7 @@ pub fn setSidebarVisible(model: *Model, visible: bool) ?source_namespace.Sidebar
 /// ```zig
 /// const change = model.toggleSidebar();
 /// ```
-pub fn toggleSidebar(model: *Model) source_namespace.SidebarLayout {
+pub fn toggleSidebar(model: *Model) SidebarLayoutType {
     return model.setSidebarVisible(!model.sidebar_visible).?;
 }
 
@@ -568,8 +672,8 @@ pub fn toggleSidebar(model: *Model) source_namespace.SidebarLayout {
 /// ```zig
 /// const change = model.setSidebarWidth(70) orelse return;
 /// ```
-pub fn setSidebarWidth(model: *Model, requested_width: u16) ?source_namespace.SidebarLayout {
-    const width = frontend_ui.sidebar.clampInteractive(model.host.host_size.cols, requested_width);
+pub fn setSidebarWidth(model: *Model, requested_width: u16) ?SidebarLayoutType {
+    const width = sidebar_module.clampInteractive(model.host.host_size.cols, requested_width);
 
     return model.commitSidebarLayout(model.sidebar_visible, width);
 }
@@ -579,8 +683,8 @@ pub fn setSidebarWidth(model: *Model, requested_width: u16) ?source_namespace.Si
 /// ```zig
 /// const change = model.stepSidebarWidth(.wider) orelse return;
 /// ```
-pub fn stepSidebarWidth(model: *Model, direction: frontend_ui.sidebar.Direction) ?source_namespace.SidebarLayout {
-    const width = frontend_ui.sidebar.step(model.host.host_size.cols, model.sidebar_width, direction);
+pub fn stepSidebarWidth(model: *Model, direction: sidebar_module.Direction) ?SidebarLayoutType {
+    const width = sidebar_module.step(model.host.host_size.cols, model.sidebar_width, direction);
 
     return model.commitSidebarLayout(model.sidebar_visible, width);
 }
@@ -591,13 +695,13 @@ pub fn stepSidebarWidth(model: *Model, direction: frontend_ui.sidebar.Direction)
 /// ```zig
 /// const change = model.restoreSidebarLayout(true, 73) orelse return;
 /// ```
-pub fn restoreSidebarLayout(model: *Model, visible: bool, preferred_width: u16) ?source_namespace.SidebarLayout {
-    const width = @max(frontend_ui.sidebar.minimum_width, preferred_width);
+pub fn restoreSidebarLayout(model: *Model, visible: bool, preferred_width: u16) ?SidebarLayoutType {
+    const width = @max(sidebar_module.minimum_width, preferred_width);
 
     return model.commitSidebarLayout(visible, width);
 }
 
-fn commitSidebarLayout(model: *Model, visible: bool, width: u16) ?source_namespace.SidebarLayout {
+fn commitSidebarLayout(model: *Model, visible: bool, width: u16) ?SidebarLayoutType {
     if (model.sidebar_visible == visible and model.sidebar_width == width) {
         return null;
     }
@@ -628,7 +732,7 @@ pub fn workspaceListCollapsed(model: *const Model) bool {
 /// ```zig
 /// const change = model.setWorkspaceListCollapsed(true) orelse return;
 /// ```
-pub fn setWorkspaceListCollapsed(model: *Model, collapsed: bool) ?source_namespace.WorkspaceListCollapse {
+pub fn setWorkspaceListCollapsed(model: *Model, collapsed: bool) ?WorkspaceListCollapseType {
     if (model.workspace_list_collapsed == collapsed) {
         return null;
     }
@@ -647,7 +751,7 @@ pub fn setWorkspaceListCollapsed(model: *Model, collapsed: bool) ?source_namespa
 /// ```zig
 /// const change = model.toggleWorkspaceList();
 /// ```
-pub fn toggleWorkspaceList(model: *Model) source_namespace.WorkspaceListCollapse {
+pub fn toggleWorkspaceList(model: *Model) WorkspaceListCollapseType {
     return model.setWorkspaceListCollapsed(!model.workspace_list_collapsed).?;
 }
 
@@ -657,7 +761,7 @@ pub fn toggleWorkspaceList(model: *Model) source_namespace.WorkspaceListCollapse
 /// ```zig
 /// const commit = try model.reconcileWorkspaceList(input) orelse return;
 /// ```
-pub fn reconcileWorkspaceList(model: *Model, input: source_namespace.workspace_list_mod.SnapshotInput) !?source_namespace.WorkspaceListCommit {
+pub fn reconcileWorkspaceList(model: *Model, input: SnapshotInputType) !?WorkspaceListCommitType {
     if (!try model.workspace_list_snapshot.replace(input)) {
         return null;
     }
@@ -676,7 +780,7 @@ pub fn reconcileWorkspaceList(model: *Model, input: source_namespace.workspace_l
 /// ```zig
 /// const workspaces = model.workspaceListSnapshot();
 /// ```
-pub fn workspaceListSnapshot(model: *const Model) *const source_namespace.workspace_list_mod.Snapshot {
+pub fn workspaceListSnapshot(model: *const Model) *const WorkspaceListSnapshot {
     return &model.workspace_list_snapshot;
 }
 
@@ -685,7 +789,7 @@ pub fn workspaceListSnapshot(model: *const Model) *const source_namespace.worksp
 /// ```zig
 /// if (!model.knowsWorkspace(workspace)) return;
 /// ```
-pub fn knowsWorkspace(model: *const Model, workspace: source_namespace.schema.WorkspaceId) bool {
+pub fn knowsWorkspace(model: *const Model, workspace: WorkspaceIdType) bool {
     return model.workspace_list_snapshot.indexOf(workspace) != null;
 }
 
@@ -694,7 +798,7 @@ pub fn knowsWorkspace(model: *const Model, workspace: source_namespace.schema.Wo
 /// ```zig
 /// const workspace = model.workspaceAtPosition(0) orelse return;
 /// ```
-pub fn workspaceAtPosition(model: *const Model, position: usize) ?source_namespace.schema.WorkspaceId {
+pub fn workspaceAtPosition(model: *const Model, position: usize) ?WorkspaceIdType {
     return model.workspace_list_snapshot.workspaceAtPosition(position);
 }
 
@@ -704,7 +808,7 @@ pub fn workspaceAtPosition(model: *const Model, position: usize) ?source_namespa
 /// ```zig
 /// const commit = model.reconcileProxyStatus(.{ .active = true, .scope = .exact, .system_trusted = false }) orelse return;
 /// ```
-pub fn reconcileProxyStatus(model: *Model, status: source_namespace.schema.ProxyStatus) ?source_namespace.ProxyStatusCommit {
+pub fn reconcileProxyStatus(model: *Model, status: ProxyStatusType) ?ProxyStatusCommitType {
     if (model.proxy_tls_active == status.active and model.proxy_tls_scope == status.scope and model.proxy_system_trusted == status.system_trusted) {
         return null;
     }
@@ -744,7 +848,7 @@ pub fn proxyTlsActive(model: *const Model) bool {
 /// ```zig
 /// const expanded = model.proxyTlsScope() == .wildcard;
 /// ```
-pub fn proxyTlsScope(model: *const Model) source_namespace.schema.ProxyScope {
+pub fn proxyTlsScope(model: *const Model) ProxyScopeType {
     return model.proxy_tls_scope;
 }
 
@@ -763,7 +867,7 @@ pub fn proxySystemTrusted(model: *const Model) bool {
 /// ```zig
 /// const commit = try model.reconcileSystemMetrics(metrics) orelse return;
 /// ```
-pub fn reconcileSystemMetrics(model: *Model, metrics: source_namespace.SystemMetrics) !?source_namespace.SystemMetricsCommit {
+pub fn reconcileSystemMetrics(model: *Model, metrics: SystemMetricsType) !?SystemMetricsCommitType {
     if (metrics.runtime_revision == 0) {
         return error.InvalidMetricsRevision;
     }
@@ -795,7 +899,7 @@ pub fn reconcileSystemMetrics(model: *Model, metrics: source_namespace.SystemMet
 /// ```zig
 /// const metrics = model.systemMetrics() orelse return;
 /// ```
-pub fn systemMetrics(model: *const Model) ?source_namespace.SystemMetrics {
+pub fn systemMetrics(model: *const Model) ?SystemMetricsType {
     return model.system_metrics;
 }
 
@@ -805,7 +909,7 @@ pub fn systemMetrics(model: *const Model) ?source_namespace.SystemMetrics {
 /// ```zig
 /// const publication = model.publishNotification(now_ns, input);
 /// ```
-pub fn publishNotification(model: *Model, now_ns: u64, input: notifications.Input) source_namespace.NotificationPublication {
+pub fn publishNotification(model: *Model, now_ns: u64, input: InputType) NotificationPublicationType {
     const id = model.notification_center.push(now_ns, input);
     model.notifications_revision +%= 1;
 
@@ -820,7 +924,7 @@ pub fn publishNotification(model: *Model, now_ns: u64, input: notifications.Inpu
 /// ```zig
 /// const snapshot = model.notificationSnapshot();
 /// ```
-pub fn notificationSnapshot(model: *const Model) *const notifications.Center {
+pub fn notificationSnapshot(model: *const Model) *const CenterType {
     return &model.notification_center;
 }
 
@@ -839,7 +943,7 @@ pub fn nextNotificationDeadline(model: *const Model, now_ns: u64, frame_interval
 /// ```zig
 /// const change = model.advanceNotifications(now_ns) orelse return;
 /// ```
-pub fn advanceNotifications(model: *Model, now_ns: u64) ?source_namespace.NotificationChange {
+pub fn advanceNotifications(model: *Model, now_ns: u64) ?NotificationChangeType {
     if (!model.notification_center.advance(now_ns)) {
         return null;
     }
@@ -854,7 +958,7 @@ pub fn advanceNotifications(model: *Model, now_ns: u64) ?source_namespace.Notifi
 /// ```zig
 /// const activation = model.activateNotification(id, now_ns) orelse return;
 /// ```
-pub fn activateNotification(model: *Model, id: notifications.Id, now_ns: u64) ?source_namespace.NotificationActivation {
+pub fn activateNotification(model: *Model, id: notifications.Id, now_ns: u64) ?NotificationActivationType {
     const target = model.notification_center.activate(id, now_ns) orelse return null;
     model.notifications_revision +%= 1;
 
@@ -869,7 +973,7 @@ pub fn activateNotification(model: *Model, id: notifications.Id, now_ns: u64) ?s
 /// ```zig
 /// const change = model.dismissNotification(id, now_ns) orelse return;
 /// ```
-pub fn dismissNotification(model: *Model, id: notifications.Id, now_ns: u64) ?source_namespace.NotificationChange {
+pub fn dismissNotification(model: *Model, id: notifications.Id, now_ns: u64) ?NotificationChangeType {
     if (!model.notification_center.dismiss(id, now_ns)) {
         return null;
     }
@@ -884,15 +988,15 @@ pub fn dismissNotification(model: *Model, id: notifications.Id, now_ns: u64) ?so
 /// ```zig
 /// const commit = try model.reconcileAgentSnapshot(input) orelse return;
 /// ```
-pub fn reconcileAgentSnapshot(model: *Model, input: agents.SnapshotInput) !?source_namespace.AgentSnapshotCommit {
+pub fn reconcileAgentSnapshot(model: *Model, input: AgentsSnapshotInput) !?AgentSnapshotCommitType {
     if (input.revision <= model.agent_snapshot.revision) {
         return null;
     }
-    if (input.agents.len > agents.max_agents) {
+    if (input.agents.len > max_agent_snapshot_entries) {
         return error.TooManyAgents;
     }
 
-    var status_changes: source_namespace.AgentStatusChanges = .{};
+    var status_changes: AgentStatusChangesType = .{};
     for (input.agents) |agent| {
         const previous = model.agent_snapshot.find(agent.key) orelse continue;
         if (previous.status == agent.status) {
@@ -927,7 +1031,7 @@ pub fn reconcileAgentSnapshot(model: *Model, input: agents.SnapshotInput) !?sour
 /// ```zig
 /// const snapshot = model.agentSnapshot();
 /// ```
-pub fn agentSnapshot(model: *const Model) *const agents.Snapshot {
+pub fn agentSnapshot(model: *const Model) *const SnapshotType {
     return &model.agent_snapshot;
 }
 
@@ -962,7 +1066,7 @@ pub fn focusedPaneForeground(model: *const Model) []const u8 {
 /// ```zig
 /// if (!model.knowsAgent(key)) discardNotification();
 /// ```
-pub fn knowsAgent(model: *const Model, key: agents.AgentKey) bool {
+pub fn knowsAgent(model: *const Model, key: AgentKeyType) bool {
     return model.agent_snapshot.find(key) != null;
 }
 
@@ -973,7 +1077,7 @@ pub fn knowsAgent(model: *const Model, key: agents.AgentKey) bool {
 /// ```zig
 /// const key = model.takeAgentAcknowledgement() orelse return;
 /// ```
-pub fn takeAgentAcknowledgement(model: *Model) ?agents.AgentKey {
+pub fn takeAgentAcknowledgement(model: *Model) ?AgentKeyType {
     const active = model.workspace.activeConst() orelse return null;
     const pane_id = active.model.layout.focused() orelse return null;
     const key = model.agent_snapshot.keyForPane(active.location, pane_id) orelse return null;
@@ -1034,7 +1138,7 @@ pub fn sidebarAnimationFrame(model: *const Model) u8 {
 /// ```zig
 /// const change = model.advanceSidebarAnimation() orelse return;
 /// ```
-pub fn advanceSidebarAnimation(model: *Model) ?source_namespace.SidebarAnimationChange {
+pub fn advanceSidebarAnimation(model: *Model) ?SidebarAnimationChangeType {
     if (!model.sidebarAnimationActive()) {
         return null;
     }
@@ -1054,7 +1158,7 @@ pub fn advanceSidebarAnimation(model: *Model) ?source_namespace.SidebarAnimation
 /// ```zig
 /// const plan = model.planAgentNavigation(key) orelse return;
 /// ```
-pub fn planAgentNavigation(model: *const Model, key: agents.AgentKey) ?source_namespace.AgentNavigationPlan {
+pub fn planAgentNavigation(model: *const Model, key: AgentKeyType) ?model_types.AgentNavigationPlan {
     const agent = model.agent_snapshot.find(key) orelse return null;
     if (model.workspace.tabForPaneConst(key.pane_id)) |tab| {
         const active = model.workspace.activeConst() orelse return null;
@@ -1083,7 +1187,7 @@ pub fn planAgentNavigation(model: *const Model, key: agents.AgentKey) ?source_na
 /// ```zig
 /// const key = model.focusedAttachmentAgent() orelse return;
 /// ```
-pub fn focusedAttachmentAgent(model: *const Model) ?agents.AgentKey {
+pub fn focusedAttachmentAgent(model: *const Model) ?AgentKeyType {
     const active = model.workspace.activeConst() orelse return null;
     const pane_id = active.model.layout.focused() orelse return null;
     const key = model.agent_snapshot.keyForPane(active.location, pane_id) orelse return null;
@@ -1100,7 +1204,7 @@ pub fn focusedAttachmentAgent(model: *const Model) ?agents.AgentKey {
 /// ```zig
 /// const target = model.focusedAttachmentTarget() orelse return;
 /// ```
-pub fn focusedAttachmentTarget(model: *const Model) ?attachments.Target {
+pub fn focusedAttachmentTarget(model: *const Model) ?TargetType {
     const key = model.focusedAttachmentAgent() orelse return null;
 
     return .{
@@ -1115,7 +1219,7 @@ pub fn focusedAttachmentTarget(model: *const Model) ?attachments.Target {
 /// ```zig
 /// const markers = model.attachmentMarkers(target) orelse return;
 /// ```
-pub fn attachmentMarkers(model: *const Model, target: attachments.Target) ?source_namespace.schema.AgentAttachmentMarkers {
+pub fn attachmentMarkers(model: *const Model, target: TargetType) ?AgentAttachmentMarkersType {
     const agent = model.agent_snapshot.find(.{
         .pane_id = target.pane_id,
         .pane_generation = target.pane_generation,
@@ -1130,7 +1234,7 @@ pub fn attachmentMarkers(model: *const Model, target: attachments.Target) ?sourc
 /// ```zig
 /// const reported = model.reportedPaneFocus() orelse return;
 /// ```
-pub fn reportedPaneFocus(model: *const Model) ?source_namespace.ReportedPaneFocus {
+pub fn reportedPaneFocus(model: *const Model) ?ReportedPaneFocusType {
     return model.reported_pane_focus;
 }
 
@@ -1140,8 +1244,8 @@ pub fn reportedPaneFocus(model: *const Model) ?source_namespace.ReportedPaneFocu
 /// ```zig
 /// const transition = model.syncReportedPaneFocus() orelse return;
 /// ```
-pub fn syncReportedPaneFocus(model: *Model) ?source_namespace.PaneFocusReportTransition {
-    const current: ?source_namespace.ReportedPaneFocus = current: {
+pub fn syncReportedPaneFocus(model: *Model) ?PaneFocusReportTransitionType {
+    const current: ?ReportedPaneFocusType = current: {
         const active = model.workspace.active() orelse break :current null;
         const pane_id = active.model.layout.focused() orelse break :current null;
         const pane = active.model.find(pane_id) orelse break :current null;
@@ -1160,7 +1264,7 @@ pub fn syncReportedPaneFocus(model: *Model) ?source_namespace.PaneFocusReportTra
 /// ```zig
 /// const transition = model.clearReportedPaneFocus() orelse return;
 /// ```
-pub fn clearReportedPaneFocus(model: *Model) ?source_namespace.PaneFocusReportTransition {
+pub fn clearReportedPaneFocus(model: *Model) ?PaneFocusReportTransitionType {
     return model.commitReportedPaneFocus(null);
 }
 
@@ -1183,7 +1287,7 @@ pub fn forgetReportedPaneFocus(model: *Model) bool {
 /// ```zig
 /// _ = model.releaseReportedPaneFocus(pane_id);
 /// ```
-pub fn releaseReportedPaneFocus(model: *Model, pane_id: source_namespace.schema.PaneId) bool {
+pub fn releaseReportedPaneFocus(model: *Model, pane_id: PaneIdType) bool {
     const reported = model.reported_pane_focus orelse return false;
     if (reported.pane_id != pane_id) {
         return false;
@@ -1193,13 +1297,13 @@ pub fn releaseReportedPaneFocus(model: *Model, pane_id: source_namespace.schema.
     return true;
 }
 
-fn commitReportedPaneFocus(model: *Model, current: ?source_namespace.ReportedPaneFocus) ?source_namespace.PaneFocusReportTransition {
+fn commitReportedPaneFocus(model: *Model, current: ?ReportedPaneFocusType) ?PaneFocusReportTransitionType {
     const previous = model.reported_pane_focus;
     if (std.meta.eql(previous, current)) {
         return null;
     }
 
-    var transition: source_namespace.PaneFocusReportTransition = .{
+    var transition: PaneFocusReportTransitionType = .{
         .previous = previous,
         .current = current,
     };
@@ -1236,7 +1340,7 @@ fn commitReportedPaneFocus(model: *Model, current: ?source_namespace.ReportedPan
 /// ```zig
 /// const session = model.panePasteSession() orelse return;
 /// ```
-pub fn panePasteSession(model: *const Model) ?source_namespace.PanePasteSession {
+pub fn panePasteSession(model: *const Model) ?PanePasteSessionType {
     return model.pane_paste;
 }
 
@@ -1254,13 +1358,13 @@ pub fn panePasteActive(model: *const Model) bool {
 /// ```zig
 /// const session = model.beginPanePaste() orelse return;
 /// ```
-pub fn beginPanePaste(model: *Model) ?source_namespace.PanePasteSession {
+pub fn beginPanePaste(model: *Model) ?PanePasteSessionType {
     if (model.pane_paste != null) {
         return null;
     }
 
     const plan = model.planPaneInput(.focused) orelse return null;
-    const session: source_namespace.PanePasteSession = .{
+    const session: PanePasteSessionType = .{
         .pane_id = plan.pane_id,
         .bracketed_paste = plan.input_modes.bracketed_paste,
     };
@@ -1274,7 +1378,7 @@ pub fn beginPanePaste(model: *Model) ?source_namespace.PanePasteSession {
 /// ```zig
 /// std.debug.assert(model.finishPanePaste(session));
 /// ```
-pub fn finishPanePaste(model: *Model, session: source_namespace.PanePasteSession) bool {
+pub fn finishPanePaste(model: *Model, session: PanePasteSessionType) bool {
     const active = model.pane_paste orelse return false;
     if (!std.meta.eql(active, session)) {
         return false;
@@ -1289,7 +1393,7 @@ pub fn finishPanePaste(model: *Model, session: source_namespace.PanePasteSession
 /// ```zig
 /// _ = model.releasePanePaste(pane_id);
 /// ```
-pub fn releasePanePaste(model: *Model, pane_id: source_namespace.schema.PaneId) bool {
+pub fn releasePanePaste(model: *Model, pane_id: PaneIdType) bool {
     const session = model.pane_paste orelse return false;
     if (session.pane_id != pane_id) {
         return false;
@@ -1306,7 +1410,7 @@ pub fn releasePanePaste(model: *Model, pane_id: source_namespace.schema.PaneId) 
 /// ```zig
 /// const plan = model.planPaneInput(.focused) orelse return;
 /// ```
-pub fn planPaneInput(model: *const Model, target: source_namespace.PaneInputTarget) ?source_namespace.PaneInputPlan {
+pub fn planPaneInput(model: *const Model, target: model_types.PaneInputTarget) ?PaneInputPlanType {
     switch (target) {
         .focused, .pane => {
             if (model.name_prompt.active() or model.copyModeActive()) {
@@ -1357,7 +1461,7 @@ pub fn planPaneInput(model: *const Model, target: source_namespace.PaneInputTarg
 /// ```zig
 /// const outcome = try model.applyPaneFrame(frame);
 /// ```
-pub fn applyPaneFrame(model: *Model, frame: source_namespace.schema.frame.FrameView) !source_namespace.PaneFrameOutcome {
+pub fn applyPaneFrame(model: *Model, frame: FrameViewType) !model_types.PaneFrameOutcome {
     const tab = model.workspace.tabForPane(frame.pane_id) orelse return error.UnexpectedPane;
     const pane = tab.model.find(frame.pane_id) orelse return error.UnexpectedPane;
     if (!pane.attached) {
@@ -1405,7 +1509,7 @@ pub fn applyPaneFrame(model: *Model, frame: source_namespace.schema.frame.FrameV
 /// ```zig
 /// const commit = model.setPaneGraphicsFallback(pane_id, true) orelse return;
 /// ```
-pub fn setPaneGraphicsFallback(model: *Model, pane_id: source_namespace.schema.PaneId, visible: bool) ?source_namespace.PaneGraphicsFallbackCommit {
+pub fn setPaneGraphicsFallback(model: *Model, pane_id: PaneIdType, visible: bool) ?PaneGraphicsFallbackCommitType {
     const tab = model.workspace.tabForPane(pane_id) orelse return null;
     if (!tab.model.setGraphicsPlaceholder(pane_id, visible)) {
         return null;
@@ -1427,7 +1531,7 @@ pub fn setPaneGraphicsFallback(model: *Model, pane_id: source_namespace.schema.P
 /// ```zig
 /// const commit = try model.updatePaneMetadata(command);
 /// ```
-pub fn updatePaneMetadata(model: *Model, command: source_namespace.PaneMetadataCommand) !?source_namespace.PaneMetadataCommit {
+pub fn updatePaneMetadata(model: *Model, command: model_types.PaneMetadataCommand) !?PaneMetadataCommitType {
     const pane_id = switch (command) {
         .cwd => |cwd| cwd.pane_id,
         .foreground => |foreground| foreground.pane_id,
@@ -1467,7 +1571,7 @@ pub fn updatePaneMetadata(model: *Model, command: source_namespace.PaneMetadataC
 /// ```zig
 /// const commit = model.updatePaneProgress(progress) orelse return;
 /// ```
-pub fn updatePaneProgress(model: *Model, progress: source_namespace.schema.PaneProgress) ?source_namespace.PaneProgressCommit {
+pub fn updatePaneProgress(model: *Model, progress: PaneProgressType) ?PaneProgressCommitType {
     const tab = model.workspace.tabForPane(progress.pane_id) orelse return null;
     const pane = tab.model.find(progress.pane_id) orelse return null;
     if (!pane.setProgress(progress)) {
@@ -1488,7 +1592,7 @@ pub fn updatePaneProgress(model: *Model, progress: source_namespace.schema.PaneP
 /// ```zig
 /// const change = model.setPaneViewport(command) orelse return;
 /// ```
-pub fn setPaneViewport(model: *Model, command: source_namespace.PaneViewportCommand) ?source_namespace.PaneViewportChange {
+pub fn setPaneViewport(model: *Model, command: PaneViewportCommandType) ?PaneViewportChangeType {
     if (model.copyModeActive()) {
         return null;
     }
@@ -1499,7 +1603,7 @@ pub fn setPaneViewport(model: *Model, command: source_namespace.PaneViewportComm
         return null;
     }
 
-    return source_namespace.commitPaneViewport(model, pane, source_namespace.paneViewportOffset(pane, command.target));
+    return model_namespace.commitPaneViewport(model, pane, model_namespace.paneViewportOffset(pane, command.target));
 }
 
 /// Reports whether copy mode currently owns pane input.
@@ -1515,7 +1619,7 @@ pub fn copyModeActive(model: *const Model) bool {
 
 /// Returns the pointer gesture's stable owner without lending its state.
 /// Example: `const target = model.pointerSelection() orelse return;`.
-pub fn pointerSelection(model: *const Model) ?struct { pane_id: source_namespace.schema.PaneId, dragging: bool } {
+pub fn pointerSelection(model: *const Model) ?struct { pane_id: PaneIdType, dragging: bool } {
     if (model.selection_gesture) |pane_id| {
         return .{ .pane_id = pane_id, .dragging = true };
     }
@@ -1547,7 +1651,7 @@ pub fn clearPointerSelection(model: *Model) bool {
 
 /// Starts selection only after routing has focused an attached pane.
 /// Example: `_ = model.beginPointerSelection(press);`.
-pub fn beginPointerSelection(model: *Model, press: source_namespace.copy_mode.PointerPress) bool {
+pub fn beginPointerSelection(model: *Model, press: PointerPressType) bool {
     if (model.copyModeActive() or model.name_prompt.active() or model.pane_paste != null) {
         return false;
     }
@@ -1566,7 +1670,7 @@ pub fn beginPointerSelection(model: *Model, press: source_namespace.copy_mode.Po
 
     model.selection_click_pane = pane.id;
     const granularity = model.selection_clicks.press(press.position, press.now_ns);
-    var state = source_namespace.copy_mode.State.init(pane.id, .{
+    var state = InputState.init(pane.id, .{
         .x = press.position.x,
         .y = pane.scroll.offset + press.position.y,
     }, pane.scroll.offset);
@@ -1582,7 +1686,7 @@ pub fn beginPointerSelection(model: *Model, press: source_namespace.copy_mode.Po
 /// ```zig
 /// const pane_id = model.copyModeTarget() orelse return;
 /// ```
-pub fn copyModeTarget(model: *const Model) ?source_namespace.schema.PaneId {
+pub fn copyModeTarget(model: *const Model) ?PaneIdType {
     const state = model.copy_state orelse return null;
 
     return state.pane_id;
@@ -1593,7 +1697,7 @@ pub fn copyModeTarget(model: *const Model) ?source_namespace.schema.PaneId {
 /// ```zig
 /// const projection = model.copyModeProjection() orelse return;
 /// ```
-pub fn copyModeProjection(model: *const Model) ?source_namespace.CopyModeProjection {
+pub fn copyModeProjection(model: *const Model) ?CopyModeProjectionType {
     const state = model.copy_state orelse return null;
 
     return .{ .pane_id = state.pane_id, .view = state.view() };
@@ -1616,11 +1720,11 @@ pub fn enterCopyMode(model: *Model) bool {
         return false;
     }
 
-    const cursor: source_namespace.copy_mode.Point = if (pane.cursor.visible)
+    const cursor: PointType = if (pane.cursor.visible)
         .{ .x = pane.cursor.x, .y = pane.scroll.offset + pane.cursor.y }
     else
         .{ .x = 0, .y = pane.scroll.offset + pane.buffer.h -| 1 };
-    model.copy_state = source_namespace.copy_mode.State.init(pane.id, cursor, pane.scroll.offset);
+    model.copy_state = InputState.init(pane.id, cursor, pane.scroll.offset);
     model.copy_revision +%= 1;
     return true;
 }
@@ -1631,7 +1735,7 @@ pub fn enterCopyMode(model: *Model) bool {
 /// ```zig
 /// const plan = model.planCopyMode(.{ .key = key }) orelse return;
 /// ```
-pub fn planCopyMode(model: *const Model, command: source_namespace.CopyModeCommand) ?source_namespace.CopyModePlan {
+pub fn planCopyMode(model: *const Model, command: model_types.CopyModeCommand) ?CopyModePlanType {
     const previous = model.copy_state orelse return null;
     const active = model.workspace.activeConst() orelse return model.planCopyModeExit(previous, null);
     const pane = active.model.findConst(previous.pane_id) orelse
@@ -1640,7 +1744,7 @@ pub fn planCopyMode(model: *const Model, command: source_namespace.CopyModeComma
 
     switch (command) {
         .key => |pressed| {
-            const effect = source_namespace.copy_mode.applyKey(&next, pressed, .{ .buffer = &pane.buffer, .scroll = pane.scroll });
+            const effect = copy_mode_module.applyKey(&next, pressed, .{ .buffer = &pane.buffer, .scroll = pane.scroll });
             if (!effect.handled) {
                 return null;
             }
@@ -1649,12 +1753,12 @@ pub fn planCopyMode(model: *const Model, command: source_namespace.CopyModeComma
                     .expected_revision = model.copy_revision,
                     .previous = previous,
                     .next = next,
-                    .viewport = source_namespace.copyModeViewport(pane, next.viewport_offset),
+                    .viewport = model_namespace.copyModeViewport(pane, next.viewport_offset),
                     .search = direction,
                 };
             }
             if (effect.open_link) {
-                const target = link_capability.extract(&pane.buffer, pane.scroll, .{
+                const target = cells_module.extract(&pane.buffer, pane.scroll, .{
                     .x = next.cursor.x,
                     .y = next.cursor.y,
                 }) orelse return null;
@@ -1667,7 +1771,7 @@ pub fn planCopyMode(model: *const Model, command: source_namespace.CopyModeComma
                 };
             }
             if (effect.exit) {
-                const selection: ?source_namespace.schema.CopySelection = if (effect.copy and next.anchor != null) .{
+                const selection: ?CopySelectionType = if (effect.copy and next.anchor != null) .{
                     .pane_id = next.pane_id,
                     .start_x = next.anchor.?.x,
                     .start_y = next.anchor.?.y,
@@ -1729,7 +1833,7 @@ pub fn planCopyMode(model: *const Model, command: source_namespace.CopyModeComma
         .expected_revision = model.copy_revision,
         .previous = previous,
         .next = next,
-        .viewport = source_namespace.copyModeViewport(pane, next.viewport_offset),
+        .viewport = model_namespace.copyModeViewport(pane, next.viewport_offset),
     };
 }
 
@@ -1739,7 +1843,7 @@ pub fn planCopyMode(model: *const Model, command: source_namespace.CopyModeComma
 /// ```zig
 /// const commit = model.commitCopyMode(plan) orelse return;
 /// ```
-pub fn commitCopyMode(model: *Model, plan: source_namespace.CopyModePlan) ?source_namespace.CopyModeCommit {
+pub fn commitCopyMode(model: *Model, plan: CopyModePlanType) ?CopyModeCommitType {
     if (model.copy_revision != plan.expected_revision) {
         return null;
     }
@@ -1756,7 +1860,7 @@ pub fn commitCopyMode(model: *Model, plan: source_namespace.CopyModePlan) ?sourc
         }
     }
 
-    var viewport_change: ?source_namespace.PaneViewportChange = null;
+    var viewport_change: ?PaneViewportChangeType = null;
     if (plan.viewport) |viewport| {
         const active = model.workspace.active() orelse return null;
         const pane = active.model.find(viewport.pane_id) orelse return null;
@@ -1764,7 +1868,7 @@ pub fn commitCopyMode(model: *Model, plan: source_namespace.CopyModePlan) ?sourc
             return null;
         }
 
-        viewport_change = source_namespace.commitPaneViewport(model, pane, viewport.offset);
+        viewport_change = model_namespace.commitPaneViewport(model, pane, viewport.offset);
     }
 
     model.copy_state = plan.next;
@@ -1782,7 +1886,7 @@ pub fn commitCopyMode(model: *Model, plan: source_namespace.CopyModePlan) ?sourc
 /// ```zig
 /// _ = model.releaseCopyMode(pane_id);
 /// ```
-pub fn releaseCopyMode(model: *Model, pane_id: source_namespace.schema.PaneId) bool {
+pub fn releaseCopyMode(model: *Model, pane_id: PaneIdType) bool {
     const state = model.copy_state orelse return false;
     if (state.pane_id != pane_id) {
         return false;
@@ -1795,7 +1899,7 @@ pub fn releaseCopyMode(model: *Model, pane_id: source_namespace.schema.PaneId) b
 
 // Reconcile copy state inside the frame transaction so callers cannot
 // publish screen state without the matching retained-history projection.
-pub fn reconcileCopyModeFrame(model: *Model, command: source_namespace.CopyModeFrame) bool {
+pub fn reconcileCopyModeFrame(model: *Model, command: CopyModeFrameType) bool {
     const state = model.copy_state orelse return false;
     if (state.pane_id != command.pane_id) {
         return false;
@@ -1810,7 +1914,7 @@ pub fn reconcileCopyModeFrame(model: *Model, command: source_namespace.CopyModeF
     }
 
     var next = state;
-    source_namespace.copy_mode.onFrame(&next, command.previous_offset, command.scroll);
+    copy_mode_module.onFrame(&next, command.previous_offset, command.scroll);
     if (std.meta.eql(state, next)) {
         return false;
     }
@@ -1820,13 +1924,13 @@ pub fn reconcileCopyModeFrame(model: *Model, command: source_namespace.CopyModeF
     return true;
 }
 
-fn planCopyModeExit(model: *const Model, previous: source_namespace.copy_mode.State, selection: ?source_namespace.schema.CopySelection) source_namespace.CopyModePlan {
+fn planCopyModeExit(model: *const Model, previous: InputState, selection: ?CopySelectionType) CopyModePlanType {
     const pane = if (model.workspace.activeConst()) |active|
         active.model.findConst(previous.pane_id)
     else
         null;
     const viewport = if (pane != null and previous.pointer == null)
-        source_namespace.copyModeViewport(pane.?, previous.entry_offset)
+        model_namespace.copyModeViewport(pane.?, previous.entry_offset)
     else
         null;
 
@@ -1844,7 +1948,7 @@ fn planCopyModeExit(model: *const Model, previous: source_namespace.copy_mode.St
 /// ```zig
 /// const location = model.activeTabLocation() orelse return;
 /// ```
-pub fn activeTabLocation(model: *const Model) ?source_namespace.schema.TabLocation {
+pub fn activeTabLocation(model: *const Model) ?TabLocationType {
     const active = model.workspace.activeConst() orelse return null;
 
     return active.location;
@@ -1855,7 +1959,7 @@ pub fn activeTabLocation(model: *const Model) ?source_namespace.schema.TabLocati
 /// ```zig
 /// const workspace = model.workspaceLocation() orelse return;
 /// ```
-pub fn workspaceLocation(model: *const Model) ?source_namespace.schema.WorkspaceLocation {
+pub fn workspaceLocation(model: *const Model) ?WorkspaceLocationType {
     return model.workspace.workspace;
 }
 
@@ -1864,7 +1968,7 @@ pub fn workspaceLocation(model: *const Model) ?source_namespace.schema.Workspace
 /// ```zig
 /// const location = model.tabLocation(tab_id) orelse return;
 /// ```
-pub fn tabLocation(model: *const Model, tab_id: source_namespace.schema.TabId) ?source_namespace.schema.TabLocation {
+pub fn tabLocation(model: *const Model, tab_id: TabIdType) ?TabLocationType {
     const index = model.workspace.indexOf(tab_id) orelse return null;
 
     return model.workspace.items[index].?.location;
@@ -1876,8 +1980,8 @@ pub fn tabLocation(model: *const Model, tab_id: source_namespace.schema.TabId) ?
 /// ```zig
 /// const pane_id = model.planWorkspaceCreation() orelse return;
 /// ```
-pub fn planWorkspaceCreation(model: *const Model) ?source_namespace.schema.PaneId {
-    return (source_namespace.focusedLaunchSource(model) orelse return null).pane_id;
+pub fn planWorkspaceCreation(model: *const Model) ?PaneIdType {
+    return (model_namespace.focusedLaunchSource(model) orelse return null).pane_id;
 }
 
 /// Captures the current workspace and attached focused pane for a tab
@@ -1886,8 +1990,8 @@ pub fn planWorkspaceCreation(model: *const Model) ?source_namespace.schema.PaneI
 /// ```zig
 /// const plan = model.planTabCreation() orelse return;
 /// ```
-pub fn planTabCreation(model: *const Model) ?source_namespace.TabCreationPlan {
-    const source = source_namespace.focusedLaunchSource(model) orelse return null;
+pub fn planTabCreation(model: *const Model) ?TabCreationPlanType {
+    const source = model_namespace.focusedLaunchSource(model) orelse return null;
 
     return .{
         .workspace = source.location.workspace,
@@ -1902,10 +2006,10 @@ pub fn planTabCreation(model: *const Model) ?source_namespace.TabCreationPlan {
 /// ```zig
 /// const departure = model.departWorkspace();
 /// ```
-pub fn departWorkspace(model: *Model) source_namespace.WorkspaceDeparture {
-    const departure = source_namespace.captureWorkspace(model);
+pub fn departWorkspace(model: *Model) WorkspaceDepartureType {
+    const departure = model_namespace.captureWorkspace(model);
     if (departure.source == null) {
-        source_namespace.releaseInvalidCopyMode(model);
+        model_namespace.releaseInvalidCopyMode(model);
         return departure;
     }
 
@@ -1925,7 +2029,7 @@ pub fn departWorkspace(model: *Model) source_namespace.WorkspaceDeparture {
     if (had_visible_panes) {
         model.panes_revision +%= 1;
     }
-    source_namespace.releaseInvalidCopyMode(model);
+    model_namespace.releaseInvalidCopyMode(model);
 
     return departure;
 }
@@ -1937,7 +2041,7 @@ pub fn departWorkspace(model: *Model) source_namespace.WorkspaceDeparture {
 /// ```zig
 /// const activation = try model.arriveWorkspace(arrival);
 /// ```
-pub fn arriveWorkspace(model: *Model, arrival: source_namespace.WorkspaceArrival) !source_namespace.WorkspaceActivation {
+pub fn arriveWorkspace(model: *Model, arrival: WorkspaceArrivalType) !WorkspaceActivationType {
     if (model.workspace.count != 0 or model.workspace.workspace != null) {
         return error.ModelNotEmpty;
     }
@@ -1950,7 +2054,7 @@ pub fn arriveWorkspace(model: *Model, arrival: source_namespace.WorkspaceArrival
     model.tabs_revision +%= 1;
     model.active_tab_revision +%= 1;
     model.panes_revision +%= 1;
-    source_namespace.releaseInvalidCopyMode(model);
+    model_namespace.releaseInvalidCopyMode(model);
 
     return model.workspaceActivation(.{
         .pane_id = arrival.pane_id,
@@ -1966,8 +2070,8 @@ pub fn arriveWorkspace(model: *Model, arrival: source_namespace.WorkspaceArrival
 /// ```zig
 /// const replacement = try model.replaceWorkspace(arrival);
 /// ```
-pub fn replaceWorkspace(model: *Model, arrival: source_namespace.WorkspaceArrival) !source_namespace.WorkspaceReplacement {
-    const departure = source_namespace.captureWorkspace(model);
+pub fn replaceWorkspace(model: *Model, arrival: WorkspaceArrivalType) !WorkspaceReplacementType {
+    const departure = model_namespace.captureWorkspace(model);
     const version_before = model.version();
     if (departure.source) |source| {
         if (std.meta.eql(source, arrival.location.workspace)) {
@@ -1989,7 +2093,7 @@ pub fn replaceWorkspace(model: *Model, arrival: source_namespace.WorkspaceArriva
     model.tabs_revision +%= 1;
     model.active_tab_revision +%= 1;
     model.panes_revision +%= 1;
-    source_namespace.releaseInvalidCopyMode(model);
+    model_namespace.releaseInvalidCopyMode(model);
 
     return .{
         .departure = departure,
@@ -2021,7 +2125,7 @@ fn retainWorkspaceLayouts(model: *Model) void {
     }
 }
 
-fn stageArrivalLayout(model: *Model, arrival: source_namespace.WorkspaceArrival) void {
+fn stageArrivalLayout(model: *Model, arrival: WorkspaceArrivalType) void {
     const saved_layout = if (model.saved_layouts.find(arrival.location)) |saved| saved.layout else arrival.saved_layout;
     if (saved_layout) |saved| {
         const staged = model.workspace.restoreLayoutOnNextSnapshot(arrival.location, saved);
@@ -2029,7 +2133,7 @@ fn stageArrivalLayout(model: *Model, arrival: source_namespace.WorkspaceArrival)
     }
 }
 
-fn workspaceActivation(model: *const Model, seed: source_namespace.WorkspaceActivationSeed) source_namespace.WorkspaceActivation {
+fn workspaceActivation(model: *const Model, seed: WorkspaceActivationSeedType) WorkspaceActivationType {
     return .{
         .pane_id = seed.pane_id,
         .location = seed.location,
@@ -2054,7 +2158,7 @@ fn workspaceActivation(model: *const Model, seed: source_namespace.WorkspaceActi
 /// ```zig
 /// const reconciliation = try model.reconcileWorkspace(snapshot);
 /// ```
-pub fn reconcileWorkspace(model: *Model, snapshot: source_namespace.WorkspaceSnapshot) !source_namespace.WorkspaceReconciliation {
+pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !WorkspaceReconciliationType {
     const current_workspace = model.workspace.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(current_workspace, snapshot.workspace)) {
         return error.UnexpectedWorkspace;
@@ -2064,22 +2168,22 @@ pub fn reconcileWorkspace(model: *Model, snapshot: source_namespace.WorkspaceSna
         return error.WorkspaceHasNoTabs;
     }
 
-    if (snapshot.tabs.len > source_namespace.tabs_mod.max_tabs) {
+    if (snapshot.tabs.len > max_tabs_per_workspace) {
         return error.TabLimitReached;
     }
 
-    if (snapshot.name.len == 0 or snapshot.name.len > source_namespace.schema.max_workspace_name_bytes) {
+    if (snapshot.name.len == 0 or snapshot.name.len > max_workspace_name_bytes_module) {
         return error.InvalidWorkspaceName;
     }
 
     const previous_active = model.activeTabLocation() orelse return error.NoActiveTab;
-    var reconciliation: source_namespace.WorkspaceReconciliation = .{
+    var reconciliation: WorkspaceReconciliationType = .{
         .previous_active = previous_active,
         .active = previous_active,
         .workspace_changed = !std.mem.eql(u8, model.workspace.workspaceName(), snapshot.name),
         .tabs_changed = snapshot.tabs.len != model.workspace.count,
     };
-    var canonical_tabs: [source_namespace.tabs_mod.max_tabs]source_namespace.schema.TabId = undefined;
+    var canonical_tabs: [max_tabs_per_workspace]TabIdType = undefined;
     for (snapshot.tabs, 0..) |descriptor, index| {
         canonical_tabs[index] = descriptor.tab_id;
         if (index >= model.workspace.count) {
@@ -2096,7 +2200,7 @@ pub fn reconcileWorkspace(model: *Model, snapshot: source_namespace.WorkspaceSna
 
     var tabs = model.workspace.tabIterator();
     while (tabs.next()) |tab| {
-        if (std.mem.findScalar(source_namespace.schema.TabId, canonical_tabs[0..snapshot.tabs.len], tab.location.tab_id) != null) {
+        if (std.mem.findScalar(TabIdType, canonical_tabs[0..snapshot.tabs.len], tab.location.tab_id) != null) {
             continue;
         }
 
@@ -2122,7 +2226,7 @@ pub fn reconcileWorkspace(model: *Model, snapshot: source_namespace.WorkspaceSna
     if (reconciliation.active_tab_changed) {
         model.active_tab_revision +%= 1;
     }
-    source_namespace.releaseInvalidCopyMode(model);
+    model_namespace.releaseInvalidCopyMode(model);
 
     const active = model.workspace.activeConst() orelse return error.WorkspaceHasNoTabs;
     reconciliation.active_snapshot_loaded = active.snapshot_loaded;
@@ -2140,18 +2244,18 @@ pub fn reconcileWorkspace(model: *Model, snapshot: source_namespace.WorkspaceSna
 /// ```zig
 /// const reconciliation = try model.reconcileTab(snapshot, workbench);
 /// ```
-pub fn reconcileTab(model: *Model, snapshot: source_namespace.TabSnapshot, area: source_namespace.ui.Rect) !source_namespace.TabReconciliation {
+pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: RectType) !TabReconciliationType {
     const tab = model.workspace.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
     if (!std.meta.eql(tab.location, snapshot.location)) {
         return error.UnexpectedTab;
     }
 
-    if (snapshot.panes.len > source_namespace.schema.max_panes_per_tab) {
+    if (snapshot.panes.len > max_panes_per_tab_module) {
         return error.TooManyPanes;
     }
 
     for (snapshot.panes, 0..) |pane_id, index| {
-        if (std.mem.findScalar(source_namespace.schema.PaneId, snapshot.panes[0..index], pane_id) != null) {
+        if (std.mem.findScalar(PaneIdType, snapshot.panes[0..index], pane_id) != null) {
             return error.DuplicatePane;
         }
 
@@ -2164,7 +2268,7 @@ pub fn reconcileTab(model: *Model, snapshot: source_namespace.TabSnapshot, area:
     const active_location = model.activeTabLocation() orelse return error.NoActiveTab;
     const active = std.meta.eql(active_location, snapshot.location);
     const previous_layout_revision = tab.model.layout.currentRevision();
-    var reconciliation: source_namespace.TabReconciliation = .{
+    var reconciliation: TabReconciliationType = .{
         .location = snapshot.location,
         .area = area,
         .active = active,
@@ -2172,7 +2276,7 @@ pub fn reconcileTab(model: *Model, snapshot: source_namespace.TabSnapshot, area:
     };
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| {
-        if (std.mem.findScalar(source_namespace.schema.PaneId, snapshot.panes, pane.id) == null) {
+        if (std.mem.findScalar(PaneIdType, snapshot.panes, pane.id) == null) {
             reconciliation.removed_panes.append(pane.id);
         }
     }
@@ -2206,7 +2310,7 @@ pub fn reconcileTab(model: *Model, snapshot: source_namespace.TabSnapshot, area:
 /// ```zig
 /// const result = model.confirmPaneAttachment(attachment);
 /// ```
-pub fn confirmPaneAttachment(model: *Model, attachment: source_namespace.PaneAttachment) !source_namespace.PaneAttachmentConfirmation {
+pub fn confirmPaneAttachment(model: *Model, attachment: PaneAttachmentType) !model_types.PaneAttachmentConfirmation {
     const active = model.workspace.active() orelse return .stale;
     if (!std.meta.eql(active.location, attachment.location)) {
         return .stale;
@@ -2237,7 +2341,7 @@ fn allocateAttachmentGeneration(model: *Model) !u64 {
 /// ```zig
 /// if (model.needsPaneAttachment(attachment)) requestSnapshot();
 /// ```
-pub fn needsPaneAttachment(model: *const Model, attachment: source_namespace.PaneAttachment) bool {
+pub fn needsPaneAttachment(model: *const Model, attachment: PaneAttachmentType) bool {
     const active = model.workspace.activeConst() orelse return false;
     if (!std.meta.eql(active.location, attachment.location)) {
         return false;
@@ -2253,9 +2357,9 @@ pub fn needsPaneAttachment(model: *const Model, attachment: source_namespace.Pan
 /// ```zig
 /// const plan = try model.planTabDetachment(location);
 /// ```
-pub fn planTabDetachment(model: *const Model, location: source_namespace.schema.TabLocation) !source_namespace.TabDetachmentPlan {
-    const tab = source_namespace.findTabConst(&model.workspace, location) orelse return error.UnexpectedTab;
-    var plan: source_namespace.TabDetachmentPlan = .{ .location = location };
+pub fn planTabDetachment(model: *const Model, location: TabLocationType) !TabDetachmentPlanType {
+    const tab = model_namespace.findTabConst(&model.workspace, location) orelse return error.UnexpectedTab;
+    var plan: TabDetachmentPlanType = .{ .location = location };
 
     for (&tab.model.panes) |*slot| {
         const pane = if (slot.*) |*value| value else continue;
@@ -2289,12 +2393,12 @@ pub fn planTabDetachment(model: *const Model, location: source_namespace.schema.
 /// ```zig
 /// try model.commitTabDetachment(plan);
 /// ```
-pub fn commitTabDetachment(model: *Model, plan: source_namespace.TabDetachmentPlan) !void {
-    if (plan.len > source_namespace.multiplexer.max_panes) {
+pub fn commitTabDetachment(model: *Model, plan: TabDetachmentPlanType) !void {
+    if (plan.len > max_panes_per_tab_module) {
         return error.InvalidTabDetachment;
     }
 
-    const tab = source_namespace.findTab(&model.workspace, plan.location) orelse return error.StaleTabDetachment;
+    const tab = model_namespace.findTab(&model.workspace, plan.location) orelse return error.StaleTabDetachment;
     if (tab.model.pane_count != plan.len) {
         return error.StaleTabDetachment;
     }
@@ -2313,7 +2417,7 @@ pub fn commitTabDetachment(model: *Model, plan: source_namespace.TabDetachmentPl
     }
 
     for (plan.slice()) |planned| {
-        source_namespace.detachPane(tab.model.find(planned.pane_id).?);
+        model_namespace.detachPane(tab.model.find(planned.pane_id).?);
     }
 }
 
@@ -2324,7 +2428,7 @@ pub fn commitTabDetachment(model: *Model, plan: source_namespace.TabDetachmentPl
 /// ```zig
 /// const focus = model.focusPane(.{ .target = .{ .direction = .left }, .area = area }) orelse return;
 /// ```
-pub fn focusPane(model: *Model, request: source_namespace.PaneFocusRequest) ?source_namespace.PaneFocus {
+pub fn focusPane(model: *Model, request: PaneFocusRequestType) ?PaneFocusType {
     const active = model.workspace.active() orelse return null;
     const previous = active.model.layout.focused() orelse return null;
     const focused = switch (request.target) {
@@ -2356,7 +2460,7 @@ pub fn focusPane(model: *Model, request: source_namespace.PaneFocusRequest) ?sou
 /// ```zig
 /// const resize = model.resizePane(.{ .direction = .right, .area = area }) orelse return;
 /// ```
-pub fn resizePane(model: *Model, request: source_namespace.ResizePaneRequest) ?source_namespace.PaneGeometryChange {
+pub fn resizePane(model: *Model, request: ResizePaneRequestType) ?PaneGeometryChangeType {
     const active = model.workspace.active() orelse return null;
     const focused = active.model.layout.focused() orelse return null;
     if (!active.model.resizeFocused(request.direction, request.area)) {
@@ -2380,7 +2484,7 @@ pub fn resizePane(model: *Model, request: source_namespace.ResizePaneRequest) ?s
 /// ```zig
 /// const change = model.togglePaneFullscreen(.{ .area = area }) orelse return;
 /// ```
-pub fn togglePaneFullscreen(model: *Model, request: source_namespace.TogglePaneFullscreenRequest) ?source_namespace.PaneGeometryChange {
+pub fn togglePaneFullscreen(model: *Model, request: TogglePaneFullscreenRequestType) ?PaneGeometryChangeType {
     const active = model.workspace.active() orelse return null;
     const focused = active.model.layout.focused() orelse return null;
     if (!active.model.toggleFullscreen()) {
@@ -2404,7 +2508,7 @@ pub fn togglePaneFullscreen(model: *Model, request: source_namespace.TogglePaneF
 /// ```zig
 /// const plan = model.planPaneSplit(.{ .axis = .horizontal, .area = area }) orelse return;
 /// ```
-pub fn planPaneSplit(model: *Model, request: source_namespace.RequestPaneSplit) ?source_namespace.PaneSplitPlan {
+pub fn planPaneSplit(model: *Model, request: RequestPaneSplitType) ?PaneSplitPlanType {
     const active = model.workspace.active() orelse return null;
     const focused = active.model.focusedPane() orelse return null;
     if (!focused.attached or !std.meta.eql(focused.location, active.location)) {
@@ -2414,10 +2518,10 @@ pub fn planPaneSplit(model: *Model, request: source_namespace.RequestPaneSplit) 
     const restore_size = active.model.contentSize(focused.id, request.area) orelse return null;
     const prospective = active.model.prospectiveSplit(.{ .pane_id = focused.id, .axis = request.axis }, request.area) orelse
         return null;
-    var provisional_size = source_namespace.multiplexer.rectSize(prospective.existing_content) orelse return null;
-    var new_pane_size = source_namespace.multiplexer.rectSize(prospective.new_content) orelse return null;
-    source_namespace.inheritCellSize(&provisional_size, restore_size);
-    source_namespace.inheritCellSize(&new_pane_size, restore_size);
+    var provisional_size = multiplexer_module.rectSize(prospective.existing_content) orelse return null;
+    var new_pane_size = multiplexer_module.rectSize(prospective.new_content) orelse return null;
+    model_namespace.inheritCellSize(&provisional_size, restore_size);
+    model_namespace.inheritCellSize(&new_pane_size, restore_size);
 
     return .{
         .split = .{
@@ -2439,7 +2543,7 @@ pub fn planPaneSplit(model: *Model, request: source_namespace.RequestPaneSplit) 
 /// ```zig
 /// const commit = try model.commitPaneSplit(command);
 /// ```
-pub fn commitPaneSplit(model: *Model, command: source_namespace.CommitPaneSplit) !source_namespace.PaneSplitCommit {
+pub fn commitPaneSplit(model: *Model, command: CommitPaneSplitType) !PaneSplitCommitType {
     const stale = model.finishPaneSplit(command, .{
         .disposition = .stale,
         .change = .unchanged,
@@ -2450,7 +2554,7 @@ pub fn commitPaneSplit(model: *Model, command: source_namespace.CommitPaneSplit)
         return stale;
     }
 
-    const tab = source_namespace.findTab(&model.workspace, command.split.location) orelse return stale;
+    const tab = model_namespace.findTab(&model.workspace, command.split.location) orelse return stale;
     const active = if (model.workspace.activeConst()) |current|
         std.meta.eql(current.location, command.split.location)
     else
@@ -2464,7 +2568,7 @@ pub fn commitPaneSplit(model: *Model, command: source_namespace.CommitPaneSplit)
         if (active) {
             try tab.model.markAttached(command.new_pane, try model.allocateAttachmentGeneration());
         } else {
-            source_namespace.detachPane(pane);
+            model_namespace.detachPane(pane);
         }
 
         return model.finishPaneSplit(command, .{
@@ -2482,7 +2586,7 @@ pub fn commitPaneSplit(model: *Model, command: source_namespace.CommitPaneSplit)
     }
 
     if (!active) {
-        source_namespace.detachPane(tab.model.find(command.new_pane).?);
+        model_namespace.detachPane(tab.model.find(command.new_pane).?);
     } else {
         model.panes_revision +%= 1;
     }
@@ -2494,7 +2598,7 @@ pub fn commitPaneSplit(model: *Model, command: source_namespace.CommitPaneSplit)
     });
 }
 
-fn finishPaneSplit(model: *const Model, command: source_namespace.CommitPaneSplit, state: source_namespace.PaneSplitCommitState) source_namespace.PaneSplitCommit {
+fn finishPaneSplit(model: *const Model, command: CommitPaneSplitType, state: PaneSplitCommitStateType) PaneSplitCommitType {
     return .{
         .pane_id = command.new_pane,
         .location = command.split.location,
@@ -2515,13 +2619,13 @@ fn finishPaneSplit(model: *const Model, command: source_namespace.CommitPaneSpli
 /// ```zig
 /// const recovery = model.recoverPaneSplit(.{ .split = split, .area = area });
 /// ```
-pub fn recoverPaneSplit(model: *Model, command: source_namespace.RecoverPaneSplit) source_namespace.PaneSplitRecovery {
+pub fn recoverPaneSplit(model: *Model, command: RecoverPaneSplitType) model_types.PaneSplitRecovery {
     const workspace = model.workspace.workspace orelse return .stale;
     if (!std.meta.eql(workspace, command.split.location.workspace)) {
         return .stale;
     }
 
-    const tab = source_namespace.findTab(&model.workspace, command.split.location) orelse return .stale;
+    const tab = model_namespace.findTab(&model.workspace, command.split.location) orelse return .stale;
     const pane = tab.model.find(command.split.target_pane) orelse return .stale;
     if (!std.meta.eql(pane.location, command.split.location)) {
         return .stale;
@@ -2543,7 +2647,7 @@ pub fn recoverPaneSplit(model: *Model, command: source_namespace.RecoverPaneSpli
 /// ```zig
 /// const closure = model.planPaneClosure() orelse return;
 /// ```
-pub fn planPaneClosure(model: *const Model) ?source_namespace.PaneClosure {
+pub fn planPaneClosure(model: *const Model) ?PaneClosureType {
     const active = model.workspace.activeConst() orelse return null;
     const focused = active.model.focusedPaneConst() orelse return null;
     if (!focused.attached or !std.meta.eql(focused.location, active.location)) {
@@ -2559,7 +2663,7 @@ pub fn planPaneClosure(model: *const Model) ?source_namespace.PaneClosure {
 /// ```zig
 /// const transition = model.retirePane(pane_id);
 /// ```
-pub fn retirePane(model: *Model, pane_id: source_namespace.schema.PaneId) source_namespace.PaneExit {
+pub fn retirePane(model: *Model, pane_id: PaneIdType) model_types.PaneExit {
     const tab = model.workspace.tabForPane(pane_id) orelse return model.stalePaneExit(pane_id);
     const pane = tab.model.find(pane_id) orelse return model.stalePaneExit(pane_id);
     if (!std.meta.eql(pane.location, tab.location)) {
@@ -2589,7 +2693,7 @@ pub fn retirePane(model: *Model, pane_id: source_namespace.schema.PaneId) source
     } };
 }
 
-fn stalePaneExit(model: *const Model, pane_id: source_namespace.schema.PaneId) source_namespace.PaneExit {
+fn stalePaneExit(model: *const Model, pane_id: PaneIdType) model_types.PaneExit {
     return .{ .stale = .{
         .pane_id = pane_id,
         .workspace_revision = model.workspace_revision,
@@ -2604,7 +2708,7 @@ fn stalePaneExit(model: *const Model, pane_id: source_namespace.schema.PaneId) s
 /// ```zig
 /// const change = try model.applyTabPosition(location, position);
 /// ```
-pub fn applyTabPosition(model: *Model, location: source_namespace.schema.TabLocation, position: u16) !source_namespace.Change {
+pub fn applyTabPosition(model: *Model, location: TabLocationType, position: u16) !model_types.Change {
     const current_workspace = model.workspace.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(current_workspace, location.workspace)) {
         return error.UnexpectedWorkspace;
@@ -2624,7 +2728,7 @@ pub fn applyTabPosition(model: *Model, location: source_namespace.schema.TabLoca
 /// ```zig
 /// const change = try model.renameTab(command);
 /// ```
-pub fn renameTab(model: *Model, command: source_namespace.RenameTab) !source_namespace.Change {
+pub fn renameTab(model: *Model, command: RenameTabType) !model_types.Change {
     const current_workspace = model.workspace.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(current_workspace, command.location.workspace)) {
         return error.UnexpectedWorkspace;
@@ -2644,7 +2748,7 @@ pub fn renameTab(model: *Model, command: source_namespace.RenameTab) !source_nam
 /// ```zig
 /// const creation = try model.createTab(command);
 /// ```
-pub fn createTab(model: *Model, command: source_namespace.NewTab) !source_namespace.TabCreation {
+pub fn createTab(model: *Model, command: NewTabType) !TabCreationType {
     const previous = model.workspace.activeConst() orelse return error.NoActiveTab;
     const previous_location = previous.location;
     const previous_layout_revision = previous.model.layout.currentRevision();
@@ -2655,7 +2759,7 @@ pub fn createTab(model: *Model, command: source_namespace.NewTab) !source_namesp
     const created = try model.workspace.addCreated(command.created, command.size);
     model.tabs_revision +%= 1;
     model.active_tab_revision +%= 1;
-    source_namespace.releaseInvalidCopyMode(model);
+    model_namespace.releaseInvalidCopyMode(model);
 
     return .{
         .previous = previous_location,
@@ -2682,7 +2786,7 @@ pub fn createTab(model: *Model, command: source_namespace.NewTab) !source_namesp
 /// ```zig
 /// const commit = try model.removeTab(command);
 /// ```
-pub fn removeTab(model: *Model, command: source_namespace.RemoveTab) !source_namespace.TabRemovalCommit {
+pub fn removeTab(model: *Model, command: RemoveTabType) !model_types.TabRemovalCommit {
     const workspace = model.workspace.workspace orelse
         return model.staleTabRemoval(command.location, .workspace);
     if (!std.meta.eql(workspace, command.location.workspace)) {
@@ -2703,7 +2807,7 @@ pub fn removeTab(model: *Model, command: source_namespace.RemoveTab) !source_nam
     const was_active = model.workspace.active_index ==
         model.workspace.indexOf(command.location.tab_id).?;
     const active_tab_revision_before = model.active_tab_revision;
-    var panes: source_namespace.RemovedPanes = .{};
+    var panes: RemovedPanesType = .{};
     var iterator = closing.model.paneIterator();
     while (iterator.next()) |pane| {
         panes.append(pane.id);
@@ -2715,7 +2819,7 @@ pub fn removeTab(model: *Model, command: source_namespace.RemoveTab) !source_nam
     if (was_active) {
         model.active_tab_revision +%= 1;
     }
-    source_namespace.releaseInvalidCopyMode(model);
+    model_namespace.releaseInvalidCopyMode(model);
 
     return .{ .removed = .{
         .removed = command.location,
@@ -2736,7 +2840,7 @@ pub fn removeTab(model: *Model, command: source_namespace.RemoveTab) !source_nam
     } };
 }
 
-fn staleTabRemoval(model: *const Model, location: source_namespace.schema.TabLocation, absence: source_namespace.TabRemovalAbsence) source_namespace.TabRemovalCommit {
+fn staleTabRemoval(model: *const Model, location: TabLocationType, absence: model_types.TabRemovalAbsence) model_types.TabRemovalCommit {
     return .{ .stale = .{
         .location = location,
         .absence = absence,
@@ -2753,7 +2857,7 @@ fn staleTabRemoval(model: *const Model, location: source_namespace.schema.TabLoc
 /// ```zig
 /// const selection = try model.selectTab(.{ .position = 1 }) orelse return;
 /// ```
-pub fn selectTab(model: *Model, target: source_namespace.TabSelectionTarget) !?source_namespace.TabSelection {
+pub fn selectTab(model: *Model, target: model_types.TabSelectionTarget) !?TabSelectionType {
     const previous = model.workspace.activeConst() orelse return error.NoActiveTab;
 
     const changed = switch (target) {
@@ -2771,7 +2875,7 @@ pub fn selectTab(model: *Model, target: source_namespace.TabSelectionTarget) !?s
 
     const selected = model.workspace.activeConst().?;
     model.active_tab_revision +%= 1;
-    source_namespace.releaseInvalidCopyMode(model);
+    model_namespace.releaseInvalidCopyMode(model);
 
     return .{
         .previous = previous.location,

@@ -1,4 +1,6 @@
-const source_namespace = @import("acknowledge_agent.zig");
+const RuntimeMetricsType = @import("../../observability/RuntimeMetrics.zig");
+const AcknowledgeAgentType = @import("telar-core").AcknowledgeAgent;
+
 /// Builds a statically dispatched acknowledgement controller.
 ///
 /// ```zig
@@ -9,7 +11,7 @@ pub fn Type(comptime Executor: type) type {
     return struct {
         const Self = @This();
 
-        metrics: *source_namespace.RuntimeMetrics,
+        metrics: *RuntimeMetricsType,
         executor: Executor,
 
         /// Creates one controller bound to the runtime metrics and handler.
@@ -17,7 +19,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// var controller = AcknowledgeController.init(&metrics, &handler);
         /// ```
-        pub fn init(metrics: *source_namespace.RuntimeMetrics, executor: Executor) Self {
+        pub fn init(metrics: *RuntimeMetricsType, executor: Executor) Self {
             return .{ .metrics = metrics, .executor = executor };
         }
 
@@ -27,7 +29,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// controller.acknowledgeAgent(acknowledgement, now_ms);
         /// ```
-        pub inline fn acknowledgeAgent(controller: *Self, acknowledgement: source_namespace.schema.AcknowledgeAgent, now_ms: i64) void {
+        pub inline fn acknowledgeAgent(controller: *Self, acknowledgement: AcknowledgeAgentType, now_ms: i64) void {
             const result = controller.executor.execute(.{
                 .pane_id = acknowledgement.pane_id,
                 .pane_generation = acknowledgement.pane_generation,

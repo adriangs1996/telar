@@ -1,8 +1,10 @@
-const ActionRoutingHandler = @This();
-const Effects = @import("ActionRoutingEffects.zig");
-const source_namespace = @import("action_routing.zig");
+const ActionRoutingEffects = @import("ActionRoutingEffects.zig");
+const action = @import("../../input/action.zig");
+const action_routing = @import("action_routing.zig");
 const lua_action = @import("lua_action.zig");
-effects: Effects,
+const ActionRoutingHandler = @This();
+
+effects: ActionRoutingEffects,
 
 /// Routes one configured action without exposing source-specific policy to
 /// the host input entrypoint.
@@ -10,7 +12,7 @@ effects: Effects,
 /// ```zig
 /// const control = try handler.execute(action, authority);
 /// ```
-pub fn execute(self: *ActionRoutingHandler, value: source_namespace.Action, authority: source_namespace.Authority) !source_namespace.Control {
+pub fn execute(self: *ActionRoutingHandler, value: action.Action, authority: action_routing.Authority) !action_routing.Control {
     const available = switch (authority) {
         .suppressed => return .continue_routing,
         .available => |state| state,
@@ -38,7 +40,7 @@ pub fn execute(self: *ActionRoutingHandler, value: source_namespace.Action, auth
     };
 }
 
-fn executeLua(handler: *ActionRoutingHandler, command: lua_action.Command, copy_mode_active: bool) !source_namespace.Control {
+fn executeLua(handler: *ActionRoutingHandler, command: lua_action.Command, copy_mode_active: bool) !action_routing.Control {
     const outcome = try handler.effects.lua(handler.effects.context, command);
 
     switch (outcome) {

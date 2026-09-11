@@ -1,5 +1,7 @@
 //! Bounded semantic state for active HTTP/2 streams.
 
+const ResponseType = @import("Response.zig");
+const TrackerType = @import("Tracker.zig");
 const std = @import("std");
 
 pub const max_tracked_streams = 128;
@@ -9,7 +11,7 @@ pub const Response = @import("Response.zig");
 pub const Tracker = @import("Tracker.zig");
 
 test "request tracking is idempotent bounded and reusable" {
-    var tracker: Tracker = .{};
+    var tracker: TrackerType = .{};
 
     try std.testing.expect(!tracker.startRequest(0));
 
@@ -25,8 +27,8 @@ test "request tracking is idempotent bounded and reusable" {
 }
 
 test "response tracking updates metadata and releases capacity" {
-    var tracker: Tracker = .{};
-    const first: Response = .{ .stream_id = 1, .status_code = 200, .sse_body = true };
+    var tracker: TrackerType = .{};
+    const first: ResponseType = .{ .stream_id = 1, .status_code = 200, .sse_body = true };
 
     try std.testing.expect(!tracker.hasActiveResponses());
     try std.testing.expect(tracker.setResponse(first));
@@ -48,7 +50,7 @@ test "response tracking updates metadata and releases capacity" {
 }
 
 test "response capacity exhaustion does not replace active streams" {
-    var tracker: Tracker = .{};
+    var tracker: TrackerType = .{};
 
     for (0..max_tracked_streams) |index| {
         try std.testing.expect(tracker.setResponse(.{

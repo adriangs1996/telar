@@ -1,12 +1,13 @@
-const SourceContext = @This();
-const workspace_mod = @import("../../workspace/root.zig");
-const source_namespace = @import("tab_snapshot_test.zig");
-const tab_snapshot_query = @import("../application/queries/tab_snapshot.zig");
+const RepositoryType = @import("../../workspace/Repository.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const SourceType = @import("../application/queries/Source.zig");
 const std = @import("std");
-workspaces: *workspace_mod.Repository,
-live_location: source_namespace.schema.TabLocation,
+const SourceContext = @This();
 
-pub fn source(context: *SourceContext) tab_snapshot_query.Source {
+workspaces: *RepositoryType,
+live_location: TabLocationType,
+
+pub fn source(context: *SourceContext) SourceType {
     return .{
         .context = context,
         .contains_tab = containsTab,
@@ -14,12 +15,12 @@ pub fn source(context: *SourceContext) tab_snapshot_query.Source {
     };
 }
 
-fn containsTab(context: *anyopaque, location: source_namespace.schema.TabLocation) bool {
+fn containsTab(context: *anyopaque, location: TabLocationType) bool {
     const source_context: *SourceContext = @ptrCast(@alignCast(context));
     return source_context.workspaces.reader().contains(location);
 }
 
-fn runningPanes(context: *anyopaque, location: source_namespace.schema.TabLocation) u16 {
+fn runningPanes(context: *anyopaque, location: TabLocationType) u16 {
     const source_context: *SourceContext = @ptrCast(@alignCast(context));
     return if (std.meta.eql(source_context.live_location, location)) 1 else 0;
 }

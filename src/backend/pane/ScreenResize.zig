@@ -1,8 +1,9 @@
-const ScreenResize = @This();
 const std = @import("std");
-const core = @import("telar-core");
+const BufferType = @import("telar-core").Buffer;
+const ScreenResize = @This();
+
 gpa: std.mem.Allocator,
-screen: *core.ui.Buffer,
+screen: *BufferType,
 damaged_rows: *[]bool,
 cols: u16,
 rows: u16,

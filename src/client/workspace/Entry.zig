@@ -1,11 +1,14 @@
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const workspace_list = @import("workspace_list.zig");
+const max_git_branch_bytes_module = @import("telar-core").max_git_branch_bytes;
 const Entry = @This();
-const source_namespace = @import("workspace_list.zig");
-workspace: source_namespace.schema.WorkspaceId,
-name: [source_namespace.max_name_bytes]u8,
+
+workspace: WorkspaceIdType,
+name: [workspace_list.max_name_bytes]u8,
 name_len: u8,
 path_offset: u32,
 path_len: u32,
 tab_count: u16,
-branch: [source_namespace.schema.max_git_branch_bytes]u8 = undefined,
+branch: [max_git_branch_bytes_module]u8 = undefined,
 branch_len: u8 = 0,
 dirty: bool = false,

@@ -1,14 +1,16 @@
+const main = @import("main.zig");
+const parseKey_module = @import("telar-client").parseKey;
+const ControlType = @import("telar-client").Control;
 const KeybindContext = @This();
-const source_namespace = @import("main.zig");
-const frontend = @import("telar-frontend");
-router: source_namespace.KeybindRouter,
+
+router: main.KeybindRouter,
 checksum: u64 = 0,
 
-fn init() !KeybindContext {
-    const ctrl_b = try frontend.keybind.parseKey("ctrl+b");
-    const d = try frontend.keybind.parseKey("d");
-    const p = try frontend.keybind.parseKey("p");
-    var bindings: [2]source_namespace.KeybindBinding = undefined;
+pub fn init() !KeybindContext {
+    const ctrl_b = try parseKey_module("ctrl+b");
+    const d = try parseKey_module("d");
+    const p = try parseKey_module("p");
+    var bindings: [2]main.KeybindBinding = undefined;
     bindings[0] = try .init(&.{ ctrl_b, d }, .detach);
     bindings[1] = try .init(&.{ ctrl_b, p }, .palette);
     return .{ .router = try .init(&bindings) };
@@ -21,7 +23,7 @@ pub fn forward(context: *KeybindContext, bytes: []const u8) !void {
     }
 }
 
-pub fn action(context: *KeybindContext, action_value: source_namespace.KeybindAction) !frontend.keybind.Control {
+pub fn action(context: *KeybindContext, action_value: main.KeybindAction) !ControlType {
     context.checksum +%= @intFromEnum(action_value) + 1;
     return .continue_routing;
 }

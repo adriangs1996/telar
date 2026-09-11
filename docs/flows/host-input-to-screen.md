@@ -86,8 +86,9 @@ and `PresentationIngress`. The latter contains the disposable view-interaction
 and visible input-routing revisions. The presenter schedules a paced draw when
 any observed value changed.
 
-The routing implementation is in `src/client/input/keybind.zig`. The TUI adapter
-in `src/frontend/input/keybind.zig` supplies `term.parse`; `Router.feed` buffers
+The routing implementation is in `src/client/input/GenericRouter.zig`. The TUI
+factory in `src/frontend/input/GenericRouter.zig` supplies `term.parse`; its
+specialized router's `feed` method buffers
 split terminal sequences. Decoder-free adapters call `routeEvent` with semantic
 keys. Both paths use the same compiled keymap. A fixed physical-key lease
 keeps repeat and release with the press's binding or application owner. The
@@ -113,7 +114,7 @@ waits for the old configuration's deadline.
 
 A complete configured sequence returns `.action` from `Router.routeKey`.
 `Router.drain` calls `InputHandler.action` in
-`src/frontend/client/resources/input_handler.zig`; it does not forward the matched bytes.
+`src/frontend/client/resources/InputHandler.zig`; it does not forward the matched bytes.
 
 `InputHandler.action` delegates the matched value to `action_routing`. The
 adapter snapshots prompt and copy-mode authority, then
@@ -175,7 +176,7 @@ failure and `Ctrl+V` follow-up policy.
 
 `PaneInputHandler` resolves an attached target through
 `ClientModel.planPaneInput` and calls `input.encoding.encodeKey` from
-`src/client/input/encoding.zig` for semantic keys. Encoding uses the pane's most
+`src/client/input/encoding_support.zig` for semantic keys. Encoding uses the pane's most
 recently applied cursor/application, modify-key and bracketed-paste modes, even
 while an older presentation is still in flight. Replayed
 byte slices have already passed parser and binding classification before they
@@ -335,9 +336,9 @@ which calls, in order:
 2. `Outbox.pushInput` inside `runtime_transport.State`;
 3. `runtime_transport.pump`;
 4. `Outbox.encodeNext`;
-5. `schema.encodePaneInput` in `src/core/schema/root.zig`;
+5. `encodePaneInput` in `src/core/schema/messages/pane.zig`;
 6. `core.transport.SocketChannel.send` in
-   `src/core/transport/root.zig`.
+   `src/core/transport/transport.zig`.
 
 The outbox is bounded, owns copied input bytes and coalesces adjacent input for
 the same pane. Only one socket send is in flight. When the viewport changes,
@@ -395,7 +396,7 @@ both validation and mutation without permitting escape completion, scrolling,
 decompression of retained pages, or grapheme cleanup. Tests reject partial
 sequences at every byte and exercise admitted writes with allocation disabled.
 
-`ingestPane` calls `Pane.ingest` in `src/backend/pane/root.zig`. The pane feeds
+`ingestPane` calls `Pane.ingest` in `src/backend/pane/Pane.zig`. The pane feeds
 the bytes to its `vt.Terminal`, snapshots child input modes and marks its cell
 projection dirty. VT is the only component that interprets child escape
 sequences.
@@ -449,7 +450,7 @@ captures an immutable `presentation_projection` and calls
    immutable active-tab model into the screen back buffer;
 2. `client.View.render` composes Telar chrome;
 3. `flushScreen` calls `presentation.Screen.flush` in
-   `src/frontend/presentation/screen.zig`;
+   `src/frontend/presentation/screen_support.zig`;
 4. the screen emits the minimal terminal diff and flushes the host writer;
 5. the lifecycle commits the exact presented pane damage;
 6. the client enqueues `.frame_ack` only after presentation.
@@ -473,7 +474,7 @@ captures an immutable `presentation_projection` and calls
 - `mouse pointer distinguishes clickable chrome panes and sidebar resizing` in
   `src/frontend/client/presentation/view.zig` proves the semantic hover mapping.
 - `mouse pointer changes fold until a shape or recovery changes` in
-  `src/frontend/presentation/screen.zig` proves OSC 22 coalescence and recovery;
+  `src/frontend/presentation/screen_support.zig` proves OSC 22 coalescence and recovery;
   the platform sequence test proves exit restores the default before leaving
   the alternate screen.
 - `host pointer shape follows semantic hover through paced presentation` in
@@ -514,7 +515,7 @@ captures an immutable `presentation_projection` and calls
   `src/transport_integration_test.zig` proves that a real child can enable
   Kitty flags 7, switch to modifyOtherKeys and return to legacy mode while
   receiving the corresponding bytes.
-- The `inline output` tests in `src/backend/pane/root.zig` prove admission bounds,
+- The `inline output` tests in `src/backend/pane/pane_namespace.zig` prove admission bounds,
   allocation-free simple runs and fallback for parser continuations, wrapping,
   styles, charsets, hyperlinks, graphemes and wide cells.
 - `PTY input remains live while the bounded ingest actor is occupied` in

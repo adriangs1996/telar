@@ -12,13 +12,13 @@
 //! eight regular files under the temporary directory, created once and
 //! rewritten in place, announced with `t=f`.
 
+const Options = @import("Options.zig");
 const std = @import("std");
+const FrameFile = @import("FrameFile.zig");
 
 const slots = 8;
 
 pub const Transport = enum { shm, file };
-
-const Options = @import("Options.zig");
 
 fn parse(args: []const [:0]const u8) !Options {
     var options: Options = .{};
@@ -99,8 +99,6 @@ fn publish(name: [:0]const u8, pixels: []const u8) !void {
     defer std.posix.munmap(map);
     @memcpy(map[0..pixels.len], pixels);
 }
-
-const FrameFile = @import("FrameFile.zig");
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;

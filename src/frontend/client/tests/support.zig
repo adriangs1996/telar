@@ -1,74 +1,36 @@
 //! Substituted platform resources shared by client integration tests.
 
-const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("telar-client").agents;
-const attachments = @import("../../attachments/root.zig");
-const graphics = @import("../../graphics/root.zig");
-const input_capability = @import("../../input/root.zig");
-const lua_config = @import("../../config/root.zig");
-const notifications = @import("telar-client").notifications;
-const platform = @import("../../platform/root.zig");
-const plugin_broker = @import("../../plugins/root.zig");
-const presentation = @import("../../presentation/root.zig");
-const sound_capability = @import("../../sound/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const keybind = input_capability.keybind;
-const kitty = graphics.kitty;
-
-pub const Io = std.Io;
-pub const File = Io.File;
-pub const schema = core.schema;
-const term = presentation.screen;
-
+const HeapType = @import("telar-core").Heap;
+const ResourcesType = @import("../entrypoints/Resources.zig");
 const Client = @import("../Client.zig");
-const InputHandler = @import("../resources/InputHandler.zig");
-const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
-const client_actions = @import("../controllers/input/actions.zig");
-const agent_navigation = @import("../controllers/agents/agent_navigation.zig");
-const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
-const session_application = @import("telar-client").application.session;
-const client_events = @import("../entrypoints/events.zig");
-const client_startup = @import("../controllers/session/client_startup.zig");
-const client_outbox = @import("telar-client").connection.outbox;
-const client_model = @import("telar-client").model;
-const client_telemetry = @import("../resources/telemetry.zig");
-const clipboard_images = @import("../controllers/host/clipboard_images.zig");
-const client_clock = @import("telar-client").resources.clock;
-const bar_updates = @import("../controllers/configuration/bar_updates.zig");
-const config_reload_worker = @import("../resources/config_reload.zig");
-const config_reloads = @import("../controllers/configuration/config_reloads.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const VersionType = @import("telar-client").Version;
+const std = @import("std");
+const AgentStatusType = @import("telar-core").AgentStatus;
+const encodeAgentSnapshot_module = @import("telar-core").encodeAgentSnapshot;
+const TestHarness = @import("TestHarness.zig");
+const AdoptionType = @import("../resources/Adoption.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
+const GenerationType = @import("../../config/Generation.zig");
+const RegistryType = @import("../../plugins/Registry.zig");
+const TrustStoreType = @import("telar-core").TrustStore;
 const host_inputs = @import("../controllers/input/host_inputs.zig");
-const host_resizes = @import("../controllers/host/host_resizes.zig");
-const name_prompts = @import("../controllers/input/name_prompts.zig");
-const notification_flow = @import("../controllers/notifications/notifications.zig");
-const pane_clipboards = @import("../controllers/panes/pane_clipboards.zig");
-const pane_closures = @import("../controllers/panes/pane_closures.zig");
-const pane_focus = @import("../controllers/panes/pane_focus.zig");
-const pane_focus_reports = @import("../controllers/panes/pane_focus_reports.zig");
-const pane_geometry = @import("../controllers/panes/pane_geometry.zig");
-const pane_openings = @import("../controllers/panes/pane_openings.zig");
-const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const plugin_actions = @import("../controllers/configuration/plugin_actions.zig");
-const request_lifecycle = @import("../connection/request_lifecycle.zig");
-const resync_requirements = @import("../controllers/session/resync_requirements.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
-const server_messages = @import("../entrypoints/runtime_messages.zig");
-const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
-const sidebar_projection = @import("../controllers/notifications/sidebar_projection.zig");
-const tab_attachments = @import("../controllers/tabs/tab_attachments.zig");
-const tab_closures = @import("../controllers/tabs/tab_closures.zig");
-const tab_creations = @import("../controllers/tabs/tab_creations.zig");
-const tab_moves = @import("../controllers/tabs/tab_moves.zig");
-const tab_renames = @import("../controllers/tabs/tab_renames.zig");
-const tab_snapshots = @import("../controllers/tabs/tab_snapshots.zig");
-const workspace_handoffs = @import("../controllers/workspaces/workspace_handoffs.zig");
-const workspace_snapshots = @import("../controllers/workspaces/workspace_snapshots.zig");
-const InputChunk = Client.InputChunk;
-pub const initial_request_id = request_lifecycle.initial_request_id;
+const ActionType = @import("telar-client").Action;
+const config_reloads = @import("../controllers/configuration/config_reloads.zig");
+const CallbackContextType = @import("telar-client").CallbackContext;
+const TestingPlugin = @import("TestingPlugin.zig");
+const parseManifest_module = @import("telar-core").parseManifest;
+const DigestType = @import("telar-core").Digest;
+const stableId_module = @import("telar-core").stableId;
+const TargetType = @import("telar-client").AttachmentTarget;
+const AgentProviderType = @import("telar-core").AgentProvider;
+const AgentInputType = @import("telar-client").AgentInput;
+const builtin_table_module = @import("telar-core").builtin_table;
+const active_pane_resources = @import("../controllers/panes/active_pane_resources.zig");
+const ClipboardCaptureType = @import("telar-client").ClipboardCapture;
+const CaptureType = @import("telar-client").Capture;
 
-pub fn clientEventResourcesForTest(heap: *const core.diagnostics.Heap) client_events.Resources {
+pub fn clientEventResourcesForTest(heap: *const HeapType) ResourcesType {
     return .{
         .tty = undefined,
         .resize_watcher = undefined,
@@ -76,13 +38,13 @@ pub fn clientEventResourcesForTest(heap: *const core.diagnostics.Heap) client_ev
     };
 }
 
-pub fn reportedPaneId(client: *const Client) ?schema.PaneId {
+pub fn reportedPaneId(client: *const Client) ?PaneIdType {
     const reported = client.model.reportedPaneFocus() orelse return null;
 
     return reported.pane_id;
 }
 
-pub fn expectNonPromptVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
+pub fn expectNonPromptVersionEqual(expected: VersionType, actual: VersionType) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -107,7 +69,7 @@ pub fn expectNonPromptVersionEqual(expected: client_model.Version, actual: clien
     try std.testing.expectEqual(expected.viewport, actual.viewport);
 }
 
-pub fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
+pub fn expectNonCopyVersionEqual(expected: VersionType, actual: VersionType) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -132,7 +94,7 @@ pub fn expectNonCopyVersionEqual(expected: client_model.Version, actual: client_
     try std.testing.expectEqual(expected.viewport, actual.viewport);
 }
 
-pub fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
+pub fn expectNonCopyOrViewportVersionEqual(expected: VersionType, actual: VersionType) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -156,7 +118,7 @@ pub fn expectNonCopyOrViewportVersionEqual(expected: client_model.Version, actua
     try std.testing.expectEqual(expected.prompt, actual.prompt);
 }
 
-pub fn expectNonViewportVersionEqual(expected: client_model.Version, actual: client_model.Version) !void {
+pub fn expectNonViewportVersionEqual(expected: VersionType, actual: VersionType) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -181,7 +143,7 @@ pub fn expectNonViewportVersionEqual(expected: client_model.Version, actual: cli
     try std.testing.expectEqual(expected.copy, actual.copy);
 }
 
-pub fn expectOnlyNotificationVersionChanged(expected: client_model.Version, actual: client_model.Version) !void {
+pub fn expectOnlyNotificationVersionChanged(expected: VersionType, actual: VersionType) !void {
     try std.testing.expect(actual.notifications > expected.notifications);
 
     var normalized = actual;
@@ -194,10 +156,8 @@ pub fn expectOnlyNotificationVersionChanged(expected: client_model.Version, actu
 // socketpair instead of the runtime socket, a pipe instead of the tty's read
 // handle, and a discarding writer instead of the host terminal.
 
-pub const TestHarness = @import("TestHarness.zig");
-
-pub fn encodeTestingAgentSnapshot(buffer: []u8, revision: u64, status: schema.AgentStatus) ![]const u8 {
-    return schema.encodeAgentSnapshot(buffer, .{
+pub fn encodeTestingAgentSnapshot(buffer: []u8, revision: u64, status: AgentStatusType) ![]const u8 {
+    return encodeAgentSnapshot_module(buffer, .{
         .revision = revision,
         .entries = &.{.{
             .pane_id = TestHarness.bootstrap_pane,
@@ -225,7 +185,7 @@ pub fn encodeTestingAgentSnapshot(buffer: []u8, revision: u64, status: schema.Ag
     });
 }
 
-pub fn testingConfigAdoption(number: u64, changed: bool) !config_reloads.Adoption {
+pub fn testingConfigAdoption(number: u64, changed: bool) !AdoptionType {
     const source = if (changed)
         \\local telar = require("telar")
         \\local config = telar.config({ api_version = 2 })
@@ -247,9 +207,9 @@ pub fn testingConfigAdoption(number: u64, changed: bool) !config_reloads.Adoptio
     return testingConfigAdoptionSource(number, source);
 }
 
-pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !config_reloads.Adoption {
-    var diagnostic: lua_config.Diagnostic = .{};
-    const generation = try lua_config.Generation.loadSource(.{
+pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !AdoptionType {
+    var diagnostic: DiagnosticType = .{};
+    const generation = try GenerationType.loadSource(.{
         .gpa = std.testing.allocator,
         .io = std.testing.io,
         .diagnostic = &diagnostic,
@@ -259,10 +219,10 @@ pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !config_relo
         .number = number,
     });
     errdefer generation.deinit();
-    const registry = try std.testing.allocator.create(plugin_broker.Registry);
+    const registry = try std.testing.allocator.create(RegistryType);
     errdefer std.testing.allocator.destroy(registry);
     registry.* = .{};
-    const trust_store = try std.testing.allocator.create(core.plugin.TrustStore);
+    const trust_store = try std.testing.allocator.create(TrustStoreType);
     errdefer std.testing.allocator.destroy(trust_store);
     trust_store.* = .{};
     const router = try host_inputs.buildRouter(.{
@@ -281,7 +241,7 @@ pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !config_relo
     };
 }
 
-pub fn installTestingLuaBinding(client: *Client, source: []const u8) !input_capability.action.Action {
+pub fn installTestingLuaBinding(client: *Client, source: []const u8) !ActionType {
     const adoption = try testingConfigAdoptionSource(1, source);
     std.debug.assert(adoption.generation.snapshot.binding_count == 1);
     const configured = adoption.generation.snapshot.bindings[0].action;
@@ -290,9 +250,7 @@ pub fn installTestingLuaBinding(client: *Client, source: []const u8) !input_capa
     return configured;
 }
 
-pub const TestingPlugin = @import("TestingPlugin.zig");
-
-pub const testing_plugin_context: lua_config.CallbackContext = .{
+pub const testing_plugin_context: CallbackContextType = .{
     .sidebar_visible = true,
     .tab_count = 1,
     .active_tab_index = 0,
@@ -302,12 +260,12 @@ pub const testing_plugin_context: lua_config.CallbackContext = .{
 
 pub fn installTestingPlugin(client: *Client) !TestingPlugin {
     std.debug.assert(client.plugin_registry == null);
-    const manifest = try core.plugin.parseManifest(
+    const manifest = try parseManifest_module(
         client.gpa,
         "{\"api_version\":1,\"id\":\"dev.telar.client-test\",\"version\":\"1\",\"entry\":\"plugin.lua\",\"source\":{\"url\":\"local:test\",\"revision\":\"one\"},\"actions\":[\"run\"],\"capabilities\":[\"runtime.control\"]}",
     );
-    const digest: core.plugin.Digest = @splat(7);
-    const registry = try client.gpa.create(plugin_broker.Registry);
+    const digest: DigestType = @splat(7);
+    const registry = try client.gpa.create(RegistryType);
     registry.* = .{};
     registry.packages[0] = .{
         .manifest = manifest,
@@ -320,25 +278,25 @@ pub fn installTestingPlugin(client: *Client) !TestingPlugin {
 
     return .{
         .action = .{
-            .plugin = core.plugin.stableId(manifest.id()),
-            .action = core.plugin.stableId("run"),
+            .plugin = stableId_module(manifest.id()),
+            .action = stableId_module("run"),
         },
         .digest = digest,
     };
 }
 
-pub fn installTestingAttachmentTarget(client: *Client, generation: u64) !attachments.Target {
+pub fn installTestingAttachmentTarget(client: *Client, generation: u64) !TargetType {
     return installTestingAttachmentProvider(client, generation, .codex);
 }
 
-pub fn installTestingAttachmentProvider(client: *Client, generation: u64, provider: schema.AgentProvider) !attachments.Target {
-    const target: attachments.Target = .{
+pub fn installTestingAttachmentProvider(client: *Client, generation: u64, provider: AgentProviderType) !TargetType {
+    const target: TargetType = .{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = generation,
     };
     _ = try client.model.reconcileAgentSnapshot(.{
         .revision = generation,
-        .agents = &.{agents.AgentInput{
+        .agents = &.{AgentInputType{
             .key = .{
                 .pane_id = target.pane_id,
                 .pane_generation = target.pane_generation,
@@ -346,7 +304,7 @@ pub fn installTestingAttachmentProvider(client: *Client, generation: u64, provid
             .location = TestHarness.bootstrap_location,
             .pane_index = 1,
             .provider = provider,
-            .attachments = core.agent_manifest.builtin_table.attachments(provider),
+            .attachments = builtin_table_module.attachments(provider),
             .status = .working,
         }},
     });
@@ -355,8 +313,8 @@ pub fn installTestingAttachmentProvider(client: *Client, generation: u64, provid
     return target;
 }
 
-pub fn testingClipboardCapture(client: *Client, execution: client_model.ClipboardCapture, bytes: []const u8) !*attachments.Capture {
-    const capture = try client.gpa.create(attachments.Capture);
+pub fn testingClipboardCapture(client: *Client, execution: ClipboardCaptureType, bytes: []const u8) !*CaptureType {
+    const capture = try client.gpa.create(CaptureType);
     errdefer client.gpa.destroy(capture);
     capture.* = .{
         .request = .{

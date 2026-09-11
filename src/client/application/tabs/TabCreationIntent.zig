@@ -1,7 +1,9 @@
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const TabCreationIntent = @This();
-const source_namespace = @import("create_tab.zig");
-workspace: source_namespace.schema.WorkspaceLocation,
-cwd_source: source_namespace.schema.PaneId,
+
+workspace: WorkspaceLocationType,
+cwd_source: PaneIdType,
 /// Borrowed only for the synchronous send callback.
 label: []const u8,
 arguments: []const []const u8 = &.{},

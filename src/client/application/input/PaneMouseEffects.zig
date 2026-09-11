@@ -1,4 +1,5 @@
+const pane_mouse = @import("pane_mouse.zig");
 const Effects = @This();
-const source_namespace = @import("pane_mouse.zig");
+
 context: *anyopaque,
-apply: *const fn (*anyopaque, source_namespace.Effect) anyerror!void,
+apply: *const fn (*anyopaque, pane_mouse.Effect) anyerror!void,

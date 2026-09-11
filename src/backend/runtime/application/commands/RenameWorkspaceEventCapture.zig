@@ -1,17 +1,19 @@
-const EventCapture = @This();
-const workspace_mod = @import("../../../workspace/root.zig");
-const EventPublisher = @import("RenameWorkspaceEventPublisher.zig");
+const ReaderType = @import("../../../workspace/Reader.zig");
+const WorkspaceRenamedType = @import("../../../workspace/WorkspaceRenamed.zig");
+const RenameWorkspaceEventPublisher = @import("RenameWorkspaceEventPublisher.zig");
 const std = @import("std");
-reader: workspace_mod.Reader,
+const EventCapture = @This();
+
+reader: ReaderType,
 count: usize = 0,
-last: ?workspace_mod.WorkspaceRenamed = null,
+last: ?WorkspaceRenamedType = null,
 observed_committed_state: bool = false,
 
-pub fn publisher(capture: *EventCapture) EventPublisher {
+pub fn publisher(capture: *EventCapture) RenameWorkspaceEventPublisher {
     return .{ .context = capture, .publish = publish };
 }
 
-fn publish(context: *anyopaque, event: workspace_mod.WorkspaceRenamed) void {
+fn publish(context: *anyopaque, event: WorkspaceRenamedType) void {
     const capture: *EventCapture = @ptrCast(@alignCast(context));
     const committed_name = capture.reader.workspaceName(event.location) orelse return;
 

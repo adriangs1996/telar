@@ -1,24 +1,18 @@
 //! Protocol controller for one client's pane viewport. Accepted requests have
 //! no direct response; a changed viewport schedules a full cell snapshot.
 
+const GenericPaneViewportController = @import("GenericPaneViewportController.zig").Type;
+const PaneViewportStubExecutor = @import("PaneViewportStubExecutor.zig");
+const pane_module = @import("telar-core").pane;
+const RuntimeMetrics = @import("../../observability/RuntimeMetrics.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const pane_viewport_commands = @import("../../application/commands/pane_viewport.zig");
-const telemetry_mod = @import("../../observability/root.zig").telemetry;
 
-pub const schema = core.schema;
-pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-
-pub const Controller = @import("GenericPaneViewportController.zig").Type;
-
-const StubExecutor = @import("PaneViewportStubExecutor.zig");
-
-const TestController = Controller(*StubExecutor);
+const TestController = GenericPaneViewportController(*PaneViewportStubExecutor);
 
 test "Controller maps the exact pane viewport" {
-    const pane_id = try schema.id.pane(7);
+    const pane_id = try pane_module(7);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var stub: StubExecutor = .{};
+    var stub: PaneViewportStubExecutor = .{};
     var controller = TestController.init(&metrics, &stub);
 
     try controller.setPaneViewport(.{ .pane_id = pane_id, .offset = 41 });
@@ -31,11 +25,11 @@ test "Controller maps the exact pane viewport" {
 
 test "Controller does not count an unchanged viewport as stale" {
     var metrics: RuntimeMetrics = .{ .started_ns = 0, .stale_client_messages = 4 };
-    var stub: StubExecutor = .{ .result = .unchanged };
+    var stub: PaneViewportStubExecutor = .{ .result = .unchanged };
     var controller = TestController.init(&metrics, &stub);
 
     try controller.setPaneViewport(.{
-        .pane_id = try schema.id.pane(7),
+        .pane_id = try pane_module(7),
         .offset = 0,
     });
 
@@ -45,11 +39,11 @@ test "Controller does not count an unchanged viewport as stale" {
 
 test "Controller counts a viewport for a missing attachment as stale" {
     var metrics: RuntimeMetrics = .{ .started_ns = 0, .stale_client_messages = 4 };
-    var stub: StubExecutor = .{ .result = .pane_not_attached };
+    var stub: PaneViewportStubExecutor = .{ .result = .pane_not_attached };
     var controller = TestController.init(&metrics, &stub);
 
     try controller.setPaneViewport(.{
-        .pane_id = try schema.id.pane(7),
+        .pane_id = try pane_module(7),
         .offset = 0,
     });
 
@@ -59,11 +53,11 @@ test "Controller counts a viewport for a missing attachment as stale" {
 
 test "Controller propagates viewport infrastructure failures without stale accounting" {
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var stub: StubExecutor = .{ .failure = error.OutOfMemory };
+    var stub: PaneViewportStubExecutor = .{ .failure = error.OutOfMemory };
     var controller = TestController.init(&metrics, &stub);
 
     try std.testing.expectError(error.OutOfMemory, controller.setPaneViewport(.{
-        .pane_id = try schema.id.pane(7),
+        .pane_id = try pane_module(7),
         .offset = 0,
     }));
 

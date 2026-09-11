@@ -1,18 +1,13 @@
 //! Single-flight host sampling with value-owned worker state.
+
+const GenericSystemMetricsCoordinator = @import("GenericSystemMetricsCoordinator.zig").Type;
+const SystemMetricsCoordinatorCapture = @import("SystemMetricsCoordinatorCapture.zig");
+const Fixture = @import("Fixture.zig");
 const std = @import("std");
-const system_metrics = @import("system_metrics.zig");
 
 pub const Resources = @import("Resources.zig");
 
-pub const RuntimePort = @import("GenericSystemMetricsCoordinatorRuntimePort.zig").Type;
-
-pub const Coordinator = @import("GenericSystemMetricsCoordinatorCoordinator.zig").Type;
-
-const Capture = @import("SystemMetricsCoordinatorCapture.zig");
-
-pub const TestCoordinator = Coordinator(Capture, .{ .rearm_tick = Capture.rearm, .schedule = Capture.schedule, .pump_clients = Capture.pump });
-
-const Fixture = @import("Fixture.zig");
+pub const TestCoordinator = GenericSystemMetricsCoordinator(SystemMetricsCoordinatorCapture, .{ .rearm_tick = SystemMetricsCoordinatorCapture.rearm, .schedule = SystemMetricsCoordinatorCapture.schedule, .pump_clients = SystemMetricsCoordinatorCapture.pump });
 
 test "blocked host sampling never queues another sample or pumps clients" {
     var fixture: Fixture = .{};

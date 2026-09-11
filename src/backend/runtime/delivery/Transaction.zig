@@ -1,4 +1,5 @@
+const delivery_namespace = @import("delivery_namespace.zig");
 const Transaction = @This();
-const source_namespace = @import("root.zig");
+
 ticket: u64,
-effect: source_namespace.Effect,
+effect: delivery_namespace.Effect,

@@ -1,12 +1,12 @@
-const InterceptOptions = @This();
-const source_namespace = @import("tls.zig");
 const std = @import("std");
-const ca = @import("ca.zig");
+const AuthorityType = @import("Authority.zig");
 const Roots = @import("Roots.zig");
-io: source_namespace.Io,
+const InterceptOptions = @This();
+
+io: std.Io,
 gpa: std.mem.Allocator,
-authority: *const ca.Authority,
+authority: *const AuthorityType,
 roots: *const Roots,
 host: []const u8,
-child: source_namespace.net.Stream,
-origin: source_namespace.net.Stream,
+child: std.Io.net.Stream,
+origin: std.Io.net.Stream,

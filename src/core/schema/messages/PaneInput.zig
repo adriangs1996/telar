@@ -1,4 +1,5 @@
+const id = @import("../id.zig");
 const PaneInput = @This();
-const source_namespace = @import("pane.zig");
-pane_id: source_namespace.PaneId,
+
+pane_id: id.PaneId,
 bytes: []const u8,

@@ -1,12 +1,10 @@
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const Entry = @import("Entry.zig");
+const PaneKeyType = @import("../pane/PaneKey.zig");
+const SessionTitleType = @import("SessionTitle.zig");
 const RestoredTitles = @This();
-const source_namespace = @import("restored_titles.zig");
-const types = @import("types.zig");
-const Entry = struct {
-    key: source_namespace.PaneKey,
-    title: source_namespace.SessionTitle,
-};
 
-slots: [types.max_records]?Entry = .{null} ** types.max_records,
+slots: [max_agent_snapshot_entries]?Entry = .{null} ** max_agent_snapshot_entries,
 
 /// Stores one title for a pane generation, replacing an earlier one for the
 /// same generation. Returns `false` when every slot is taken.
@@ -14,7 +12,7 @@ slots: [types.max_records]?Entry = .{null} ** types.max_records,
 /// ```zig
 /// _ = titles.put(pane.key(), title);
 /// ```
-pub fn put(titles: *RestoredTitles, key: source_namespace.PaneKey, title: source_namespace.SessionTitle) bool {
+pub fn put(titles: *RestoredTitles, key: PaneKeyType, title: SessionTitleType) bool {
     if (titles.indexOf(key)) |index| {
         titles.slots[index].?.title = title;
         return true;
@@ -37,14 +35,14 @@ pub fn put(titles: *RestoredTitles, key: source_namespace.PaneKey, title: source
 /// ```zig
 /// if (titles.take(identity.key)) |title| agent.restoreTitle(title);
 /// ```
-pub fn take(titles: *RestoredTitles, key: source_namespace.PaneKey) ?source_namespace.SessionTitle {
+pub fn take(titles: *RestoredTitles, key: PaneKeyType) ?SessionTitleType {
     const index = titles.indexOf(key) orelse return null;
     const title = titles.slots[index].?.title;
     titles.slots[index] = null;
     return title;
 }
 
-fn indexOf(titles: *const RestoredTitles, key: source_namespace.PaneKey) ?usize {
+fn indexOf(titles: *const RestoredTitles, key: PaneKeyType) ?usize {
     for (titles.slots, 0..) |slot, index| {
         const entry = slot orelse continue;
 

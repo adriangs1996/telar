@@ -4,24 +4,26 @@
 //! ClientModel caches the latest values. Rendering only formats what is
 //! already in memory, in fixed buffers, so the frame stays allocation free.
 
+const ContextType = @import("Context.zig");
+const RectType = @import("telar-core").Rect;
+const Metrics = @import("Metrics.zig");
+const StyleType = @import("telar-core").Style;
 const std = @import("std");
-const input = @import("../input/root.zig");
+const icons_module = @import("../ui/icons.zig");
+const measure_module = @import("telar-core").measure;
+const IconType = @import("telar-client").Icon;
+const Mode = @import("telar-client").Mode;
+const Hints = @import("telar-client").Hints;
+const PairInput = @import("PairInput.zig");
+const WriteInput = @import("WriteInput.zig");
+const KeyType = @import("telar-client").Key;
+const ColorType = @import("telar-core").Color;
+const BufferType = @import("telar-core").Buffer;
 const widget = @import("context_support.zig");
-const ui = @import("../ui/root.zig");
+const theme_support = @import("../ui/theme_support.zig");
+const parseKey_module = @import("telar-client").parseKey;
 
-const keybind = input.keybind;
-
-pub const Metrics = @import("Metrics.zig");
-
-pub const max_prefix_hints = @import("telar-client").input.hints.max_prefix_hints;
-
-pub const Hint = @import("telar-client").input.hints.Hint;
-
-pub const Hints = @import("telar-client").input.hints.Hints;
-
-pub const Mode = @import("telar-client").input.hints.Mode;
-
-pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
+pub fn render(context: *ContextType, area: RectType, metrics: ?Metrics) void {
     if (area.isEmpty()) {
         return;
     }
@@ -29,7 +31,7 @@ pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
     var x = area.x + 1;
     const background = context.palette.panel_bg;
 
-    const cpu_style: ui.Style = .{
+    const cpu_style: StyleType = .{
         .fg = cpuColor(context, values.cpu_percent),
         .bg = background,
     };
@@ -39,7 +41,7 @@ pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = cpu, .style = cpu_style });
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "  ", .style = .{ .bg = background } });
 
-    const memory_style: ui.Style = .{
+    const memory_style: StyleType = .{
         .fg = context.palette.mauve,
         .bg = background,
     };
@@ -54,11 +56,11 @@ pub fn render(context: *widget.Context, area: ui.Rect, metrics: ?Metrics) void {
     // Machines without a battery show nothing rather than a fake 0%.
     if (values.battery_percent) |battery| {
         x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "  ", .style = .{ .bg = background } });
-        const battery_style: ui.Style = .{
+        const battery_style: StyleType = .{
             .fg = if (battery < 20) context.palette.red else context.palette.green,
             .bg = background,
         };
-        x += context.drawIcon(.{ .area = area, .point = .{ .x = x, .y = area.y }, .icon = ui.icons.battery(battery), .style = battery_style });
+        x += context.drawIcon(.{ .area = area, .point = .{ .x = x, .y = area.y }, .icon = icons_module.battery(battery), .style = battery_style });
         var battery_buffer: [10]u8 = undefined;
         const text = std.fmt.bufPrint(&battery_buffer, "{d}%", .{battery}) catch return;
         _ = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = text, .style = battery_style });
@@ -74,21 +76,21 @@ pub fn desiredWidth(metrics: ?Metrics) u16 {
         values.memory_used_decigib / 10,
         values.memory_used_decigib % 10,
     }) catch return 0;
-    var width: u16 = 1 + iconWidth(.cpu) + ui.measure(cpu) + 2 + iconWidth(.memory) + ui.measure(memory);
+    var width: u16 = 1 + iconWidth(.cpu) + measure_module(cpu) + 2 + iconWidth(.memory) + measure_module(memory);
     if (values.battery_percent) |battery| {
         var battery_buffer: [10]u8 = undefined;
         const text = std.fmt.bufPrint(&battery_buffer, "{d}%", .{battery}) catch return width;
-        width +|= 2 + iconWidth(ui.icons.battery(battery)) + ui.measure(text);
+        width +|= 2 + iconWidth(icons_module.battery(battery)) + measure_module(text);
     }
 
     return width;
 }
 
-fn iconWidth(icon: ui.icons.Icon) u16 {
-    return @max(@as(u16, 1), ui.measure(icon.unicodeGlyph()));
+fn iconWidth(icon: IconType) u16 {
+    return @max(@as(u16, 1), measure_module(icon.unicodeGlyph()));
 }
 
-pub fn renderMode(context: *widget.Context, area: ui.Rect, mode: Mode) void {
+pub fn renderMode(context: *ContextType, area: RectType, mode: Mode) void {
     if (area.isEmpty() or mode == .normal) {
         return;
     }
@@ -100,7 +102,7 @@ pub fn renderMode(context: *widget.Context, area: ui.Rect, mode: Mode) void {
     }
 }
 
-fn renderPrefix(context: *widget.Context, area: ui.Rect, hints: *const Hints) void {
+fn renderPrefix(context: *ContextType, area: RectType, hints: *const Hints) void {
     var x = renderModeLabel(context, area, " PREFIX ");
     renderPair(context, .{ .area = area, .x = &x, .key = "Esc", .label = "cancel" });
     for (hints.slice()) |hint| {
@@ -109,7 +111,7 @@ fn renderPrefix(context: *widget.Context, area: ui.Rect, hints: *const Hints) vo
     }
 }
 
-fn renderCopy(context: *widget.Context, area: ui.Rect) void {
+fn renderCopy(context: *ContextType, area: RectType) void {
     var x = renderModeLabel(context, area, " COPY ");
     renderPair(context, .{ .area = area, .x = &x, .key = "h/j/k/l", .label = "move" });
     renderPair(context, .{ .area = area, .x = &x, .key = "w/b/e", .label = "word" });
@@ -121,7 +123,7 @@ fn renderCopy(context: *widget.Context, area: ui.Rect) void {
     renderPair(context, .{ .area = area, .x = &x, .key = "q/Esc", .label = "exit" });
 }
 
-fn renderModeLabel(context: *widget.Context, area: ui.Rect, label: []const u8) u16 {
+fn renderModeLabel(context: *ContextType, area: RectType, label: []const u8) u16 {
     return area.x + context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = label, .max_width = area.w, .style = .{
         .fg = context.palette.surface_dim,
         .bg = context.palette.accent,
@@ -129,11 +131,7 @@ fn renderModeLabel(context: *widget.Context, area: ui.Rect, label: []const u8) u
     } });
 }
 
-const PairInput = @import("PairInput.zig");
-
-const WriteInput = @import("WriteInput.zig");
-
-fn renderPair(context: *widget.Context, pair: PairInput) void {
+fn renderPair(context: *ContextType, pair: PairInput) void {
     const area = pair.area;
     const x = pair.x;
 
@@ -161,7 +159,7 @@ fn renderPair(context: *widget.Context, pair: PairInput) void {
     write(context, .{ .area = area, .x = x, .text = " ", .style = .{ .bg = context.palette.panel_bg } });
 }
 
-fn write(context: *widget.Context, input_write: WriteInput) void {
+fn write(context: *ContextType, input_write: WriteInput) void {
     const remaining = input_write.area.x + input_write.area.w -| input_write.x.*;
     if (remaining == 0) {
         return;
@@ -174,7 +172,7 @@ fn write(context: *widget.Context, input_write: WriteInput) void {
     });
 }
 
-fn formatKey(buffer: *[32]u8, key: keybind.Key) []const u8 {
+fn formatKey(buffer: *[32]u8, key: KeyType) []const u8 {
     var len: usize = 0;
     if (key.mods.ctrl) {
         append(buffer, &len, "Ctrl+");
@@ -212,7 +210,7 @@ fn append(buffer: *[32]u8, len: *usize, text: []const u8) void {
     len.* += take;
 }
 
-fn cpuColor(context: *const widget.Context, cpu_percent: u8) ui.Color {
+fn cpuColor(context: *const ContextType, cpu_percent: u8) ColorType {
     if (cpu_percent > 90) {
         return context.palette.red;
     }
@@ -223,17 +221,17 @@ fn cpuColor(context: *const widget.Context, cpu_percent: u8) ui.Color {
 }
 
 test "mode bars render prefix and copy hints" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 120, 1);
+    var buffer = try BufferType.init(std.testing.allocator, 120, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: widget.Context = .{
+    var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &ui.theme.default_theme.palette,
+        .palette = &theme_support.default_theme.palette,
         .hovered = null,
     };
     var hints: Hints = .{};
-    hints.append(.{ .key = try keybind.parseKey("N"), .label = "new workspace" });
+    hints.append(.{ .key = try parseKey_module("N"), .label = "new workspace" });
 
     renderMode(&context, buffer.area(), .{ .prefix = hints });
     try std.testing.expectEqualStrings("P", buffer.at(1, 0).?.text());
@@ -248,6 +246,6 @@ test "key labels preserve modifiers and special keys" {
     var buffer: [32]u8 = undefined;
     try std.testing.expectEqualStrings(
         "Ctrl+Alt+Left",
-        formatKey(&buffer, try keybind.parseKey("ctrl+alt+left")),
+        formatKey(&buffer, try parseKey_module("ctrl+alt+left")),
     );
 }

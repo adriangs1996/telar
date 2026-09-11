@@ -1,4 +1,6 @@
+const TabLocationType = @import("telar-core").TabLocation;
+const TabMoveDirectionType = @import("telar-core").TabMoveDirection;
 const MoveTab = @This();
-const source_namespace = @import("move_tab.zig");
-location: source_namespace.schema.TabLocation,
-direction: source_namespace.schema.TabMoveDirection,
+
+location: TabLocationType,
+direction: TabMoveDirectionType,

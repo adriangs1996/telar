@@ -1,23 +1,26 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("create_tab.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const std = @import("std");
-model: *client_model.Model,
-first: source_namespace.schema.TabLocation,
-second: source_namespace.schema.TabLocation,
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const NewTab = @import("../../model/NewTab.zig");
+const TestingModel = @This();
+
+model: *ModelType,
+first: TabLocationType,
+second: TabLocationType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first: source_namespace.schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: source_namespace.schema.TabLocation = .{
+    const second: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -31,7 +34,7 @@ pub fn deinit(testing: *TestingModel) void {
     std.testing.allocator.destroy(testing.model);
 }
 
-pub fn command(testing: *const TestingModel) source_namespace.ConfirmTabCreation {
+pub fn command(testing: *const TestingModel) NewTab {
     return .{
         .created = .{
             .location = testing.second,

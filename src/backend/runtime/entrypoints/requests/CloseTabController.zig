@@ -1,15 +1,18 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const CloseTabExecutorType = @import("../../application/commands/CloseTabExecutor.zig");
+const CloseTabType = @import("telar-core").CloseTab;
+const RequestIdType = @import("telar-core").RequestId;
 const Controller = @This();
-const source_namespace = @import("close_tab.zig");
-const close_tab_commands = @import("../../application/commands/close_tab.zig");
-responses: *source_namespace.ResponseQueue,
-close_tab: close_tab_commands.CloseTabExecutor,
+
+responses: *ResponseQueueType,
+close_tab: CloseTabExecutorType,
 
 /// Creates one controller for the lifetime of a close-tab request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, close_tab: close_tab_commands.CloseTabExecutor) Controller {
+pub fn init(responses: *ResponseQueueType, close_tab: CloseTabExecutorType) Controller {
     return .{ .responses = responses, .close_tab = close_tab };
 }
 
@@ -19,7 +22,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, close_tab: close_tab_com
 /// ```zig
 /// try controller.closeTab(request);
 /// ```
-pub fn closeTab(controller: *Controller, request: source_namespace.schema.CloseTab) !void {
+pub fn closeTab(controller: *Controller, request: CloseTabType) !void {
     const removed = controller.close_tab.execute(.{ .location = request.location }) catch |err| {
         switch (err) {
             error.TabNotFound => try controller.queueTabNotFound(request.request_id),
@@ -37,7 +40,7 @@ pub fn closeTab(controller: *Controller, request: source_namespace.schema.CloseT
     } });
 }
 
-fn queueTabNotFound(controller: *Controller, request_id: source_namespace.schema.RequestId) !void {
+fn queueTabNotFound(controller: *Controller, request_id: RequestIdType) !void {
     try controller.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = .tab_not_found,

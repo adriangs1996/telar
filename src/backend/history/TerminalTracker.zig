@@ -1,15 +1,21 @@
-const Tracker = @This();
+const TerminalTrackerConfig = @import("TerminalTrackerConfig.zig");
 const std = @import("std");
-const osc = @import("osc.zig");
+const OscTracker = @import("OscTracker.zig");
 const vt = @import("ghostty-vt");
-const source_namespace = @import("terminal.zig");
-const InputObservation = @import("TerminalInputObservation.zig");
+const InputScannerType = @import("InputScanner.zig");
+const terminal_ops = @import("terminal.zig");
+const TerminalInputObservation = @import("TerminalInputObservation.zig");
 const builtin = @import("builtin");
-const OutputObservation = @import("TerminalOutputObservation.zig");
+const osc = @import("osc.zig");
+const TerminalOutputObservation = @import("TerminalOutputObservation.zig");
+const ClockType = @import("Clock.zig");
+const CommandType = @import("Command.zig");
 const ExitObservation = @import("ExitObservation.zig");
-const Completion = @import("TerminalCompletion.zig");
+const TerminalCompletion = @import("TerminalCompletion.zig");
+const Tracker = @This();
+
 gpa: std.mem.Allocator,
-aux: osc.Tracker,
+aux: OscTracker,
 /// Bounded raw output tail for the running command; null unless output
 /// capture is enabled at startup.
 output_tail: ?[]u8 = null,
@@ -23,7 +29,7 @@ right_prompt_hash: u64 = 0,
 /// prompt to re-anchor at yet.
 anchor_erased: bool = false,
 phase: Phase = .idle,
-input: source_namespace.InputScanner = .{},
+input: InputScannerType = .{},
 command: ?[:0]const u8 = null,
 command_truncated: bool = false,
 command_cwd: [std.fs.max_path_bytes]u8 = undefined,
@@ -46,19 +52,15 @@ pub const Phase = enum {
     running,
 };
 
-pub const Config = struct {
-    cwd: []const u8,
-    terminal: *vt.Terminal,
-    capture_output: bool = false,
-};
+pub const Config = @import("TerminalTrackerConfig.zig");
 
-pub fn init(gpa: std.mem.Allocator, config: Config) !Tracker {
+pub fn init(gpa: std.mem.Allocator, config: TerminalTrackerConfig) !Tracker {
     const terminal = config.terminal;
     const screen = terminal.screens.active;
     const anchor = try screen.pages.trackPin(screen.cursor.page_pin.*);
     errdefer screen.pages.untrackPin(anchor);
     const output_tail: ?[]u8 = if (config.capture_output)
-        try gpa.alloc(u8, source_namespace.max_output_tail_bytes)
+        try gpa.alloc(u8, terminal_ops.max_output_tail_bytes)
     else
         null;
     return .{
@@ -88,7 +90,7 @@ pub fn deinit(tracker: *Tracker, terminal: *vt.Terminal) void {
 /// ```zig
 /// _ = tracker.observeInput(.{ .terminal = terminal, .bytes = bytes, .shell_foreground = true, .clock = clock }, &sink);
 /// ```
-pub fn observeInput(tracker: *Tracker, observation: InputObservation, sink: anytype) usize {
+pub fn observeInput(tracker: *Tracker, observation: TerminalInputObservation, sink: anytype) usize {
     const terminal = observation.terminal;
     const bytes = observation.bytes;
     const shell_foreground = observation.shell_foreground;
@@ -175,7 +177,7 @@ pub fn captureSubmitted(tracker: *Tracker, terminal: *vt.Terminal) !bool {
     // A blank anchor row means the shell erased the echo and painted
     // elsewhere without the edit being re-anchored. Whatever follows the
     // anchor is prompt, not command.
-    if (tracker.anchor.garbage or finish_pin.before(tracker.anchor.*) or tracker.anchor_erased or source_namespace.rowIsBlank(tracker.anchor.*)) {
+    if (tracker.anchor.garbage or finish_pin.before(tracker.anchor.*) or tracker.anchor_erased or terminal_ops.rowIsBlank(tracker.anchor.*)) {
         if (comptime builtin.mode == .Debug) {
             tracker.capture_failures += 1;
         }
@@ -184,7 +186,7 @@ pub fn captureSubmitted(tracker: *Tracker, terminal: *vt.Terminal) !bool {
     }
 
     const cols: usize = @max(1, terminal.cols);
-    const max_rows = source_namespace.max_command_bytes / cols + 2;
+    const max_rows = osc.max_command_bytes / cols + 2;
     const clamped_finish = if (tracker.anchor.down(max_rows)) |limit| finish: {
         if (!limit.before(finish_pin)) {
             break :finish finish_pin;
@@ -210,8 +212,8 @@ pub fn captureSubmitted(tracker: *Tracker, terminal: *vt.Terminal) !bool {
     }
 
     tracker.freeCommand();
-    if (text.len > source_namespace.max_command_bytes) {
-        const keep = source_namespace.validPrefixLength(text, source_namespace.max_command_bytes);
+    if (text.len > osc.max_command_bytes) {
+        const keep = terminal_ops.validPrefixLength(text, osc.max_command_bytes);
         const trimmed = tracker.gpa.dupeZ(u8, text[0..keep]) catch |err| {
             tracker.gpa.free(text);
             return err;
@@ -236,7 +238,7 @@ pub fn captureSubmitted(tracker: *Tracker, terminal: *vt.Terminal) !bool {
 /// ```zig
 /// tracker.observeOutput(.{ .terminal = terminal, .bytes = bytes, .clock = clock, .shell_foreground = foreground }, &sink);
 /// ```
-pub fn observeOutput(tracker: *Tracker, observation: OutputObservation, sink: anytype) void {
+pub fn observeOutput(tracker: *Tracker, observation: TerminalOutputObservation, sink: anytype) void {
     const bytes = observation.bytes;
     const clock = observation.clock;
     const shell_foreground = observation.shell_foreground;
@@ -253,10 +255,10 @@ pub fn observeOutput(tracker: *Tracker, observation: OutputObservation, sink: an
 
     const Relay = struct {
         tracker: *Tracker,
-        clock: source_namespace.Clock,
+        clock: ClockType,
         sink: @TypeOf(sink),
 
-        pub fn emit(relay: *@This(), value: osc.Command) void {
+        pub fn emit(relay: *@This(), value: CommandType) void {
             if (relay.tracker.phase != .running) {
                 return;
             }
@@ -307,7 +309,7 @@ pub fn shellExited(tracker: *Tracker, observation: ExitObservation, sink: anytyp
 /// ```zig
 /// tracker.interrupt(clock, &sink);
 /// ```
-pub fn interrupt(tracker: *Tracker, clock: source_namespace.Clock, sink: anytype) void {
+pub fn interrupt(tracker: *Tracker, clock: ClockType, sink: anytype) void {
     if (tracker.phase == .running) {
         tracker.finish(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
     } else {
@@ -349,7 +351,7 @@ fn findRightPrompt(tracker: *Tracker) void {
         tracker.right_prompt.* = tracker.anchor.*;
         tracker.right_prompt.x = @intCast(x);
         tracker.right_prompt.garbage = false;
-        tracker.right_prompt_hash = source_namespace.hashCells(tracker.right_prompt.*.cells(.right));
+        tracker.right_prompt_hash = terminal_ops.hashCells(tracker.right_prompt.*.cells(.right));
         tracker.right_prompt_active = true;
         return;
     }
@@ -368,7 +370,7 @@ fn rebaseMovedEdit(tracker: *Tracker, terminal: *vt.Terminal) void {
     if (tracker.anchor.garbage) {
         return;
     }
-    if (!tracker.anchor_erased and source_namespace.rowIsBlank(tracker.anchor.*)) {
+    if (!tracker.anchor_erased and terminal_ops.rowIsBlank(tracker.anchor.*)) {
         tracker.anchor_erased = true;
     }
 
@@ -376,7 +378,7 @@ fn rebaseMovedEdit(tracker: *Tracker, terminal: *vt.Terminal) void {
     // before it and the prompt would be captured as command text.
     const cursor = terminal.screens.active.cursor.page_pin.*;
     const echo_start = tracker.echoStart(cursor);
-    if (echo_start == 0 or source_namespace.cellsBlank(cursor.cells(.left)[0..echo_start])) {
+    if (echo_start == 0 or terminal_ops.cellsBlank(cursor.cells(.left)[0..echo_start])) {
         return;
     }
 
@@ -405,7 +407,7 @@ fn echoStart(tracker: *const Tracker, cursor: vt.Pin) u16 {
     const cells = cursor.cells(.left);
     const start = cursor.x - typed.len;
     for (typed, cells[start..cursor.x]) |byte, cell| {
-        if (source_namespace.cellBlank(cell)) {
+        if (terminal_ops.cellBlank(cell)) {
             if (byte != ' ') {
                 return cursor.x;
             }
@@ -427,19 +429,19 @@ fn selectionFinish(tracker: *const Tracker, fallback: vt.Pin) vt.Pin {
     if (right_prompt.x == 0 or
         !tracker.anchor.*.before(right_prompt) or
         !right_prompt.before(fallback) or
-        source_namespace.hashCells(right_prompt.cells(.right)) != tracker.right_prompt_hash)
+        terminal_ops.hashCells(right_prompt.cells(.right)) != tracker.right_prompt_hash)
     {
         return fallback;
     }
     return right_prompt.left(1);
 }
 
-fn finish(tracker: *Tracker, completion: Completion, sink: anytype) void {
+fn finish(tracker: *Tracker, completion: TerminalCompletion, sink: anytype) void {
     const owned = tracker.command orelse {
         tracker.reset(.idle);
         return;
     };
-    const command_len = source_namespace.validPrefixLength(owned, source_namespace.max_command_bytes);
+    const command_len = terminal_ops.validPrefixLength(owned, osc.max_command_bytes);
     const duration = @max(@as(i64, 0), completion.clock.awake_ns - tracker.started_awake_ns);
     const output: []const u8 = if (tracker.output_tail) |tail| tail[0..tracker.output_len] else "";
     sink.emit(.{

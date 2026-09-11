@@ -1,9 +1,10 @@
-const Timeline = @This();
-const source_namespace = @import("db.zig");
+const db_ops = @import("db.zig");
 const std = @import("std");
 const Row = @import("Row.zig");
-db: ?*source_namespace.c.sqlite3 = null,
-insert: ?*source_namespace.c.sqlite3_stmt = null,
+const Timeline = @This();
+
+db: ?*db_ops.c.sqlite3 = null,
+insert: ?*db_ops.c.sqlite3_stmt = null,
 session_id: []const u8,
 
 pub const Error = error{ OpenFailed, SchemaFailed, PrepareFailed };
@@ -11,18 +12,18 @@ pub const Error = error{ OpenFailed, SchemaFailed, PrepareFailed };
 pub fn open(path: [:0]const u8, session_id: []const u8) Error!Timeline {
     var timeline: Timeline = .{ .session_id = session_id };
 
-    if (source_namespace.c.sqlite3_open(path.ptr, &timeline.db) != source_namespace.c.SQLITE_OK) {
+    if (db_ops.c.sqlite3_open(path.ptr, &timeline.db) != db_ops.c.SQLITE_OK) {
         return error.OpenFailed;
     }
-    errdefer _ = source_namespace.c.sqlite3_close(timeline.db);
+    errdefer _ = db_ops.c.sqlite3_close(timeline.db);
     if (!std.mem.eql(u8, path, ":memory:") and std.c.chmod(path.ptr, 0o600) != 0) {
         return error.OpenFailed;
     }
 
-    if (source_namespace.c.sqlite3_exec(timeline.db, source_namespace.schema, null, null, null) != source_namespace.c.SQLITE_OK) {
+    if (db_ops.c.sqlite3_exec(timeline.db, db_ops.schema, null, null, null) != db_ops.c.SQLITE_OK) {
         return error.SchemaFailed;
     }
-    if (source_namespace.c.sqlite3_prepare_v2(timeline.db, source_namespace.insert_sql, -1, &timeline.insert, null) != source_namespace.c.SQLITE_OK) {
+    if (db_ops.c.sqlite3_prepare_v2(timeline.db, db_ops.insert_sql, -1, &timeline.insert, null) != db_ops.c.SQLITE_OK) {
         return error.PrepareFailed;
     }
 
@@ -31,10 +32,10 @@ pub fn open(path: [:0]const u8, session_id: []const u8) Error!Timeline {
 
 pub fn close(t: *Timeline) void {
     if (t.insert) |stmt| {
-        _ = source_namespace.c.sqlite3_finalize(stmt);
+        _ = db_ops.c.sqlite3_finalize(stmt);
     }
     if (t.db) |db| {
-        _ = source_namespace.c.sqlite3_close(db);
+        _ = db_ops.c.sqlite3_close(db);
     }
     t.* = .{ .session_id = t.session_id };
 }
@@ -51,24 +52,24 @@ pub fn close(t: *Timeline) void {
 pub fn append(t: *Timeline, row: Row) void {
     const stmt = t.insert orelse return;
 
-    _ = source_namespace.c.sqlite3_reset(stmt);
+    _ = db_ops.c.sqlite3_reset(stmt);
 
-    source_namespace.bindText(stmt, 1, t.session_id);
-    _ = source_namespace.c.sqlite3_bind_int64(stmt, 2, row.at_ms);
-    source_namespace.bindText(stmt, 3, @tagName(row.kind));
-    source_namespace.bindInt(stmt, 4, row.ref);
-    source_namespace.bindOptText(stmt, 5, row.command);
-    source_namespace.bindInt(stmt, 6, row.exit_status);
-    source_namespace.bindInt(stmt, 7, row.duration_ms);
-    source_namespace.bindOptText(stmt, 8, row.host);
-    source_namespace.bindInt(stmt, 9, row.port);
-    source_namespace.bindInt(stmt, 10, row.bytes_up);
-    source_namespace.bindInt(stmt, 11, row.bytes_down);
-    source_namespace.bindOptText(stmt, 12, row.output);
-    source_namespace.bindInt(stmt, 13, row.truncated);
+    db_ops.bindText(stmt, 1, t.session_id);
+    _ = db_ops.c.sqlite3_bind_int64(stmt, 2, row.at_ms);
+    db_ops.bindText(stmt, 3, @tagName(row.kind));
+    db_ops.bindInt(stmt, 4, row.ref);
+    db_ops.bindOptText(stmt, 5, row.command);
+    db_ops.bindInt(stmt, 6, row.exit_status);
+    db_ops.bindInt(stmt, 7, row.duration_ms);
+    db_ops.bindOptText(stmt, 8, row.host);
+    db_ops.bindInt(stmt, 9, row.port);
+    db_ops.bindInt(stmt, 10, row.bytes_up);
+    db_ops.bindInt(stmt, 11, row.bytes_down);
+    db_ops.bindOptText(stmt, 12, row.output);
+    db_ops.bindInt(stmt, 13, row.truncated);
 
-    _ = source_namespace.c.sqlite3_step(stmt);
+    _ = db_ops.c.sqlite3_step(stmt);
     // Bindings hold borrowed pointers (see `bindText`); drop them now so no
     // dangling address survives this call.
-    _ = source_namespace.c.sqlite3_clear_bindings(stmt);
+    _ = db_ops.c.sqlite3_clear_bindings(stmt);
 }

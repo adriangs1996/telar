@@ -1,6 +1,7 @@
+const platform = @import("../../platform/platform.zig");
+const HeapType = @import("telar-core").Heap;
 const Resources = @This();
-const platform = @import("../../platform/root.zig");
-const source_namespace = @import("events.zig");
+
 tty: *const platform.Tty,
 resize_watcher: *platform.ResizeWatcher,
-heap: *const source_namespace.diagnostics.Heap,
+heap: *const HeapType,

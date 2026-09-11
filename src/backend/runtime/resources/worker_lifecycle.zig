@@ -5,11 +5,12 @@
 //! joining the worker and destroying the state. Startup failure releases the
 //! transferred state so the caller owns nothing on error.
 
+const FakeState = @import("FakeState.zig");
+const FakeWorker = @import("FakeWorker.zig");
 const std = @import("std");
-
-pub const Port = @import("GenericPort.zig").Type;
-
-pub const Lifecycle = @import("GenericLifecycle.zig").Type;
+const GenericPort = @import("GenericPort.zig").Type;
+const GenericLifecycle = @import("GenericLifecycle.zig").Type;
+const Capture = @import("Capture.zig");
 
 pub const Step = enum {
     start,
@@ -17,12 +18,6 @@ pub const Step = enum {
     join,
     destroy,
 };
-
-const Capture = @import("Capture.zig");
-
-const FakeState = @import("FakeState.zig");
-
-const FakeWorker = @import("FakeWorker.zig");
 
 fn startFakeWorker(state: *FakeState) !FakeWorker {
     state.capture.record(.start);
@@ -54,14 +49,14 @@ fn destroyFakeState(state: *FakeState) void {
     state.capture.record(.destroy);
 }
 
-const test_port: Port(FakeState, FakeWorker) = .{
+const test_port: GenericPort(FakeState, FakeWorker) = .{
     .start = startFakeWorker,
     .close = closeFakeQueues,
     .join = joinFakeWorker,
     .destroy = destroyFakeState,
 };
 
-const TestLifecycle = Lifecycle(FakeState, FakeWorker, test_port);
+const TestLifecycle = GenericLifecycle(FakeState, FakeWorker, test_port);
 
 fn expectSteps(capture: *const Capture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);

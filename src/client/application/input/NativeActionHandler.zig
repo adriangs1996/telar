@@ -1,8 +1,10 @@
+const NativeActionEffects = @import("NativeActionEffects.zig");
+const action = @import("../../input/action.zig");
+const NativeActionAuthority = @import("NativeActionAuthority.zig");
+const action_routing = @import("action_routing.zig");
 const NativeActionHandler = @This();
-const Effects = @import("NativeActionEffects.zig");
-const source_namespace = @import("native_action.zig");
-const Authority = @import("NativeActionAuthority.zig");
-effects: Effects,
+
+effects: NativeActionEffects,
 
 /// Retires copy mode before delivering any other native action. This
 /// policy applies identically to host, Lua and plugin action sources.
@@ -10,7 +12,7 @@ effects: Effects,
 /// ```zig
 /// const control = try handler.execute(action, authority);
 /// ```
-pub fn execute(handler: *NativeActionHandler, value: source_namespace.Action, authority: Authority) !source_namespace.Control {
+pub fn execute(handler: *NativeActionHandler, value: action.Action, authority: NativeActionAuthority) !action_routing.Control {
     const preserves_copy_mode = switch (value) {
         .enter_copy_mode => true,
         else => false,

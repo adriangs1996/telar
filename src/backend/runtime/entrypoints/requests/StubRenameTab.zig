@@ -1,19 +1,23 @@
-const StubRenameTab = @This();
-const rename_tab_commands = @import("../../application/commands/rename_tab.zig");
-const source_namespace = @import("rename_tab.zig");
+const TabRenamed = @import("../../../workspace/TabRenamed.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const RenameTabExecutorType = @import("../../application/commands/RenameTabExecutor.zig");
+const RenameTabType = @import("../../application/commands/RenameTab.zig");
 const std = @import("std");
-result: ?rename_tab_commands.RenameTabResult = null,
+const StubRenameTab = @This();
+
+result: ?TabRenamed = null,
 failure: ?anyerror = null,
 call_count: usize = 0,
-last_location: ?source_namespace.schema.TabLocation = null,
-last_label: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+last_location: ?TabLocationType = null,
+last_label: [max_tab_label_bytes_module]u8 = undefined,
 last_label_len: u8 = 0,
 
-pub fn executor(stub: *StubRenameTab) rename_tab_commands.RenameTabExecutor {
+pub fn executor(stub: *StubRenameTab) RenameTabExecutorType {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, command: rename_tab_commands.RenameTab) anyerror!rename_tab_commands.RenameTabResult {
+fn execute(context: *anyopaque, command: RenameTabType) anyerror!TabRenamed {
     const stub: *StubRenameTab = @ptrCast(@alignCast(context));
     std.debug.assert(command.label.len <= stub.last_label.len);
 

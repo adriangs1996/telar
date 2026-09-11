@@ -1,10 +1,15 @@
 const GenericPluginEffectsRuntimePort = @import("GenericPluginEffectsRuntimePort.zig").Type;
-const Resources = @import("PluginEffectsResources.zig");
-const plugins = @import("../../../plugins/root.zig");
+const PluginEffectsResources = @import("PluginEffectsResources.zig");
+const Result = @import("../../../plugins/Result.zig");
+const RecordCommandType = @import("../../../plugins/RecordCommand.zig");
 const std = @import("std");
-const agent_mod = @import("../../../agent/root.zig");
-const agent_identity = @import("../../application/coordinators/root.zig").agent_identity;
-const source_namespace = @import("plugin_effects.zig");
+const AgentEvidenceType = @import("../../../plugins/AgentEvidence.zig");
+const Status = @import("telar-core").Status;
+const agent_identity = @import("../../application/coordinators/agent_identity.zig");
+const NotificationType = @import("../../../plugins/Notification.zig");
+const CoreNotification = @import("telar-core").Notification;
+const encodeNotification_module = @import("telar-core").encodeNotification;
+
 /// Binds tap authorization and effect application to one runtime application.
 ///
 /// ```zig
@@ -15,14 +20,14 @@ pub fn Type(comptime Context: type, comptime port: GenericPluginEffectsRuntimePo
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: PluginEffectsResources,
 
         /// Creates an adapter borrowing runtime-owned stores and worker service.
         ///
         /// ```zig
         /// const adapter = PluginEffectsAdapter.init(application, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: PluginEffectsResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -31,7 +36,7 @@ pub fn Type(comptime Context: type, comptime port: GenericPluginEffectsRuntimePo
         /// ```zig
         /// try adapter.handle(result);
         /// ```
-        pub fn handle(adapter: *Self, result_value: anyerror!*plugins.EffectResult) !void {
+        pub fn handle(adapter: *Self, result_value: anyerror!*Result) !void {
             const result = result_value catch return;
             defer result.deinit();
             try port.rearm_receive(adapter.context);
@@ -53,7 +58,7 @@ pub fn Type(comptime Context: type, comptime port: GenericPluginEffectsRuntimePo
             }
         }
 
-        fn recordCommand(adapter: *Self, result: *const plugins.EffectResult, record: plugins.effects.RecordCommand) void {
+        fn recordCommand(adapter: *Self, result: *const Result, record: RecordCommandType) void {
             const pane = adapter.resources.panes.resolve(.{ .id = result.pane, .generation = result.pane_generation }) orelse return;
             if (pane.exit != null) {
                 return;
@@ -77,12 +82,12 @@ pub fn Type(comptime Context: type, comptime port: GenericPluginEffectsRuntimePo
             });
         }
 
-        fn applyAgentEvidence(adapter: *Self, evidence: plugins.effects.AgentEvidence) bool {
+        fn applyAgentEvidence(adapter: *Self, evidence: AgentEvidenceType) bool {
             const pane = adapter.resources.panes.find(evidence.pane) orelse return false;
             if (pane.exit != null) {
                 return false;
             }
-            const status: agent_mod.ScreenStatus = switch (evidence.state) {
+            const status: Status = switch (evidence.state) {
                 .working, .settling => .working,
                 .blocked => .blocked,
                 .ready => .ready,
@@ -104,15 +109,15 @@ pub fn Type(comptime Context: type, comptime port: GenericPluginEffectsRuntimePo
             });
         }
 
-        fn publishNotification(adapter: *Self, notification: plugins.effects.Notification) bool {
+        fn publishNotification(adapter: *Self, notification: NotificationType) bool {
             var validation_buffer: [512]u8 = undefined;
-            const value: source_namespace.schema.Notification = .{
+            const value: CoreNotification = .{
                 .level = notification.level,
                 .duration_ms = notification.duration_ms,
                 .title = notification.title,
                 .message = notification.message,
             };
-            _ = source_namespace.schema.encodeNotification(&validation_buffer, value) catch return false;
+            _ = encodeNotification_module(&validation_buffer, value) catch return false;
             return port.publish_notification(adapter.context, value) != 0;
         }
     };

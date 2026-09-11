@@ -1,11 +1,13 @@
 //! PTY acquisition and the verified fork-to-exec transaction.
 
+const Command = @import("Command.zig");
 const std = @import("std");
-const command_mod = @import("command_support.zig");
+const Spawned = @import("Spawned.zig");
 const native = @import("native.zig");
-
-pub const Command = command_mod.Command;
-const max_args = command_mod.max_args;
+const ChildExec = @import("ChildExec.zig");
+const ChildDescriptor = @import("ChildDescriptor.zig");
+const ExecRequest = @import("ExecRequest.zig");
+const command_mod = @import("command_support.zig");
 
 const default_path = "/usr/local/bin:/bin:/usr/bin";
 
@@ -19,12 +21,7 @@ pub const ChildFailureStage = enum(c_int) {
     exec,
 };
 
-const ChildFailure = extern struct {
-    stage: ChildFailureStage,
-    errno_code: c_int,
-};
-
-pub const Spawned = @import("Spawned.zig");
+const ChildFailure = @import("ChildFailure.zig").ChildFailure;
 
 pub fn spawn(command: *const Command, window: *const std.posix.winsize) !Spawned {
     const cwd_fd: ?std.c.fd_t = if (command.cwd) |cwd_path|
@@ -156,8 +153,6 @@ fn childFailureError(failure: ChildFailure) anyerror {
     };
 }
 
-const ChildExec = @import("ChildExec.zig");
-
 /// No allocator, error unwinding, or operation that can acquire a userspace
 /// libc lock may run in the child between `fork` and successful `execve`.
 fn childExec(child: ChildExec) noreturn {
@@ -194,16 +189,12 @@ fn childExec(child: ChildExec) noreturn {
     childFail(child.error_fd, .exec, exec_error);
 }
 
-const ChildDescriptor = @import("ChildDescriptor.zig");
-
 fn duplicateChildDescriptor(descriptor: ChildDescriptor) void {
     const result = std.c.dup2(descriptor.source, descriptor.target);
     if (result < 0) {
         childFail(descriptor.error_fd, descriptor.stage, std.posix.errno(result));
     }
 }
-
-const ExecRequest = @import("ExecRequest.zig");
 
 fn execWithPath(request: ExecRequest) std.posix.E {
     const file = std.mem.span(request.file);
@@ -245,7 +236,7 @@ fn execCandidate(request: ExecRequest, candidate: [*:0]const u8) std.posix.E {
         return exec_error;
     }
 
-    var shell_argv: [max_args + 1:null]?[*:0]const u8 = @splat(null);
+    var shell_argv: [command_mod.max_args + 1:null]?[*:0]const u8 = @splat(null);
     shell_argv[0] = "/bin/sh";
     shell_argv[1] = candidate;
     var source_index: usize = 1;

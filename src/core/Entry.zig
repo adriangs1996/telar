@@ -1,7 +1,8 @@
+const schema_contract_test = @import("schema_contract_test.zig");
 const Entry = @This();
-const source_namespace = @import("schema_contract_test.zig");
+
 name: []const u8,
-direction: source_namespace.Direction,
+direction: schema_contract_test.Direction,
 /// The payload tail is raw bytes without a length prefix, so a prefix of
 /// the message can decode as a valid shorter message.
 tail_tolerant: bool = false,

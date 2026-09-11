@@ -1,6 +1,7 @@
+const model = @import("../../bars/model.zig");
+const bar_update = @import("bar_update.zig");
 const Command = @This();
-const bars = @import("../../bars/root.zig");
-const source_namespace = @import("bar_update.zig");
+
 generation: u64,
-position: bars.Position,
-result: source_namespace.Result,
+position: model.Position,
+result: bar_update.Result,

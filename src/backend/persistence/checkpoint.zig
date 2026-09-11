@@ -5,11 +5,19 @@
 //! rebuild: identities, paths, labels, pane launch commands and client layout
 //! replicas. File descriptors, PTYs and in-flight work are never written.
 
+const WorkspaceRecord = @import("WorkspaceRecord.zig");
+const TabRecord = @import("TabRecord.zig");
+const PaneRecord = @import("PaneRecord.zig");
+const LayoutRecord = @import("LayoutRecord.zig");
+const validateSessionTitle_module = @import("telar-core").validateSessionTitle;
 const std = @import("std");
-const core = @import("telar-core");
-
-pub const schema = core.schema;
-pub const wire = core.schema.wire;
+const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const Encoder = @import("Encoder.zig");
+const Reader = @import("Reader.zig");
+const ArgumentIterator = @import("ArgumentIterator.zig");
+const Counters = @import("Counters.zig");
+const EncoderType = @import("telar-core").Encoder;
 
 pub const magic: *const [8]u8 = "TELARCKP";
 /// Version 2 added the agent title to pane records; version 1 files still read.
@@ -18,16 +26,6 @@ pub const oldest_readable_version: u16 = 1;
 pub const max_file_bytes = 4 * 1024 * 1024;
 pub const max_launch_arguments = 32;
 pub const max_launch_bytes = 1024;
-
-pub const Counters = @import("Counters.zig");
-
-pub const WorkspaceRecord = @import("WorkspaceRecord.zig");
-
-pub const TabRecord = @import("TabRecord.zig");
-
-pub const PaneRecord = @import("PaneRecord.zig");
-
-pub const LayoutRecord = @import("LayoutRecord.zig");
 
 pub const Record = union(enum) {
     workspace: WorkspaceRecord,
@@ -44,12 +42,6 @@ pub const Kind = enum(u8) {
     layout = 4,
 };
 
-pub const Encoder = @import("Encoder.zig");
-
-pub const Reader = @import("Reader.zig");
-
-pub const ArgumentIterator = @import("ArgumentIterator.zig");
-
 /// An empty title carries no source. A present one must be printable and
 /// come from a durable source, so restore never revives a placeholder.
 pub fn validateTitle(title: []const u8, source: u8) !void {
@@ -61,15 +53,15 @@ pub fn validateTitle(title: []const u8, source: u8) !void {
         return;
     }
 
-    schema.validateSessionTitle(title) catch return error.InvalidCheckpoint;
-    switch (std.enums.fromInt(schema.AgentTitleSource, source) orelse return error.InvalidCheckpoint) {
+    validateSessionTitle_module(title) catch return error.InvalidCheckpoint;
+    switch (std.enums.fromInt(AgentTitleSourceType, source) orelse return error.InvalidCheckpoint) {
         .generated, .manual, .agent => {},
         .telar, .terminal => return error.InvalidCheckpoint,
     }
 }
 
 pub fn validatePath(path: []const u8) !void {
-    if (path.len == 0 or path.len > schema.max_cwd_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
+    if (path.len == 0 or path.len > max_cwd_bytes_module or std.mem.indexOfScalar(u8, path, 0) != null) {
         return error.InvalidCheckpoint;
     }
 }
@@ -97,7 +89,7 @@ test "checkpoint records round trip through the file encoding" {
         .agent_provider = 1,
         .agent_session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000",
         .agent_title = "Investigate proxy lifecycle",
-        .agent_title_source = @intFromEnum(schema.AgentTitleSource.generated),
+        .agent_title_source = @intFromEnum(AgentTitleSourceType.generated),
     });
     try encoder.layout(.{ .identity = 42, .last_used = 3, .payload = "\x1a\x01" });
     const bytes = try encoder.finish();
@@ -120,7 +112,7 @@ test "checkpoint records round trip through the file encoding" {
     try std.testing.expectEqual(@as(u8, 1), pane.agent_provider);
     try std.testing.expectEqualStrings("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", pane.agent_session);
     try std.testing.expectEqualStrings("Investigate proxy lifecycle", pane.agent_title);
-    try std.testing.expectEqual(@intFromEnum(schema.AgentTitleSource.generated), pane.agent_title_source);
+    try std.testing.expectEqual(@intFromEnum(AgentTitleSourceType.generated), pane.agent_title_source);
     const layout = (try reader.next()).?.layout;
     try std.testing.expectEqual(@as(u64, 42), layout.identity);
     try std.testing.expectEqualStrings("\x1a\x01", layout.payload);
@@ -145,24 +137,24 @@ test "pane titles must be printable and come from a durable source" {
 
     var placeholder = base;
     placeholder.agent_title = "New Claude Code session";
-    placeholder.agent_title_source = @intFromEnum(schema.AgentTitleSource.telar);
+    placeholder.agent_title_source = @intFromEnum(AgentTitleSourceType.telar);
     var encoder = try Encoder.init(&buffer, counters);
     try std.testing.expectError(error.InvalidCheckpoint, encoder.pane(placeholder));
 
     var agent_named = base;
     agent_named.agent_title = "Fix proxy";
-    agent_named.agent_title_source = @intFromEnum(schema.AgentTitleSource.agent);
+    agent_named.agent_title_source = @intFromEnum(AgentTitleSourceType.agent);
     encoder = try Encoder.init(&buffer, counters);
     try encoder.pane(agent_named);
 
     var control = base;
     control.agent_title = "a\x1bb";
-    control.agent_title_source = @intFromEnum(schema.AgentTitleSource.manual);
+    control.agent_title_source = @intFromEnum(AgentTitleSourceType.manual);
     encoder = try Encoder.init(&buffer, counters);
     try std.testing.expectError(error.InvalidCheckpoint, encoder.pane(control));
 
     var sourced_empty = base;
-    sourced_empty.agent_title_source = @intFromEnum(schema.AgentTitleSource.generated);
+    sourced_empty.agent_title_source = @intFromEnum(AgentTitleSourceType.generated);
     encoder = try Encoder.init(&buffer, counters);
     try std.testing.expectError(error.InvalidCheckpoint, encoder.pane(sourced_empty));
 
@@ -175,7 +167,7 @@ test "pane titles must be printable and come from a durable source" {
 
 test "a version 1 checkpoint still reads, with no pane title" {
     var buffer: [512]u8 = undefined;
-    var inner = wire.Encoder.init(&buffer);
+    var inner = EncoderType.init(&buffer);
     try inner.writeBytes(magic);
     try inner.writeInt(u16, 1);
     try inner.writeInt(u64, 2);

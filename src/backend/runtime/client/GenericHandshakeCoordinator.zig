@@ -1,5 +1,6 @@
 const GenericHandshakePort = @import("GenericHandshakePort.zig").Type;
 const GenericState = @import("GenericState.zig").Type;
+
 /// Creates a statically dispatched handshake-completion coordinator.
 ///
 /// ```zig

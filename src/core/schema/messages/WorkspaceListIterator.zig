@@ -1,8 +1,9 @@
-const WorkspaceListIterator = @This();
-const wire = @import("../wire.zig");
+const DecoderType = @import("../Decoder.zig");
 const WorkspaceListEntry = @import("WorkspaceListEntry.zig");
-const source_namespace = @import("workspace.zig");
-decoder: wire.Decoder,
+const workspace = @import("workspace.zig");
+const WorkspaceListIterator = @This();
+
+decoder: DecoderType,
 remaining: u16,
 
 pub fn next(iterator: *WorkspaceListIterator) !?WorkspaceListEntry {
@@ -10,5 +11,5 @@ pub fn next(iterator: *WorkspaceListIterator) !?WorkspaceListEntry {
         return null;
     }
     iterator.remaining -= 1;
-    return try source_namespace.decodeWorkspaceListEntry(&iterator.decoder);
+    return try workspace.decodeWorkspaceListEntry(&iterator.decoder);
 }

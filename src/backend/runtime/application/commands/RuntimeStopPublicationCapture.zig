@@ -1,16 +1,18 @@
-const PublicationCapture = @This();
-const shutdown_mod = @import("../../lifecycle/root.zig").shutdown_authority;
+const StateType = @import("../../lifecycle/State.zig");
+const StopRequestedType = @import("../../lifecycle/StopRequested.zig");
 const Notifications = @import("Notifications.zig");
-shutdown: *const shutdown_mod.State,
+const PublicationCapture = @This();
+
+shutdown: *const StateType,
 calls: usize = 0,
-event: ?shutdown_mod.StopRequested = null,
+event: ?StopRequestedType = null,
 observed_committed_state: bool = false,
 
 pub fn notifications(capture: *PublicationCapture) Notifications {
     return .{ .context = capture, .publish_fn = publish };
 }
 
-fn publish(context: *anyopaque, event: shutdown_mod.StopRequested) void {
+fn publish(context: *anyopaque, event: StopRequestedType) void {
     const capture: *PublicationCapture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.event = event;

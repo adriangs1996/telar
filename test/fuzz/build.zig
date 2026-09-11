@@ -1,15 +1,13 @@
+const Seed = @import("build/Seed.zig");
+const Fuzzer = @import("build/Fuzzer.zig");
 const std = @import("std");
 const builtin = @import("builtin");
 const afl = @import("afl");
-
-const Seed = @import("Seed.zig");
 
 pub const ModuleKind = enum {
     schema,
     escape,
 };
-
-const Fuzzer = @import("Fuzzer.zig");
 
 const client_seeds = [_]Seed{
     .{ .name = "empty", .bytes = "" },
@@ -74,7 +72,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const core = b.createModule(.{
-        .root_source_file = b.path("../../src/core/root.zig"),
+        .root_source_file = b.path("../../src/core/core.zig"),
         .target = target,
         .optimize = optimize,
     });

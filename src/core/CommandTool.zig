@@ -1,8 +1,9 @@
+const agent_manifest = @import("agent_manifest.zig");
 const CommandTool = @This();
-const source_namespace = @import("agent_manifest.zig");
-tool: [source_namespace.max_tool_name_bytes]u8 = undefined,
+
+tool: [agent_manifest.max_tool_name_bytes]u8 = undefined,
 tool_len: u8,
-field: [source_namespace.max_command_field_bytes]u8 = undefined,
+field: [agent_manifest.max_command_field_bytes]u8 = undefined,
 field_len: u8,
 
 pub fn toolSlice(mapping: *const CommandTool) []const u8 {

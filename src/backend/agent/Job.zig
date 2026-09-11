@@ -1,10 +1,12 @@
+const PaneKeyType = @import("../pane/PaneKey.zig");
+const AgentProviderType = @import("telar-core").AgentProvider;
+const description = @import("description.zig");
 const Job = @This();
-const pane_mod = @import("../pane/root.zig");
-const source_namespace = @import("description.zig");
-pane: pane_mod.PaneKey,
+
+pane: PaneKeyType,
 session_id: [16]u8,
-provider: source_namespace.schema.AgentProvider,
-query: [source_namespace.max_query_bytes]u8 = undefined,
+provider: AgentProviderType,
+query: [description.max_query_bytes]u8 = undefined,
 query_len: u16,
 
 pub fn querySlice(job: *const Job) []const u8 {

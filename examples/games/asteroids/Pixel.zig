@@ -1,5 +1,6 @@
-const Pixel = @This();
 const Color = @import("Color.zig");
+const Pixel = @This();
+
 r: u8,
 g: u8,
 b: u8,

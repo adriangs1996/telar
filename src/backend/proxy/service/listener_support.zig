@@ -1,14 +1,10 @@
 //! Bounded loopback listener for the local proxy capability.
 
 const std = @import("std");
-
-pub const Io = std.Io;
-pub const net = Io.net;
+const Listener = @import("Listener.zig");
 
 pub const first_port: u16 = 45100;
 pub const port_attempts: u16 = 128;
-
-pub const Listener = @import("Listener.zig");
 
 test "listeners skip ports already owned by another proxy listener" {
     const io = std.testing.io;

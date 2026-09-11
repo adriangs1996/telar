@@ -1,8 +1,10 @@
-const DismissNotificationHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const TimerEffects = @import("TimerEffects.zig");
 const InteractionCommand = @import("InteractionCommand.zig");
-model: *client_model.Model,
+const NotificationChangeType = @import("../../model/NotificationChange.zig");
+const DismissNotificationHandler = @This();
+
+model: *ModelType,
 effects: TimerEffects,
 
 /// Commits an exit transition without activating the notification.
@@ -10,7 +12,7 @@ effects: TimerEffects,
 /// ```zig
 /// const change = try handler.execute(command) orelse return;
 /// ```
-pub fn execute(handler: *DismissNotificationHandler, command: InteractionCommand) !?client_model.NotificationChange {
+pub fn execute(handler: *DismissNotificationHandler, command: InteractionCommand) !?NotificationChangeType {
     const change = handler.model.dismissNotification(command.id, command.now_ns) orelse return null;
 
     try handler.effects.reschedule(handler.effects.context);

@@ -184,23 +184,23 @@ new client rebuilds its disposable model through workspace and tab snapshots.
 
 ## Proof
 
-- `src/frontend/client/tab_closures.zig` proves explicit correlation,
+- `src/frontend/client/controllers/tabs/tab_closures.zig` proves explicit correlation,
   lifecycle classification, retired-response handling, wire translation and
   physical port wiring.
-- `src/frontend/client/application/close_tab.zig` proves request ordering,
+- `src/client/application/tabs/close_tab.zig` proves request ordering,
   failure recovery, commit-before-delivery, lifecycle classification,
   workspace transition policy and committed-delivery failure.
-- `src/frontend/client/application/tab_removal_delivery.zig` proves all four
+- `src/client/application/tabs/tab_removal_delivery.zig` proves all four
   dispositions, exact revisions and successor layout, stale-state validation,
   effect order, snapshot coalescence and partial failure semantics.
-- `src/frontend/client/application/tab_snapshot_recovery.zig` proves shared
+- `src/client/application/tabs/tab_snapshot_recovery.zig` proves shared
   recovery coalescence and exact repair delivery.
-- `src/frontend/client/application/workspace_handoff_admission.zig` proves
+- `src/client/application/workspaces/workspace_handoff_admission.zig` proves
   that predecessor following requires an empty projection and bypasses the
   pending gate only for stale continuations.
-- `src/frontend/client/model.zig` proves exact location and workspace-removal
+- `src/client/model/Model.zig` proves exact location and workspace-removal
   validation, captured pane identities and model version changes.
-- `src/frontend/client/client_test.zig` proves bounded request delivery,
+- `src/frontend/client/tests/` proves bounded request delivery,
   correlation, late responses, resource cleanup, predecessor handoff, exit and
   presenter observation through the real client adapters.
 - `src/backend/workspace/commands.zig` and

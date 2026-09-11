@@ -1,18 +1,24 @@
-const AgentInput = @This();
 const AgentKey = @import("AgentKey.zig");
-const source_namespace = @import("snapshot_support.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
+const AgentTitleStateType = @import("telar-core").AgentTitleState;
+const AgentProviderType = @import("telar-core").AgentProvider;
+const AgentAttachmentMarkersType = @import("telar-core").AgentAttachmentMarkers;
+const AgentStatusType = @import("telar-core").AgentStatus;
+const AgentInput = @This();
+
 key: AgentKey,
-location: source_namespace.schema.TabLocation,
+location: TabLocationType,
 pane_index: u16,
 workspace_label: []const u8 = "",
 tab_label: []const u8 = "",
 session_title: []const u8 = "",
-title_source: source_namespace.schema.AgentTitleSource = .telar,
-title_state: source_namespace.schema.AgentTitleState = .placeholder,
+title_source: AgentTitleSourceType = .telar,
+title_state: AgentTitleStateType = .placeholder,
 cwd_label: []const u8 = "",
-provider: source_namespace.schema.AgentProvider,
+provider: AgentProviderType,
 provider_name: []const u8 = "",
 display_name: []const u8 = "",
 icon: []const u8 = "",
-attachments: source_namespace.schema.AgentAttachmentMarkers = .none,
-status: source_namespace.schema.AgentStatus,
+attachments: AgentAttachmentMarkersType = .none,
+status: AgentStatusType,

@@ -1,10 +1,13 @@
-const Watches = @This();
-const types = @import("types.zig");
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
 const Watch = @import("Watch.zig");
 const Registration = @import("Registration.zig");
-const source_namespace = @import("session_file.zig");
+const max_agent_session_file_bytes = @import("telar-core").max_agent_session_file_bytes;
 const std = @import("std");
-slots: [types.max_records]?Watch = @splat(null),
+const session_file = @import("session_file.zig");
+const PaneKeyType = @import("../pane/PaneKey.zig");
+const Watches = @This();
+
+slots: [max_agent_snapshot_entries]?Watch = @splat(null),
 
 /// Registers or refreshes the session file of one pane generation. A
 /// changed path, kind or session restarts the watch; the same ones keep
@@ -16,7 +19,7 @@ slots: [types.max_records]?Watch = @splat(null),
 /// ```
 pub fn put(watches: *Watches, registration: Registration) bool {
     const path = registration.path;
-    if (path.len == 0 or path.len > source_namespace.max_path_bytes) {
+    if (path.len == 0 or path.len > max_agent_session_file_bytes) {
         return false;
     }
 
@@ -27,7 +30,7 @@ pub fn put(watches: *Watches, registration: Registration) bool {
             return true;
         }
 
-        watch.* = source_namespace.fresh(registration);
+        watch.* = session_file.fresh(registration);
         return true;
     }
 
@@ -36,14 +39,14 @@ pub fn put(watches: *Watches, registration: Registration) bool {
             continue;
         }
 
-        slot.* = source_namespace.fresh(registration);
+        slot.* = session_file.fresh(registration);
         return true;
     }
 
     return false;
 }
 
-pub fn find(watches: *Watches, key: source_namespace.PaneKey) ?*Watch {
+pub fn find(watches: *Watches, key: PaneKeyType) ?*Watch {
     for (&watches.slots) |*slot| {
         if (slot.*) |*watch| {
             if (watch.key.id == key.id and watch.key.generation == key.generation) {
@@ -55,7 +58,7 @@ pub fn find(watches: *Watches, key: source_namespace.PaneKey) ?*Watch {
     return null;
 }
 
-pub fn remove(watches: *Watches, key: source_namespace.PaneKey) bool {
+pub fn remove(watches: *Watches, key: PaneKeyType) bool {
     for (&watches.slots) |*slot| {
         if (slot.*) |watch| {
             if (watch.key.id == key.id and watch.key.generation == key.generation) {

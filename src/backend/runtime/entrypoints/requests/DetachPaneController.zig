@@ -1,8 +1,9 @@
-const Controller = @This();
-const detach_pane_commands = @import("../../application/commands/detach_pane.zig");
+const DetachPaneExecutorType = @import("../../application/commands/DetachPaneExecutor.zig");
 const StaleMessages = @import("StaleMessages.zig");
-const source_namespace = @import("detach_pane.zig");
-detach_pane: detach_pane_commands.DetachPaneExecutor,
+const DetachPaneType = @import("telar-core").DetachPane;
+const Controller = @This();
+
+detach_pane: DetachPaneExecutorType,
 stale_messages: StaleMessages,
 
 /// Creates a request-scoped detach controller.
@@ -10,7 +11,7 @@ stale_messages: StaleMessages,
 /// ```zig
 /// var controller = Controller.init(handler.executor(), stale_messages);
 /// ```
-pub fn init(detach_pane: detach_pane_commands.DetachPaneExecutor, stale_messages: StaleMessages) Controller {
+pub fn init(detach_pane: DetachPaneExecutorType, stale_messages: StaleMessages) Controller {
     return .{ .detach_pane = detach_pane, .stale_messages = stale_messages };
 }
 
@@ -20,7 +21,7 @@ pub fn init(detach_pane: detach_pane_commands.DetachPaneExecutor, stale_messages
 /// ```zig
 /// try controller.detachPane(request);
 /// ```
-pub fn detachPane(controller: *Controller, request: source_namespace.schema.DetachPane) !void {
+pub fn detachPane(controller: *Controller, request: DetachPaneType) !void {
     const result = try controller.detach_pane.execute(.{ .pane_id = request.pane_id });
 
     if (result == .not_attached) {

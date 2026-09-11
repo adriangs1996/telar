@@ -1,27 +1,30 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_snapshot.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-model: *client_model.Model,
-location: source_namespace.schema.TabLocation,
-root_pane: source_namespace.schema.PaneId,
-discovered_pane: source_namespace.schema.PaneId,
-pane_ids: [2]source_namespace.schema.PaneId,
+const PaneSnapshot = @import("../../workspace/PaneSnapshot.zig");
+const TestingModel = @This();
+
+model: *ModelType,
+location: TabLocationType,
+root_pane: PaneIdType,
+discovered_pane: PaneIdType,
+pane_ids: [2]PaneIdType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const location: source_namespace.schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const root_pane: source_namespace.schema.PaneId = @enumFromInt(1);
+    const root_pane: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = root_pane, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
-    const discovered_pane: source_namespace.schema.PaneId = @enumFromInt(2);
+    const discovered_pane: PaneIdType = @enumFromInt(2);
 
     return .{
         .model = model,
@@ -37,7 +40,7 @@ pub fn deinit(testing: *TestingModel) void {
     std.testing.allocator.destroy(testing.model);
 }
 
-pub fn snapshot(testing: *const TestingModel) client_model.TabSnapshot {
+pub fn snapshot(testing: *const TestingModel) PaneSnapshot {
     return .{
         .location = testing.location,
         .panes = &testing.pane_ids,

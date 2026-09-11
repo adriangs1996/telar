@@ -73,7 +73,7 @@ silent.
 
 ## Proof
 
-- `src/backend/history/observer.zig` replays quoted status text, every byte
+- `src/backend/history/observer_support.zig` replays quoted status text, every byte
   boundary of a synchronized Codex redraw, unchanged ready repaints, and
   input-only batches.
 - `src/backend/history/codex_screen.zig` covers drafts, cursor ownership,
@@ -81,7 +81,7 @@ silent.
 - `src/backend/runtime/entrypoints/events/pane/observation.zig` combines PTY
   frames with continuing Stop hooks and proves exactly one final sound. It
   also rejects a delayed ready result older than the current report.
-- `src/backend/agent/tracker.zig` covers active work versus settlement,
+- `src/backend/agent/tracker_support.zig` covers active work versus settlement,
   monotonic ordering within a millisecond, stale evidence expiry, and model
   responses that finish before the agent turn, including Pi tools running
   beyond the report lifetime.
@@ -89,14 +89,14 @@ silent.
   long-run renewal, nested dialogs, hung hooks, queue saturation, missed
   settlement and shutdown.
 
-- `src/backend/agent/agent.zig` proves the unseen window and its reset.
+- `src/backend/agent/Agent.zig` proves the unseen window and its reset.
 - `src/backend/runtime/tests/acknowledge_agent_test.zig` proves the
   controller-to-tracker path, idempotence, stale generations and re-arming
   after a new turn.
 - `src/backend/runtime/entrypoints/requests/acknowledge_agent.zig` proves
   stale accounting.
 - `src/core/schema_contract_test.zig` pins the `acknowledge_agent` bytes.
-- `src/frontend/client/model/tests/observations.zig` proves once-per-completion
+- `src/client/model/tests/observations.zig` proves once-per-completion
   acknowledgement and its reset.
-- `src/frontend/client/application/panes/active_pane_resource_delivery.zig`
+- `src/client/application/panes/active_pane_resource_delivery.zig`
   proves the effect precedes attachment synchronization.

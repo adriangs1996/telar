@@ -1,15 +1,16 @@
-const RejectContext = @This();
-const State = @import("ConfigReloadState.zig");
+const ConfigReloadState = @import("ConfigReloadState.zig");
 const std = @import("std");
 const Loaded = @import("Loaded.zig");
-const source_namespace = @import("config_reload.zig");
-const lua_config = @import("../../config/root.zig");
-state: *State,
+const config_reload = @import("config_reload.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
+const RejectContext = @This();
+
+state: *ConfigReloadState,
 gpa: std.mem.Allocator,
 loaded: Loaded,
 
-pub fn reject(context: RejectContext, comptime format: []const u8, args: anytype) source_namespace.Outcome {
-    var diagnostic: lua_config.Diagnostic = .{};
+pub fn reject(context: RejectContext, comptime format: []const u8, args: anytype) config_reload.Outcome {
+    var diagnostic: DiagnosticType = .{};
     diagnostic.set(format, args);
     context.state.clearOrphans();
     context.state.mtime_ns = context.loaded.mtime_ns;

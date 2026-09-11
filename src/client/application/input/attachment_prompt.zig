@@ -1,16 +1,15 @@
 //! Application policy binding local previews to one agent prompt's image markers.
 
+const AgentAttachmentMarkersType = @import("telar-core").AgentAttachmentMarkers;
+const types = @import("../../attachments/types.zig");
+const Key = @import("../../input/Key.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const attachments = @import("../../attachments/root.zig");
-const input_capability = @import("../../input/root.zig");
-const client_model = @import("../../root.zig").model;
-const key_routing = @import("key_routing.zig");
-
-const Key = input_capability.keybind.Key;
-pub const schema = core.schema;
-
-pub const RemovalCommand = @import("RemovalCommand.zig");
+const DismissCapture = @import("DismissCapture.zig");
+const DismissAttachmentHandler = @import("DismissAttachmentHandler.zig");
+const ModelType = @import("../../model/Model.zig");
+const TargetType = @import("../../attachments/AttachmentTarget.zig");
+const ObserveCapture = @import("ObserveCapture.zig");
+const ObservePaneInputHandler = @import("ObservePaneInputHandler.zig");
 
 /// Maps the marker scheme an agent's manifest declares to the client policy
 /// that binds previews to prompt markers.
@@ -18,7 +17,7 @@ pub const RemovalCommand = @import("RemovalCommand.zig");
 /// ```zig
 /// const policy = markerPolicy(.pasted_path);
 /// ```
-pub fn markerPolicy(markers: schema.AgentAttachmentMarkers) attachments.MarkerPolicy {
+pub fn markerPolicy(markers: AgentAttachmentMarkersType) types.MarkerPolicy {
     return switch (markers) {
         .stable_number => .stable_number,
         .pasted_path => .pasted_path,
@@ -32,7 +31,7 @@ pub fn markerPolicy(markers: schema.AgentAttachmentMarkers) attachments.MarkerPo
 /// ```zig
 /// if (backslashContinuesPrompt(policy) and attachments.promptContinuesAtCursor(screen)) return;
 /// ```
-pub fn backslashContinuesPrompt(policy: attachments.MarkerPolicy) bool {
+pub fn backslashContinuesPrompt(policy: types.MarkerPolicy) bool {
     return policy != .ordered;
 }
 
@@ -43,7 +42,7 @@ pub fn backslashContinuesPrompt(policy: attachments.MarkerPolicy) bool {
 /// ```zig
 /// if (editsMarkers(policy, key)) store.expectMarkerDeletion(target);
 /// ```
-pub fn editsMarkers(policy: attachments.MarkerPolicy, key: Key) bool {
+pub fn editsMarkers(policy: types.MarkerPolicy, key: Key) bool {
     if (key.phase == .release or !policy.learnsIdentity()) {
         return false;
     }
@@ -77,21 +76,11 @@ fn isLetter(key: Key, letter: u8) bool {
     };
 }
 
-pub const DismissEffects = @import("DismissEffects.zig");
-
-pub const DismissAttachmentHandler = @import("DismissAttachmentHandler.zig");
-
-pub const ObserveEffects = @import("ObserveEffects.zig");
-
-pub const ObservePaneInputHandler = @import("ObservePaneInputHandler.zig");
-
 pub const Event = enum {
     plan,
     deliver,
     remove,
 };
-
-const DismissCapture = @import("DismissCapture.zig");
 
 test "marker policies follow each provider's prompt conventions" {
     try std.testing.expect(markerPolicy(.ordered) == .ordered);
@@ -132,17 +121,15 @@ test "preview dismissal deletes the child marker before retiring local media" {
     try std.testing.expectEqualSlices(Event, &.{.plan}, capture.events[0..capture.count]);
 }
 
-const ObserveCapture = @import("ObserveCapture.zig");
-
 test "pane input mirrors marker deletion and submission into preview state" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const target: attachments.Target = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
+    const target: TargetType = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
     var capture: ObserveCapture = .{ .target = target, .marker = @enumFromInt(3) };
     var handler: ObservePaneInputHandler = .{ .model = &model, .effects = capture.effects() };
 
     try std.testing.expect(!handler.execute(target.pane_id, .{ .key = .{ .code = .backspace } }));
-    try std.testing.expectEqual(@as(attachments.Id, @enumFromInt(3)), capture.removed.?);
+    try std.testing.expectEqual(@as(types.Id, @enumFromInt(3)), capture.removed.?);
 
     _ = try model.beginClipboardCapture(target);
     try std.testing.expect(handler.execute(target.pane_id, .{ .key = .{ .code = .enter } }));
@@ -157,9 +144,9 @@ test "pane input mirrors marker deletion and submission into preview state" {
 }
 
 test "an Enter the editor turns into a newline keeps previews and the capture" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const target: attachments.Target = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
+    const target: TargetType = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
     var capture: ObserveCapture = .{ .target = target, .continues = true };
     var handler: ObservePaneInputHandler = .{ .model = &model, .effects = capture.effects() };
 

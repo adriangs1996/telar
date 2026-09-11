@@ -1,38 +1,26 @@
 //! User-visible notifications raised by a client or the runtime.
 
-const std = @import("std");
-const wire = @import("../wire.zig");
-const id = @import("../id.zig");
-const types = @import("../types.zig");
+const ShowNotification = @import("ShowNotification.zig");
 const codec = @import("../codec.zig");
+const EncoderType = @import("../Encoder.zig");
 const tags = @import("tags.zig");
-
-const ClientTag = tags.ClientTag;
-const ServerTag = tags.ServerTag;
-pub const RequestId = id.RequestId;
-pub const NotificationLevel = types.NotificationLevel;
-pub const NotificationTarget = types.NotificationTarget;
-const encodeDerived = codec.encodeDerived;
-const validateRequestId = codec.validateRequestId;
-const validatePaneId = codec.validatePaneId;
-const validateBytes = codec.validateBytes;
-
-pub const Notification = @import("Notification.zig");
-
-pub const ShowNotification = @import("ShowNotification.zig");
-
-pub const NotificationShown = @import("NotificationShown.zig");
+const id = @import("../id.zig");
+const DecoderType = @import("../Decoder.zig");
+const Notification = @import("Notification.zig");
+const std = @import("std");
+const types = @import("../types.zig");
+const NotificationShown = @import("NotificationShown.zig");
 
 pub fn encodeShowNotification(buffer: []u8, message: ShowNotification) ![]const u8 {
-    try validateRequestId(message.request_id);
-    var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ClientTag.show_notification));
+    try codec.validateRequestId(message.request_id);
+    var encoder = EncoderType.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ClientTag.show_notification));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encodeNotificationBody(&encoder, message.notification);
     return encoder.finish();
 }
 
-pub fn decodeShowNotification(decoder: *wire.Decoder) !ShowNotification {
+pub fn decodeShowNotification(decoder: *DecoderType) !ShowNotification {
     return .{
         .request_id = try id.request(try decoder.readInt(u64)),
         .notification = try decodeNotification(decoder),
@@ -40,17 +28,17 @@ pub fn decodeShowNotification(decoder: *wire.Decoder) !ShowNotification {
 }
 
 pub fn encodeNotification(buffer: []u8, message: Notification) ![]const u8 {
-    var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ServerTag.notification));
+    var encoder = EncoderType.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ServerTag.notification));
     try encodeNotificationBody(&encoder, message);
     return encoder.finish();
 }
 
-pub fn decodeNotification(decoder: *wire.Decoder) !Notification {
-    const level = std.enums.fromInt(NotificationLevel, try decoder.readByte()) orelse
+pub fn decodeNotification(decoder: *DecoderType) !Notification {
+    const level = std.enums.fromInt(types.NotificationLevel, try decoder.readByte()) orelse
         return error.InvalidNotificationLevel;
     const duration_ms = try decoder.readInt(u32);
-    const target: NotificationTarget = switch (try decoder.readByte()) {
+    const target: types.NotificationTarget = switch (try decoder.readByte()) {
         0 => .none,
         1 => .{ .pane = try id.pane(try decoder.readInt(u64)) },
         2 => .{ .tab = try id.tab(try decoder.readInt(u64)) },
@@ -69,21 +57,21 @@ pub fn decodeNotification(decoder: *wire.Decoder) !Notification {
 }
 
 pub fn encodeNotificationShown(buffer: []u8, message: NotificationShown) ![]const u8 {
-    return encodeDerived(
-        @intFromEnum(ServerTag.notification_shown),
+    return codec.encodeDerived(
+        @intFromEnum(tags.ServerTag.notification_shown),
         buffer,
         message,
     );
 }
 
-fn encodeNotificationBody(encoder: *wire.Encoder, notification: Notification) !void {
+fn encodeNotificationBody(encoder: *EncoderType, notification: Notification) !void {
     try validateNotification(notification);
     try encoder.writeByte(@intFromEnum(notification.level));
     try encoder.writeInt(u32, notification.duration_ms);
     switch (notification.target) {
         .none => try encoder.writeByte(0),
         .pane => |pane_id| {
-            try validatePaneId(pane_id);
+            try codec.validatePaneId(pane_id);
             try encoder.writeByte(1);
             try encoder.writeInt(u64, id.raw(pane_id));
         },
@@ -117,7 +105,7 @@ fn validateNotification(notification: Notification) !void {
 }
 
 fn validateNotificationText(bytes: []const u8, maximum: usize, empty_allowed: bool) !void {
-    try validateBytes(bytes, maximum, empty_allowed);
+    try codec.validateBytes(bytes, maximum, empty_allowed);
     if (!std.unicode.utf8ValidateSlice(bytes)) {
         return error.InvalidUtf8;
     }

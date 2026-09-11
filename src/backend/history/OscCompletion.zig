@@ -1,6 +1,7 @@
-const Completion = @This();
 const Clock = @import("Clock.zig");
-const source_namespace = @import("osc.zig");
+const osc = @import("osc.zig");
+const Completion = @This();
+
 clock: Clock,
 exit_code: ?i32,
-status: source_namespace.Status,
+status: osc.Status,

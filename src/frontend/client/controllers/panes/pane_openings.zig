@@ -1,30 +1,31 @@
 //! Correlates successful pane-open responses with the client operation that
 //! requested them and delivers one translated confirmation.
 
-const core = @import("telar-core");
-const panes_application = @import("telar-client").application.panes;
-
 const Client = @import("../../Client.zig");
-const pane_attachments = @import("pane_attachments.zig");
-const pane_splits = @import("pane_splits.zig");
+const PaneOpenedType = @import("telar-core").PaneOpened;
+const ApplicationPanesPaneOpenDeliveryOutcome = @import("telar-client").ApplicationPanesPaneOpenDeliveryOutcome;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const workspace_creations = @import("../workspaces/workspace_creations.zig");
+const ApplicationPanesPaneOpenDeliveryContinuation = @import("telar-client").ApplicationPanesPaneOpenDeliveryContinuation;
+const DeliverPaneOpenHandlerType = @import("telar-client").DeliverPaneOpenHandler;
+const OpenedPaneType = @import("telar-client").OpenedPane;
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
-const pane_open_delivery = panes_application.pane_open_delivery;
-const schema = core.schema;
-
-pub const Outcome = pane_open_delivery.Outcome;
+const WorkspaceCreationType = @import("telar-client").ApplicationPanesWorkspaceCreation;
+const workspace_creations = @import("../workspaces/workspace_creations.zig");
+const PaneSplitConfirmationType = @import("telar-client").PaneSplitConfirmation;
+const pane_splits = @import("pane_splits.zig");
+const PaneAttachmentConfirmationType = @import("telar-client").PaneAttachmentConfirmation;
+const pane_attachments = @import("pane_attachments.zig");
 
 /// Consumes one correlated open continuation and delivers its confirmation.
 ///
 /// ```zig
 /// _ = try apply(client, opened);
 /// ```
-pub fn apply(client: *Client, opened: schema.PaneOpened) !Outcome {
+pub fn apply(client: *Client, opened: PaneOpenedType) !ApplicationPanesPaneOpenDeliveryOutcome {
     const continuation = request_lifecycle.consume(client, opened.request_id) orelse
         return error.UnexpectedRequest;
-    const delivery: pane_open_delivery.Continuation = switch (continuation) {
-        .initial_open => pane_open_delivery.Continuation.initial_open,
+    const delivery: ApplicationPanesPaneOpenDeliveryContinuation = switch (continuation) {
+        .initial_open => ApplicationPanesPaneOpenDeliveryContinuation.initial_open,
         .create_workspace => |requested_size| .{ .create_workspace = requested_size },
         .split => |split| .{ .split = .{
             .target_pane = split.target_pane,
@@ -36,10 +37,10 @@ pub fn apply(client: *Client, opened: schema.PaneOpened) !Outcome {
             .pane_id = attachment.pane_id,
             .location = attachment.location,
         } },
-        .ignored => pane_open_delivery.Continuation.ignored,
+        .ignored => ApplicationPanesPaneOpenDeliveryContinuation.ignored,
         else => return error.UnexpectedRequest,
     };
-    var use_case: pane_open_delivery.DeliverPaneOpenHandler = .{
+    var use_case: DeliverPaneOpenHandlerType = .{
         .effects = .{
             .context = client,
             .arrive_workspace = arriveWorkspace,
@@ -55,7 +56,7 @@ pub fn apply(client: *Client, opened: schema.PaneOpened) !Outcome {
     });
 }
 
-fn translate(opened: schema.PaneOpened) pane_open_delivery.OpenedPane {
+fn translate(opened: PaneOpenedType) OpenedPaneType {
     return .{
         .pane_id = opened.pane_id,
         .location = opened.location,
@@ -63,14 +64,14 @@ fn translate(opened: schema.PaneOpened) pane_open_delivery.OpenedPane {
     };
 }
 
-fn arriveWorkspace(raw_context: *anyopaque, opened: pane_open_delivery.OpenedPane) !void {
+fn arriveWorkspace(raw_context: *anyopaque, opened: OpenedPaneType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     var use_case = workspace_handoffs.confirmationHandler(client);
 
     try use_case.execute(try workspace_handoffs.arrival(client, opened));
 }
 
-fn createWorkspace(raw_context: *anyopaque, confirmation: pane_open_delivery.WorkspaceCreation) !void {
+fn createWorkspace(raw_context: *anyopaque, confirmation: WorkspaceCreationType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     var use_case = workspace_creations.confirmationHandler(client);
 
@@ -81,7 +82,7 @@ fn createWorkspace(raw_context: *anyopaque, confirmation: pane_open_delivery.Wor
     ));
 }
 
-fn confirmSplit(raw_context: *anyopaque, confirmation: pane_open_delivery.PaneSplitConfirmation) !void {
+fn confirmSplit(raw_context: *anyopaque, confirmation: PaneSplitConfirmationType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     var use_case = pane_splits.confirmationHandler(client);
 
@@ -93,7 +94,7 @@ fn confirmSplit(raw_context: *anyopaque, confirmation: pane_open_delivery.PaneSp
     });
 }
 
-fn confirmAttachment(raw_context: *anyopaque, confirmation: pane_open_delivery.PaneAttachmentConfirmation) !void {
+fn confirmAttachment(raw_context: *anyopaque, confirmation: PaneAttachmentConfirmationType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     var use_case = pane_attachments.confirmationHandler(client);
 

@@ -1,6 +1,7 @@
+const bar_updates = @import("bar_updates.zig");
+const PositionType = @import("telar-client").Position;
 const CommandExecution = @This();
-const source_namespace = @import("bar_updates.zig");
-const bars = @import("../../../bars/root.zig");
-id: source_namespace.CommandExecutionId,
+
+id: bar_updates.CommandExecutionId,
 generation: u64,
-position: bars.Position,
+position: PositionType,

@@ -54,12 +54,12 @@ with the default expanded list; no runtime process or PTY is affected.
 
 ## Proof
 
-- `src/frontend/client/model.zig` proves collapse ownership, no-op assignment
+- `src/client/model/Model.zig` proves collapse ownership, no-op assignment
   and chrome-revision isolation.
-- `src/frontend/client/application/toggle_workspace_list.zig` proves the use
+- `src/client/model/tests/configuration_and_host.zig` proves the use
   case changes only committed client state.
-- `src/frontend/client/view.zig` proves top-bar clicks return intent without
+- `src/frontend/client/presentation/view.zig` proves top-bar clicks return intent without
   mutating the projection.
-- `src/frontend/client/client_test.zig` proves the projection remains stale
+- `src/frontend/client/tests/` proves the projection remains stale
   until presenter observation, the dispatcher does not request a draw and no
   runtime message is emitted.

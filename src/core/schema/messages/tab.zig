@@ -1,139 +1,101 @@
 //! Tab lifecycle inside a workspace and the per-tab pane snapshot.
 
-const wire = @import("../wire.zig");
-const id = @import("../id.zig");
-const types = @import("../types.zig");
+const RequestTabSnapshot = @import("RequestTabSnapshot.zig");
 const codec = @import("../codec.zig");
-const launch_mod = @import("launch.zig");
-const workspace = @import("workspace.zig");
 const tags = @import("tags.zig");
-
-const ClientTag = tags.ClientTag;
-const ServerTag = tags.ServerTag;
-pub const RequestId = id.RequestId;
-pub const PaneId = id.PaneId;
-pub const WorkspaceId = id.WorkspaceId;
-pub const TerminalSize = types.TerminalSize;
-pub const WorkspaceLocation = types.WorkspaceLocation;
-pub const TabLocation = types.TabLocation;
-pub const Launch = types.Launch;
-pub const TabMoveDirection = types.TabMoveDirection;
-pub const PaneDescriptor = types.PaneDescriptor;
-pub const LaunchView = launch_mod.LaunchView;
-const encodeDerived = codec.encodeDerived;
-const validateRequestId = codec.validateRequestId;
-const validatePaneId = codec.validatePaneId;
-const validateTabLabel = codec.validateTabLabel;
-const encodeSize = codec.encodeSize;
-const decodeSize = codec.decodeSize;
-const encodeTabLocation = codec.encodeTabLocation;
-const decodeTabLocation = codec.decodeTabLocation;
-const encodeWorkspaceLocation = codec.encodeWorkspaceLocation;
-const decodeWorkspaceLocation = codec.decodeWorkspaceLocation;
-pub const decodePaneLifecycle = codec.decodePaneLifecycle;
-
-pub const RequestTabSnapshot = @import("RequestTabSnapshot.zig");
-
-pub const CreateTab = @import("CreateTab.zig");
-
-pub const CreateTabView = @import("CreateTabView.zig");
-
-pub const RenameTab = @import("RenameTab.zig");
-
-pub const CloseTab = @import("CloseTab.zig");
-
-pub const MoveTab = @import("MoveTab.zig");
-
-pub const TabCreated = @import("TabCreated.zig");
-
-pub const TabRenamed = @import("TabRenamed.zig");
-
-pub const TabClosed = @import("TabClosed.zig");
-
-pub const TabMoved = @import("TabMoved.zig");
-
-pub const TabSnapshot = @import("TabSnapshot.zig");
-
-pub const TabSnapshotView = @import("TabSnapshotView.zig");
-
-pub const PaneDescriptorIterator = @import("PaneDescriptorIterator.zig");
+const CreateTab = @import("CreateTab.zig");
+const EncoderType = @import("../Encoder.zig");
+const id = @import("../id.zig");
+const launch_mod = @import("launch.zig");
+const DecoderType = @import("../Decoder.zig");
+const CreateTabView = @import("CreateTabView.zig");
+const RenameTab = @import("RenameTab.zig");
+const CloseTab = @import("CloseTab.zig");
+const MoveTab = @import("MoveTab.zig");
+const TabSnapshot = @import("TabSnapshot.zig");
+const types = @import("../types.zig");
+const TabSnapshotView = @import("TabSnapshotView.zig");
+const TabCreated = @import("TabCreated.zig");
+const TabRenamed = @import("TabRenamed.zig");
+const TabClosed = @import("TabClosed.zig");
+const TabMoved = @import("TabMoved.zig");
 
 pub fn encodeRequestTabSnapshot(buffer: []u8, message: RequestTabSnapshot) ![]const u8 {
-    return encodeDerived(
-        @intFromEnum(ClientTag.request_tab_snapshot),
+    return codec.encodeDerived(
+        @intFromEnum(tags.ClientTag.request_tab_snapshot),
         buffer,
         message,
     );
 }
 
 pub fn encodeCreateTab(buffer: []u8, message: CreateTab) ![]const u8 {
-    try validateRequestId(message.request_id);
+    try codec.validateRequestId(message.request_id);
     try message.size.validate();
-    try validateTabLabel(message.label, true);
-    var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ClientTag.create_tab));
+    try codec.validateTabLabel(message.label, true);
+    var encoder = EncoderType.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ClientTag.create_tab));
     try encoder.writeInt(u64, id.raw(message.request_id));
-    try encodeWorkspaceLocation(&encoder, message.workspace);
+    try codec.encodeWorkspaceLocation(&encoder, message.workspace);
     try encoder.writeSized16(message.label);
-    try encodeSize(&encoder, message.size);
+    try codec.encodeSize(&encoder, message.size);
     try launch_mod.encodeLaunch(&encoder, message.launch);
     return encoder.finish();
 }
 
-pub fn decodeCreateTab(decoder: *wire.Decoder) !CreateTabView {
+pub fn decodeCreateTab(decoder: *DecoderType) !CreateTabView {
     const request_id = try id.request(try decoder.readInt(u64));
-    const location = try decodeWorkspaceLocation(decoder);
+    const location = try codec.decodeWorkspaceLocation(decoder);
     const label = try decoder.readSized16();
-    try validateTabLabel(label, true);
+    try codec.validateTabLabel(label, true);
     return .{
         .request_id = request_id,
         .workspace = location,
         .label = label,
-        .size = try decodeSize(decoder),
+        .size = try codec.decodeSize(decoder),
         .launch = try launch_mod.decodeLaunch(decoder),
     };
 }
 
 pub fn encodeRenameTab(buffer: []u8, message: RenameTab) ![]const u8 {
-    try validateRequestId(message.request_id);
-    try validateTabLabel(message.label, false);
-    var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ClientTag.rename_tab));
+    try codec.validateRequestId(message.request_id);
+    try codec.validateTabLabel(message.label, false);
+    var encoder = EncoderType.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ClientTag.rename_tab));
     try encoder.writeInt(u64, id.raw(message.request_id));
-    try encodeTabLocation(&encoder, message.location);
+    try codec.encodeTabLocation(&encoder, message.location);
     try encoder.writeSized16(message.label);
     return encoder.finish();
 }
 
-pub fn decodeRenameTab(decoder: *wire.Decoder) !RenameTab {
+pub fn decodeRenameTab(decoder: *DecoderType) !RenameTab {
     const request_id = try id.request(try decoder.readInt(u64));
-    const location = try decodeTabLocation(decoder);
+    const location = try codec.decodeTabLocation(decoder);
     const label = try decoder.readSized16();
-    try validateTabLabel(label, false);
+    try codec.validateTabLabel(label, false);
     return .{ .request_id = request_id, .location = location, .label = label };
 }
 
 pub fn encodeCloseTab(buffer: []u8, message: CloseTab) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.close_tab), buffer, message);
+    return codec.encodeDerived(@intFromEnum(tags.ClientTag.close_tab), buffer, message);
 }
 
 pub fn encodeMoveTab(buffer: []u8, message: MoveTab) ![]const u8 {
-    return encodeDerived(@intFromEnum(ClientTag.move_tab), buffer, message);
+    return codec.encodeDerived(@intFromEnum(tags.ClientTag.move_tab), buffer, message);
 }
 
 pub fn encodeTabSnapshot(buffer: []u8, message: TabSnapshot) ![]const u8 {
-    try validateRequestId(message.request_id);
+    try codec.validateRequestId(message.request_id);
     if (message.panes.len > types.max_panes_per_tab) {
         return error.TooManyPanes;
     }
 
-    var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ServerTag.tab_snapshot));
+    var encoder = EncoderType.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ServerTag.tab_snapshot));
     try encoder.writeInt(u64, id.raw(message.request_id));
-    try encodeTabLocation(&encoder, message.location);
+    try codec.encodeTabLocation(&encoder, message.location);
     try encoder.writeInt(u16, @intCast(message.panes.len));
     for (message.panes, 0..) |pane, pane_index| {
-        try validatePaneId(pane.pane_id);
+        try codec.validatePaneId(pane.pane_id);
         for (message.panes[0..pane_index]) |previous| {
             if (previous.pane_id == pane.pane_id) {
                 return error.DuplicatePane;
@@ -145,9 +107,9 @@ pub fn encodeTabSnapshot(buffer: []u8, message: TabSnapshot) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeTabSnapshot(decoder: *wire.Decoder) !TabSnapshotView {
+pub fn decodeTabSnapshot(decoder: *DecoderType) !TabSnapshotView {
     const request_id = try id.request(try decoder.readInt(u64));
-    const location = try decodeTabLocation(decoder);
+    const location = try codec.decodeTabLocation(decoder);
     const pane_count = try decoder.readInt(u16);
     if (pane_count > types.max_panes_per_tab) {
         return error.TooManyPanes;
@@ -156,10 +118,10 @@ pub fn decodeTabSnapshot(decoder: *wire.Decoder) !TabSnapshotView {
     const panes_start = decoder.index;
     // Quadratic duplicate scan, acceptable while max_panes_per_tab is 64;
     // revisit before raising the limit.
-    var seen: [types.max_panes_per_tab]PaneId = undefined;
+    var seen: [types.max_panes_per_tab]id.PaneId = undefined;
     for (0..pane_count) |pane_index| {
         const pane_id = try id.pane(try decoder.readInt(u64));
-        _ = try decodePaneLifecycle(try decoder.readByte());
+        _ = try codec.decodePaneLifecycle(try decoder.readByte());
         for (seen[0..pane_index]) |previous| {
             if (previous == pane_id) {
                 return error.DuplicatePane;
@@ -176,25 +138,25 @@ pub fn decodeTabSnapshot(decoder: *wire.Decoder) !TabSnapshotView {
 }
 
 pub fn encodeTabCreated(buffer: []u8, message: TabCreated) ![]const u8 {
-    try validateRequestId(message.request_id);
-    try validatePaneId(message.root_pane_id);
-    try validateTabLabel(message.label, false);
-    var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ServerTag.tab_created));
+    try codec.validateRequestId(message.request_id);
+    try codec.validatePaneId(message.root_pane_id);
+    try codec.validateTabLabel(message.label, false);
+    var encoder = EncoderType.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ServerTag.tab_created));
     try encoder.writeInt(u64, id.raw(message.request_id));
-    try encodeTabLocation(&encoder, message.location);
+    try codec.encodeTabLocation(&encoder, message.location);
     try encoder.writeInt(u16, message.position);
     try encoder.writeSized16(message.label);
     try encoder.writeInt(u64, id.raw(message.root_pane_id));
     return encoder.finish();
 }
 
-pub fn decodeTabCreated(decoder: *wire.Decoder) !TabCreated {
+pub fn decodeTabCreated(decoder: *DecoderType) !TabCreated {
     const request_id = try id.request(try decoder.readInt(u64));
-    const location = try decodeTabLocation(decoder);
+    const location = try codec.decodeTabLocation(decoder);
     const position = try decoder.readInt(u16);
     const label = try decoder.readSized16();
-    try validateTabLabel(label, false);
+    try codec.validateTabLabel(label, false);
     return .{
         .request_id = request_id,
         .location = location,
@@ -205,28 +167,28 @@ pub fn decodeTabCreated(decoder: *wire.Decoder) !TabCreated {
 }
 
 pub fn encodeTabRenamed(buffer: []u8, message: TabRenamed) ![]const u8 {
-    try validateRequestId(message.request_id);
-    try validateTabLabel(message.label, false);
-    var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ServerTag.tab_renamed));
+    try codec.validateRequestId(message.request_id);
+    try codec.validateTabLabel(message.label, false);
+    var encoder = EncoderType.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ServerTag.tab_renamed));
     try encoder.writeInt(u64, id.raw(message.request_id));
-    try encodeTabLocation(&encoder, message.location);
+    try codec.encodeTabLocation(&encoder, message.location);
     try encoder.writeSized16(message.label);
     return encoder.finish();
 }
 
-pub fn decodeTabRenamed(decoder: *wire.Decoder) !TabRenamed {
+pub fn decodeTabRenamed(decoder: *DecoderType) !TabRenamed {
     const request_id = try id.request(try decoder.readInt(u64));
-    const location = try decodeTabLocation(decoder);
+    const location = try codec.decodeTabLocation(decoder);
     const label = try decoder.readSized16();
-    try validateTabLabel(label, false);
+    try codec.validateTabLabel(label, false);
     return .{ .request_id = request_id, .location = location, .label = label };
 }
 
 pub fn encodeTabClosed(buffer: []u8, message: TabClosed) ![]const u8 {
-    return encodeDerived(@intFromEnum(ServerTag.tab_closed), buffer, message);
+    return codec.encodeDerived(@intFromEnum(tags.ServerTag.tab_closed), buffer, message);
 }
 
 pub fn encodeTabMoved(buffer: []u8, message: TabMoved) ![]const u8 {
-    return encodeDerived(@intFromEnum(ServerTag.tab_moved), buffer, message);
+    return codec.encodeDerived(@intFromEnum(tags.ServerTag.tab_moved), buffer, message);
 }

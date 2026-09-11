@@ -1,5 +1,6 @@
-const Processing = @This();
-const source_namespace = @import("root.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const Stats = @import("Stats.zig");
-current_size: source_namespace.schema.TerminalSize,
+const Processing = @This();
+
+current_size: TerminalSizeType,
 stats: *Stats,

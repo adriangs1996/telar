@@ -1,9 +1,10 @@
-/// Owned captured-output read result.
-const OutputResult = @This();
-const source_namespace = @import("model.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const QueryOrigin = @import("QueryOrigin.zig");
 const std = @import("std");
-request_id: source_namespace.schema.RequestId,
+/// Owned captured-output read result.
+const OutputResult = @This();
+
+request_id: RequestIdType,
 origin: QueryOrigin,
 id: u64,
 truncated: bool,

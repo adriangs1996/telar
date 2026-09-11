@@ -1,7 +1,8 @@
-const Context = @This();
 const std = @import("std");
-const channel_mod = @import("channel_support.zig");
-const metrics_mod = @import("metrics.zig");
+const ChannelType = @import("Channel.zig");
+const CountersType = @import("Counters.zig");
+const Context = @This();
+
 io: std.Io,
-channel: *channel_mod.Channel,
-metrics: *metrics_mod.Counters,
+channel: *ChannelType,
+metrics: *CountersType,

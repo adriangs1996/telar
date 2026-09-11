@@ -1,7 +1,9 @@
+const DecoderType = @import("../Decoder.zig");
+const types = @import("../types.zig");
+const layout = @import("layout.zig");
 const ClientLayoutNodeIterator = @This();
-const wire = @import("../wire.zig");
-const source_namespace = @import("layout.zig");
-decoder: wire.Decoder,
+
+decoder: DecoderType,
 remaining: u16,
 
 /// Decodes the next tree node, returning null after the declared count.
@@ -9,11 +11,11 @@ remaining: u16,
 /// ```zig
 /// const node = (try nodes.next()) orelse return;
 /// ```
-pub fn next(iterator: *ClientLayoutNodeIterator) !?source_namespace.ClientLayoutNode {
+pub fn next(iterator: *ClientLayoutNodeIterator) !?types.ClientLayoutNode {
     if (iterator.remaining == 0) {
         return null;
     }
 
     iterator.remaining -= 1;
-    return @as(?source_namespace.ClientLayoutNode, try source_namespace.decodeClientLayoutNode(&iterator.decoder));
+    return @as(?types.ClientLayoutNode, try layout.decodeClientLayoutNode(&iterator.decoder));
 }

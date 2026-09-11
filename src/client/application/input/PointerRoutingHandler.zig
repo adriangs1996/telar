@@ -1,14 +1,15 @@
+const PointerRoutingEffects = @import("PointerRoutingEffects.zig");
+const pointer_routing = @import("pointer_routing.zig");
 const PointerRoutingHandler = @This();
-const Effects = @import("PointerRoutingEffects.zig");
-const source_namespace = @import("pointer_routing.zig");
-effects: Effects,
+
+effects: PointerRoutingEffects,
 
 /// Gives each pointer event to the first owner that accepts it.
 ///
 /// ```zig
 /// const outcome = try handler.execute(authority);
 /// ```
-pub fn execute(handler: *PointerRoutingHandler, authority: source_namespace.Authority) !source_namespace.Outcome {
+pub fn execute(handler: *PointerRoutingHandler, authority: pointer_routing.Authority) !pointer_routing.Outcome {
     const command = switch (authority) {
         .unavailable => return .unavailable,
         .available => |available| available,

@@ -1,7 +1,8 @@
-const Composition = @This();
-const Model = @import("telar-client").workspace.multiplexer.Model;
-const source_namespace = @import("multiplexer.zig");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const ScreenType = @import("../presentation/Screen.zig");
 const CompositionInput = @import("CompositionInput.zig");
-model: *const Model,
-screen: *source_namespace.term.Screen,
+const Composition = @This();
+
+model: *const MultiplexerModel,
+screen: *ScreenType,
 input: CompositionInput,

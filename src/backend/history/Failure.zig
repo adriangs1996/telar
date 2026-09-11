@@ -1,6 +1,7 @@
-const Failure = @This();
-const source_namespace = @import("model.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const QueryOrigin = @import("QueryOrigin.zig");
-request_id: source_namespace.schema.RequestId,
+const Failure = @This();
+
+request_id: RequestIdType,
 origin: QueryOrigin,
 message: []const u8,

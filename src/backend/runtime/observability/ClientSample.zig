@@ -1,6 +1,7 @@
+const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
 const ClientSample = @This();
-const source_namespace = @import("telemetry.zig");
-attachment_stores: []const *const source_namespace.AttachmentStore = &.{},
+
+attachment_stores: []const *const AttachmentStoreType = &.{},
 count: usize = 0,
 response_queue_depth: usize = 0,
 response_queue_high_water: usize = 0,

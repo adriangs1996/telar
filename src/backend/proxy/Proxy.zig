@@ -1,15 +1,19 @@
-const Proxy = @This();
 const std = @import("std");
-const source_namespace = @import("root.zig");
+const proxy_namespace = @import("proxy_namespace.zig");
 const Config = @import("Config.zig");
-const service_mod = @import("service/root.zig");
-const capture_mod = @import("capture/root.zig");
+const ServiceType = @import("service/Service.zig");
+const HalfType = @import("capture/Half.zig");
+const PaneKeyType = @import("../pane/PaneKey.zig");
 const PaneEnvironmentOptions = @import("PaneEnvironmentOptions.zig");
 const PaneEnvironment = @import("PaneEnvironment.zig");
-const pty = @import("../pty/root.zig");
+const OverrideType = @import("../pty/Override.zig");
+const ChildEnvironmentType = @import("../pty/ChildEnvironment.zig");
 const Observation = @import("Observation.zig");
+const Snapshot = @import("Snapshot.zig");
+const Proxy = @This();
+
 gpa: std.mem.Allocator,
-lifecycle: source_namespace.ServiceLifecycle,
+lifecycle: proxy_namespace.ServiceLifecycle,
 
 /// Creates and starts the complete proxy capability.
 ///
@@ -17,11 +21,11 @@ lifecycle: source_namespace.ServiceLifecycle,
 /// const proxy = try Proxy.create(io, gpa, config);
 /// defer proxy.destroy();
 /// ```
-pub fn create(io: source_namespace.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
+pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
     const proxy = try gpa.create(Proxy);
     errdefer gpa.destroy(proxy);
 
-    const service = try service_mod.Service.create(io, gpa, .{
+    const service = try ServiceType.create(io, gpa, .{
         .key = config.key_path,
         .certificate = config.certificate_path,
         .bundle = config.bundle_path,
@@ -32,7 +36,7 @@ pub fn create(io: source_namespace.Io, gpa: std.mem.Allocator, config: Config) !
 
     proxy.* = .{
         .gpa = gpa,
-        .lifecycle = try source_namespace.ServiceLifecycle.start(service),
+        .lifecycle = try proxy_namespace.ServiceLifecycle.start(service),
     };
 
     return proxy;
@@ -56,7 +60,7 @@ pub fn destroy(proxy: *Proxy) void {
 /// ```zig
 /// const half = try proxy.receiveCapture(io);
 /// ```
-pub fn receiveCapture(proxy: *Proxy, io: source_namespace.Io) anyerror!*capture_mod.Half {
+pub fn receiveCapture(proxy: *Proxy, io: std.Io) anyerror!*HalfType {
     return proxy.lifecycle.service.receiveCapture(io);
 }
 
@@ -65,7 +69,7 @@ pub fn receiveCapture(proxy: *Proxy, io: source_namespace.Io) anyerror!*capture_
 /// ```zig
 /// proxy.decodeCapture(half);
 /// ```
-pub fn decodeCapture(proxy: *Proxy, half: *capture_mod.Half) void {
+pub fn decodeCapture(proxy: *Proxy, half: *HalfType) void {
     proxy.lifecycle.service.decodeCapture(half);
 }
 
@@ -77,8 +81,8 @@ pub fn decodeCapture(proxy: *Proxy, half: *capture_mod.Half) void {
 /// var pane_environment = try proxy.registerPane(key, .{ .inherited = inherited, .overrides = pane_overrides });
 /// defer pane_environment.deinit();
 /// ```
-pub fn registerPane(proxy: *Proxy, key: source_namespace.PaneKey, options: PaneEnvironmentOptions) !PaneEnvironment {
-    std.debug.assert(options.overrides.len <= source_namespace.max_pane_overrides);
+pub fn registerPane(proxy: *Proxy, key: PaneKeyType, options: PaneEnvironmentOptions) !PaneEnvironment {
+    std.debug.assert(options.overrides.len <= proxy_namespace.max_pane_overrides);
     const service = proxy.lifecycle.service;
     var credential = try service.registerPane(.{ .id = key.id, .generation = key.generation });
     defer std.crypto.secureZero(u8, &credential.token);
@@ -88,15 +92,15 @@ pub fn registerPane(proxy: *Proxy, key: source_namespace.PaneKey, options: PaneE
     defer std.crypto.secureZero(u8, &url_buffer);
     const proxy_url = try service.credentialUrl(&url_buffer, &credential);
     const client = service.clientConfiguration();
-    const proxy_overrides = source_namespace.environmentOverrides(
+    const proxy_overrides = proxy_namespace.environmentOverrides(
         proxy_url,
         client.certificate_path,
         client.bundle_path,
     );
-    var overrides: [source_namespace.max_pane_overrides + source_namespace.environment_override_count]pty.ChildEnvironment.Override = undefined;
+    var overrides: [proxy_namespace.max_pane_overrides + proxy_namespace.environment_override_count]OverrideType = undefined;
     @memcpy(overrides[0..options.overrides.len], options.overrides);
     @memcpy(overrides[options.overrides.len .. options.overrides.len + proxy_overrides.len], &proxy_overrides);
-    return .{ .value = try pty.ChildEnvironment.initWithOverrides(proxy.gpa, options.inherited, .{
+    return .{ .value = try ChildEnvironmentType.initWithOverrides(proxy.gpa, options.inherited, .{
         .telar_term_program = "telar",
         .overrides = overrides[0 .. options.overrides.len + proxy_overrides.len],
     }) };
@@ -107,7 +111,7 @@ pub fn registerPane(proxy: *Proxy, key: source_namespace.PaneKey, options: PaneE
 /// ```zig
 /// proxy.revokePane(key);
 /// ```
-pub fn revokePane(proxy: *Proxy, key: source_namespace.PaneKey) void {
+pub fn revokePane(proxy: *Proxy, key: PaneKeyType) void {
     proxy.lifecycle.service.unregisterPane(.{ .id = key.id, .generation = key.generation });
 }
 
@@ -117,7 +121,7 @@ pub fn revokePane(proxy: *Proxy, key: source_namespace.PaneKey) void {
 /// ```zig
 /// const observation = try proxy.receive(io);
 /// ```
-pub fn receive(proxy: *Proxy, io: source_namespace.Io) anyerror!Observation {
+pub fn receive(proxy: *Proxy, io: std.Io) anyerror!Observation {
     var event = try proxy.lifecycle.service.receive(io);
     defer std.crypto.secureZero(u8, &event.credential.token);
     return .{
@@ -140,12 +144,12 @@ pub fn receive(proxy: *Proxy, io: source_namespace.Io) anyerror!Observation {
 /// ```zig
 /// const snapshot = proxy.metrics();
 /// ```
-pub fn metrics(proxy: *const Proxy) source_namespace.MetricsSnapshot {
+pub fn metrics(proxy: *const Proxy) Snapshot {
     return proxy.lifecycle.service.metrics();
 }
 
-pub fn address(proxy: *const Proxy) source_namespace.Io.net.IpAddress {
+pub fn address(proxy: *const Proxy) std.Io.net.IpAddress {
     const client = proxy.lifecycle.service.clientConfiguration();
 
-    return source_namespace.Io.net.IpAddress.parse("127.0.0.1", client.port) catch unreachable;
+    return std.Io.net.IpAddress.parse("127.0.0.1", client.port) catch unreachable;
 }

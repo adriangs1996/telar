@@ -1,9 +1,10 @@
+const keybind = @import("keybind.zig");
+const Control = @import("telar-client").Control;
 const Capture = @This();
-const source_namespace = @import("keybind.zig");
-const Control = @import("telar-client").input.keybind.Control;
+
 bytes: [256]u8 = undefined,
 len: usize = 0,
-actions: [8]source_namespace.TestAction = undefined,
+actions: [8]keybind.TestAction = undefined,
 action_len: usize = 0,
 stop_on_action: bool = false,
 
@@ -15,7 +16,7 @@ pub fn forward(capture: *Capture, bytes: []const u8) !void {
     capture.len += bytes.len;
 }
 
-pub fn action(capture: *Capture, value: source_namespace.TestAction) !Control {
+pub fn action(capture: *Capture, value: keybind.TestAction) !Control {
     capture.actions[capture.action_len] = value;
     capture.action_len += 1;
     return if (capture.stop_on_action) .stop else .continue_routing;

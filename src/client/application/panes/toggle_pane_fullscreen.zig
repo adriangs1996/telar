@@ -1,26 +1,15 @@
 //! Application use case for toggling one client's focused pane fullscreen.
 
+const TogglePaneFullscreenTestingModel = @import("TogglePaneFullscreenTestingModel.zig");
+const TogglePaneFullscreenEffectsCapture = @import("TogglePaneFullscreenEffectsCapture.zig");
+const TogglePaneFullscreenHandler = @import("TogglePaneFullscreenHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-pub const ui = core.ui;
-
-pub const TogglePaneFullscreen = client_model.TogglePaneFullscreenRequest;
-
-pub const FullscreenEffects = @import("FullscreenEffects.zig");
-
-pub const TogglePaneFullscreenHandler = @import("TogglePaneFullscreenHandler.zig");
-
-const TestingModel = @import("TogglePaneFullscreenTestingModel.zig");
-
-const EffectsCapture = @import("TogglePaneFullscreenEffectsCapture.zig");
+const VersionType = @import("../../model/Version.zig");
 
 test "TogglePaneFullscreenHandler commits before delivering geometry" {
-    var testing = try TestingModel.init();
+    var testing = try TogglePaneFullscreenTestingModel.init();
     defer testing.deinit();
-    var effects: EffectsCapture = .{
+    var effects: TogglePaneFullscreenEffectsCapture = .{
         .model = testing.model,
         .expected_focused = testing.first,
     };
@@ -41,9 +30,9 @@ test "TogglePaneFullscreenHandler commits before delivering geometry" {
 }
 
 test "TogglePaneFullscreenHandler accepts a single pane and suppresses absent layouts" {
-    var testing = try TestingModel.init();
+    var testing = try TogglePaneFullscreenTestingModel.init();
     defer testing.deinit();
-    var effects: EffectsCapture = .{
+    var effects: TogglePaneFullscreenEffectsCapture = .{
         .model = testing.model,
         .expected_focused = testing.first,
     };
@@ -61,13 +50,13 @@ test "TogglePaneFullscreenHandler accepts a single pane and suppresses absent la
     try std.testing.expect((try handler.execute(.{ .area = testing.area })) == null);
 
     try std.testing.expectEqual(@as(usize, 1), effects.calls);
-    try std.testing.expectEqualDeep(client_model.Version{ .panes = 1 }, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{ .panes = 1 }, testing.model.version());
 }
 
 test "TogglePaneFullscreenHandler preserves the commit after effect failure" {
-    var testing = try TestingModel.init();
+    var testing = try TogglePaneFullscreenTestingModel.init();
     defer testing.deinit();
-    var effects: EffectsCapture = .{
+    var effects: TogglePaneFullscreenEffectsCapture = .{
         .model = testing.model,
         .expected_focused = testing.first,
         .fail = true,

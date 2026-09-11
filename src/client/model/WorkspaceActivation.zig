@@ -1,7 +1,9 @@
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
 const WorkspaceActivation = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
-location: source_namespace.schema.TabLocation,
+
+pane_id: PaneIdType,
+location: TabLocationType,
 workspace_revision_before: u64,
 tabs_revision_before: u64,
 active_tab_revision_before: u64,

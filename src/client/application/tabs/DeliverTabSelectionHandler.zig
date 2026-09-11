@@ -1,16 +1,20 @@
-const DeliverTabSelectionHandler = @This();
-const client_model = @import("../../root.zig").model;
-const pane_paste = @import("../input/root.zig").pane_paste;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
-const Effects = @import("TabSelectionDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const PanePasteEffects = @import("../input/PanePasteEffects.zig");
+const PaneFocusReportingEffects = @import("../panes/PaneFocusReportingEffects.zig");
+const TabAttachmentRetirementEffects = @import("TabAttachmentRetirementEffects.zig");
+const TabSelectionDeliveryEffects = @import("TabSelectionDeliveryEffects.zig");
+const TabSelectionType = @import("../../model/TabSelection.zig");
+const RetireTabAttachmentsHandlerType = @import("RetireTabAttachmentsHandler.zig");
 const std = @import("std");
-const source_namespace = @import("tab_selection_delivery.zig");
-model: *client_model.Model,
-paste_effects: pane_paste.Effects,
-focus_effects: pane_focus_reporting.Effects,
-attachment_effects: tab_attachment_retirement.Effects,
-effects: Effects,
+const TabLocationType = @import("telar-core").TabLocation;
+const TabType = @import("../../workspace/Tab.zig");
+const DeliverTabSelectionHandler = @This();
+
+model: *ModelType,
+paste_effects: PanePasteEffects,
+focus_effects: PaneFocusReportingEffects,
+attachment_effects: TabAttachmentRetirementEffects,
+effects: TabSelectionDeliveryEffects,
 
 /// Validates one exact selection before retiring the previous tab's
 /// resources and activating the selected tab's graphics and snapshot.
@@ -18,10 +22,10 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(selection);
 /// ```
-pub fn execute(handler: *DeliverTabSelectionHandler, selection: client_model.TabSelection) !void {
+pub fn execute(handler: *DeliverTabSelectionHandler, selection: TabSelectionType) !void {
     try handler.validate(selection);
 
-    var retire_previous: tab_attachment_retirement.RetireTabAttachmentsHandler = .{
+    var retire_previous: RetireTabAttachmentsHandlerType = .{
         .model = handler.model,
         .paste_effects = handler.paste_effects,
         .focus_effects = handler.focus_effects,
@@ -39,7 +43,7 @@ pub fn execute(handler: *DeliverTabSelectionHandler, selection: client_model.Tab
     try handler.effects.request_tab_snapshot(handler.effects.context, selection.selected);
 }
 
-fn validate(handler: *const DeliverTabSelectionHandler, selection: client_model.TabSelection) !void {
+fn validate(handler: *const DeliverTabSelectionHandler, selection: TabSelectionType) !void {
     if (std.meta.eql(selection.previous, selection.selected)) {
         return error.StaleTabSelection;
     }
@@ -61,7 +65,7 @@ fn validate(handler: *const DeliverTabSelectionHandler, selection: client_model.
     }
 }
 
-fn exactTab(handler: *const DeliverTabSelectionHandler, location: source_namespace.schema.TabLocation) !*source_namespace.tabs_mod.Tab {
+fn exactTab(handler: *const DeliverTabSelectionHandler, location: TabLocationType) !*TabType {
     const tab = handler.model.workspace.find(location.tab_id) orelse return error.StaleTabSelection;
     if (!std.meta.eql(tab.location, location)) {
         return error.StaleTabSelection;

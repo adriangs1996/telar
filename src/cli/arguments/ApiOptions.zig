@@ -1,5 +1,6 @@
-const ApiOptions = @This();
 const std = @import("std");
+const ApiOptions = @This();
+
 json: bool = false,
 
 pub fn parse(args: []const [*:0]const u8) !ApiOptions {

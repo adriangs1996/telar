@@ -4,21 +4,9 @@
 //! copy so application decisions and presentation read the same revision.
 
 const std = @import("std");
-const core = @import("telar-core");
-
-pub const schema = core.schema;
-
-pub const max_agents = schema.max_agent_snapshot_entries;
-
-pub const AgentKey = @import("AgentKey.zig");
-
-pub const AgentInput = @import("AgentInput.zig");
-
-pub const Agent = @import("Agent.zig");
-
-pub const SnapshotInput = @import("SnapshotInput.zig");
-
-pub const Snapshot = @import("Snapshot.zig");
+const AgentInput = @import("AgentInput.zig");
+const Snapshot = @import("AgentSnapshot.zig");
+const AgentProviderType = @import("telar-core").AgentProvider;
 
 pub fn copyLabel(destination: []u8, source: []const u8) !u8 {
     if (source.len > destination.len) {
@@ -62,7 +50,7 @@ test "snapshots own current agents and ignore stale replacement" {
     const agent = testingAgent();
 
     try std.testing.expect(try snapshot.replace(.{ .revision = 4, .agents = &.{agent} }));
-    try std.testing.expectEqual(schema.AgentProvider.codex, snapshot.slice()[0].provider);
+    try std.testing.expectEqual(AgentProviderType.codex, snapshot.slice()[0].provider);
     try std.testing.expectEqualStrings("Improve sidebar", snapshot.slice()[0].sessionTitle());
     try std.testing.expect(!try snapshot.replace(.{ .revision = 3, .agents = &.{} }));
     try std.testing.expectEqual(@as(u8, 1), snapshot.count);

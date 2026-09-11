@@ -1,30 +1,19 @@
 //! The launch body shared by every message that starts a child: cwd,
 //! arguments and environment, bounded before any consumer allocates.
 
-const std = @import("std");
-const wire = @import("../wire.zig");
-const id = @import("../id.zig");
-const types = @import("../types.zig");
+const EncoderType = @import("../Encoder.zig");
+const Launch = @import("../Launch.zig");
 const codec = @import("../codec.zig");
+const types = @import("../types.zig");
+const id = @import("../id.zig");
+const std = @import("std");
+const DecoderType = @import("../Decoder.zig");
+const LaunchView = @import("LaunchView.zig");
 
-pub const PaneId = id.PaneId;
-const Launch = types.Launch;
-pub const EnvironmentMode = types.EnvironmentMode;
-pub const EnvironmentEntry = types.EnvironmentEntry;
-pub const validateBytes = codec.validateBytes;
-const validatePaneId = codec.validatePaneId;
-pub const validateEnvironmentEntry = codec.validateEnvironmentEntry;
-
-pub const LaunchView = @import("LaunchView.zig");
-
-pub const ArgumentIterator = @import("ArgumentIterator.zig");
-
-pub const EnvironmentIterator = @import("EnvironmentIterator.zig");
-
-pub fn encodeLaunch(encoder: *wire.Encoder, launch: Launch) !void {
-    try validateBytes(launch.cwd, types.max_cwd_bytes, false);
+pub fn encodeLaunch(encoder: *EncoderType, launch: Launch) !void {
+    try codec.validateBytes(launch.cwd, types.max_cwd_bytes, false);
     if (launch.cwd_source) |pane_id| {
-        try validatePaneId(pane_id);
+        try codec.validatePaneId(pane_id);
     }
     if (launch.arguments.len == 0 or launch.arguments.len > types.max_argument_count) {
         return error.InvalidArgumentCount;
@@ -38,7 +27,7 @@ pub fn encodeLaunch(encoder: *wire.Encoder, launch: Launch) !void {
     try encoder.writeInt(u16, @intCast(launch.arguments.len));
     var argument_bytes: usize = 0;
     for (launch.arguments, 0..) |argument, index| {
-        try validateBytes(argument, std.math.maxInt(u16), index != 0);
+        try codec.validateBytes(argument, std.math.maxInt(u16), index != 0);
         argument_bytes = std.math.add(usize, argument_bytes, argument.len) catch
             return error.ArgumentsTooLarge;
         if (argument_bytes > types.max_argument_bytes) {
@@ -51,7 +40,7 @@ pub fn encodeLaunch(encoder: *wire.Encoder, launch: Launch) !void {
     try encoder.writeInt(u16, @intCast(launch.environment.len));
     var environment_bytes: usize = 0;
     for (launch.environment) |entry| {
-        try validateEnvironmentEntry(entry);
+        try codec.validateEnvironmentEntry(entry);
         environment_bytes = std.math.add(usize, environment_bytes, entry.name.len) catch
             return error.EnvironmentTooLarge;
         environment_bytes = std.math.add(usize, environment_bytes, entry.value.len) catch
@@ -64,13 +53,13 @@ pub fn encodeLaunch(encoder: *wire.Encoder, launch: Launch) !void {
     }
 }
 
-pub fn decodeLaunch(decoder: *wire.Decoder) !LaunchView {
+pub fn decodeLaunch(decoder: *DecoderType) !LaunchView {
     // Structural walk only: field boundaries and byte budgets, so every wire
     // length is checked before a consumer allocates from it. Content rules
     // (embedded NULs, '=' in names) are enforced by the iterators as the
     // consumer decodes each item, so items are only scanned once.
     const cwd = try decoder.readSized16();
-    try validateBytes(cwd, types.max_cwd_bytes, false);
+    try codec.validateBytes(cwd, types.max_cwd_bytes, false);
     const cwd_source_raw = try decoder.readInt(u64);
     const cwd_source = if (cwd_source_raw == 0)
         null

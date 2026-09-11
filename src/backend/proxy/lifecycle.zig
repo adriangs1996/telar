@@ -1,10 +1,11 @@
 //! Ownership transaction for one running proxy service.
 
+const GenericLifecyclePort = @import("GenericLifecyclePort.zig").Type;
+const GenericLifecycle = @import("GenericLifecycle.zig").Type;
+const FakeService = @import("FakeService.zig");
+const FakeWorker = @import("FakeWorker.zig");
 const std = @import("std");
-
-pub const Port = @import("GenericLifecyclePort.zig").Type;
-
-pub const Lifecycle = @import("GenericLifecycle.zig").Type;
+const LifecycleCapture = @import("LifecycleCapture.zig");
 
 pub const Step = enum {
     start,
@@ -12,12 +13,6 @@ pub const Step = enum {
     close,
     destroy,
 };
-
-const Capture = @import("LifecycleCapture.zig");
-
-const FakeService = @import("FakeService.zig");
-
-const FakeWorker = @import("FakeWorker.zig");
 
 fn startWorker(service: *FakeService) !FakeWorker {
     service.capture.record(.start);
@@ -52,21 +47,21 @@ fn destroyService(service: *FakeService) void {
     service.capture.destroyed = true;
 }
 
-const test_port: Port(FakeService, FakeWorker) = .{
+const test_port: GenericLifecyclePort(FakeService, FakeWorker) = .{
     .start = startWorker,
     .cancel = cancelWorker,
     .close = closeObservations,
     .destroy = destroyService,
 };
 
-const TestLifecycle = Lifecycle(FakeService, FakeWorker, test_port);
+const TestLifecycle = GenericLifecycle(FakeService, FakeWorker, test_port);
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const LifecycleCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
 test "worker startup failure destroys the transferred service" {
-    var capture: Capture = .{ .start_fails = true };
+    var capture: LifecycleCapture = .{ .start_fails = true };
     var service: FakeService = .{ .capture = &capture };
 
     try std.testing.expectError(error.ConcurrencyUnavailable, TestLifecycle.start(&service));
@@ -76,7 +71,7 @@ test "worker startup failure destroys the transferred service" {
 }
 
 test "successful startup retains every resource until deinit" {
-    var capture: Capture = .{};
+    var capture: LifecycleCapture = .{};
     var service: FakeService = .{ .capture = &capture };
     var lifecycle = try TestLifecycle.start(&service);
 

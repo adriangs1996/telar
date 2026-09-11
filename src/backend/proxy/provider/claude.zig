@@ -1,8 +1,8 @@
 //! Anthropic streaming-protocol interpretation.
 
+const SseEvent = @import("../SseEvent.zig");
 const std = @import("std");
 const sse = @import("../sse.zig");
-
 const MessageDelta = @import("MessageDelta.zig");
 
 /// Returns whether an SSE event explicitly reports a naturally completed
@@ -18,7 +18,7 @@ const MessageDelta = @import("MessageDelta.zig");
 ///     .truncated = false,
 /// });
 /// ```
-pub fn completesTurn(event: sse.Event) bool {
+pub fn completesTurn(event: SseEvent) bool {
     if (event.truncated or !std.mem.eql(u8, event.name, "message_delta")) {
         return false;
     }
@@ -34,7 +34,7 @@ pub fn completesTurn(event: sse.Event) bool {
         std.mem.eql(u8, delta.stop_reason orelse return false, "end_turn");
 }
 
-fn testEvent(name: []const u8, data: []const u8) sse.Event {
+fn testEvent(name: []const u8, data: []const u8) SseEvent {
     return .{ .name = name, .data = data, .truncated = false };
 }
 

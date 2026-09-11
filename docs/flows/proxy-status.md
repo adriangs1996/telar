@@ -84,14 +84,14 @@ nothing.
 
 ## Proof
 
-- `src/backend/runtime/delivery/root.zig` proves one committed status delivery per
+- `src/backend/runtime/delivery/delivery_namespace.zig` proves one committed status delivery per
   client connection.
-- `src/core/schema/root.zig` defines the bounded active, scope, and trust state.
-- `src/frontend/client/model/root.zig` proves idempotence and isolated versioning.
-- `src/frontend/client/application/agents/proxy_status.zig` proves commit-before-
+- `src/core/schema/schema.zig` defines the bounded active, scope, and trust state.
+- `src/client/model/Model.zig` proves idempotence and isolated versioning.
+- `src/client/application/agents/proxy_status.zig` proves commit-before-
   delivery ordering, duplicate suppression and retained commits after delivery
   failure.
-- `src/frontend/client/application/agents/proxy_status_delivery.zig` proves exact
+- `src/client/application/agents/proxy_status_delivery.zig` proves exact
   transition validation, notification policy and retained commits after
   publication failure.
 - `src/frontend/client/tests/notifications_and_agents.zig` proves protocol adaptation, duplicate

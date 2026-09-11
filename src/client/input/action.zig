@@ -4,24 +4,17 @@
 //! plugin names are resolved while compiling configuration so routing remains
 //! allocation-free and never retains configuration-owned memory.
 
+const CommandTab = @import("CommandTab.zig");
+const Notification = @import("Notification.zig");
+const CallbackRef = @import("CallbackRef.zig");
+const PluginAction = @import("PluginAction.zig");
 const std = @import("std");
-const core = @import("telar-core");
-
-pub const schema = core.schema;
-
-pub const CallbackRef = @import("CallbackRef.zig");
-
-pub const PluginAction = @import("PluginAction.zig");
 
 pub const SplitDirection = enum(u8) { horizontal, vertical };
 pub const Direction = enum(u8) { left, right, up, down };
 pub const SidebarDirection = enum(u8) { left, right };
 pub const TabMove = enum(u8) { previous, next };
 pub const ScrollDirection = enum(u8) { up, down };
-
-pub const Notification = @import("Notification.zig");
-
-pub const CommandTab = @import("CommandTab.zig");
 
 pub const Action = union(enum) {
     toggle_agent_mode,

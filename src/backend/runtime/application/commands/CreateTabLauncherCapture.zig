@@ -1,25 +1,29 @@
-const LauncherCapture = @This();
-const source_namespace = @import("create_tab.zig");
-const PaneLauncher = @import("CreateTabPaneLauncher.zig");
-const LaunchPane = @import("CreateTabLaunchPane.zig");
-const LaunchedPane = @import("CreateTabLaunchedPane.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const CreateTabPaneLauncher = @import("CreateTabPaneLauncher.zig");
+const CreateTabLaunchPane = @import("CreateTabLaunchPane.zig");
+const CreateTabLaunchedPane = @import("CreateTabLaunchedPane.zig");
 const std = @import("std");
+const LauncherCapture = @This();
+
 failure: ?anyerror = null,
-pane_id: source_namespace.schema.PaneId = .invalid,
+pane_id: PaneIdType = .invalid,
 call_count: usize = 0,
-last_location: ?source_namespace.schema.TabLocation = null,
-last_size: ?source_namespace.schema.TerminalSize = null,
-last_launch_cwd: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+last_location: ?TabLocationType = null,
+last_size: ?TerminalSizeType = null,
+last_launch_cwd: [max_cwd_bytes_module]u8 = undefined,
 last_launch_cwd_len: usize = 0,
-last_workspace_path: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+last_workspace_path: [max_cwd_bytes_module]u8 = undefined,
 last_workspace_path_len: usize = 0,
 last_argument_count: u16 = 0,
 
-pub fn port(capture: *LauncherCapture) PaneLauncher {
+pub fn port(capture: *LauncherCapture) CreateTabPaneLauncher {
     return .{ .context = capture, .launch = launch };
 }
 
-fn launch(context: *anyopaque, request: LaunchPane) !LaunchedPane {
+fn launch(context: *anyopaque, request: CreateTabLaunchPane) !CreateTabLaunchedPane {
     const capture: *LauncherCapture = @ptrCast(@alignCast(context));
     std.debug.assert(request.launch_cwd.len <= capture.last_launch_cwd.len);
     std.debug.assert(request.workspace_path.len <= capture.last_workspace_path.len);

@@ -1,24 +1,28 @@
-const LauncherCapture = @This();
-const source_namespace = @import("create_workspace.zig");
-const PaneLauncher = @import("CreateWorkspacePaneLauncher.zig");
-const LaunchPane = @import("CreateWorkspaceLaunchPane.zig");
-const LaunchedPane = @import("CreateWorkspaceLaunchedPane.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const CreateWorkspacePaneLauncher = @import("CreateWorkspacePaneLauncher.zig");
+const CreateWorkspaceLaunchPane = @import("CreateWorkspaceLaunchPane.zig");
+const CreateWorkspaceLaunchedPane = @import("CreateWorkspaceLaunchedPane.zig");
 const std = @import("std");
+const LauncherCapture = @This();
+
 failure: ?anyerror = null,
-pane_id: source_namespace.schema.PaneId,
+pane_id: PaneIdType,
 call_count: usize = 0,
-last_location: ?source_namespace.schema.TabLocation = null,
-last_size: ?source_namespace.schema.TerminalSize = null,
-last_launch_cwd: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+last_location: ?TabLocationType = null,
+last_size: ?TerminalSizeType = null,
+last_launch_cwd: [max_cwd_bytes_module]u8 = undefined,
 last_launch_cwd_len: usize = 0,
-last_workspace_path: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+last_workspace_path: [max_cwd_bytes_module]u8 = undefined,
 last_workspace_path_len: usize = 0,
 
-pub fn port(capture: *LauncherCapture) PaneLauncher {
+pub fn port(capture: *LauncherCapture) CreateWorkspacePaneLauncher {
     return .{ .context = capture, .launch = launch };
 }
 
-fn launch(context: *anyopaque, request: LaunchPane) !LaunchedPane {
+fn launch(context: *anyopaque, request: CreateWorkspaceLaunchPane) !CreateWorkspaceLaunchedPane {
     const capture: *LauncherCapture = @ptrCast(@alignCast(context));
     std.debug.assert(request.launch_cwd.len <= capture.last_launch_cwd.len);
     std.debug.assert(request.workspace_path.len <= capture.last_workspace_path.len);

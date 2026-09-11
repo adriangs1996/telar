@@ -1,9 +1,10 @@
 const GenericIngestRuntimePort = @import("GenericIngestRuntimePort.zig").Type;
-const Resources = @import("IngestResources.zig");
-const Completion = @import("IngestCompletion.zig");
-const source_namespace = @import("ingest.zig");
+const IngestResources = @import("IngestResources.zig");
+const IngestCompletion = @import("IngestCompletion.zig");
+const enabled_module = @import("telar-core").enabled;
 const Read = @import("Read.zig");
 const std = @import("std");
+
 /// Creates a statically dispatched post-ingest coordinator.
 ///
 /// ```zig
@@ -14,14 +15,14 @@ pub fn Type(comptime Context: type, comptime port: GenericIngestRuntimePort(Cont
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: IngestResources,
 
         /// Binds one runtime's pane repository and telemetry.
         ///
         /// ```zig
         /// var coordinator = IngestCoordinator.init(&context, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: IngestResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -32,7 +33,7 @@ pub fn Type(comptime Context: type, comptime port: GenericIngestRuntimePort(Cont
         /// ```zig
         /// try coordinator.handle(completion);
         /// ```
-        pub fn handle(coordinator: *Self, completion: Completion) !void {
+        pub fn handle(coordinator: *Self, completion: IngestCompletion) !void {
             const pane = coordinator.resources.panes.resolve(completion.pane) orelse {
                 coordinator.resources.metrics.stale_pane_events += 1;
                 return;
@@ -46,7 +47,7 @@ pub fn Type(comptime Context: type, comptime port: GenericIngestRuntimePort(Cont
                 return;
             };
 
-            if (comptime source_namespace.diagnostics.enabled) {
+            if (comptime enabled_module) {
                 coordinator.resources.metrics.ingest.observe(stats.elapsed_ns);
             }
 

@@ -1,6 +1,20 @@
-const source_namespace = @import("catalog.zig");
+const types = @import("types.zig");
+const TargetType = @import("AttachmentTarget.zig");
 const path_marker = @import("path_marker.zig");
 const std = @import("std");
+const PendingDeletionType = @import("PendingDeletion.zig");
+const catalog = @import("catalog.zig");
+const SnapshotType = @import("AttachmentSnapshot.zig");
+const ItemType = @import("Item.zig");
+const CaptureType = @import("Capture.zig");
+const MarkerScreenType = @import("MarkerScreen.zig");
+const MarkerRemovalType = @import("MarkerRemoval.zig");
+const markers = @import("markers.zig");
+const DeletionProbeType = @import("DeletionProbe.zig");
+const MarkerType = @import("Marker.zig");
+const BufferType = @import("telar-core").Buffer;
+const MarkerScanType = @import("MarkerScan.zig");
+
 /// Creates an attachment catalog with presentation-owned slot resources.
 /// Example: `var catalog = Catalog(Delivery).init(gpa);`.
 pub fn Type(comptime Delivery: type) type {
@@ -9,13 +23,13 @@ pub fn Type(comptime Delivery: type) type {
         pub const Slot = struct {
             delivery: Delivery.SlotState,
 
-            id: source_namespace.Id,
-            target: source_namespace.Target,
+            id: types.Id,
+            target: TargetType,
             png: []u8,
             width: u32,
             height: u32,
-            marker_policy: source_namespace.MarkerPolicy,
-            marker: ?source_namespace.MarkerIdentity = null,
+            marker_policy: types.MarkerPolicy,
+            marker: ?types.MarkerIdentity = null,
             retire_pending: bool = false,
 
             pub fn markerNumber(slot: *const Slot) ?u16 {
@@ -36,7 +50,7 @@ pub fn Type(comptime Delivery: type) type {
                 };
             }
 
-            pub fn owns(slot: *const Slot, target: source_namespace.Target) bool {
+            pub fn owns(slot: *const Slot, target: TargetType) bool {
                 return !slot.retire_pending and std.meta.eql(slot.target, target);
             }
         };
@@ -47,10 +61,10 @@ pub fn Type(comptime Delivery: type) type {
         };
 
         gpa: std.mem.Allocator,
-        slots: [source_namespace.max_items]?Slot = @splat(null),
-        active_target: ?source_namespace.Target = null,
-        marker_deletion_pending: ?source_namespace.PendingDeletion = null,
-        modal: ?source_namespace.Id = null,
+        slots: [types.max_items]?Slot = @splat(null),
+        active_target: ?TargetType = null,
+        marker_deletion_pending: ?PendingDeletionType = null,
+        modal: ?types.Id = null,
         total_bytes: usize = 0,
         ingress_version: u64 = 0,
 
@@ -86,12 +100,12 @@ pub fn Type(comptime Delivery: type) type {
             }
         }
 
-        pub fn setTarget(store: *Self, target: ?source_namespace.Target) TargetChange {
+        pub fn setTarget(store: *Self, target: ?TargetType) TargetChange {
             const previous_pane = if (store.visibleCount() != 0)
                 if (store.active_target) |active| active.pane_id else null
             else
                 null;
-            if (source_namespace.optionalTargetEql(store.active_target, target)) {
+            if (catalog.optionalTargetEql(store.active_target, target)) {
                 return .{};
             }
             store.active_target = target;
@@ -113,7 +127,7 @@ pub fn Type(comptime Delivery: type) type {
             return store.visibleCount() != 0;
         }
 
-        pub fn visibleTarget(store: *const Self) ?source_namespace.Target {
+        pub fn visibleTarget(store: *const Self) ?TargetType {
             if (store.visibleCount() == 0) {
                 return null;
             }
@@ -125,8 +139,8 @@ pub fn Type(comptime Delivery: type) type {
             return store.modal != null;
         }
 
-        pub fn snapshot(store: *const Self) source_namespace.Snapshot {
-            var result: source_namespace.Snapshot = .{ .modal = store.modal };
+        pub fn snapshot(store: *const Self) SnapshotType {
+            var result: SnapshotType = .{ .modal = store.modal };
             for (store.slots) |maybe_slot| if (maybe_slot) |slot| {
                 if (!store.slotVisible(&slot)) {
                     continue;
@@ -146,7 +160,7 @@ pub fn Type(comptime Delivery: type) type {
                     while (at != 0 and @intFromEnum(result.items[at - 1].id) >
                         @intFromEnum(result.items[at].id)) : (at -= 1)
                     {
-                        std.mem.swap(source_namespace.Item, &result.items[at - 1], &result.items[at]);
+                        std.mem.swap(ItemType, &result.items[at - 1], &result.items[at]);
                     }
                 }
             }
@@ -160,18 +174,18 @@ pub fn Type(comptime Delivery: type) type {
             return result;
         }
 
-        pub fn adopt(store: *Self, capture: *source_namespace.Capture) !void {
-            if (capture.png.len == 0 or capture.png.len > source_namespace.max_png_bytes or
+        pub fn adopt(store: *Self, capture: *CaptureType) !void {
+            if (capture.png.len == 0 or capture.png.len > types.max_png_bytes or
                 capture.width == 0 or capture.height == 0)
             {
                 return error.InvalidClipboardImage;
             }
             const pixels = std.math.mul(u64, capture.width, capture.height) catch
                 return error.ClipboardImageTooLarge;
-            if (pixels > source_namespace.max_pixels) {
+            if (pixels > types.max_pixels) {
                 return error.ClipboardImageTooLarge;
             }
-            while (store.total_bytes + capture.png.len > source_namespace.max_retained_bytes or
+            while (store.total_bytes + capture.png.len > types.max_retained_bytes or
                 store.freeIndex() == null)
             {
                 store.evictOldest() orelse return error.AttachmentSelfFull;
@@ -197,7 +211,7 @@ pub fn Type(comptime Delivery: type) type {
             store.ingress_version +%= 1;
         }
 
-        pub fn remove(store: *Self, id: source_namespace.Id) bool {
+        pub fn remove(store: *Self, id: types.Id) bool {
             for (&store.slots, 0..) |*slot, index| {
                 if (slot.* == null or slot.*.?.id != id or slot.*.?.retire_pending) {
                     continue;
@@ -211,7 +225,7 @@ pub fn Type(comptime Delivery: type) type {
             return false;
         }
 
-        pub fn removeVisible(store: *Self, target: source_namespace.Target) u8 {
+        pub fn removeVisible(store: *Self, target: TargetType) u8 {
             var removed: u8 = 0;
             for (&store.slots, 0..) |*slot, index| {
                 if (slot.* == null or slot.*.?.retire_pending or !std.meta.eql(slot.*.?.target, target)) {
@@ -231,32 +245,32 @@ pub fn Type(comptime Delivery: type) type {
             return removed;
         }
 
-        pub fn planMarkerRemoval(store: *const Self, id: source_namespace.Id, screen: source_namespace.MarkerScreen) ?source_namespace.MarkerRemoval {
+        pub fn planMarkerRemoval(store: *const Self, id: types.Id, screen: MarkerScreenType) ?MarkerRemovalType {
             const visible = store.snapshot();
             const ordinal = snapshotOrdinal(&visible, id) orelse return null;
             const slot = store.findConst(id) orelse return null;
             const removal = switch (slot.marker_policy) {
-                .ordered, .stable_number => source_namespace.planPlaceholderRemoval(slot.markerNumber(), ordinal, screen),
-                .pasted_path => source_namespace.planPathRemoval(slot.markerPath(), screen),
+                .ordered, .stable_number => markers.planPlaceholderRemoval(slot.markerNumber(), ordinal, screen),
+                .pasted_path => markers.planPathRemoval(slot.markerPath(), screen),
             } orelse return null;
-            if (removal.keyCount() > source_namespace.max_removal_keys) {
+            if (removal.keyCount() > types.max_removal_keys) {
                 return null;
             }
 
             return removal;
         }
 
-        pub fn idAtMarkerDeletion(store: *const Self, screen: source_namespace.MarkerScreen, deletion: source_namespace.MarkerDeletion) ?source_namespace.Id {
+        pub fn idAtMarkerDeletion(store: *const Self, screen: MarkerScreenType, deletion: types.MarkerDeletion) ?types.Id {
             const visible = store.snapshot();
             for (visible.slice(), 0..) |item, index| {
                 const slot = store.findConst(item.id) orelse continue;
                 const touches = switch (slot.marker_policy) {
-                    .ordered, .stable_number => screen.cursor.visible and source_namespace.markerTouchesCursor(screen.buffer, .{
+                    .ordered, .stable_number => screen.cursor.visible and markers.markerTouchesCursor(screen.buffer, .{
                         .ordinal = slot.markerNumber() orelse @as(u16, @intCast(index + 1)),
                         .cursor = screen.cursor,
                         .deletion = deletion,
                     }),
-                    .pasted_path => source_namespace.pathTouchesCursor(slot.markerPath() orelse continue, screen, deletion),
+                    .pasted_path => markers.pathTouchesCursor(slot.markerPath() orelse continue, screen, deletion),
                 };
                 if (touches) {
                     return item.id;
@@ -266,9 +280,9 @@ pub fn Type(comptime Delivery: type) type {
             return null;
         }
 
-        pub fn pendingMarkerAtDeletion(store: *const Self, screen: source_namespace.MarkerScreen, probe: source_namespace.DeletionProbe) bool {
+        pub fn pendingMarkerAtDeletion(store: *const Self, screen: MarkerScreenType, probe: DeletionProbeType) bool {
             const visible = store.snapshot();
-            if (visible.len >= source_namespace.max_items) {
+            if (visible.len >= types.max_items) {
                 return false;
             }
 
@@ -278,7 +292,7 @@ pub fn Type(comptime Delivery: type) type {
                         return false;
                     }
 
-                    return source_namespace.markerTouchesCursor(screen.buffer, .{
+                    return markers.markerTouchesCursor(screen.buffer, .{
                         .ordinal = @as(u16, visible.len) + 1,
                         .cursor = screen.cursor,
                         .deletion = probe.deletion,
@@ -286,13 +300,13 @@ pub fn Type(comptime Delivery: type) type {
                 },
                 .pasted_path => {
                     const target = store.active_target orelse return false;
-                    var found: [source_namespace.max_items * 2]path_marker.Marker = undefined;
+                    var found: [types.max_items * 2]MarkerType = undefined;
                     const count = path_marker.collect(screen.buffer, &found);
                     for (found[0..count]) |marker| {
                         if (store.pathClaimed(target, marker.uuid)) {
                             continue;
                         }
-                        if (source_namespace.markerCursorTouches(marker, screen, probe.deletion)) {
+                        if (markers.markerCursorTouches(marker, screen, probe.deletion)) {
                             return true;
                         }
                     }
@@ -302,17 +316,17 @@ pub fn Type(comptime Delivery: type) type {
             }
         }
 
-        pub fn expectMarkerDeletion(store: *Self, target: source_namespace.Target) void {
+        pub fn expectMarkerDeletion(store: *Self, target: TargetType) void {
             for (store.slots) |maybe_slot| {
                 const slot = maybe_slot orelse continue;
                 if (slot.owns(target) and slot.marker_policy.learnsIdentity()) {
-                    store.marker_deletion_pending = .{ .target = target, .frames = source_namespace.deletion_watch_frames };
+                    store.marker_deletion_pending = .{ .target = target, .frames = types.deletion_watch_frames };
                     return;
                 }
             }
         }
 
-        pub fn reconcileMarkers(store: *Self, target: source_namespace.Target, screen: source_namespace.MarkerScreen) u8 {
+        pub fn reconcileMarkers(store: *Self, target: TargetType, screen: MarkerScreenType) u8 {
             const visible = store.snapshot();
             for (visible.slice()) |item| {
                 const slot = store.find(item.id) orelse continue;
@@ -346,7 +360,7 @@ pub fn Type(comptime Delivery: type) type {
                 }
 
                 const present = switch (marker) {
-                    .number => |number| source_namespace.markerPresent(screen.buffer, number),
+                    .number => |number| markers.markerPresent(screen.buffer, number),
                     .path => |uuid| path_marker.find(screen.buffer, uuid) != null,
                 };
                 if (present) {
@@ -370,13 +384,13 @@ pub fn Type(comptime Delivery: type) type {
             return removed;
         }
 
-        fn pendingDeletionFor(store: *const Self, target: source_namespace.Target) bool {
+        fn pendingDeletionFor(store: *const Self, target: TargetType) bool {
             const pending = store.marker_deletion_pending orelse return false;
 
             return std.meta.eql(pending.target, target);
         }
 
-        fn pathClaimed(store: *const Self, target: source_namespace.Target, uuid: path_marker.Uuid) bool {
+        fn pathClaimed(store: *const Self, target: TargetType, uuid: path_marker.Uuid) bool {
             for (store.slots) |maybe_slot| {
                 const slot = maybe_slot orelse continue;
                 const claimed = slot.markerPath() orelse continue;
@@ -388,7 +402,7 @@ pub fn Type(comptime Delivery: type) type {
             return false;
         }
 
-        pub fn openModal(store: *Self, id: source_namespace.Id) bool {
+        pub fn openModal(store: *Self, id: types.Id) bool {
             const slot = store.find(id) orelse return false;
             if (!store.slotVisible(slot)) {
                 return false;
@@ -424,7 +438,7 @@ pub fn Type(comptime Delivery: type) type {
             return std.meta.eql(target, slot.target);
         }
 
-        pub fn find(store: *Self, id: source_namespace.Id) ?*Slot {
+        pub fn find(store: *Self, id: types.Id) ?*Slot {
             for (&store.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
                 if (slot.id == id) {
                     return slot;
@@ -433,7 +447,7 @@ pub fn Type(comptime Delivery: type) type {
             return null;
         }
 
-        pub fn findConst(store: *const Self, id: source_namespace.Id) ?*const Slot {
+        pub fn findConst(store: *const Self, id: types.Id) ?*const Slot {
             for (&store.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
                 if (slot.id == id) {
                     return slot;
@@ -484,7 +498,7 @@ pub fn Type(comptime Delivery: type) type {
             }
             maybe_slot.* = null;
         }
-        pub fn snapshotOrdinal(projection: *const source_namespace.Snapshot, id: source_namespace.Id) ?u8 {
+        pub fn snapshotOrdinal(projection: *const SnapshotType, id: types.Id) ?u8 {
             for (projection.slice(), 0..) |item, index| {
                 if (item.id == id) {
                     return @intCast(index);
@@ -494,10 +508,10 @@ pub fn Type(comptime Delivery: type) type {
             return null;
         }
 
-        pub fn pathForNextUnpaired(store: *const Self, target: source_namespace.Target, buffer: *const source_namespace.ui.Buffer) ?path_marker.Uuid {
-            var found: [source_namespace.max_items * 2]path_marker.Marker = undefined;
+        pub fn pathForNextUnpaired(store: *const Self, target: TargetType, buffer: *const BufferType) ?path_marker.Uuid {
+            var found: [types.max_items * 2]MarkerType = undefined;
             const count = path_marker.collect(buffer, &found);
-            var candidates: [source_namespace.max_items * 2]path_marker.Uuid = undefined;
+            var candidates: [types.max_items * 2]path_marker.Uuid = undefined;
             var candidate_count: usize = 0;
             for (found[0..count]) |marker| {
                 if (store.pathClaimed(target, marker.uuid)) {
@@ -516,7 +530,7 @@ pub fn Type(comptime Delivery: type) type {
             return candidates[candidate_count - unpaired];
         }
 
-        pub fn unpairedPathCount(store: *const Self, target: source_namespace.Target) u8 {
+        pub fn unpairedPathCount(store: *const Self, target: TargetType) u8 {
             var count: u8 = 0;
             for (store.slots) |maybe_slot| {
                 const slot = maybe_slot orelse continue;
@@ -528,10 +542,10 @@ pub fn Type(comptime Delivery: type) type {
             return count;
         }
 
-        pub fn markerForNextUnpaired(store: *const Self, target: source_namespace.Target, buffer: *const source_namespace.ui.Buffer) ?u16 {
-            var candidates: [source_namespace.max_items]u16 = @splat(0);
+        pub fn markerForNextUnpaired(store: *const Self, target: TargetType, buffer: *const BufferType) ?u16 {
+            var candidates: [types.max_items]u16 = @splat(0);
             var candidate_count: u8 = 0;
-            var scan: source_namespace.MarkerScan = .{ .buffer = buffer };
+            var scan: MarkerScanType = .{ .buffer = buffer };
             while (scan.next()) |marker| {
                 if (markerNumberClaimed(store, target, marker.number)) {
                     continue;
@@ -571,7 +585,7 @@ pub fn Type(comptime Delivery: type) type {
             return candidates[unpaired - 1];
         }
 
-        pub fn unpairedStableCount(store: *const Self, target: source_namespace.Target) u8 {
+        pub fn unpairedStableCount(store: *const Self, target: TargetType) u8 {
             var count: u8 = 0;
             for (store.slots) |maybe_slot| {
                 const slot = maybe_slot orelse continue;
@@ -583,7 +597,7 @@ pub fn Type(comptime Delivery: type) type {
             return count;
         }
 
-        pub fn markerNumberClaimed(store: *const Self, target: source_namespace.Target, number: u16) bool {
+        pub fn markerNumberClaimed(store: *const Self, target: TargetType, number: u16) bool {
             for (store.slots) |maybe_slot| {
                 const slot = maybe_slot orelse continue;
                 if (slot.owns(target) and slot.markerNumber() == number) {

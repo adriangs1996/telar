@@ -1,7 +1,8 @@
 //! Mouse-gesture ownership for textual links inside pane content.
 
+const Pointer = @import("Pointer.zig");
+const TargetType = @import("LinkTarget.zig");
 const std = @import("std");
-const target_mod = @import("root.zig").target;
 
 pub const Kind = enum {
     press,
@@ -10,15 +11,9 @@ pub const Kind = enum {
     other,
 };
 
-pub const Command = @import("Command.zig");
-
-pub const Outcome = @import("Outcome.zig");
-
-pub const Pointer = @import("Pointer.zig");
-
 test "a link press owns its drag and release" {
     var pointer: Pointer = .{};
-    const target = try target_mod.Target.init("https://example.com");
+    const target = try TargetType.init("https://example.com");
 
     const pressed = pointer.handle(.{ .kind = .press, .left_button = true }, target);
     try std.testing.expect(pressed.consumed);
@@ -30,7 +25,7 @@ test "a link press owns its drag and release" {
 
 test "non-link and non-left presses remain unowned" {
     var pointer: Pointer = .{};
-    const target = try target_mod.Target.init("https://example.com");
+    const target = try TargetType.init("https://example.com");
 
     try std.testing.expect(!pointer.handle(.{ .kind = .press, .left_button = true }, null).consumed);
     try std.testing.expect(!pointer.handle(.{ .kind = .press, .left_button = false }, target).consumed);

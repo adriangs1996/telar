@@ -1,7 +1,8 @@
-const ImportHistoryView = @This();
-const source_namespace = @import("history.zig");
+const id = @import("../id.zig");
 const ImportEntryIterator = @import("ImportEntryIterator.zig");
-request_id: source_namespace.RequestId,
+const ImportHistoryView = @This();
+
+request_id: id.RequestId,
 source: []const u8,
 base_sequence: u64,
 entry_count: u16,

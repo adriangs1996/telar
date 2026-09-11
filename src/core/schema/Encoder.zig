@@ -1,5 +1,6 @@
-const Encoder = @This();
 const std = @import("std");
+const Encoder = @This();
+
 buffer: []u8,
 index: usize = 0,
 

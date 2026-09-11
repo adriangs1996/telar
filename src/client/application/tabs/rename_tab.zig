@@ -1,27 +1,17 @@
 //! Application use cases for requesting and confirming a tab rename.
 
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const RequestRenameTab = @import("RequestRenameTab.zig");
-
-pub const TabRenameIntent = @import("TabRenameIntent.zig");
-
-pub const TabOperationGate = @import("RenameTabTabOperationGate.zig");
-
-pub const RenameRequestEffects = @import("RenameRequestEffects.zig");
-
-pub const RequestRenameTabHandler = @import("RequestRenameTabHandler.zig");
-
-pub const ConfirmTabRename = client_model.RenameTab;
-
-pub const ConfirmTabRenameHandler = @import("ConfirmTabRenameHandler.zig");
+const RenameTabTestingModel = @import("RenameTabTestingModel.zig");
+const RenameTabRequestCapture = @import("RenameTabRequestCapture.zig");
+const RequestRenameTabHandler = @import("RequestRenameTabHandler.zig");
+const VersionType = @import("../../model/Version.zig");
+const ConfirmTabRenameHandler = @import("ConfirmTabRenameHandler.zig");
+const types = @import("../../model/types.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 
 pub fn validateLabel(label: []const u8) !void {
-    if (label.len == 0 or label.len > schema.max_tab_label_bytes) {
+    if (label.len == 0 or label.len > max_tab_label_bytes_module) {
         return error.InvalidTabLabel;
     }
     if (!std.unicode.utf8ValidateSlice(label)) {
@@ -34,14 +24,10 @@ pub fn validateLabel(label: []const u8) !void {
     }
 }
 
-const RequestCapture = @import("RenameTabRequestCapture.zig");
-
-const TestingModel = @import("RenameTabTestingModel.zig");
-
 test "tab rename request resolves an inactive target without mutation" {
-    var testing = try TestingModel.init();
+    var testing = try RenameTabTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{};
+    var capture: RenameTabRequestCapture = .{};
     var handler: RequestRenameTabHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -57,13 +43,13 @@ test "tab rename request resolves an inactive target without mutation" {
     try std.testing.expectEqualDeep(testing.second, capture.location.?);
     try std.testing.expectEqualStrings("server", capture.labelSlice());
     try std.testing.expectEqualStrings("logs", testing.model.workspace.find(testing.second.tab_id).?.labelSlice());
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "tab rename request suppresses blocked and missing targets" {
-    var testing = try TestingModel.init();
+    var testing = try RenameTabTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{ .blocked = true };
+    var capture: RenameTabRequestCapture = .{ .blocked = true };
     var handler: RequestRenameTabHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -81,20 +67,20 @@ test "tab rename request suppresses blocked and missing targets" {
     }));
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "tab rename request rejects invalid labels before delivery" {
-    var testing = try TestingModel.init();
+    var testing = try RenameTabTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{};
+    var capture: RenameTabRequestCapture = .{};
     var handler: RequestRenameTabHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
         .effects = capture.effects(),
     };
     const invalid_utf8 = [_]u8{0xff};
-    const too_long = [_]u8{'x'} ** (schema.max_tab_label_bytes + 1);
+    const too_long = [_]u8{'x'} ** (max_tab_label_bytes_module + 1);
 
     try std.testing.expectError(error.InvalidTabLabel, handler.execute(.{
         .tab_id = testing.first.tab_id,
@@ -114,13 +100,13 @@ test "tab rename request rejects invalid labels before delivery" {
     }));
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "tab rename request propagates delivery failure without mutation" {
-    var testing = try TestingModel.init();
+    var testing = try RenameTabTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{ .failure = error.DeliveryFailed };
+    var capture: RenameTabRequestCapture = .{ .failure = error.DeliveryFailed };
     var handler: RequestRenameTabHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -134,11 +120,11 @@ test "tab rename request propagates delivery failure without mutation" {
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqualStrings("main", testing.model.workspace.find(testing.first.tab_id).?.labelSlice());
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "tab rename confirmation commits the canonical label without changing active identity" {
-    var testing = try TestingModel.init();
+    var testing = try RenameTabTestingModel.init();
     defer testing.deinit();
     var handler: ConfirmTabRenameHandler = .{ .model = testing.model };
 
@@ -147,7 +133,7 @@ test "tab rename confirmation commits the canonical label without changing activ
         .label = "canonical",
     });
 
-    try std.testing.expectEqual(client_model.Change.changed, change);
+    try std.testing.expectEqual(types.Change.changed, change);
     try std.testing.expectEqualStrings("canonical", testing.model.workspace.find(testing.second.tab_id).?.labelSlice());
     try std.testing.expectEqualDeep(testing.first, testing.model.activeTabLocation().?);
     try std.testing.expectEqual(@as(u64, 1), testing.model.version().tabs);
@@ -155,7 +141,7 @@ test "tab rename confirmation commits the canonical label without changing activ
 }
 
 test "tab rename confirmation preserves the version for a canonical no-op" {
-    var testing = try TestingModel.init();
+    var testing = try RenameTabTestingModel.init();
     defer testing.deinit();
     var handler: ConfirmTabRenameHandler = .{ .model = testing.model };
 
@@ -164,19 +150,19 @@ test "tab rename confirmation preserves the version for a canonical no-op" {
         .label = "logs",
     });
 
-    try std.testing.expectEqual(client_model.Change.unchanged, change);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqual(types.Change.unchanged, change);
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "tab rename confirmation rejects invalid canonical state without mutation" {
-    var testing = try TestingModel.init();
+    var testing = try RenameTabTestingModel.init();
     defer testing.deinit();
     var handler: ConfirmTabRenameHandler = .{ .model = testing.model };
-    const other_workspace: schema.TabLocation = .{
+    const other_workspace: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(9) },
         .tab_id = testing.second.tab_id,
     };
-    const missing_tab: schema.TabLocation = .{
+    const missing_tab: TabLocationType = .{
         .workspace = testing.first.workspace,
         .tab_id = @enumFromInt(9),
     };
@@ -195,5 +181,5 @@ test "tab rename confirmation rejects invalid canonical state without mutation" 
     }));
 
     try std.testing.expectEqualStrings("logs", testing.model.workspace.find(testing.second.tab_id).?.labelSlice());
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }

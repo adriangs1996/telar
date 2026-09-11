@@ -1,20 +1,66 @@
 //! Exhaustive classification and delegation for decoded client requests.
 
 const std = @import("std");
-const core = @import("telar-core");
+const ClientMessageType = @import("telar-core").ClientMessage;
+const RequestRouterCapture = @import("RequestRouterCapture.zig");
+const PaneInputType = @import("telar-core").PaneInput;
+const GenericHandlers = @import("GenericHandlers.zig").Type;
+const OpenPaneViewType = @import("telar-core").OpenPaneView;
+const PaneResizeType = @import("telar-core").PaneResize;
+const FrameAckType = @import("telar-core").FrameAck;
+const RequestSnapshotType = @import("telar-core").RequestSnapshot;
+const DetachPaneType = @import("telar-core").DetachPane;
+const RequestTabSnapshotType = @import("telar-core").RequestTabSnapshot;
+const CreatePaneViewType = @import("telar-core").CreatePaneView;
+const ClosePaneType = @import("telar-core").ClosePane;
+const QueryHistoryType = @import("telar-core").QueryHistory;
+const SuggestCommandType = @import("telar-core").SuggestCommand;
+const RequestWorkspaceSnapshotType = @import("telar-core").RequestWorkspaceSnapshot;
+const CreateTabViewType = @import("telar-core").CreateTabView;
+const RenameTabType = @import("telar-core").RenameTab;
+const CloseTabType = @import("telar-core").CloseTab;
+const MoveTabType = @import("telar-core").MoveTab;
+const RequestGraphicsSnapshotType = @import("telar-core").RequestGraphicsSnapshot;
+const GraphicsCreditType = @import("telar-core").GraphicsCredit;
+const ConfigureGraphicsType = @import("telar-core").ConfigureGraphics;
+const TerminalColors = @import("telar-core").TerminalColors;
+const RequestRuntimeStateType = @import("telar-core").RequestRuntimeState;
+const CreateWorkspaceViewType = @import("telar-core").CreateWorkspaceView;
+const RenameWorkspaceType = @import("telar-core").RenameWorkspace;
+const SetPaneViewportType = @import("telar-core").SetPaneViewport;
+const CopySelectionType = @import("telar-core").CopySelection;
+const ShowNotificationType = @import("telar-core").ShowNotification;
+const ClientLayoutUpdateViewType = @import("telar-core").ClientLayoutUpdateView;
+const AcknowledgeAgentType = @import("telar-core").AcknowledgeAgent;
+const QueryAgentsType = @import("telar-core").QueryAgents;
+const ReadPaneType = @import("telar-core").ReadPane;
+const SendPaneTextType = @import("telar-core").SendPaneText;
+const ReportAgentSessionType = @import("telar-core").ReportAgentSession;
+const ReportAgentType = @import("telar-core").ReportAgent;
+const ReportAgentCommandType = @import("telar-core").ReportAgentCommand;
+const ReportAgentTitleType = @import("telar-core").ReportAgentTitle;
+const SearchPaneType = @import("telar-core").SearchPane;
+const ImportHistoryViewType = @import("telar-core").ImportHistoryView;
+const DeleteHistoryType = @import("telar-core").DeleteHistory;
+const PruneHistoryType = @import("telar-core").PruneHistory;
+const ReadHistoryOutputType = @import("telar-core").ReadHistoryOutput;
+const HistoryStatsQueryType = @import("telar-core").HistoryStatsQuery;
+const RequestPaneFocusType = @import("telar-core").RequestPaneFocus;
+const CompletePaneFocusType = @import("telar-core").CompletePaneFocus;
+const GenericRouter = @import("GenericRouter.zig").Type;
+const RequestIdType = @import("telar-core").RequestId;
+const PaneIdType = @import("telar-core").PaneId;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const LaunchViewType = @import("telar-core").LaunchView;
 
-pub const schema = core.schema;
-
-pub const Tag = std.meta.Tag(schema.ClientMessage);
+pub const Tag = std.meta.Tag(ClientMessageType);
 
 pub const RequestClass = enum {
     ui,
     control,
 };
-
-pub const Handlers = @import("GenericHandlers.zig").Type;
-
-pub const Router = @import("GenericRouter.zig").Type;
 
 /// Classifies the first request on a connection without coupling the event
 /// loop to individual payload types.
@@ -45,15 +91,13 @@ pub fn classify(tag: Tag) RequestClass {
     };
 }
 
-const Capture = @import("RequestRouterCapture.zig");
-
-fn captureHandler(comptime tag: Tag, comptime Payload: type) *const fn (*Capture, Payload) anyerror!void {
+fn captureHandler(comptime tag: Tag, comptime Payload: type) *const fn (*RequestRouterCapture, Payload) anyerror!void {
     return struct {
-        fn call(capture: *Capture, payload: Payload) !void {
+        fn call(capture: *RequestRouterCapture, payload: Payload) !void {
             capture.calls += 1;
             capture.last = tag;
 
-            if (comptime Payload == schema.PaneInput) {
+            if (comptime Payload == PaneInputType) {
                 capture.pane_input = payload;
             }
 
@@ -64,9 +108,9 @@ fn captureHandler(comptime tag: Tag, comptime Payload: type) *const fn (*Capture
     }.call;
 }
 
-fn captureVoidHandler(comptime tag: Tag) *const fn (*Capture) anyerror!void {
+fn captureVoidHandler(comptime tag: Tag) *const fn (*RequestRouterCapture) anyerror!void {
     return struct {
-        fn call(capture: *Capture) !void {
+        fn call(capture: *RequestRouterCapture) !void {
             capture.calls += 1;
             capture.last = tag;
 
@@ -77,65 +121,65 @@ fn captureVoidHandler(comptime tag: Tag) *const fn (*Capture) anyerror!void {
     }.call;
 }
 
-const testing_handlers: Handlers(Capture) = .{
-    .open_pane = captureHandler(.open_pane, schema.OpenPaneView),
-    .pane_input = captureHandler(.pane_input, schema.PaneInput),
-    .pane_resize = captureHandler(.pane_resize, schema.PaneResize),
-    .frame_ack = captureHandler(.frame_ack, schema.FrameAck),
-    .request_snapshot = captureHandler(.request_snapshot, schema.RequestSnapshot),
-    .detach_pane = captureHandler(.detach_pane, schema.DetachPane),
+const testing_handlers: GenericHandlers(RequestRouterCapture) = .{
+    .open_pane = captureHandler(.open_pane, OpenPaneViewType),
+    .pane_input = captureHandler(.pane_input, PaneInputType),
+    .pane_resize = captureHandler(.pane_resize, PaneResizeType),
+    .frame_ack = captureHandler(.frame_ack, FrameAckType),
+    .request_snapshot = captureHandler(.request_snapshot, RequestSnapshotType),
+    .detach_pane = captureHandler(.detach_pane, DetachPaneType),
     .runtime_stop = captureVoidHandler(.runtime_stop),
-    .request_tab_snapshot = captureHandler(.request_tab_snapshot, schema.RequestTabSnapshot),
-    .create_pane = captureHandler(.create_pane, schema.CreatePaneView),
-    .close_pane = captureHandler(.close_pane, schema.ClosePane),
-    .query_history = captureHandler(.query_history, schema.QueryHistory),
-    .suggest_command = captureHandler(.suggest_command, schema.SuggestCommand),
-    .request_workspace_snapshot = captureHandler(.request_workspace_snapshot, schema.RequestWorkspaceSnapshot),
-    .create_tab = captureHandler(.create_tab, schema.CreateTabView),
-    .rename_tab = captureHandler(.rename_tab, schema.RenameTab),
-    .close_tab = captureHandler(.close_tab, schema.CloseTab),
-    .move_tab = captureHandler(.move_tab, schema.MoveTab),
-    .request_graphics_snapshot = captureHandler(.request_graphics_snapshot, schema.RequestGraphicsSnapshot),
-    .graphics_credit = captureHandler(.graphics_credit, schema.GraphicsCredit),
-    .configure_graphics = captureHandler(.configure_graphics, schema.ConfigureGraphics),
-    .configure_terminal_colors = captureHandler(.configure_terminal_colors, schema.ConfigureTerminalColors),
-    .request_runtime_state = captureHandler(.request_runtime_state, schema.RequestRuntimeState),
-    .create_workspace = captureHandler(.create_workspace, schema.CreateWorkspaceView),
-    .rename_workspace = captureHandler(.rename_workspace, schema.RenameWorkspace),
-    .set_pane_viewport = captureHandler(.set_pane_viewport, schema.SetPaneViewport),
-    .copy_selection = captureHandler(.copy_selection, schema.CopySelection),
-    .show_notification = captureHandler(.show_notification, schema.ShowNotification),
-    .update_client_layout = captureHandler(.update_client_layout, schema.ClientLayoutUpdateView),
-    .acknowledge_agent = captureHandler(.acknowledge_agent, schema.AcknowledgeAgent),
-    .query_agents = captureHandler(.query_agents, schema.QueryAgents),
-    .read_pane = captureHandler(.read_pane, schema.ReadPane),
-    .send_pane_text = captureHandler(.send_pane_text, schema.SendPaneText),
-    .report_agent_session = captureHandler(.report_agent_session, schema.ReportAgentSession),
-    .report_agent = captureHandler(.report_agent, schema.ReportAgent),
-    .report_agent_command = captureHandler(.report_agent_command, schema.ReportAgentCommand),
-    .report_agent_title = captureHandler(.report_agent_title, schema.ReportAgentTitle),
-    .search_pane = captureHandler(.search_pane, schema.SearchPane),
-    .import_history = captureHandler(.import_history, schema.ImportHistoryView),
-    .delete_history = captureHandler(.delete_history, schema.DeleteHistory),
-    .prune_history = captureHandler(.prune_history, schema.PruneHistory),
-    .read_history_output = captureHandler(.read_history_output, schema.ReadHistoryOutput),
-    .history_stats = captureHandler(.history_stats, schema.HistoryStatsQuery),
-    .request_pane_focus = captureHandler(.request_pane_focus, schema.RequestPaneFocus),
-    .complete_pane_focus = captureHandler(.complete_pane_focus, schema.CompletePaneFocus),
+    .request_tab_snapshot = captureHandler(.request_tab_snapshot, RequestTabSnapshotType),
+    .create_pane = captureHandler(.create_pane, CreatePaneViewType),
+    .close_pane = captureHandler(.close_pane, ClosePaneType),
+    .query_history = captureHandler(.query_history, QueryHistoryType),
+    .suggest_command = captureHandler(.suggest_command, SuggestCommandType),
+    .request_workspace_snapshot = captureHandler(.request_workspace_snapshot, RequestWorkspaceSnapshotType),
+    .create_tab = captureHandler(.create_tab, CreateTabViewType),
+    .rename_tab = captureHandler(.rename_tab, RenameTabType),
+    .close_tab = captureHandler(.close_tab, CloseTabType),
+    .move_tab = captureHandler(.move_tab, MoveTabType),
+    .request_graphics_snapshot = captureHandler(.request_graphics_snapshot, RequestGraphicsSnapshotType),
+    .graphics_credit = captureHandler(.graphics_credit, GraphicsCreditType),
+    .configure_graphics = captureHandler(.configure_graphics, ConfigureGraphicsType),
+    .configure_terminal_colors = captureHandler(.configure_terminal_colors, TerminalColors),
+    .request_runtime_state = captureHandler(.request_runtime_state, RequestRuntimeStateType),
+    .create_workspace = captureHandler(.create_workspace, CreateWorkspaceViewType),
+    .rename_workspace = captureHandler(.rename_workspace, RenameWorkspaceType),
+    .set_pane_viewport = captureHandler(.set_pane_viewport, SetPaneViewportType),
+    .copy_selection = captureHandler(.copy_selection, CopySelectionType),
+    .show_notification = captureHandler(.show_notification, ShowNotificationType),
+    .update_client_layout = captureHandler(.update_client_layout, ClientLayoutUpdateViewType),
+    .acknowledge_agent = captureHandler(.acknowledge_agent, AcknowledgeAgentType),
+    .query_agents = captureHandler(.query_agents, QueryAgentsType),
+    .read_pane = captureHandler(.read_pane, ReadPaneType),
+    .send_pane_text = captureHandler(.send_pane_text, SendPaneTextType),
+    .report_agent_session = captureHandler(.report_agent_session, ReportAgentSessionType),
+    .report_agent = captureHandler(.report_agent, ReportAgentType),
+    .report_agent_command = captureHandler(.report_agent_command, ReportAgentCommandType),
+    .report_agent_title = captureHandler(.report_agent_title, ReportAgentTitleType),
+    .search_pane = captureHandler(.search_pane, SearchPaneType),
+    .import_history = captureHandler(.import_history, ImportHistoryViewType),
+    .delete_history = captureHandler(.delete_history, DeleteHistoryType),
+    .prune_history = captureHandler(.prune_history, PruneHistoryType),
+    .read_history_output = captureHandler(.read_history_output, ReadHistoryOutputType),
+    .history_stats = captureHandler(.history_stats, HistoryStatsQueryType),
+    .request_pane_focus = captureHandler(.request_pane_focus, RequestPaneFocusType),
+    .complete_pane_focus = captureHandler(.complete_pane_focus, CompletePaneFocusType),
 };
 
-const TestRouter = Router(Capture, testing_handlers);
+const TestRouter = GenericRouter(RequestRouterCapture, testing_handlers);
 
-fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
-    const request_id: schema.RequestId = @enumFromInt(1);
-    const pane_id: schema.PaneId = @enumFromInt(2);
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(3) };
-    const location: schema.TabLocation = .{
+fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]ClientMessageType {
+    const request_id: RequestIdType = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(2);
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(3) };
+    const location: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(4),
     };
-    const size: schema.TerminalSize = .{ .cols = 80, .rows = 24 };
-    const launch: schema.LaunchView = .{
+    const size: TerminalSizeType = .{ .cols = 80, .rows = 24 };
+    const launch: LaunchViewType = .{
         .cwd = "/work",
         .argument_count = 0,
         .encoded_arguments = "",
@@ -213,7 +257,7 @@ fn testingMessages() [@typeInfo(Tag).@"enum".fields.len]schema.ClientMessage {
 }
 
 test "Router delegates every client tag exactly once and preserves classification" {
-    var capture: Capture = .{};
+    var capture: RequestRouterCapture = .{};
     const router = TestRouter.init(&capture);
     const messages = testingMessages();
     var seen: [messages.len]bool = @splat(false);
@@ -256,12 +300,12 @@ test "Router delegates every client tag exactly once and preserves classificatio
     }
 
     try std.testing.expectEqual(messages.len, capture.calls);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), capture.pane_input.?.pane_id);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(2)), capture.pane_input.?.pane_id);
     try std.testing.expectEqualStrings("input", capture.pane_input.?.bytes);
 }
 
 test "Router propagates handler failure without a second delegation" {
-    var capture: Capture = .{ .failure = .move_tab };
+    var capture: RequestRouterCapture = .{ .failure = .move_tab };
     const router = TestRouter.init(&capture);
     const messages = testingMessages();
     const move_tab = messages[@intFromEnum(Tag.move_tab)];

@@ -1,8 +1,9 @@
-const WorkspaceOptions = @This();
-const source_namespace = @import("workspace.zig");
+const workspace = @import("workspace.zig");
 const std = @import("std");
-const Cursor = @import("cursor_support.zig").Cursor;
-action: source_namespace.WorkspaceAction,
+const Cursor = @import("Cursor.zig");
+const WorkspaceOptions = @This();
+
+action: workspace.WorkspaceAction,
 branch: ?[*:0]const u8 = null,
 name: ?[*:0]const u8 = null,
 directory: ?[*:0]const u8 = null,
@@ -29,7 +30,7 @@ pub fn parse(args: []const [*:0]const u8) !WorkspaceOptions {
                 return error.DuplicateWorktreeOption;
             }
 
-            try source_namespace.validateWorktreeBranch(std.mem.span(value));
+            try workspace.validateWorktreeBranch(std.mem.span(value));
             options.branch = value;
         } else if (std.mem.eql(u8, arg, "--name")) {
             const value = try cursor.require(error.MissingWorkspaceName);

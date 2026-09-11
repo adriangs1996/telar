@@ -1,21 +1,24 @@
-const DamageContext = @This();
 const std = @import("std");
-const core = @import("telar-core");
-const source_namespace = @import("main.zig");
+const CellType = @import("telar-core").Cell;
+const SpanType = @import("telar-core").Span;
 const Fixture = @import("Fixture.zig");
+const main = @import("main.zig");
+const max_span_count_module = @import("telar-core").max_span_count;
+const DamageContext = @This();
+
 gpa: std.mem.Allocator,
-acknowledged: []core.ui.Cell,
-current: []core.ui.Cell,
+acknowledged: []CellType,
+current: []CellType,
 damaged_rows: []bool,
-spans: []source_namespace.schema.frame.Span,
+spans: []SpanType,
 changed_index: usize,
 
-fn init(gpa: std.mem.Allocator, fixture: *const Fixture, workload: source_namespace.Workload) !DamageContext {
-    const acknowledged = try gpa.dupe(core.ui.Cell, fixture.cells_a);
+pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture, workload: main.Workload) !DamageContext {
+    const acknowledged = try gpa.dupe(CellType, fixture.cells_a);
     errdefer gpa.free(acknowledged);
-    const current = try gpa.dupe(core.ui.Cell, fixture.cells_a);
+    const current = try gpa.dupe(CellType, fixture.cells_a);
     errdefer gpa.free(current);
-    const damaged_rows = try gpa.alloc(bool, source_namespace.rows);
+    const damaged_rows = try gpa.alloc(bool, main.rows);
     errdefer gpa.free(damaged_rows);
     @memset(damaged_rows, false);
     if (workload == .full_screen) {
@@ -25,11 +28,11 @@ fn init(gpa: std.mem.Allocator, fixture: *const Fixture, workload: source_namesp
         for (fixture.spans(workload, 1)) |span| {
             const start: usize = @intCast(span.start);
             @memcpy(current[start..][0..span.cells.len], span.cells);
-            damaged_rows[start / source_namespace.cols] = true;
+            damaged_rows[start / main.cols] = true;
         }
     }
     const changed_index: usize = @intCast(fixture.spans(workload, 1)[0].start);
-    const spans = try gpa.alloc(source_namespace.schema.frame.Span, source_namespace.schema.frame.max_span_count);
+    const spans = try gpa.alloc(SpanType, max_span_count_module);
     return .{
         .gpa = gpa,
         .acknowledged = acknowledged,
@@ -40,7 +43,7 @@ fn init(gpa: std.mem.Allocator, fixture: *const Fixture, workload: source_namesp
     };
 }
 
-fn deinit(context: *DamageContext) void {
+pub fn deinit(context: *DamageContext) void {
     context.gpa.free(context.spans);
     context.gpa.free(context.damaged_rows);
     context.gpa.free(context.current);

@@ -1,27 +1,24 @@
 //! Vertical contract test for the runtime detach-pane flow.
 
+const pane_module = @import("telar-core").pane;
+const DetachPaneTestEffects = @import("DetachPaneTestEffects.zig");
+const workspace_module = @import("telar-core").workspace;
+const DetachPaneHandlerType = @import("../application/commands/DetachPaneHandler.zig");
+const DetachPaneController = @import("../entrypoints/requests/DetachPaneController.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const attachment_mod = @import("../attachment/root.zig");
-const detach_pane_commands = @import("../application/commands/detach_pane.zig");
-const detach_pane_controller = @import("../entrypoints/requests/detach_pane.zig");
-
-pub const schema = core.schema;
-
-const Effects = @import("DetachPaneTestEffects.zig");
 
 test "a detach request commits session state before releasing geometry" {
-    const pane_id = try schema.id.pane(7);
-    var effects: Effects = .{ .detached = .{
+    const pane_id = try pane_module(7);
+    var effects: DetachPaneTestEffects = .{ .detached = .{
         .pane_id = pane_id,
-        .workspace = .{ .workspace = try schema.id.workspace(3) },
+        .workspace = .{ .workspace = try workspace_module(3) },
         .last_attachment = true,
     } };
-    var handler: detach_pane_commands.DetachPaneHandler = .{
+    var handler: DetachPaneHandlerType = .{
         .attachments = effects.attachments(),
         .geometry = effects.geometry(),
     };
-    var controller = detach_pane_controller.Controller.init(handler.executor(), effects.staleMessages());
+    var controller = DetachPaneController.init(handler.executor(), effects.staleMessages());
 
     try controller.detachPane(.{ .pane_id = pane_id });
 

@@ -1,7 +1,8 @@
-const tls = @import("tls.zig");
+const SessionType = @import("Session.zig");
+
 pub fn Type(comptime Session: type) type {
     return struct {
         session: Session,
-        protocol: tls.Session.Protocol,
+        protocol: SessionType.Protocol,
     };
 }

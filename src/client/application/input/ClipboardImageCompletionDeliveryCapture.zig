@@ -1,15 +1,16 @@
+const clipboard_image = @import("clipboard_image.zig");
+const ClipboardImageCompletionDelivery = @import("ClipboardImageCompletionDelivery.zig");
 const CompletionDeliveryCapture = @This();
-const source_namespace = @import("clipboard_image.zig");
-const CompletionDelivery = @import("ClipboardImageCompletionDelivery.zig");
+
 calls: usize = 0,
-outcome: ?source_namespace.CompletionOutcome = null,
+outcome: ?clipboard_image.CompletionOutcome = null,
 fail: bool = false,
 
-pub fn port(capture: *CompletionDeliveryCapture) CompletionDelivery {
+pub fn port(capture: *CompletionDeliveryCapture) ClipboardImageCompletionDelivery {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(raw_context: *anyopaque, outcome: source_namespace.CompletionOutcome) !void {
+fn deliver(raw_context: *anyopaque, outcome: clipboard_image.CompletionOutcome) !void {
     const capture: *CompletionDeliveryCapture = @ptrCast(@alignCast(raw_context));
     capture.calls += 1;
     capture.outcome = outcome;

@@ -1,14 +1,10 @@
 //! Application policy for delivering one committed sidebar layout.
 
+const DeliverSidebarLayoutHandler = @import("DeliverSidebarLayoutHandler.zig");
+const SidebarLayoutDeliveryEffectsCapture = @import("SidebarLayoutDeliveryEffectsCapture.zig");
+const SidebarLayoutType = @import("../../model/SidebarLayout.zig");
 const std = @import("std");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../../root.zig").model;
-
-pub const multiplexer = workspace_capability.multiplexer;
-
-pub const Effects = @import("SidebarLayoutDeliveryEffects.zig");
-
-pub const DeliverSidebarLayoutHandler = @import("DeliverSidebarLayoutHandler.zig");
+const TestingModel = @import("TestingModel.zig");
 
 pub const Event = enum {
     project_view,
@@ -16,11 +12,7 @@ pub const Event = enum {
     pane_geometry,
 };
 
-const TestingModel = @import("TestingModel.zig");
-
-const EffectsCapture = @import("SidebarLayoutDeliveryEffectsCapture.zig");
-
-fn expectStale(handler: *const DeliverSidebarLayoutHandler, capture: *const EffectsCapture, change: client_model.SidebarLayout) !void {
+fn expectStale(handler: *const DeliverSidebarLayoutHandler, capture: *const SidebarLayoutDeliveryEffectsCapture, change: SidebarLayoutType) !void {
     try std.testing.expectError(error.StaleSidebarLayout, handler.execute(change));
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);
 }
@@ -29,7 +21,7 @@ test "DeliverSidebarLayoutHandler orders the complete active projection" {
     var testing = try TestingModel.init(true);
     defer testing.deinit();
     const change = testing.model.toggleSidebar();
-    var capture: EffectsCapture = .{
+    var capture: SidebarLayoutDeliveryEffectsCapture = .{
         .model = testing.model,
         .expected = change,
     };
@@ -55,7 +47,7 @@ test "DeliverSidebarLayoutHandler projects an empty workspace without geometry" 
     var testing = try TestingModel.init(false);
     defer testing.deinit();
     const change = testing.model.toggleSidebar();
-    var capture: EffectsCapture = .{
+    var capture: SidebarLayoutDeliveryEffectsCapture = .{
         .model = testing.model,
         .expected = change,
     };
@@ -79,7 +71,7 @@ test "DeliverSidebarLayoutHandler rejects stale commits before effects" {
     var testing = try TestingModel.init(true);
     defer testing.deinit();
     const change = testing.model.toggleSidebar();
-    var capture: EffectsCapture = .{
+    var capture: SidebarLayoutDeliveryEffectsCapture = .{
         .model = testing.model,
         .expected = change,
     };
@@ -102,7 +94,7 @@ test "DeliverSidebarLayoutHandler retains completed projection after geometry fa
     var testing = try TestingModel.init(true);
     defer testing.deinit();
     const change = testing.model.toggleSidebar();
-    var capture: EffectsCapture = .{
+    var capture: SidebarLayoutDeliveryEffectsCapture = .{
         .model = testing.model,
         .expected = change,
         .fail_geometry = true,

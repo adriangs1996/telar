@@ -1,14 +1,15 @@
-const HookOptions = @This();
-const source_namespace = @import("hook.zig");
+const values = @import("values.zig");
 const std = @import("std");
-agent: source_namespace.HookAgent,
+const HookOptions = @This();
+
+agent: values.HookAgent,
 socket: ?[*:0]const u8 = null,
 
 pub fn parse(args: []const [*:0]const u8) !HookOptions {
     if (args.len == 0) {
         return error.MissingHookAgent;
     }
-    var options: HookOptions = .{ .agent = try source_namespace.parseHookAgent(std.mem.span(args[0])) };
+    var options: HookOptions = .{ .agent = try values.parseHookAgent(std.mem.span(args[0])) };
     var index: usize = 1;
     while (index < args.len) : (index += 2) {
         if (!std.mem.eql(u8, std.mem.span(args[index]), "--socket") or index + 1 >= args.len) {

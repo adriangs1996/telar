@@ -7,34 +7,53 @@
 //! There is no Telar runtime, IPC, history, sidebar, tabs, or configuration.
 
 const std = @import("std");
-const vt = @import("ghostty-vt");
-const core = @import("telar-core");
-const backend = @import("telar-backend");
-const frontend = @import("telar-frontend");
-
-pub const Io = std.Io;
-const File = Io.File;
-pub const schema = core.schema;
-pub const ui = core.ui;
-pub const pty = backend.pty;
-pub const media = backend.media;
-pub const blit = backend.blit;
-pub const term = frontend.term;
-pub const kitty = frontend.kitty;
-const platform = frontend.platform;
-pub const multiplexer = frontend.multiplexer;
-pub const HostCapabilities = frontend.client.HostCapabilities;
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const FrameGeometry = @import("FrameGeometry.zig");
+const RectType = @import("telar-core").Rect;
+const HostCapabilities = @import("telar-client").HostCapabilities;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const SizeType = @import("telar-frontend").Size;
+const EventType = @import("telar-frontend").Event;
+const translate = @import("telar-frontend").translate;
+const settledCapabilities = @import("telar-frontend").settledCapabilities;
+const InputChunk = @import("InputChunk.zig");
+const OutputChunk = @import("OutputChunk.zig");
+const SessionType = @import("telar-backend").Session;
+const ResizeWatcherType = @import("telar-frontend").ResizeWatcher;
+const timeout_ns = @import("telar-frontend").timeout_ns;
+const BufferType = @import("telar-core").Buffer;
+const StyleType = @import("telar-core").Style;
+const Emulator = @import("Emulator.zig");
+const ScreenType = @import("telar-frontend").Screen;
+const CellDrawOptions = @import("CellDrawOptions.zig");
+const PresentContext = @import("PresentContext.zig");
+const ExteriorGraphics = @import("ExteriorGraphics.zig");
+const GraphicsReadiness = @import("GraphicsReadiness.zig");
+const PaneGeometryContext = @import("PaneGeometryContext.zig");
+const invalidatePlacements_module = @import("telar-frontend").invalidatePlacements;
+const max_args_module = @import("telar-backend").max_args;
+const CommandType = @import("telar-backend").Command;
+const ChildEnvironmentType = @import("telar-backend").ChildEnvironment;
+const TtyType = @import("telar-frontend").Tty;
+const installCrashRestore_module = @import("telar-frontend").installCrashRestore;
+const pane_enter = @import("telar-frontend").pane_enter;
+const query = @import("telar-frontend").query;
+const pane_leave = @import("telar-frontend").pane_leave;
+const StoreType = @import("telar-frontend").Store;
+const GraphicsMirror = @import("GraphicsMirror.zig");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const HostInput = @import("HostInput.zig");
+const KittyGraphicsWriterType = @import("telar-frontend").KittyGraphicsWriter;
 
 pub const std_options: std.Options = .{ .log_level = .err };
 
-pub const pane_id: schema.PaneId = @enumFromInt(1);
-const location: schema.TabLocation = .{
+pub const pane_id: PaneIdType = @enumFromInt(1);
+const location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(1) },
     .tab_id = @enumFromInt(1),
 };
 const frame_interval_ns = std.time.ns_per_s / 60;
-
-const FrameGeometry = @import("FrameGeometry.zig");
 
 fn centeredFrame(cols: u16, rows: u16) !FrameGeometry {
     if (cols < 8 or rows < 8) {
@@ -45,7 +64,7 @@ fn centeredFrame(cols: u16, rows: u16) !FrameGeometry {
     if (width < 3 or height < 3) {
         return error.TerminalTooSmall;
     }
-    const outer: ui.Rect = .{
+    const outer: RectType = .{
         .x = (cols - width) / 2,
         .y = (rows - height) / 2,
         .w = width,
@@ -54,7 +73,7 @@ fn centeredFrame(cols: u16, rows: u16) !FrameGeometry {
     return .{ .outer = outer, .content = outer.inner(1) };
 }
 
-fn paneTerminalSize(frame: FrameGeometry, capabilities: *const HostCapabilities) schema.TerminalSize {
+fn paneTerminalSize(frame: FrameGeometry, capabilities: *const HostCapabilities) TerminalSizeType {
     const cell = capabilities.cellSize(0, 0);
     return .{
         .cols = frame.content.w,
@@ -64,7 +83,7 @@ fn paneTerminalSize(frame: FrameGeometry, capabilities: *const HostCapabilities)
     };
 }
 
-fn observePlatformPixels(capabilities: *HostCapabilities, size: platform.Size) void {
+fn observePlatformPixels(capabilities: *HostCapabilities, size: SizeType) void {
     if (size.width_px != 0) {
         capabilities.window_width_px = size.width_px;
     }
@@ -79,18 +98,8 @@ fn observePlatformPixels(capabilities: *HostCapabilities, size: platform.Size) v
     }
 }
 
-const ResponseQueue = @import("ResponseQueue.zig");
-
-const Emulator = @import("Emulator.zig");
-
-const GraphicsMirror = @import("GraphicsMirror.zig");
-
-const ExteriorGraphics = @import("ExteriorGraphics.zig");
-
-const HostInput = @import("HostInput.zig");
-
-pub fn observeHostCapability(capabilities: *HostCapabilities, response: term.Event.TerminalResponse) bool {
-    const observation = frontend.client.translateHostCapability(response) orelse return false;
+pub fn observeHostCapability(capabilities: *HostCapabilities, response: EventType.TerminalResponse) bool {
+    const observation = translate(response) orelse return false;
     const next = capabilities.withObservation(observation);
     if (std.meta.eql(capabilities.*, next)) {
         return false;
@@ -101,7 +110,7 @@ pub fn observeHostCapability(capabilities: *HostCapabilities, response: term.Eve
 }
 
 fn expireHostCapabilities(capabilities: *HostCapabilities) bool {
-    const next = frontend.client.settledHostCapabilities(capabilities.*);
+    const next = settledCapabilities(capabilities.*);
     if (std.meta.eql(capabilities.*, next)) {
         return false;
     }
@@ -109,10 +118,6 @@ fn expireHostCapabilities(capabilities: *HostCapabilities) bool {
     capabilities.* = next;
     return true;
 }
-
-const InputChunk = @import("InputChunk.zig");
-
-const OutputChunk = @import("OutputChunk.zig");
 
 const Message = union(enum) {
     input: InputChunk,
@@ -122,7 +127,7 @@ const Message = union(enum) {
     child_closed,
 };
 
-fn inputActor(io: Io, file: File, queue: *Io.Queue(Message)) Io.Cancelable!void {
+fn inputActor(io: std.Io, file: std.Io.File, queue: *std.Io.Queue(Message)) std.Io.Cancelable!void {
     while (true) {
         var chunk: InputChunk = .{};
         const len = file.readStreaming(io, &.{&chunk.bytes}) catch |err| switch (err) {
@@ -140,7 +145,7 @@ fn inputActor(io: Io, file: File, queue: *Io.Queue(Message)) Io.Cancelable!void 
     }
 }
 
-fn outputActor(io: Io, session: *pty.Session, queue: *Io.Queue(Message)) Io.Cancelable!void {
+fn outputActor(io: std.Io, session: *SessionType, queue: *std.Io.Queue(Message)) std.Io.Cancelable!void {
     while (true) {
         var chunk: OutputChunk = .{};
         const len = session.read(io, &chunk.bytes) catch |err| switch (err) {
@@ -162,7 +167,7 @@ fn outputActor(io: Io, session: *pty.Session, queue: *Io.Queue(Message)) Io.Canc
     }
 }
 
-fn resizeActor(io: Io, watcher: *platform.ResizeWatcher, queue: *Io.Queue(Message)) Io.Cancelable!void {
+fn resizeActor(io: std.Io, watcher: *ResizeWatcherType, queue: *std.Io.Queue(Message)) std.Io.Cancelable!void {
     while (true) {
         try watcher.wait(io);
         queue.putOne(io, .resized) catch |err| switch (err) {
@@ -172,9 +177,9 @@ fn resizeActor(io: Io, watcher: *platform.ResizeWatcher, queue: *Io.Queue(Messag
     }
 }
 
-fn capabilityTimeoutActor(io: Io, queue: *Io.Queue(Message)) Io.Cancelable!void {
-    const deadline = Io.Timestamp.fromNanoseconds(
-        @intCast(monotonic(io) + kitty.capability_timeout_ns),
+fn capabilityTimeoutActor(io: std.Io, queue: *std.Io.Queue(Message)) std.Io.Cancelable!void {
+    const deadline = std.Io.Timestamp.fromNanoseconds(
+        @intCast(monotonic(io) + timeout_ns),
     ).withClock(.awake);
     try deadline.wait(io);
     queue.putOne(io, .capability_timeout) catch |err| switch (err) {
@@ -183,9 +188,9 @@ fn capabilityTimeoutActor(io: Io, queue: *Io.Queue(Message)) Io.Cancelable!void 
     };
 }
 
-fn drawFrame(buffer: *ui.Buffer, frame: FrameGeometry) void {
-    const background: ui.Style = .{ .bg = .{ .rgb = .{ 0x10, 0x10, 0x10 } } };
-    const border: ui.Style = .{
+fn drawFrame(buffer: *BufferType, frame: FrameGeometry) void {
+    const background: StyleType = .{ .bg = .{ .rgb = .{ 0x10, 0x10, 0x10 } } };
+    const border: StyleType = .{
         .fg = .{ .rgb = .{ 0xff, 0xc7, 0x99 } },
         .bg = .{ .rgb = .{ 0x10, 0x10, 0x10 } },
     };
@@ -211,7 +216,7 @@ fn drawFrame(buffer: *ui.Buffer, frame: FrameGeometry) void {
     }
 }
 
-fn drainResponses(io: Io, session: *pty.Session, emulator: *Emulator) !void {
+fn drainResponses(io: std.Io, session: *SessionType, emulator: *Emulator) !void {
     if (emulator.responses.overflowed) {
         return error.PtyResponseOverflow;
     }
@@ -221,9 +226,7 @@ fn drainResponses(io: Io, session: *pty.Session, emulator: *Emulator) !void {
     }
 }
 
-const CellDrawOptions = @import("CellDrawOptions.zig");
-
-fn drawCells(screen: *term.Screen, emulator: *Emulator, options: CellDrawOptions) !void {
+fn drawCells(screen: *ScreenType, emulator: *Emulator, options: CellDrawOptions) !void {
     const frame = options.frame;
     const rebuild_frame = options.rebuild_frame;
     const buffer = screen.buffer();
@@ -232,8 +235,6 @@ fn drawCells(screen: *term.Screen, emulator: *Emulator, options: CellDrawOptions
     }
     screen.cursor = try emulator.draw(buffer, .{ .area = frame.content, .force = rebuild_frame });
 }
-
-const PresentContext = @import("PresentContext.zig");
 
 fn present(context: PresentContext) !void {
     const screen = context.screen;
@@ -263,8 +264,6 @@ fn present(context: PresentContext) !void {
     _ = try screen.flush(writer);
 }
 
-const GraphicsReadiness = @import("GraphicsReadiness.zig");
-
 fn graphicsReady(state: GraphicsReadiness) bool {
     const cell = state.capabilities.cellSize(0, 0);
     if (state.capabilities.images != .supported or cell.width == 0 or cell.height == 0) {
@@ -272,8 +271,6 @@ fn graphicsReady(state: GraphicsReadiness) bool {
     }
     return state.store.damage or state.mirror.ready(state.emulator);
 }
-
-const PaneGeometryContext = @import("PaneGeometryContext.zig");
 
 fn applyPaneGeometry(context: PaneGeometryContext) !bool {
     const next = paneTerminalSize(context.frame, context.capabilities);
@@ -288,11 +285,11 @@ fn applyPaneGeometry(context: PaneGeometryContext) !bool {
     });
     try context.emulator.resize(next);
     context.model.setCellSize(next.cell_width_px, next.cell_height_px);
-    kitty.delivery.invalidatePlacements(context.graphics_store);
+    invalidatePlacements_module(context.graphics_store);
     return true;
 }
 
-fn collectCommand(init: std.process.Init, storage: *[pty.max_args][*:0]const u8) !pty.Command {
+fn collectCommand(init: std.process.Init, storage: *[max_args_module][*:0]const u8) !CommandType {
     storage[0] = "terminal-browser";
     var len: usize = 1;
     var args = init.minimal.args.iterate();
@@ -304,11 +301,11 @@ fn collectCommand(init: std.process.Init, storage: *[pty.max_args][*:0]const u8)
         storage[len] = arg.ptr;
         len += 1;
     }
-    return pty.Command.fromArgv(storage[0..len]);
+    return CommandType.fromArgv(storage[0..len]);
 }
 
-fn monotonic(io: Io) u64 {
-    const timestamp = Io.Timestamp.now(io, .awake);
+fn monotonic(io: std.Io) u64 {
+    const timestamp = std.Io.Timestamp.now(io, .awake);
     return @intCast(@max(timestamp.nanoseconds, 0));
 }
 
@@ -321,29 +318,29 @@ fn monotonic(io: Io) u64 {
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const gpa = init.gpa;
-    var child_environment = try pty.ChildEnvironment.init(
+    var child_environment = try ChildEnvironmentType.init(
         gpa,
         init.minimal.environ,
         "telar-pane-example",
     );
     defer child_environment.deinit();
 
-    var tty = platform.Tty.open() catch |err| {
+    var tty = TtyType.open() catch |err| {
         std.debug.print("terminal-browser-pane needs a terminal: {s}\n", .{@errorName(err)});
         return err;
     };
     defer tty.deinit();
-    platform.installCrashRestore(&tty);
+    installCrashRestore_module(&tty);
 
     var tty_file = tty.writeHandle();
     var output_buffer: [512 * 1024]u8 = undefined;
     var output = tty_file.writer(io, &output_buffer);
     const writer = &output.interface;
-    try writer.writeAll(platform.pane_enter_sequence);
-    try writer.writeAll(kitty.capability_query);
+    try writer.writeAll(pane_enter);
+    try writer.writeAll(query);
     try writer.flush();
     defer {
-        writer.writeAll(platform.pane_leave_sequence) catch {};
+        writer.writeAll(pane_leave) catch {};
         writer.flush() catch {};
     }
 
@@ -359,10 +356,10 @@ pub fn main(init: std.process.Init) !void {
     var frame = try centeredFrame(host_size.cols, host_size.rows);
     const initial_size = paneTerminalSize(frame, &capabilities);
 
-    var argument_storage: [pty.max_args][*:0]const u8 = undefined;
+    var argument_storage: [max_args_module][*:0]const u8 = undefined;
     var command = try collectCommand(init, &argument_storage);
     command.environment = &child_environment;
-    var session = try pty.Session.spawn(&command, .{
+    var session = try SessionType.spawn(&command, .{
         .cols = initial_size.cols,
         .rows = initial_size.rows,
         .cell_width_px = initial_size.cell_width_px,
@@ -374,12 +371,12 @@ pub fn main(init: std.process.Init) !void {
     try emulator.init(.{ .io = io, .allocator = gpa, .size = initial_size });
     defer emulator.deinit();
 
-    var screen = try term.Screen.init(gpa, host_size.cols, host_size.rows);
+    var screen = try ScreenType.init(gpa, host_size.cols, host_size.rows);
     defer screen.deinit();
-    var graphics_store = kitty.Store.init(gpa);
+    var graphics_store = StoreType.init(gpa);
     defer graphics_store.deinit();
     var mirror: GraphicsMirror = .{};
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
     try model.addRoot(.{
         .pane_id = pane_id,
@@ -388,12 +385,12 @@ pub fn main(init: std.process.Init) !void {
     });
     model.setCellSize(initial_size.cell_width_px, initial_size.cell_height_px);
 
-    var watcher = try platform.ResizeWatcher.init(&tty);
+    var watcher = try ResizeWatcherType.init(&tty);
     defer watcher.deinit();
 
     var queue_storage: [32]Message = undefined;
-    var queue: Io.Queue(Message) = .init(&queue_storage);
-    var actors: Io.Group = .init;
+    var queue: std.Io.Queue(Message) = .init(&queue_storage);
+    var actors: std.Io.Group = .init;
     try actors.concurrent(io, inputActor, .{ io, tty.readHandle(), &queue });
     try actors.concurrent(io, outputActor, .{ io, &session, &queue });
     try actors.concurrent(io, resizeActor, .{ io, &watcher, &queue });
@@ -449,7 +446,7 @@ pub fn main(init: std.process.Init) !void {
         if (scheduled) {
             const deadline_ns = last_frame_ns + frame_interval_ns;
             if (monotonic(io) < deadline_ns) {
-                const deadline = Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
+                const deadline = std.Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
                 deadline.wait(io) catch {};
             }
         }
@@ -501,7 +498,7 @@ pub fn main(init: std.process.Init) !void {
                     .frame = frame,
                     .capabilities = &capabilities,
                 });
-                kitty.delivery.invalidatePlacements(&graphics_store);
+                invalidatePlacements_module(&graphics_store);
                 rebuild_frame = true;
                 redraw_cells = true;
             },
@@ -549,12 +546,12 @@ pub fn main(init: std.process.Init) !void {
 
 test "the frame is centered and exactly half the host" {
     const frame = try centeredFrame(120, 40);
-    try std.testing.expectEqual(ui.Rect{ .x = 30, .y = 10, .w = 60, .h = 20 }, frame.outer);
-    try std.testing.expectEqual(ui.Rect{ .x = 31, .y = 11, .w = 58, .h = 18 }, frame.content);
+    try std.testing.expectEqual(RectType{ .x = 30, .y = 10, .w = 60, .h = 20 }, frame.outer);
+    try std.testing.expectEqual(RectType{ .x = 31, .y = 11, .w = 58, .h = 18 }, frame.content);
 }
 
 test "child KGP becomes an exterior placement at the centered pane offset" {
-    const size: schema.TerminalSize = .{
+    const size: TerminalSizeType = .{
         .cols = 20,
         .rows = 10,
         .cell_width_px = 10,
@@ -567,23 +564,23 @@ test "child KGP becomes an exterior placement at the centered pane offset" {
         "\x1b_Ga=T,f=32,s=1,v=1,t=d,i=7,p=3,c=2,r=1;AQID/w==\x1b\\",
     );
 
-    var store = kitty.Store.init(std.testing.allocator);
+    var store = StoreType.init(std.testing.allocator);
     defer store.deinit();
     var mirror: GraphicsMirror = .{};
     try std.testing.expect(try mirror.sync(&emulator, &store));
 
-    var model = multiplexer.Model.init(std.testing.allocator);
+    var model = MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = size });
-    const area: ui.Rect = .{ .x = 10, .y = 5, .w = 20, .h = 10 };
-    var graphics_writer: kitty.KittyGraphicsWriter = .{
+    const area: RectType = .{ .x = 10, .y = 5, .w = 20, .h = 10 };
+    var graphics_writer: KittyGraphicsWriterType = .{
         .store = &store,
         .layout_snapshot = model.layoutSnapshot(area),
         .cell_width = 10,
         .cell_height = 20,
     };
     var bytes: [16 * 1024]u8 = undefined;
-    var writer = Io.Writer.fixed(&bytes);
+    var writer = std.Io.Writer.fixed(&bytes);
     _ = try graphics_writer.write(&writer);
     const output = writer.buffered();
 

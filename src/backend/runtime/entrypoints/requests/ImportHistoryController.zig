@@ -1,16 +1,18 @@
-const Controller = @This();
-const source_namespace = @import("import_history.zig");
-const history_mod = @import("../../../history/root.zig");
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const ServiceType = @import("../../../history/Service.zig");
 const std = @import("std");
-responses: *source_namespace.ResponseQueue,
-service: *history_mod.Service,
+const ImportHistoryViewType = @import("telar-core").ImportHistoryView;
+const Controller = @This();
+
+responses: *ResponseQueueType,
+service: *ServiceType,
 
 /// Creates a controller scoped to one import batch.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, application.history_service);
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, service: *history_mod.Service) Controller {
+pub fn init(responses: *ResponseQueueType, service: *ServiceType) Controller {
     return .{ .responses = responses, .service = service };
 }
 
@@ -22,7 +24,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, service: *history_mod.Se
 /// ```zig
 /// try controller.importHistory(io, batch);
 /// ```
-pub fn importHistory(controller: *Controller, io: std.Io, batch: source_namespace.schema.ImportHistoryView) !void {
+pub fn importHistory(controller: *Controller, io: std.Io, batch: ImportHistoryViewType) !void {
     if (!controller.service.importBatch(io, batch)) {
         try controller.responses.push(.{ .request_failed = .{
             .request_id = batch.request_id,

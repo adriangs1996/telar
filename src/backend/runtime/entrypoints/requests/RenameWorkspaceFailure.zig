@@ -1,4 +1,5 @@
+const FailureCodeType = @import("telar-core").FailureCode;
 const Failure = @This();
-const source_namespace = @import("rename_workspace.zig");
-code: source_namespace.schema.FailureCode,
+
+code: FailureCodeType,
 message: []const u8,

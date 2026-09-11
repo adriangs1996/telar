@@ -1,24 +1,26 @@
-const Drawing = @This();
-const widget = @import("context_support.zig");
-const Input = @import("HistoryBrowserInput.zig");
-const ui = @import("../ui/root.zig");
-const source_namespace = @import("history_browser.zig");
+const ContextType = @import("Context.zig");
+const HistoryBrowserInput = @import("HistoryBrowserInput.zig");
+const ColorType = @import("telar-core").Color;
+const RectType = @import("telar-core").Rect;
+const Text = @import("Text.zig");
+const history_browser = @import("history_browser.zig");
 const std = @import("std");
+const GraphemeIteratorType = @import("telar-core").GraphemeIterator;
 const Entry = @import("Entry.zig");
 const Inspection = @import("Inspection.zig");
 const Wrapped = @import("Wrapped.zig");
 const Detail = @import("Detail.zig");
-context: *widget.Context,
-input: Input,
-background: ui.Color,
+const Drawing = @This();
 
-pub const Text = struct { text: []const u8, color: ui.Color };
+context: *ContextType,
+input: HistoryBrowserInput,
+background: ColorType,
 
-pub fn line(draw: *Drawing, area: ui.Rect, value: Text) void {
+pub fn line(draw: *Drawing, area: RectType, value: Text) void {
     _ = draw.context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = value.text, .max_width = area.w, .style = .{ .fg = value.color, .bg = draw.background } });
 }
 
-pub fn rows(draw: *Drawing, area: ui.Rect) void {
+pub fn rows(draw: *Drawing, area: RectType) void {
     if (draw.input.loading or draw.input.entries.len == 0) {
         draw.line(area, .{ .text = if (draw.input.loading) "Searching..." else "No matching commands", .color = draw.context.palette.subtext0 });
         return;
@@ -30,20 +32,20 @@ pub fn rows(draw: *Drawing, area: ui.Rect) void {
     for (0..count) |offset| {
         const index = start + offset;
         const entry = draw.input.entries[index];
-        const row: ui.Rect = .{ .x = area.x, .y = area.y + area.h - 1 - @as(u16, @intCast(offset)), .w = area.w, .h = 1 };
+        const row: RectType = .{ .x = area.x, .y = area.y + area.h - 1 - @as(u16, @intCast(offset)), .w = area.w, .h = 1 };
         draw.background = if (index == selected) draw.context.palette.surface1 else draw.context.palette.panel_bg;
         draw.context.buffer.fill(row, .{ .glyph = " ", .style = .{ .bg = draw.background } });
         draw.line(row, .{ .text = if (index == selected) ">" else " ", .color = draw.context.palette.accent });
         var x = row.x + 2;
         var storage: [32]u8 = undefined;
         if (row.w >= 40) {
-            const duration = source_namespace.durationText(entry.duration_ns, &storage);
+            const duration = history_browser.durationText(entry.duration_ns, &storage);
             draw.line(.{ .x = x, .y = row.y, .w = 7, .h = 1 }, .{ .text = duration, .color = draw.context.palette.yellow });
             x += 8;
         }
 
         if (row.w >= 64) {
-            const age = source_namespace.ageText(draw.input.now_ms -| entry.started_at_ms, &storage);
+            const age = history_browser.ageText(draw.input.now_ms -| entry.started_at_ms, &storage);
             draw.line(.{ .x = x, .y = row.y, .w = 7, .h = 1 }, .{ .text = age, .color = draw.context.palette.subtext0 });
             x += 8;
         }
@@ -58,14 +60,14 @@ pub fn rows(draw: *Drawing, area: ui.Rect) void {
     draw.background = draw.context.palette.panel_bg;
 }
 
-fn command(draw: *Drawing, area: ui.Rect, command_text: []const u8) void {
+fn command(draw: *Drawing, area: RectType, command_text: []const u8) void {
     draw.line(area, .{ .text = command_text, .color = draw.context.palette.text });
     const query = draw.input.field.text();
     if (query.len == 0) {
         return;
     }
 
-    var iterator: ui.GraphemeIterator = .{ .bytes = command_text };
+    var iterator: GraphemeIteratorType = .{ .bytes = command_text };
     var x = area.x;
     var matched: usize = 0;
     while (iterator.next()) |cluster| {
@@ -82,9 +84,9 @@ fn command(draw: *Drawing, area: ui.Rect, command_text: []const u8) void {
     }
 }
 
-pub fn inspect(draw: *Drawing, area: ui.Rect, entry: Entry) void {
+pub fn inspect(draw: *Drawing, area: RectType, entry: Entry) void {
     const content: Inspection = .{ .entry = entry, .output = draw.input.output, .output_hint = draw.input.output_hint };
-    const scroll = if (draw.input.detail_scroll == 0) 0 else @min(draw.input.detail_scroll, source_namespace.detailScrollLimit(area, content));
+    const scroll = if (draw.input.detail_scroll == 0) 0 else @min(draw.input.detail_scroll, history_browser.detailScrollLimit(area, content));
     var lines: Wrapped = .{ .draw = draw, .area = area, .skip = scroll };
     var detail = Detail.init(content);
     for (detail.texts(), 0..) |text, index| {

@@ -1,11 +1,12 @@
 //! Application use case for navigating to one committed agent identity.
 
+const TabIdType = @import("telar-core").TabId;
+const PaneIdType = @import("telar-core").PaneId;
+const AgentHandoffType = @import("../../model/AgentHandoff.zig");
+const TestingModel = @import("TestingModel.zig");
+const AgentNavigationCapture = @import("AgentNavigationCapture.zig");
+const NavigateAgentHandler = @import("NavigateAgentHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../../root.zig").agents;
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
 
 pub const Outcome = enum {
     ignored,
@@ -13,26 +14,16 @@ pub const Outcome = enum {
     handoff_requested,
 };
 
-pub const HandoffGate = @import("HandoffGate.zig");
-
-pub const NavigationEffects = @import("NavigationEffects.zig");
-
-pub const NavigateAgentHandler = @import("NavigateAgentHandler.zig");
-
 pub const Event = union(enum) {
-    select_tab: schema.TabId,
-    focus_pane: schema.PaneId,
-    handoff: client_model.AgentHandoff,
+    select_tab: TabIdType,
+    focus_pane: PaneIdType,
+    handoff: AgentHandoffType,
 };
-
-const Capture = @import("AgentNavigationCapture.zig");
-
-const TestingModel = @import("TestingModel.zig");
 
 test "NavigateAgentHandler orders local tab selection before pane focus" {
     var testing = try TestingModel.init();
     defer testing.deinit();
-    var capture: Capture = .{};
+    var capture: AgentNavigationCapture = .{};
     var handler: NavigateAgentHandler = .{
         .model = testing.model,
         .handoffs = capture.gate(),
@@ -51,7 +42,7 @@ test "NavigateAgentHandler orders local tab selection before pane focus" {
 test "NavigateAgentHandler gates handoffs and stale identities without effects" {
     var testing = try TestingModel.init();
     defer testing.deinit();
-    var capture: Capture = .{ .blocked = true };
+    var capture: AgentNavigationCapture = .{ .blocked = true };
     var handler: NavigateAgentHandler = .{
         .model = testing.model,
         .handoffs = capture.gate(),
@@ -68,7 +59,7 @@ test "NavigateAgentHandler gates handoffs and stale identities without effects" 
     capture.blocked = false;
     try std.testing.expectEqual(Outcome.handoff_requested, try handler.execute(testing.remote_key));
     try std.testing.expectEqual(@as(usize, 1), capture.count);
-    try std.testing.expectEqualDeep(client_model.AgentHandoff{
+    try std.testing.expectEqualDeep(AgentHandoffType{
         .pane_id = testing.remote_key.pane_id,
         .fallback_workspace = @enumFromInt(3),
     }, capture.events[0].handoff);
@@ -77,7 +68,7 @@ test "NavigateAgentHandler gates handoffs and stale identities without effects" 
 test "NavigateAgentHandler stops or propagates failed navigation effects in order" {
     var testing = try TestingModel.init();
     defer testing.deinit();
-    var capture: Capture = .{ .select_result = false };
+    var capture: AgentNavigationCapture = .{ .select_result = false };
     var handler: NavigateAgentHandler = .{
         .model = testing.model,
         .handoffs = capture.gate(),

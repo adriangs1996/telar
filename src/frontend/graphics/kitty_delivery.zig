@@ -1,29 +1,22 @@
 //! Kitty delivery state. The shared catalog owns pixels, quotas and revisions.
+
+const ImageStateType = @import("ImageState.zig");
+const PlacementStateType = @import("PlacementState.zig");
+const GenericResourceStore = @import("telar-client").GenericResourceStore;
+const Compression = @import("Compression.zig");
 const std = @import("std");
-const core = @import("telar-core");
-pub const graphics = core.graphics;
-const schema = core.schema;
-pub const diagnostics = core.diagnostics;
-const Io = std.Io;
 const kitty = @import("kitty.zig");
-const resources = @import("telar-client").graphics;
-pub const Store = resources.ResourceStore(@This());
+const supportsSharedMemory = @import("telar-client").supportsSharedMemory;
+const PaneIdType = @import("telar-core").PaneId;
+const ImageIdentity = @import("telar-client").ImageIdentity;
+const PartialPlacement = @import("PartialPlacement.zig");
+const enabled_module = @import("telar-core").enabled;
+const PlacementIdentity = @import("telar-client").PlacementIdentity;
+
+pub const Store = GenericResourceStore(@This());
 const ImageEntry = Store.ImageEntry;
 const PlacementEntry = Store.PlacementEntry;
-const ImageIdentity = resources.ImageIdentity;
-const PlacementIdentity = resources.PlacementIdentity;
-const SharedPixels = resources.SharedPixels;
-const identity = resources.identity;
-const supportsSharedMemory = resources.supportsSharedMemory;
-pub const Compression = kitty.Compression;
-pub const CompressionScheduler = kitty.CompressionScheduler;
-pub const Delete = kitty.Delete;
-pub const PartialTransmission = kitty.PartialTransmission;
-const PartialPlacement = kitty.PartialPlacement;
-const compression_slice_per_frame = kitty.compression_slice_per_frame;
-const compression_min_bytes = kitty.compression_min_bytes;
-const shared_consume_deadline_passes = kitty.shared_consume_deadline_passes;
-const shared_expiry_disable_threshold = kitty.shared_expiry_disable_threshold;
+
 pub const State = @import("State.zig");
 pub const ImageState = @import("ImageState.zig");
 pub const PlacementState = @import("PlacementState.zig");
@@ -98,7 +91,7 @@ pub fn advanceCompression(store: *Store, entry: *ImageEntry, budget: *usize) boo
     if (entry.delivery.compressed != null or entry.delivery.incompressible) {
         return true;
     }
-    if (!store.delivery.host_zlib or entry.pixels.len < compression_min_bytes) {
+    if (!store.delivery.host_zlib or entry.pixels.len < kitty.compression_min_bytes) {
         return true;
     }
     if (budget.* == 0) {
@@ -115,7 +108,7 @@ pub fn advanceCompression(store: *Store, entry: *ImageEntry, budget: *usize) boo
         };
         // The compressor asserts a non-empty output buffer at init; the
         // allocating writer grows it past this seed as the stream needs.
-        state.allocating = Io.Writer.Allocating.initCapacity(store.gpa, 4096) catch {
+        state.allocating = std.Io.Writer.Allocating.initCapacity(store.gpa, 4096) catch {
             store.gpa.destroy(state);
             entry.delivery.incompressible = true;
             return true;
@@ -147,7 +140,7 @@ pub fn advanceCompression(store: *Store, entry: *ImageEntry, budget: *usize) boo
         }
         if (state.offset < entry.pixels.len) {
             if (store.delivery.compression_input.len == 0) {
-                store.delivery.compression_input = store.gpa.alloc(u8, compression_slice_per_frame) catch {
+                store.delivery.compression_input = store.gpa.alloc(u8, kitty.compression_slice_per_frame) catch {
                     freeCompression(store, entry);
                     entry.delivery.incompressible = true;
                     return true;
@@ -244,7 +237,7 @@ pub fn expireSharedTransmissions(store: *Store) void {
         if (image.shared == null or !image.delivery.emitted_shared) {
             continue;
         }
-        if (store.delivery.pass_counter -% image.delivery.transmitted_pass < shared_consume_deadline_passes) {
+        if (store.delivery.pass_counter -% image.delivery.transmitted_pass < kitty.shared_consume_deadline_passes) {
             continue;
         }
         if (sharedPixelsConsumed(store, image)) {
@@ -252,13 +245,13 @@ pub fn expireSharedTransmissions(store: *Store) void {
         }
         loseSharedName(store, entry.key_ptr.pane_id, image);
         store.delivery.shared_expiries +|= 1;
-        if (store.delivery.shared_expiries >= shared_expiry_disable_threshold) {
+        if (store.delivery.shared_expiries >= kitty.shared_expiry_disable_threshold) {
             store.shared_memory = false;
         }
     }
 }
 
-pub fn loseSharedName(store: *Store, pane_id: schema.PaneId, image: *ImageEntry) void {
+pub fn loseSharedName(store: *Store, pane_id: PaneIdType, image: *ImageEntry) void {
     const shared = if (image.shared) |*value| value else return;
     _ = std.c.shm_unlink(shared.sliceZ());
     image.delivery.emitted_shared = false;
@@ -351,7 +344,7 @@ pub fn allocatePlacementId(store: *Store) !u32 {
     return store.delivery.next_placement_id;
 }
 
-pub fn queueDelete(store: *Store, value: Delete) void {
+pub fn queueDelete(store: *Store, value: kitty.Delete) void {
     if (store.delivery.delete_len == store.delivery.delete_queue.len) {
         // Recover with one bounded range delete, then rebuild every
         // Telar-owned low-range image and placement. UI images live in the
@@ -365,7 +358,7 @@ pub fn queueDelete(store: *Store, value: Delete) void {
     store.delivery.delete_len += 1;
 }
 
-pub fn popDelete(store: *Store) ?Delete {
+pub fn popDelete(store: *Store) ?kitty.Delete {
     if (store.delivery.delete_len == 0) {
         return null;
     }
@@ -435,15 +428,15 @@ pub fn capturePartialPlacements(store: *Store) void {
     }
 }
 
-pub fn imageCreated(store: *Store) !ImageState {
+pub fn imageCreated(store: *Store) !ImageStateType {
     return .{ .external_id = try allocateImageId(store) };
 }
-pub fn placementCreated(store: *Store) !PlacementState {
+pub fn placementCreated(store: *Store) !PlacementStateType {
     return .{ .external_id = try allocatePlacementId(store) };
 }
 pub const releaseImage = freeCompression;
 pub fn imageDeleted(store: *Store, entry: ImageEntry) void {
-    if (comptime diagnostics.enabled) {
+    if (comptime enabled_module) {
         if (entry.retire_pending and entry.delivery.emitted_shared and entry.delivery.transmitted_ns != 0 and store.delivery.clock_ns != 0) {
             store.delivery.retire_latency.observe(store.delivery.clock_ns -| entry.delivery.transmitted_ns);
         }

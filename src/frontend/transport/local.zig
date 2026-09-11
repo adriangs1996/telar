@@ -1,9 +1,9 @@
 //! Frontend connection to a local telar runtime.
 
 const std = @import("std");
-const core = @import("telar-core");
+const SocketChannelType = @import("telar-core").SocketChannel;
 
-pub fn connect(io: std.Io, path: []const u8) !core.transport.SocketChannel {
+pub fn connect(io: std.Io, path: []const u8) !SocketChannelType {
     _ = io;
     if (!std.fs.path.isAbsolute(path)) {
         return error.RelativePath;

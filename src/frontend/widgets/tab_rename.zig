@@ -1,22 +1,19 @@
 //! Inline tab-name editor occupying the bottom bar.
 
-const core = @import("telar-core");
-const edit = @import("telar-client").input.edit;
-const widget = @import("context_support.zig");
-const ui = @import("../ui/root.zig");
+const GenericField = @import("telar-client").GenericField;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const ContextType = @import("Context.zig");
+const TabRenameInput = @import("TabRenameInput.zig");
+const CursorType = @import("Cursor.zig");
+const measure_module = @import("telar-core").measure;
+const RectType = @import("telar-core").Rect;
 
-const schema = core.schema;
-
-pub const Field = edit.Field(schema.max_tab_label_bytes);
+pub const Field = GenericField(max_tab_label_bytes_module);
 pub const Kind = enum { rename_tab, create_workspace, rename_workspace, copy_search_forward, copy_search_backward };
-
-pub const Output = widget.Cursor;
-
-pub const Input = @import("TabRenameInput.zig");
 
 /// Renders one tab or workspace name prompt and returns its cursor.
 /// For example: `const cursor = render(context, .{ .area = area, .field = field, .kind = .rename_tab });`.
-pub fn render(context: *widget.Context, input: Input) Output {
+pub fn render(context: *ContextType, input: TabRenameInput) CursorType {
     const area = input.area;
     const field = input.field;
     const prefix = switch (input.kind) {
@@ -31,8 +28,8 @@ pub fn render(context: *widget.Context, input: Input) Output {
         .bg = context.palette.panel_bg,
         .flags = .{ .bold = true },
     } });
-    const field_x = area.x + ui.measure(prefix);
-    const field_area: ui.Rect = .{
+    const field_x = area.x + measure_module(prefix);
+    const field_area: RectType = .{
         .x = field_x,
         .y = area.y,
         .w = area.w -| (field_x - area.x),

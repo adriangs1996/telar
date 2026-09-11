@@ -1,5 +1,7 @@
+const id = @import("../id.zig");
+const types = @import("../types.zig");
 const PaneExited = @This();
-const source_namespace = @import("pane.zig");
-pane_id: source_namespace.PaneId,
-kind: source_namespace.ExitKind,
+
+pane_id: id.PaneId,
+kind: types.ExitKind,
 value: u32,

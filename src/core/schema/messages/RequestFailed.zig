@@ -1,6 +1,8 @@
+const id = @import("../id.zig");
+const types = @import("../types.zig");
 const RequestFailed = @This();
-const source_namespace = @import("runtime.zig");
+
 /// Zero identifies a connection-level error rather than a request.
-request_id: source_namespace.RequestId,
-code: source_namespace.FailureCode,
+request_id: id.RequestId,
+code: types.FailureCode,
 message: []const u8,

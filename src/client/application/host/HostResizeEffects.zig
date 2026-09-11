@@ -1,4 +1,5 @@
+const HostCommitType = @import("../../model/HostCommit.zig");
 const Effects = @This();
-const client_model = @import("../../root.zig").model;
+
 context: *anyopaque,
-deliver: *const fn (*anyopaque, client_model.HostCommit) anyerror!void,
+deliver: *const fn (*anyopaque, HostCommitType) anyerror!void,

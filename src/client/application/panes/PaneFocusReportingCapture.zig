@@ -1,16 +1,18 @@
-const Capture = @This();
-const client_model = @import("../../root.zig").model;
-const Delivery = @import("Delivery.zig");
-const Effects = @import("PaneFocusReportingEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const ReportedPaneFocusType = @import("../../model/ReportedPaneFocus.zig");
+const Delivery = @import("PaneFocusDelivery.zig");
+const PaneFocusReportingEffects = @import("PaneFocusReportingEffects.zig");
 const std = @import("std");
-model: *const client_model.Model,
-expected: ?client_model.ReportedPaneFocus,
+const Capture = @This();
+
+model: *const ModelType,
+expected: ?ReportedPaneFocusType,
 deliveries: [4]Delivery = undefined,
 delivery_count: usize = 0,
 all_observed_commit: bool = true,
 fail: bool = false,
 
-pub fn port(capture: *Capture) Effects {
+pub fn port(capture: *Capture) PaneFocusReportingEffects {
     return .{ .context = capture, .deliver = deliver };
 }
 

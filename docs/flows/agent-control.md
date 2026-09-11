@@ -96,7 +96,7 @@ endpoint. The CLI resolves `--socket`, then `TELAR_SOCKET`, then
 - `src/backend/runtime/tests/read_pane_test.zig` proves row selection,
   truncation and late binding through the encoder.
 - `src/backend/runtime/application/pane_launcher.zig` proves the identity
-  variables; `src/backend/proxy/root.zig` proves they survive proxy
+  variables; `src/backend/proxy/proxy_namespace.zig` proves they survive proxy
   registration.
 - `src/cli/parser.zig` and `src/cli/control.zig` prove the grammar, target
   resolution and JSON escaping.

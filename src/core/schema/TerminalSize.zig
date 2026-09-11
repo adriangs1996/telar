@@ -1,5 +1,6 @@
-const TerminalSize = @This();
 const frame = @import("frame_support.zig");
+const TerminalSize = @This();
+
 cols: u16,
 rows: u16,
 /// Pixel size of one cell. Zero means the client has not learned it.

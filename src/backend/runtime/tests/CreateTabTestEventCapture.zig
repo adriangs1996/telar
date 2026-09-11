@@ -1,14 +1,15 @@
+const TabCreatedType = @import("../../workspace/TabCreated.zig");
+const CreateTabEventPublisher = @import("../application/commands/CreateTabEventPublisher.zig");
 const EventCapture = @This();
-const workspace_mod = @import("../../workspace/root.zig");
-const create_tab_commands = @import("../application/commands/create_tab.zig");
-count: usize = 0,
-last: ?workspace_mod.TabCreated = null,
 
-pub fn publisher(capture: *EventCapture) create_tab_commands.EventPublisher {
+count: usize = 0,
+last: ?TabCreatedType = null,
+
+pub fn publisher(capture: *EventCapture) CreateTabEventPublisher {
     return .{ .context = capture, .publish = publish };
 }
 
-fn publish(context: *anyopaque, event: workspace_mod.TabCreated) void {
+fn publish(context: *anyopaque, event: TabCreatedType) void {
     const capture: *EventCapture = @ptrCast(@alignCast(context));
     capture.count += 1;
     capture.last = event;

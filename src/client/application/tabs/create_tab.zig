@@ -1,29 +1,17 @@
 //! Application use cases for requesting and confirming tab creation.
 
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const RequestTabCreation = @import("RequestTabCreation.zig");
-
-pub const TabCreationIntent = @import("TabCreationIntent.zig");
-
-pub const TabOperationGate = @import("CreateTabTabOperationGate.zig");
-
-pub const CreationRequestEffects = @import("CreationRequestEffects.zig");
-
-pub const RequestTabCreationHandler = @import("RequestTabCreationHandler.zig");
-
-pub const ConfirmTabCreation = client_model.NewTab;
-
-pub const ConfirmationDelivery = @import("ConfirmationDelivery.zig");
-
-pub const ConfirmTabCreationHandler = @import("ConfirmTabCreationHandler.zig");
+const CreateTabTestingModel = @import("CreateTabTestingModel.zig");
+const CreateTabRequestCapture = @import("CreateTabRequestCapture.zig");
+const RequestTabCreationHandler = @import("RequestTabCreationHandler.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const VersionType = @import("../../model/Version.zig");
+const DeliveryCapture = @import("DeliveryCapture.zig");
+const ConfirmTabCreationHandler = @import("ConfirmTabCreationHandler.zig");
 
 pub fn validateLabel(label: []const u8) !void {
-    if (label.len > schema.max_tab_label_bytes) {
+    if (label.len > max_tab_label_bytes_module) {
         return error.InvalidTabLabel;
     }
     if (!std.unicode.utf8ValidateSlice(label)) {
@@ -36,16 +24,10 @@ pub fn validateLabel(label: []const u8) !void {
     }
 }
 
-const RequestCapture = @import("CreateTabRequestCapture.zig");
-
-const DeliveryCapture = @import("DeliveryCapture.zig");
-
-const TestingModel = @import("CreateTabTestingModel.zig");
-
 test "tab creation request sends the current workspace and focused pane without mutation" {
-    var testing = try TestingModel.init();
+    var testing = try CreateTabTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{};
+    var capture: CreateTabRequestCapture = .{};
     var handler: RequestTabCreationHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -56,15 +38,15 @@ test "tab creation request sends the current workspace and focused pane without 
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqualDeep(testing.first.workspace, capture.workspace.?);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), capture.cwd_source.?);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(1)), capture.cwd_source.?);
     try std.testing.expectEqualStrings("logs", capture.labelSlice());
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "tab creation request suppresses blocked and absent launch sources" {
-    var testing = try TestingModel.init();
+    var testing = try CreateTabTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{ .blocked = true };
+    var capture: CreateTabRequestCapture = .{ .blocked = true };
     var handler: RequestTabCreationHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -80,15 +62,15 @@ test "tab creation request suppresses blocked and absent launch sources" {
 }
 
 test "tab creation request rejects invalid labels before delivery" {
-    var testing = try TestingModel.init();
+    var testing = try CreateTabTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{};
+    var capture: CreateTabRequestCapture = .{};
     var handler: RequestTabCreationHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
         .effects = capture.effects(),
     };
-    var too_long: [schema.max_tab_label_bytes + 1]u8 = @splat('a');
+    var too_long: [max_tab_label_bytes_module + 1]u8 = @splat('a');
     const invalid_utf8 = [_]u8{0xff};
 
     try std.testing.expectError(error.InvalidTabLabel, handler.execute(.{ .label = &too_long }));
@@ -96,13 +78,13 @@ test "tab creation request rejects invalid labels before delivery" {
     try std.testing.expectError(error.InvalidUtf8, handler.execute(.{ .label = &invalid_utf8 }));
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "tab creation request propagates delivery failure without mutation" {
-    var testing = try TestingModel.init();
+    var testing = try CreateTabTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{ .fail = true };
+    var capture: CreateTabRequestCapture = .{ .fail = true };
     var handler: RequestTabCreationHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -112,11 +94,11 @@ test "tab creation request propagates delivery failure without mutation" {
     try std.testing.expectError(error.DeliveryFailed, handler.execute(.{}));
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "ConfirmTabCreationHandler commits before delivery" {
-    var testing = try TestingModel.init();
+    var testing = try CreateTabTestingModel.init();
     defer testing.deinit();
     var delivery: DeliveryCapture = .{ .model = testing.model, .expected = testing.second };
     var handler: ConfirmTabCreationHandler = .{
@@ -133,7 +115,7 @@ test "ConfirmTabCreationHandler commits before delivery" {
 }
 
 test "ConfirmTabCreationHandler rejects model failures before delivery" {
-    var testing = try TestingModel.init();
+    var testing = try CreateTabTestingModel.init();
     defer testing.deinit();
     var delivery: DeliveryCapture = .{ .model = testing.model, .expected = testing.second };
     var handler: ConfirmTabCreationHandler = .{
@@ -148,11 +130,11 @@ test "ConfirmTabCreationHandler rejects model failures before delivery" {
     try std.testing.expectEqual(@as(usize, 0), delivery.calls);
     try std.testing.expectEqual(@as(usize, 1), testing.model.workspace.count);
     try std.testing.expectEqualDeep(testing.first, testing.model.activeTabLocation().?);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "ConfirmTabCreationHandler preserves a committed creation after delivery failure" {
-    var testing = try TestingModel.init();
+    var testing = try CreateTabTestingModel.init();
     defer testing.deinit();
     var delivery: DeliveryCapture = .{
         .model = testing.model,

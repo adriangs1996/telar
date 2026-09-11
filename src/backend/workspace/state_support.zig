@@ -1,11 +1,9 @@
 //! Passive in-memory storage owned by `RuntimeModel` for workspace aggregates.
 
+const State = @import("State.zig");
 const std = @import("std");
-const workspace = @import("workspace_support.zig");
 
 pub const max_workspaces = 64;
-
-pub const State = @import("State.zig");
 
 /// Advances projection revision while preserving zero as the unseen sentinel.
 ///

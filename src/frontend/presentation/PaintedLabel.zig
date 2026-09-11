@@ -1,5 +1,7 @@
+const BufferType = @import("telar-core").Buffer;
+const RectType = @import("telar-core").Rect;
 const PaintedLabel = @This();
-const source_namespace = @import("pane_labels.zig");
-buffer: *const source_namespace.ui.Buffer,
-area: source_namespace.ui.Rect,
+
+buffer: *const BufferType,
+area: RectType,
 selected: bool,

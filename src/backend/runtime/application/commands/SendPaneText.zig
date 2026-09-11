@@ -1,5 +1,7 @@
+const PaneKeyType = @import("../../../pane/PaneKey.zig");
+const PaneTextModeType = @import("telar-core").PaneTextMode;
 const SendPaneText = @This();
-const source_namespace = @import("send_pane_text.zig");
-pane: source_namespace.PaneKey,
-mode: source_namespace.schema.PaneTextMode,
+
+pane: PaneKeyType,
+mode: PaneTextModeType,
 text: []const u8,

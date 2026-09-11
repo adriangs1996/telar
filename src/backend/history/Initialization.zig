@@ -1,11 +1,12 @@
-const Initialization = @This();
-const source_namespace = @import("observer_support.zig");
 const std = @import("std");
-const agent_detection = @import("agent_detection.zig");
-const core = @import("telar-core");
-io: source_namespace.Io,
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const TableType = @import("telar-core").Table;
+const builtin_table_module = @import("telar-core").builtin_table;
+const Initialization = @This();
+
+io: std.Io,
 gpa: std.mem.Allocator,
 cwd: []const u8,
-size: source_namespace.schema.TerminalSize,
-manifests: *const agent_detection.Table = &core.agent_manifest.builtin_table,
+size: TerminalSizeType,
+manifests: *const TableType = &builtin_table_module,
 capture_output: bool = false,

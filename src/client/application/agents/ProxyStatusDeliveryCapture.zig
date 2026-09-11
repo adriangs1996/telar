@@ -1,17 +1,19 @@
-const DeliveryCapture = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
+const ProxyStatusCommitType = @import("../../model/ProxyStatusCommit.zig");
 const ProxyStatusDelivery = @import("ProxyStatusDelivery.zig");
-model: *const client_model.Model,
+const DeliveryCapture = @This();
+
+model: *const ModelType,
 calls: usize = 0,
 observed_commit: bool = false,
-commit: ?client_model.ProxyStatusCommit = null,
+commit: ?ProxyStatusCommitType = null,
 fail: bool = false,
 
 pub fn port(capture: *DeliveryCapture) ProxyStatusDelivery {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(context: *anyopaque, commit: client_model.ProxyStatusCommit) !void {
+fn deliver(context: *anyopaque, commit: ProxyStatusCommitType) !void {
     const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.commit = commit;

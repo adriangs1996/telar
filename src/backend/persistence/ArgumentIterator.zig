@@ -1,3 +1,4 @@
+const std = @import("std");
 /// Iterates the NUL-terminated arguments of a pane record.
 ///
 /// ```zig
@@ -5,7 +6,7 @@
 /// while (arguments.next()) |argument| use(argument);
 /// ```
 const ArgumentIterator = @This();
-const std = @import("std");
+
 remaining: []const u8,
 
 pub fn init(arguments: []const u8) ArgumentIterator {

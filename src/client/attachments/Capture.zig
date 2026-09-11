@@ -1,6 +1,7 @@
-const Capture = @This();
 const CaptureRequest = @import("CaptureRequest.zig");
 const std = @import("std");
+const Capture = @This();
+
 request: CaptureRequest,
 png: []u8,
 width: u32,

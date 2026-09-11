@@ -1,20 +1,21 @@
-const RecoveryCapture = @This();
-const source_namespace = @import("workspace_handoff.zig");
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const WorkspaceRecoveryEffects = @import("WorkspaceRecoveryEffects.zig");
-forgotten: ?source_namespace.schema.WorkspaceId = null,
-retried: ?source_namespace.schema.WorkspaceId = null,
+const RecoveryCapture = @This();
+
+forgotten: ?WorkspaceIdType = null,
+retried: ?WorkspaceIdType = null,
 fail: bool = false,
 
 pub fn port(capture: *RecoveryCapture) WorkspaceRecoveryEffects {
     return .{ .context = capture, .forget = forget, .retry = retry };
 }
 
-fn forget(context: *anyopaque, workspace: source_namespace.schema.WorkspaceId) void {
+fn forget(context: *anyopaque, workspace: WorkspaceIdType) void {
     const capture: *RecoveryCapture = @ptrCast(@alignCast(context));
     capture.forgotten = workspace;
 }
 
-fn retry(context: *anyopaque, workspace: source_namespace.schema.WorkspaceId) !void {
+fn retry(context: *anyopaque, workspace: WorkspaceIdType) !void {
     const capture: *RecoveryCapture = @ptrCast(@alignCast(context));
     capture.retried = workspace;
     if (capture.fail) {

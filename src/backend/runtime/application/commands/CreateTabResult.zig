@@ -1,5 +1,6 @@
+const TabCreatedType = @import("../../../workspace/TabCreated.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const CreateTabResult = @This();
-const workspace_mod = @import("../../../workspace/root.zig");
-const source_namespace = @import("create_tab.zig");
-created: workspace_mod.TabCreated,
-root_pane_id: source_namespace.schema.PaneId,
+
+created: TabCreatedType,
+root_pane_id: PaneIdType,

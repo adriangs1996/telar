@@ -1,18 +1,10 @@
 //! Completion policy for one asynchronous runtime-to-client send.
 
-const std = @import("std");
-
-pub const SentEvent = @import("GenericSentEvent.zig").Type;
-
-pub const RuntimePort = @import("GenericRuntimePort.zig").Type;
-
-pub const Coordinator = @import("GenericCoordinator.zig").Type;
-
-const FakeSession = @import("SendCoordinatorFakeSession.zig");
-
-const FakeCompletion = @import("FakeCompletion.zig");
-
+const GenericRuntimePort = @import("GenericRuntimePort.zig").Type;
+const SendCoordinatorCapture = @import("SendCoordinatorCapture.zig");
 const TestTypes = @import("TestTypes.zig");
+const GenericCoordinator = @import("GenericCoordinator.zig").Type;
+const std = @import("std");
 
 pub const Step = enum {
     resolve,
@@ -30,32 +22,30 @@ pub const Step = enum {
     shutdown_delivered,
 };
 
-const Capture = @import("SendCoordinatorCapture.zig");
-
-const test_port: RuntimePort(Capture, TestTypes) = .{
-    .resolve = Capture.resolve,
-    .record_stale = Capture.recordStale,
-    .release_send = Capture.releaseSend,
-    .is_closing = Capture.isClosing,
-    .finalize = Capture.finalize,
-    .complete_delivery = Capture.completeDelivery,
-    .drop_client = Capture.dropClient,
-    .detach_after_send = Capture.detachAfterSend,
-    .should_close_after_reply = Capture.shouldCloseAfterReply,
-    .stopping = Capture.stopping,
-    .pump_client = Capture.pumpClient,
-    .pump_all = Capture.pumpAll,
-    .shutdown_delivered = Capture.shutdownDelivered,
+const test_port: GenericRuntimePort(SendCoordinatorCapture, TestTypes) = .{
+    .resolve = SendCoordinatorCapture.resolve,
+    .record_stale = SendCoordinatorCapture.recordStale,
+    .release_send = SendCoordinatorCapture.releaseSend,
+    .is_closing = SendCoordinatorCapture.isClosing,
+    .finalize = SendCoordinatorCapture.finalize,
+    .complete_delivery = SendCoordinatorCapture.completeDelivery,
+    .drop_client = SendCoordinatorCapture.dropClient,
+    .detach_after_send = SendCoordinatorCapture.detachAfterSend,
+    .should_close_after_reply = SendCoordinatorCapture.shouldCloseAfterReply,
+    .stopping = SendCoordinatorCapture.stopping,
+    .pump_client = SendCoordinatorCapture.pumpClient,
+    .pump_all = SendCoordinatorCapture.pumpAll,
+    .shutdown_delivered = SendCoordinatorCapture.shutdownDelivered,
 };
 
-const TestCoordinator = Coordinator(Capture, TestTypes, test_port);
+const TestCoordinator = GenericCoordinator(SendCoordinatorCapture, TestTypes, test_port);
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const SendCoordinatorCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
 test "a stale completion records one stale message without touching a session" {
-    var capture: Capture = .{ .resolve_client = false };
+    var capture: SendCoordinatorCapture = .{ .resolve_client = false };
     var coordinator = TestCoordinator.init(&capture);
 
     try std.testing.expect(!coordinator.handle(.{ .client = 7, .result = {} }));
@@ -65,7 +55,7 @@ test "a stale completion records one stale message without touching a session" {
 }
 
 test "a closing session releases the send before finalization" {
-    var capture: Capture = .{ .session = .{ .closing = true }, .shutdown_complete = true };
+    var capture: SendCoordinatorCapture = .{ .session = .{ .closing = true }, .shutdown_complete = true };
     var coordinator = TestCoordinator.init(&capture);
 
     try std.testing.expect(coordinator.handle(.{ .client = 7, .result = {} }));
@@ -76,7 +66,7 @@ test "a closing session releases the send before finalization" {
 }
 
 test "a failed delivery closes the client before deferred effects" {
-    var capture: Capture = .{ .completion = .{ .close_client = true, .detach_pane = 9 } };
+    var capture: SendCoordinatorCapture = .{ .completion = .{ .close_client = true, .detach_pane = 9 } };
     var coordinator = TestCoordinator.init(&capture);
 
     try std.testing.expect(!coordinator.handle(.{ .client = 7, .result = error.SendFailed }));
@@ -88,7 +78,7 @@ test "a failed delivery closes the client before deferred effects" {
 }
 
 test "a successful deferred detach precedes the next delivery pump" {
-    var capture: Capture = .{ .completion = .{ .detach_pane = 9 } };
+    var capture: SendCoordinatorCapture = .{ .completion = .{ .detach_pane = 9 } };
     var coordinator = TestCoordinator.init(&capture);
 
     try std.testing.expect(!coordinator.handle(.{ .client = 7, .result = {} }));
@@ -107,7 +97,7 @@ test "a successful deferred detach precedes the next delivery pump" {
 }
 
 test "close-after-reply drops an active client without retrying delivery" {
-    var capture: Capture = .{ .session = .{ .close_after_reply = true } };
+    var capture: SendCoordinatorCapture = .{ .session = .{ .close_after_reply = true } };
     var coordinator = TestCoordinator.init(&capture);
 
     try std.testing.expect(!coordinator.handle(.{ .client = 7, .result = {} }));
@@ -125,7 +115,7 @@ test "close-after-reply drops an active client without retrying delivery" {
 }
 
 test "shutdown defers close-after-reply until the stopping delivery completes" {
-    var capture: Capture = .{
+    var capture: SendCoordinatorCapture = .{
         .session = .{ .close_after_reply = true },
         .runtime_stopping = true,
         .shutdown_complete = true,
@@ -150,7 +140,7 @@ test "shutdown defers close-after-reply until the stopping delivery completes" {
 }
 
 test "delivery retry failure drops the client" {
-    var capture: Capture = .{ .pump_failure = true };
+    var capture: SendCoordinatorCapture = .{ .pump_failure = true };
     var coordinator = TestCoordinator.init(&capture);
 
     try std.testing.expect(!coordinator.handle(.{ .client = 7, .result = {} }));
@@ -169,7 +159,7 @@ test "delivery retry failure drops the client" {
 }
 
 test "an active shutdown pumps every client before checking completion" {
-    var capture: Capture = .{ .runtime_stopping = true, .shutdown_complete = true };
+    var capture: SendCoordinatorCapture = .{ .runtime_stopping = true, .shutdown_complete = true };
     var coordinator = TestCoordinator.init(&capture);
 
     try std.testing.expect(coordinator.handle(.{ .client = 7, .result = {} }));

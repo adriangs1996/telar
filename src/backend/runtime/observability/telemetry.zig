@@ -1,16 +1,18 @@
 //! Runtime metrics and their diagnostics serialization.
 
+const TelemetrySample = @import("TelemetrySample.zig");
+const now_module = @import("telar-core").now;
 const std = @import("std");
 const vt = @import("ghostty-vt");
-const core = @import("telar-core");
-const attachment_mod = @import("../attachment/root.zig");
-const history = @import("../../history/root.zig");
-const pane_mod = @import("../../pane/root.zig");
-
-pub const Io = std.Io;
-pub const diagnostics = core.diagnostics;
-pub const AttachmentStore = attachment_mod.AttachmentStore;
-pub const PaneStore = pane_mod.PaneStore;
+const elapsed_module = @import("telar-core").elapsed;
+const rssBytes_module = @import("telar-core").rssBytes;
+const State = @import("State.zig");
+const ServiceType = @import("../../history/Service.zig");
+const HeapType = @import("telar-core").Heap;
+const enter_module = @import("telar-core").enter;
+const PaneStore = @import("../../pane/PaneStore.zig");
+const RuntimeMetrics = @import("RuntimeMetrics.zig");
+const enabled_module = @import("telar-core").enabled;
 
 pub const max_line_bytes = 12288;
 
@@ -19,28 +21,18 @@ pub const WriteCompletion = enum {
     disable_sink,
 };
 
-pub const State = @import("State.zig");
-
-pub const RuntimeMetrics = @import("RuntimeMetrics.zig");
-
-pub const ClientSample = @import("ClientSample.zig");
-
-pub const ProxySample = @import("ProxySample.zig");
-
-pub const Sample = @import("TelemetrySample.zig");
-
 /// Serializes one immutable view of runtime counters and retained resources
 /// into caller-owned storage. The returned slice aliases `buffer`.
 ///
 /// ```zig
 /// const line = try formatRuntimeTelemetry(&buffer, sample);
 /// ```
-pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
+pub fn formatRuntimeTelemetry(buffer: []u8, sample: TelemetrySample) ![]const u8 {
     const metrics = sample.metrics;
     const panes = sample.panes;
     const clients = sample.clients;
     const proxy = sample.proxy;
-    const now_ns = diagnostics.now(sample.io);
+    const now_ns = now_module(sample.io);
     var outstanding_frames: usize = 0;
     var dirty_panes: usize = 0;
     var attachment_count: usize = 0;
@@ -141,7 +133,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
         }
     }
     const history_stats = sample.history_service.statsSnapshot();
-    var output = Io.Writer.fixed(buffer);
+    var output = std.Io.Writer.fixed(buffer);
     try output.print("{{\"ts_ms\":{d},\"uptime_ms\":{d},\"role\":\"runtime\"," ++
         "\"client_count\":{d},\"workspace_count\":{d},\"tab_count\":{d}," ++
         "\"pane_count\":{d},\"attachment_count\":{d}," ++
@@ -157,7 +149,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
         "\"coalesced_spans\":{d},\"bridged_cells\":{d}," ++
         "\"coalesced_bytes_saved\":{d},", .{
         now_ns / std.time.ns_per_ms,
-        diagnostics.elapsed(metrics.started_ns, now_ns) / std.time.ns_per_ms,
+        elapsed_module(metrics.started_ns, now_ns) / std.time.ns_per_ms,
         clients.count,
         sample.workspace_count,
         sample.tab_count,
@@ -259,7 +251,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
     try output.print("\"system_sample_avg_us\":{d},\"system_sample_max_us\":{d},\"system_sample_age_ms\":{d},", .{
         metrics.system_sample.average() / std.time.ns_per_us,
         metrics.system_sample.max_ns / std.time.ns_per_us,
-        if (metrics.system_sample_last_ns == 0) @as(u64, 0) else diagnostics.elapsed(metrics.system_sample_last_ns, now_ns) / std.time.ns_per_ms,
+        if (metrics.system_sample_last_ns == 0) @as(u64, 0) else elapsed_module(metrics.system_sample_last_ns, now_ns) / std.time.ns_per_ms,
     });
     try output.print("\"history_captured\":{d},\"history_dropped\":{d}," ++
         "\"history_candidate_input_bytes\":{d},\"history_input_dropped\":{d}," ++
@@ -410,7 +402,7 @@ pub fn formatRuntimeTelemetry(buffer: []u8, sample: Sample) ![]const u8 {
             "\"observation_allocs\":{d},\"observation_alloc_bytes\":{d}," ++
             "\"other_allocs\":{d},\"other_alloc_bytes\":{d}}}\n",
         .{
-            diagnostics.rssBytes(),
+            rssBytes_module(),
             panes.graphics_budget.used,
             pane_media_used,
             vt_scrollback_bytes,
@@ -469,11 +461,11 @@ test "a failed telemetry write releases the buffer before retiring its sink" {
 
 test "runtime telemetry reports retained memory domains" {
     const io = std.testing.io;
-    var service = try history.Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
+    var service = try ServiceType.init(std.testing.allocator, .{ .database_path = ":memory:" });
     defer service.deinit(io);
-    var heap = diagnostics.Heap.init(std.testing.allocator);
+    var heap = HeapType.init(std.testing.allocator);
     {
-        const path = diagnostics.enter(.observation);
+        const path = enter_module(.observation);
         defer path.restore();
         const scratch = try heap.allocator().alloc(u8, 16);
         defer heap.allocator().free(scratch);
@@ -539,11 +531,11 @@ test "runtime telemetry reports retained memory domains" {
         try std.testing.expect(std.mem.indexOf(u8, line, "\"vt_scrollback_bytes\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"history_sqlite_bytes\":0") != null);
         try std.testing.expect(std.mem.indexOf(u8, line, "\"rss_bytes\":") != null);
-        const expected_heap = if (diagnostics.enabled)
+        const expected_heap = if (enabled_module)
             "\"heap_live_bytes\":16"
         else
             "\"heap_live_bytes\":0";
-        const expected_observation_allocs = if (diagnostics.enabled)
+        const expected_observation_allocs = if (enabled_module)
             "\"observation_allocs\":1"
         else
             "\"observation_allocs\":0";

@@ -1,9 +1,14 @@
-const Tracker = @This();
-const source_namespace = @import("requests.zig");
+const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
 const Entry = @import("Entry.zig");
+const RequestIdType = @import("telar-core").RequestId;
+const requests = @import("requests.zig");
 const std = @import("std");
+const PaneIdType = @import("telar-core").PaneId;
+const TabIdType = @import("telar-core").TabId;
+const Tracker = @This();
+
 /// One attachment per pane plus the singleton client operations.
-pub const capacity = source_namespace.schema.max_panes_per_tab + 8;
+pub const capacity = max_panes_per_tab_module + 8;
 
 entries: [capacity]?Entry = @splat(null),
 count: usize = 0,
@@ -13,7 +18,7 @@ count: usize = 0,
 /// ```zig
 /// try tracker.add(request_id, continuation);
 /// ```
-pub fn add(tracker: *Tracker, request_id: source_namespace.schema.RequestId, continuation: source_namespace.Continuation) !void {
+pub fn add(tracker: *Tracker, request_id: RequestIdType, continuation: requests.Continuation) !void {
     std.debug.assert(request_id != .none);
     for (&tracker.entries) |*slot| {
         if (slot.*) |entry| {
@@ -62,7 +67,7 @@ pub fn isEmpty(tracker: *const Tracker) bool {
 ///     return;
 /// }
 /// ```
-pub fn has(tracker: *const Tracker, group: source_namespace.Group) bool {
+pub fn has(tracker: *const Tracker, group: requests.Group) bool {
     for (tracker.entries) |slot| {
         const entry = slot orelse continue;
         if (entry.continuation.group() == group) {
@@ -80,7 +85,7 @@ pub fn has(tracker: *const Tracker, group: source_namespace.Group) bool {
 ///     return;
 /// }
 /// ```
-pub fn hasPane(tracker: *const Tracker, group: source_namespace.Group, pane_id: source_namespace.schema.PaneId) bool {
+pub fn hasPane(tracker: *const Tracker, group: requests.Group, pane_id: PaneIdType) bool {
     for (tracker.entries) |slot| {
         const entry = slot orelse continue;
         if (entry.continuation.group() == group and entry.continuation.paneId() == pane_id) {
@@ -96,7 +101,7 @@ pub fn hasPane(tracker: *const Tracker, group: source_namespace.Group, pane_id: 
 /// ```zig
 /// const continuation = tracker.take(request_id) orelse return error.UnexpectedRequest;
 /// ```
-pub fn take(tracker: *Tracker, request_id: source_namespace.schema.RequestId) ?source_namespace.Continuation {
+pub fn take(tracker: *Tracker, request_id: RequestIdType) ?requests.Continuation {
     for (&tracker.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (entry.request_id != request_id) {
@@ -120,7 +125,7 @@ pub fn take(tracker: *Tracker, request_id: source_namespace.schema.RequestId) ?s
 /// ```zig
 /// tracker.ignoreTab(tab_id);
 /// ```
-pub fn ignoreTab(tracker: *Tracker, tab_id: source_namespace.schema.TabId) void {
+pub fn ignoreTab(tracker: *Tracker, tab_id: TabIdType) void {
     for (&tracker.entries) |*slot| {
         const entry = if (slot.*) |*value| value else continue;
         if (entry.continuation.tabId() != tab_id) {
@@ -140,7 +145,7 @@ pub fn ignoreTab(tracker: *Tracker, tab_id: source_namespace.schema.TabId) void 
 /// ```zig
 /// tracker.ignorePane(pane_id);
 /// ```
-pub fn ignorePane(tracker: *Tracker, pane_id: source_namespace.schema.PaneId) void {
+pub fn ignorePane(tracker: *Tracker, pane_id: PaneIdType) void {
     for (&tracker.entries) |*slot| {
         const entry = if (slot.*) |*value| value else continue;
         if (entry.continuation.paneId() == pane_id) {
@@ -157,7 +162,7 @@ pub fn ignorePane(tracker: *Tracker, pane_id: source_namespace.schema.PaneId) vo
 /// ```zig
 /// _ = tracker.ignoreAttachment(pane_id);
 /// ```
-pub fn ignoreAttachment(tracker: *Tracker, pane_id: source_namespace.schema.PaneId) bool {
+pub fn ignoreAttachment(tracker: *Tracker, pane_id: PaneIdType) bool {
     for (&tracker.entries) |*slot| {
         const entry = if (slot.*) |*value| value else continue;
         switch (entry.continuation) {
@@ -181,7 +186,7 @@ pub fn ignoreAttachment(tracker: *Tracker, pane_id: source_namespace.schema.Pane
 /// ```zig
 /// _ = tracker.completePaneClose(pane_id);
 /// ```
-pub fn completePaneClose(tracker: *Tracker, pane_id: source_namespace.schema.PaneId) bool {
+pub fn completePaneClose(tracker: *Tracker, pane_id: PaneIdType) bool {
     for (&tracker.entries) |*slot| {
         const entry = slot.* orelse continue;
         switch (entry.continuation) {

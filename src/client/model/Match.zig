@@ -1,4 +1,5 @@
+const goto_picker = @import("goto_picker.zig");
 const Match = @This();
-const source_namespace = @import("goto_picker.zig");
-item: source_namespace.Item,
+
+item: goto_picker.Item,
 score: u32,

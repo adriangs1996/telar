@@ -1,6 +1,7 @@
+const RectType = @import("telar-core").Rect;
+const CenterType = @import("telar-client").Center;
 const RenderMode = @This();
-const ui = @import("../ui/root.zig");
-const notifications = @import("telar-client").notifications;
-area: ui.Rect,
-center: *const notifications.Center,
+
+area: RectType,
+center: *const CenterType,
 paint: bool,

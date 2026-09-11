@@ -4,44 +4,43 @@
 //! outside a telar pane, or on any error, it exits 0 so the agent is
 //! unaffected.
 
+const AgentProviderType = @import("telar-core").AgentProvider;
+const ToolHookInput = @import("ToolHookInput.zig");
+const CommandReport = @import("CommandReport.zig");
+const AgentCommandPhaseType = @import("telar-core").AgentCommandPhase;
 const std = @import("std");
-const core = @import("telar-core");
+const builtin_table_module = @import("telar-core").builtin_table;
+const validateSessionReference_module = @import("telar-core").validateSessionReference;
+const PiHookInput = @import("PiHookInput.zig");
+const Report = @import("Report.zig");
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
+const truncateSessionTitle_module = @import("telar-core").truncateSessionTitle;
+const ClaudeHookInput = @import("ClaudeHookInput.zig");
+const max_agent_session_file_bytes_module = @import("telar-core").max_agent_session_file_bytes;
+const CodexHookInput = @import("CodexHookInput.zig");
+const AgentReportStateType = @import("telar-core").AgentReportState;
+const HookOptionsType = @import("arguments/HookOptions.zig");
 const control = @import("control.zig");
-const parser = @import("parser.zig");
-
-const Io = std.Io;
-const File = Io.File;
-pub const schema = core.schema;
+const Target = @import("Target.zig");
+const Reports = @import("Reports.zig");
+const SessionType = @import("Session.zig");
+const AgentSessionFileKindType = @import("telar-core").AgentSessionFileKind;
 
 pub const max_input_bytes = 64 * 1024;
-
-pub const Report = @import("Report.zig");
-
-pub const ClaudeHookInput = @import("ClaudeHookInput.zig");
-
-pub const CodexHookInput = @import("CodexHookInput.zig");
-
-pub const PiHookInput = @import("PiHookInput.zig");
-
-const Reports = @import("Reports.zig");
-
-const CommandReport = @import("CommandReport.zig");
-
-const ToolHookInput = @import("ToolHookInput.zig");
 
 /// Extracts a shell command using the provider's manifest mapping.
 ///
 /// ```zig
 /// const command = mapToolCommand(.claude, input) orelse return;
 /// ```
-fn mapToolCommand(provider: schema.AgentProvider, input: ToolHookInput) ?CommandReport {
+fn mapToolCommand(provider: AgentProviderType, input: ToolHookInput) ?CommandReport {
     if (input.agent_id) |agent_id| {
         if (agent_id.len != 0) {
             return null;
         }
     }
 
-    const phase: schema.AgentCommandPhase = if (std.mem.eql(u8, input.event, "PreToolUse") or
+    const phase: AgentCommandPhaseType = if (std.mem.eql(u8, input.event, "PreToolUse") or
         std.mem.eql(u8, input.event, "tool_execution_start"))
         .started
     else if (std.mem.eql(u8, input.event, "PostToolUse") or
@@ -49,7 +48,7 @@ fn mapToolCommand(provider: schema.AgentProvider, input: ToolHookInput) ?Command
         .finished
     else
         return null;
-    const field = core.agent_manifest.builtin_table.commandField(provider, input.tool_name) orelse return null;
+    const field = builtin_table_module.commandField(provider, input.tool_name) orelse return null;
     if (input.tool_input != .object) {
         return null;
     }
@@ -58,10 +57,10 @@ fn mapToolCommand(provider: schema.AgentProvider, input: ToolHookInput) ?Command
         return null;
     }
 
-    const session = if (schema.validateSessionReference(input.session)) |_| input.session else |_| "";
+    const session = if (validateSessionReference_module(input.session)) |_| input.session else |_| "";
     return .{
         .phase = phase,
-        .provider = core.agent_manifest.builtin_table.providerName(provider),
+        .provider = builtin_table_module.providerName(provider),
         .tool_call_id = input.tool_call_id,
         .command = value.string,
         .cwd = input.cwd,
@@ -78,7 +77,7 @@ fn mapToolCommand(provider: schema.AgentProvider, input: ToolHookInput) ?Command
 /// ```
 pub fn mapPiHook(input: PiHookInput) ?Report {
     const event = input.event;
-    const session = if (schema.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
+    const session = if (validateSessionReference_module(input.session_id)) |_| input.session_id else |_| "";
 
     if (std.mem.eql(u8, event, "session_start") or
         std.mem.eql(u8, event, "agent_settled") or
@@ -112,7 +111,7 @@ pub fn mapPiHook(input: PiHookInput) ?Report {
 /// ```zig
 /// const title = mapPiTitle(&buffer, input) orelse return;
 /// ```
-pub fn mapPiTitle(buffer: *[schema.max_agent_session_title_bytes]u8, input: PiHookInput) ?[]const u8 {
+pub fn mapPiTitle(buffer: *[max_agent_session_title_bytes_module]u8, input: PiHookInput) ?[]const u8 {
     const name = if (std.mem.eql(u8, input.event, "session_info_changed"))
         input.name orelse ""
     else if (std.mem.eql(u8, input.event, "session_start"))
@@ -120,7 +119,7 @@ pub fn mapPiTitle(buffer: *[schema.max_agent_session_title_bytes]u8, input: PiHo
     else
         return null;
 
-    return schema.truncateSessionTitle(buffer, name);
+    return truncateSessionTitle_module(buffer, name);
 }
 
 /// Maps one Claude Code hook event to a report. Subagent events and
@@ -130,13 +129,13 @@ pub fn mapPiTitle(buffer: *[schema.max_agent_session_title_bytes]u8, input: PiHo
 /// const report = mapClaudeHook(input) orelse return;
 /// ```
 pub fn mapClaudeHook(input: ClaudeHookInput) ?Report {
-    const session_file = if (input.transcript_path.len <= schema.max_agent_session_file_bytes) input.transcript_path else "";
+    const session_file = if (input.transcript_path.len <= max_agent_session_file_bytes_module) input.transcript_path else "";
     if (input.agent_id != null and input.agent_id.?.len != 0) {
         return null;
     }
 
     const event = input.hook_event_name;
-    const session = if (schema.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
+    const session = if (validateSessionReference_module(input.session_id)) |_| input.session_id else |_| "";
 
     if (std.mem.eql(u8, event, "SessionStart")) {
         return .{ .state = .ready, .session = session, .session_file = session_file };
@@ -176,12 +175,12 @@ pub fn mapClaudeHook(input: ClaudeHookInput) ?Report {
 /// ```zig
 /// const title = mapClaudeTitle(&buffer, input) orelse return;
 /// ```
-pub fn mapClaudeTitle(buffer: *[schema.max_agent_session_title_bytes]u8, input: ClaudeHookInput) ?[]const u8 {
+pub fn mapClaudeTitle(buffer: *[max_agent_session_title_bytes_module]u8, input: ClaudeHookInput) ?[]const u8 {
     if (!std.mem.eql(u8, input.hook_event_name, "SessionStart") or input.session_title.len == 0 or input.agent_id != null) {
         return null;
     }
 
-    return schema.truncateSessionTitle(buffer, input.session_title);
+    return truncateSessionTitle_module(buffer, input.session_title);
 }
 
 /// Codex's state directory: `CODEX_HOME`, else `~/.codex`.
@@ -202,8 +201,8 @@ fn codexHome(environ: std.process.Environ, buffer: *[std.fs.max_path_bytes]u8) ?
 /// ```zig
 /// const database = codexStateDatabase(io, "/home/me/.codex", &buffer) orelse return;
 /// ```
-pub fn codexStateDatabase(io: Io, home: []const u8, buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
-    var directory = Io.Dir.cwd().openDir(io, home, .{ .iterate = true }) catch return null;
+pub fn codexStateDatabase(io: std.Io, home: []const u8, buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
+    var directory = std.Io.Dir.cwd().openDir(io, home, .{ .iterate = true }) catch return null;
     defer directory.close(io);
     var iterator = directory.iterate();
     var best: ?u32 = null;
@@ -246,11 +245,11 @@ pub fn mapCodexHook(input: CodexHookInput) ?Report {
     }
 
     const event = input.hook_event_name;
-    const session = if (schema.validateSessionReference(input.session_id)) |_| input.session_id else |_| "";
-    const file = if (input.state_database.len <= schema.max_agent_session_file_bytes) input.state_database else "";
+    const session = if (validateSessionReference_module(input.session_id)) |_| input.session_id else |_| "";
+    const file = if (input.state_database.len <= max_agent_session_file_bytes_module) input.state_database else "";
 
     if (std.mem.eql(u8, event, "SessionStart")) {
-        const state: schema.AgentReportState = if (std.mem.eql(u8, input.source, "compact")) .working else .ready;
+        const state: AgentReportStateType = if (std.mem.eql(u8, input.source, "compact")) .working else .ready;
         return .{ .state = state, .session = session, .session_file = file, .session_file_kind = .codex_state };
     }
     if (std.mem.eql(u8, event, "UserPromptSubmit") or std.mem.eql(u8, event, "PreToolUse") or std.mem.eql(u8, event, "PostToolUse")) {
@@ -278,7 +277,7 @@ pub fn mapCodexHook(input: CodexHookInput) ?Report {
 /// ```zig
 /// try hook.run(process_init, options);
 /// ```
-pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
+pub fn run(init: std.process.Init, options: HookOptionsType) !void {
     const environ = init.minimal.environ;
     const pane_id = control.currentPaneId(environ) catch return;
     const generation_text = std.process.Environ.getPosix(environ, "TELAR_PANE_GENERATION") orelse return;
@@ -286,7 +285,7 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
 
     const input = try init.gpa.alloc(u8, max_input_bytes);
     defer init.gpa.free(input);
-    var stdin_reader = File.stdin().readerStreaming(init.io, &.{});
+    var stdin_reader = std.Io.File.stdin().readerStreaming(init.io, &.{});
     const len = stdin_reader.interface.readSliceShort(input) catch return;
     const target: Target = .{
         .socket = options.socket,
@@ -306,7 +305,7 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
                 .session = parsed.value.session_id,
                 .exit_code = if (std.mem.eql(u8, parsed.value.hook_event_name, "PostToolUse")) 0 else null,
             });
-            var title_buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+            var title_buffer: [max_agent_session_title_bytes_module]u8 = undefined;
             sendReports(init, target, .{
                 .lifecycle = mapClaudeHook(parsed.value),
                 .command = command,
@@ -345,7 +344,7 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
                 .session = parsed.value.session_id,
                 .exit_code = parsed.value.exit_code,
             });
-            var title_buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+            var title_buffer: [max_agent_session_title_bytes_module]u8 = undefined;
             sendReports(init, target, .{
                 .lifecycle = mapPiHook(parsed.value),
                 .command = command,
@@ -355,8 +354,6 @@ pub fn run(init: std.process.Init, options: parser.HookOptions) !void {
     }
 }
 
-const Target = @import("Target.zig");
-
 fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
     if (reports.lifecycle == null and reports.command == null and reports.title == null) {
         return;
@@ -364,7 +361,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
 
     // Attach only. The pane environment survives a stopped runtime, and a
     // hook that started one would resurrect it from every orphaned agent.
-    var session = control.Session.attach(init, target.socket) catch return;
+    var session = SessionType.attach(init, target.socket) catch return;
     defer session.close();
     const pane = target.pane;
     if (reports.lifecycle) |lifecycle| {
@@ -394,21 +391,21 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
 test "Pi extension events map to reports and prompts close into the right state" {
     const session = "01a061a3-a2e7-7574-9e07-997b8d59340d";
     const start = mapPiHook(.{ .event = "session_start", .session_id = session }).?;
-    try std.testing.expectEqual(schema.AgentReportState.ready, start.state);
+    try std.testing.expectEqual(AgentReportStateType.ready, start.state);
     try std.testing.expectEqualStrings(session, start.session);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "agent_start" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.ready, mapPiHook(.{ .event = "agent_settled" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.blocked, mapPiHook(.{ .event = "ui_prompt_start" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "ui_prompt_end", .idle = false }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "ui_prompt_end" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.ready, mapPiHook(.{ .event = "ui_prompt_end", .idle = true }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.exited, mapPiHook(.{ .event = "session_shutdown" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapPiHook(.{ .event = "agent_start" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.ready, mapPiHook(.{ .event = "agent_settled" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.blocked, mapPiHook(.{ .event = "ui_prompt_start" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapPiHook(.{ .event = "ui_prompt_end", .idle = false }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapPiHook(.{ .event = "ui_prompt_end" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.ready, mapPiHook(.{ .event = "ui_prompt_end", .idle = true }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.exited, mapPiHook(.{ .event = "session_shutdown" }).?.state);
     try std.testing.expect(mapPiHook(.{ .event = "tool_execution_start" }) == null);
     try std.testing.expectEqualStrings("", mapPiHook(.{ .event = "agent_start", .session_id = "../etc" }).?.session);
 }
 
 test "Pi session names map to title reports and a cleared name to an empty title" {
-    var buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+    var buffer: [max_agent_session_title_bytes_module]u8 = undefined;
     try std.testing.expectEqualStrings("Fix proxy", mapPiTitle(&buffer, .{ .event = "session_info_changed", .name = "Fix proxy" }).?);
     try std.testing.expectEqualStrings("", mapPiTitle(&buffer, .{ .event = "session_info_changed" }).?);
     try std.testing.expectEqualStrings("Fix proxy", mapPiTitle(&buffer, .{ .event = "session_start", .name = "Fix proxy" }).?);
@@ -426,13 +423,13 @@ test "Pi hook JSON accepts the extension payload" {
     const parsed = try std.json.parseFromSlice(PiHookInput, std.testing.allocator, "{\"event\":\"session_start\",\"session_id\":\"01a061a3-a2e7-7574-9e07-997b8d59340d\",\"idle\":true}", .{ .ignore_unknown_fields = true });
     defer parsed.deinit();
     const report = mapPiHook(parsed.value).?;
-    try std.testing.expectEqual(schema.AgentReportState.ready, report.state);
+    try std.testing.expectEqual(AgentReportStateType.ready, report.state);
     try std.testing.expectEqualStrings("01a061a3-a2e7-7574-9e07-997b8d59340d", report.session);
     try std.testing.expectError(error.SyntaxError, std.json.parseFromSlice(PiHookInput, std.testing.allocator, "not json", .{ .ignore_unknown_fields = true }));
 }
 
 test "Claude session titles and transcripts ride along with the hook reports" {
-    var buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+    var buffer: [max_agent_session_title_bytes_module]u8 = undefined;
     try std.testing.expectEqualStrings("Fix proxy", mapClaudeTitle(&buffer, .{ .hook_event_name = "SessionStart", .session_title = "Fix proxy" }).?);
     try std.testing.expect(mapClaudeTitle(&buffer, .{ .hook_event_name = "SessionStart" }) == null);
     try std.testing.expect(mapClaudeTitle(&buffer, .{ .hook_event_name = "Stop", .session_title = "Fix proxy" }) == null);
@@ -440,8 +437,8 @@ test "Claude session titles and transcripts ride along with the hook reports" {
 
     const report = mapClaudeHook(.{ .hook_event_name = "Stop", .transcript_path = "/home/me/.claude/projects/p/s.jsonl" }).?;
     try std.testing.expectEqualStrings("/home/me/.claude/projects/p/s.jsonl", report.session_file);
-    try std.testing.expectEqual(schema.AgentSessionFileKind.claude_transcript, report.session_file_kind);
-    const long = "/" ** (schema.max_agent_session_file_bytes + 1);
+    try std.testing.expectEqual(AgentSessionFileKindType.claude_transcript, report.session_file_kind);
+    const long = "/" ** (max_agent_session_file_bytes_module + 1);
     try std.testing.expectEqualStrings("", mapClaudeHook(.{ .hook_event_name = "Stop", .transcript_path = long }).?.session_file);
     try std.testing.expectEqualStrings("", mapCodexHook(.{ .hook_event_name = "Stop" }).?.session_file);
 }
@@ -449,8 +446,8 @@ test "Claude session titles and transcripts ride along with the hook reports" {
 test "Codex reports carry the resolved state database and find the newest schema" {
     const report = mapCodexHook(.{ .hook_event_name = "Stop", .state_database = "/home/me/.codex/state_5.sqlite" }).?;
     try std.testing.expectEqualStrings("/home/me/.codex/state_5.sqlite", report.session_file);
-    try std.testing.expectEqual(schema.AgentSessionFileKind.codex_state, report.session_file_kind);
-    try std.testing.expectEqual(schema.AgentSessionFileKind.codex_state, mapCodexHook(.{ .hook_event_name = "SessionEnd", .state_database = "/x" }).?.session_file_kind);
+    try std.testing.expectEqual(AgentSessionFileKindType.codex_state, report.session_file_kind);
+    try std.testing.expectEqual(AgentSessionFileKindType.codex_state, mapCodexHook(.{ .hook_event_name = "SessionEnd", .state_database = "/x" }).?.session_file_kind);
 
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
@@ -475,15 +472,15 @@ test "Codex reports carry the resolved state database and find the newest schema
 test "Claude hook events map to reports and subagents are ignored" {
     const session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
     const start = mapClaudeHook(.{ .hook_event_name = "SessionStart", .session_id = session }).?;
-    try std.testing.expectEqual(schema.AgentReportState.ready, start.state);
+    try std.testing.expectEqual(AgentReportStateType.ready, start.state);
     try std.testing.expectEqualStrings(session, start.session);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapClaudeHook(.{ .hook_event_name = "UserPromptSubmit" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.ready, mapClaudeHook(.{ .hook_event_name = "Stop" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.exited, mapClaudeHook(.{ .hook_event_name = "SessionEnd" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.blocked, mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "permission_prompt" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.ready, mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "idle_prompt" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapClaudeHook(.{ .hook_event_name = "UserPromptSubmit" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.ready, mapClaudeHook(.{ .hook_event_name = "Stop" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.exited, mapClaudeHook(.{ .hook_event_name = "SessionEnd" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.blocked, mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "permission_prompt" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.ready, mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "idle_prompt" }).?.state);
     try std.testing.expect(mapClaudeHook(.{ .hook_event_name = "Notification", .notification_type = "auth_success" }) == null);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapClaudeHook(.{ .hook_event_name = "PreToolUse" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapClaudeHook(.{ .hook_event_name = "PreToolUse" }).?.state);
     try std.testing.expect(mapClaudeHook(.{ .hook_event_name = "Stop", .agent_id = "sub-1" }) == null);
     try std.testing.expectEqualStrings("", mapClaudeHook(.{ .hook_event_name = "Stop", .session_id = "bad session" }).?.session);
 }
@@ -491,16 +488,16 @@ test "Claude hook events map to reports and subagents are ignored" {
 test "Codex hook events map to reports and subagents are ignored" {
     const session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000";
     const start = mapCodexHook(.{ .hook_event_name = "SessionStart", .session_id = session }).?;
-    try std.testing.expectEqual(schema.AgentReportState.ready, start.state);
+    try std.testing.expectEqual(AgentReportStateType.ready, start.state);
     try std.testing.expectEqualStrings(session, start.session);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "SessionStart", .source = "compact" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "UserPromptSubmit" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.blocked, mapCodexHook(.{ .hook_event_name = "PermissionRequest" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "PostToolUse" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.settling, mapCodexHook(.{ .hook_event_name = "Stop" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.ready, mapCodexHook(.{ .hook_event_name = "Interrupt" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.exited, mapCodexHook(.{ .hook_event_name = "SessionEnd" }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapCodexHook(.{ .hook_event_name = "PreToolUse" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapCodexHook(.{ .hook_event_name = "SessionStart", .source = "compact" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapCodexHook(.{ .hook_event_name = "UserPromptSubmit" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.blocked, mapCodexHook(.{ .hook_event_name = "PermissionRequest" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapCodexHook(.{ .hook_event_name = "PostToolUse" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.settling, mapCodexHook(.{ .hook_event_name = "Stop" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.ready, mapCodexHook(.{ .hook_event_name = "Interrupt" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.exited, mapCodexHook(.{ .hook_event_name = "SessionEnd" }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapCodexHook(.{ .hook_event_name = "PreToolUse" }).?.state);
     try std.testing.expect(mapCodexHook(.{ .hook_event_name = "PostToolUse", .agent_id = "sub-1" }) == null);
     try std.testing.expectEqualStrings("", mapCodexHook(.{ .hook_event_name = "Stop", .session_id = "bad session" }).?.session);
 }
@@ -522,7 +519,7 @@ test "installed harness payloads map shell tools through manifests" {
         .session = codex.value.session_id,
         .exit_code = null,
     }).?;
-    try std.testing.expectEqual(schema.AgentCommandPhase.started, codex_command.phase);
+    try std.testing.expectEqual(AgentCommandPhaseType.started, codex_command.phase);
     try std.testing.expectEqualStrings("codex", codex_command.provider);
     try std.testing.expectEqualStrings("call-7", codex_command.tool_call_id);
     try std.testing.expectEqualStrings("zig build test", codex_command.command);
@@ -543,7 +540,7 @@ test "installed harness payloads map shell tools through manifests" {
         .session = claude.value.session_id,
         .exit_code = 0,
     }).?;
-    try std.testing.expectEqual(schema.AgentCommandPhase.finished, claude_command.phase);
+    try std.testing.expectEqual(AgentCommandPhaseType.finished, claude_command.phase);
     try std.testing.expectEqualStrings("npm test", claude_command.command);
 
     const pi_payload =
@@ -577,9 +574,9 @@ test "installed harness payloads map shell tools through manifests" {
 }
 
 test "Pi snapshots preserve active runs and nested prompts" {
-    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "state_snapshot", .idle = false }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.ready, mapPiHook(.{ .event = "state_snapshot", .idle = true }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.blocked, mapPiHook(.{ .event = "ui_prompt_end", .idle = true, .blocked = true }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "agent_settled", .idle = false }).?.state);
-    try std.testing.expectEqual(schema.AgentReportState.working, mapPiHook(.{ .event = "session_start", .idle = false }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapPiHook(.{ .event = "state_snapshot", .idle = false }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.ready, mapPiHook(.{ .event = "state_snapshot", .idle = true }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.blocked, mapPiHook(.{ .event = "ui_prompt_end", .idle = true, .blocked = true }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapPiHook(.{ .event = "agent_settled", .idle = false }).?.state);
+    try std.testing.expectEqual(AgentReportStateType.working, mapPiHook(.{ .event = "session_start", .idle = false }).?.state);
 }

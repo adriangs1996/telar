@@ -1,32 +1,28 @@
 //! Request-scoped controller for the rename-workspace protocol message.
 
-const std = @import("std");
-const core = @import("telar-core");
-const rename_workspace_commands = @import("../../application/commands/rename_workspace.zig");
-const delivery_mod = @import("../../delivery/root.zig");
-
-pub const schema = core.schema;
-pub const ResponseQueue = delivery_mod.ResponseQueue;
-
-pub const Controller = @import("RenameWorkspaceController.zig");
-
-const Failure = @import("RenameWorkspaceFailure.zig");
-
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const workspace_module = @import("telar-core").workspace;
+const ResponseQueue = @import("../../delivery/ResponseQueue.zig");
 const StubRenameWorkspace = @import("StubRenameWorkspace.zig");
+const WorkspaceRenamed = @import("../../../workspace/WorkspaceRenamed.zig");
+const RenameWorkspaceController = @import("RenameWorkspaceController.zig");
+const RequestIdType = @import("telar-core").RequestId;
+const std = @import("std");
+const FailureCodeType = @import("telar-core").FailureCode;
 
-fn testingLocation() !schema.WorkspaceLocation {
-    return .{ .workspace = try schema.id.workspace(3) };
+fn testingLocation() !WorkspaceLocationType {
+    return .{ .workspace = try workspace_module(3) };
 }
 
 test "Controller maps a workspace rename and queues its canonical snapshot reference" {
     const requested_location = try testingLocation();
-    const canonical_location: schema.WorkspaceLocation = .{ .workspace = try schema.id.workspace(4) };
+    const canonical_location: WorkspaceLocationType = .{ .workspace = try workspace_module(4) };
     var responses: ResponseQueue = .{};
     var rename_stub: StubRenameWorkspace = .{
-        .result = try rename_workspace_commands.RenameWorkspaceResult.init(canonical_location, "canonical"),
+        .result = try WorkspaceRenamed.init(canonical_location, "canonical"),
     };
-    var controller = Controller.init(&responses, rename_stub.executor());
-    const request_id: schema.RequestId = @enumFromInt(11);
+    var controller = RenameWorkspaceController.init(&responses, rename_stub.executor());
+    const request_id: RequestIdType = @enumFromInt(11);
 
     try controller.renameWorkspace(.{
         .request_id = request_id,
@@ -47,7 +43,7 @@ test "Controller preserves legacy workspace rename error mapping" {
     const location = try testingLocation();
     const cases = [_]struct {
         command_error: anyerror,
-        failure_code: schema.FailureCode,
+        failure_code: FailureCodeType,
         message: []const u8,
     }{
         .{ .command_error = error.WorkspaceNotFound, .failure_code = .workspace_not_found, .message = "workspace not found" },
@@ -57,8 +53,8 @@ test "Controller preserves legacy workspace rename error mapping" {
     for (cases, 0..) |case, index| {
         var responses: ResponseQueue = .{};
         var rename_stub: StubRenameWorkspace = .{ .failure = case.command_error };
-        var controller = Controller.init(&responses, rename_stub.executor());
-        const request_id: schema.RequestId = @enumFromInt(index + 20);
+        var controller = RenameWorkspaceController.init(&responses, rename_stub.executor());
+        const request_id: RequestIdType = @enumFromInt(index + 20);
 
         try controller.renameWorkspace(.{
             .request_id = request_id,
@@ -77,7 +73,7 @@ test "Controller preserves legacy workspace rename error mapping" {
 test "Controller propagates unexpected workspace rename failures" {
     var responses: ResponseQueue = .{};
     var rename_stub: StubRenameWorkspace = .{ .failure = error.EventPublisherUnavailable };
-    var controller = Controller.init(&responses, rename_stub.executor());
+    var controller = RenameWorkspaceController.init(&responses, rename_stub.executor());
 
     try std.testing.expectError(error.EventPublisherUnavailable, controller.renameWorkspace(.{
         .request_id = @enumFromInt(30),

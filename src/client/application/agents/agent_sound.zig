@@ -1,26 +1,20 @@
 //! Application policy for one runtime-owned agent sound.
 
+const AgentKeyType = @import("../../agents/AgentKey.zig");
+const AgentInputType = @import("../../agents/AgentInput.zig");
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../../root.zig").agents;
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const Command = @import("Command.zig");
-
-pub const Effects = @import("AgentSoundEffects.zig");
+const EffectsCapture = @import("EffectsCapture.zig");
+const HandleAgentSoundHandler = @import("HandleAgentSoundHandler.zig");
+const AgentSoundType = @import("telar-core").AgentSound;
+const VersionType = @import("../../model/Version.zig");
 
 pub const Outcome = enum {
     accepted,
     stale,
 };
 
-pub const HandleAgentSoundHandler = @import("HandleAgentSoundHandler.zig");
-
-const EffectsCapture = @import("EffectsCapture.zig");
-
-fn agentInput(key: agents.AgentKey) agents.AgentInput {
+fn agentInput(key: AgentKeyType) AgentInputType {
     return .{
         .key = key,
         .location = .{
@@ -34,9 +28,9 @@ fn agentInput(key: agents.AgentKey) agents.AgentInput {
 }
 
 test "HandleAgentSoundHandler accepts only an exact current identity" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const key: agents.AgentKey = .{
+    const key: AgentKeyType = .{
         .pane_id = @enumFromInt(7),
         .pane_generation = 3,
     };
@@ -60,14 +54,14 @@ test "HandleAgentSoundHandler accepts only an exact current identity" {
 
     try std.testing.expectEqual(Outcome.accepted, accepted);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expectEqual(schema.AgentSound.ready, capture.sound.?);
-    try std.testing.expectEqual(client_model.Version{ .agents = 1 }, model.version());
+    try std.testing.expectEqual(AgentSoundType.ready, capture.sound.?);
+    try std.testing.expectEqual(VersionType{ .agents = 1 }, model.version());
 }
 
 test "HandleAgentSoundHandler propagates effect failure for a current identity" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const key: agents.AgentKey = .{
+    const key: AgentKeyType = .{
         .pane_id = @enumFromInt(7),
         .pane_generation = 3,
     };

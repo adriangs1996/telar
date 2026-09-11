@@ -1,9 +1,9 @@
 //! Incremental HTTP/2 frame boundaries; payloads are borrowed, never buffered.
 
+const Reader = @import("Reader.zig");
 const std = @import("std");
-pub const header_bytes = 9;
 
-pub const Reader = @import("Reader.zig");
+pub const header_bytes = 9;
 
 test "fragmented headers, empty frames and payload offsets preserve frame boundaries" {
     const bytes = "\x00\x00\x03\x00\x01\x80\x00\x00\x07abc" ++ "\x00\x00\x00\x04\x01\x00\x00\x00\x00";

@@ -1,3 +1,4 @@
+const id = @import("../id.zig");
 const RequestGraphicsSnapshot = @This();
-const source_namespace = @import("graphics.zig");
-pane_id: source_namespace.PaneId
+
+pane_id: id.PaneId

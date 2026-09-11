@@ -5,25 +5,17 @@
 //! replace it atomically; stale or oversized snapshots preserve the last
 //! usable value.
 
+const WorkspaceListSnapshot = @import("WorkspaceListSnapshot.zig");
+const EntryInput = @import("EntryInput.zig");
 const std = @import("std");
-const core = @import("telar-core");
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 
-pub const schema = core.schema;
-
-pub const max_entries = schema.max_workspace_list_entries;
 /// Display cap; truncation never ends inside a UTF-8 continuation sequence.
 pub const max_name_bytes = 48;
 /// One shared pool for every stored path. Paths stay whole so the replica
 /// never exposes a fabricated location. A snapshot that cannot fit is rejected.
 pub const path_pool_size = 16 * 1024;
-
-pub const EntryInput = @import("EntryInput.zig");
-
-pub const SnapshotInput = @import("SnapshotInput.zig");
-
-const Entry = @import("Entry.zig");
-
-pub const Snapshot = @import("WorkspaceListSnapshot.zig");
 
 /// Truncates one display name without ending inside a continuation sequence.
 ///
@@ -44,7 +36,7 @@ pub fn truncateName(name: []const u8) []const u8 {
 }
 
 test "replacement rejects stale revisions and copies into fixed storage" {
-    var snapshot: Snapshot = .{};
+    var snapshot: WorkspaceListSnapshot = .{};
     const entries = [_]EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/work/telar", .tab_count = 2 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 1 },
@@ -57,21 +49,21 @@ test "replacement rejects stale revisions and copies into fixed storage" {
     try std.testing.expectEqual(@as(usize, 2), snapshot.count);
     try std.testing.expectEqualStrings("telar", snapshot.nameAt(0));
     try std.testing.expectEqualStrings("/work/api", snapshot.pathAt(1));
-    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(1)), snapshot.workspaceAtPosition(0).?);
-    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(2)), snapshot.workspaceAtPosition(1).?);
+    try std.testing.expectEqual(@as(WorkspaceIdType, @enumFromInt(1)), snapshot.workspaceAtPosition(0).?);
+    try std.testing.expectEqual(@as(WorkspaceIdType, @enumFromInt(2)), snapshot.workspaceAtPosition(1).?);
     try std.testing.expect(snapshot.workspaceAtPosition(2) == null);
     try std.testing.expectEqual(@as(usize, 1), snapshot.indexOf(@enumFromInt(2)).?);
     try std.testing.expect(snapshot.indexOf(@enumFromInt(9)) == null);
 }
 
 test "failed replacement preserves the last usable snapshot" {
-    var snapshot: Snapshot = .{};
+    var snapshot: WorkspaceListSnapshot = .{};
     const original = [_]EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/work/telar", .tab_count = 2 },
     };
     try std.testing.expect(try snapshot.replace(.{ .revision = 1, .entries = &original }));
 
-    const large_path: [schema.max_cwd_bytes]u8 = @splat('x');
+    const large_path: [max_cwd_bytes_module]u8 = @splat('x');
     const oversized = [_]EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "one", .path = &large_path, .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "two", .path = &large_path, .tab_count = 1 },
@@ -91,7 +83,7 @@ test "failed replacement preserves the last usable snapshot" {
 }
 
 test "duplicate workspace ids are rejected" {
-    var snapshot: Snapshot = .{};
+    var snapshot: WorkspaceListSnapshot = .{};
     const entries = [_]EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "a", .path = "/a", .tab_count = 1 },
         .{ .workspace = @enumFromInt(1), .name = "b", .path = "/b", .tab_count = 1 },

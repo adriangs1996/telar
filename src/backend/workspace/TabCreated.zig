@@ -1,7 +1,8 @@
-const TabCreated = @This();
-const source_namespace = @import("events.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const OwnedTabLabel = @import("OwnedTabLabel.zig");
-location: source_namespace.schema.TabLocation,
+const TabCreated = @This();
+
+location: TabLocationType,
 position: u16,
 label: OwnedTabLabel,
 
@@ -10,7 +11,7 @@ label: OwnedTabLabel,
 /// ```zig
 /// const event = try TabCreated.init(location, 1, "logs");
 /// ```
-pub fn init(location: source_namespace.schema.TabLocation, position: u16, label: []const u8) !TabCreated {
+pub fn init(location: TabLocationType, position: u16, label: []const u8) !TabCreated {
     return .{
         .location = location,
         .position = position,

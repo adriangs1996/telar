@@ -1,7 +1,9 @@
+const id = @import("../id.zig");
+const pane = @import("pane.zig");
 const PaneProgress = @This();
-const source_namespace = @import("pane.zig");
-pane_id: source_namespace.PaneId,
-state: source_namespace.PaneProgressState,
+
+pane_id: id.PaneId,
+state: pane.PaneProgressState,
 percent: ?u8 = null,
 
 /// Rejects state and percentage combinations that have no protocol meaning.

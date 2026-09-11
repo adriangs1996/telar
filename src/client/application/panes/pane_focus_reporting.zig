@@ -1,10 +1,12 @@
 //! Application policy for child terminal focus reporting and retirement.
 
+const PaneFocusReportingTestingModel = @import("PaneFocusReportingTestingModel.zig");
+const PaneFocusReportingCapture = @import("PaneFocusReportingCapture.zig");
+const PaneFocusReportingHandler = @import("PaneFocusReportingHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
+const Delivery = @import("PaneFocusDelivery.zig");
+const ReportedPaneFocusType = @import("../../model/ReportedPaneFocus.zig");
+const RetireReportedPaneFocusHandler = @import("RetireReportedPaneFocusHandler.zig");
 
 pub const Command = enum {
     sync,
@@ -16,31 +18,19 @@ pub const Direction = enum {
     focus_in,
 };
 
-pub const Delivery = @import("Delivery.zig");
-
-pub const Effects = @import("PaneFocusReportingEffects.zig");
-
 pub const Outcome = enum {
     applied,
     unchanged,
 };
 
-pub const PaneFocusReportingHandler = @import("PaneFocusReportingHandler.zig");
-
-pub const RetireReportedPaneFocusHandler = @import("RetireReportedPaneFocusHandler.zig");
-
-const TestingModel = @import("PaneFocusReportingTestingModel.zig");
-
-const Capture = @import("PaneFocusReportingCapture.zig");
-
 test "PaneFocusReportingHandler commits before ordered focus reports" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFocusReportingTestingModel.init();
     defer testing.deinit();
     const first_pane = testing.model.workspace.findPane(testing.first).?;
     const second_pane = testing.model.workspace.findPane(testing.second).?;
     first_pane.input_modes.focus_events = true;
     second_pane.input_modes.focus_events = true;
-    var capture: Capture = .{
+    var capture: PaneFocusReportingCapture = .{
         .model = testing.model,
         .expected = .{ .pane_id = testing.first, .focus_events = true },
     };
@@ -71,10 +61,10 @@ test "PaneFocusReportingHandler commits before ordered focus reports" {
 }
 
 test "PaneFocusReportingHandler commits disabled reporting without effects" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFocusReportingTestingModel.init();
     defer testing.deinit();
     const version = testing.model.version();
-    var capture: Capture = .{
+    var capture: PaneFocusReportingCapture = .{
         .model = testing.model,
         .expected = .{ .pane_id = testing.first, .focus_events = false },
     };
@@ -92,17 +82,17 @@ test "PaneFocusReportingHandler commits disabled reporting without effects" {
 }
 
 test "PaneFocusReportingHandler preserves committed target after delivery failure" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFocusReportingTestingModel.init();
     defer testing.deinit();
     testing.model.workspace.findPane(testing.first).?.input_modes.focus_events = true;
     testing.model.workspace.findPane(testing.second).?.input_modes.focus_events = true;
     _ = testing.model.syncReportedPaneFocus().?;
     try std.testing.expect(testing.model.workspace.active().?.model.focusPane(testing.second));
-    const expected = client_model.ReportedPaneFocus{
+    const expected = ReportedPaneFocusType{
         .pane_id = testing.second,
         .focus_events = true,
     };
-    var capture: Capture = .{
+    var capture: PaneFocusReportingCapture = .{
         .model = testing.model,
         .expected = expected,
         .fail = true,
@@ -121,11 +111,11 @@ test "PaneFocusReportingHandler preserves committed target after delivery failur
 }
 
 test "PaneFocusReportingHandler clears one reporting owner exactly once" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFocusReportingTestingModel.init();
     defer testing.deinit();
     testing.model.workspace.findPane(testing.first).?.input_modes.focus_events = true;
     _ = testing.model.syncReportedPaneFocus().?;
-    var capture: Capture = .{ .model = testing.model, .expected = null };
+    var capture: PaneFocusReportingCapture = .{ .model = testing.model, .expected = null };
     var handler: PaneFocusReportingHandler = .{
         .model = testing.model,
         .effects = capture.port(),
@@ -141,7 +131,7 @@ test "PaneFocusReportingHandler clears one reporting owner exactly once" {
 }
 
 test "RetireReportedPaneFocusHandler silently forgets one stale owner" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFocusReportingTestingModel.init();
     defer testing.deinit();
     testing.model.workspace.findPane(testing.first).?.input_modes.focus_events = true;
     _ = testing.model.syncReportedPaneFocus().?;

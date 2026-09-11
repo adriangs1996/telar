@@ -12,17 +12,13 @@
 //! These patterns are presentation hints only. They may mark a pane as busy or
 //! visibly blocked; they never grant permission or generate input.
 
-const std = @import("std");
 const vt = @import("ghostty-vt");
-const core = @import("telar-core");
-
-const schema = core.schema;
-
-pub const Status = core.agent_manifest.Status;
-pub const Signal = core.agent_manifest.Signal;
-pub const Table = core.agent_manifest.Table;
-
-pub const Sample = @import("Sample.zig");
+const std = @import("std");
+const Signal = @import("telar-core").Signal;
+const Sample = @import("Sample.zig");
+const builtin_table_module = @import("telar-core").builtin_table;
+const Status = @import("telar-core").Status;
+const AgentProviderType = @import("telar-core").AgentProvider;
 
 fn testTerminal(cols: u16, rows: u16) !vt.Terminal {
     return vt.Terminal.init(std.testing.io, std.testing.allocator, .{ .cols = cols, .rows = rows });
@@ -31,7 +27,7 @@ fn testTerminal(cols: u16, rows: u16) !vt.Terminal {
 fn sampleSignal(terminal: *const vt.Terminal) ?Signal {
     var sample: Sample = .{};
     sample.capture(terminal);
-    return sample.signal(&core.agent_manifest.builtin_table);
+    return sample.signal(&builtin_table_module);
 }
 
 test "a status line above the idle prompt keeps Codex working" {
@@ -41,7 +37,7 @@ test "a status line above the idle prompt keeps Codex working" {
 
     const detected = sampleSignal(&terminal).?;
     try std.testing.expectEqual(Status.working, detected.status);
-    try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
+    try std.testing.expectEqual(AgentProviderType.codex, detected.provider);
 }
 
 test "the idle prompt alone marks Codex ready" {
@@ -51,7 +47,7 @@ test "the idle prompt alone marks Codex ready" {
 
     const detected = sampleSignal(&terminal).?;
     try std.testing.expectEqual(Status.ready, detected.status);
-    try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
+    try std.testing.expectEqual(AgentProviderType.codex, detected.provider);
     try std.testing.expect(detected.identity_confirmed);
     try std.testing.expect(detected.ready_confirmed);
 }
@@ -65,7 +61,7 @@ test "an erased status line no longer counts" {
 
     const detected = sampleSignal(&terminal).?;
     try std.testing.expectEqual(Status.ready, detected.status);
-    try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
+    try std.testing.expectEqual(AgentProviderType.codex, detected.provider);
 }
 
 test "permission prompts outrank work and the prompt" {
@@ -75,7 +71,7 @@ test "permission prompts outrank work and the prompt" {
 
     const detected = sampleSignal(&terminal).?;
     try std.testing.expectEqual(Status.blocked, detected.status);
-    try std.testing.expectEqual(schema.AgentProvider.claude, detected.provider);
+    try std.testing.expectEqual(AgentProviderType.claude, detected.provider);
 }
 
 test "Claude branding confirms identity without claiming a prompt" {
@@ -85,7 +81,7 @@ test "Claude branding confirms identity without claiming a prompt" {
 
     const branded = sampleSignal(&terminal).?;
     try std.testing.expectEqual(Status.ready, branded.status);
-    try std.testing.expectEqual(schema.AgentProvider.claude, branded.provider);
+    try std.testing.expectEqual(AgentProviderType.claude, branded.provider);
     try std.testing.expect(branded.identity_confirmed);
     try std.testing.expect(!branded.ready_confirmed);
 }
@@ -99,9 +95,9 @@ test "soft-wrapped rows join without a separator" {
     sample.capture(&terminal);
     try std.testing.expectEqualStrings("Codex esc to interrupt", sample.text());
 
-    const detected = sample.signal(&core.agent_manifest.builtin_table).?;
+    const detected = sample.signal(&builtin_table_module).?;
     try std.testing.expectEqual(Status.working, detected.status);
-    try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
+    try std.testing.expectEqual(AgentProviderType.codex, detected.provider);
 }
 
 test "hard line breaks separate rows and blank cells become spaces" {
@@ -130,7 +126,7 @@ test "the bottom rows survive a screen larger than the capacity" {
     try std.testing.expect(sample.text().len <= Sample.capacity);
     try std.testing.expect(std.mem.endsWith(u8, sample.text(), "Ask Codex to do anything"));
 
-    const detected = sample.signal(&core.agent_manifest.builtin_table).?;
+    const detected = sample.signal(&builtin_table_module).?;
     try std.testing.expectEqual(Status.ready, detected.status);
-    try std.testing.expectEqual(schema.AgentProvider.codex, detected.provider);
+    try std.testing.expectEqual(AgentProviderType.codex, detected.provider);
 }

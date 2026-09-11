@@ -1,13 +1,10 @@
-const Recorder = @This();
-const source_namespace = @import("echo_trace.zig");
 const std = @import("std");
+const Record = @import("Record.zig");
+const echo_trace = @import("echo_trace.zig");
+const Recorder = @This();
+
 const capacity = 16384;
-const Record = struct {
-    ns: u64,
-    tag: source_namespace.Tag,
-    cpu_ns: if (source_namespace.cpu_enabled) u64 else void = if (source_namespace.cpu_enabled) 0 else {},
-    thread: if (source_namespace.cpu_enabled) std.Thread.Id else void = if (source_namespace.cpu_enabled) 0 else {},
-};
+
 claimed: std.atomic.Value(usize) = .init(0),
 records: [capacity]Record = undefined,
 
@@ -38,7 +35,7 @@ pub fn dump(recorder: *const Recorder, io: std.Io, directory: []const u8) !void 
     var writer = file.writer(io, &buffer);
 
     for (recorder.records[0..@min(count, capacity)]) |record| {
-        if (comptime source_namespace.cpu_enabled) {
+        if (comptime echo_trace.cpu_enabled) {
             try writer.interface.print("{{\"ns\":{d},\"event\":\"{s}\",\"cpu_ns\":{d},\"thread\":{d}}}\n", .{ record.ns, @tagName(record.tag), record.cpu_ns, record.thread });
         } else {
             try writer.interface.print("{{\"ns\":{d},\"event\":\"{s}\"}}\n", .{ record.ns, @tagName(record.tag) });

@@ -1,5 +1,6 @@
-const RecoverPaneSplit = @This();
 const PaneSplit = @import("PaneSplit.zig");
-const source_namespace = @import("types.zig");
+const RectType = @import("telar-core").Rect;
+const RecoverPaneSplit = @This();
+
 split: PaneSplit,
-area: source_namespace.ui.Rect,
+area: RectType,

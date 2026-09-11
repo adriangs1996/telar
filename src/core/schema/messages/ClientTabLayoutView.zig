@@ -1,8 +1,10 @@
-const ClientTabLayoutView = @This();
-const source_namespace = @import("layout.zig");
+const TabLocationType = @import("../TabLocation.zig");
+const id = @import("../id.zig");
 const ClientLayoutNodeIterator = @import("ClientLayoutNodeIterator.zig");
-location: source_namespace.TabLocation,
-focused_pane: source_namespace.PaneId,
+const ClientTabLayoutView = @This();
+
+location: TabLocationType,
+focused_pane: id.PaneId,
 fullscreen: bool,
 workspace_active: bool,
 node_count: u16,

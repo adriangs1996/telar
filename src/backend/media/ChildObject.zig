@@ -1,6 +1,7 @@
+const std = @import("std");
 /// A child's shared object mapped read-only for one copy out of it.
 const ChildObject = @This();
-const std = @import("std");
+
 pixels: []align(std.heap.page_size_min) u8,
 
 /// Unmaps the object; the name was already unlinked, as the protocol

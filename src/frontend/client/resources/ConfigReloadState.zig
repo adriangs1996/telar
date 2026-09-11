@@ -1,9 +1,10 @@
+const Orphans = @import("Orphans.zig");
+const std = @import("std");
 /// The reload's own state on the client: the watch fingerprint, the
 /// generation counter, and the race-window handoff slots the async task
 /// publishes into so a cancelled reload can still be freed.
 const State = @This();
-const Orphans = @import("Orphans.zig");
-const std = @import("std");
+
 mtime_ns: i128,
 next_generation: u64 = 2,
 orphans: Orphans = .{},

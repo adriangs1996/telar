@@ -1,15 +1,13 @@
+const types = @import("../../agent/types.zig");
+const request_body = @import("request_body.zig");
+const StreamsSlot = @import("StreamsSlot.zig");
+const Fragment = @import("Fragment.zig");
+const request_support = @import("request_support.zig");
 /// Bounded collection of request observers keyed by HTTP/2 stream ID.
 const Streams = @This();
-const Observer = @import("Observer.zig");
-const source_namespace = @import("request_body.zig");
-const Fragment = @import("Fragment.zig");
-const Slot = struct {
-    stream_id: u32 = 0,
-    observer: Observer = .{},
-};
 
-dialect: source_namespace.ApiDialect,
-slots: [source_namespace.max_concurrent_requests]Slot = @splat(.{}),
+dialect: types.ApiDialect,
+slots: [request_body.max_concurrent_requests]StreamsSlot = @splat(.{}),
 
 /// Creates an empty per-connection observer set.
 ///
@@ -17,7 +15,7 @@ slots: [source_namespace.max_concurrent_requests]Slot = @splat(.{}),
 /// var streams = Streams.init(.anthropic_messages);
 /// defer streams.deinit();
 /// ```
-pub fn init(dialect: source_namespace.ApiDialect) Streams {
+pub fn init(dialect: types.ApiDialect) Streams {
     return .{ .dialect = dialect };
 }
 
@@ -32,7 +30,7 @@ pub fn start(streams: *Streams, stream_id: u32) bool {
         return false;
     }
 
-    var free: ?*Slot = null;
+    var free: ?*StreamsSlot = null;
 
     for (&streams.slots) |*slot| {
         if (slot.stream_id == stream_id) {
@@ -68,7 +66,7 @@ pub fn feed(streams: *Streams, fragment: Fragment) void {
 ///     publish(classification);
 /// }
 /// ```
-pub fn finish(streams: *Streams, stream_id: u32) ?source_namespace.RequestClass {
+pub fn finish(streams: *Streams, stream_id: u32) ?request_support.RequestClass {
     const slot = streams.find(stream_id) orelse return null;
     const classification = slot.observer.finish();
     slot.observer.deinit();
@@ -105,7 +103,7 @@ pub fn deinit(streams: *Streams) void {
     streams.dialect = .unknown;
 }
 
-fn find(streams: *Streams, stream_id: u32) ?*Slot {
+fn find(streams: *Streams, stream_id: u32) ?*StreamsSlot {
     for (&streams.slots) |*slot| {
         if (slot.stream_id == stream_id) {
             return slot;

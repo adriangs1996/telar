@@ -1,6 +1,8 @@
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const PaneSnapshot = @This();
-const source_namespace = @import("tabs.zig");
-location: source_namespace.schema.TabLocation,
+
+location: TabLocationType,
 /// Borrowed only for synchronous reconciliation. Order is the canonical
 /// display order used when a tab has no retained client layout.
-panes: []const source_namespace.schema.PaneId,
+panes: []const PaneIdType,

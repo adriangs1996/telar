@@ -1,8 +1,10 @@
-const Layouts = @This();
-const source_namespace = @import("navigation.zig");
+const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
 const SavedLayout = @import("SavedLayout.zig");
 const std = @import("std");
-entries: [source_namespace.schema.max_client_layout_tabs]?SavedLayout = @splat(null),
+const TabLocationType = @import("telar-core").TabLocation;
+const Layouts = @This();
+
+entries: [max_client_layout_tabs_module]?SavedLayout = @splat(null),
 eviction_index: usize = 0,
 
 /// Retains the latest split tree for one stable tab identity.
@@ -46,7 +48,7 @@ pub fn retain(layouts: *Layouts, saved: SavedLayout) void {
 /// ```zig
 /// const saved = layouts.find(location) orelse return;
 /// ```
-pub fn find(layouts: *const Layouts, location: source_namespace.schema.TabLocation) ?SavedLayout {
+pub fn find(layouts: *const Layouts, location: TabLocationType) ?SavedLayout {
     for (layouts.entries) |slot| {
         const entry = slot orelse continue;
         if (std.meta.eql(entry.location, location)) {
@@ -62,7 +64,7 @@ pub fn find(layouts: *const Layouts, location: source_namespace.schema.TabLocati
 /// ```zig
 /// layouts.forget(location);
 /// ```
-pub fn forget(layouts: *Layouts, location: source_namespace.schema.TabLocation) void {
+pub fn forget(layouts: *Layouts, location: TabLocationType) void {
     for (&layouts.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (std.meta.eql(entry.location, location)) {

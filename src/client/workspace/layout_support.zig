@@ -1,22 +1,33 @@
 //! Disposable pane layout owned by the client.
 
+const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
+const GenericSlotIndex = @import("telar-core").GenericSlotIndex;
+const client_layout_ratio_scale_module = @import("telar-core").client_layout_ratio_scale;
+const PaneIdType = @import("telar-core").PaneId;
+const Split = @import("Split.zig");
+const SplitGeometry = @import("SplitGeometry.zig");
+const RectType = @import("telar-core").Rect;
 const std = @import("std");
-const core = @import("telar-core");
+const min_client_layout_ratio_module = @import("telar-core").min_client_layout_ratio;
+const max_client_layout_ratio_module = @import("telar-core").max_client_layout_ratio;
+const Layout = @import("WorkspaceLayout.zig");
+const LayoutSnapshot = @import("LayoutSnapshot.zig");
+const View = @import("LayoutView.zig");
+const max_client_layout_nodes_module = @import("telar-core").max_client_layout_nodes;
+const ClientLayoutNodeType = @import("telar-core").ClientLayoutNode;
+const TabLocationType = @import("telar-core").TabLocation;
+const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
+const encodeClientLayoutSnapshot_module = @import("telar-core").encodeClientLayoutSnapshot;
+const decodeServer_module = @import("telar-core").decodeServer;
 
-pub const schema = core.schema;
-pub const ui = core.ui;
-
-pub const Metrics = @import("metrics_support.zig").Metrics;
-pub const max_panes = schema.max_panes_per_tab;
-pub const max_nodes = max_panes * 2 - 1;
+pub const max_nodes = max_panes_per_tab_module * 2 - 1;
 pub const NodeIndex = u8;
-const index_capacity = max_panes * 2;
-pub const ViewIndex = core.fixed_index.SlotIndex(index_capacity);
-const ratio_scale: u16 = schema.client_layout_ratio_scale;
-pub const default_split_ratio: u16 = ratio_scale / 2;
-pub const minimum_split_ratio: u16 = schema.min_client_layout_ratio;
-pub const maximum_split_ratio: u16 = schema.max_client_layout_ratio;
-pub const resize_step: u16 = ratio_scale / 20;
+const index_capacity = max_panes_per_tab_module * 2;
+pub const ViewIndex = GenericSlotIndex(index_capacity);
+
+pub const default_split_ratio: u16 = client_layout_ratio_scale_module / 2;
+
+pub const resize_step: u16 = client_layout_ratio_scale_module / 20;
 
 pub const Axis = enum {
     /// Children occupy the left and right halves.
@@ -32,49 +43,21 @@ pub const Direction = enum {
     down,
 };
 
-const Split = @import("Split.zig");
-
 pub const Node = union(enum) {
     empty,
-    leaf: schema.PaneId,
+    leaf: PaneIdType,
     split: Split,
 };
 
-const Slot = @import("Slot.zig");
-
-pub const View = @import("View.zig");
-
-pub const PaneBottomReservation = @import("PaneBottomReservation.zig");
-
-pub const ProspectiveSplit = @import("ProspectiveSplit.zig");
-
-pub const SplitTarget = @import("SplitTarget.zig");
-
-pub const SplitRequest = @import("SplitRequest.zig");
-
-pub const PaneSet = @import("PaneSet.zig");
-
-const SnapshotReset = @import("SnapshotReset.zig");
-
-const RatioCandidate = @import("RatioCandidate.zig");
-
-const SplitGeometry = @import("SplitGeometry.zig");
-
-pub const Snapshot = @import("LayoutSnapshot.zig");
-
-pub const Layout = @import("Layout.zig");
-
-const ClientLayoutBuilder = @import("ClientLayoutBuilder.zig");
-
-pub fn splitArea(geometry: SplitGeometry) [2]ui.Rect {
-    std.debug.assert(geometry.ratio <= ratio_scale);
+pub fn splitArea(geometry: SplitGeometry) [2]RectType {
+    std.debug.assert(geometry.ratio <= client_layout_ratio_scale_module);
 
     return switch (geometry.axis) {
         .horizontal => horizontal: {
             const gutter: u16 = if (geometry.area.w >= geometry.gap + 2) geometry.gap else 0;
             const usable = geometry.area.w - gutter;
             const first_width: u16 = @intCast(
-                @as(u32, usable) * geometry.ratio / ratio_scale,
+                @as(u32, usable) * geometry.ratio / client_layout_ratio_scale_module,
             );
             break :horizontal .{
                 .{ .x = geometry.area.x, .y = geometry.area.y, .w = first_width, .h = geometry.area.h },
@@ -90,7 +73,7 @@ pub fn splitArea(geometry: SplitGeometry) [2]ui.Rect {
             const gutter: u16 = if (geometry.area.h >= geometry.gap + 4) geometry.gap else 0;
             const usable = geometry.area.h - gutter;
             const first_height: u16 = @intCast(
-                @as(u32, usable) * geometry.ratio / ratio_scale,
+                @as(u32, usable) * geometry.ratio / client_layout_ratio_scale_module,
             );
             break :vertical .{
                 .{ .x = geometry.area.x, .y = geometry.area.y, .w = geometry.area.w, .h = first_height },
@@ -108,18 +91,18 @@ pub fn splitArea(geometry: SplitGeometry) [2]ui.Rect {
 /// The ratio that gives the first of `remaining` panes an equal share of a
 /// region, bounded by the ratios a client layout may carry.
 pub fn equalShareRatio(remaining: usize) u16 {
-    const share: u16 = @intCast(ratio_scale / remaining);
-    return std.math.clamp(share, minimum_split_ratio, maximum_split_ratio);
+    const share: u16 = @intCast(client_layout_ratio_scale_module / remaining);
+    return std.math.clamp(share, min_client_layout_ratio_module, max_client_layout_ratio_module);
 }
 
-pub fn extent(area: ui.Rect, axis: Axis) u16 {
+pub fn extent(area: RectType, axis: Axis) u16 {
     return switch (axis) {
         .horizontal => area.w,
         .vertical => area.h,
     };
 }
 
-fn borderedContent(area: ui.Rect) ui.Rect {
+fn borderedContent(area: RectType) RectType {
     return area.inner(1);
 }
 
@@ -133,10 +116,10 @@ pub fn distance(a: u32, b: u32) u32 {
 
 test "display order shares the width equally and clamps a crowded tab" {
     var layout: Layout = .{ .pane_gaps = false };
-    const panes = [_]schema.PaneId{ @enumFromInt(1), @enumFromInt(2), @enumFromInt(3), @enumFromInt(4), @enumFromInt(5) };
+    const panes = [_]PaneIdType{ @enumFromInt(1), @enumFromInt(2), @enumFromInt(3), @enumFromInt(4), @enumFromInt(5) };
     try layout.restoreDisplayOrder(&panes, @enumFromInt(3));
 
-    var geometry: Snapshot = .{};
+    var geometry: LayoutSnapshot = .{};
     layout.snapshot(.{ .w = 100, .h = 10 }, &geometry);
     var total: u16 = 0;
     for (panes) |pane_id| {
@@ -145,9 +128,9 @@ test "display order shares the width equally and clamps a crowded tab" {
         total += width;
     }
     try std.testing.expectEqual(@as(u16, 100), total);
-    try std.testing.expectEqual(@as(?schema.PaneId, @enumFromInt(3)), layout.focused());
+    try std.testing.expectEqual(@as(?PaneIdType, @enumFromInt(3)), layout.focused());
 
-    var crowded: [12]schema.PaneId = undefined;
+    var crowded: [12]PaneIdType = undefined;
     for (&crowded, 1..) |*pane_id, raw| {
         pane_id.* = @enumFromInt(raw);
     }
@@ -162,12 +145,12 @@ test "splits produce non-overlapping bordered content rectangles" {
     try layout.addRoot(@enumFromInt(1));
     try layout.splitFocused(@enumFromInt(2), .horizontal);
 
-    var storage: [max_panes]View = undefined;
+    var storage: [max_panes_per_tab_module]View = undefined;
     const visible = layout.views(.{ .w = 80, .h = 24 }, &storage);
     try std.testing.expectEqual(@as(usize, 2), visible.len);
-    try std.testing.expectEqual(ui.Rect{ .w = 39, .h = 24 }, visible[0].outer);
-    try std.testing.expectEqual(ui.Rect{ .x = 1, .y = 1, .w = 37, .h = 22 }, visible[0].content);
-    try std.testing.expectEqual(ui.Rect{ .x = 40, .w = 40, .h = 24 }, visible[1].outer);
+    try std.testing.expectEqual(RectType{ .w = 39, .h = 24 }, visible[0].outer);
+    try std.testing.expectEqual(RectType{ .x = 1, .y = 1, .w = 37, .h = 22 }, visible[0].content);
+    try std.testing.expectEqual(RectType{ .x = 40, .w = 40, .h = 24 }, visible[1].outer);
     try std.testing.expectEqual(@as(u16, 1), visible[1].outer.x - visible[0].outer.w);
     try std.testing.expect(visible[1].focused);
 }
@@ -179,17 +162,17 @@ test "disabled pane gaps remove the empty cell between borders" {
     try layout.addRoot(@enumFromInt(1));
     try layout.splitFocused(@enumFromInt(2), .horizontal);
 
-    var storage: [max_panes]View = undefined;
+    var storage: [max_panes_per_tab_module]View = undefined;
     const visible = layout.views(.{ .w = 80, .h = 24 }, &storage);
-    try std.testing.expectEqual(ui.Rect{ .w = 40, .h = 24 }, visible[0].outer);
-    try std.testing.expectEqual(ui.Rect{ .x = 40, .w = 40, .h = 24 }, visible[1].outer);
+    try std.testing.expectEqual(RectType{ .w = 40, .h = 24 }, visible[0].outer);
+    try std.testing.expectEqual(RectType{ .x = 40, .w = 40, .h = 24 }, visible[1].outer);
     try std.testing.expectEqual(visible[0].outer.w, visible[1].outer.x);
 }
 
 test "disabled pane gaps permit the smallest pair of bordered panes" {
     var layout: Layout = .{};
     try layout.addRoot(@enumFromInt(1));
-    const area: ui.Rect = .{ .w = 6, .h = 3 };
+    const area: RectType = .{ .w = 6, .h = 3 };
     try std.testing.expect(!layout.canSplit(.{ .pane_id = @enumFromInt(1), .axis = .horizontal }, area));
     _ = layout.setPaneGaps(false);
     try std.testing.expect(layout.canSplit(.{ .pane_id = @enumFromInt(1), .axis = .horizontal }, area));
@@ -201,21 +184,21 @@ test "directional focus follows pane geometry" {
     try layout.splitFocused(@enumFromInt(2), .horizontal);
     try layout.splitFocused(@enumFromInt(3), .vertical);
 
-    const area: ui.Rect = .{ .w = 80, .h = 24 };
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), layout.focusDirection(.up, area).?);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), layout.focusDirection(.left, area).?);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), layout.focusDirection(.right, area).?);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(3)), layout.focusDirection(.down, area).?);
+    const area: RectType = .{ .w = 80, .h = 24 };
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(2)), layout.focusDirection(.up, area).?);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(1)), layout.focusDirection(.left, area).?);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(2)), layout.focusDirection(.right, area).?);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(3)), layout.focusDirection(.down, area).?);
 }
 
 test "bottom reservation shortens only its target pane" {
-    const first: schema.PaneId = @enumFromInt(1);
-    const second: schema.PaneId = @enumFromInt(2);
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
     var layout: Layout = .{};
     try layout.addRoot(first);
     try layout.splitFocused(second, .horizontal);
 
-    var geometry: Snapshot = .{};
+    var geometry: LayoutSnapshot = .{};
     layout.snapshot(.{ .w = 80, .h = 24 }, &geometry);
     const first_before = geometry.find(first).?;
     const second_before = geometry.find(second).?;
@@ -237,11 +220,11 @@ test "bottom reservation shortens only its target pane" {
 }
 
 test "bottom reservation preserves a minimum pane height" {
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     var layout: Layout = .{};
     try layout.addRoot(pane_id);
 
-    var geometry: Snapshot = .{};
+    var geometry: LayoutSnapshot = .{};
     layout.snapshot(.{ .w = 20, .h = 5 }, &geometry);
     const before = geometry.find(pane_id).?;
     const shelf = geometry.reserveBelowPane(.{
@@ -256,13 +239,13 @@ test "bottom reservation preserves a minimum pane height" {
 }
 
 test "directional resize grows and shrinks horizontal and vertical panes" {
-    const area: ui.Rect = .{ .w = 101, .h = 41 };
+    const area: RectType = .{ .w = 101, .h = 41 };
 
     var horizontal: Layout = .{};
     try horizontal.addRoot(@enumFromInt(1));
     try horizontal.splitFocused(@enumFromInt(2), .horizontal);
     try std.testing.expect(horizontal.focusPane(@enumFromInt(1)));
-    var geometry: Snapshot = .{};
+    var geometry: LayoutSnapshot = .{};
     horizontal.snapshot(area, &geometry);
     const horizontal_before = geometry.find(@enumFromInt(1)).?.outer.w;
     try std.testing.expect(horizontal.resizeFocused(.right, area));
@@ -287,13 +270,13 @@ test "directional resize grows and shrinks horizontal and vertical panes" {
 }
 
 test "resize selects the nearest matching ancestor and preserves usable pane content" {
-    const area: ui.Rect = .{ .w = 80, .h = 24 };
+    const area: RectType = .{ .w = 80, .h = 24 };
     var layout: Layout = .{};
     try layout.addRoot(@enumFromInt(1));
     try layout.splitFocused(@enumFromInt(2), .horizontal);
     try layout.splitFocused(@enumFromInt(3), .vertical);
 
-    var geometry: Snapshot = .{};
+    var geometry: LayoutSnapshot = .{};
     layout.snapshot(area, &geometry);
     const left_before = geometry.find(@enumFromInt(1)).?.outer.w;
     const focused_before = geometry.find(@enumFromInt(3)).?.outer.h;
@@ -315,7 +298,7 @@ test "resize selects the nearest matching ancestor and preserves usable pane con
 }
 
 test "fullscreen toggles one pane without destroying the tiled layout" {
-    const area: ui.Rect = .{ .w = 101, .h = 41 };
+    const area: RectType = .{ .w = 101, .h = 41 };
     var layout: Layout = .{};
     try std.testing.expect(!layout.toggleFullscreen());
     try layout.addRoot(@enumFromInt(1));
@@ -323,7 +306,7 @@ test "fullscreen toggles one pane without destroying the tiled layout" {
     try std.testing.expect(layout.focusPane(@enumFromInt(1)));
     try std.testing.expect(layout.resizeFocused(.right, area));
 
-    var geometry: Snapshot = .{};
+    var geometry: LayoutSnapshot = .{};
     layout.snapshot(area, &geometry);
     const first_width = geometry.find(@enumFromInt(1)).?.outer.w;
     const second_width = geometry.find(@enumFromInt(2)).?.outer.w;
@@ -332,17 +315,17 @@ test "fullscreen toggles one pane without destroying the tiled layout" {
     try std.testing.expect(layout.isFullscreen());
     layout.snapshot(area, &geometry);
     try std.testing.expectEqual(@as(usize, 1), geometry.views().len);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), geometry.views()[0].pane_id);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(1)), geometry.views()[0].pane_id);
     try std.testing.expectEqual(area, geometry.views()[0].outer);
     try std.testing.expectEqual(borderedContent(area), geometry.views()[0].content);
     try std.testing.expectEqual(@as(u16, 1), geometry.views()[0].display_index);
 
     try std.testing.expectEqual(
-        @as(schema.PaneId, @enumFromInt(2)),
+        @as(PaneIdType, @enumFromInt(2)),
         layout.focusDirection(.right, area).?,
     );
     layout.snapshot(area, &geometry);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), geometry.views()[0].pane_id);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(2)), geometry.views()[0].pane_id);
     try std.testing.expectEqual(@as(u16, 2), geometry.views()[0].display_index);
 
     try std.testing.expect(layout.toggleFullscreen());
@@ -354,10 +337,10 @@ test "fullscreen toggles one pane without destroying the tiled layout" {
 }
 
 test "fullscreen navigation follows display order and restores spatial geometry" {
-    const area: ui.Rect = .{ .w = 101, .h = 41 };
-    const first: schema.PaneId = @enumFromInt(10);
-    const second: schema.PaneId = @enumFromInt(90);
-    const third: schema.PaneId = @enumFromInt(40);
+    const area: RectType = .{ .w = 101, .h = 41 };
+    const first: PaneIdType = @enumFromInt(10);
+    const second: PaneIdType = @enumFromInt(90);
+    const third: PaneIdType = @enumFromInt(40);
     var layout: Layout = .{};
     try layout.addRoot(first);
     try layout.splitFocused(second, .horizontal);
@@ -367,11 +350,11 @@ test "fullscreen navigation follows display order and restores spatial geometry"
     try std.testing.expect(layout.resizeFocused(.up, area));
     try std.testing.expect(layout.focusPane(first));
 
-    var storage: [max_panes]schema.PaneId = undefined;
-    try std.testing.expectEqualSlices(schema.PaneId, &.{ first, third, second }, layout.orderedPanes(&storage));
-    var before: Snapshot = .{};
+    var storage: [max_panes_per_tab_module]PaneIdType = undefined;
+    try std.testing.expectEqualSlices(PaneIdType, &.{ first, third, second }, layout.orderedPanes(&storage));
+    var before: LayoutSnapshot = .{};
     layout.snapshot(area, &before);
-    var nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    var nodes: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
     const original = layout.clientLayoutNodes(&nodes);
     try std.testing.expect(layout.toggleFullscreen());
 
@@ -389,9 +372,9 @@ test "fullscreen navigation follows display order and restores spatial geometry"
 
     try std.testing.expect(layout.toggleFullscreen());
     try std.testing.expectEqual(third, layout.focused().?);
-    var restored_nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    var restored_nodes: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
     try std.testing.expectEqualDeep(original, layout.clientLayoutNodes(&restored_nodes));
-    var after: Snapshot = .{};
+    var after: LayoutSnapshot = .{};
     layout.snapshot(area, &after);
     for (before.views(), after.views()) |previous, current| {
         try std.testing.expectEqual(previous.pane_id, current.pane_id);
@@ -406,7 +389,7 @@ test "fullscreen navigation follows display order and restores spatial geometry"
 
 test "fullscreen pane order tracks splits and removals" {
     var layout: Layout = .{};
-    var storage: [max_panes]schema.PaneId = undefined;
+    var storage: [max_panes_per_tab_module]PaneIdType = undefined;
     try std.testing.expectEqual(@as(usize, 0), layout.orderedPanes(&storage).len);
     try layout.addRoot(@enumFromInt(1));
     try layout.splitFocused(@enumFromInt(2), .vertical);
@@ -414,21 +397,21 @@ test "fullscreen pane order tracks splits and removals" {
     try layout.splitFocused(@enumFromInt(3), .horizontal);
     try std.testing.expect(layout.isFullscreen());
     try std.testing.expect(layout.remove(@enumFromInt(2)));
-    try std.testing.expectEqualSlices(schema.PaneId, &.{ @enumFromInt(1), @enumFromInt(3) }, layout.orderedPanes(&storage));
+    try std.testing.expectEqualSlices(PaneIdType, &.{ @enumFromInt(1), @enumFromInt(3) }, layout.orderedPanes(&storage));
     try std.testing.expectEqual(@as(u16, 2), layout.displayIndex(@enumFromInt(3)).?);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), layout.focusDirection(.left, .{}).?);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(1)), layout.focusDirection(.left, .{}).?);
 }
 
 test "fullscreen survives single-pane splits and removals until the tab is empty" {
-    const area: ui.Rect = .{ .w = 101, .h = 41 };
-    const first: schema.PaneId = @enumFromInt(1);
-    const second: schema.PaneId = @enumFromInt(2);
+    const area: RectType = .{ .w = 101, .h = 41 };
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
     var layout: Layout = .{};
     try layout.addRoot(first);
     try std.testing.expect(!layout.hasBorders());
     try std.testing.expect(layout.toggleFullscreen());
     try std.testing.expect(layout.hasBorders());
-    var geometry: Snapshot = .{};
+    var geometry: LayoutSnapshot = .{};
     layout.snapshot(area, &geometry);
     try std.testing.expectEqual(borderedContent(area), geometry.find(first).?.content);
 
@@ -471,7 +454,7 @@ test "removing a leaf compacts its parent and preserves the sibling" {
     try std.testing.expectEqual(@as(usize, 2), layout.count());
     try std.testing.expect(!layout.contains(@enumFromInt(2)));
     try std.testing.expect(layout.contains(@enumFromInt(3)));
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(3)), layout.focused().?);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(3)), layout.focused().?);
 }
 
 test "tiny panes reject splits that would create a zero-row PTY" {
@@ -486,7 +469,7 @@ test "snapshot indexes colliding pane ids and records its source revision" {
     try layout.addRoot(@enumFromInt(1));
     try layout.splitFocused(@enumFromInt(129), .horizontal);
 
-    var geometry: Snapshot = .{};
+    var geometry: LayoutSnapshot = .{};
     layout.snapshot(.{ .w = 80, .h = 24 }, &geometry);
 
     try std.testing.expectEqual(layout.currentRevision(), geometry.revision);
@@ -520,14 +503,14 @@ test "client layout encoding restores single and split pane fullscreen" {
         }
 
         try std.testing.expect(original.toggleFullscreen());
-        var node_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+        var node_storage: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
         const nodes = original.clientLayoutNodes(&node_storage);
-        const location: schema.TabLocation = .{
+        const location: TabLocationType = .{
             .workspace = .{ .workspace = @enumFromInt(4) },
             .tab_id = @enumFromInt(5),
         };
-        var wire: [schema.max_client_layout_wire_bytes]u8 = undefined;
-        const payload = try schema.encodeClientLayoutSnapshot(&wire, .{
+        var wire: [max_client_layout_wire_bytes_module]u8 = undefined;
+        const payload = try encodeClientLayoutSnapshot_module(&wire, .{
             .restored = true,
             .sidebar_width = 62,
             .active_tab = location,
@@ -539,13 +522,13 @@ test "client layout encoding restores single and split pane fullscreen" {
                 .nodes = nodes,
             }},
         });
-        var tabs = (try schema.decodeServer(payload)).client_layout_snapshot.tabs();
+        var tabs = (try decodeServer_module(payload)).client_layout_snapshot.tabs();
         const restored = try Layout.fromClientLayout((try tabs.next()).?);
 
         try std.testing.expectEqual(original.count(), restored.count());
         try std.testing.expectEqual(original.focused().?, restored.focused().?);
         try std.testing.expect(restored.isFullscreen());
-        var restored_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+        var restored_storage: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
         const restored_nodes = restored.clientLayoutNodes(&restored_storage);
         try std.testing.expectEqual(nodes.len, restored_nodes.len);
         for (nodes, restored_nodes) |expected, actual| {

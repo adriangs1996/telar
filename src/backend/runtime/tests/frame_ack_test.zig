@@ -1,15 +1,15 @@
 //! Vertical and application tests for pane frame acknowledgements.
 
+const GenericFrameAckController = @import("../entrypoints/requests/GenericFrameAckController.zig").Type;
+const FrameAckHandlerType = @import("../application/commands/FrameAckHandler.zig");
+const PaneFixture = @import("PaneFixture.zig");
 const std = @import("std");
-const core = @import("telar-core");
+const decodeServer_module = @import("telar-core").decodeServer;
+const pane_module = @import("telar-core").pane;
 const frame_ack_commands = @import("../application/commands/frame_ack.zig");
-const frame_ack_controller = @import("../entrypoints/requests/frame_ack.zig");
-const test_support = @import("support.zig");
+const enabled_module = @import("telar-core").enabled;
 
-const schema = core.schema;
-const diagnostics = core.diagnostics;
-const PaneFixture = test_support.PaneFixture;
-const AckController = frame_ack_controller.Controller(*frame_ack_commands.FrameAckHandler);
+const AckController = GenericFrameAckController(*FrameAckHandlerType);
 
 fn prepareOutstandingFrame(fixture: *PaneFixture, buffer: []u8) !u64 {
     const attachment = fixture.attachments.find(fixture.pane.id).?;
@@ -18,7 +18,7 @@ fn prepareOutstandingFrame(fixture: *PaneFixture, buffer: []u8) !u64 {
         .buffer = buffer,
         .metrics = &fixture.metrics,
     })).?;
-    const message = try schema.decodeServer(prepared.bytes);
+    const message = try decodeServer_module(prepared.bytes);
     const frame = switch (message) {
         .pane_frame => |value| value,
         else => return error.ExpectedPaneFrame,
@@ -37,7 +37,7 @@ test "FrameAckHandler accepts only the exact outstanding frame" {
     const frame_id = try prepareOutstandingFrame(&fixture, &buffer);
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     const received_at_ns = attachment.cells.outstanding.?.sent_ns + 37;
-    var handler: frame_ack_commands.FrameAckHandler = .{
+    var handler: FrameAckHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
@@ -63,12 +63,12 @@ test "FrameAckHandler leaves another pane's outstanding frame untouched" {
     var buffer: [16 * 1024]u8 = undefined;
     const frame_id = try prepareOutstandingFrame(&fixture, &buffer);
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    var handler: frame_ack_commands.FrameAckHandler = .{
+    var handler: FrameAckHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
     const result = try handler.execute(.{
-        .pane_id = try schema.id.pane(99),
+        .pane_id = try pane_module(99),
         .frame_id = frame_id,
         .received_at_ns = std.math.maxInt(u64),
     });
@@ -88,7 +88,7 @@ test "FrameAckHandler rejects future obsolete and duplicate frame IDs" {
     try std.testing.expect(fixture.attachments.requestCellSnapshot(fixture.pane.id));
     const current_frame_id = try prepareOutstandingFrame(&fixture, &buffer);
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    var handler: frame_ack_commands.FrameAckHandler = .{
+    var handler: FrameAckHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
@@ -129,7 +129,7 @@ test "an accepted ACK preserves a pending recovery snapshot" {
     const acknowledged_frame_id = try prepareOutstandingFrame(&fixture, &buffer);
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     try std.testing.expect(fixture.attachments.requestCellSnapshot(fixture.pane.id));
-    var handler: frame_ack_commands.FrameAckHandler = .{
+    var handler: FrameAckHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
@@ -154,7 +154,7 @@ test "frame ACK crosses controller and handler and records only accepted latency
     var buffer: [16 * 1024]u8 = undefined;
     const frame_id = try prepareOutstandingFrame(&fixture, &buffer);
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    var handler: frame_ack_commands.FrameAckHandler = .{
+    var handler: FrameAckHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var controller = AckController.init(std.testing.io, &fixture.metrics, &handler);
@@ -163,5 +163,5 @@ test "frame ACK crosses controller and handler and records only accepted latency
 
     try std.testing.expectEqual(@as(u64, 0), attachment.outstandingFrameId());
     try std.testing.expectEqual(@as(u64, 0), fixture.metrics.stale_client_messages);
-    try std.testing.expectEqual(@as(u64, if (diagnostics.enabled) 1 else 0), fixture.metrics.ack.count);
+    try std.testing.expectEqual(@as(u64, if (enabled_module) 1 else 0), fixture.metrics.ack.count);
 }

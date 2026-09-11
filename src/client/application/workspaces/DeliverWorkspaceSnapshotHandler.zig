@@ -1,15 +1,18 @@
-const DeliverWorkspaceSnapshotHandler = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("workspace_snapshot_delivery.zig");
-const pane_geometry_delivery = @import("../panes/root.zig").pane_geometry_delivery;
-const Effects = @import("WorkspaceSnapshotDeliveryEffects.zig");
-const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
+const ModelType = @import("../../model/Model.zig");
+const RectType = @import("telar-core").Rect;
+const OfferEffectsType = @import("../panes/OfferEffects.zig");
+const WorkspaceSnapshotDeliveryEffects = @import("WorkspaceSnapshotDeliveryEffects.zig");
+const WorkspaceReconciliationType = @import("../../model/WorkspaceReconciliation.zig");
+const ReleasePaneResourcesHandlerType = @import("../panes/ReleasePaneResourcesHandler.zig");
+const RetireReportedPaneFocusHandlerType = @import("../panes/RetireReportedPaneFocusHandler.zig");
+const OfferPaneGeometryHandlerType = @import("../panes/OfferPaneGeometryHandler.zig");
 const std = @import("std");
-model: *client_model.Model,
-area: source_namespace.ui.Rect,
-geometry_effects: pane_geometry_delivery.OfferEffects,
-effects: Effects,
+const DeliverWorkspaceSnapshotHandler = @This();
+
+model: *ModelType,
+area: RectType,
+geometry_effects: OfferEffectsType,
+effects: WorkspaceSnapshotDeliveryEffects,
 
 /// Validates one exact reconciliation before releasing retired resources,
 /// activating the canonical tab and repairing snapshot or geometry state.
@@ -17,14 +20,14 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(&reconciliation);
 /// ```
-pub fn execute(handler: *DeliverWorkspaceSnapshotHandler, reconciliation: *const client_model.WorkspaceReconciliation) !void {
+pub fn execute(handler: *DeliverWorkspaceSnapshotHandler, reconciliation: *const WorkspaceReconciliationType) !void {
     try handler.validate(reconciliation);
 
     for (reconciliation.removed_tabs.slice()) |location| {
         handler.effects.ignore_tab_requests(handler.effects.context, location.tab_id);
     }
 
-    var release_pane: pane_resource_release.ReleasePaneResourcesHandler = .{
+    var release_pane: ReleasePaneResourcesHandlerType = .{
         .model = handler.model,
         .effects = .{
             .context = handler.effects.context,
@@ -37,7 +40,7 @@ pub fn execute(handler: *DeliverWorkspaceSnapshotHandler, reconciliation: *const
 
     const active = handler.model.workspace.active() orelse return error.StaleWorkspaceReconciliation;
     if (reconciliation.active_tab_changed) {
-        var retire_focus: pane_focus_reporting.RetireReportedPaneFocusHandler = .{
+        var retire_focus: RetireReportedPaneFocusHandlerType = .{
             .model = handler.model,
         };
         _ = retire_focus.execute();
@@ -59,13 +62,13 @@ pub fn execute(handler: *DeliverWorkspaceSnapshotHandler, reconciliation: *const
         return;
     }
 
-    var offer_geometry: pane_geometry_delivery.OfferPaneGeometryHandler = .{
+    var offer_geometry: OfferPaneGeometryHandlerType = .{
         .effects = handler.geometry_effects,
     };
     _ = try offer_geometry.execute(&active.model, handler.area);
 }
 
-fn validate(handler: *const DeliverWorkspaceSnapshotHandler, reconciliation: *const client_model.WorkspaceReconciliation) !void {
+fn validate(handler: *const DeliverWorkspaceSnapshotHandler, reconciliation: *const WorkspaceReconciliationType) !void {
     const active = handler.model.workspace.activeConst() orelse return error.StaleWorkspaceReconciliation;
     const version = handler.model.version();
     if (!std.meta.eql(active.location, reconciliation.active) or

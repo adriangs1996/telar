@@ -1,19 +1,21 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("toggle_pane_fullscreen.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const PaneGeometryChangeType = @import("../../model/PaneGeometryChange.zig");
 const FullscreenEffects = @import("FullscreenEffects.zig");
-model: *const client_model.Model,
-expected_focused: source_namespace.schema.PaneId,
+const EffectsCapture = @This();
+
+model: *const ModelType,
+expected_focused: PaneIdType,
 calls: usize = 0,
 observed_commit: bool = false,
-change: ?client_model.PaneGeometryChange = null,
+change: ?PaneGeometryChangeType = null,
 fail: bool = false,
 
 pub fn port(capture: *EffectsCapture) FullscreenEffects {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(context: *anyopaque, change: client_model.PaneGeometryChange) !void {
+fn deliver(context: *anyopaque, change: PaneGeometryChangeType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     const active = capture.model.workspace.activeConst().?;
     capture.calls += 1;

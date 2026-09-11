@@ -1,9 +1,10 @@
+const ModelType = @import("../../model/Model.zig");
+const RequestTabSnapshotRecoveryHandlerType = @import("../tabs/RequestTabSnapshotRecoveryHandler.zig");
+const PaneAttachmentType = @import("../../model/PaneAttachment.zig");
 const RecoverPaneAttachmentHandler = @This();
-const client_model = @import("../../root.zig").model;
-const tab_snapshot_recovery = @import("../tabs/root.zig").tab_snapshot_recovery;
-const source_namespace = @import("attach_pane.zig");
-model: *const client_model.Model,
-snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
+
+model: *const ModelType,
+snapshots: RequestTabSnapshotRecoveryHandlerType,
 
 /// Requests canonical membership only while the failed attachment still
 /// belongs to the active tab and remains detached.
@@ -11,7 +12,7 @@ snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
 /// ```zig
 /// _ = try handler.execute(attachment);
 /// ```
-pub fn execute(handler: *RecoverPaneAttachmentHandler, attachment: source_namespace.PaneAttachment) !bool {
+pub fn execute(handler: *RecoverPaneAttachmentHandler, attachment: PaneAttachmentType) !bool {
     if (!handler.model.needsPaneAttachment(attachment)) {
         return false;
     }

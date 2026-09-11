@@ -1,5 +1,6 @@
-const Transformer = @This();
 const Transformation = @import("Transformation.zig");
-const source_namespace = @import("middleware.zig");
+const middleware = @import("middleware.zig");
+const Transformer = @This();
+
 context: *anyopaque,
-transform: *const fn (*anyopaque, Transformation) source_namespace.TransformStatus,
+transform: *const fn (*anyopaque, Transformation) middleware.TransformStatus,

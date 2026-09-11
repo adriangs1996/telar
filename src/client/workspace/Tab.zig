@@ -1,12 +1,14 @@
-const Tab = @This();
-const source_namespace = @import("tabs.zig");
-const multiplexer = @import("multiplexer.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const MultiplexerModel = @import("MultiplexerModel.zig");
 const std = @import("std");
 const TabInit = @import("TabInit.zig");
-location: source_namespace.schema.TabLocation,
-label: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+const Tab = @This();
+
+location: TabLocationType,
+label: [max_tab_label_bytes_module]u8 = undefined,
 label_len: u8 = 0,
-model: multiplexer.Model,
+model: MultiplexerModel,
 snapshot_loaded: bool = false,
 restore_display_order: bool = false,
 

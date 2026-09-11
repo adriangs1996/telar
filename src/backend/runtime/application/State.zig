@@ -1,7 +1,8 @@
-const State = @This();
 const OwnedWrite = @import("OwnedWrite.zig");
-const source_namespace = @import("session_checkpoint.zig");
+const session_checkpoint = @import("session_checkpoint.zig");
 const std = @import("std");
+const State = @This();
+
 path: ?[]const u8 = null,
 /// Type the agent's resume command into a restored pane's shell.
 resume_agents: bool = true,
@@ -42,7 +43,7 @@ pub fn noteChange(state: *State, now_ns: u64) void {
 /// ```
 pub fn due(state: *const State, now_ns: u64) bool {
     return state.enabled() and state.dirty and state.pending == null and
-        now_ns -| state.last_change_ns >= source_namespace.debounce_ns;
+        now_ns -| state.last_change_ns >= session_checkpoint.debounce_ns;
 }
 
 /// Takes ownership before scheduling and releases it on startup failure.
@@ -51,7 +52,7 @@ pub fn startWrite(state: *State, owned: OwnedWrite, scheduler: anytype) !void {
     std.debug.assert(state.pending == null);
     state.pending = owned;
     state.dirty = false;
-    scheduler.concurrent(.checkpoint_written, source_namespace.writeFile, .{owned.job}) catch |err| {
+    scheduler.concurrent(.checkpoint_written, session_checkpoint.writeFile, .{owned.job}) catch |err| {
         state.completeWrite(err);
         return err;
     };

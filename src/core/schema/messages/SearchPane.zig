@@ -1,6 +1,7 @@
+const id = @import("../id.zig");
 /// Copy-mode text search over one attached pane's retained history.
 const SearchPane = @This();
-const source_namespace = @import("pane.zig");
-request_id: source_namespace.RequestId,
-pane_id: source_namespace.PaneId,
+
+request_id: id.RequestId,
+pane_id: id.PaneId,
 needle: []const u8,

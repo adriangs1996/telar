@@ -1,5 +1,6 @@
+const bar_updates = @import("bar_updates.zig");
+const OutputType = @import("../../../bars/Output.zig");
 const Completion = @This();
-const source_namespace = @import("bar_updates.zig");
-const bars = @import("../../../bars/root.zig");
-execution_id: source_namespace.CommandExecutionId,
-result: anyerror!bars.command.Output,
+
+execution_id: bar_updates.CommandExecutionId,
+result: anyerror!OutputType,

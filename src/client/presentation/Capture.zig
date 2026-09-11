@@ -1,8 +1,9 @@
+const window_title = @import("window_title.zig");
 const Capture = @This();
-const source_namespace = @import("window_title.zig");
+
 count: usize = 0,
 fail: bool = false,
-text: [source_namespace.max_title_bytes]u8 = undefined,
+text: [window_title.max_title_bytes]u8 = undefined,
 len: usize = 0,
 
 pub fn set(context: *anyopaque, title: []const u8) !void {

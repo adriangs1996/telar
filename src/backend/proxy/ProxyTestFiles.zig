@@ -1,7 +1,7 @@
-const ProxyTestFiles = @This();
 const std = @import("std");
-const source_namespace = @import("root.zig");
 const Config = @import("Config.zig");
+const ProxyTestFiles = @This();
+
 temp: std.testing.TmpDir,
 key: [std.fs.max_path_bytes]u8 = undefined,
 key_len: usize = 0,
@@ -10,7 +10,7 @@ certificate_len: usize = 0,
 bundle: [std.fs.max_path_bytes]u8 = undefined,
 bundle_len: usize = 0,
 
-pub fn init(io: source_namespace.Io) !ProxyTestFiles {
+pub fn init(io: std.Io) !ProxyTestFiles {
     var files: ProxyTestFiles = .{ .temp = std.testing.tmpDir(.{}) };
     errdefer files.temp.cleanup();
 

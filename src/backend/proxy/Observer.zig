@@ -1,5 +1,6 @@
-const Observer = @This();
 const std = @import("std");
-const Event = @import("MiddlewareEvent.zig");
+const MiddlewareEvent = @import("MiddlewareEvent.zig");
+const Observer = @This();
+
 context: *anyopaque,
-observe: *const fn (*anyopaque, std.Io, Event) void,
+observe: *const fn (*anyopaque, std.Io, MiddlewareEvent) void,

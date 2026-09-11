@@ -1,6 +1,7 @@
 //! Resolves configuration sources before a generation evaluates them.
 
 const std = @import("std");
+const Environment = @import("Environment.zig");
 
 pub fn defaultPath(environ: std.process.Environ, buffer: []u8) ![]const u8 {
     return resolveDefaultPath(.{
@@ -9,8 +10,6 @@ pub fn defaultPath(environ: std.process.Environ, buffer: []u8) ![]const u8 {
         .home = environ.getPosix("HOME"),
     }, buffer);
 }
-
-const Environment = @import("Environment.zig");
 
 fn resolveDefaultPath(environment: Environment, buffer: []u8) ![]const u8 {
     if (environment.development) |path| {

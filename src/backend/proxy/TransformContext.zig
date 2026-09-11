@@ -1,11 +1,13 @@
+const PaneIdType = @import("telar-core").PaneId;
+const types = @import("../agent/types.zig");
+const middleware = @import("middleware.zig");
 const TransformContext = @This();
-const source_namespace = @import("middleware.zig");
-const dialect_mod = @import("provider/dialect.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 pane_generation: u64,
-dialect: dialect_mod.ApiDialect,
-protocol: source_namespace.Protocol,
-direction: source_namespace.Direction,
-kind: source_namespace.HeaderKind,
+dialect: types.ApiDialect,
+protocol: middleware.Protocol,
+direction: middleware.Direction,
+kind: middleware.HeaderKind,
 connection_id: u64,
 stream_id: u32,

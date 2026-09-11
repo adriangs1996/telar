@@ -1,14 +1,14 @@
+const std = @import("std");
 /// In-progress deflate of one image's pixels. Heap-allocated and never moved,
 /// because the compressor holds pointers into the allocating writer and the
 /// window buffer.
 const Compression = @This();
-const source_namespace = @import("kitty.zig");
-const std = @import("std");
+
 input: []u8 = &.{},
 input_len: usize = 0,
 finish_after: bool = false,
 failed: bool = false,
-allocating: source_namespace.Io.Writer.Allocating,
+allocating: std.Io.Writer.Allocating,
 window: [std.compress.flate.max_window_len]u8,
 compress: std.compress.flate.Compress,
 offset: usize,

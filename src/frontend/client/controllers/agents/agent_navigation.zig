@@ -1,27 +1,24 @@
 //! Wires sidebar agent navigation to local focus and runtime handoff adapters.
 
-const core = @import("telar-core");
-const agents = @import("telar-client").agents;
-const agents_application = @import("telar-client").application.agents;
-const client_model = @import("telar-client").model;
-const pane_focus = @import("../panes/pane_focus.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const tab_selections = @import("../tabs/tab_selections.zig");
-const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
-
 const Client = @import("../../Client.zig");
-const agent_navigation = agents_application.agent_navigation;
-const schema = core.schema;
-
-pub const Outcome = agent_navigation.Outcome;
+const AgentKeyType = @import("telar-client").AgentKey;
+const ApplicationAgentsAgentNavigationOutcome = @import("telar-client").ApplicationAgentsAgentNavigationOutcome;
+const NavigateAgentHandlerType = @import("telar-client").NavigateAgentHandler;
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const TabIdType = @import("telar-core").TabId;
+const tab_selections = @import("../tabs/tab_selections.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const pane_focus = @import("../panes/pane_focus.zig");
+const AgentHandoffType = @import("telar-client").AgentHandoff;
+const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
 /// Resolves one sidebar agent key and applies its local navigation or handoff.
 ///
 /// ```zig
 /// const outcome = try apply(client, agent_key);
 /// ```
-pub fn apply(client: *Client, key: agents.AgentKey) !Outcome {
-    var use_case: agent_navigation.NavigateAgentHandler = .{
+pub fn apply(client: *Client, key: AgentKeyType) !ApplicationAgentsAgentNavigationOutcome {
+    var use_case: NavigateAgentHandlerType = .{
         .model = &client.model,
         .handoffs = .{
             .context = client,
@@ -44,14 +41,14 @@ fn handoffPending(context: *anyopaque) bool {
     return request_lifecycle.busy(client);
 }
 
-fn selectTab(context: *anyopaque, tab_id: schema.TabId) !bool {
+fn selectTab(context: *anyopaque, tab_id: TabIdType) !bool {
     const client: *Client = @ptrCast(@alignCast(context));
     var use_case = tab_selections.selectionHandler(client);
 
     return (try use_case.execute(.{ .target = .{ .tab_id = tab_id } })) != null;
 }
 
-fn focusPane(context: *anyopaque, pane_id: schema.PaneId) !void {
+fn focusPane(context: *anyopaque, pane_id: PaneIdType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     var use_case = pane_focus.handler(client);
 
@@ -61,7 +58,7 @@ fn focusPane(context: *anyopaque, pane_id: schema.PaneId) !void {
     });
 }
 
-fn requestHandoff(context: *anyopaque, handoff: client_model.AgentHandoff) !void {
+fn requestHandoff(context: *anyopaque, handoff: AgentHandoffType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     _ = try workspace_handoffs.requestPane(client, handoff.pane_id, handoff.fallback_workspace);

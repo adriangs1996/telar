@@ -1,4 +1,5 @@
+const std = @import("std");
 const Target = @This();
-const source_namespace = @import("connect_authentication.zig");
-host: source_namespace.net.HostName,
+
+host: std.Io.net.HostName,
 port: u16,

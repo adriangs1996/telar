@@ -1,24 +1,20 @@
 //! Connects the sidebar animation use case to the client timer.
 
 const std = @import("std");
-const notifications_application = @import("telar-client").application.notifications;
-const client_clock = @import("telar-client").resources.clock;
-const client_model = @import("telar-client").model;
-
 const Client = @import("../../Client.zig");
-const Io = std.Io;
-const sidebar_animation = notifications_application.sidebar_animation;
+const ActivityType = @import("telar-client").Activity;
+const SidebarAnimationChangeType = @import("telar-client").SidebarAnimationChange;
+const SidebarAnimationHandlerType = @import("telar-client").SidebarAnimationHandler;
+const monotonic_module = @import("telar-client").monotonic;
 
 const interval_ns = 120 * std.time.ns_per_ms;
-
-pub const Scheduler = @import("Scheduler.zig");
 
 /// Ensures the current model has one future tick when animation is active.
 ///
 /// ```zig
 /// _ = try synchronize(client);
 /// ```
-pub fn synchronize(client: *Client) !sidebar_animation.Activity {
+pub fn synchronize(client: *Client) !ActivityType {
     var use_case = handler(client);
 
     return use_case.synchronize();
@@ -29,7 +25,7 @@ pub fn synchronize(client: *Client) !sidebar_animation.Activity {
 /// ```zig
 /// _ = try handleTick(client, result);
 /// ```
-pub fn handleTick(client: *Client, result: anyerror!void) !?client_model.SidebarAnimationChange {
+pub fn handleTick(client: *Client, result: anyerror!void) !?SidebarAnimationChangeType {
     client.sidebar_animation_scheduler.pending = false;
     try result;
 
@@ -38,7 +34,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !?client_model.Sidebar
     return use_case.tick();
 }
 
-fn handler(client: *Client) sidebar_animation.SidebarAnimationHandler {
+fn handler(client: *Client) SidebarAnimationHandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -55,7 +51,7 @@ fn schedule(raw_context: *anyopaque) !void {
         return;
     }
 
-    const deadline_ns = client_clock.monotonic(client.io) +| interval_ns;
+    const deadline_ns = monotonic_module(client.io) +| interval_ns;
     scheduler.pending = true;
     client.select.concurrent(.sidebar_animation_tick, waitUntil, .{
         client.io,
@@ -66,7 +62,7 @@ fn schedule(raw_context: *anyopaque) !void {
     };
 }
 
-fn waitUntil(io: Io, deadline_ns: u64) anyerror!void {
-    const deadline = Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
+fn waitUntil(io: std.Io, deadline_ns: u64) anyerror!void {
+    const deadline = std.Io.Timestamp.fromNanoseconds(@intCast(deadline_ns)).withClock(.awake);
     try deadline.wait(io);
 }

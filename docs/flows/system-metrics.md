@@ -70,14 +70,14 @@ runtime's fresh delivery cursor supplies the current sample.
 
 ## Proof
 
-- `src/backend/runtime/system_metrics.zig` proves bounded sampling, visible
+- `src/backend/runtime/observability/system_metrics.zig` proves bounded sampling, visible
   change detection and platform value reduction.
-- `src/backend/runtime/delivery.zig` proves per-client latest-state delivery.
-- `src/core/schema/root.zig` proves wire validation and optional-battery
+- `src/backend/runtime/delivery/` proves per-client latest-state delivery.
+- `src/core/schema/schema.zig` proves wire validation and optional-battery
   encoding rules.
-- `src/frontend/client/model.zig` proves ownership, stale handling, validation
+- `src/client/model/Model.zig` proves ownership, stale handling, validation
   and isolated versioning.
-- `src/frontend/client/application/system_metrics.zig` proves the use-case
+- `src/frontend/client/controllers/agents/system_metrics.zig` proves the use-case
   boundary and retained state after rejection.
-- `src/frontend/client/client_test.zig` proves protocol adaptation, absence of
+- `src/frontend/client/tests/` proves protocol adaptation, absence of
   direct draw requests and presenter-owned status-bar projection.

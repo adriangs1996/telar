@@ -1,4 +1,5 @@
+const PointType = @import("telar-core").Point;
 const PointerMotion = @This();
-const source_namespace = @import("copy_mode.zig");
-position: source_namespace.ui.Point,
+
+position: PointType,
 release: bool = false,

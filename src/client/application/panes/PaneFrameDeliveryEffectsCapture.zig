@@ -1,19 +1,22 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_frame_delivery.zig");
-const Effects = @import("PaneFrameDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneFrameCommitType = @import("../../model/PaneFrameCommit.zig");
+const pane_frame_delivery = @import("pane_frame_delivery.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const PaneFrameDeliveryEffects = @import("PaneFrameDeliveryEffects.zig");
 const std = @import("std");
-model: *const client_model.Model,
-commit: client_model.PaneFrameCommit,
+const EffectsCapture = @This();
+
+model: *const ModelType,
+commit: PaneFrameCommitType,
 current_visibility: bool,
-events: [3]source_namespace.Event = undefined,
+events: [3]pane_frame_delivery.Event = undefined,
 event_count: usize = 0,
-observed_pane: ?source_namespace.schema.PaneId = null,
+observed_pane: ?PaneIdType = null,
 delivered_visibility: ?bool = null,
 committed_state_observed: bool = true,
-failure: source_namespace.Failure = .none,
+failure: pane_frame_delivery.Failure = .none,
 
-pub fn effects(capture: *EffectsCapture) Effects {
+pub fn effects(capture: *EffectsCapture) PaneFrameDeliveryEffects {
     return .{
         .context = capture,
         .pane_graphics_visible = paneGraphicsVisible,
@@ -22,7 +25,7 @@ pub fn effects(capture: *EffectsCapture) Effects {
     };
 }
 
-fn paneGraphicsVisible(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId) bool {
+fn paneGraphicsVisible(raw_context: *anyopaque, pane_id: PaneIdType) bool {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.read_graphics_visibility);
     capture.observed_pane = pane_id;
@@ -30,7 +33,7 @@ fn paneGraphicsVisible(raw_context: *anyopaque, pane_id: source_namespace.schema
     return capture.current_visibility;
 }
 
-fn setPaneGraphicsVisible(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId, visible: bool) !void {
+fn setPaneGraphicsVisible(raw_context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.set_graphics_visibility);
     capture.observed_pane = pane_id;
@@ -50,7 +53,7 @@ fn synchronizeActiveResources(raw_context: *anyopaque) !void {
     }
 }
 
-fn append(capture: *EffectsCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectsCapture, event: pane_frame_delivery.Event) void {
     capture.observeCommit();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -77,6 +80,6 @@ fn observeCommit(capture: *EffectsCapture) void {
         version.frame == capture.commit.frame_revision;
 }
 
-pub fn eventSlice(capture: *const EffectsCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectsCapture) []const pane_frame_delivery.Event {
     return capture.events[0..capture.event_count];
 }

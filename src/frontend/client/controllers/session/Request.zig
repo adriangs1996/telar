@@ -1,3 +1,4 @@
+const platform = @import("../../../platform/platform.zig");
 const Request = @This();
-const platform = @import("../../../platform/root.zig");
+
 resize_watcher: *platform.ResizeWatcher,

@@ -1,8 +1,9 @@
-const Scheduler = @This();
 const std = @import("std");
-const source_namespace = @import("deadline_timer.zig");
-deadline_ns: std.atomic.Value(u64) = .init(source_namespace.no_deadline),
-wake: source_namespace.Io.Event = .unset,
+const deadline_timer = @import("deadline_timer.zig");
+const Scheduler = @This();
+
+deadline_ns: std.atomic.Value(u64) = .init(deadline_timer.no_deadline),
+wake: std.Io.Event = .unset,
 pending: bool = false,
 
 /// Replaces the current deadline and reports whether the caller must
@@ -11,8 +12,8 @@ pending: bool = false,
 /// ```zig
 /// if (scheduler.update(io, deadline_ns) == .schedule) startWorker();
 /// ```
-pub fn update(scheduler: *Scheduler, io: source_namespace.Io, deadline_ns: ?u64) source_namespace.Update {
-    const replacement = deadline_ns orelse source_namespace.no_deadline;
+pub fn update(scheduler: *Scheduler, io: std.Io, deadline_ns: ?u64) deadline_timer.Update {
+    const replacement = deadline_ns orelse deadline_timer.no_deadline;
     const previous = scheduler.deadline_ns.load(.acquire);
     scheduler.deadline_ns.store(replacement, .release);
     if (scheduler.pending) {

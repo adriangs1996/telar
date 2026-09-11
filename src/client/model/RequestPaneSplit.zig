@@ -1,4 +1,6 @@
+const layout_support = @import("../workspace/layout_support.zig");
+const RectType = @import("telar-core").Rect;
 const RequestPaneSplit = @This();
-const source_namespace = @import("types.zig");
-axis: source_namespace.layout_mod.Axis,
-area: source_namespace.ui.Rect,
+
+axis: layout_support.Axis,
+area: RectType,

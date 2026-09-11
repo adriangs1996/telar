@@ -1,33 +1,26 @@
 //! Application policy for delivering disposable client resources after one
 //! committed tab selection.
 
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const TabSelectionDeliveryTestingModel = @import("TabSelectionDeliveryTestingModel.zig");
+const TabSelectionDeliveryEffectsCapture = @import("TabSelectionDeliveryEffectsCapture.zig");
+const DeliverTabSelectionHandler = @import("DeliverTabSelectionHandler.zig");
+const TabSelectionType = @import("../../model/TabSelection.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../../root.zig").model;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const pane_paste = @import("../input/root.zig").pane_paste;
-const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
-
-pub const schema = core.schema;
-pub const tabs_mod = workspace_capability.tabs;
-
-pub const Effects = @import("TabSelectionDeliveryEffects.zig");
-
-pub const DeliverTabSelectionHandler = @import("DeliverTabSelectionHandler.zig");
 
 pub const Event = union(enum) {
-    paste_finish: schema.PaneId,
-    focus_out: schema.PaneId,
-    attachment_pending: schema.PaneId,
-    detach: schema.PaneId,
-    retire_attachment: schema.PaneId,
+    paste_finish: PaneIdType,
+    focus_out: PaneIdType,
+    attachment_pending: PaneIdType,
+    detach: PaneIdType,
+    retire_attachment: PaneIdType,
     graphics_visibility: struct {
-        pane_id: schema.PaneId,
+        pane_id: PaneIdType,
         visible: bool,
     },
     synchronize_active_resources,
-    request_tab_snapshot: schema.TabLocation,
+    request_tab_snapshot: TabLocationType,
 };
 
 pub const Failure = enum {
@@ -38,11 +31,7 @@ pub const Failure = enum {
     tab_snapshot,
 };
 
-const TestingModel = @import("TabSelectionDeliveryTestingModel.zig");
-
-const EffectsCapture = @import("TabSelectionDeliveryEffectsCapture.zig");
-
-fn deliveryHandler(testing: *TestingModel, capture: *EffectsCapture) DeliverTabSelectionHandler {
+fn deliveryHandler(testing: *TabSelectionDeliveryTestingModel, capture: *TabSelectionDeliveryEffectsCapture) DeliverTabSelectionHandler {
     return .{
         .model = testing.model,
         .paste_effects = capture.pasteEffects(),
@@ -52,7 +41,7 @@ fn deliveryHandler(testing: *TestingModel, capture: *EffectsCapture) DeliverTabS
     };
 }
 
-fn captureFor(testing: *TestingModel, selection: client_model.TabSelection) EffectsCapture {
+fn captureFor(testing: *TabSelectionDeliveryTestingModel, selection: TabSelectionType) TabSelectionDeliveryEffectsCapture {
     return .{
         .model = testing.model,
         .selection = selection,
@@ -62,7 +51,7 @@ fn captureFor(testing: *TestingModel, selection: client_model.TabSelection) Effe
 }
 
 test "DeliverTabSelectionHandler retires previous resources before activating the selection" {
-    var testing = try TestingModel.init();
+    var testing = try TabSelectionDeliveryTestingModel.init();
     defer testing.deinit();
     const selection = try testing.select();
     var capture = captureFor(&testing, selection);
@@ -98,7 +87,7 @@ test "DeliverTabSelectionHandler retires previous resources before activating th
 }
 
 test "DeliverTabSelectionHandler rejects altered commits before resource retirement" {
-    var testing = try TestingModel.init();
+    var testing = try TabSelectionDeliveryTestingModel.init();
     defer testing.deinit();
     const selection = try testing.select();
     var capture = captureFor(&testing, selection);
@@ -141,7 +130,7 @@ test "DeliverTabSelectionHandler rejects altered commits before resource retirem
 }
 
 test "DeliverTabSelectionHandler catches local layout ABA and active identity changes" {
-    var previous_testing = try TestingModel.init();
+    var previous_testing = try TabSelectionDeliveryTestingModel.init();
     defer previous_testing.deinit();
     const previous_selection = try previous_testing.select();
     var previous_capture = captureFor(&previous_testing, previous_selection);
@@ -155,7 +144,7 @@ test "DeliverTabSelectionHandler catches local layout ABA and active identity ch
     );
     try std.testing.expectEqual(@as(usize, 0), previous_capture.event_count);
 
-    var selected_testing = try TestingModel.init();
+    var selected_testing = try TabSelectionDeliveryTestingModel.init();
     defer selected_testing.deinit();
     const selected_selection = try selected_testing.select();
     var selected_capture = captureFor(&selected_testing, selected_selection);
@@ -169,7 +158,7 @@ test "DeliverTabSelectionHandler catches local layout ABA and active identity ch
     );
     try std.testing.expectEqual(@as(usize, 0), selected_capture.event_count);
 
-    var active_testing = try TestingModel.init();
+    var active_testing = try TabSelectionDeliveryTestingModel.init();
     defer active_testing.deinit();
     const active_selection = try active_testing.select();
     var active_capture = captureFor(&active_testing, active_selection);
@@ -181,7 +170,7 @@ test "DeliverTabSelectionHandler catches local layout ABA and active identity ch
 }
 
 test "DeliverTabSelectionHandler stops when previous attachment retirement fails" {
-    var testing = try TestingModel.init();
+    var testing = try TabSelectionDeliveryTestingModel.init();
     defer testing.deinit();
     const selection = try testing.select();
     var capture = captureFor(&testing, selection);
@@ -208,7 +197,7 @@ test "DeliverTabSelectionHandler stops when previous attachment retirement fails
 }
 
 test "DeliverTabSelectionHandler preserves completed stages across later failures" {
-    var visibility_testing = try TestingModel.init();
+    var visibility_testing = try TabSelectionDeliveryTestingModel.init();
     defer visibility_testing.deinit();
     const visibility_selection = try visibility_testing.select();
     var visibility_capture = captureFor(&visibility_testing, visibility_selection);
@@ -228,7 +217,7 @@ test "DeliverTabSelectionHandler preserves completed stages across later failure
         visibility_capture.eventSlice()[visibility_capture.event_count - 1],
     );
 
-    var resources_testing = try TestingModel.init();
+    var resources_testing = try TabSelectionDeliveryTestingModel.init();
     defer resources_testing.deinit();
     const resources_selection = try resources_testing.select();
     var resources_capture = captureFor(&resources_testing, resources_selection);
@@ -244,7 +233,7 @@ test "DeliverTabSelectionHandler preserves completed stages across later failure
         resources_capture.eventSlice()[resources_capture.event_count - 1],
     );
 
-    var snapshot_testing = try TestingModel.init();
+    var snapshot_testing = try TabSelectionDeliveryTestingModel.init();
     defer snapshot_testing.deinit();
     const snapshot_selection = try snapshot_testing.select();
     var snapshot_capture = captureFor(&snapshot_testing, snapshot_selection);

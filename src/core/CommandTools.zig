@@ -1,18 +1,19 @@
-const CommandTools = @This();
-const source_namespace = @import("agent_manifest.zig");
+const agent_manifest = @import("agent_manifest.zig");
 const CommandTool = @import("CommandTool.zig");
 const std = @import("std");
-items: [source_namespace.max_command_tools]CommandTool = undefined,
+const CommandTools = @This();
+
+items: [agent_manifest.max_command_tools]CommandTool = undefined,
 count: u8 = 0,
 
-pub fn append(mappings: *CommandTools, tool: []const u8, field: []const u8) source_namespace.ListError!void {
+pub fn append(mappings: *CommandTools, tool: []const u8, field: []const u8) agent_manifest.ListError!void {
     if (tool.len == 0 or field.len == 0) {
         return error.EmptyEntry;
     }
-    if (tool.len > source_namespace.max_tool_name_bytes or field.len > source_namespace.max_command_field_bytes) {
+    if (tool.len > agent_manifest.max_tool_name_bytes or field.len > agent_manifest.max_command_field_bytes) {
         return error.EntryTooLong;
     }
-    if (mappings.count == source_namespace.max_command_tools) {
+    if (mappings.count == agent_manifest.max_command_tools) {
         return error.TooManyEntries;
     }
 

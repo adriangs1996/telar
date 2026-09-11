@@ -1,12 +1,13 @@
-const Capture = @This();
-const source_namespace = @import("pane_attachment_requests.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const PaneAttachmentRequest = @import("PaneAttachmentRequest.zig");
-const Effects = @import("PaneAttachmentRequestsEffects.zig");
-pending: ?source_namespace.schema.PaneId = null,
+const PaneAttachmentRequestsEffects = @import("PaneAttachmentRequestsEffects.zig");
+const Capture = @This();
+
+pending: ?PaneIdType = null,
 requests: [4]PaneAttachmentRequest = undefined,
 request_count: usize = 0,
 
-pub fn effects(capture: *Capture) Effects {
+pub fn effects(capture: *Capture) PaneAttachmentRequestsEffects {
     return .{
         .context = capture,
         .attachment_pending = attachmentPending,
@@ -14,7 +15,7 @@ pub fn effects(capture: *Capture) Effects {
     };
 }
 
-fn attachmentPending(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId) bool {
+fn attachmentPending(raw_context: *anyopaque, pane_id: PaneIdType) bool {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     return capture.pending == pane_id;
 }

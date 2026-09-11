@@ -1,12 +1,15 @@
-const EventObserver = @This();
-const exchange_mod = @import("exchange_support.zig");
-const provider = @import("../provider/root.zig");
+const ExchangeType = @import("Exchange.zig");
+const ResponseStreamsType = @import("../provider/ResponseStreams.zig");
+const Streams = @import("../provider/Streams.zig");
 const CaptureStreams = @import("CaptureStreams.zig");
-const h2 = @import("../h2/root.zig");
-const source_namespace = @import("h2.zig");
-exchange: *exchange_mod.Exchange,
-responses: ?*provider.ResponseStreams = null,
-requests: ?*provider.RequestStreams = null,
+const relay = @import("../h2/relay.zig");
+const h2 = @import("h2.zig");
+const LifecycleType = @import("../h2/Lifecycle.zig");
+const EventObserver = @This();
+
+exchange: *ExchangeType,
+responses: ?*ResponseStreamsType = null,
+requests: ?*Streams = null,
 captures: ?*CaptureStreams = null,
 
 /// Routes borrowed HTTP/2 observations through provider request and
@@ -15,7 +18,7 @@ captures: ?*CaptureStreams = null,
 /// ```zig
 /// observer.emit(.{ .request_body = .{ .stream_id = 3, .bytes = fragment } });
 /// ```
-pub fn emit(observer: *EventObserver, event: h2.Event) void {
+pub fn emit(observer: *EventObserver, event: relay.Event) void {
     switch (event) {
         .lifecycle => |lifecycle| observer.observeLifecycle(lifecycle),
         .request_headers => |headers| if (observer.captures) |captures| captures.feedHeaders(headers),
@@ -40,7 +43,7 @@ pub fn emit(observer: *EventObserver, event: h2.Event) void {
 
             const responses = observer.responses orelse return;
 
-            if (source_namespace.shouldInspectBody(body)) {
+            if (h2.shouldInspectBody(body)) {
                 observer.exchange.record(.claude_sse_payload_fragment);
 
                 if (responses.feed(body.stream_id, body.bytes)) {
@@ -55,11 +58,11 @@ pub fn emit(observer: *EventObserver, event: h2.Event) void {
     }
 }
 
-fn observeLifecycle(observer: *EventObserver, lifecycle: h2.Lifecycle) void {
+fn observeLifecycle(observer: *EventObserver, lifecycle: LifecycleType) void {
     if (observer.shouldClassifyRequest(lifecycle)) {
         const requests = observer.requests.?;
         if (!requests.start(lifecycle.stream_id)) {
-            source_namespace.publishRequestClass(observer.exchange, lifecycle.stream_id, .auxiliary);
+            h2.publishRequestClass(observer.exchange, lifecycle.stream_id, .auxiliary);
         }
 
         return;
@@ -92,7 +95,7 @@ fn observeLifecycle(observer: *EventObserver, lifecycle: h2.Lifecycle) void {
     }
 }
 
-fn shouldClassifyRequest(observer: *const EventObserver, lifecycle: h2.Lifecycle) bool {
+fn shouldClassifyRequest(observer: *const EventObserver, lifecycle: LifecycleType) bool {
     return observer.exchange.dialect == .anthropic_messages and observer.requests != null and lifecycle.phase == .request_started;
 }
 
@@ -103,5 +106,5 @@ fn finishRequest(observer: *EventObserver, stream_id: u32) void {
 
     const requests = observer.requests orelse return;
     const classification = requests.finish(stream_id) orelse return;
-    source_namespace.publishRequestClass(observer.exchange, stream_id, classification);
+    h2.publishRequestClass(observer.exchange, stream_id, classification);
 }

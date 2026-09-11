@@ -1,10 +1,8 @@
 //! Bounded cell damage independent of the eventual presentation target.
 
+const DamageRow = @import("DamageRow.zig");
+const CellSpan = @import("CellSpan.zig");
 const std = @import("std");
-
-pub const DamageRow = @import("DamageRow.zig");
-
-pub const CellSpan = @import("CellSpan.zig");
 
 /// Splits a validated cell span at row boundaries without allocating.
 /// The caller guarantees start + count <= rows.len * width.

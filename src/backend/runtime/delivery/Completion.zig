@@ -1,5 +1,6 @@
+const PaneIdType = @import("telar-core").PaneId;
 const Completion = @This();
-const source_namespace = @import("root.zig");
-detach_pane: ?source_namespace.schema.PaneId = null,
+
+detach_pane: ?PaneIdType = null,
 close_client: bool = false,
 stopping_delivered: bool = false,

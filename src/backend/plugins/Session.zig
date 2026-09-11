@@ -1,0 +1,157 @@
+const OpenOptionsType = @import("OpenOptions.zig");
+const std = @import("std");
+const SessionSpec = @import("SessionSpec.zig");
+const Request = @import("Request.zig");
+const ResultType = @import("Result.zig");
+const protocol = @import("protocol.zig");
+const effects = @import("effects.zig");
+const Session = @This();
+
+pub const OpenOptions = @import("OpenOptions.zig");
+
+io: std.Io,
+gpa: std.mem.Allocator,
+child: std.process.Child,
+reader_storage: std.Io.File.MultiReader.Buffer(1) = undefined,
+reader: std.Io.File.MultiReader = undefined,
+stderr_future: ?std.Io.Future(anyerror!void) = null,
+stderr_bytes: [4096]u8 = undefined,
+stderr_len: usize = 0,
+timeout_ms: u32,
+
+/// Starts one isolated `tap-worker` with empty environment and root cwd.
+///
+/// ```zig
+/// const session = try Session.open(io, gpa, .{ .entry = entry, .timeout_ms = 200 });
+/// ```
+pub fn open(io: std.Io, gpa: std.mem.Allocator, options: OpenOptionsType) !*Session {
+    const session = try gpa.create(Session);
+    errdefer gpa.destroy(session);
+    var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const executable = executable_buffer[0..try std.process.executablePath(io, &executable_buffer)];
+    const argv = [_][]const u8{ executable, "tap-worker", options.entry };
+    var empty_environment = std.process.Environ.Map.init(gpa);
+    defer empty_environment.deinit();
+    session.* = .{
+        .io = io,
+        .gpa = gpa,
+        .child = try std.process.spawn(io, .{
+            .argv = &argv,
+            .cwd = .{ .path = "/" },
+            .environ_map = &empty_environment,
+            .stdin = .pipe,
+            .stdout = .pipe,
+            .stderr = .pipe,
+        }),
+        .timeout_ms = options.timeout_ms,
+    };
+    errdefer session.child.kill(io);
+    session.reader.init(gpa, io, session.reader_storage.toStreams(), &.{session.child.stdout.?});
+    errdefer session.reader.deinit();
+    session.stderr_future = try io.concurrent(drainStderr, .{session});
+    return session;
+}
+
+/// Kills the worker and releases its bounded stdout reader.
+///
+/// ```zig
+/// session.close();
+/// ```
+pub fn close(session: *Session) void {
+    session.child.kill(session.io);
+    if (session.stderr_future) |*future| {
+        _ = future.await(session.io) catch {};
+    }
+    if (session.stderr_len != 0) {
+        std.log.warn("tap worker stderr: {s}", .{session.stderr_bytes[0..session.stderr_len]});
+    }
+    session.reader.deinit();
+    session.gpa.destroy(session);
+}
+
+fn drainStderr(session: *Session) anyerror!void {
+    const stderr = session.child.stderr orelse return;
+    var buffer: [1024]u8 = undefined;
+    while (true) {
+        const count = stderr.readStreaming(session.io, &.{&buffer}) catch return;
+        if (count == 0) {
+            return;
+        }
+        const keep = @min(count, session.stderr_bytes.len - session.stderr_len);
+        if (keep != 0) {
+            @memcpy(session.stderr_bytes[session.stderr_len..][0..keep], buffer[0..keep]);
+            session.stderr_len += keep;
+        }
+    }
+}
+
+/// Sends one exchange and returns a heap-owned effect result.
+///
+/// ```zig
+/// const result = try session.exchange(spec, request);
+/// ```
+pub fn exchange(session: *Session, spec: SessionSpec, request: Request) !*ResultType {
+    var prefix: [protocol.prefix_bytes]u8 = undefined;
+    std.mem.writeInt(u32, &prefix, @intCast(request.bytes.len), .little);
+    const stdin = session.child.stdin orelse return error.WorkerClosed;
+    stdin.writeStreamingAll(session.io, &prefix) catch return error.WorkerWriteFailed;
+    stdin.writeStreamingAll(session.io, request.bytes) catch return error.WorkerWriteFailed;
+    const timeout: std.Io.Timeout = .{ .deadline = .fromNow(session.io, .{
+        .clock = .awake,
+        .raw = .fromMilliseconds(session.timeout_ms),
+    }) };
+    try session.readExact(&prefix, timeout);
+    const response_len = std.mem.readInt(u32, &prefix, .little);
+    if (response_len == 0 or response_len > effects.max_effect_bytes) {
+        return error.InvalidWorkerFrame;
+    }
+    const storage = try session.gpa.alloc(u8, response_len);
+    errdefer session.gpa.free(storage);
+    try session.readExact(storage, timeout);
+    if (storage[0] == 3) {
+        const failure = try protocol.decodeError(storage);
+        if (failure.event_id != request.event_id) {
+            return error.StaleWorkerReply;
+        }
+        return error.WorkerEventFailed;
+    }
+    const decoded = try protocol.decodeEffects(storage);
+    if (decoded.event_id != request.event_id) {
+        return error.StaleWorkerReply;
+    }
+    const result = try session.gpa.create(ResultType);
+    result.* = .{
+        .gpa = session.gpa,
+        .package_index = spec.package_index,
+        .plugin_id = spec.plugin_id,
+        .digest = spec.digest,
+        .generation = spec.generation,
+        .event_id = decoded.event_id,
+        .pane = request.pane,
+        .pane_generation = request.pane_generation,
+        .storage = storage,
+        .batch = decoded.batch,
+    };
+    return result;
+}
+
+fn readExact(session: *Session, output: []u8, timeout: std.Io.Timeout) !void {
+    const reader = session.reader.reader(0);
+    var offset: usize = 0;
+    while (offset != output.len) {
+        const buffered = reader.buffered();
+        const count = @min(buffered.len, output.len - offset);
+        if (count != 0) {
+            @memcpy(output[offset..][0..count], buffered[0..count]);
+            reader.toss(count);
+            offset += count;
+            continue;
+        }
+
+        session.reader.fill(1, timeout) catch |err| switch (err) {
+            error.Timeout => return error.WorkerTimeout,
+            error.EndOfStream => return error.WorkerClosed,
+            else => return error.WorkerReadFailed,
+        };
+    }
+}

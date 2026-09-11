@@ -1,4 +1,5 @@
+const AgentSnapshotCommitType = @import("../../model/AgentSnapshotCommit.zig");
 const AgentSnapshotDelivery = @This();
-const client_model = @import("../../root.zig").model;
+
 context: *anyopaque,
-deliver: *const fn (*anyopaque, *const client_model.AgentSnapshotCommit) anyerror!void,
+deliver: *const fn (*anyopaque, *const AgentSnapshotCommitType) anyerror!void,

@@ -1,6 +1,7 @@
+const id = @import("../id.zig");
 const WorkspaceListEntry = @This();
-const source_namespace = @import("workspace.zig");
-workspace: source_namespace.WorkspaceId,
+
+workspace: id.WorkspaceId,
 name: []const u8,
 path: []const u8,
 tab_count: u16,

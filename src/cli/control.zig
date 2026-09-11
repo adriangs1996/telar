@@ -2,24 +2,11 @@
 //! agents through the local runtime.
 
 const std = @import("std");
-const core = @import("telar-core");
-const parser = @import("parser.zig");
-const runtime_connection = @import("runtime_connection.zig");
-
-pub const Io = std.Io;
-const File = Io.File;
-pub const schema = core.schema;
-pub const RuntimeConnector = runtime_connection.RuntimeConnector;
-
-pub const max_entries = schema.max_agent_snapshot_entries;
-
-pub const ExecutionContext = @import("ExecutionContext.zig");
-
-pub const AgentCommandReport = @import("AgentCommandReport.zig");
-
-pub const Agent = @import("ControlAgent.zig");
-
-pub const Snapshot = @import("Snapshot.zig");
+const RequestFailedType = @import("telar-core").RequestFailed;
+const AgentStatusType = @import("telar-core").AgentStatus;
+const ControlAgent = @import("ControlAgent.zig");
+const Snapshot = @import("Snapshot.zig");
+const pane_module = @import("telar-core").pane;
 
 /// Reads the pane identity the runtime injected into this process.
 ///
@@ -45,8 +32,6 @@ pub fn currentPaneGeneration(environ: std.process.Environ) !u64 {
     return generation;
 }
 
-pub const Session = @import("Session.zig");
-
 pub const ControlError = error{
     PaneNotFound,
     PaneExited,
@@ -55,7 +40,7 @@ pub const ControlError = error{
     RuntimeRefused,
 };
 
-pub fn failureError(failure: schema.RequestFailed) ControlError {
+pub fn failureError(failure: RequestFailedType) ControlError {
     return switch (failure.code) {
         .pane_not_found => error.PaneNotFound,
         .pane_exited => error.PaneExited,
@@ -86,7 +71,7 @@ pub fn describe(err: anyerror) []const u8 {
     };
 }
 
-pub fn statusName(status: schema.AgentStatus) []const u8 {
+pub fn statusName(status: AgentStatusType) []const u8 {
     return switch (status) {
         .unknown => "unknown",
         .working => "working",
@@ -102,7 +87,7 @@ pub fn statusName(status: schema.AgentStatus) []const u8 {
 /// ```zig
 /// try writeJsonString(writer, title);
 /// ```
-pub fn writeJsonString(writer: *Io.Writer, text: []const u8) !void {
+pub fn writeJsonString(writer: *std.Io.Writer, text: []const u8) !void {
     try writer.writeByte('"');
     for (text) |byte| {
         switch (byte) {
@@ -123,7 +108,7 @@ pub fn writeJsonString(writer: *Io.Writer, text: []const u8) !void {
 /// ```zig
 /// try writeAgentJson(writer, agent);
 /// ```
-pub fn writeAgentJson(writer: *Io.Writer, agent: *const Agent) !void {
+pub fn writeAgentJson(writer: *std.Io.Writer, agent: *const ControlAgent) !void {
     try writer.print("{{\"pane_id\":{d},\"pane_generation\":{d},\"workspace_id\":{d},\"tab_id\":{d},\"pane_index\":{d},\"provider\":", .{
         agent.pane_id,
         agent.pane_generation,
@@ -150,7 +135,7 @@ pub fn writeAgentJson(writer: *Io.Writer, agent: *const Agent) !void {
 /// ```zig
 /// try writeAgentRow(writer, agent);
 /// ```
-pub fn writeAgentRow(writer: *Io.Writer, agent: *const Agent) !void {
+pub fn writeAgentRow(writer: *std.Io.Writer, agent: *const ControlAgent) !void {
     try writer.print("{d:<6}{d:<5}{s:<9}{s:<8}{s:<18}{s:<14}{s}\n", .{
         agent.pane_id,
         agent.pane_generation,
@@ -172,7 +157,7 @@ pub fn copyBounded(storage: []u8, value: []const u8) u8 {
 
 test "json strings escape quotes, backslashes and control bytes" {
     var buffer: [64]u8 = undefined;
-    var writer = Io.Writer.fixed(&buffer);
+    var writer = std.Io.Writer.fixed(&buffer);
 
     try writeJsonString(&writer, "a\"b\\c\nd\x01");
 
@@ -181,8 +166,8 @@ test "json strings escape quotes, backslashes and control bytes" {
 
 test "snapshot resolution prefers exact pane ids and rejects ambiguous titles" {
     var snapshot: Snapshot = .{};
-    snapshot.entries[0] = Agent.fromEntry(.{
-        .pane_id = try schema.id.pane(7),
+    snapshot.entries[0] = ControlAgent.fromEntry(.{
+        .pane_id = try pane_module(7),
         .pane_generation = 2,
         .process_id = 1,
         .session_id = .{0} ** 16,

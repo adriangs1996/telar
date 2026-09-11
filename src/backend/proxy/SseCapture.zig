@@ -1,15 +1,16 @@
-const Capture = @This();
-const source_namespace = @import("sse.zig");
+const sse = @import("sse.zig");
 const CapturedEvent = @import("CapturedEvent.zig");
-const Event = @import("SseEvent.zig");
+const SseEvent = @import("SseEvent.zig");
 const std = @import("std");
-events: [source_namespace.max_captured_events]CapturedEvent = @splat(.{}),
+const Capture = @This();
+
+events: [sse.max_captured_events]CapturedEvent = @splat(.{}),
 len: usize = 0,
 
-pub fn emit(capture: *Capture, event: Event) void {
+pub fn emit(capture: *Capture, event: SseEvent) void {
     std.debug.assert(capture.len < capture.events.len);
-    std.debug.assert(event.name.len <= source_namespace.max_event_name_bytes);
-    std.debug.assert(event.data.len <= source_namespace.max_data_bytes);
+    std.debug.assert(event.name.len <= sse.max_event_name_bytes);
+    std.debug.assert(event.data.len <= sse.max_data_bytes);
 
     const destination = &capture.events[capture.len];
     @memcpy(destination.name[0..event.name.len], event.name);

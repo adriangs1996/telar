@@ -1,5 +1,6 @@
+const CredentialType = @import("../Credential.zig");
 const CaptureGate = @This();
-const identity = @import("../identity.zig");
-pub fn accepts(_: *anyopaque, _: *const identity.Credential) bool {
+
+pub fn accepts(_: *anyopaque, _: *const CredentialType) bool {
     return true;
 }

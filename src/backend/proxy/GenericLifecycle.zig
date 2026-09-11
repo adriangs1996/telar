@@ -1,4 +1,5 @@
 const GenericLifecyclePort = @import("GenericLifecyclePort.zig").Type;
+
 /// Creates the owner of one service and its background worker.
 ///
 /// Startup transfers service ownership immediately. If the worker cannot

@@ -1,5 +1,6 @@
-const ToolHookInput = @This();
 const std = @import("std");
+const ToolHookInput = @This();
+
 event: []const u8,
 agent_id: ?[]const u8 = null,
 tool_name: []const u8,

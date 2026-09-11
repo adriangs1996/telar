@@ -1,8 +1,7 @@
 //! One thread-safe sequence authority shared by a session's observation producers.
 
+const Sequence = @import("Sequence.zig");
 const std = @import("std");
-
-pub const Sequence = @import("Sequence.zig");
 
 fn reserveBatch(sequence: *Sequence, output: *[1024]u64) void {
     for (output) |*number| {

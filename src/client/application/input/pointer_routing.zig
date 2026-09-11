@@ -1,16 +1,14 @@
 //! Application policy for routing one normalized host pointer event.
 
+const PointerCommand = @import("PointerCommand.zig");
+const PointerRoutingCapture = @import("PointerRoutingCapture.zig");
+const PointerRoutingHandler = @import("PointerRoutingHandler.zig");
 const std = @import("std");
-const pane_mouse = @import("pane_mouse.zig");
-
-pub const PointerCommand = pane_mouse.PointerCommand;
 
 pub const Authority = union(enum) {
     unavailable,
     available: PointerCommand,
 };
-
-pub const ViewOutcome = @import("ViewOutcome.zig");
 
 pub const Outcome = enum {
     unavailable,
@@ -19,10 +17,6 @@ pub const Outcome = enum {
     link,
     pane,
 };
-
-pub const Effects = @import("PointerRoutingEffects.zig");
-
-pub const PointerRoutingHandler = @import("PointerRoutingHandler.zig");
 
 pub const Event = enum {
     copy_mode,
@@ -39,8 +33,6 @@ pub const Failure = enum {
     pane,
 };
 
-const Capture = @import("PointerRoutingCapture.zig");
-
 fn testingCommand() PointerCommand {
     return .{
         .event = .{ .x = 4, .y = 7, .kind = .press },
@@ -51,7 +43,7 @@ fn testingCommand() PointerCommand {
 }
 
 test "pointer routing drops input without authority" {
-    var capture: Capture = .{};
+    var capture: PointerRoutingCapture = .{};
     var handler: PointerRoutingHandler = .{ .effects = capture.port() };
 
     try std.testing.expectEqual(Outcome.unavailable, try handler.execute(.unavailable));
@@ -59,7 +51,7 @@ test "pointer routing drops input without authority" {
 }
 
 test "pointer routing stops after copy mode accepts the event" {
-    var capture: Capture = .{ .copy_consumed = true };
+    var capture: PointerRoutingCapture = .{ .copy_consumed = true };
     var handler: PointerRoutingHandler = .{ .effects = capture.port() };
 
     try std.testing.expectEqual(Outcome.copy_mode, try handler.execute(.{ .available = testingCommand() }));
@@ -67,7 +59,7 @@ test "pointer routing stops after copy mode accepts the event" {
 }
 
 test "pointer routing stops after consumed or outside view interaction" {
-    var capture: Capture = .{ .view_outcome = .{
+    var capture: PointerRoutingCapture = .{ .view_outcome = .{
         .consume_pane_input = true,
         .pointer_inside = true,
     } };
@@ -86,7 +78,7 @@ test "pointer routing stops after consumed or outside view interaction" {
 }
 
 test "pointer routing reaches pane input only after both earlier owners decline" {
-    var capture: Capture = .{};
+    var capture: PointerRoutingCapture = .{};
     var handler: PointerRoutingHandler = .{ .effects = capture.port() };
 
     try std.testing.expectEqual(Outcome.pane, try handler.execute(.{ .available = testingCommand() }));
@@ -94,7 +86,7 @@ test "pointer routing reaches pane input only after both earlier owners decline"
 }
 
 test "pointer routing stops after a link claims the gesture" {
-    var capture: Capture = .{ .link_consumed = true };
+    var capture: PointerRoutingCapture = .{ .link_consumed = true };
     var handler: PointerRoutingHandler = .{ .effects = capture.port() };
 
     try std.testing.expectEqual(Outcome.link, try handler.execute(.{ .available = testingCommand() }));
@@ -102,7 +94,7 @@ test "pointer routing stops after a link claims the gesture" {
 }
 
 test "pointer routing propagates a selected failure without later effects" {
-    var capture: Capture = .{ .failure = .pane };
+    var capture: PointerRoutingCapture = .{ .failure = .pane };
     var handler: PointerRoutingHandler = .{ .effects = capture.port() };
 
     try std.testing.expectError(

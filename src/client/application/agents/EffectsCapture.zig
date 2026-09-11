@@ -1,15 +1,16 @@
+const AgentSoundType = @import("telar-core").AgentSound;
+const AgentSoundEffects = @import("AgentSoundEffects.zig");
 const EffectsCapture = @This();
-const source_namespace = @import("agent_sound.zig");
-const Effects = @import("AgentSoundEffects.zig");
+
 calls: usize = 0,
-sound: ?source_namespace.schema.AgentSound = null,
+sound: ?AgentSoundType = null,
 fail: bool = false,
 
-pub fn port(capture: *EffectsCapture) Effects {
+pub fn port(capture: *EffectsCapture) AgentSoundEffects {
     return .{ .context = capture, .schedule = schedule };
 }
 
-fn schedule(context: *anyopaque, sound: source_namespace.schema.AgentSound) !void {
+fn schedule(context: *anyopaque, sound: AgentSoundType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.sound = sound;

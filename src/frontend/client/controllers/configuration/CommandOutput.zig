@@ -1,6 +1,8 @@
-const CommandOutput = @This();
 const CommandExecution = @import("CommandExecution.zig");
-const bars = @import("../../../bars/root.zig");
+const CommandType = @import("telar-client").BarCommand;
+const OutputType = @import("../../../bars/Output.zig");
+const CommandOutput = @This();
+
 execution: CommandExecution,
-command: bars.Command,
-output: bars.command.Output,
+command: CommandType,
+output: OutputType,

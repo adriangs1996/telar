@@ -1,25 +1,15 @@
 //! Application use case for changing one pane's client-owned viewport.
 
+const SetPaneViewportTestingModel = @import("SetPaneViewportTestingModel.zig");
+const SetPaneViewportEffectsCapture = @import("SetPaneViewportEffectsCapture.zig");
+const SetPaneViewportHandler = @import("SetPaneViewportHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const SetPaneViewport = client_model.PaneViewportCommand;
-
-pub const PaneViewportEffects = @import("PaneViewportEffects.zig");
-
-pub const SetPaneViewportHandler = @import("SetPaneViewportHandler.zig");
-
-const TestingModel = @import("SetPaneViewportTestingModel.zig");
-
-const EffectsCapture = @import("SetPaneViewportEffectsCapture.zig");
+const VersionType = @import("../../model/Version.zig");
 
 test "SetPaneViewportHandler commits before synchronizing client resources" {
-    var testing = try TestingModel.init();
+    var testing = try SetPaneViewportTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: SetPaneViewportEffectsCapture = .{ .model = testing.model };
     var handler: SetPaneViewportHandler = .{
         .model = testing.model,
         .effects = capture.port(),
@@ -39,9 +29,9 @@ test "SetPaneViewportHandler commits before synchronizing client resources" {
 }
 
 test "SetPaneViewportHandler suppresses repeated and unavailable targets" {
-    var testing = try TestingModel.init();
+    var testing = try SetPaneViewportTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: SetPaneViewportEffectsCapture = .{ .model = testing.model };
     var handler: SetPaneViewportHandler = .{
         .model = testing.model,
         .effects = capture.port(),
@@ -63,13 +53,13 @@ test "SetPaneViewportHandler suppresses repeated and unavailable targets" {
     })) == null);
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "SetPaneViewportHandler preserves the committed viewport after effect failure" {
-    var testing = try TestingModel.init();
+    var testing = try SetPaneViewportTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model, .fail = true };
+    var capture: SetPaneViewportEffectsCapture = .{ .model = testing.model, .fail = true };
     var handler: SetPaneViewportHandler = .{
         .model = testing.model,
         .effects = capture.port(),
@@ -81,6 +71,6 @@ test "SetPaneViewportHandler preserves the committed viewport after effect failu
     }));
 
     try std.testing.expectEqual(@as(u32, 15), testing.model.workspace.findPane(testing.pane_id).?.scroll.offset);
-    try std.testing.expectEqual(client_model.Version{ .viewport = 1 }, testing.model.version());
+    try std.testing.expectEqual(VersionType{ .viewport = 1 }, testing.model.version());
     try std.testing.expect(capture.observed_commit);
 }

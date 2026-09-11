@@ -3,8 +3,8 @@
 //! These types own no buffers and borrow no network data. They may outlive the
 //! scratch storage used to parse or transform an HTTP message head.
 
-const std = @import("std");
 const provider = @import("../provider/request_support.zig");
+const std = @import("std");
 
 /// How an HTTP message body is delimited on the wire.
 pub const BodyPlan = union(enum) {
@@ -22,12 +22,6 @@ pub const BodyPlan = union(enum) {
     }
 };
 
-/// Route-level request classification.
-///
-/// Classification refers to the request received from the child, before any
-/// configured header transformation changes the forwarded method or target.
-/// A Claude inference route remains only a candidate until its body is
-/// classified by the provider layer.
 pub const RequestClass = provider.RequestClass;
 
 /// Information from the forwarded request needed to parse its response.

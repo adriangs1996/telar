@@ -1,5 +1,6 @@
+const TimingType = @import("telar-core").Timing;
 const Metrics = @This();
-const source_namespace = @import("telemetry.zig");
+
 started_ns: u64,
 input_events: u64 = 0,
 input_bytes: u64 = 0,
@@ -49,14 +50,14 @@ max_pending_updates: u64 = 0,
 mouse_events: u64 = 0,
 chrome_scanned_cells: u64 = 0,
 chrome_damaged_cells: u64 = 0,
-decode: source_namespace.diagnostics.Timing = .{},
-apply: source_namespace.diagnostics.Timing = .{},
-compose: source_namespace.diagnostics.Timing = .{},
-ack_enqueue: source_namespace.diagnostics.Timing = .{},
-input_enqueue: source_namespace.diagnostics.Timing = .{},
-flush: source_namespace.diagnostics.Timing = .{},
-media_flush: source_namespace.diagnostics.Timing = .{},
-draw_lateness: source_namespace.diagnostics.Timing = .{},
-paced_interval: source_namespace.diagnostics.Timing = .{},
+decode: TimingType = .{},
+apply: TimingType = .{},
+compose: TimingType = .{},
+ack_enqueue: TimingType = .{},
+input_enqueue: TimingType = .{},
+flush: TimingType = .{},
+media_flush: TimingType = .{},
+draw_lateness: TimingType = .{},
+paced_interval: TimingType = .{},
 /// Time between consecutive pane images handed to the host.
-pane_present_interval: source_namespace.diagnostics.Timing = .{},
+pane_present_interval: TimingType = .{},

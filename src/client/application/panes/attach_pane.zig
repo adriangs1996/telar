@@ -1,26 +1,15 @@
 //! Application use cases for confirming and recovering one pane attachment.
 
+const AttachPaneTestingModel = @import("AttachPaneTestingModel.zig");
+const ConfirmPaneAttachmentHandler = @import("ConfirmPaneAttachmentHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const tab_snapshot_recovery = @import("../tabs/root.zig").tab_snapshot_recovery;
-
-pub const schema = core.schema;
-
-pub const PaneAttachment = client_model.PaneAttachment;
-
-pub const ConfirmPaneAttachment = @import("ConfirmPaneAttachment.zig");
-
-pub const ConfirmPaneAttachmentHandler = @import("ConfirmPaneAttachmentHandler.zig");
-
-pub const RecoverPaneAttachmentHandler = @import("RecoverPaneAttachmentHandler.zig");
-
-const TestingModel = @import("AttachPaneTestingModel.zig");
-
-const RecoveryCapture = @import("AttachPaneRecoveryCapture.zig");
+const types = @import("../../model/types.zig");
+const VersionType = @import("../../model/Version.zig");
+const AttachPaneRecoveryCapture = @import("AttachPaneRecoveryCapture.zig");
+const RecoverPaneAttachmentHandler = @import("RecoverPaneAttachmentHandler.zig");
 
 test "ConfirmPaneAttachmentHandler validates and commits one exact confirmation" {
-    var testing = try TestingModel.init();
+    var testing = try AttachPaneTestingModel.init();
     defer testing.deinit();
     var handler: ConfirmPaneAttachmentHandler = .{ .model = testing.model };
     const attachment = testing.attachment();
@@ -39,34 +28,34 @@ test "ConfirmPaneAttachmentHandler validates and commits one exact confirmation"
     }));
     try std.testing.expect(!testing.model.workspace.findPane(testing.discovered).?.attached);
 
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.confirmed, try handler.execute(.{
+    try std.testing.expectEqual(types.PaneAttachmentConfirmation.confirmed, try handler.execute(.{
         .requested = attachment,
         .confirmed = attachment,
         .created = false,
     }));
     try std.testing.expect(testing.model.workspace.findPane(testing.discovered).?.attached);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "ConfirmPaneAttachmentHandler ignores a confirmation made stale by tab state" {
-    var testing = try TestingModel.init();
+    var testing = try AttachPaneTestingModel.init();
     defer testing.deinit();
     _ = testing.model.workspace.active().?.model.removePane(testing.discovered);
     var handler: ConfirmPaneAttachmentHandler = .{ .model = testing.model };
     const attachment = testing.attachment();
 
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, try handler.execute(.{
+    try std.testing.expectEqual(types.PaneAttachmentConfirmation.stale, try handler.execute(.{
         .requested = attachment,
         .confirmed = attachment,
         .created = false,
     }));
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "RecoverPaneAttachmentHandler refreshes only an attachment still needed" {
-    var testing = try TestingModel.init();
+    var testing = try AttachPaneTestingModel.init();
     defer testing.deinit();
-    var capture: RecoveryCapture = .{};
+    var capture: AttachPaneRecoveryCapture = .{};
     var handler: RecoverPaneAttachmentHandler = .{
         .model = testing.model,
         .snapshots = capture.handler(),
@@ -83,9 +72,9 @@ test "RecoverPaneAttachmentHandler refreshes only an attachment still needed" {
 }
 
 test "RecoverPaneAttachmentHandler propagates refresh failure without model mutation" {
-    var testing = try TestingModel.init();
+    var testing = try AttachPaneTestingModel.init();
     defer testing.deinit();
-    var capture: RecoveryCapture = .{ .fail = true };
+    var capture: AttachPaneRecoveryCapture = .{ .fail = true };
     var handler: RecoverPaneAttachmentHandler = .{
         .model = testing.model,
         .snapshots = capture.handler(),
@@ -95,5 +84,5 @@ test "RecoverPaneAttachmentHandler propagates refresh failure without model muta
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expect(!testing.model.workspace.findPane(testing.discovered).?.attached);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }

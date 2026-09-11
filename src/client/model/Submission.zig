@@ -1,6 +1,7 @@
+const name_prompt = @import("name_prompt.zig");
 const Submission = @This();
-const source_namespace = @import("name_prompt.zig");
-target: source_namespace.Target,
+
+target: name_prompt.Target,
 /// Borrowed from the active prompt until the synchronous submit effect
 /// returns.
 name: []const u8,

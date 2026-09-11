@@ -1,33 +1,20 @@
 //! Application transaction for launching a sibling pane in an existing tab.
 
+const LaunchViewType = @import("telar-core").LaunchView;
+const TabLocationType = @import("telar-core").TabLocation;
+const CreatePane = @import("CreatePane.zig");
+const StateType = @import("../../../workspace/State.zig");
+const RepositoryType = @import("../../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const pane_mod = @import("../../../pane/root.zig");
-const workspace_mod = @import("../../../workspace/root.zig");
-
-pub const schema = core.schema;
-
-pub const CreatePane = @import("CreatePane.zig");
-
-pub const CreatePaneResult = pane_mod.PaneLaunched;
-
-pub const PrepareLaunch = @import("CreatePanePrepareLaunch.zig");
-
-pub const LaunchPane = @import("CreatePaneLaunchPane.zig");
-
-pub const TabPanes = @import("TabPanes.zig");
-
-pub const LaunchAuthority = @import("CreatePaneLaunchAuthority.zig");
-
-pub const PaneLauncher = @import("CreatePanePaneLauncher.zig");
-
-pub const PaneAttachment = @import("CreatePanePaneAttachment.zig");
-
-pub const EventPublisher = @import("CreatePaneEventPublisher.zig");
-
-pub const CreatePaneExecutor = @import("CreatePaneExecutor.zig");
-
-pub const CreatePaneHandler = @import("CreatePaneHandler.zig");
+const PaneLaunchedType = @import("../../../pane/PaneLaunched.zig");
+const pane_module = @import("telar-core").pane;
+const CreatePaneCapture = @import("CreatePaneCapture.zig");
+const CreatePaneAuthorityCapture = @import("CreatePaneAuthorityCapture.zig");
+const CreatePaneLauncherCapture = @import("CreatePaneLauncherCapture.zig");
+const CreatePaneAttachmentCapture = @import("CreatePaneAttachmentCapture.zig");
+const CreatePaneEventCapture = @import("CreatePaneEventCapture.zig");
+const CreatePaneHandler = @import("CreatePaneHandler.zig");
+const tab_module = @import("telar-core").tab;
 
 pub fn mapLaunchError(spawn_error: anyerror) anyerror {
     return switch (spawn_error) {
@@ -37,17 +24,7 @@ pub fn mapLaunchError(spawn_error: anyerror) anyerror {
     };
 }
 
-const PaneCapture = @import("CreatePanePaneCapture.zig");
-
-const AuthorityCapture = @import("CreatePaneAuthorityCapture.zig");
-
-const LauncherCapture = @import("CreatePaneLauncherCapture.zig");
-
-const AttachmentCapture = @import("CreatePaneAttachmentCapture.zig");
-
-const EventCapture = @import("CreatePaneEventCapture.zig");
-
-fn testingLaunch() schema.LaunchView {
+fn testingLaunch() LaunchViewType {
     return .{
         .cwd = "/requested",
         .argument_count = 1,
@@ -58,7 +35,7 @@ fn testingLaunch() schema.LaunchView {
     };
 }
 
-fn testingCommand(location: schema.TabLocation) CreatePane {
+fn testingCommand(location: TabLocationType) CreatePane {
     return .{
         .location = location,
         .size = .{ .cols = 120, .rows = 40 },
@@ -66,27 +43,27 @@ fn testingCommand(location: schema.TabLocation) CreatePane {
     };
 }
 
-fn testingRepository(state: *workspace_mod.State) workspace_mod.Repository {
-    return workspace_mod.Repository.init(state, std.testing.allocator);
+fn testingRepository(state: *StateType) RepositoryType {
+    return RepositoryType.init(state, std.testing.allocator);
 }
 
-fn testingLaunched(location: schema.TabLocation) !pane_mod.PaneLaunched {
+fn testingLaunched(location: TabLocationType) !PaneLaunchedType {
     return .{
-        .key = .{ .id = try schema.id.pane(17), .generation = 9 },
+        .key = .{ .id = try pane_module(17), .generation = 9 },
         .location = location,
     };
 }
 
 test "CreatePaneHandler publishes the committed pane before attaching" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
-    var panes: PaneCapture = .{};
-    var authority: AuthorityCapture = .{};
-    var launcher: LauncherCapture = .{ .result = try testingLaunched(location) };
-    var attachment: AttachmentCapture = .{};
-    var events: EventCapture = .{};
+    var panes: CreatePaneCapture = .{};
+    var authority: CreatePaneAuthorityCapture = .{};
+    var launcher: CreatePaneLauncherCapture = .{ .result = try testingLaunched(location) };
+    var attachment: CreatePaneAttachmentCapture = .{};
+    var events: CreatePaneEventCapture = .{};
     attachment.event_count = &events.count;
     var handler: CreatePaneHandler = .{
         .workspaces = workspaces.reader(),
@@ -116,15 +93,15 @@ test "CreatePaneHandler publishes the committed pane before attaching" {
 }
 
 test "CreatePaneHandler rejects absent or pane-less tabs before authority effects" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const existing = (try workspaces.ensure("/work/project")).location;
-    var panes: PaneCapture = .{ .has_running = false };
-    var authority: AuthorityCapture = .{};
-    var launcher: LauncherCapture = .{ .result = try testingLaunched(existing) };
-    var attachment: AttachmentCapture = .{};
-    var events: EventCapture = .{};
+    var panes: CreatePaneCapture = .{ .has_running = false };
+    var authority: CreatePaneAuthorityCapture = .{};
+    var launcher: CreatePaneLauncherCapture = .{ .result = try testingLaunched(existing) };
+    var attachment: CreatePaneAttachmentCapture = .{};
+    var events: CreatePaneEventCapture = .{};
     var handler: CreatePaneHandler = .{
         .workspaces = workspaces.reader(),
         .panes = panes.port(),
@@ -133,9 +110,9 @@ test "CreatePaneHandler rejects absent or pane-less tabs before authority effect
         .attachment = attachment.port(),
         .events = events.publisher(),
     };
-    const missing: schema.TabLocation = .{
+    const missing: TabLocationType = .{
         .workspace = existing.workspace,
-        .tab_id = try schema.id.tab(999),
+        .tab_id = try tab_module(999),
     };
 
     try std.testing.expectError(error.TabNotFound, handler.execute(testingCommand(missing)));
@@ -150,15 +127,15 @@ test "CreatePaneHandler rejects absent or pane-less tabs before authority effect
 }
 
 test "CreatePaneHandler leaves launch untouched when authority rejects the request" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
-    var panes: PaneCapture = .{};
-    var authority: AuthorityCapture = .{ .failure = error.InvalidLaunchCwd };
-    var launcher: LauncherCapture = .{ .result = try testingLaunched(location) };
-    var attachment: AttachmentCapture = .{};
-    var events: EventCapture = .{};
+    var panes: CreatePaneCapture = .{};
+    var authority: CreatePaneAuthorityCapture = .{ .failure = error.InvalidLaunchCwd };
+    var launcher: CreatePaneLauncherCapture = .{ .result = try testingLaunched(location) };
+    var attachment: CreatePaneAttachmentCapture = .{};
+    var events: CreatePaneEventCapture = .{};
     var handler: CreatePaneHandler = .{
         .workspaces = workspaces.reader(),
         .panes = panes.port(),
@@ -176,18 +153,18 @@ test "CreatePaneHandler leaves launch untouched when authority rejects the reque
 }
 
 fn expectLaunchFailure(spawn_failure: anyerror, command_failure: anyerror) !void {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
-    var panes: PaneCapture = .{};
-    var authority: AuthorityCapture = .{};
-    var launcher: LauncherCapture = .{
+    var panes: CreatePaneCapture = .{};
+    var authority: CreatePaneAuthorityCapture = .{};
+    var launcher: CreatePaneLauncherCapture = .{
         .failure = spawn_failure,
         .result = try testingLaunched(location),
     };
-    var attachment: AttachmentCapture = .{};
-    var events: EventCapture = .{};
+    var attachment: CreatePaneAttachmentCapture = .{};
+    var events: CreatePaneEventCapture = .{};
     var handler: CreatePaneHandler = .{
         .workspaces = workspaces.reader(),
         .panes = panes.port(),
@@ -211,15 +188,15 @@ test "CreatePaneHandler maps every pane launch failure category" {
 }
 
 test "CreatePaneHandler preserves the launch event after attachment failure" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
-    var panes: PaneCapture = .{};
-    var authority: AuthorityCapture = .{};
-    var launcher: LauncherCapture = .{ .result = try testingLaunched(location) };
-    var attachment: AttachmentCapture = .{ .failure = error.AttachmentUnavailable };
-    var events: EventCapture = .{};
+    var panes: CreatePaneCapture = .{};
+    var authority: CreatePaneAuthorityCapture = .{};
+    var launcher: CreatePaneLauncherCapture = .{ .result = try testingLaunched(location) };
+    var attachment: CreatePaneAttachmentCapture = .{ .failure = error.AttachmentUnavailable };
+    var events: CreatePaneEventCapture = .{};
     var handler: CreatePaneHandler = .{
         .workspaces = workspaces.reader(),
         .panes = panes.port(),

@@ -1,20 +1,14 @@
 //! Bounded, scrubbed storage for one captured exchange part.
 
+const Buffer = @import("Buffer.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const identity = @import("../identity.zig");
-const middleware = @import("../middleware.zig");
+const Quota = @import("Quota.zig");
+const Config = @import("Config.zig");
 
-pub const default_max_part_bytes = core.proxy.default_capture_part_bytes;
-pub const default_max_exchange_bytes = core.proxy.default_capture_exchange_bytes;
-pub const default_max_total_bytes = core.proxy.default_capture_total_bytes;
-pub const default_join_timeout_ms = core.proxy.default_capture_join_timeout_ms;
 pub const max_host_bytes = 255;
 pub const max_method_bytes = 32;
 pub const max_target_bytes = 8 * 1024;
 pub const max_encoding_bytes = 128;
-
-pub const Config = @import("Config.zig");
 
 pub const Part = enum {
     request_head,
@@ -33,20 +27,6 @@ pub const Outcome = enum {
     failed,
     reset,
 };
-
-pub const Key = @import("Key.zig");
-
-pub const Pane = @import("Pane.zig");
-
-pub const Buffer = @import("Buffer.zig");
-
-pub const Quota = @import("Quota.zig");
-
-pub const Reservation = @import("Reservation.zig");
-
-pub const HalfOptions = @import("HalfOptions.zig");
-
-pub const Half = @import("Half.zig");
 
 test "buffer grows within its bound and scrubs owned storage" {
     var buffer = Buffer.init(std.testing.allocator, 5);

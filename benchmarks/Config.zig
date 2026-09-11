@@ -1,6 +1,7 @@
-const Config = @This();
 const std = @import("std");
-const source_namespace = @import("main.zig");
+const main = @import("main.zig");
+const Config = @This();
+
 filter: ?[]const u8 = null,
 samples: usize = 12,
 sample_ns: u64 = 40 * std.time.ns_per_ms,
@@ -8,7 +9,7 @@ json: bool = false,
 list: bool = false,
 enforce: bool = false,
 
-fn parse(args: []const []const u8) !Config {
+pub fn parse(args: []const []const u8) !Config {
     var config: Config = .{};
     var index: usize = 1;
     while (index < args.len) {
@@ -25,7 +26,7 @@ fn parse(args: []const []const u8) !Config {
                 return error.MissingSampleCount;
             }
             config.samples = try std.fmt.parseUnsigned(usize, args[index], 10);
-            if (config.samples == 0 or config.samples > source_namespace.max_samples) {
+            if (config.samples == 0 or config.samples > main.max_samples) {
                 return error.InvalidSampleCount;
             }
         } else if (std.mem.eql(u8, arg, "--sample-ms")) {
@@ -54,6 +55,6 @@ fn parse(args: []const []const u8) !Config {
     return config;
 }
 
-fn includes(config: Config, name: []const u8) bool {
+pub fn includes(config: Config, name: []const u8) bool {
     return config.filter == null or std.mem.find(u8, name, config.filter.?) != null;
 }

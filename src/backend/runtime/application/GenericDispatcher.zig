@@ -1,66 +1,155 @@
 const GenericRuntimePort = @import("GenericRuntimePort.zig").Type;
-const source_namespace = @import("request_dispatch.zig");
-const open_pane_commands = @import("commands/open_pane.zig");
-const open_pane_controller = @import("../entrypoints/requests/open_pane.zig");
-const pane_input_commands = @import("commands/pane_input.zig");
-const pane_focus = @import("../entrypoints/requests/pane_focus.zig");
-const pane_resize_commands = @import("commands/pane_resize.zig");
-const frame_ack_commands = @import("commands/frame_ack.zig");
-const request_snapshot_commands = @import("commands/request_snapshot.zig");
-const detach_pane_commands = @import("commands/detach_pane.zig");
-const detach_pane_controller = @import("../entrypoints/requests/detach_pane.zig");
-const runtime_stop_commands = @import("commands/runtime_stop.zig");
-const runtime_stop_controller = @import("../entrypoints/requests/runtime_stop.zig");
-const tab_snapshot_query = @import("queries/tab_snapshot.zig");
-const tab_snapshot_controller = @import("../entrypoints/requests/tab_snapshot.zig");
-const create_pane_commands = @import("commands/create_pane.zig");
-const create_pane_controller = @import("../entrypoints/requests/create_pane.zig");
-const close_pane_commands = @import("commands/close_pane.zig");
-const close_pane_controller = @import("../entrypoints/requests/close_pane.zig");
-const history_query = @import("queries/history.zig");
-const history_query_controller = @import("../entrypoints/requests/history_query.zig");
+const Session = @import("../client/Session.zig");
+const Repository = @import("../../workspace/Repository.zig");
+const GenericHandlers = @import("../client/GenericHandlers.zig").Type;
+const GenericRouter = @import("../client/GenericRouter.zig").Type;
+const OpenPaneViewType = @import("telar-core").OpenPaneView;
+const OpenPaneHandlerType = @import("commands/OpenPaneHandler.zig");
+const OpenPaneController = @import("../entrypoints/requests/OpenPaneController.zig");
+const PaneInputType = @import("telar-core").PaneInput;
+const PaneInputHandlerType = @import("commands/PaneInputHandler.zig");
+const request_dispatch = @import("request_dispatch.zig");
+const RequestPaneFocusType = @import("telar-core").RequestPaneFocus;
+const CompletePaneFocusType = @import("telar-core").CompletePaneFocus;
+const PaneIdType = @import("telar-core").PaneId;
+const PaneFocusController = @import("../entrypoints/requests/PaneFocusController.zig");
+const PaneResizeType = @import("telar-core").PaneResize;
+const PaneResizeHandlerType = @import("commands/PaneResizeHandler.zig");
+const FrameAckType = @import("telar-core").FrameAck;
+const FrameAckHandlerType = @import("commands/FrameAckHandler.zig");
+const RequestSnapshotType = @import("telar-core").RequestSnapshot;
+const RequestCellSnapshotHandlerType = @import("commands/RequestCellSnapshotHandler.zig");
+const DetachPaneType = @import("telar-core").DetachPane;
+const DetachPaneHandlerType = @import("commands/DetachPaneHandler.zig");
+const DetachPaneController = @import("../entrypoints/requests/DetachPaneController.zig");
+const RuntimeStopHandlerType = @import("commands/RuntimeStopHandler.zig");
+const RuntimeStopController = @import("../entrypoints/requests/RuntimeStopController.zig");
+const RequestTabSnapshotType = @import("telar-core").RequestTabSnapshot;
+const TabSnapshotHandler = @import("queries/TabSnapshotHandler.zig");
+const TabSnapshotController = @import("../entrypoints/requests/TabSnapshotController.zig");
+const CreatePaneViewType = @import("telar-core").CreatePaneView;
+const CreatePaneHandlerType = @import("commands/CreatePaneHandler.zig");
+const CreatePaneController = @import("../entrypoints/requests/CreatePaneController.zig");
+const ClosePaneType = @import("telar-core").ClosePane;
+const ClosePaneHandlerType = @import("commands/ClosePaneHandler.zig");
+const ClosePaneController = @import("../entrypoints/requests/ClosePaneController.zig");
+const QueryHistoryType = @import("telar-core").QueryHistory;
+const HistoryHandler = @import("queries/HistoryHandler.zig");
+const HistoryQueryController = @import("../entrypoints/requests/HistoryQueryController.zig");
+const SuggestCommandType = @import("telar-core").SuggestCommand;
+const max_pane_text_bytes_module = @import("telar-core").max_pane_text_bytes;
 const suggestion = @import("suggestion.zig");
-const engine = @import("../../engine/root.zig");
-const prune_history_controller = @import("../entrypoints/requests/prune_history.zig");
-const history_output_controller = @import("../entrypoints/requests/history_output.zig");
-const import_history_controller = @import("../entrypoints/requests/import_history.zig");
-const workspace_snapshot_query = @import("queries/workspace_snapshot.zig");
-const workspace_snapshot_controller = @import("../entrypoints/requests/workspace_snapshot.zig");
-const create_tab_commands = @import("commands/create_tab.zig");
-const create_tab_controller = @import("../entrypoints/requests/create_tab.zig");
-const rename_tab_commands = @import("commands/rename_tab.zig");
-const rename_tab_controller = @import("../entrypoints/requests/rename_tab.zig");
-const close_tab_commands = @import("commands/close_tab.zig");
-const close_tab_controller = @import("../entrypoints/requests/close_tab.zig");
-const move_tab_commands = @import("commands/move_tab.zig");
-const move_tab_controller = @import("../entrypoints/requests/move_tab.zig");
-const request_graphics_snapshot_commands = @import("commands/request_graphics_snapshot.zig");
-const graphics_credit_commands = @import("commands/graphics_credit.zig");
-const graphics_configuration_commands = @import("commands/graphics_configuration.zig");
-const terminal_colors_commands = @import("commands/terminal_colors.zig");
-const terminal_colors_controller = @import("../entrypoints/requests/terminal_colors.zig");
-const create_workspace_commands = @import("commands/create_workspace.zig");
-const create_workspace_controller = @import("../entrypoints/requests/create_workspace.zig");
-const rename_workspace_commands = @import("commands/rename_workspace.zig");
-const rename_workspace_controller = @import("../entrypoints/requests/rename_workspace.zig");
-const pane_viewport_commands = @import("commands/pane_viewport.zig");
-const acknowledge_agent_commands = @import("commands/acknowledge_agent.zig");
-const read_pane_controller = @import("../entrypoints/requests/read_pane.zig");
-const send_pane_text_commands = @import("commands/send_pane_text.zig");
-const report_agent_session_commands = @import("commands/report_agent_session.zig");
-const report_agent_commands = @import("commands/report_agent.zig");
-const agent_capability = @import("../../agent/root.zig");
-const report_agent_command_commands = @import("commands/report_agent_command.zig");
-const report_agent_title_commands = @import("commands/report_agent_title.zig");
-const pane_search = @import("pane_search.zig");
-const copy_selection_commands = @import("commands/copy_selection.zig");
-const show_notification_commands = @import("commands/show_notification.zig");
-const show_notification_controller = @import("../entrypoints/requests/show_notification.zig");
-const history = @import("../../history/root.zig");
-const attachment_mod = @import("../attachment/root.zig");
-const pane_mod = @import("../../pane/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
+const types = @import("../../engine/types.zig");
+const raw_module = @import("telar-core").raw;
+const PromptType = @import("../../engine/Prompt.zig");
+const ResponseQueueType = @import("../delivery/ResponseQueue.zig");
+const RequestIdType = @import("telar-core").RequestId;
+const SuggestionStatusType = @import("telar-core").SuggestionStatus;
+const DeleteHistoryType = @import("telar-core").DeleteHistory;
+const PruneHistoryController = @import("../entrypoints/requests/PruneHistoryController.zig");
+const PruneHistoryType = @import("telar-core").PruneHistory;
+const ReadHistoryOutputType = @import("telar-core").ReadHistoryOutput;
+const HistoryOutputController = @import("../entrypoints/requests/HistoryOutputController.zig");
+const HistoryStatsQueryType = @import("telar-core").HistoryStatsQuery;
+const ImportHistoryViewType = @import("telar-core").ImportHistoryView;
+const ImportHistoryController = @import("../entrypoints/requests/ImportHistoryController.zig");
+const RequestWorkspaceSnapshotType = @import("telar-core").RequestWorkspaceSnapshot;
+const WorkspaceSnapshotHandler = @import("queries/WorkspaceSnapshotHandler.zig");
+const WorkspaceSnapshotController = @import("../entrypoints/requests/WorkspaceSnapshotController.zig");
+const CreateTabViewType = @import("telar-core").CreateTabView;
+const CreateTabHandlerType = @import("commands/CreateTabHandler.zig");
+const CreateTabController = @import("../entrypoints/requests/CreateTabController.zig");
+const RenameTabType = @import("telar-core").RenameTab;
+const RenameTabHandlerType = @import("commands/RenameTabHandler.zig");
+const RenameTabController = @import("../entrypoints/requests/RenameTabController.zig");
+const CloseTabType = @import("telar-core").CloseTab;
+const CloseTabHandlerType = @import("commands/CloseTabHandler.zig");
+const CloseTabController = @import("../entrypoints/requests/CloseTabController.zig");
+const MoveTabType = @import("telar-core").MoveTab;
+const MoveTabHandlerType = @import("commands/MoveTabHandler.zig");
+const MoveTabController = @import("../entrypoints/requests/MoveTabController.zig");
+const RequestGraphicsSnapshotType = @import("telar-core").RequestGraphicsSnapshot;
+const RequestGraphicsSnapshotHandlerType = @import("commands/RequestGraphicsSnapshotHandler.zig");
+const GraphicsCreditType = @import("telar-core").GraphicsCredit;
+const ReturnGraphicsCreditHandlerType = @import("commands/ReturnGraphicsCreditHandler.zig");
+const ConfigureGraphicsType = @import("telar-core").ConfigureGraphics;
+const ConfigureGraphicsHandlerType = @import("commands/ConfigureGraphicsHandler.zig");
+const TerminalColors = @import("telar-core").TerminalColors;
+const GenericHandler = @import("commands/GenericHandler.zig").Type;
+const GenericTerminalColorsController = @import("../entrypoints/requests/GenericTerminalColorsController.zig").Type;
+const RequestRuntimeStateType = @import("telar-core").RequestRuntimeState;
+const ClientLayoutUpdateViewType = @import("telar-core").ClientLayoutUpdateView;
+const CreateWorkspaceViewType = @import("telar-core").CreateWorkspaceView;
+const CreateWorkspaceHandlerType = @import("commands/CreateWorkspaceHandler.zig");
+const CreateWorkspaceController = @import("../entrypoints/requests/CreateWorkspaceController.zig");
+const RenameWorkspaceType = @import("telar-core").RenameWorkspace;
+const RenameWorkspaceHandlerType = @import("commands/RenameWorkspaceHandler.zig");
+const RenameWorkspaceController = @import("../entrypoints/requests/RenameWorkspaceController.zig");
+const SetPaneViewportType = @import("telar-core").SetPaneViewport;
+const SetPaneViewportHandlerType = @import("commands/SetPaneViewportHandler.zig");
+const AcknowledgeAgentType = @import("telar-core").AcknowledgeAgent;
+const AcknowledgeAgentHandlerType = @import("commands/AcknowledgeAgentHandler.zig");
 const std = @import("std");
+const QueryAgentsType = @import("telar-core").QueryAgents;
+const ReadPaneType = @import("telar-core").ReadPane;
+const ReadPaneController = @import("../entrypoints/requests/ReadPaneController.zig");
+const SendPaneTextType = @import("telar-core").SendPaneText;
+const SendPaneTextHandlerType = @import("commands/SendPaneTextHandler.zig");
+const ReportAgentSessionType = @import("telar-core").ReportAgentSession;
+const ReportAgentSessionHandlerType = @import("commands/ReportAgentSessionHandler.zig");
+const ReportAgentType = @import("telar-core").ReportAgent;
+const ReportAgentHandlerType = @import("commands/ReportAgentHandler.zig");
+const sound_module = @import("../../agent/sound.zig");
+const ReportAgentCommandType = @import("telar-core").ReportAgentCommand;
+const ReportAgentCommandHandlerType = @import("commands/ReportAgentCommandHandler.zig");
+const ReportAgentTitleType = @import("telar-core").ReportAgentTitle;
+const ReportAgentTitleHandlerType = @import("commands/ReportAgentTitleHandler.zig");
+const SearchPaneType = @import("telar-core").SearchPane;
+const pane_search = @import("pane_search.zig");
+const CopySelectionType = @import("telar-core").CopySelection;
+const CopySelectionHandlerType = @import("commands/CopySelectionHandler.zig");
+const ShowNotificationType = @import("telar-core").ShowNotification;
+const ShowNotificationHandlerType = @import("commands/ShowNotificationHandler.zig");
+const ShowNotificationController = @import("../entrypoints/requests/ShowNotificationController.zig");
+const PaneInputScheduler = @import("commands/PaneInputScheduler.zig");
+const PaneResizeScheduler = @import("commands/PaneResizeScheduler.zig");
+const PaneType = @import("../../pane/Pane.zig");
+const ClientKeyType = @import("../../history/ClientKey.zig");
+const PaneStoreType = @import("../../pane/PaneStore.zig");
+const ServiceType = @import("../../history/Service.zig");
+const QueryType = @import("../../history/Query.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
+const PaneDetachedType = @import("../attachment/PaneDetached.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
+const PaneLaunchedType = @import("../../pane/PaneLaunched.zig");
+const OpenPanePrepareLaunch = @import("commands/OpenPanePrepareLaunch.zig");
+const launch_cwd_module = @import("../client/launch_cwd.zig");
+const OpenPaneLaunchPane = @import("commands/OpenPaneLaunchPane.zig");
+const PrepareViewType = @import("commands/PrepareView.zig");
+const open_pane_commands = @import("commands/open_pane.zig");
+const CreateTabPrepareLaunch = @import("commands/CreateTabPrepareLaunch.zig");
+const CreateTabLaunchedPane = @import("commands/CreateTabLaunchedPane.zig");
+const CreateTabLaunchPane = @import("commands/CreateTabLaunchPane.zig");
+const CreateWorkspacePrepareLaunch = @import("commands/CreateWorkspacePrepareLaunch.zig");
+const CreateWorkspaceLaunchPane = @import("commands/CreateWorkspaceLaunchPane.zig");
+const CreateWorkspaceLaunchedPane = @import("commands/CreateWorkspaceLaunchedPane.zig");
+const CreatePanePrepareLaunch = @import("commands/CreatePanePrepareLaunch.zig");
+const CreatePaneLaunchPane = @import("commands/CreatePaneLaunchPane.zig");
+const TabCreatedType = @import("../../workspace/TabCreated.zig");
+const TabRenamedType = @import("../../workspace/TabRenamed.zig");
+const TabMovedType = @import("../../workspace/TabMoved.zig");
+const WorkspaceRenamedType = @import("../../workspace/WorkspaceRenamed.zig");
+const WorkspaceCreatedType = @import("../../workspace/WorkspaceCreated.zig");
+const TabRemovedType = @import("../../workspace/TabRemoved.zig");
+const NotificationsType = @import("commands/Notifications.zig");
+const StopRequestedType = @import("../lifecycle/StopRequested.zig");
+const NotificationPublisherType = @import("commands/NotificationPublisher.zig");
+const NotificationType = @import("telar-core").Notification;
+const DeliveryType = @import("../entrypoints/requests/Delivery.zig");
+const ClientMessageType = @import("telar-core").ClientMessage;
+
 /// Builds the request dispatcher for one application type and its pane actor
 /// scheduling port.
 ///
@@ -73,10 +162,10 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
 
         const ClientRequestContext = struct {
             application: *Application,
-            session: *source_namespace.ClientSession,
-            workspaces: source_namespace.WorkspaceRepository,
+            session: *Session,
+            workspaces: Repository,
 
-            fn init(application: *Application, session: *source_namespace.ClientSession) ClientRequestContext {
+            fn init(application: *Application, session: *Session) ClientRequestContext {
                 return .{
                     .application = application,
                     .session = session,
@@ -85,7 +174,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             }
         };
 
-        const client_request_handlers: source_namespace.client_request_router.Handlers(ClientRequestContext) = .{
+        const client_request_handlers: GenericHandlers(ClientRequestContext) = .{
             .open_pane = routeOpenPane,
             .pane_input = routePaneInput,
             .pane_resize = routePaneResize,
@@ -132,13 +221,13 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             .complete_pane_focus = routeCompletePaneFocus,
         };
 
-        const ClientRequestRouter = source_namespace.client_request_router.Router(ClientRequestContext, client_request_handlers);
+        const ClientRequestRouter = GenericRouter(ClientRequestContext, client_request_handlers);
 
-        fn routeOpenPane(request: *ClientRequestContext, open: source_namespace.schema.OpenPaneView) !void {
+        fn routeOpenPane(request: *ClientRequestContext, open: OpenPaneViewType) !void {
             const application = request.application;
             const session = request.session;
             var client_context: ClientLaunchContext = .{ .application = application, .session = session };
-            var handler: open_pane_commands.OpenPaneHandler = .{
+            var handler: OpenPaneHandlerType = .{
                 .workspaces = &request.workspaces,
                 .panes = .{
                     .context = &client_context,
@@ -162,43 +251,43 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                     .publish = publishOpenPaneEvent,
                 },
             };
-            var controller = open_pane_controller.Controller.init(&session.delivery.responses, handler.executor());
+            var controller = OpenPaneController.init(&session.delivery.responses, handler.executor());
 
             try controller.openPane(open);
         }
 
-        fn routePaneInput(request: *ClientRequestContext, input: source_namespace.schema.PaneInput) !void {
+        fn routePaneInput(request: *ClientRequestContext, input: PaneInputType) !void {
             const application = request.application;
-            var handler: pane_input_commands.PaneInputHandler = .{
+            var handler: PaneInputHandlerType = .{
                 .io = application.io,
                 .attachments = &request.session.attachments,
                 .metrics = &application.metrics,
                 .agent_input = if (application.agent_description_options != null) &application.model.agents else null,
                 .scheduler = paneInputScheduler(application),
             };
-            var controller = source_namespace.PaneInputController.init(&application.metrics, &handler);
+            var controller = request_dispatch.PaneInputController.init(&application.metrics, &handler);
 
             if (try controller.paneInput(input) == .handled) {
                 notePaneInput(application, request.session, input.pane_id);
             }
         }
 
-        fn routeRequestPaneFocus(request: *ClientRequestContext, focus: source_namespace.schema.RequestPaneFocus) !void {
+        fn routeRequestPaneFocus(request: *ClientRequestContext, focus: RequestPaneFocusType) !void {
             var controller = paneFocusController(request.application);
             try controller.requestFocus(request.session, focus);
         }
 
-        fn routeCompletePaneFocus(request: *ClientRequestContext, completion: source_namespace.schema.CompletePaneFocus) !void {
+        fn routeCompletePaneFocus(request: *ClientRequestContext, completion: CompletePaneFocusType) !void {
             var controller = paneFocusController(request.application);
             try controller.completeFocus(request.session, completion);
         }
 
-        fn notePaneInput(application: *Application, session: *source_namespace.ClientSession, pane_id: source_namespace.schema.PaneId) void {
+        fn notePaneInput(application: *Application, session: *Session, pane_id: PaneIdType) void {
             var controller = paneFocusController(application);
             controller.notePaneInput(session, pane_id);
         }
 
-        fn paneFocusController(application: *Application) pane_focus.Controller {
+        fn paneFocusController(application: *Application) PaneFocusController {
             return .{
                 .panes = &application.model.panes,
                 .clients = application.clients,
@@ -208,16 +297,16 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             };
         }
 
-        fn pumpFocusClient(context: *anyopaque, session: *source_namespace.ClientSession) !void {
+        fn pumpFocusClient(context: *anyopaque, session: *Session) !void {
             const application: *Application = @ptrCast(@alignCast(context));
             try application.pump(session);
         }
 
-        fn routePaneResize(request: *ClientRequestContext, resize: source_namespace.schema.PaneResize) !void {
+        fn routePaneResize(request: *ClientRequestContext, resize: PaneResizeType) !void {
             const application = request.application;
             const session = request.session;
             var resize_context: ClientAttachmentContext = .{ .application = application, .session = session };
-            var handler: pane_resize_commands.PaneResizeHandler = .{
+            var handler: PaneResizeHandlerType = .{
                 .attachments = &session.attachments,
                 .geometry = .{
                     .context = &resize_context,
@@ -226,35 +315,35 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                 },
                 .scheduler = paneResizeScheduler(application),
             };
-            var controller = source_namespace.PaneResizeController.init(&application.metrics, &handler);
+            var controller = request_dispatch.PaneResizeController.init(&application.metrics, &handler);
 
             try controller.paneResize(resize);
         }
 
-        fn routeFrameAck(request: *ClientRequestContext, ack: source_namespace.schema.FrameAck) !void {
+        fn routeFrameAck(request: *ClientRequestContext, ack: FrameAckType) !void {
             const application = request.application;
-            var handler: frame_ack_commands.FrameAckHandler = .{
+            var handler: FrameAckHandlerType = .{
                 .attachments = &request.session.attachments,
             };
-            var controller = source_namespace.FrameAckController.init(application.io, &application.metrics, &handler);
+            var controller = request_dispatch.FrameAckController.init(application.io, &application.metrics, &handler);
 
             try controller.frameAck(ack);
         }
 
-        fn routeRequestSnapshot(request: *ClientRequestContext, snapshot: source_namespace.schema.RequestSnapshot) !void {
-            var handler: request_snapshot_commands.RequestCellSnapshotHandler = .{
+        fn routeRequestSnapshot(request: *ClientRequestContext, snapshot: RequestSnapshotType) !void {
+            var handler: RequestCellSnapshotHandlerType = .{
                 .attachments = &request.session.attachments,
             };
-            var controller = source_namespace.RequestSnapshotController.init(&request.application.metrics, &handler);
+            var controller = request_dispatch.RequestSnapshotController.init(&request.application.metrics, &handler);
 
             try controller.requestSnapshot(snapshot);
         }
 
-        fn routeDetachPane(request: *ClientRequestContext, detach: source_namespace.schema.DetachPane) !void {
+        fn routeDetachPane(request: *ClientRequestContext, detach: DetachPaneType) !void {
             const application = request.application;
             const session = request.session;
             var detach_context: ClientAttachmentContext = .{ .application = application, .session = session };
-            var handler: detach_pane_commands.DetachPaneHandler = .{
+            var handler: DetachPaneHandlerType = .{
                 .attachments = .{
                     .context = &detach_context,
                     .detach = detachClientAttachment,
@@ -265,7 +354,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                     .release = releaseClientWorkspaceGeometry,
                 },
             };
-            var controller = detach_pane_controller.Controller.init(handler.executor(), .{
+            var controller = DetachPaneController.init(handler.executor(), .{
                 .context = &application.metrics,
                 .record = recordStaleClientMessage,
             });
@@ -274,38 +363,38 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
         }
 
         fn routeRuntimeStop(request: *ClientRequestContext) !void {
-            var handler: runtime_stop_commands.RuntimeStopHandler = .{
+            var handler: RuntimeStopHandlerType = .{
                 .shutdown = &request.application.shutdown,
                 .notifications = runtimeStopNotifications(request.application),
             };
-            var controller = runtime_stop_controller.Controller.init(handler.executor());
+            var controller = RuntimeStopController.init(handler.executor());
 
             controller.runtimeStop(request.session.key);
         }
 
-        fn routeRequestTabSnapshot(request: *ClientRequestContext, snapshot: source_namespace.schema.RequestTabSnapshot) !void {
+        fn routeRequestTabSnapshot(request: *ClientRequestContext, snapshot: RequestTabSnapshotType) !void {
             var source_context: TabSnapshotSourceContext = .{
                 .panes = &request.application.model.panes,
                 .workspaces = &request.workspaces,
             };
-            var handler: tab_snapshot_query.Handler = .{
+            var handler: TabSnapshotHandler = .{
                 .source = .{
                     .context = &source_context,
                     .contains_tab = tabSnapshotContainsTab,
                     .running_panes = tabSnapshotRunningPanes,
                 },
             };
-            var controller = tab_snapshot_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+            var controller = TabSnapshotController.init(&request.session.delivery.responses, handler.executor());
 
             try controller.requestTabSnapshot(snapshot);
         }
 
-        fn routeCreatePane(request: *ClientRequestContext, create: source_namespace.schema.CreatePaneView) !void {
+        fn routeCreatePane(request: *ClientRequestContext, create: CreatePaneViewType) !void {
             const application = request.application;
             const session = request.session;
             var client_context: ClientLaunchContext = .{ .application = application, .session = session };
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = session.key };
-            var handler: create_pane_commands.CreatePaneHandler = .{
+            var handler: CreatePaneHandlerType = .{
                 .workspaces = request.workspaces.reader(),
                 .panes = .{
                     .context = &application.model.panes,
@@ -328,37 +417,37 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                     .publish = publishPaneLaunched,
                 },
             };
-            var controller = create_pane_controller.Controller.init(&session.delivery.responses, handler.executor());
+            var controller = CreatePaneController.init(&session.delivery.responses, handler.executor());
 
             try controller.createPane(create);
         }
 
-        fn routeClosePane(request: *ClientRequestContext, close: source_namespace.schema.ClosePane) !void {
-            var handler: close_pane_commands.ClosePaneHandler = .{
+        fn routeClosePane(request: *ClientRequestContext, close: ClosePaneType) !void {
+            var handler: ClosePaneHandlerType = .{
                 .panes = .{
                     .context = &request.session.attachments,
                     .request_close = requestAttachedPaneClose,
                 },
             };
-            var controller = close_pane_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+            var controller = ClosePaneController.init(&request.session.delivery.responses, handler.executor());
 
             try controller.closePane(close);
         }
 
-        fn routeQueryHistory(request: *ClientRequestContext, query: source_namespace.schema.QueryHistory) !void {
+        fn routeQueryHistory(request: *ClientRequestContext, query: QueryHistoryType) !void {
             const application = request.application;
             const session = request.session;
             var service_context: HistoryQueryServiceContext = .{
                 .io = application.io,
                 .service = application.history_service,
             };
-            var handler: history_query.Handler = .{
+            var handler: HistoryHandler = .{
                 .service = .{
                     .context = &service_context,
                     .submit_fn = submitHistoryQuery,
                 },
             };
-            var controller = history_query_controller.Controller.init(
+            var controller = HistoryQueryController.init(
                 &session.delivery.responses,
                 &application.metrics,
                 handler.executor(),
@@ -375,7 +464,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
         /// `AgentEvents.handleEngineResponse`. Every failure answers with a
         /// `command_suggestion` status instead of a request failure, so the
         /// palette never consumes a continuation.
-        fn routeSuggestCommand(request: *ClientRequestContext, command: source_namespace.schema.SuggestCommand) !void {
+        fn routeSuggestCommand(request: *ClientRequestContext, command: SuggestCommandType) !void {
             const application = request.application;
             const session = request.session;
             const service = application.engine_service orelse {
@@ -385,31 +474,31 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                 return queueSuggestionStatus(&session.delivery.responses, command.request_id, .failed);
             };
 
-            var screen_storage: [source_namespace.schema.max_pane_text_bytes]u8 = undefined;
+            var screen_storage: [max_pane_text_bytes_module]u8 = undefined;
             const dump = pane.dumpText(.{ .rows = suggestion.context_rows, .source = .screen }, &screen_storage);
-            var prompt_buffer: [engine.max_prompt_bytes]u8 = undefined;
+            var prompt_buffer: [types.max_prompt_bytes]u8 = undefined;
             const prompt = suggestion.buildPrompt(.{
                 .cwd = pane.cwd.slice(),
                 .screen = screen_storage[0..dump.len],
                 .request = command.text,
             }, &prompt_buffer);
-            const purpose: engine.Purpose = .{ .suggestion = .{
+            const purpose: types.Purpose = .{ .suggestion = .{
                 .client_id = session.key.id,
                 .client_generation = session.key.generation,
-                .request_id = source_namespace.schema.id.raw(command.request_id),
+                .request_id = raw_module(command.request_id),
             } };
-            const queued = engine.Prompt.init(purpose, prompt) catch null;
+            const queued = PromptType.init(purpose, prompt) catch null;
             if (queued == null or !service.submit(application.io, .{ .prompt = queued.? })) {
                 return queueSuggestionStatus(&session.delivery.responses, command.request_id, .failed);
             }
         }
 
-        fn queueSuggestionStatus(responses: *source_namespace.ResponseQueue, request_id: source_namespace.schema.RequestId, status: source_namespace.schema.SuggestionStatus) !void {
+        fn queueSuggestionStatus(responses: *ResponseQueueType, request_id: RequestIdType, status: SuggestionStatusType) !void {
             try responses.push(.{ .command_suggestion = .{ .request_id = request_id, .status = status } });
         }
 
-        fn routeDeleteHistory(request: *ClientRequestContext, delete: source_namespace.schema.DeleteHistory) !void {
-            var controller = prune_history_controller.Controller.init(
+        fn routeDeleteHistory(request: *ClientRequestContext, delete: DeleteHistoryType) !void {
+            var controller = PruneHistoryController.init(
                 &request.session.delivery.responses,
                 request.application.history_service,
             );
@@ -424,8 +513,8 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             });
         }
 
-        fn routePruneHistory(request: *ClientRequestContext, prune: source_namespace.schema.PruneHistory) !void {
-            var controller = prune_history_controller.Controller.init(
+        fn routePruneHistory(request: *ClientRequestContext, prune: PruneHistoryType) !void {
+            var controller = PruneHistoryController.init(
                 &request.session.delivery.responses,
                 request.application.history_service,
             );
@@ -440,8 +529,8 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             });
         }
 
-        fn routeReadHistoryOutput(request: *ClientRequestContext, read: source_namespace.schema.ReadHistoryOutput) !void {
-            var controller = history_output_controller.Controller.init(
+        fn routeReadHistoryOutput(request: *ClientRequestContext, read: ReadHistoryOutputType) !void {
+            var controller = HistoryOutputController.init(
                 &request.session.delivery.responses,
                 request.application.history_service,
             );
@@ -456,8 +545,8 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             });
         }
 
-        fn routeHistoryStats(request: *ClientRequestContext, query: source_namespace.schema.HistoryStatsQuery) !void {
-            var controller = history_output_controller.Controller.init(
+        fn routeHistoryStats(request: *ClientRequestContext, query: HistoryStatsQueryType) !void {
+            var controller = HistoryOutputController.init(
                 &request.session.delivery.responses,
                 request.application.history_service,
             );
@@ -472,8 +561,8 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             });
         }
 
-        fn routeImportHistory(request: *ClientRequestContext, batch: source_namespace.schema.ImportHistoryView) !void {
-            var controller = import_history_controller.Controller.init(
+        fn routeImportHistory(request: *ClientRequestContext, batch: ImportHistoryViewType) !void {
+            var controller = ImportHistoryController.init(
                 &request.session.delivery.responses,
                 request.application.history_service,
             );
@@ -481,21 +570,21 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             try controller.importHistory(request.application.io, batch);
         }
 
-        fn routeRequestWorkspaceSnapshot(request: *ClientRequestContext, snapshot: source_namespace.schema.RequestWorkspaceSnapshot) !void {
-            var handler: workspace_snapshot_query.Handler = .{
+        fn routeRequestWorkspaceSnapshot(request: *ClientRequestContext, snapshot: RequestWorkspaceSnapshotType) !void {
+            var handler: WorkspaceSnapshotHandler = .{
                 .workspaces = request.workspaces.reader(),
             };
-            var controller = workspace_snapshot_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+            var controller = WorkspaceSnapshotController.init(&request.session.delivery.responses, handler.executor());
 
             try controller.requestWorkspaceSnapshot(snapshot);
         }
 
-        fn routeCreateTab(request: *ClientRequestContext, create: source_namespace.schema.CreateTabView) !void {
+        fn routeCreateTab(request: *ClientRequestContext, create: CreateTabViewType) !void {
             const application = request.application;
             const session = request.session;
             var client_context: ClientLaunchContext = .{ .application = application, .session = session };
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = session.key };
-            var handler: create_tab_commands.CreateTabHandler = .{
+            var handler: CreateTabHandlerType = .{
                 .workspaces = &request.workspaces,
                 .authority = .{
                     .context = &client_context,
@@ -514,30 +603,30 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                     .publish = publishTabCreated,
                 },
             };
-            var controller = create_tab_controller.Controller.init(&session.delivery.responses, handler.executor());
+            var controller = CreateTabController.init(&session.delivery.responses, handler.executor());
 
             try controller.createTab(create);
         }
 
-        fn routeRenameTab(request: *ClientRequestContext, rename: source_namespace.schema.RenameTab) !void {
+        fn routeRenameTab(request: *ClientRequestContext, rename: RenameTabType) !void {
             const application = request.application;
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = request.session.key };
-            var handler: rename_tab_commands.RenameTabHandler = .{
+            var handler: RenameTabHandlerType = .{
                 .workspaces = &request.workspaces,
                 .events = .{
                     .context = &event_context,
                     .publish = publishTabRenamed,
                 },
             };
-            var controller = rename_tab_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+            var controller = RenameTabController.init(&request.session.delivery.responses, handler.executor());
 
             try controller.renameTab(rename);
         }
 
-        fn routeCloseTab(request: *ClientRequestContext, close: source_namespace.schema.CloseTab) !void {
+        fn routeCloseTab(request: *ClientRequestContext, close: CloseTabType) !void {
             const application = request.application;
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = request.session.key };
-            var handler: close_tab_commands.CloseTabHandler = .{
+            var handler: CloseTabHandlerType = .{
                 .workspaces = &request.workspaces,
                 .panes = .{
                     .context = &application.model.panes,
@@ -548,69 +637,69 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                     .publish = publishTabRemoved,
                 },
             };
-            var controller = close_tab_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+            var controller = CloseTabController.init(&request.session.delivery.responses, handler.executor());
 
             try controller.closeTab(close);
         }
 
-        fn routeMoveTab(request: *ClientRequestContext, move: source_namespace.schema.MoveTab) !void {
+        fn routeMoveTab(request: *ClientRequestContext, move: MoveTabType) !void {
             const application = request.application;
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = request.session.key };
-            var handler: move_tab_commands.MoveTabHandler = .{
+            var handler: MoveTabHandlerType = .{
                 .workspaces = &request.workspaces,
                 .events = .{
                     .context = &event_context,
                     .publish = publishTabMoved,
                 },
             };
-            var controller = move_tab_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+            var controller = MoveTabController.init(&request.session.delivery.responses, handler.executor());
 
             try controller.moveTab(move);
         }
 
-        fn routeRequestGraphicsSnapshot(request: *ClientRequestContext, snapshot: source_namespace.schema.RequestGraphicsSnapshot) !void {
-            var handler: request_graphics_snapshot_commands.RequestGraphicsSnapshotHandler = .{
+        fn routeRequestGraphicsSnapshot(request: *ClientRequestContext, snapshot: RequestGraphicsSnapshotType) !void {
+            var handler: RequestGraphicsSnapshotHandlerType = .{
                 .attachments = &request.session.attachments,
             };
-            var controller = source_namespace.RequestGraphicsSnapshotController.init(&request.application.metrics, &handler);
+            var controller = request_dispatch.RequestGraphicsSnapshotController.init(&request.application.metrics, &handler);
 
             try controller.requestGraphicsSnapshot(snapshot);
         }
 
-        fn routeGraphicsCredit(request: *ClientRequestContext, credit: source_namespace.schema.GraphicsCredit) !void {
-            var handler: graphics_credit_commands.ReturnGraphicsCreditHandler = .{
+        fn routeGraphicsCredit(request: *ClientRequestContext, credit: GraphicsCreditType) !void {
+            var handler: ReturnGraphicsCreditHandlerType = .{
                 .attachments = &request.session.attachments,
             };
-            var controller = source_namespace.GraphicsCreditController.init(&request.application.metrics, &handler);
+            var controller = request_dispatch.GraphicsCreditController.init(&request.application.metrics, &handler);
 
             try controller.graphicsCredit(credit);
         }
 
-        fn routeConfigureGraphics(request: *ClientRequestContext, configure: source_namespace.schema.ConfigureGraphics) !void {
-            var handler: graphics_configuration_commands.ConfigureGraphicsHandler = .{
+        fn routeConfigureGraphics(request: *ClientRequestContext, configure: ConfigureGraphicsType) !void {
+            var handler: ConfigureGraphicsHandlerType = .{
                 .attachments = &request.session.attachments,
             };
-            var controller = source_namespace.GraphicsConfigurationController.init(&handler);
+            var controller = request_dispatch.GraphicsConfigurationController.init(&handler);
 
             try controller.configureGraphics(configure);
         }
 
-        fn routeConfigureTerminalColors(request: *ClientRequestContext, colors: source_namespace.schema.ConfigureTerminalColors) !void {
-            var handler: terminal_colors_commands.Handler(Application) = .{
+        fn routeConfigureTerminalColors(request: *ClientRequestContext, colors: TerminalColors) !void {
+            var handler: GenericHandler(Application) = .{
                 .application = request.application,
                 .session = request.session,
             };
-            var controller: terminal_colors_controller.Controller(@TypeOf(&handler)) = .{ .executor = &handler };
+            var controller: GenericTerminalColorsController(@TypeOf(&handler)) = .{ .executor = &handler };
             controller.configureTerminalColors(colors);
         }
 
-        fn routeRequestRuntimeState(request: *ClientRequestContext, runtime_state: source_namespace.schema.RequestRuntimeState) !void {
-            var controller = source_namespace.RuntimeStateController.init(&request.session.delivery);
+        fn routeRequestRuntimeState(request: *ClientRequestContext, runtime_state: RequestRuntimeStateType) !void {
+            var controller = request_dispatch.RuntimeStateController.init(&request.session.delivery);
 
             try controller.requestRuntimeState(runtime_state.client_identity);
         }
 
-        fn routeUpdateClientLayout(request: *ClientRequestContext, update: source_namespace.schema.ClientLayoutUpdateView) !void {
+        fn routeUpdateClientLayout(request: *ClientRequestContext, update: ClientLayoutUpdateViewType) !void {
             const identity = request.session.delivery.client_identity;
             if (identity == .invalid) {
                 return error.ClientLayoutNotSubscribed;
@@ -627,12 +716,12 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             request.application.noteSessionChange();
         }
 
-        fn routeCreateWorkspace(request: *ClientRequestContext, create: source_namespace.schema.CreateWorkspaceView) !void {
+        fn routeCreateWorkspace(request: *ClientRequestContext, create: CreateWorkspaceViewType) !void {
             const application = request.application;
             const session = request.session;
             var client_context: ClientLaunchContext = .{ .application = application, .session = session };
             var event_context: WorkspaceEventContext = .{ .application = application, .origin = session.key };
-            var handler: create_workspace_commands.CreateWorkspaceHandler = .{
+            var handler: CreateWorkspaceHandlerType = .{
                 .workspaces = &request.workspaces,
                 .authority = .{
                     .context = &client_context,
@@ -656,62 +745,62 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                     .publish = publishWorkspaceCreated,
                 },
             };
-            var controller = create_workspace_controller.Controller.init(&session.delivery.responses, handler.executor());
+            var controller = CreateWorkspaceController.init(&session.delivery.responses, handler.executor());
 
             try controller.createWorkspace(create);
         }
 
-        fn routeRenameWorkspace(request: *ClientRequestContext, rename: source_namespace.schema.RenameWorkspace) !void {
+        fn routeRenameWorkspace(request: *ClientRequestContext, rename: RenameWorkspaceType) !void {
             var event_context: WorkspaceEventContext = .{
                 .application = request.application,
                 .origin = request.session.key,
             };
-            var handler: rename_workspace_commands.RenameWorkspaceHandler = .{
+            var handler: RenameWorkspaceHandlerType = .{
                 .workspaces = &request.workspaces,
                 .events = .{
                     .context = &event_context,
                     .publish = publishWorkspaceRenamed,
                 },
             };
-            var controller = rename_workspace_controller.Controller.init(&request.session.delivery.responses, handler.executor());
+            var controller = RenameWorkspaceController.init(&request.session.delivery.responses, handler.executor());
 
             try controller.renameWorkspace(rename);
         }
 
-        fn routeSetPaneViewport(request: *ClientRequestContext, viewport: source_namespace.schema.SetPaneViewport) !void {
-            var handler: pane_viewport_commands.SetPaneViewportHandler = .{
+        fn routeSetPaneViewport(request: *ClientRequestContext, viewport: SetPaneViewportType) !void {
+            var handler: SetPaneViewportHandlerType = .{
                 .attachments = &request.session.attachments,
             };
-            var controller = source_namespace.PaneViewportController.init(&request.application.metrics, &handler);
+            var controller = request_dispatch.PaneViewportController.init(&request.application.metrics, &handler);
 
             try controller.setPaneViewport(viewport);
         }
 
-        fn routeAcknowledgeAgent(request: *ClientRequestContext, acknowledgement: source_namespace.schema.AcknowledgeAgent) !void {
-            var handler: acknowledge_agent_commands.AcknowledgeAgentHandler = .{
+        fn routeAcknowledgeAgent(request: *ClientRequestContext, acknowledgement: AcknowledgeAgentType) !void {
+            var handler: AcknowledgeAgentHandlerType = .{
                 .agents = &request.application.model.agents,
             };
-            var controller = source_namespace.AcknowledgeAgentController.init(&request.application.metrics, &handler);
-            const now_ms = source_namespace.Io.Timestamp.now(request.application.io, .real).toMilliseconds();
+            var controller = request_dispatch.AcknowledgeAgentController.init(&request.application.metrics, &handler);
+            const now_ms = std.Io.Timestamp.now(request.application.io, .real).toMilliseconds();
 
             controller.acknowledgeAgent(acknowledgement, now_ms);
         }
 
-        fn routeQueryAgents(request: *ClientRequestContext, query: source_namespace.schema.QueryAgents) !void {
-            var controller = source_namespace.QueryAgentsController.init(&request.session.delivery);
+        fn routeQueryAgents(request: *ClientRequestContext, query: QueryAgentsType) !void {
+            var controller = request_dispatch.QueryAgentsController.init(&request.session.delivery);
 
             controller.queryAgents(query);
         }
 
-        fn routeReadPane(request: *ClientRequestContext, read: source_namespace.schema.ReadPane) !void {
-            var controller = read_pane_controller.Controller.init(&request.session.delivery.responses);
+        fn routeReadPane(request: *ClientRequestContext, read: ReadPaneType) !void {
+            var controller = ReadPaneController.init(&request.session.delivery.responses);
 
             try controller.readPane(read);
         }
 
-        fn routeSendPaneText(request: *ClientRequestContext, send: source_namespace.schema.SendPaneText) !void {
+        fn routeSendPaneText(request: *ClientRequestContext, send: SendPaneTextType) !void {
             const application = request.application;
-            var handler: send_pane_text_commands.SendPaneTextHandler = .{
+            var handler: SendPaneTextHandlerType = .{
                 .panes = &application.model.panes,
                 .agents = &application.model.agents,
                 .input = .{
@@ -721,37 +810,37 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                     .scheduler = paneInputScheduler(application),
                 },
             };
-            var controller = source_namespace.SendPaneTextController.init(&request.session.delivery.responses, &handler);
+            var controller = request_dispatch.SendPaneTextController.init(&request.session.delivery.responses, &handler);
 
             try controller.sendPaneText(send);
         }
 
-        fn routeReportAgentSession(request: *ClientRequestContext, report: source_namespace.schema.ReportAgentSession) !void {
+        fn routeReportAgentSession(request: *ClientRequestContext, report: ReportAgentSessionType) !void {
             const application = request.application;
-            var handler: report_agent_session_commands.ReportAgentSessionHandler = .{
+            var handler: ReportAgentSessionHandlerType = .{
                 .panes = &application.model.panes,
                 .agents = &application.model.agents,
             };
-            var controller = source_namespace.ReportAgentSessionController.init(&request.session.delivery.responses, &handler);
-            const now_ms = source_namespace.Io.Timestamp.now(application.io, .real).toMilliseconds();
+            var controller = request_dispatch.ReportAgentSessionController.init(&request.session.delivery.responses, &handler);
+            const now_ms = std.Io.Timestamp.now(application.io, .real).toMilliseconds();
 
             if (try controller.reportAgentSession(report, now_ms) == .recorded) {
                 application.noteSessionChange();
             }
         }
 
-        fn routeReportAgent(request: *ClientRequestContext, report: source_namespace.schema.ReportAgent) !void {
+        fn routeReportAgent(request: *ClientRequestContext, report: ReportAgentType) !void {
             const application = request.application;
-            var handler: report_agent_commands.ReportAgentHandler = .{
+            var handler: ReportAgentHandlerType = .{
                 .panes = &application.model.panes,
                 .agents = &application.model.agents,
             };
-            var controller = source_namespace.ReportAgentController.init(&request.session.delivery.responses, &handler);
-            const now_ms = source_namespace.Io.Timestamp.now(application.io, .real).toMilliseconds();
+            var controller = request_dispatch.ReportAgentController.init(&request.session.delivery.responses, &handler);
+            const now_ms = std.Io.Timestamp.now(application.io, .real).toMilliseconds();
 
             const result = try controller.reportAgent(report, .{
                 .real_ms = now_ms,
-                .awake_ns = @intCast(source_namespace.Io.Timestamp.now(application.io, .awake).toNanoseconds()),
+                .awake_ns = @intCast(std.Io.Timestamp.now(application.io, .awake).toNanoseconds()),
             });
             if (result.session_recorded) {
                 application.noteSessionChange();
@@ -760,7 +849,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
                 return;
             }
 
-            const sound = agent_capability.soundForTransition(result.previous, result.current) orelse return;
+            const sound = sound_module.soundForTransition(result.previous, result.current) orelse return;
             application.publishAgentSound(.{
                 .pane_id = report.pane_id,
                 .pane_generation = report.pane_generation,
@@ -768,48 +857,48 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             });
         }
 
-        fn routeReportAgentCommand(request: *ClientRequestContext, report: source_namespace.schema.ReportAgentCommand) !void {
+        fn routeReportAgentCommand(request: *ClientRequestContext, report: ReportAgentCommandType) !void {
             const application = request.application;
-            var handler: report_agent_command_commands.ReportAgentCommandHandler = .{
+            var handler: ReportAgentCommandHandlerType = .{
                 .panes = &application.model.panes,
             };
-            var controller = source_namespace.ReportAgentCommandController.init(&request.session.delivery.responses, &handler);
-            const now_ms = source_namespace.Io.Timestamp.now(application.io, .real).toMilliseconds();
+            var controller = request_dispatch.ReportAgentCommandController.init(&request.session.delivery.responses, &handler);
+            const now_ms = std.Io.Timestamp.now(application.io, .real).toMilliseconds();
 
             try controller.reportAgentCommand(report, now_ms);
         }
 
-        fn routeReportAgentTitle(request: *ClientRequestContext, report: source_namespace.schema.ReportAgentTitle) !void {
+        fn routeReportAgentTitle(request: *ClientRequestContext, report: ReportAgentTitleType) !void {
             const application = request.application;
-            var handler: report_agent_title_commands.ReportAgentTitleHandler = .{
+            var handler: ReportAgentTitleHandlerType = .{
                 .panes = &application.model.panes,
                 .agents = &application.model.agents,
             };
-            var controller = source_namespace.ReportAgentTitleController.init(&request.session.delivery.responses, &handler);
+            var controller = request_dispatch.ReportAgentTitleController.init(&request.session.delivery.responses, &handler);
 
             if (try controller.reportAgentTitle(report) == .recorded) {
                 application.noteSessionChange();
             }
         }
 
-        fn routeSearchPane(request: *ClientRequestContext, search: source_namespace.schema.SearchPane) !void {
+        fn routeSearchPane(request: *ClientRequestContext, search: SearchPaneType) !void {
             try pane_search.start(request.application, request.session, search);
         }
 
-        fn routeCopySelection(request: *ClientRequestContext, selection: source_namespace.schema.CopySelection) !void {
-            var handler: copy_selection_commands.CopySelectionHandler = .{
+        fn routeCopySelection(request: *ClientRequestContext, selection: CopySelectionType) !void {
+            var handler: CopySelectionHandlerType = .{
                 .attachments = &request.session.attachments,
             };
-            var controller = source_namespace.CopySelectionController.init(&request.application.metrics, &handler, &request.session.delivery);
+            var controller = request_dispatch.CopySelectionController.init(&request.application.metrics, &handler, &request.session.delivery);
 
             controller.copySelection(selection);
         }
 
-        fn routeShowNotification(request: *ClientRequestContext, notification: source_namespace.schema.ShowNotification) !void {
-            var handler: show_notification_commands.ShowNotificationHandler = .{
+        fn routeShowNotification(request: *ClientRequestContext, notification: ShowNotificationType) !void {
+            var handler: ShowNotificationHandlerType = .{
                 .notifications = notificationPublisher(request.application),
             };
-            var controller = show_notification_controller.Controller.init(
+            var controller = ShowNotificationController.init(
                 &request.session.delivery.responses,
                 handler.executor(),
                 notificationDelivery(request.application),
@@ -818,7 +907,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             try controller.showNotification(notification);
         }
 
-        fn paneInputScheduler(application: *Application) pane_input_commands.Scheduler {
+        fn paneInputScheduler(application: *Application) PaneInputScheduler {
             return .{
                 .context = application,
                 .observation = entrypointScheduleObservation,
@@ -826,7 +915,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             };
         }
 
-        fn paneResizeScheduler(application: *Application) pane_resize_commands.Scheduler {
+        fn paneResizeScheduler(application: *Application) PaneResizeScheduler {
             return .{
                 .context = application,
                 .observation = entrypointScheduleObservation,
@@ -835,103 +924,103 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             };
         }
 
-        fn entrypointScheduleObservation(context: *anyopaque, pane: *source_namespace.Pane) !void {
+        fn entrypointScheduleObservation(context: *anyopaque, pane: *PaneType) !void {
             const application: *Application = @ptrCast(@alignCast(context));
             return runtime_port.schedule_observation(application, pane);
         }
 
-        fn entrypointScheduleMedia(context: *anyopaque, pane: *source_namespace.Pane) !void {
+        fn entrypointScheduleMedia(context: *anyopaque, pane: *PaneType) !void {
             const application: *Application = @ptrCast(@alignCast(context));
             return runtime_port.schedule_media(application, pane);
         }
 
-        fn entrypointScheduleResponse(context: *anyopaque, pane: *source_namespace.Pane) !void {
+        fn entrypointScheduleResponse(context: *anyopaque, pane: *PaneType) !void {
             const application: *Application = @ptrCast(@alignCast(context));
             return runtime_port.schedule_response(application, pane);
         }
 
-        fn entrypointScheduleInput(context: *anyopaque, pane: *source_namespace.Pane) !void {
+        fn entrypointScheduleInput(context: *anyopaque, pane: *PaneType) !void {
             const application: *Application = @ptrCast(@alignCast(context));
             return runtime_port.schedule_input(application, pane);
         }
 
         const ClientLaunchContext = struct {
             application: *Application,
-            session: *source_namespace.ClientSession,
+            session: *Session,
         };
 
         const ClientAttachmentContext = struct {
             application: *Application,
-            session: *source_namespace.ClientSession,
+            session: *Session,
         };
 
         const WorkspaceEventContext = struct {
             application: *Application,
-            origin: source_namespace.ClientKey,
+            origin: ClientKeyType,
         };
 
         const TabSnapshotSourceContext = struct {
-            panes: *source_namespace.PaneStore,
-            workspaces: *source_namespace.WorkspaceRepository,
+            panes: *PaneStoreType,
+            workspaces: *Repository,
         };
 
         const HistoryQueryServiceContext = struct {
-            io: source_namespace.Io,
-            service: *history.Service,
+            io: std.Io,
+            service: *ServiceType,
         };
 
-        fn submitHistoryQuery(context: *anyopaque, query: history.Query) bool {
+        fn submitHistoryQuery(context: *anyopaque, query: QueryType) bool {
             const service: *HistoryQueryServiceContext = @ptrCast(@alignCast(context));
             return service.service.query(service.io, query);
         }
 
-        fn tabSnapshotContainsTab(context: *anyopaque, location: source_namespace.schema.TabLocation) bool {
+        fn tabSnapshotContainsTab(context: *anyopaque, location: TabLocationType) bool {
             const source: *TabSnapshotSourceContext = @ptrCast(@alignCast(context));
             return source.workspaces.reader().contains(location);
         }
 
-        fn tabSnapshotRunningPanes(context: *anyopaque, location: source_namespace.schema.TabLocation) u16 {
+        fn tabSnapshotRunningPanes(context: *anyopaque, location: TabLocationType) u16 {
             const source: *TabSnapshotSourceContext = @ptrCast(@alignCast(context));
             return source.panes.countAt(location);
         }
 
-        fn requestAttachedPaneClose(context: *anyopaque, pane_id: source_namespace.schema.PaneId) ?bool {
-            const attachments: *source_namespace.AttachmentStore = @ptrCast(@alignCast(context));
+        fn requestAttachedPaneClose(context: *anyopaque, pane_id: PaneIdType) ?bool {
+            const attachments: *AttachmentStoreType = @ptrCast(@alignCast(context));
             const attachment = attachments.find(pane_id) orelse return null;
             return attachment.pane.requestClose();
         }
 
-        fn createPaneHasRunning(context: *anyopaque, location: source_namespace.schema.TabLocation) bool {
-            const panes: *source_namespace.PaneStore = @ptrCast(@alignCast(context));
+        fn createPaneHasRunning(context: *anyopaque, location: TabLocationType) bool {
+            const panes: *PaneStoreType = @ptrCast(@alignCast(context));
             return panes.countAt(location) != 0;
         }
 
-        fn detachClientAttachment(context: *anyopaque, pane_id: source_namespace.schema.PaneId) ?attachment_mod.PaneDetached {
+        fn detachClientAttachment(context: *anyopaque, pane_id: PaneIdType) ?PaneDetachedType {
             const client: *ClientAttachmentContext = @ptrCast(@alignCast(context));
             return client.session.attachments.detach(pane_id);
         }
 
-        fn leaveClientWorkspace(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) bool {
+        fn leaveClientWorkspace(context: *anyopaque, workspace: WorkspaceLocationType) bool {
             const client: *ClientAttachmentContext = @ptrCast(@alignCast(context));
             return client.session.attachments.leaveWorkspace(workspace);
         }
 
-        fn clientHoldsWorkspaceGeometry(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) bool {
+        fn clientHoldsWorkspaceGeometry(context: *anyopaque, workspace: WorkspaceLocationType) bool {
             const client: *ClientAttachmentContext = @ptrCast(@alignCast(context));
             return client.application.holdsGeometry(client.session.key, workspace);
         }
 
-        fn releaseClientWorkspaceGeometry(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) void {
+        fn releaseClientWorkspaceGeometry(context: *anyopaque, workspace: WorkspaceLocationType) void {
             const client: *ClientAttachmentContext = @ptrCast(@alignCast(context));
             client.application.releaseGeometryFor(client.session.key, workspace);
         }
 
         fn recordStaleClientMessage(context: *anyopaque) void {
-            const metrics: *source_namespace.RuntimeMetrics = @ptrCast(@alignCast(context));
+            const metrics: *RuntimeMetricsType = @ptrCast(@alignCast(context));
             metrics.stale_client_messages += 1;
         }
 
-        fn findOpenPane(context: *anyopaque, pane_id: source_namespace.schema.PaneId) ?pane_mod.PaneLaunched {
+        fn findOpenPane(context: *anyopaque, pane_id: PaneIdType) ?PaneLaunchedType {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             const pane = client.application.model.panes.findRunning(pane_id) orelse return null;
 
@@ -942,22 +1031,22 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             return .{ .key = pane.key(), .location = pane.location };
         }
 
-        fn findFirstOpenPane(context: *anyopaque, location: source_namespace.schema.TabLocation) ?pane_mod.PaneLaunched {
+        fn findFirstOpenPane(context: *anyopaque, location: TabLocationType) ?PaneLaunchedType {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             const pane = client.application.model.panes.firstAt(location) orelse return null;
             return .{ .key = pane.key(), .location = pane.location };
         }
 
-        fn prepareOpenPaneLaunch(context: *anyopaque, request: open_pane_commands.PrepareLaunch) ![]const u8 {
+        fn prepareOpenPaneLaunch(context: *anyopaque, request: OpenPanePrepareLaunch) ![]const u8 {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
-            return source_namespace.launch_cwd.resolveLaunchCwd(
+            return launch_cwd_module.resolveLaunchCwd(
                 &client.session.attachments,
                 request.launch,
                 .any,
             ) catch error.InvalidLaunchCwd;
         }
 
-        fn launchOpenPane(context: *anyopaque, request: open_pane_commands.LaunchPane) !pane_mod.PaneLaunched {
+        fn launchOpenPane(context: *anyopaque, request: OpenPaneLaunchPane) !PaneLaunchedType {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             const pane = try client.application.launchPane(.{
                 .location = request.location,
@@ -970,7 +1059,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             return .{ .key = pane.key(), .location = pane.location };
         }
 
-        fn prepareOpenPaneView(context: *anyopaque, request: open_pane_commands.PrepareView) !void {
+        fn prepareOpenPaneView(context: *anyopaque, request: PrepareViewType) !void {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             const pane = client.application.model.panes.resolve(request.pane.key) orelse return error.PaneUnavailable;
             const resize_result = if (pane.ingest_pending)
@@ -983,7 +1072,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             try runtime_port.schedule_media(client.application, pane);
         }
 
-        fn attachOpenPane(context: *anyopaque, launched: pane_mod.PaneLaunched) !void {
+        fn attachOpenPane(context: *anyopaque, launched: PaneLaunchedType) !void {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             const pane = client.application.model.panes.resolve(launched.key) orelse return error.PaneUnavailable;
             const attachment = try client.session.attachments.attach(client.application.gpa, pane);
@@ -999,28 +1088,28 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             client.application.notifyWorkspaceChanged(client.session.key, workspace);
         }
 
-        fn prepareCreateTabLaunch(context: *anyopaque, request: create_tab_commands.PrepareLaunch) ![]const u8 {
+        fn prepareCreateTabLaunch(context: *anyopaque, request: CreateTabPrepareLaunch) ![]const u8 {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
 
             if (!client.application.holdsGeometry(client.session.key, request.workspace)) {
                 return error.GeometryUnavailable;
             }
 
-            return source_namespace.launch_cwd.resolveLaunchCwd(
+            return launch_cwd_module.resolveLaunchCwd(
                 &client.session.attachments,
                 request.launch,
                 .{ .workspace = request.workspace },
             ) catch error.InvalidLaunchCwd;
         }
 
-        fn attachCreatedTab(context: *anyopaque, launched: create_tab_commands.LaunchedPane) !void {
+        fn attachCreatedTab(context: *anyopaque, launched: CreateTabLaunchedPane) !void {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             const pane = client.application.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
 
             _ = try client.session.attachments.attach(client.application.gpa, pane);
         }
 
-        fn launchCreatedTabPane(context: *anyopaque, request: create_tab_commands.LaunchPane) !create_tab_commands.LaunchedPane {
+        fn launchCreatedTabPane(context: *anyopaque, request: CreateTabLaunchPane) !CreateTabLaunchedPane {
             const application: *Application = @ptrCast(@alignCast(context));
             const pane = try application.launchPane(.{
                 .location = request.location,
@@ -1033,26 +1122,26 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             return .{ .id = pane.id };
         }
 
-        fn prepareCreateWorkspaceLaunch(context: *anyopaque, request: create_workspace_commands.PrepareLaunch) ![]const u8 {
+        fn prepareCreateWorkspaceLaunch(context: *anyopaque, request: CreateWorkspacePrepareLaunch) ![]const u8 {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
-            return source_namespace.launch_cwd.resolveLaunchCwd(
+            return launch_cwd_module.resolveLaunchCwd(
                 &client.session.attachments,
                 request.launch,
                 .any,
             ) catch error.InvalidLaunchCwd;
         }
 
-        fn acquireCreatedWorkspaceGeometry(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) bool {
+        fn acquireCreatedWorkspaceGeometry(context: *anyopaque, workspace: WorkspaceLocationType) bool {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             return client.application.holdsGeometry(client.session.key, workspace);
         }
 
-        fn releaseCreatedWorkspaceGeometry(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) void {
+        fn releaseCreatedWorkspaceGeometry(context: *anyopaque, workspace: WorkspaceLocationType) void {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             client.application.releaseGeometryFor(client.session.key, workspace);
         }
 
-        fn launchCreatedWorkspacePane(context: *anyopaque, request: create_workspace_commands.LaunchPane) !create_workspace_commands.LaunchedPane {
+        fn launchCreatedWorkspacePane(context: *anyopaque, request: CreateWorkspaceLaunchPane) !CreateWorkspaceLaunchedPane {
             const application: *Application = @ptrCast(@alignCast(context));
             const pane = try application.launchPane(.{
                 .location = request.location,
@@ -1065,7 +1154,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             return .{ .id = pane.id };
         }
 
-        fn replaceCreatedWorkspaceAttachments(context: *anyopaque, launched: create_workspace_commands.LaunchedPane) !void {
+        fn replaceCreatedWorkspaceAttachments(context: *anyopaque, launched: CreateWorkspaceLaunchedPane) !void {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             const pane = client.application.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
             const previous_workspace = client.session.attachments.currentWorkspace();
@@ -1079,21 +1168,21 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             _ = try attachment.resizeIfNeeded();
         }
 
-        fn prepareCreatePaneLaunch(context: *anyopaque, request: create_pane_commands.PrepareLaunch) ![]const u8 {
+        fn prepareCreatePaneLaunch(context: *anyopaque, request: CreatePanePrepareLaunch) ![]const u8 {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
 
             if (!client.application.holdsGeometry(client.session.key, request.location.workspace)) {
                 return error.GeometryUnavailable;
             }
 
-            return source_namespace.launch_cwd.resolveLaunchCwd(
+            return launch_cwd_module.resolveLaunchCwd(
                 &client.session.attachments,
                 request.launch,
                 .{ .tab = request.location },
             ) catch error.InvalidLaunchCwd;
         }
 
-        fn launchCreatedPane(context: *anyopaque, request: create_pane_commands.LaunchPane) !pane_mod.PaneLaunched {
+        fn launchCreatedPane(context: *anyopaque, request: CreatePaneLaunchPane) !PaneLaunchedType {
             const application: *Application = @ptrCast(@alignCast(context));
             const pane = try application.launchPane(.{
                 .location = request.location,
@@ -1106,19 +1195,19 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             return .{ .key = pane.key(), .location = pane.location };
         }
 
-        fn attachCreatedPane(context: *anyopaque, launched: pane_mod.PaneLaunched) !void {
+        fn attachCreatedPane(context: *anyopaque, launched: PaneLaunchedType) !void {
             const client: *ClientLaunchContext = @ptrCast(@alignCast(context));
             const pane = client.application.model.panes.resolve(launched.key) orelse return error.LaunchedPaneUnavailable;
             _ = try client.session.attachments.attach(client.application.gpa, pane);
         }
 
-        fn publishTabCreated(context: *anyopaque, event: workspace_mod.TabCreated) void {
+        fn publishTabCreated(context: *anyopaque, event: TabCreatedType) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
             publication.application.noteSessionChange();
             publication.application.notifyWorkspaceChanged(publication.origin, event.location.workspace);
         }
 
-        fn publishTabRenamed(context: *anyopaque, event: workspace_mod.TabRenamed) void {
+        fn publishTabRenamed(context: *anyopaque, event: TabRenamedType) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
             publication.application.noteSessionChange();
 
@@ -1126,13 +1215,13 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             publication.application.notifyWorkspaceChanged(publication.origin, event.location.workspace);
         }
 
-        fn publishTabMoved(context: *anyopaque, event: workspace_mod.TabMoved) void {
+        fn publishTabMoved(context: *anyopaque, event: TabMovedType) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
             publication.application.noteSessionChange();
             publication.application.notifyWorkspaceChanged(publication.origin, event.location.workspace);
         }
 
-        fn publishWorkspaceRenamed(context: *anyopaque, event: workspace_mod.WorkspaceRenamed) void {
+        fn publishWorkspaceRenamed(context: *anyopaque, event: WorkspaceRenamedType) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
             publication.application.noteSessionChange();
 
@@ -1140,23 +1229,23 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             publication.application.notifyWorkspaceChanged(publication.origin, event.location);
         }
 
-        fn publishWorkspaceCreated(context: *anyopaque, event: workspace_mod.WorkspaceCreated) void {
+        fn publishWorkspaceCreated(context: *anyopaque, event: WorkspaceCreatedType) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
             publication.application.noteSessionChange();
             publication.application.notifyWorkspaceChanged(publication.origin, event.location.workspace);
         }
 
-        fn publishPaneLaunched(context: *anyopaque, event: pane_mod.PaneLaunched) void {
+        fn publishPaneLaunched(context: *anyopaque, event: PaneLaunchedType) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
             publication.application.notifyWorkspaceChanged(publication.origin, event.location.workspace);
         }
 
-        fn closeTabPanes(context: *anyopaque, location: source_namespace.schema.TabLocation) void {
-            const panes: *source_namespace.PaneStore = @ptrCast(@alignCast(context));
+        fn closeTabPanes(context: *anyopaque, location: TabLocationType) void {
+            const panes: *PaneStoreType = @ptrCast(@alignCast(context));
             panes.closeAt(location);
         }
 
-        fn publishTabRemoved(context: *anyopaque, event: workspace_mod.TabRemoved) void {
+        fn publishTabRemoved(context: *anyopaque, event: TabRemovedType) void {
             const publication: *WorkspaceEventContext = @ptrCast(@alignCast(context));
             publication.application.noteSessionChange();
 
@@ -1171,11 +1260,11 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             }
         }
 
-        fn runtimeStopNotifications(application: *Application) runtime_stop_commands.Notifications {
+        fn runtimeStopNotifications(application: *Application) NotificationsType {
             return .{ .context = application, .publish_fn = publishRuntimeStop };
         }
 
-        fn publishRuntimeStop(context: *anyopaque, event: source_namespace.shutdown_mod.StopRequested) void {
+        fn publishRuntimeStop(context: *anyopaque, event: StopRequestedType) void {
             const application: *Application = @ptrCast(@alignCast(context));
             std.debug.assert(application.shutdown.isRequested());
             std.debug.assert(std.meta.eql(application.shutdown.initiator.?, event.initiator));
@@ -1189,16 +1278,16 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
             }
         }
 
-        fn notificationPublisher(application: *Application) show_notification_commands.NotificationPublisher {
+        fn notificationPublisher(application: *Application) NotificationPublisherType {
             return .{ .context = application, .publish_fn = publishRequestedNotification };
         }
 
-        fn publishRequestedNotification(context: *anyopaque, notification: source_namespace.schema.Notification) u8 {
+        fn publishRequestedNotification(context: *anyopaque, notification: NotificationType) u8 {
             const application: *Application = @ptrCast(@alignCast(context));
             return application.publishNotification(notification);
         }
 
-        fn notificationDelivery(application: *Application) show_notification_controller.Delivery {
+        fn notificationDelivery(application: *Application) DeliveryType {
             return .{ .context = application, .pump_all_fn = pumpNotificationClients };
         }
 
@@ -1212,7 +1301,7 @@ pub fn Type(comptime Application: type, comptime runtime_port: GenericRuntimePor
         /// ```zig
         /// try RequestDispatcher.dispatch(&application, session, message);
         /// ```
-        pub fn dispatch(application: *Application, session: *source_namespace.ClientSession, message: source_namespace.schema.ClientMessage) !void {
+        pub fn dispatch(application: *Application, session: *Session, message: ClientMessageType) !void {
             var context = ClientRequestContext.init(application, session);
             const router = ClientRequestRouter.init(&context);
 

@@ -1,9 +1,12 @@
-const RecoverPaneSplitHandler = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("split_pane.zig");
+const ModelType = @import("../../model/Model.zig");
+const RectType = @import("telar-core").Rect;
 const RecoveryEffects = @import("RecoveryEffects.zig");
-model: *client_model.Model,
-area: source_namespace.ui.Rect,
+const PaneSplitType = @import("../../model/PaneSplit.zig");
+const split_pane = @import("split_pane.zig");
+const RecoverPaneSplitHandler = @This();
+
+model: *ModelType,
+area: RectType,
 effects: RecoveryEffects,
 
 /// Restores only the exact active target that was provisionally resized.
@@ -12,7 +15,7 @@ effects: RecoveryEffects,
 /// ```zig
 /// const status = try handler.execute(split);
 /// ```
-pub fn execute(handler: *RecoverPaneSplitHandler, split: source_namespace.PaneSplit) !source_namespace.RecoveryStatus {
+pub fn execute(handler: *RecoverPaneSplitHandler, split: PaneSplitType) !split_pane.RecoveryStatus {
     return switch (handler.model.recoverPaneSplit(.{ .split = split, .area = handler.area })) {
         .resize => |resize| recovery: {
             try handler.effects.resize(handler.effects.context, resize);

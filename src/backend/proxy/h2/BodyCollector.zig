@@ -1,6 +1,7 @@
-const BodyCollector = @This();
-const source_namespace = @import("relay.zig");
+const relay = @import("relay.zig");
 const std = @import("std");
+const BodyCollector = @This();
+
 bytes: [256]u8 = undefined,
 len: usize = 0,
 stream_id: u32 = 0,
@@ -12,7 +13,7 @@ finished_before_body: bool = false,
 request_body: bool = false,
 request_finished: usize = 0,
 
-pub fn emit(collector: *BodyCollector, event: source_namespace.Event) void {
+pub fn emit(collector: *BodyCollector, event: relay.Event) void {
     switch (event) {
         .lifecycle => |observed| switch (observed.phase) {
             .response_activity => collector.activity += 1,

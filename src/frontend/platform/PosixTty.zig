@@ -1,8 +1,9 @@
-const Tty = @This();
 const std = @import("std");
-const source_namespace = @import("posix.zig");
-const Size = @import("types.zig").Size;
+const posix_ops = @import("posix.zig");
+const Size = @import("Size.zig");
 const builtin = @import("builtin");
+const Tty = @This();
+
 fd: std.c.fd_t,
 original: std.posix.termios,
 
@@ -43,7 +44,7 @@ pub fn open() !Tty {
 pub fn deinit(t: *Tty) void {
     // Disarmed before the descriptor closes, so a crash after shutdown
     // cannot write escape sequences into a recycled file descriptor.
-    source_namespace.crash_restore.fd = -1;
+    posix_ops.crash_restore.fd = -1;
     std.posix.tcsetattr(t.fd, .FLUSH, t.original) catch {};
     _ = std.c.close(t.fd);
 }
@@ -70,11 +71,11 @@ pub fn size(t: *const Tty) Size {
     };
 }
 
-pub fn writeHandle(t: *const Tty) source_namespace.File {
+pub fn writeHandle(t: *const Tty) std.Io.File {
     return .{ .handle = t.fd, .flags = .{ .nonblocking = false } };
 }
 
-pub fn readHandle(t: *const Tty) source_namespace.File {
+pub fn readHandle(t: *const Tty) std.Io.File {
     return .{ .handle = t.fd, .flags = .{ .nonblocking = false } };
 }
 
@@ -85,7 +86,7 @@ pub fn readHandle(t: *const Tty) source_namespace.File {
 /// ```
 pub fn identity(t: *const Tty) !u64 {
     var path: [std.fs.max_path_bytes]u8 = undefined;
-    if (source_namespace.unistd.ttyname_r(t.fd, &path, path.len) != 0) {
+    if (posix_ops.unistd.ttyname_r(t.fd, &path, path.len) != 0) {
         return error.TerminalIdentityUnavailable;
     }
 
@@ -94,5 +95,5 @@ pub fn identity(t: *const Tty) !u64 {
         return error.TerminalIdentityUnavailable;
     }
 
-    return source_namespace.nonzeroHash(name);
+    return posix_ops.nonzeroHash(name);
 }

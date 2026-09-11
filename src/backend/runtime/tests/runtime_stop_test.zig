@@ -1,34 +1,33 @@
 //! Vertical contract tests for runtime-stop authority and notification.
 
 const std = @import("std");
-const runtime_stop_commands = @import("../application/commands/runtime_stop.zig");
-const runtime_stop_controller = @import("../entrypoints/requests/runtime_stop.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const shutdown_mod = @import("../lifecycle/root.zig").shutdown_authority;
-
+const DeliveryType = @import("../delivery/Delivery.zig");
+const StateType = @import("../lifecycle/State.zig");
 const Recipient = @import("Recipient.zig");
-
-const Broadcaster = @import("RuntimeStopTestBroadcaster.zig");
+const RuntimeStopTestBroadcaster = @import("RuntimeStopTestBroadcaster.zig");
+const RuntimeStopHandlerType = @import("../application/commands/RuntimeStopHandler.zig");
+const RuntimeStopController = @import("../entrypoints/requests/RuntimeStopController.zig");
+const ClientKeyType = @import("../../history/ClientKey.zig");
 
 test "the first runtime-stop request notifies every active recipient once" {
     const gpa = std.testing.allocator;
-    var first_delivery = try delivery_mod.Delivery.init(gpa);
+    var first_delivery = try DeliveryType.init(gpa);
     defer first_delivery.deinit(gpa);
-    var inactive_delivery = try delivery_mod.Delivery.init(gpa);
+    var inactive_delivery = try DeliveryType.init(gpa);
     defer inactive_delivery.deinit(gpa);
-    var third_delivery = try delivery_mod.Delivery.init(gpa);
+    var third_delivery = try DeliveryType.init(gpa);
     defer third_delivery.deinit(gpa);
-    var shutdown: shutdown_mod.State = .{};
+    var shutdown: StateType = .{};
     var first: Recipient = .{ .active = true, .delivery = &first_delivery };
     var inactive: Recipient = .{ .active = false, .delivery = &inactive_delivery };
     var third: Recipient = .{ .active = true, .delivery = &third_delivery };
-    var broadcaster: Broadcaster = .{ .recipients = .{ &first, &inactive, &third } };
-    var handler: runtime_stop_commands.RuntimeStopHandler = .{
+    var broadcaster: RuntimeStopTestBroadcaster = .{ .recipients = .{ &first, &inactive, &third } };
+    var handler: RuntimeStopHandlerType = .{
         .shutdown = &shutdown,
         .notifications = broadcaster.notifications(),
     };
-    var controller = runtime_stop_controller.Controller.init(handler.executor());
-    const initiator: shutdown_mod.ClientKey = .{ .id = 17, .generation = 23 };
+    var controller = RuntimeStopController.init(handler.executor());
+    const initiator: ClientKeyType = .{ .id = 17, .generation = 23 };
 
     controller.runtimeStop(initiator);
     controller.runtimeStop(.{ .id = 99, .generation = 100 });

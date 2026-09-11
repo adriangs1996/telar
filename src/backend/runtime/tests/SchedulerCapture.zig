@@ -1,12 +1,15 @@
-const SchedulerCapture = @This();
 const Trace = @import("Trace.zig");
-const source_namespace = @import("pane_resize_test.zig");
-const pane_resize_commands = @import("../application/commands/pane_resize.zig");
-const Pane = @import("../../pane/root.zig").Pane;
+const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const PaneResizeScheduler = @import("../application/commands/PaneResizeScheduler.zig");
+const Pane = @import("../../pane/Pane.zig");
 const std = @import("std");
+const PaneFixtureType = @import("PaneFixture.zig");
+const SchedulerCapture = @This();
+
 trace: *Trace,
-attachments: *source_namespace.AttachmentStore,
-expected_size: source_namespace.schema.TerminalSize,
+attachments: *AttachmentStoreType,
+expected_size: TerminalSizeType,
 observation_failure: ?anyerror = null,
 media_failure: ?anyerror = null,
 response_failure: ?anyerror = null,
@@ -14,7 +17,7 @@ observation_saw_resized_pane: bool = false,
 observation_saw_old_attachment: bool = false,
 response_saw_resized_attachment: bool = false,
 
-pub fn scheduler(capture: *SchedulerCapture) pane_resize_commands.Scheduler {
+pub fn scheduler(capture: *SchedulerCapture) PaneResizeScheduler {
     return .{
         .context = capture,
         .observation = scheduleObservation,
@@ -28,8 +31,8 @@ fn scheduleObservation(context: *anyopaque, pane: *Pane) !void {
     capture.trace.record(.observation);
     capture.observation_saw_resized_pane = std.meta.eql(pane.size, capture.expected_size);
     const attachment = capture.attachments.find(pane.id) orelse return error.MissingAttachment;
-    capture.observation_saw_old_attachment = attachment.cells.acknowledged.w == source_namespace.PaneFixture.initial_size.cols and
-        attachment.cells.acknowledged.h == source_namespace.PaneFixture.initial_size.rows;
+    capture.observation_saw_old_attachment = attachment.cells.acknowledged.w == PaneFixtureType.initial_size.cols and
+        attachment.cells.acknowledged.h == PaneFixtureType.initial_size.rows;
 
     if (capture.observation_failure) |failure| {
         return failure;

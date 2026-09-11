@@ -1,4 +1,7 @@
-const source_namespace = @import("report_agent_session.zig");
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const ReportAgentSessionType = @import("telar-core").ReportAgentSession;
+const report_agent_session = @import("report_agent_session.zig");
+
 /// Builds a statically dispatched controller around one executor.
 ///
 /// ```zig
@@ -8,10 +11,10 @@ pub fn Type(comptime Executor: type) type {
     return struct {
         const Self = @This();
 
-        responses: *source_namespace.ResponseQueue,
+        responses: *ResponseQueueType,
         executor: Executor,
 
-        pub fn init(responses: *source_namespace.ResponseQueue, executor: Executor) Self {
+        pub fn init(responses: *ResponseQueueType, executor: Executor) Self {
             return .{ .responses = responses, .executor = executor };
         }
 
@@ -20,7 +23,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// const outcome = try controller.reportAgentSession(request, now_ms);
         /// ```
-        pub fn reportAgentSession(controller: *Self, request: source_namespace.schema.ReportAgentSession, now_ms: i64) !source_namespace.Outcome {
+        pub fn reportAgentSession(controller: *Self, request: ReportAgentSessionType, now_ms: i64) !report_agent_session.Outcome {
             const result = controller.executor.execute(.{
                 .pane = .{ .id = request.pane_id, .generation = request.pane_generation },
                 .session = request.session,

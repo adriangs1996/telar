@@ -1,46 +1,27 @@
 //! Pure marker scanning and editor-navigation plans over committed cells.
 
+const MarkerScreen = @import("MarkerScreen.zig");
+const MarkerRemoval = @import("MarkerRemoval.zig");
+const path_marker = @import("path_marker.zig");
+const types = @import("types.zig");
+const MarkerType = @import("Marker.zig");
+const ScreenType = @import("Screen.zig");
+const BufferType = @import("telar-core").Buffer;
+const CursorType = @import("telar-core").Cursor;
+const MarkerPosition = @import("MarkerPosition.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const Io = std.Io;
-pub const schema = core.schema;
-pub const ui = core.ui;
-const path_marker = @import("../root.zig").attachments.path_marker;
-const types = @import("../root.zig").attachments.types;
-const max_items = types.max_items;
-const max_source_bytes = types.max_source_bytes;
-const max_png_bytes = types.max_png_bytes;
-const max_pixels = types.max_pixels;
-const max_retained_bytes = types.max_retained_bytes;
-const max_marker_navigation_steps = types.max_marker_navigation_steps;
-const max_removal_keys = types.max_removal_keys;
-const deletion_watch_frames = types.deletion_watch_frames;
-const Target = types.Target;
-const CaptureRequest = types.CaptureRequest;
-const MarkerPolicy = types.MarkerPolicy;
-const MarkerIdentity = types.MarkerIdentity;
-const Capture = types.Capture;
-const CaptureResources = types.CaptureResources;
-const Id = types.Id;
-const Item = types.Item;
-const Snapshot = types.Snapshot;
-const MarkerScreen = types.MarkerScreen;
-pub const MarkerDeletion = types.MarkerDeletion;
-const MarkerRemoval = types.MarkerRemoval;
-const DeletionProbe = types.DeletionProbe;
-const PendingDeletion = types.PendingDeletion;
-const PlanItem = types.PlanItem;
-const Plan = types.Plan;
+const MarkerScan = @import("MarkerScan.zig");
+const MarkerBoundary = @import("MarkerBoundary.zig");
+const PointType = @import("telar-core").Point;
+const MarkerTail = @import("MarkerTail.zig");
+const CellType = @import("telar-core").Cell;
+const SpanType = @import("Span.zig");
 
 const marker_head = "[Image";
 pub const marker_head_width: u16 = marker_head.len;
 const marker_separator = " #";
 const marker_separator_width: u16 = marker_separator.len;
 pub const minimum_marker_width: u16 = marker_head_width + marker_separator_width + 2;
-
-pub const MarkerPosition = @import("MarkerPosition.zig");
-
-pub const MarkerScan = @import("MarkerScan.zig");
 
 /// The cursor must share a row with the marker's end or start. A wrapped
 /// marker spans two rows, and steps across the wrap cannot be counted from
@@ -105,20 +86,20 @@ pub fn planPathRemoval(path: ?path_marker.Uuid, screen: MarkerScreen) ?MarkerRem
     return null;
 }
 
-pub fn pathTouchesCursor(uuid: path_marker.Uuid, screen: MarkerScreen, deletion: MarkerDeletion) bool {
+pub fn pathTouchesCursor(uuid: path_marker.Uuid, screen: MarkerScreen, deletion: types.MarkerDeletion) bool {
     const marker = path_marker.find(screen.buffer, uuid) orelse return false;
 
     return markerCursorTouches(marker, screen, deletion);
 }
 
-pub fn markerCursorTouches(marker: path_marker.Marker, screen: MarkerScreen, deletion: MarkerDeletion) bool {
+pub fn markerCursorTouches(marker: MarkerType, screen: MarkerScreen, deletion: types.MarkerDeletion) bool {
     return switch (deletion) {
         .backward => path_marker.cursorAt(pathScreen(screen), marker.end),
         .forward => path_marker.cursorAt(pathScreen(screen), marker.start),
     };
 }
 
-pub fn pathScreen(screen: MarkerScreen) path_marker.Screen {
+pub fn pathScreen(screen: MarkerScreen) ScreenType {
     return .{ .buffer = screen.buffer, .cursor = screen.cursor };
 }
 
@@ -126,7 +107,7 @@ pub fn pathScreen(screen: MarkerScreen) path_marker.Screen {
 /// the newest ones on screen, mirroring how Claude's numbers are paired.
 /// Picks the marker carrying `number` closest to the cursor. The transcript
 /// above the prompt may repeat a sent prompt's markers.
-pub fn findMarker(buffer: *const ui.Buffer, number: u16, cursor: schema.frame.Cursor) ?MarkerPosition {
+pub fn findMarker(buffer: *const BufferType, number: u16, cursor: CursorType) ?MarkerPosition {
     var best: ?MarkerPosition = null;
     var best_distance: u32 = std.math.maxInt(u32);
     var scan: MarkerScan = .{ .buffer = buffer };
@@ -147,7 +128,7 @@ pub fn findMarker(buffer: *const ui.Buffer, number: u16, cursor: schema.frame.Cu
     return best;
 }
 
-pub fn markerPresent(buffer: *const ui.Buffer, number: u16) bool {
+pub fn markerPresent(buffer: *const BufferType, number: u16) bool {
     var scan: MarkerScan = .{ .buffer = buffer };
     while (scan.next()) |marker| {
         if (marker.number == number) {
@@ -158,10 +139,8 @@ pub fn markerPresent(buffer: *const ui.Buffer, number: u16) bool {
     return false;
 }
 
-pub const MarkerBoundary = @import("MarkerBoundary.zig");
-
-pub fn markerTouchesCursor(buffer: *const ui.Buffer, boundary: MarkerBoundary) bool {
-    const cursor: ui.Point = .{ .x = boundary.cursor.x, .y = boundary.cursor.y };
+pub fn markerTouchesCursor(buffer: *const BufferType, boundary: MarkerBoundary) bool {
+    const cursor: PointType = .{ .x = boundary.cursor.x, .y = boundary.cursor.y };
     var scan: MarkerScan = .{ .buffer = buffer };
     while (scan.next()) |marker| {
         if (marker.number != boundary.ordinal) {
@@ -183,12 +162,12 @@ pub fn markerTouchesCursor(buffer: *const ui.Buffer, boundary: MarkerBoundary) b
 /// Reads one `[Image #N]` placeholder whose head starts at `at`. The editor
 /// may have wrapped the placeholder at its space: the head then closes its
 /// row and `#N]` opens the next one after that row's indentation.
-pub fn parseMarker(buffer: *const ui.Buffer, at: ui.Point) ?MarkerPosition {
+pub fn parseMarker(buffer: *const BufferType, at: PointType) ?MarkerPosition {
     if (!cellsMatch(buffer, at, marker_head)) {
         return null;
     }
 
-    const after_head: ui.Point = .{ .x = at.x + marker_head_width, .y = at.y };
+    const after_head: PointType = .{ .x = at.x + marker_head_width, .y = at.y };
     if (cellsMatch(buffer, after_head, marker_separator)) {
         const tail = parseMarkerTail(buffer, .{ .x = after_head.x + marker_separator_width, .y = at.y }) orelse return null;
 
@@ -200,7 +179,7 @@ pub fn parseMarker(buffer: *const ui.Buffer, at: ui.Point) ?MarkerPosition {
     }
 
     const number_x = firstInkOnRow(buffer, at.y + 1) orelse return null;
-    const hash: ui.Point = .{ .x = number_x, .y = at.y + 1 };
+    const hash: PointType = .{ .x = number_x, .y = at.y + 1 };
     if (!cellsMatch(buffer, hash, "#")) {
         return null;
     }
@@ -210,10 +189,8 @@ pub fn parseMarker(buffer: *const ui.Buffer, at: ui.Point) ?MarkerPosition {
     return .{ .number = tail.number, .start = at, .end = tail.end };
 }
 
-pub const MarkerTail = @import("MarkerTail.zig");
-
 /// Reads the `N]` that closes a marker, starting at its first digit.
-pub fn parseMarkerTail(buffer: *const ui.Buffer, at: ui.Point) ?MarkerTail {
+pub fn parseMarkerTail(buffer: *const BufferType, at: PointType) ?MarkerTail {
     var number: u16 = 0;
     var x = at.x;
     while (x < buffer.w) : (x += 1) {
@@ -241,13 +218,13 @@ pub fn parseMarkerTail(buffer: *const ui.Buffer, at: ui.Point) ?MarkerTail {
     return null;
 }
 
-pub fn cellAt(buffer: *const ui.Buffer, at: ui.Point) ui.Cell {
+pub fn cellAt(buffer: *const BufferType, at: PointType) CellType {
     return buffer.cells[@as(usize, at.y) * buffer.w + at.x];
 }
 
 /// Reports whether `literal` occupies the cells starting at `at`, one ASCII
 /// byte per single-width cell.
-pub fn cellsMatch(buffer: *const ui.Buffer, at: ui.Point, literal: []const u8) bool {
+pub fn cellsMatch(buffer: *const BufferType, at: PointType, literal: []const u8) bool {
     if (at.y >= buffer.h or at.x + literal.len > buffer.w) {
         return false;
     }
@@ -262,11 +239,11 @@ pub fn cellsMatch(buffer: *const ui.Buffer, at: ui.Point, literal: []const u8) b
     return true;
 }
 
-pub fn cellBlank(cell: ui.Cell) bool {
+pub fn cellBlank(cell: CellType) bool {
     return cell.width == 0 or std.mem.eql(u8, cell.text(), " ");
 }
 
-pub fn rowBlankFrom(buffer: *const ui.Buffer, at: ui.Point) bool {
+pub fn rowBlankFrom(buffer: *const BufferType, at: PointType) bool {
     var x = at.x;
     while (x < buffer.w) : (x += 1) {
         if (!cellBlank(cellAt(buffer, .{ .x = x, .y = at.y }))) {
@@ -277,7 +254,7 @@ pub fn rowBlankFrom(buffer: *const ui.Buffer, at: ui.Point) bool {
     return true;
 }
 
-pub fn firstInkOnRow(buffer: *const ui.Buffer, y: u16) ?u16 {
+pub fn firstInkOnRow(buffer: *const BufferType, y: u16) ?u16 {
     var x: u16 = 0;
     while (x < buffer.w) : (x += 1) {
         if (!cellBlank(cellAt(buffer, .{ .x = x, .y = y }))) {
@@ -290,7 +267,7 @@ pub fn firstInkOnRow(buffer: *const ui.Buffer, y: u16) ?u16 {
 
 /// Width of the marker occupying one row from `x`, or 0 when the cell opens
 /// no marker or the marker wraps onto the next row.
-pub fn markerWidthAt(buffer: *const ui.Buffer, x: u16, y: u16) u16 {
+pub fn markerWidthAt(buffer: *const BufferType, x: u16, y: u16) u16 {
     const marker = parseMarker(buffer, .{ .x = x, .y = y }) orelse return 0;
     if (!marker.contiguous()) {
         return 0;
@@ -316,7 +293,7 @@ pub fn promptContinuesAtCursor(screen: MarkerScreen) bool {
 
 /// The hardware cursor when the child shows it, otherwise Pi's isolated
 /// inverse-video cell.
-pub fn editorCursor(screen: MarkerScreen) ?ui.Point {
+pub fn editorCursor(screen: MarkerScreen) ?PointType {
     if (screen.cursor.visible) {
         return .{ .x = screen.cursor.x, .y = screen.cursor.y };
     }
@@ -331,7 +308,7 @@ pub fn editorCursor(screen: MarkerScreen) ?ui.Point {
     return null;
 }
 
-pub fn atomicSteps(buffer: *const ui.Buffer, y: u16, span: path_marker.Span) ?u8 {
+pub fn atomicSteps(buffer: *const BufferType, y: u16, span: SpanType) ?u8 {
     if (span.from > span.to or span.to > buffer.w) {
         return null;
     }
@@ -348,7 +325,7 @@ pub fn atomicSteps(buffer: *const ui.Buffer, y: u16, span: path_marker.Span) ?u8
             steps += @intFromBool(cell.width != 0);
             x += 1;
         }
-        if (steps > max_marker_navigation_steps) {
+        if (steps > types.max_marker_navigation_steps) {
             return null;
         }
     }

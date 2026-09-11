@@ -1,8 +1,9 @@
+const CopyModePointerEffects = @import("CopyModePointerEffects.zig");
+const CopyModePointerCommand = @import("CopyModePointerCommand.zig");
+const copy_mode_pointer = @import("copy_mode_pointer.zig");
 const CopyModePointerHandler = @This();
-const Effects = @import("CopyModePointerEffects.zig");
-const Command = @import("CopyModePointerCommand.zig");
-const source_namespace = @import("copy_mode_pointer.zig");
-effects: Effects,
+
+effects: CopyModePointerEffects,
 
 /// Routes captured selection gestures before chrome or child input.
 /// Keyboard copy mode consumes non-wheel events; its inside wheel moves
@@ -11,7 +12,7 @@ effects: Effects,
 /// ```zig
 /// const outcome = try handler.execute(command, authority);
 /// ```
-pub fn execute(handler: *CopyModePointerHandler, command: Command, authority: source_namespace.Authority) !source_namespace.Outcome {
+pub fn execute(handler: *CopyModePointerHandler, command: CopyModePointerCommand, authority: copy_mode_pointer.Authority) !copy_mode_pointer.Outcome {
     const pointer_inside = switch (authority) {
         .unowned => return .unowned,
         .target_missing => {

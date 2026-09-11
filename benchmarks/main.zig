@@ -1,14 +1,52 @@
 //! Reproducible benchmarks for telar's interactive path.
 
+const Case = @import("Case.zig");
+const default_width = @import("telar-client").default_width;
 const std = @import("std");
+const Measurement = @import("Measurement.zig");
+const SpanType = @import("telar-core").Span;
+const FrameType = @import("telar-core").Frame;
+const CellType = @import("telar-core").Cell;
+const DamageContext = @import("DamageContext.zig");
+const collectSpans_module = @import("telar-backend").collectSpans;
+const FrameContext = @import("FrameContext.zig");
+const HistoryInputContext = @import("HistoryInputContext.zig");
+const EncodeContext = @import("EncodeContext.zig");
+const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
+const DecodeContext = @import("DecodeContext.zig");
+const decodeServer_module = @import("telar-core").decodeServer;
+const PipelineContext = @import("PipelineContext.zig");
+const apply_module = @import("telar-frontend").apply;
+const OutboxContext = @import("OutboxContext.zig");
+const GenericBinding = @import("telar-client").GenericBinding;
+const GenericRouter = @import("telar-frontend").GenericRouter;
+const KeybindContext = @import("KeybindContext.zig");
+const LuaCallbackContext = @import("LuaCallbackContext.zig");
+const ClientUiContext = @import("ClientUiContext.zig");
+const CursorContext = @import("CursorContext.zig");
+const PacerContext = @import("PacerContext.zig");
+const LayoutContext = @import("LayoutContext.zig");
+const WorkspaceLayoutSupportDirection = @import("telar-client").WorkspaceLayoutSupportDirection;
+const raw_module = @import("telar-core").raw;
+const CompositorType = @import("telar-frontend").Compositor;
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const ScreenType = @import("telar-frontend").Screen;
+const CompositionResultType = @import("telar-frontend").CompositionResult;
+const default_theme_module = @import("telar-frontend").default_theme;
+const MultiplexerContext = @import("MultiplexerContext.zig");
+const IncrementalComposeContext = @import("IncrementalComposeContext.zig");
+const GraphicsContext = @import("GraphicsContext.zig");
+const TransmitContext = @import("TransmitContext.zig");
+const KgpIngestContext = @import("KgpIngestContext.zig");
+const SharedFrameContext = @import("SharedFrameContext.zig");
+const TextRasterContext = @import("TextRasterContext.zig");
+const SurfaceType = @import("telar-frontend").Surface;
+const ColorType = @import("telar-frontend").Color;
+const ResultWriter = @import("ResultWriter.zig");
+const ExecutionResources = @import("ExecutionResources.zig");
+const Fixture = @import("Fixture.zig");
+const Config = @import("Config.zig");
 const builtin = @import("builtin");
-const core = @import("telar-core");
-const backend = @import("telar-backend");
-const frontend = @import("telar-frontend");
-const vt = @import("ghostty-vt");
-
-pub const Io = std.Io;
-pub const schema = core.schema;
 
 pub const cols: u16 = 154;
 pub const rows: u16 = 37;
@@ -40,10 +78,6 @@ const usage =
     \\  --help                Print this help
 ;
 
-const Config = @import("Config.zig");
-
-const Case = @import("Case.zig");
-
 const cases = [_]Case{
     .{ .name = "backend.damage.one_cell", .work_per_op = cols, .work_unit = "cells" },
     .{ .name = "backend.damage.fragmented", .work_per_op = fragmented_rows * cols, .work_unit = "cells" },
@@ -64,9 +98,9 @@ const cases = [_]Case{
     .{ .name = "frontend.lua.callback", .work_per_op = 1, .work_unit = "callbacks" },
     .{ .name = "frontend.pacer.late_frame", .work_per_op = 1, .work_unit = "frames" },
     .{ .name = "frontend.flush.cursor_only", .work_per_op = 1, .work_unit = "frames" },
-    .{ .name = "frontend.client_ui.chrome.tabs_1", .work_per_op = 2 * cols + sidebar_width * (rows - 2), .work_unit = "cells" },
-    .{ .name = "frontend.client_ui.chrome.tabs_8", .work_per_op = 2 * cols + sidebar_width * (rows - 2), .work_unit = "cells" },
-    .{ .name = "frontend.client_ui.chrome.tabs_64", .work_per_op = 2 * cols + sidebar_width * (rows - 2), .work_unit = "cells" },
+    .{ .name = "frontend.client_ui.chrome.tabs_1", .work_per_op = 2 * cols + default_width * (rows - 2), .work_unit = "cells" },
+    .{ .name = "frontend.client_ui.chrome.tabs_8", .work_per_op = 2 * cols + default_width * (rows - 2), .work_unit = "cells" },
+    .{ .name = "frontend.client_ui.chrome.tabs_64", .work_per_op = 2 * cols + default_width * (rows - 2), .work_unit = "cells" },
     .{ .name = "frontend.layout.directional_focus", .work_per_op = 4, .work_unit = "panes" },
     .{ .name = "frontend.multiplexer.compose_four", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "frontend.multiplexer.patch_one_cell", .work_per_op = 1, .work_unit = "cells" },
@@ -116,10 +150,8 @@ const cases = [_]Case{
     },
 };
 
-const Measurement = @import("Measurement.zig");
-
-fn timestamp(io: Io) u64 {
-    return @intCast(Io.Clock.awake.now(io).nanoseconds);
+fn timestamp(io: std.Io) u64 {
+    return @intCast(std.Io.Clock.awake.now(io).nanoseconds);
 }
 
 fn timed(input: anytype, iterations: usize, comptime run: fn (@TypeOf(input.context), usize) anyerror!u64) !u64 {
@@ -164,11 +196,7 @@ fn measure(input: anytype, comptime run: fn (@TypeOf(input.context), usize) anye
     };
 }
 
-const ResultWriter = @import("ResultWriter.zig");
-
-const Fixture = @import("Fixture.zig");
-
-pub fn frame(frame_id: u64, spans: []const schema.frame.Span) schema.frame.Frame {
+pub fn frame(frame_id: u64, spans: []const SpanType) FrameType {
     return .{
         .pane_id = @enumFromInt(1),
         .frame_id = frame_id,
@@ -180,7 +208,7 @@ pub fn frame(frame_id: u64, spans: []const schema.frame.Span) schema.frame.Frame
     };
 }
 
-pub fn fillEditor(cells: []core.ui.Cell, variant: u8) void {
+pub fn fillEditor(cells: []CellType, variant: u8) void {
     for (cells, 0..) |*cell, index| {
         const x = index % cols;
         const y = index / cols;
@@ -197,7 +225,7 @@ pub fn fillEditor(cells: []core.ui.Cell, variant: u8) void {
     }
 }
 
-pub fn fillFragmentedSpans(spans: []schema.frame.Span, cells: []const core.ui.Cell) void {
+pub fn fillFragmentedSpans(spans: []SpanType, cells: []const CellType) void {
     var span_index: usize = 0;
     for (0..fragmented_rows) |y| {
         for ([_]usize{ 12, 91 }) |cluster_start| {
@@ -214,13 +242,11 @@ pub fn fillFragmentedSpans(spans: []schema.frame.Span, cells: []const core.ui.Ce
     }
 }
 
-const DamageContext = @import("DamageContext.zig");
-
 fn runDamage(context: *DamageContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         context.current[context.changed_index].bytes[0] = if (iteration & 1 == 0) '0' else '1';
-        const diff = backend.damage.collectSpans(.{
+        const diff = collectSpans_module(.{
             .current = context.current,
             .acknowledged = context.acknowledged,
             .cols = cols,
@@ -230,8 +256,6 @@ fn runDamage(context: *DamageContext, iterations: usize) !u64 {
     }
     return checksum;
 }
-
-const FrameContext = @import("FrameContext.zig");
 
 fn runFrame(context: *FrameContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
@@ -244,8 +268,6 @@ fn runFrame(context: *FrameContext, iterations: usize) !u64 {
     return checksum;
 }
 
-const HistoryInputContext = @import("HistoryInputContext.zig");
-
 fn runHistoryInput(context: *HistoryInputContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |_| {
@@ -257,46 +279,38 @@ fn runHistoryInput(context: *HistoryInputContext, iterations: usize) !u64 {
     return checksum;
 }
 
-const EncodeContext = @import("EncodeContext.zig");
-
 fn runEncode(context: *EncodeContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         const spans = context.fixture.spans(context.workload, iteration & 1);
-        const payload = try schema.encodePaneFrame(context.fixture.encode_buffer, frame(2, spans));
+        const payload = try encodePaneFrame_module(context.fixture.encode_buffer, frame(2, spans));
         checksum +%= payload.len;
         checksum +%= payload[payload.len - 1];
     }
     return checksum;
 }
 
-const DecodeContext = @import("DecodeContext.zig");
-
 fn runDecode(context: *DecodeContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
-        const message = try schema.decodeServer(context.payloads[iteration & 1]);
+        const message = try decodeServer_module(context.payloads[iteration & 1]);
         const decoded = message.pane_frame;
         checksum +%= decoded.encoded_spans.len + decoded.span_count + decoded.frame_id;
     }
     return checksum;
 }
 
-const PipelineContext = @import("PipelineContext.zig");
-
 fn runPipeline(context: *PipelineContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
-        const message = try schema.decodeServer(context.payloads[iteration & 1]);
-        const applied = try frontend.frame.apply(&context.screen, message.pane_frame);
-        var writer = Io.Writer.fixed(context.output);
+        const message = try decodeServer_module(context.payloads[iteration & 1]);
+        const applied = try apply_module(&context.screen, message.pane_frame);
+        var writer = std.Io.Writer.fixed(context.output);
         const flushed = try context.screen.flush(&writer);
         checksum +%= applied.cells + flushed.cells + flushed.scanned + flushed.bytes;
     }
     return checksum;
 }
-
-const OutboxContext = @import("OutboxContext.zig");
 
 fn runOutboxInput(context: *OutboxContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
@@ -310,15 +324,13 @@ fn runOutboxInput(context: *OutboxContext, iterations: usize) !u64 {
 }
 
 pub const KeybindAction = enum(u8) { detach, palette };
-pub const KeybindBinding = frontend.keybind.Binding(KeybindAction, 4);
-pub const KeybindRouter = frontend.keybind.Router(KeybindAction, .{
+pub const KeybindBinding = GenericBinding(KeybindAction, 4);
+pub const KeybindRouter = GenericRouter(KeybindAction, .{
     .max_bindings = 16,
     .max_keys = 4,
     .input_capacity = 64,
     .held_capacity = 32,
 });
-
-const KeybindContext = @import("KeybindContext.zig");
 
 fn runKeybind(context: *KeybindContext, iterations: usize) !u64 {
     const input = "cargo test\x02d";
@@ -327,8 +339,6 @@ fn runKeybind(context: *KeybindContext, iterations: usize) !u64 {
     }
     return context.checksum;
 }
-
-const LuaCallbackContext = @import("LuaCallbackContext.zig");
 
 fn runLuaCallback(context: *LuaCallbackContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
@@ -348,12 +358,6 @@ fn runLuaCallback(context: *LuaCallbackContext, iterations: usize) !u64 {
     return checksum;
 }
 
-const CursorContext = @import("CursorContext.zig");
-
-pub const sidebar_width = frontend.client.sidebar_width;
-
-const ClientUiContext = @import("ClientUiContext.zig");
-
 fn runClientUi(context: *ClientUiContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
@@ -372,14 +376,12 @@ fn runCursor(context: *CursorContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         context.screen.cursor = .{ .x = @intCast(iteration % cols), .y = @intCast(iteration % rows) };
-        var writer = Io.Writer.fixed(context.output);
+        var writer = std.Io.Writer.fixed(context.output);
         const flushed = try context.screen.flush(&writer);
         checksum +%= flushed.bytes;
     }
     return checksum;
 }
-
-const PacerContext = @import("PacerContext.zig");
 
 fn runPacer(context: *PacerContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
@@ -395,14 +397,12 @@ fn runPacer(context: *PacerContext, iterations: usize) !u64 {
     return checksum;
 }
 
-const LayoutContext = @import("LayoutContext.zig");
-
 fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
-    const directions = [_]frontend.layout.Direction{ .right, .down, .left, .up };
+    const directions = [_]WorkspaceLayoutSupportDirection{ .right, .down, .left, .up };
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         if (context.layout.focusDirection(directions[iteration & 3], context.area)) |pane_id| {
-            checksum +%= schema.id.raw(pane_id);
+            checksum +%= raw_module(pane_id);
         }
     }
     return checksum;
@@ -410,15 +410,13 @@ fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
 
 /// Composes one model over the whole host screen with the default palette,
 /// the way the presenter does for a client without chrome.
-pub fn composeFullScreen(compositor: *frontend.multiplexer.Compositor, model: *const frontend.multiplexer.Model, screen: *frontend.term.Screen) !frontend.multiplexer.CompositionResult {
+pub fn composeFullScreen(compositor: *CompositorType, model: *const MultiplexerModel, screen: *ScreenType) !CompositionResultType {
     return compositor.render(.{
         .model = model,
         .screen = screen,
-        .input = .{ .area = screen.back.area(), .palette = &frontend.theme.default_theme.palette },
+        .input = .{ .area = screen.back.area(), .palette = &default_theme_module.palette },
     });
 }
-
-const MultiplexerContext = @import("MultiplexerContext.zig");
 
 fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
@@ -430,13 +428,11 @@ fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
     return checksum;
 }
 
-const IncrementalComposeContext = @import("IncrementalComposeContext.zig");
-
 fn runIncrementalCompose(context: *IncrementalComposeContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         context.model.find(@enumFromInt(1)).?.applied_frame_id = 1;
-        const frame_view = (try schema.decodeServer(
+        const frame_view = (try decodeServer_module(
             context.payloads[iteration & 1],
         )).pane_frame;
         _ = try context.model.applyFrame(frame_view);
@@ -445,8 +441,6 @@ fn runIncrementalCompose(context: *IncrementalComposeContext, iterations: usize)
     }
     return checksum;
 }
-
-const GraphicsContext = @import("GraphicsContext.zig");
 
 fn runGraphicsTransmission(context: *GraphicsContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
@@ -462,7 +456,7 @@ fn runGraphicsTransmission(context: *GraphicsContext, iterations: usize) !u64 {
             entry.value_ptr.delivery.dirty = true;
         }
         context.store.damage = true;
-        var output = Io.Writer.fixed(context.output);
+        var output = std.Io.Writer.fixed(context.output);
         var graphics_writer = context.writer();
         checksum +%= try graphics_writer.write(&output);
     }
@@ -473,22 +467,18 @@ fn runGraphicsIdle(context: *GraphicsContext, iterations: usize) !u64 {
     context.store.damage = false;
     var checksum: u64 = 0;
     for (0..iterations) |_| {
-        var output = Io.Writer.fixed(context.output);
+        var output = std.Io.Writer.fixed(context.output);
         var graphics_writer = context.writer();
         checksum +%= try graphics_writer.write(&output);
     }
     return checksum;
 }
 
-const TransmitContext = @import("TransmitContext.zig");
-
 fn runTransmitDelivery(context: *TransmitContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |_| checksum +%= try context.deliver();
     return checksum;
 }
-
-const KgpIngestContext = @import("KgpIngestContext.zig");
 
 fn runKgpIngest(context: *KgpIngestContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
@@ -500,8 +490,6 @@ fn runKgpIngest(context: *KgpIngestContext, iterations: usize) !u64 {
     }
     return checksum;
 }
-
-const SharedFrameContext = @import("SharedFrameContext.zig");
 
 fn runSharedFramePublish(context: *SharedFrameContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
@@ -528,15 +516,13 @@ fn runSharedFrameFreeze(context: *SharedFrameContext, iterations: usize) !u64 {
     return checksum;
 }
 
-const TextRasterContext = @import("TextRasterContext.zig");
-
 fn runTextRaster(context: *TextRasterContext, iterations: usize) !u64 {
-    const surface: frontend.text_rasterizer.Surface = .{
+    const surface: SurfaceType = .{
         .pixels = context.pixels,
         .width = TextRasterContext.width,
         .height = TextRasterContext.height,
     };
-    const color: frontend.text_rasterizer.Color = .{
+    const color: ColorType = .{
         .red = 220,
         .green = 230,
         .blue = 240,
@@ -549,8 +535,6 @@ fn runTextRaster(context: *TextRasterContext, iterations: usize) !u64 {
     }
     return checksum +% context.pixels[context.pixels.len / 2];
 }
-
-const ExecutionResources = @import("ExecutionResources.zig");
 
 fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: *Fixture) !void {
     const io = resources.io;
@@ -752,7 +736,7 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
     var graphics_transmit_case = cases[case_index];
     case_index += 1;
     if (config.includes(graphics_transmit_case.name)) {
-        var output = Io.Writer.fixed(fixture.terminal_output);
+        var output = std.Io.Writer.fixed(fixture.terminal_output);
         var graphics_writer = graphics_context.writer();
         graphics_transmit_case.payload_bytes_per_op = try graphics_writer.write(&output);
         try result_writer.write(
@@ -800,17 +784,17 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     const config = Config.parse(args) catch |err| switch (err) {
         error.HelpRequested => {
-            try Io.File.stdout().writeStreamingAll(init.io, usage);
+            try std.Io.File.stdout().writeStreamingAll(init.io, usage);
             return;
         },
         else => {
-            try Io.File.stderr().writeStreamingAll(init.io, usage);
+            try std.Io.File.stderr().writeStreamingAll(init.io, usage);
             return err;
         },
     };
 
     var stdout_buffer: [16 * 1024]u8 = undefined;
-    var stdout_writer = Io.File.stdout().writer(init.io, &stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(init.io, &stdout_buffer);
     const writer = &stdout_writer.interface;
 
     if (config.list) {

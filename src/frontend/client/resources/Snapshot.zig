@@ -1,21 +1,26 @@
+const TabIdType = @import("telar-core").TabId;
+const PaneIdType = @import("telar-core").PaneId;
+const SnapshotType = @import("telar-client").OutboxSnapshot;
+const HostCapabilitiesType = @import("telar-client").HostCapabilities;
+const SupportType = @import("telar-client").Support;
+const capabilities_module = @import("../../graphics/capabilities.zig");
+const TimingType = @import("telar-core").Timing;
+const CoreSnapshotSnapshot = @import("telar-core").SnapshotSnapshot;
 const Snapshot = @This();
-const source_namespace = @import("telemetry.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
-const client_model = @import("telar-client").model;
-const kitty = @import("../../graphics/root.zig").kitty;
+
 theme_name: []const u8,
 icon_theme_name: []const u8,
-active_tab: source_namespace.schema.TabId,
+active_tab: TabIdType,
 tab_count: usize,
-focused_pane: source_namespace.schema.PaneId,
+focused_pane: PaneIdType,
 pane_count: usize,
 pending_updates: usize,
 draw_pending: bool,
 media_pending: bool,
-outbox: runtime_transport.Snapshot,
-capabilities: client_model.HostCapabilities,
-zlib_support: kitty.Support = .unknown,
-sidebar_rendering: kitty.ResolvedSidebarRendering,
+outbox: SnapshotType,
+capabilities: HostCapabilitiesType,
+zlib_support: SupportType = .unknown,
+sidebar_rendering: capabilities_module.ResolvedSidebarRendering,
 lua_used: usize,
 lua_limit: usize,
 kitty_store_bytes: usize,
@@ -27,5 +32,5 @@ pill_cache_bytes: usize = 0,
 attachment_cache_bytes: usize,
 screen_bytes: usize,
 shared_expiries: u8,
-shared_retire_latency: source_namespace.diagnostics.Timing,
-heap: source_namespace.diagnostics.Heap.Snapshot,
+shared_retire_latency: TimingType,
+heap: CoreSnapshotSnapshot,

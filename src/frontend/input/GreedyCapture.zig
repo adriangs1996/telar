@@ -1,7 +1,8 @@
+const Key = @import("telar-client").Key;
+const keybind = @import("keybind.zig");
+const Control = @import("telar-client").Control;
 const GreedyCapture = @This();
-const Key = @import("telar-client").input.Key;
-const source_namespace = @import("keybind.zig");
-const Control = @import("telar-client").input.keybind.Control;
+
 keys: [8]Key = undefined,
 key_count: usize = 0,
 action_count: usize = 0,
@@ -17,7 +18,7 @@ pub fn key(capture: *GreedyCapture, value: Key) !void {
 
 pub fn forward(_: *GreedyCapture, _: []const u8) !void {}
 
-pub fn action(capture: *GreedyCapture, _: source_namespace.TestAction) !Control {
+pub fn action(capture: *GreedyCapture, _: keybind.TestAction) !Control {
     capture.action_count += 1;
     return .continue_routing;
 }

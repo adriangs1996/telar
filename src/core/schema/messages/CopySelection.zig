@@ -1,7 +1,8 @@
+const id = @import("../id.zig");
 /// Selection coordinates use the full screen history, not viewport rows.
 const CopySelection = @This();
-const source_namespace = @import("pane.zig");
-pane_id: source_namespace.PaneId,
+
+pane_id: id.PaneId,
 start_x: u16,
 start_y: u32,
 end_x: u16,

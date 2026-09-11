@@ -1,13 +1,14 @@
 //! Launch-directory authority shared by client request entrypoints.
 
-const core = @import("telar-core");
-
-const schema = core.schema;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const LaunchViewType = @import("telar-core").LaunchView;
+const std = @import("std");
 
 pub const CwdSourceScope = union(enum) {
     any,
-    workspace: schema.WorkspaceLocation,
-    tab: schema.TabLocation,
+    workspace: WorkspaceLocationType,
+    tab: TabLocationType,
 };
 
 /// Resolves a launch directory from either the explicit request value or a
@@ -16,7 +17,7 @@ pub const CwdSourceScope = union(enum) {
 /// ```zig
 /// const cwd = try resolveLaunchCwd(&attachments, launch, .{ .workspace = workspace });
 /// ```
-pub fn resolveLaunchCwd(attachments: anytype, launch: schema.LaunchView, scope: CwdSourceScope) ![]const u8 {
+pub fn resolveLaunchCwd(attachments: anytype, launch: LaunchViewType, scope: CwdSourceScope) ![]const u8 {
     const source_id = launch.cwd_source orelse return launch.cwd;
     const attachment = attachments.find(source_id) orelse
         return error.CwdSourcePaneUnavailable;
@@ -29,12 +30,12 @@ pub fn resolveLaunchCwd(attachments: anytype, launch: schema.LaunchView, scope: 
     switch (scope) {
         .any => {},
         .workspace => |workspace| {
-            if (!@import("std").meta.eql(pane.location.workspace, workspace)) {
+            if (!std.meta.eql(pane.location.workspace, workspace)) {
                 return error.CwdSourceOutsideWorkspace;
             }
         },
         .tab => |location| {
-            if (!@import("std").meta.eql(pane.location, location)) {
+            if (!std.meta.eql(pane.location, location)) {
                 return error.CwdSourceOutsideTab;
             }
         },

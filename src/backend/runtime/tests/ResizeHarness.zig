@@ -1,15 +1,17 @@
-const ResizeHarness = @This();
 const Trace = @import("Trace.zig");
 const GeometryCapture = @import("GeometryCapture.zig");
 const SchedulerCapture = @import("SchedulerCapture.zig");
-const pane_resize_commands = @import("../application/commands/pane_resize.zig");
-const source_namespace = @import("pane_resize_test.zig");
+const PaneResizeHandlerType = @import("../application/commands/PaneResizeHandler.zig");
+const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const ResizeHarness = @This();
+
 trace: Trace = .{},
 geometry: GeometryCapture = undefined,
 scheduler: SchedulerCapture = undefined,
-handler: pane_resize_commands.PaneResizeHandler = undefined,
+handler: PaneResizeHandlerType = undefined,
 
-pub fn init(harness: *ResizeHarness, attachments: *source_namespace.AttachmentStore, expected_size: source_namespace.schema.TerminalSize) void {
+pub fn init(harness: *ResizeHarness, attachments: *AttachmentStoreType, expected_size: TerminalSizeType) void {
     harness.trace = .{};
     harness.geometry = .{ .trace = &harness.trace, .attachments = attachments };
     harness.scheduler = .{

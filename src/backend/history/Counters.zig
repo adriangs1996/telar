@@ -1,6 +1,7 @@
-const Counters = @This();
 const std = @import("std");
 const Snapshot = @import("Snapshot.zig");
+const Counters = @This();
+
 queued: std.atomic.Value(u64) = .init(0),
 queue_high_water: std.atomic.Value(u64) = .init(0),
 dropped: std.atomic.Value(u64) = .init(0),

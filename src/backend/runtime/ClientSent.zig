@@ -1,4 +1,5 @@
+const ClientKey = @import("../history/ClientKey.zig");
 const ClientSent = @This();
-const client_session = @import("client/root.zig").session;
-client: client_session.Key,
+
+client: ClientKey,
 result: anyerror!void,

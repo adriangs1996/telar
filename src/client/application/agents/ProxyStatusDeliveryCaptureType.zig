@@ -1,20 +1,22 @@
+const ModelType = @import("../../model/Model.zig");
+const ProxyStatusCommitType = @import("../../model/ProxyStatusCommit.zig");
+const ProxyStatusDeliveryEffects = @import("ProxyStatusDeliveryEffects.zig");
+const InputType = @import("../../notifications/NotificationInput.zig");
+const proxy_status_delivery = @import("proxy_status_delivery.zig");
 const Capture = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("ProxyStatusDeliveryEffects.zig");
-const notification_capability = @import("../../root.zig").notifications;
-const source_namespace = @import("proxy_status_delivery.zig");
-model: *const client_model.Model,
-expected: client_model.ProxyStatusCommit,
+
+model: *const ModelType,
+expected: ProxyStatusCommitType,
 calls: usize = 0,
 observed_commit: bool = false,
 notification_valid: bool = false,
 fail: bool = false,
 
-pub fn effects(capture: *Capture) Effects {
+pub fn effects(capture: *Capture) ProxyStatusDeliveryEffects {
     return .{ .context = capture, .publish_notification = publishNotification };
 }
 
-fn publishNotification(context: *anyopaque, input: notification_capability.Input) !void {
+fn publishNotification(context: *anyopaque, input: InputType) !void {
     const capture: *Capture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.observed_commit = capture.model.proxyTlsActive() == capture.expected.active and
@@ -22,7 +24,7 @@ fn publishNotification(context: *anyopaque, input: notification_capability.Input
         capture.model.proxySystemTrusted() == capture.expected.system_trusted and
         capture.model.version().proxy_status == capture.expected.proxy_status_revision and
         capture.expected.proxy_status_revision_before +% 1 == capture.expected.proxy_status_revision;
-    capture.notification_valid = source_namespace.expectedNotification(capture.expected, input);
+    capture.notification_valid = proxy_status_delivery.expectedNotification(capture.expected, input);
 
     if (capture.fail) {
         return error.NotificationPublicationFailed;

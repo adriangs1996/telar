@@ -1,6 +1,5 @@
+const Config = @import("Config.zig");
 const std = @import("std");
-
-pub const Config = @import("Config.zig");
 
 pub const ParseResult = union(enum) {
     config: Config,

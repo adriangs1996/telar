@@ -1,9 +1,10 @@
-const Capture = @This();
-const source_namespace = @import("connection_admission.zig");
+const connection_admission = @import("connection_admission.zig");
 const std = @import("std");
-steps: [20]source_namespace.Step = undefined,
+const Capture = @This();
+
+steps: [20]connection_admission.Step = undefined,
 len: usize = 0,
-accepts: [4]source_namespace.AcceptResult = undefined,
+accepts: [4]connection_admission.AcceptResult = undefined,
 accept_len: usize = 0,
 accept_index: usize = 0,
 slot_available: bool = true,
@@ -12,7 +13,7 @@ started_stream: ?u8 = null,
 closed_stream: ?u8 = null,
 releases: usize = 0,
 
-fn record(capture: *Capture, step: source_namespace.Step) void {
+fn record(capture: *Capture, step: connection_admission.Step) void {
     std.debug.assert(capture.len < capture.steps.len);
     capture.steps[capture.len] = step;
     capture.len += 1;
@@ -39,7 +40,7 @@ pub fn acquire(capture: *Capture) bool {
     return capture.slot_available;
 }
 
-pub fn start(capture: *Capture, _: *source_namespace.Io.Group, stream: u8) !void {
+pub fn start(capture: *Capture, _: *std.Io.Group, stream: u8) !void {
     capture.record(.start);
 
     if (capture.start_fails) {
@@ -59,6 +60,6 @@ pub fn close(capture: *Capture, stream: u8) void {
     capture.closed_stream = stream;
 }
 
-pub fn cancel(capture: *Capture, _: *source_namespace.Io.Group) void {
+pub fn cancel(capture: *Capture, _: *std.Io.Group) void {
     capture.record(.cancel);
 }

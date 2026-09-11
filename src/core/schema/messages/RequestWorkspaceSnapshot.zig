@@ -1,4 +1,6 @@
+const id = @import("../id.zig");
+const types = @import("../types.zig");
 const RequestWorkspaceSnapshot = @This();
-const source_namespace = @import("workspace.zig");
-request_id: source_namespace.RequestId,
-workspace: source_namespace.WorkspaceLocation,
+
+request_id: id.RequestId,
+workspace: types.WorkspaceLocation,

@@ -1,5 +1,6 @@
-const ReportEffect = @This();
-const source_namespace = @import("pane_mouse.zig");
+const PaneMousePlanType = @import("../../workspace/PaneMousePlan.zig");
 const PointerCommand = @import("PointerCommand.zig");
-plan: source_namespace.multiplexer.PaneMousePlan,
+const ReportEffect = @This();
+
+plan: PaneMousePlanType,
 command: PointerCommand,

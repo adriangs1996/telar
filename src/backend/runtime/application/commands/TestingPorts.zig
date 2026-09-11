@@ -1,9 +1,10 @@
-const TestingPorts = @This();
 const PanesCapture = @import("PanesCapture.zig");
-const AuthorityCapture = @import("OpenPaneAuthorityCapture.zig");
-const GeometryCapture = @import("OpenPaneGeometryCapture.zig");
-const EventCapture = @import("OpenPaneEventCapture.zig");
+const OpenPaneAuthorityCapture = @import("OpenPaneAuthorityCapture.zig");
+const OpenPaneGeometryCapture = @import("OpenPaneGeometryCapture.zig");
+const OpenPaneEventCapture = @import("OpenPaneEventCapture.zig");
+const TestingPorts = @This();
+
 panes: *PanesCapture,
-authority: *AuthorityCapture,
-geometry: *GeometryCapture,
-events: *EventCapture,
+authority: *OpenPaneAuthorityCapture,
+geometry: *OpenPaneGeometryCapture,
+events: *OpenPaneEventCapture,

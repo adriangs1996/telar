@@ -1,17 +1,18 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("rename_workspace.zig");
+const ModelType = @import("../../model/Model.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const std = @import("std");
-model: *client_model.Model,
-workspace: source_namespace.schema.WorkspaceLocation,
+const TestingModel = @This();
+
+model: *ModelType,
+workspace: WorkspaceLocationType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),

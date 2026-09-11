@@ -1,8 +1,25 @@
 const std = @import("std");
-const core = @import("telar-core");
-const backend = @import("telar-backend");
-const frontend = @import("telar-frontend");
-pub const handshake = core.handshake;
+const SocketChannelType = @import("telar-core").SocketChannel;
+const LocalListenerType = @import("telar-backend").LocalListener;
+const connect_module = @import("telar-frontend").connect;
+const HandshakeWorker = @import("HandshakeWorker.zig");
+const schema_id_module = @import("telar-core").schema_id;
+const performSchema_module = @import("telar-frontend").performSchema;
+const RejectReasonType = @import("telar-core").RejectReason;
+const root = @import("telar-core").root;
+const serve_module = @import("telar-backend").serve;
+const LaunchPhaseType = @import("telar-backend").LaunchPhase;
+const LaunchTestFaultType = @import("telar-backend").LaunchTestFault;
+const max_frame_size_module = @import("telar-core").max_frame_size;
+const CellType = @import("telar-core").Cell;
+const encodeKey_module = @import("telar-client").encodeKey;
+const parse_module = @import("telar-frontend").parse;
+const IngestTestGateType = @import("telar-backend").IngestTestGate;
+const StoreType = @import("telar-frontend").Store;
+const max_input_bytes_module = @import("telar-core").max_input_bytes;
+const RuntimeTestChannel = @import("RuntimeTestChannel.zig");
+const perform_module = @import("telar-frontend").perform;
+const FrameViewType = @import("telar-core").FrameView;
 
 const test_receive_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(15) },
@@ -13,9 +30,7 @@ pub const TestReceiveEvent = union(enum) {
     expired: anyerror!void,
 };
 
-const RuntimeTestChannel = @import("RuntimeTestChannel.zig");
-
-pub fn receiveRuntimeFrame(io: std.Io, connection: *core.transport.SocketChannel, buffer: []u8) anyerror![]u8 {
+pub fn receiveRuntimeFrame(io: std.Io, connection: *SocketChannelType, buffer: []u8) anyerror![]u8 {
     return connection.receive(io, buffer);
 }
 
@@ -38,8 +53,6 @@ fn waitForFile(io: std.Io, path: []const u8, attempts: usize) !bool {
     return false;
 }
 
-const HandshakeWorker = @import("HandshakeWorker.zig");
-
 test "frontend and backend exchange framed messages over a local socket" {
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
@@ -52,14 +65,14 @@ test "frontend and backend exchange framed messages over a local socket" {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/transport.sock", .{directory});
 
-    var listener = try backend.transport.local.LocalListener.listen(io, path);
+    var listener = try LocalListenerType.listen(io, path);
     defer listener.deinit(io);
 
     const stat = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
     try std.testing.expectEqual(std.Io.File.Kind.unix_domain_socket, stat.kind);
     try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
 
-    var client = try frontend.transport.local.connect(io, path);
+    var client = try connect_module(io, path);
     defer client.deinit(io);
     var peer = try listener.accept(io);
     defer peer.deinit(io);
@@ -93,15 +106,15 @@ test "a second backend cannot replace a live endpoint" {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/transport.sock", .{directory});
 
-    var listener = try backend.transport.local.LocalListener.listen(io, path);
+    var listener = try LocalListenerType.listen(io, path);
     defer listener.deinit(io);
 
     try std.testing.expectError(
         error.AddressInUse,
-        backend.transport.local.LocalListener.listen(io, path),
+        LocalListenerType.listen(io, path),
     );
 
-    var client = try frontend.transport.local.connect(io, path);
+    var client = try connect_module(io, path);
     client.deinit(io);
 }
 
@@ -116,9 +129,9 @@ test "frontend and backend accept the same schema" {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/handshake.sock", .{directory});
 
-    var listener = try backend.transport.local.LocalListener.listen(io, path);
+    var listener = try LocalListenerType.listen(io, path);
     defer listener.deinit(io);
-    var client = try frontend.transport.local.connect(io, path);
+    var client = try connect_module(io, path);
     defer client.deinit(io);
     var peer = try listener.accept(io);
     defer peer.deinit(io);
@@ -126,20 +139,20 @@ test "frontend and backend accept the same schema" {
     var worker = HandshakeWorker{
         .io = io,
         .connection = &peer,
-        .supported = handshake.schema_id,
+        .supported = schema_id_module,
     };
     const thread = try std.Thread.spawn(.{}, HandshakeWorker.run, .{&worker});
-    const client_response = try frontend.transport.handshake.performSchema(
+    const client_response = try performSchema_module(
         io,
         &client,
-        handshake.schema_id,
+        schema_id_module,
     );
     thread.join();
 
     if (worker.failure) |err| {
         return err;
     }
-    try std.testing.expectEqual(handshake.schema_id, client_response.accepted.schema);
+    try std.testing.expectEqual(schema_id_module, client_response.accepted.schema);
     try std.testing.expectEqualDeep(client_response, worker.response.?);
 }
 
@@ -154,22 +167,22 @@ test "backend explains an incompatible schema" {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrint(&path_buffer, "{s}/handshake.sock", .{directory});
 
-    var listener = try backend.transport.local.LocalListener.listen(io, path);
+    var listener = try LocalListenerType.listen(io, path);
     defer listener.deinit(io);
-    var client = try frontend.transport.local.connect(io, path);
+    var client = try connect_module(io, path);
     defer client.deinit(io);
     var peer = try listener.accept(io);
     defer peer.deinit(io);
 
-    var client_schema = handshake.schema_id;
+    var client_schema = schema_id_module;
     client_schema[0] ^= 1;
     var worker = HandshakeWorker{
         .io = io,
         .connection = &peer,
-        .supported = handshake.schema_id,
+        .supported = schema_id_module,
     };
     const thread = try std.Thread.spawn(.{}, HandshakeWorker.run, .{&worker});
-    const client_response = try frontend.transport.handshake.performSchema(
+    const client_response = try performSchema_module(
         io,
         &client,
         client_schema,
@@ -180,17 +193,17 @@ test "backend explains an incompatible schema" {
         return err;
     }
     try std.testing.expectEqual(
-        handshake.RejectReason.incompatible_schema,
+        RejectReasonType.incompatible_schema,
         client_response.rejected.reason,
     );
-    try std.testing.expectEqual(handshake.schema_id, client_response.rejected.expected_schema);
+    try std.testing.expectEqual(schema_id_module, client_response.rejected.expected_schema);
     try std.testing.expectEqualDeep(client_response, worker.response.?);
 }
 
 test "runtime stops with a live pane and removes its endpoint" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -205,7 +218,7 @@ test "runtime stops with a live pane and removes its endpoint" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -261,7 +274,7 @@ test "runtime stops with a live pane and removes its endpoint" {
 }
 
 test "partial pane actor startup aborts only that launch" {
-    for ([_]backend.history.LaunchPhase{
+    for ([_]LaunchPhaseType{
         .pane_registration,
         .wait_actor,
         .output_actor,
@@ -271,7 +284,7 @@ test "partial pane actor startup aborts only that launch" {
 test "invalid launch cwd fails before workspace commit" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -285,7 +298,7 @@ test "invalid launch cwd fails before workspace commit" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -344,10 +357,10 @@ test "invalid launch cwd fails before workspace commit" {
     };
 }
 
-fn expectPartialLaunchRecovery(phase: backend.history.LaunchPhase) !void {
+fn expectPartialLaunchRecovery(phase: LaunchPhaseType) !void {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -359,8 +372,8 @@ fn expectPartialLaunchRecovery(phase: backend.history.LaunchPhase) !void {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var fault: backend.runtime.LaunchTestFault = .{ .phase = phase };
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var fault: LaunchTestFaultType = .{ .phase = phase };
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -444,7 +457,7 @@ fn expectPartialLaunchRecovery(phase: backend.history.LaunchPhase) !void {
 test "runtime destroys a pane after its shell exits" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -456,7 +469,7 @@ test "runtime destroys a pane after its shell exits" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -481,9 +494,9 @@ test "runtime destroys a pane after its shell exits" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
-    var cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var cells: [40 * 8]CellType = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
     var location: ?schema.TabLocation = null;
     var saw_output = false;
@@ -579,7 +592,7 @@ test "runtime destroys a pane after its shell exits" {
 test "the last pane closes only its tab when the workspace has another tab" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -591,7 +604,7 @@ test "the last pane closes only its tab when the workspace has another tab" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -604,7 +617,7 @@ test "the last pane closes only its tab when the workspace has another tab" {
     var connection = try connectRuntimeForTest(io, path);
     defer connection.deinit(io);
     var send_buffer: [4096]u8 = undefined;
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
 
     try connection.send(io, try schema.encodeOpenPane(&send_buffer, .{
@@ -680,7 +693,7 @@ test "the last pane closes only its tab when the workspace has another tab" {
 test "an exited detached pane removes its tab and workspace" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -692,7 +705,7 @@ test "an exited detached pane removes its tab and workspace" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -741,7 +754,7 @@ test "an exited detached pane removes its tab and workspace" {
 test "one client drives two attached panes and closes either one" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -753,7 +766,7 @@ test "one client drives two attached panes and closes either one" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -766,7 +779,7 @@ test "one client drives two attached panes and closes either one" {
     var connection = try connectRuntimeForTest(io, path);
     defer connection.deinit(io);
     var send_buffer: [1024]u8 = undefined;
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
 
     const first_arguments = [_][]const u8{
@@ -830,8 +843,8 @@ test "one client drives two attached panes and closes either one" {
         .bytes = "two\n",
     }));
 
-    var first_cells: [40 * 8]core.ui.Cell = @splat(.{});
-    var second_cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var first_cells: [40 * 8]CellType = @splat(.{});
+    var second_cells: [40 * 8]CellType = @splat(.{});
     var saw_first = false;
     var saw_second = false;
     var close_sent = false;
@@ -900,7 +913,7 @@ test "one client drives two attached panes and closes either one" {
 test "pane keeps running while its client is disconnected" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -916,7 +929,7 @@ test "pane keeps running while its client is disconnected" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -945,7 +958,7 @@ test "pane keeps running while its client is disconnected" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
     var original_pane_id: schema.PaneId = .invalid;
     while (original_pane_id == .invalid) {
@@ -968,7 +981,7 @@ test "pane keeps running while its client is disconnected" {
         .launch = .{ .cwd = directory, .arguments = &.{"/bin/false"} },
     }));
 
-    var cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var cells: [40 * 8]CellType = @splat(.{});
     var saw_output = false;
     var attached = false;
     var finish_released = false;
@@ -1032,7 +1045,7 @@ test "pane keeps running while its client is disconnected" {
 test "runtime keeps independent panes for different workspaces" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1044,7 +1057,7 @@ test "runtime keeps independent panes for different workspaces" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -1115,7 +1128,7 @@ test "runtime keeps independent panes for different workspaces" {
 test "explicit workspace creation and selection use identity instead of path" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1127,9 +1140,9 @@ test "explicit workspace creation and selection use identity instead of path" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var fault: backend.runtime.LaunchTestFault = .{ .phase = .pane_registration };
+    var fault: LaunchTestFaultType = .{ .phase = .pane_registration };
     fault.claimed.store(true, .release);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -1276,7 +1289,7 @@ test "explicit workspace creation and selection use identity instead of path" {
 test "tab launch inherits cwd from a runtime-owned pane" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1293,7 +1306,7 @@ test "tab launch inherits cwd from a runtime-owned pane" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -1395,7 +1408,7 @@ test "tab launch inherits cwd from a runtime-owned pane" {
 test "runtime owns the complete tab lifecycle" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1407,7 +1420,7 @@ test "runtime owns the complete tab lifecycle" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -1540,7 +1553,7 @@ test "runtime owns the complete tab lifecycle" {
 test "runtime retains a terminal layout across client reconnection" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1552,7 +1565,7 @@ test "runtime retains a terminal layout across client reconnection" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -1668,7 +1681,7 @@ test "runtime retains a terminal layout across client reconnection" {
 test "a reconnect restores tab order labels and pane membership" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1680,7 +1693,7 @@ test "a reconnect restores tab order labels and pane membership" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -1815,7 +1828,7 @@ test "a reconnect restores tab order labels and pane membership" {
 test "an identical pane resize does not emit another snapshot" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1827,7 +1840,7 @@ test "an identical pane resize does not emit another snapshot" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -1846,7 +1859,7 @@ test "an identical pane resize does not emit another snapshot" {
         .launch = .{ .cwd = directory, .arguments = &.{ "/bin/sleep", "600" } },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
     var pane_id: schema.PaneId = .invalid;
     var location: ?schema.TabLocation = null;
@@ -1900,7 +1913,7 @@ test "an identical pane resize does not emit another snapshot" {
 test "runtime persists terminal-edited commands without shell integration" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -1922,7 +1935,7 @@ test "runtime persists terminal-edited commands without shell integration" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{
+    var server = try io.concurrent(serve_module, .{
         io,
         gpa,
         .{
@@ -1952,13 +1965,13 @@ test "runtime persists terminal-edited commands without shell integration" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
     var pane_id: schema.PaneId = .invalid;
     var input_sent = false;
     var saw_graphics = false;
     var saw_root_cwd = false;
-    var cells: [80 * 24]core.ui.Cell = @splat(.{});
+    var cells: [80 * 24]CellType = @splat(.{});
     while (true) {
         switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
             .pane_opened => |opened| pane_id = opened.pane_id,
@@ -2030,7 +2043,7 @@ test "runtime persists terminal-edited commands without shell integration" {
 test "modified Enter follows the compatibility profile and child keyboard negotiation through the PTY" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -2041,7 +2054,7 @@ test "modified Enter follows the compatibility profile and child keyboard negoti
     const socket_path = try std.fmt.bufPrint(&socket_buffer, "{s}/keyboard.sock", .{directory});
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -2082,9 +2095,9 @@ test "modified Enter follows the compatibility profile and child keyboard negoti
         .{ .marker = "XTERM_READY", .expected = "\x1b[27;2;13~\r" },
         .{ .marker = "LEGACY_READY", .expected = "\r\r" },
     };
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
-    var cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var cells: [40 * 8]CellType = @splat(.{});
     var stage: usize = 0;
     while (true) switch (try schema.decodeServer(connection.receive(io, receive_buffer) catch |err| {
         const expected = if (stage < stages.len) stages[stage].marker else "INPUT_OK";
@@ -2107,14 +2120,14 @@ test "modified Enter follows the compatibility profile and child keyboard negoti
                 continue;
             }
             var input_buffer: [64]u8 = undefined;
-            const shifted = try frontend.input.encodeKey(
+            const shifted = try encodeKey_module(
                 &input_buffer,
-                frontend.term.parse("\x1b[13;2:1u").?.event.key,
+                parse_module("\x1b[13;2:1u").?.event.key,
                 frame.input_modes,
             );
-            const plain = try frontend.input.encodeKey(
+            const plain = try encodeKey_module(
                 input_buffer[shifted.len..],
-                frontend.term.parse("\r").?.event.key,
+                parse_module("\r").?.event.key,
                 frame.input_modes,
             );
             const bytes = input_buffer[0 .. shifted.len + plain.len];
@@ -2134,7 +2147,7 @@ test "modified Enter follows the compatibility profile and child keyboard negoti
 test "PTY input remains live while the bounded ingest actor is occupied" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -2152,11 +2165,11 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
     var entered: std.Io.Queue(u8) = .init(&entered_storage);
     var release: std.Io.Queue(u8) = .init(&release_storage);
-    var gate: backend.runtime.IngestTestGate = .{
+    var gate: IngestTestGateType = .{
         .entered = &entered,
         .release = &release,
     };
-    var server = try io.concurrent(backend.runtime.serve, .{
+    var server = try io.concurrent(serve_module, .{
         io,
         gpa,
         .{
@@ -2196,7 +2209,7 @@ test "PTY input remains live while the bounded ingest actor is occupied" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
     var pane_id: schema.PaneId = .invalid;
     while (pane_id == .invalid) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
@@ -2255,7 +2268,7 @@ test "runtime decodes PNG from a real PTY and resynchronizes RGBA pixels" {
 fn expectGraphicsRoundtrip(comptime transmission: []const u8) !void {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -2267,7 +2280,7 @@ fn expectGraphicsRoundtrip(comptime transmission: []const u8) !void {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = socket_path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -2303,11 +2316,11 @@ fn expectGraphicsRoundtrip(comptime transmission: []const u8) !void {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
-    var store = frontend.kitty.Store.init(gpa);
+    var store = StoreType.init(gpa);
     defer store.deinit();
-    var cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var cells: [40 * 8]CellType = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
     var saw_child_reply = false;
     var saw_image = false;
@@ -2384,7 +2397,7 @@ fn expectGraphicsRoundtrip(comptime transmission: []const u8) !void {
 test "a silent connection cannot starve later clients" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -2396,7 +2409,7 @@ test "a silent connection cannot starve later clients" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -2411,7 +2424,7 @@ test "a silent connection cannot starve later clients" {
     var probe = try connectRuntimeForTest(io, path);
     probe.deinit(io);
     var silent = while (true) {
-        if (frontend.transport.local.connect(io, path)) |connection| {
+        if (connect_module(io, path)) |connection| {
             break connection;
         } else |_| {
             try io.sleep(.fromMilliseconds(1), .awake);
@@ -2438,7 +2451,7 @@ test "a silent connection cannot starve later clients" {
 test "input to one pane flows while another pane's PTY is wedged" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -2454,7 +2467,7 @@ test "input to one pane flows while another pane's PTY is wedged" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -2466,8 +2479,8 @@ test "input to one pane flows while another pane's PTY is wedged" {
 
     var connection = try connectRuntimeForTest(io, path);
     defer connection.deinit(io);
-    var send_buffer: [core.schema.max_input_bytes + 512]u8 = undefined;
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    var send_buffer: [max_input_bytes_module + 512]u8 = undefined;
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
 
     // Pane A: raw mode, then stopped. Its PTY input queue fills and the
@@ -2481,7 +2494,7 @@ test "input to one pane flows while another pane's PTY is wedged" {
     }));
     var wedged_pane: schema.PaneId = .invalid;
     var wedged_location: schema.TabLocation = undefined;
-    var cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var cells: [40 * 8]CellType = @splat(.{});
     var a_ready = false;
     while (!a_ready) switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
         .pane_opened => |opened| {
@@ -2552,7 +2565,7 @@ test "input to one pane flows while another pane's PTY is wedged" {
 test "two clients observe one pane with independent frame acknowledgement" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -2564,7 +2577,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -2589,9 +2602,9 @@ test "two clients observe one pane with independent frame acknowledgement" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const first_receive = try gpa.alloc(u8, core.transport.max_frame_size);
+    const first_receive = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(first_receive);
-    var first_cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var first_cells: [40 * 8]CellType = @splat(.{});
     var pane_id: schema.PaneId = .invalid;
     var first_snapshot = false;
     var child_ready = false;
@@ -2623,9 +2636,9 @@ test "two clients observe one pane with independent frame acknowledgement" {
         .size = .{ .cols = 80, .rows = 20 },
         .launch = null,
     }));
-    const second_receive = try gpa.alloc(u8, core.transport.max_frame_size);
+    const second_receive = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(second_receive);
-    var second_cells: [40 * 8]core.ui.Cell = @splat(.{});
+    var second_cells: [40 * 8]CellType = @splat(.{});
     var second_opened = false;
     var second_snapshot = false;
     while (!second_opened or !second_snapshot) {
@@ -2720,7 +2733,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
         .pane_id = pane_id,
         .size = .{ .cols = 80, .rows = 20 },
     }));
-    var resized_cells: [80 * 20]core.ui.Cell = @splat(.{});
+    var resized_cells: [80 * 20]CellType = @splat(.{});
     while (true) switch (try schema.decodeServer(try second.receive(io, second_receive))) {
         .pane_frame => |frame| {
             try second.send(io, try schema.encodeFrameAck(&second_send, .{
@@ -2741,7 +2754,7 @@ test "two clients observe one pane with independent frame acknowledgement" {
 test "a stale attachment command does not disconnect the client" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -2753,7 +2766,7 @@ test "a stale attachment command does not disconnect the client" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -2778,7 +2791,7 @@ test "a stale attachment command does not disconnect the client" {
         .launch = .{ .cwd = directory, .arguments = &arguments },
     }));
 
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     defer gpa.free(receive_buffer);
     for (0..32) |_| switch (try schema.decodeServer(try connection.receive(io, receive_buffer))) {
         .pane_opened => |opened| {
@@ -2794,7 +2807,7 @@ test "a stale attachment command does not disconnect the client" {
 test "runtime broadcasts a bounded notification and acknowledges delivery" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    const schema = core.schema;
+    const schema = root;
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
 
@@ -2809,7 +2822,7 @@ test "runtime broadcasts a bounded notification and acknowledges delivery" {
 
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(backend.runtime.serve, .{ io, gpa, .{
+    var server = try io.concurrent(serve_module, .{ io, gpa, .{
         .endpoint = path,
         .environment = std.testing.environ,
         .stop = &stop,
@@ -2861,11 +2874,11 @@ test "runtime broadcasts a bounded notification and acknowledges delivery" {
 
 fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
     for (0..200) |_| {
-        var connection = frontend.transport.local.connect(io, path) catch {
+        var connection = connect_module(io, path) catch {
             try io.sleep(.fromMilliseconds(1), .awake);
             continue;
         };
-        const negotiated = frontend.transport.handshake.perform(io, &connection) catch {
+        const negotiated = perform_module(io, &connection) catch {
             connection.deinit(io);
             try io.sleep(.fromMilliseconds(1), .awake);
             continue;
@@ -2879,7 +2892,7 @@ fn connectRuntimeForTest(io: std.Io, path: []const u8) !RuntimeTestChannel {
     return error.RuntimeDidNotStart;
 }
 
-fn rowContains(cells: []const core.ui.Cell, needle: []const u8) bool {
+fn rowContains(cells: []const CellType, needle: []const u8) bool {
     if (needle.len > cells.len) {
         return false;
     }
@@ -2895,7 +2908,7 @@ fn rowContains(cells: []const core.ui.Cell, needle: []const u8) bool {
     return false;
 }
 
-fn applyFrameCells(cells: []core.ui.Cell, frame: core.schema.frame.FrameView) !void {
+fn applyFrameCells(cells: []CellType, frame: FrameViewType) !void {
     var spans = frame.spans();
     while (try spans.next()) |span| {
         var source = span.cells();

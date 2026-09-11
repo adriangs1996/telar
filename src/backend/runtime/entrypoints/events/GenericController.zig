@@ -1,5 +1,9 @@
 const GenericHistoryResponseRuntimePort = @import("GenericHistoryResponseRuntimePort.zig").Type;
-const history = @import("../../../history/root.zig");
+const model_module = @import("../../../history/model.zig");
+const QueryResultType = @import("../../../history/QueryResult.zig");
+const OutputResultType = @import("../../../history/OutputResult.zig");
+const StatsResultType = @import("../../../history/StatsResult.zig");
+
 /// Creates a statically dispatched history-response controller.
 ///
 /// ```zig
@@ -28,23 +32,23 @@ pub fn Type(comptime Context: type, comptime Session: type, comptime port: Gener
         /// ```zig
         /// try controller.handle(response_result);
         /// ```
-        pub fn handle(controller: *Self, response_result: anyerror!history.Response) !void {
+        pub fn handle(controller: *Self, response_result: anyerror!model_module.Response) !void {
             const response = response_result catch return;
-            var owned_query: ?*history.model.QueryResult = switch (response) {
+            var owned_query: ?*QueryResultType = switch (response) {
                 .query_result => |result| result,
                 .failed, .pruned, .output_result, .stats_result => null,
             };
             defer if (owned_query) |result| {
                 port.dispose_query_result(controller.context, result);
             };
-            var owned_output: ?*history.model.OutputResult = switch (response) {
+            var owned_output: ?*OutputResultType = switch (response) {
                 .output_result => |result| result,
                 else => null,
             };
             defer if (owned_output) |result| {
                 result.deinit();
             };
-            var owned_stats: ?*history.model.StatsResult = switch (response) {
+            var owned_stats: ?*StatsResultType = switch (response) {
                 .stats_result => |result| result,
                 else => null,
             };

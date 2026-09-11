@@ -1,20 +1,19 @@
 //! Single-flight admission of accepted client sockets.
 
-const std = @import("std");
-
-pub const State = @import("GenericState.zig").Type;
-
-pub const AcceptPort = @import("GenericAcceptPort.zig").Type;
-
-pub const AcceptCoordinator = @import("GenericAcceptCoordinator.zig").Type;
-
-pub const HandshakePort = @import("GenericHandshakePort.zig").Type;
-
-pub const HandshakeCoordinator = @import("GenericHandshakeCoordinator.zig").Type;
-
+const GenericState = @import("GenericState.zig").Type;
 const FakeConnection = @import("FakeConnection.zig");
+const GenericAcceptPort = @import("GenericAcceptPort.zig").Type;
+const AdmissionCapture = @import("AdmissionCapture.zig");
+const GenericAcceptCoordinator = @import("GenericAcceptCoordinator.zig").Type;
+const std = @import("std");
+const Fixture = @import("Fixture.zig");
+const GenericHandshakePort = @import("GenericHandshakePort.zig").Type;
+const HandshakeCapture = @import("HandshakeCapture.zig");
+const TestHandshakeTypes = @import("TestHandshakeTypes.zig");
+const GenericHandshakeCoordinator = @import("GenericHandshakeCoordinator.zig").Type;
+const HandshakeFixture = @import("HandshakeFixture.zig");
 
-pub const AdmissionState = State(FakeConnection);
+pub const AdmissionState = GenericState(FakeConnection);
 
 pub const Step = enum {
     stopping,
@@ -25,22 +24,18 @@ pub const Step = enum {
     start_handshake,
 };
 
-const Capture = @import("AdmissionCapture.zig");
-
-const test_port: AcceptPort(Capture, FakeConnection) = .{
-    .stopping = Capture.stopping,
-    .rearm_accept = Capture.rearmAccept,
-    .has_capacity = Capture.hasCapacity,
-    .shutdown_connection = Capture.shutdownConnection,
-    .deinit_connection = Capture.deinitConnection,
-    .start_handshake = Capture.startHandshake,
+const test_port: GenericAcceptPort(AdmissionCapture, FakeConnection) = .{
+    .stopping = AdmissionCapture.stopping,
+    .rearm_accept = AdmissionCapture.rearmAccept,
+    .has_capacity = AdmissionCapture.hasCapacity,
+    .shutdown_connection = AdmissionCapture.shutdownConnection,
+    .deinit_connection = AdmissionCapture.deinitConnection,
+    .start_handshake = AdmissionCapture.startHandshake,
 };
 
-pub const TestCoordinator = AcceptCoordinator(Capture, FakeConnection, test_port);
+pub const TestCoordinator = GenericAcceptCoordinator(AdmissionCapture, FakeConnection, test_port);
 
-const Fixture = @import("Fixture.zig");
-
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const AdmissionCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
@@ -141,10 +136,6 @@ test "a new socket aborts a stalled handshake but does not replace its slot" {
     try std.testing.expectEqual(@as(u8, 7), fixture.state.pendingConnection().?.id);
 }
 
-const FakeSession = @import("AdmissionFakeSession.zig");
-
-const TestHandshakeTypes = @import("TestHandshakeTypes.zig");
-
 pub const HandshakeStep = enum {
     stopping,
     deinit_connection,
@@ -153,9 +144,7 @@ pub const HandshakeStep = enum {
     drop_session,
 };
 
-const HandshakeCapture = @import("HandshakeCapture.zig");
-
-const test_handshake_port: HandshakePort(HandshakeCapture, TestHandshakeTypes) = .{
+const test_handshake_port: GenericHandshakePort(HandshakeCapture, TestHandshakeTypes) = .{
     .stopping = HandshakeCapture.stopping,
     .deinit_connection = HandshakeCapture.deinitConnection,
     .admit = HandshakeCapture.admit,
@@ -163,9 +152,7 @@ const test_handshake_port: HandshakePort(HandshakeCapture, TestHandshakeTypes) =
     .drop_session = HandshakeCapture.dropSession,
 };
 
-pub const TestHandshakeCoordinator = HandshakeCoordinator(HandshakeCapture, TestHandshakeTypes, test_handshake_port);
-
-const HandshakeFixture = @import("HandshakeFixture.zig");
+pub const TestHandshakeCoordinator = GenericHandshakeCoordinator(HandshakeCapture, TestHandshakeTypes, test_handshake_port);
 
 fn expectHandshakeSteps(capture: *const HandshakeCapture, expected: []const HandshakeStep) !void {
     try std.testing.expectEqualSlices(HandshakeStep, expected, capture.steps[0..capture.len]);

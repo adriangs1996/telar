@@ -2,40 +2,22 @@
 //! and the bootstrap snapshot it gets back on reconnect. Every tree is
 //! validated as a complete pre-order binary tree before either side trusts it.
 
-const std = @import("std");
-const wire = @import("../wire.zig");
-const id = @import("../id.zig");
-const types = @import("../types.zig");
-const codec = @import("../codec.zig");
+const ClientLayoutUpdate = @import("../ClientLayoutUpdate.zig");
+const EncoderType = @import("../Encoder.zig");
 const tags = @import("tags.zig");
-
-const ClientTag = tags.ClientTag;
-const ServerTag = tags.ServerTag;
-pub const PaneId = id.PaneId;
-pub const TabLocation = types.TabLocation;
-const ClientLayoutAxis = types.ClientLayoutAxis;
-pub const ClientLayoutNode = types.ClientLayoutNode;
-const ClientTabLayout = types.ClientTabLayout;
-const ClientLayoutUpdate = types.ClientLayoutUpdate;
-const ClientLayoutSnapshot = types.ClientLayoutSnapshot;
-pub const max_panes_per_tab = types.max_panes_per_tab;
-pub const max_client_layout_tabs = types.max_client_layout_tabs;
-pub const max_client_layout_nodes = types.max_client_layout_nodes;
-pub const min_client_layout_ratio = types.min_client_layout_ratio;
-pub const max_client_layout_ratio = types.max_client_layout_ratio;
-pub const validatePaneId = codec.validatePaneId;
-const encodeTabLocation = codec.encodeTabLocation;
-const decodeTabLocation = codec.decodeTabLocation;
-
-pub const ClientTabLayoutView = @import("ClientTabLayoutView.zig");
-
-pub const ClientLayoutUpdateView = @import("ClientLayoutUpdateView.zig");
-
-pub const ClientLayoutSnapshotView = @import("ClientLayoutSnapshotView.zig");
-
-pub const ClientLayoutNodeIterator = @import("ClientLayoutNodeIterator.zig");
-
-pub const ClientTabLayoutIterator = @import("ClientTabLayoutIterator.zig");
+const codec = @import("../codec.zig");
+const DecoderType = @import("../Decoder.zig");
+const ClientLayoutUpdateView = @import("ClientLayoutUpdateView.zig");
+const types = @import("../types.zig");
+const ClientLayoutCollection = @import("ClientLayoutCollection.zig");
+const ClientLayoutSnapshot = @import("../ClientLayoutSnapshot.zig");
+const ClientLayoutSnapshotView = @import("ClientLayoutSnapshotView.zig");
+const TabLocation = @import("../TabLocation.zig");
+const id = @import("../id.zig");
+const std = @import("std");
+const ClientTabLayout = @import("../ClientTabLayout.zig");
+const ClientTabLayoutView = @import("ClientTabLayoutView.zig");
+const ClientLayoutTreeValidation = @import("ClientLayoutTreeValidation.zig");
 
 /// Encodes one complete current-workspace layout update.
 ///
@@ -44,12 +26,12 @@ pub const ClientTabLayoutIterator = @import("ClientTabLayoutIterator.zig");
 /// ```
 pub fn encodeClientLayoutUpdate(buffer: []u8, message: ClientLayoutUpdate) ![]const u8 {
     try validateClientLayoutUpdate(message);
-    var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ClientTag.update_client_layout));
+    var encoder = EncoderType.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ClientTag.update_client_layout));
     try encoder.writeByte(@intFromBool(message.sidebar_visible));
     try encoder.writeInt(u16, message.sidebar_width);
     try encoder.writeByte(@intFromBool(message.workspace_list_collapsed));
-    try encodeTabLocation(&encoder, message.active_tab);
+    try codec.encodeTabLocation(&encoder, message.active_tab);
     try encoder.writeInt(u16, @intCast(message.tabs.len));
     for (message.tabs) |tab| {
         try encodeClientTabLayout(&encoder, tab);
@@ -58,16 +40,16 @@ pub fn encodeClientLayoutUpdate(buffer: []u8, message: ClientLayoutUpdate) ![]co
     return encoder.finish();
 }
 
-pub fn decodeClientLayoutUpdate(decoder: *wire.Decoder) !ClientLayoutUpdateView {
+pub fn decodeClientLayoutUpdate(decoder: *DecoderType) !ClientLayoutUpdateView {
     const sidebar_visible = try decoder.readBool();
     const sidebar_width = try decoder.readInt(u16);
     const workspace_list_collapsed = try decoder.readBool();
-    const active_tab = try decodeTabLocation(decoder);
+    const active_tab = try codec.decodeTabLocation(decoder);
     const tab_count = try decoder.readInt(u16);
     if (sidebar_width == 0) {
         return error.InvalidClientLayoutWidth;
     }
-    if (tab_count == 0 or tab_count > max_client_layout_tabs) {
+    if (tab_count == 0 or tab_count > types.max_client_layout_tabs) {
         return error.InvalidClientLayoutSnapshot;
     }
 
@@ -100,8 +82,8 @@ pub fn decodeClientLayoutUpdate(decoder: *wire.Decoder) !ClientLayoutUpdateView 
 /// ```
 pub fn encodeClientLayoutSnapshot(buffer: []u8, message: ClientLayoutSnapshot) ![]const u8 {
     try validateClientLayoutSnapshot(message);
-    var encoder = wire.Encoder.init(buffer);
-    try encoder.writeByte(@intFromEnum(ServerTag.client_layout_snapshot));
+    var encoder = EncoderType.init(buffer);
+    try encoder.writeByte(@intFromEnum(tags.ServerTag.client_layout_snapshot));
     try encoder.writeByte(@intFromBool(message.restored));
     try encoder.writeByte(@intFromBool(message.sidebar_visible));
     try encoder.writeInt(u16, message.sidebar_width);
@@ -112,14 +94,14 @@ pub fn encodeClientLayoutSnapshot(buffer: []u8, message: ClientLayoutSnapshot) !
     return encoder.finish();
 }
 
-pub fn decodeClientLayoutSnapshot(decoder: *wire.Decoder) !ClientLayoutSnapshotView {
+pub fn decodeClientLayoutSnapshot(decoder: *DecoderType) !ClientLayoutSnapshotView {
     const restored = try decoder.readBool();
     const sidebar_visible = try decoder.readBool();
     const sidebar_width = try decoder.readInt(u16);
     const workspace_list_collapsed = try decoder.readBool();
     const active_tab = try decodeOptionalTabLocation(decoder);
     const tab_count = try decoder.readInt(u16);
-    if (tab_count > max_client_layout_tabs) {
+    if (tab_count > types.max_client_layout_tabs) {
         return error.TooManyClientLayoutTabs;
     }
     if (!restored) {
@@ -155,30 +137,30 @@ pub fn decodeClientLayoutSnapshot(decoder: *wire.Decoder) !ClientLayoutSnapshotV
     };
 }
 
-fn encodeOptionalTabLocation(encoder: *wire.Encoder, location: ?TabLocation) !void {
+fn encodeOptionalTabLocation(encoder: *EncoderType, location: ?TabLocation) !void {
     try encoder.writeByte(@intFromBool(location != null));
     if (location) |value| {
-        try encodeTabLocation(encoder, value);
+        try codec.encodeTabLocation(encoder, value);
     }
 }
 
-fn decodeOptionalTabLocation(decoder: *wire.Decoder) !?TabLocation {
+fn decodeOptionalTabLocation(decoder: *DecoderType) !?TabLocation {
     if (!try decoder.readBool()) {
         return null;
     }
 
-    return try decodeTabLocation(decoder);
+    return try codec.decodeTabLocation(decoder);
 }
 
-fn encodeClientLayoutNode(encoder: *wire.Encoder, node: ClientLayoutNode) !void {
+fn encodeClientLayoutNode(encoder: *EncoderType, node: types.ClientLayoutNode) !void {
     switch (node) {
         .pane => |pane_id| {
-            try validatePaneId(pane_id);
+            try codec.validatePaneId(pane_id);
             try encoder.writeByte(0);
             try encoder.writeInt(u64, id.raw(pane_id));
         },
         .split => |split| {
-            if (split.ratio < min_client_layout_ratio or split.ratio > max_client_layout_ratio) {
+            if (split.ratio < types.min_client_layout_ratio or split.ratio > types.max_client_layout_ratio) {
                 return error.InvalidClientLayoutRatio;
             }
 
@@ -189,14 +171,14 @@ fn encodeClientLayoutNode(encoder: *wire.Encoder, node: ClientLayoutNode) !void 
     }
 }
 
-pub fn decodeClientLayoutNode(decoder: *wire.Decoder) !ClientLayoutNode {
+pub fn decodeClientLayoutNode(decoder: *DecoderType) !types.ClientLayoutNode {
     return switch (try decoder.readByte()) {
         0 => .{ .pane = try id.pane(try decoder.readInt(u64)) },
         1 => split: {
-            const axis = std.enums.fromInt(ClientLayoutAxis, try decoder.readByte()) orelse
+            const axis = std.enums.fromInt(types.ClientLayoutAxis, try decoder.readByte()) orelse
                 return error.InvalidClientLayoutAxis;
             const ratio = try decoder.readInt(u16);
-            if (ratio < min_client_layout_ratio or ratio > max_client_layout_ratio) {
+            if (ratio < types.min_client_layout_ratio or ratio > types.max_client_layout_ratio) {
                 return error.InvalidClientLayoutRatio;
             }
 
@@ -206,9 +188,9 @@ pub fn decodeClientLayoutNode(decoder: *wire.Decoder) !ClientLayoutNode {
     };
 }
 
-fn encodeClientTabLayout(encoder: *wire.Encoder, layout: ClientTabLayout) !void {
+fn encodeClientTabLayout(encoder: *EncoderType, layout: ClientTabLayout) !void {
     try validateClientTabLayout(layout);
-    try encodeTabLocation(encoder, layout.location);
+    try codec.encodeTabLocation(encoder, layout.location);
     try encoder.writeInt(u64, id.raw(layout.focused_pane));
     try encoder.writeByte(@intFromBool(layout.fullscreen));
     try encoder.writeByte(@intFromBool(layout.workspace_active));
@@ -218,13 +200,13 @@ fn encodeClientTabLayout(encoder: *wire.Encoder, layout: ClientTabLayout) !void 
     }
 }
 
-pub fn decodeClientTabLayout(decoder: *wire.Decoder) !ClientTabLayoutView {
-    const location = try decodeTabLocation(decoder);
+pub fn decodeClientTabLayout(decoder: *DecoderType) !ClientTabLayoutView {
+    const location = try codec.decodeTabLocation(decoder);
     const focused_pane = try id.pane(try decoder.readInt(u64));
     const fullscreen = try decoder.readBool();
     const workspace_active = try decoder.readBool();
     const node_count = try decoder.readInt(u16);
-    if (node_count == 0 or node_count > max_client_layout_nodes) {
+    if (node_count == 0 or node_count > types.max_client_layout_nodes) {
         return error.InvalidClientLayoutNodeCount;
     }
 
@@ -242,12 +224,8 @@ pub fn decodeClientTabLayout(decoder: *wire.Decoder) !ClientTabLayoutView {
     return view;
 }
 
-const ClientLayoutTreeValidation = @import("ClientLayoutTreeValidation.zig");
-
-const ClientLayoutTreeSummary = @import("ClientLayoutTreeSummary.zig");
-
 fn validateClientTabLayout(layout: ClientTabLayout) !void {
-    if (layout.nodes.len == 0 or layout.nodes.len > max_client_layout_nodes) {
+    if (layout.nodes.len == 0 or layout.nodes.len > types.max_client_layout_nodes) {
         return error.InvalidClientLayoutNodeCount;
     }
 
@@ -292,7 +270,7 @@ fn validateClientLayoutSnapshot(message: ClientLayoutSnapshot) !void {
         return;
     }
 
-    if (message.sidebar_width == 0 or message.tabs.len > max_client_layout_tabs) {
+    if (message.sidebar_width == 0 or message.tabs.len > types.max_client_layout_tabs) {
         return error.InvalidClientLayoutSnapshot;
     }
 
@@ -300,7 +278,7 @@ fn validateClientLayoutSnapshot(message: ClientLayoutSnapshot) !void {
 }
 
 fn validateClientLayouts(active: TabLocation, tabs: []const ClientTabLayout) !void {
-    if (tabs.len == 0 or tabs.len > max_client_layout_tabs) {
+    if (tabs.len == 0 or tabs.len > types.max_client_layout_tabs) {
         return error.InvalidClientLayoutSnapshot;
     }
 
@@ -322,7 +300,3 @@ fn validateClientLayoutEntries(active: ?TabLocation, tabs: []const ClientTabLayo
         try collection.validateActive(location);
     }
 }
-
-const ClientLayoutEntry = @import("ClientLayoutEntry.zig");
-
-const ClientLayoutCollection = @import("ClientLayoutCollection.zig");

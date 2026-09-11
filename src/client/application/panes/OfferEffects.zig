@@ -1,5 +1,8 @@
+const PaneResizeType = @import("telar-core").PaneResize;
+const PaneBottomReservationType = @import("../../workspace/PaneBottomReservation.zig");
+const pane_geometry_delivery = @import("pane_geometry_delivery.zig");
 const OfferEffects = @This();
-const source_namespace = @import("pane_geometry_delivery.zig");
+
 context: *anyopaque,
-deliver_resize: *const fn (*anyopaque, source_namespace.schema.PaneResize) anyerror!void,
-bottom_reservation: *const fn (*anyopaque) ?source_namespace.layout_mod.PaneBottomReservation = source_namespace.noBottomReservation,
+deliver_resize: *const fn (*anyopaque, PaneResizeType) anyerror!void,
+bottom_reservation: *const fn (*anyopaque) ?PaneBottomReservationType = pane_geometry_delivery.noBottomReservation,

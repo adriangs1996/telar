@@ -1,8 +1,9 @@
-const Preparation = @This();
 const std = @import("std");
-const source_namespace = @import("client.zig");
-const remote = @import("remote.zig");
+const RunOptionsType = @import("arguments/RunOptions.zig");
+const LaunchDefaultsType = @import("LaunchDefaults.zig");
+const Preparation = @This();
+
 process: std.process.Init,
-options: *const source_namespace.RunOptions,
+options: *const RunOptionsType,
 endpoint: []const u8,
-remote_defaults: ?remote.LaunchDefaults = null,
+remote_defaults: ?LaunchDefaultsType = null,

@@ -1,0 +1,17 @@
+const Snapshot = @This();
+
+live_bytes: u64 = 0,
+live_allocs: u64 = 0,
+allocs: u64 = 0,
+frees: u64 = 0,
+alloc_bytes: u64 = 0,
+interactive_allocs: u64 = 0,
+interactive_alloc_bytes: u64 = 0,
+interactive_vt_allocs: u64 = 0,
+interactive_vt_alloc_bytes: u64 = 0,
+media_allocs: u64 = 0,
+media_alloc_bytes: u64 = 0,
+observation_allocs: u64 = 0,
+observation_alloc_bytes: u64 = 0,
+other_allocs: u64 = 0,
+other_alloc_bytes: u64 = 0,

@@ -1,11 +1,13 @@
-const RenameWorkspaceHandler = @This();
-const source_namespace = @import("rename_workspace.zig");
-const EventPublisher = @import("RenameWorkspaceEventPublisher.zig");
+const Repository = @import("../../../workspace/Repository.zig");
+const RenameWorkspaceEventPublisher = @import("RenameWorkspaceEventPublisher.zig");
 const RenameWorkspace = @import("RenameWorkspace.zig");
-const workspace_mod = @import("../../../workspace/root.zig");
+const WorkspaceRenamed = @import("../../../workspace/WorkspaceRenamed.zig");
+const commands = @import("../../../workspace/commands.zig");
 const RenameWorkspaceExecutor = @import("RenameWorkspaceExecutor.zig");
-workspaces: *source_namespace.WorkspaceRepository,
-events: EventPublisher,
+const RenameWorkspaceHandler = @This();
+
+workspaces: *Repository,
+events: RenameWorkspaceEventPublisher,
 
 /// Commits an aggregate rename and repository revision before publishing
 /// the owned workspace event. Failed commands have no effects.
@@ -13,8 +15,8 @@ events: EventPublisher,
 /// ```zig
 /// const renamed = try handler.execute(.{ .location = location, .name = "backend" });
 /// ```
-pub fn execute(handler: *RenameWorkspaceHandler, command: RenameWorkspace) !source_namespace.RenameWorkspaceResult {
-    const renamed = try workspace_mod.renameWorkspace(
+pub fn execute(handler: *RenameWorkspaceHandler, command: RenameWorkspace) !WorkspaceRenamed {
+    const renamed = try commands.renameWorkspace(
         handler.workspaces,
         command.location,
         command.name,
@@ -33,7 +35,7 @@ pub fn executor(handler: *RenameWorkspaceHandler) RenameWorkspaceExecutor {
     return .{ .context = handler, .execute_fn = executeErased };
 }
 
-fn executeErased(context: *anyopaque, command: RenameWorkspace) !source_namespace.RenameWorkspaceResult {
+fn executeErased(context: *anyopaque, command: RenameWorkspace) !WorkspaceRenamed {
     const handler: *RenameWorkspaceHandler = @ptrCast(@alignCast(context));
     return handler.execute(command);
 }

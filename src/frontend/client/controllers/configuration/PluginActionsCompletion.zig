@@ -1,5 +1,6 @@
+const PluginExecutionIdType = @import("telar-client").PluginExecutionId;
+const WorkerResultType = @import("../../../plugins/WorkerResult.zig");
 const Completion = @This();
-const client_model = @import("telar-client").model;
-const plugin_broker = @import("../../../plugins/root.zig");
-execution_id: client_model.PluginExecutionId,
-result: anyerror!plugin_broker.WorkerResult,
+
+execution_id: PluginExecutionIdType,
+result: anyerror!WorkerResultType,

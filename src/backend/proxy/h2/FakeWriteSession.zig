@@ -1,9 +1,10 @@
+const SessionType = @import("../Session.zig");
 const FakeWriteSession = @This();
-const tls = @import("../tls.zig");
+
 output: [512 * 1024]u8 = undefined,
 len: usize = 0,
 
-pub fn writeAll(fake: *FakeWriteSession, _: tls.Session.Side, bytes: []const u8) bool {
+pub fn writeAll(fake: *FakeWriteSession, _: SessionType.Side, bytes: []const u8) bool {
     if (bytes.len > fake.output.len - fake.len) {
         return false;
     }

@@ -1,14 +1,16 @@
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const events = @import("events.zig");
 const WorkspaceRenamed = @This();
-const source_namespace = @import("events.zig");
-location: source_namespace.schema.WorkspaceLocation,
-name: source_namespace.OwnedExplicitWorkspaceName,
+
+location: WorkspaceLocationType,
+name: events.OwnedExplicitWorkspaceName,
 
 /// Validates and owns the canonical name of a renamed workspace.
 ///
 /// ```zig
 /// const event = try WorkspaceRenamed.init(location, "backend");
 /// ```
-pub fn init(location: source_namespace.schema.WorkspaceLocation, name: []const u8) !WorkspaceRenamed {
+pub fn init(location: WorkspaceLocationType, name: []const u8) !WorkspaceRenamed {
     return .{ .location = location, .name = try .init(name) };
 }
 

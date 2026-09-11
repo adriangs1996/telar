@@ -1,13 +1,20 @@
-const Renderer = @This();
 const std = @import("std");
-const raster = @import("rasterizer_support.zig");
-const ui_icons = @import("../ui/root.zig").icons;
-const Slot = @import("IconsSlot.zig");
+const RasterizerType = @import("Rasterizer.zig");
+const ui_icons = @import("../ui/icons.zig");
+const IconsSlot = @import("IconsSlot.zig");
 const Placement = @import("Placement.zig");
-const source_namespace = @import("icons.zig");
-const kitty = @import("kitty.zig");
+const icons = @import("icons.zig");
+const ConfigurationType = @import("Configuration.zig");
+const MarkType = @import("../ui/Mark.zig");
+const IconType = @import("telar-client").Icon;
+const writeTransmissionAbort_module = @import("kitty_protocol").writeTransmissionAbort;
+const writeDeleteImage_module = @import("kitty_protocol").writeDeleteImage;
+const kitty_codec = @import("kitty_codec.zig");
+const writeDeletePlacement_module = @import("kitty_protocol").writeDeletePlacement;
+const Renderer = @This();
+
 gpa: std.mem.Allocator,
-text: ?raster.Rasterizer,
+text: ?RasterizerType,
 supported: bool = false,
 failed: bool = false,
 cell_width: u16 = 0,
@@ -17,7 +24,7 @@ pixel_height: u16 = 0,
 atlas: []u8 = &.{},
 atlas_width: u32 = 0,
 atlas_height: u32 = 0,
-slots: [ui_icons.max_marks]Slot = undefined,
+slots: [ui_icons.max_marks]IconsSlot = undefined,
 slot_count: u8 = 0,
 placements: [ui_icons.max_marks]Placement = undefined,
 placement_count: u8 = 0,
@@ -32,7 +39,7 @@ transfer_abort_pending: bool = false,
 pub fn init(gpa: std.mem.Allocator) Renderer {
     return .{
         .gpa = gpa,
-        .text = raster.Rasterizer.initFont(source_namespace.embedded_font) catch null,
+        .text = RasterizerType.initFont(icons.embedded_font) catch null,
     };
 }
 
@@ -55,7 +62,7 @@ pub fn available(renderer: *const Renderer) bool {
 
 /// Applies host graphics support and cell geometry to the icon atlas.
 /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
-pub fn configure(renderer: *Renderer, configuration: kitty.Configuration) bool {
+pub fn configure(renderer: *Renderer, configuration: ConfigurationType) bool {
     const supported = configuration.support == .supported and renderer.text != null;
     if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
         renderer.cell_height == configuration.cell_height)
@@ -76,7 +83,7 @@ pub fn disable(renderer: *Renderer) void {
     renderer.placements_dirty = renderer.image_emitted or renderer.transfer_offset != 0;
 }
 
-pub fn prepare(renderer: *Renderer, marks: []const ui_icons.Mark) !void {
+pub fn prepare(renderer: *Renderer, marks: []const MarkType) !void {
     if (marks.len > ui_icons.max_marks) {
         return error.TooManyIconMarks;
     }
@@ -89,19 +96,19 @@ pub fn prepare(renderer: *Renderer, marks: []const ui_icons.Mark) !void {
         return;
     }
 
-    var next_slots: [ui_icons.max_marks]Slot = undefined;
+    var next_slots: [ui_icons.max_marks]IconsSlot = undefined;
     var next_slot_count: u8 = 0;
     var next_placements: [ui_icons.max_marks]Placement = undefined;
     for (marks, 0..) |mark, mark_index| {
-        const wanted = source_namespace.slotFromMark(mark);
-        if (source_namespace.isWorkingIcon(mark.icon)) {
+        const wanted = icons.slotFromMark(mark);
+        if (icons.isWorkingIcon(mark.icon)) {
             inline for (.{
-                ui_icons.Icon.agent_working_0,
-                ui_icons.Icon.agent_working_1,
-                ui_icons.Icon.agent_working_2,
-                ui_icons.Icon.agent_working_3,
+                IconType.agent_working_0,
+                IconType.agent_working_1,
+                IconType.agent_working_2,
+                IconType.agent_working_3,
             }) |frame| {
-                _ = try source_namespace.ensureSlot(&next_slots, &next_slot_count, .{
+                _ = try icons.ensureSlot(&next_slots, &next_slot_count, .{
                     .icon = frame,
                     .foreground = mark.foreground,
                     .background = mark.background,
@@ -109,16 +116,16 @@ pub fn prepare(renderer: *Renderer, marks: []const ui_icons.Mark) !void {
                 });
             }
         }
-        const slot = try source_namespace.ensureSlot(&next_slots, &next_slot_count, wanted);
+        const slot = try icons.ensureSlot(&next_slots, &next_slot_count, wanted);
         next_placements[mark_index] = .{ .area = mark.area, .slot = slot };
     }
     const next_placement_count: u8 = @intCast(marks.len);
-    const raster_size = source_namespace.fitCell(renderer.cell_width, renderer.cell_height);
-    const atlas_width = @as(u32, raster_size.width) * source_namespace.widestSlot(next_slots[0..next_slot_count]);
+    const raster_size = icons.fitCell(renderer.cell_width, renderer.cell_height);
+    const atlas_width = @as(u32, raster_size.width) * icons.widestSlot(next_slots[0..next_slot_count]);
     const slots_changed = renderer.pixel_width != raster_size.width or
         renderer.pixel_height != raster_size.height or
         renderer.atlas_width != atlas_width or
-        !source_namespace.slotsEqual(
+        !icons.slotsEqual(
             renderer.slots[0..renderer.slot_count],
             next_slots[0..next_slot_count],
         );
@@ -126,14 +133,14 @@ pub fn prepare(renderer: *Renderer, marks: []const ui_icons.Mark) !void {
     if (slots_changed) {
         const atlas_height = std.math.mul(u32, raster_size.height, next_slot_count) catch
             return error.IconAtlasTooLarge;
-        const atlas_len = try source_namespace.rgbaLength(atlas_width, atlas_height);
-        if (atlas_len > source_namespace.max_atlas_bytes) {
+        const atlas_len = try icons.rgbaLength(atlas_width, atlas_height);
+        if (atlas_len > icons.max_atlas_bytes) {
             return error.IconAtlasTooLarge;
         }
         const next_atlas = try renderer.gpa.alloc(u8, atlas_len);
         errdefer renderer.gpa.free(next_atlas);
         const text = if (renderer.text) |*value| value else unreachable;
-        try source_namespace.renderAtlas(text, .{
+        try icons.renderAtlas(text, .{
             .pixels = next_atlas,
             .raster_size = raster_size,
             .atlas_width = atlas_width,
@@ -154,7 +161,7 @@ pub fn prepare(renderer: *Renderer, marks: []const ui_icons.Mark) !void {
         renderer.placements_dirty = true;
     }
 
-    if (!source_namespace.placementsEqual(
+    if (!icons.placementsEqual(
         renderer.placements[0..renderer.placement_count],
         next_placements[0..next_placement_count],
     )) {
@@ -180,24 +187,24 @@ pub fn transferInProgress(renderer: *const Renderer) bool {
     return renderer.transfer_offset != 0;
 }
 
-pub fn write(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_namespace.Io.Writer.Error!usize {
+pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     if (!renderer.damaged()) {
         return 0;
     }
     var written: usize = 0;
     if (renderer.transfer_abort_pending) {
-        written += try kitty.writeTransmissionAbort(writer);
+        written += try writeTransmissionAbort_module(writer);
         renderer.transfer_abort_pending = false;
         renderer.transfer_offset = 0;
     }
 
     if (!renderer.visible) {
         if (renderer.transfer_offset != 0) {
-            written += try kitty.writeTransmissionAbort(writer);
+            written += try writeTransmissionAbort_module(writer);
             renderer.transfer_offset = 0;
         }
         if (renderer.image_emitted) {
-            written += try kitty.writeDeleteImage(writer, source_namespace.image_id);
+            written += try writeDeleteImage_module(writer, icons.image_id);
         }
         renderer.image_emitted = false;
         renderer.image_dirty = false;
@@ -208,14 +215,14 @@ pub fn write(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_na
 
     if (renderer.image_dirty) {
         if (renderer.transfer_offset == 0 and renderer.image_emitted) {
-            written += try kitty.writeDeleteImage(writer, source_namespace.image_id);
+            written += try writeDeleteImage_module(writer, icons.image_id);
             renderer.image_emitted = false;
             renderer.emitted_placement_count = 0;
         }
-        const progress = try kitty.writeTransmissionChunks(writer, .{
-            .external_id = source_namespace.image_id,
+        const progress = try kitty_codec.writeTransmissionChunks(writer, .{
+            .external_id = icons.image_id,
             .image = .{
-                .key = .{ .image_id = source_namespace.image_id, .generation = 1 },
+                .key = .{ .image_id = icons.image_id, .generation = 1 },
                 .format = .rgba,
                 .width = renderer.atlas_width,
                 .height = renderer.atlas_height,
@@ -223,7 +230,7 @@ pub fn write(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_na
             },
             .pixels = renderer.atlas,
             .start_offset = renderer.transfer_offset,
-            .budget = kitty.transmission_budget_per_frame,
+            .budget = kitty_codec.transmission_budget_per_frame,
             .compressed = false,
         });
         written += progress.written;
@@ -238,17 +245,17 @@ pub fn write(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_na
 
     if (renderer.placements_dirty and renderer.image_emitted) {
         for (0..renderer.emitted_placement_count) |index| {
-            written += try kitty.writeDeletePlacement(
+            written += try writeDeletePlacement_module(
                 writer,
-                source_namespace.image_id,
-                source_namespace.first_placement_id + @as(u32, @intCast(index)),
+                icons.image_id,
+                icons.first_placement_id + @as(u32, @intCast(index)),
             );
         }
         for (renderer.placements[0..renderer.placement_count], 0..) |placement, index| {
             const columns: u32 = renderer.slots[placement.slot].columns;
-            written += try kitty.writePlacement(writer, .{
-                .image_id = source_namespace.image_id,
-                .placement_id = source_namespace.first_placement_id + @as(u32, @intCast(index)),
+            written += try kitty_codec.writePlacement(writer, .{
+                .image_id = icons.image_id,
+                .placement_id = icons.first_placement_id + @as(u32, @intCast(index)),
                 .value = .{
                     .column = placement.area.x,
                     .row = placement.area.y,
@@ -261,7 +268,7 @@ pub fn write(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_na
                     .columns = columns,
                     .rows = 1,
                 },
-                .z = source_namespace.z_index,
+                .z = icons.z_index,
             });
         }
         renderer.emitted_placement_count = renderer.placement_count;

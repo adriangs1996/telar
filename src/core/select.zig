@@ -19,10 +19,13 @@
 //!
 //! No terminal and no buffer ownership: a range is four numbers and a mode.
 
+const Point = @import("ui/Point.zig");
+const CellType = @import("ui/Cell.zig");
+const BufferType = @import("ui/Buffer.zig");
+const Range = @import("Range.zig");
 const std = @import("std");
-const ui = @import("ui/root.zig");
-
-pub const Point = ui.Point;
+const text_module = @import("ui/text.zig");
+const ClickTracker = @import("ClickTracker.zig");
 
 /// Reading order, which is what makes a range comparable at all: a selection
 /// dragged upwards has its anchor after its head.
@@ -50,9 +53,7 @@ pub const Mode = enum {
 /// that gets it subtly wrong feels wrong without the user being able to say why.
 pub const Granularity = enum { character, word, line };
 
-pub const Range = @import("Range.zig");
-
-fn isWordByte(cell: *const ui.Cell) bool {
+fn isWordByte(cell: *const CellType) bool {
     if (cell.width == 0) {
         return true;
     }
@@ -67,7 +68,7 @@ fn isWordByte(cell: *const ui.Cell) bool {
     return glyph[0] != ' ';
 }
 
-pub fn wordStart(b: *const ui.Buffer, at: Point) u16 {
+pub fn wordStart(b: *const BufferType, at: Point) u16 {
     const current = cellAt(b, at.x, at.y) orelse return at.x;
     const word = isWordByte(current);
     var x = at.x;
@@ -80,7 +81,7 @@ pub fn wordStart(b: *const ui.Buffer, at: Point) u16 {
     return x;
 }
 
-pub fn wordEnd(b: *const ui.Buffer, at: Point) u16 {
+pub fn wordEnd(b: *const BufferType, at: Point) u16 {
     const current = cellAt(b, at.x, at.y) orelse return at.x;
     const word = isWordByte(current);
     var x = at.x;
@@ -93,7 +94,7 @@ pub fn wordEnd(b: *const ui.Buffer, at: Point) u16 {
     return x;
 }
 
-fn cellAt(b: *const ui.Buffer, x: u16, y: u16) ?*const ui.Cell {
+fn cellAt(b: *const BufferType, x: u16, y: u16) ?*const CellType {
     if (x >= b.w or y >= b.h) {
         return null;
     }
@@ -112,7 +113,7 @@ fn cellAt(b: *const ui.Buffer, x: u16, y: u16) ?*const ui.Cell {
 /// Rows are joined with a newline. That newline is real for chrome, which was
 /// never one long line - unlike a pane, where the emulator knows which breaks
 /// it invented and `blit` asks it instead.
-pub fn text(b: *const ui.Buffer, range: Range, out: []u8) []const u8 {
+pub fn text(b: *const BufferType, range: Range, out: []u8) []const u8 {
     if (range.isEmpty()) {
         return out[0..0];
     }
@@ -167,25 +168,21 @@ pub fn text(b: *const ui.Buffer, range: Range, out: []u8) []const u8 {
     return out[0..len];
 }
 
-pub const ClickTracker = @import("ClickTracker.zig");
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-
 /// Draws `rows` into a buffer, so the tests read like a screen.
-fn screen(gpa: std.mem.Allocator, rows: []const []const u8) !ui.Buffer {
+fn screen(gpa: std.mem.Allocator, rows: []const []const u8) !BufferType {
     var width: u16 = 0;
-    for (rows) |row| width = @max(width, ui.measure(row));
-    var b = try ui.Buffer.init(gpa, width, @intCast(rows.len));
+    for (rows) |row| width = @max(width, text_module.measure(row));
+    var b = try BufferType.init(gpa, width, @intCast(rows.len));
     b.fill(b.area(), .{ .glyph = " ", .style = .{} });
     for (rows, 0..) |row, y| _ = b.writeText(b.area(), .{ .point = .{ .x = 0, .y = @intCast(y) }, .text = row, .style = .{} });
     return b;
 }
 
-fn copied(b: *const ui.Buffer, range: Range, out: []u8) []const u8 {
+fn copied(b: *const BufferType, range: Range, out: []u8) []const u8 {
     return text(b, range.expanded(b), out);
 }
 
@@ -193,19 +190,19 @@ test "a linear selection follows the text, not a rectangle" {
     // Dragging from the middle of one row to the middle of another takes the
     // rest of the first row and the start of the last, which is what reading
     // order means and what a rectangle would get wrong.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{ "abcdef", "ghijkl", "mnopqr" });
     defer b.deinit();
 
     var out: [64]u8 = undefined;
     const got = copied(&b, .{ .anchor = .{ .x = 3, .y = 0 }, .head = .{ .x = 2, .y = 2 } }, &out);
-    try testing.expectEqualStrings("def\nghijkl\nmno", got);
+    try std.testing.expectEqualStrings("def\nghijkl\nmno", got);
 }
 
 test "a block selection lifts a column out" {
     // The reason block mode is worth having: pulling one column out of tabular
     // output without dragging everything around it along.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{ "aa bb cc", "dd ee ff", "gg hh ii" });
     defer b.deinit();
 
@@ -215,11 +212,11 @@ test "a block selection lifts a column out" {
         .head = .{ .x = 4, .y = 2 },
         .mode = .block,
     }, &out);
-    try testing.expectEqualStrings("bb\nee\nhh", got);
+    try std.testing.expectEqualStrings("bb\nee\nhh", got);
 }
 
 test "a selection dragged upwards is the same selection" {
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{ "abc", "def" });
     defer b.deinit();
 
@@ -227,38 +224,38 @@ test "a selection dragged upwards is the same selection" {
     var up: [32]u8 = undefined;
     const forwards = copied(&b, .{ .anchor = .{ .x = 1, .y = 0 }, .head = .{ .x = 1, .y = 1 } }, &down);
     const backwards = copied(&b, .{ .anchor = .{ .x = 1, .y = 1 }, .head = .{ .x = 1, .y = 0 } }, &up);
-    try testing.expectEqualStrings(forwards, backwards);
+    try std.testing.expectEqualStrings(forwards, backwards);
 }
 
 test "trailing padding is not content" {
     // A screen is a grid and every row is full. Copying the blanks pastes a
     // rectangle of spaces, which is the single most recognisable symptom of
     // text copied out of a terminal.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{ "hi", "there" });
     defer b.deinit();
 
     var out: [32]u8 = undefined;
     const got = copied(&b, .{ .anchor = .{ .x = 0, .y = 0 }, .head = .{ .x = 4, .y = 1 } }, &out);
-    try testing.expectEqualStrings("hi\nthere", got);
+    try std.testing.expectEqualStrings("hi\nthere", got);
 }
 
 test "a wide glyph is copied once, not twice" {
     // Its second cell holds nothing. Reading the grid back verbatim doubles
     // every CJK character.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{"漢字"});
     defer b.deinit();
 
     var out: [32]u8 = undefined;
     const got = copied(&b, .{ .anchor = .{ .x = 0, .y = 0 }, .head = .{ .x = 3, .y = 0 } }, &out);
-    try testing.expectEqualStrings("漢字", got);
+    try std.testing.expectEqualStrings("漢字", got);
 }
 
 test "double click on a one-character word selects that character" {
     // Expansion of a single-cell word collapses anchor and head onto the same
     // point; that must still read as one selected cell, not as no selection.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{"run x now"});
     defer b.deinit();
 
@@ -268,13 +265,13 @@ test "double click on a one-character word selects that character" {
         .head = .{ .x = 4, .y = 0 },
         .granularity = .word,
     }, &out);
-    try testing.expectEqualStrings("x", got);
+    try std.testing.expectEqualStrings("x", got);
 }
 
 test "double click takes the word, including its punctuation" {
     // A path or a URL is what people double-click in a terminal. Splitting at
     // every slash makes the gesture useless.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{"run src/main.zig now"});
     defer b.deinit();
 
@@ -284,11 +281,11 @@ test "double click takes the word, including its punctuation" {
         .head = .{ .x = 7, .y = 0 },
         .granularity = .word,
     }, &out);
-    try testing.expectEqualStrings("src/main.zig", got);
+    try std.testing.expectEqualStrings("src/main.zig", got);
 }
 
 test "triple click takes the row without its padding" {
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{ "short", "a much longer row" });
     defer b.deinit();
 
@@ -298,14 +295,14 @@ test "triple click takes the row without its padding" {
         .head = .{ .x = 2, .y = 0 },
         .granularity = .line,
     }, &out);
-    try testing.expectEqualStrings("short", got);
+    try std.testing.expectEqualStrings("short", got);
 }
 
 test "word granularity survives a drag" {
     // Double-click-and-drag selects by word all the way along. People rely on
     // it without knowing it exists, and it only works if the expansion is
     // applied on every move rather than once at the start.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{"alpha beta gamma"});
     defer b.deinit();
 
@@ -315,13 +312,13 @@ test "word granularity survives a drag" {
         .head = .{ .x = 12, .y = 0 },
         .granularity = .word,
     }, &out);
-    try testing.expectEqualStrings("beta gamma", got);
+    try std.testing.expectEqualStrings("beta gamma", got);
 }
 
 test "highlighting agrees with what gets copied" {
     // Two code paths, one answer. A selection that paints wider than it copies
     // is the kind of thing users notice and cannot describe.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{ "abcdef", "ghijkl" });
     defer b.deinit();
 
@@ -337,19 +334,19 @@ test "highlighting agrees with what gets copied" {
     };
     // "ef" + newline + "gh": four characters painted, four copied plus the
     // break the rows imply.
-    try testing.expectEqual(@as(usize, 4), painted);
-    try testing.expectEqualStrings("ef\ngh", got);
+    try std.testing.expectEqual(@as(usize, 4), painted);
+    try std.testing.expectEqualStrings("ef\ngh", got);
 }
 
 test "word expansion groups whitespace separately and keeps wide glyph tails inside words" {
-    var b = try screen(testing.allocator, &.{"ab  界cd"});
+    var b = try screen(std.testing.allocator, &.{"ab  界cd"});
     defer b.deinit();
     const space = (Range{ .anchor = .{ .x = 2, .y = 0 }, .head = .{ .x = 2, .y = 0 }, .granularity = .word }).expanded(&b);
-    try testing.expectEqual(@as(u16, 2), space.anchor.x);
-    try testing.expectEqual(@as(u16, 3), space.head.x);
+    try std.testing.expectEqual(@as(u16, 2), space.anchor.x);
+    try std.testing.expectEqual(@as(u16, 3), space.head.x);
     const wide = (Range{ .anchor = .{ .x = 5, .y = 0 }, .head = .{ .x = 5, .y = 0 }, .granularity = .word }).expanded(&b);
-    try testing.expectEqual(@as(u16, 4), wide.anchor.x);
-    try testing.expectEqual(@as(u16, 7), wide.head.x);
+    try std.testing.expectEqual(@as(u16, 4), wide.anchor.x);
+    try std.testing.expectEqual(@as(u16, 7), wide.head.x);
 }
 
 test "rapid repeated clicks saturate at line granularity" {
@@ -357,49 +354,49 @@ test "rapid repeated clicks saturate at line granularity" {
     for (0..1024) |index| {
         const granularity = tracker.press(.{ .x = 2, .y = 3 }, index);
         if (index >= 2) {
-            try testing.expectEqual(Granularity.line, granularity);
+            try std.testing.expectEqual(Granularity.line, granularity);
         }
     }
 }
 
 test "an empty selection copies nothing" {
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{"abc"});
     defer b.deinit();
 
     var out: [32]u8 = undefined;
     const got = copied(&b, .{ .anchor = .{ .x = 1, .y = 0 }, .head = .{ .x = 1, .y = 0 } }, &out);
-    try testing.expectEqualStrings("", got);
+    try std.testing.expectEqualStrings("", got);
 }
 
 test "extraction stops at the end of the caller's buffer" {
     // The output size is the caller's choice and a screen can be large. Running
     // past it would be the one memory bug in a file that has no allocator.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var b = try screen(gpa, &.{ "aaaaaaaaaa", "bbbbbbbbbb" });
     defer b.deinit();
 
     var out: [5]u8 = undefined;
     const got = copied(&b, .{ .anchor = .{ .x = 0, .y = 0 }, .head = .{ .x = 9, .y = 1 } }, &out);
-    try testing.expect(got.len <= out.len);
-    try testing.expectEqualStrings("aaaaa", got);
+    try std.testing.expect(got.len <= out.len);
+    try std.testing.expectEqualStrings("aaaaa", got);
 }
 
 test "clicks become double and triple only when they are close in both senses" {
     var t: ClickTracker = .{};
     const at: Point = .{ .x = 4, .y = 2 };
 
-    try testing.expectEqual(Granularity.character, t.press(at, 0));
-    try testing.expectEqual(Granularity.word, t.press(at, 100 * std.time.ns_per_ms));
-    try testing.expectEqual(Granularity.line, t.press(at, 200 * std.time.ns_per_ms));
+    try std.testing.expectEqual(Granularity.character, t.press(at, 0));
+    try std.testing.expectEqual(Granularity.word, t.press(at, 100 * std.time.ns_per_ms));
+    try std.testing.expectEqual(Granularity.line, t.press(at, 200 * std.time.ns_per_ms));
     // Past three it stays on line: holding the button down asks for more, never
     // for less.
-    try testing.expectEqual(Granularity.line, t.press(at, 300 * std.time.ns_per_ms));
+    try std.testing.expectEqual(Granularity.line, t.press(at, 300 * std.time.ns_per_ms));
 
     // Too slow.
-    try testing.expectEqual(Granularity.character, t.press(at, 2000 * std.time.ns_per_ms));
+    try std.testing.expectEqual(Granularity.character, t.press(at, 2000 * std.time.ns_per_ms));
     // Quick, but somewhere else. Two clicks far apart are two clicks.
-    try testing.expectEqual(
+    try std.testing.expectEqual(
         Granularity.character,
         t.press(.{ .x = 40, .y = 9 }, 2050 * std.time.ns_per_ms),
     );
@@ -409,6 +406,6 @@ test "a click one column over still counts as a double click" {
     // Fingers move. Demanding the exact same cell makes double click fail often
     // enough to feel unreliable without ever failing reproducibly.
     var t: ClickTracker = .{};
-    try testing.expectEqual(Granularity.character, t.press(.{ .x = 4, .y = 2 }, 0));
-    try testing.expectEqual(Granularity.word, t.press(.{ .x = 5, .y = 2 }, 50 * std.time.ns_per_ms));
+    try std.testing.expectEqual(Granularity.character, t.press(.{ .x = 4, .y = 2 }, 0));
+    try std.testing.expectEqual(Granularity.word, t.press(.{ .x = 5, .y = 2 }, 50 * std.time.ns_per_ms));
 }

@@ -127,21 +127,21 @@ presenter compare versions and schedule at most the required paced frame.
 
 ## Proof
 
-- `src/frontend/client/model.zig` proves single-flight reservation, exact
+- `src/client/model/Model.zig` proves single-flight reservation, exact
   identity matching, generation retention and identifier exhaustion.
-- `src/frontend/client/application/plugin_action.zig` proves prepare/commit/
+- `src/client/application/input/plugin_action.zig` proves prepare/commit/
   schedule order, rollback, stale suppression, completion ordering, diagnostic
   clearing and failure classification before delivery.
-- `src/frontend/client/application/plugin_action_delivery.zig` proves loop
+- `src/client/application/input/plugin_action_delivery.zig` proves loop
   directives, diagnostic policy, notification mapping and retained diagnostics
   after publication failure.
-- `src/frontend/client/application/client_diagnostic.zig` proves the shared
+- `src/client/application/configuration/client_diagnostic.zig` proves the shared
   diagnostic replacement and clear policy used by plugin outcomes.
-- `src/frontend/client/application/action_routing.zig` proves that configured
+- `src/client/application/input/action_routing.zig` proves that configured
   plugin values select only the asynchronous start port.
-- `src/frontend/client/client_test.zig` proves authorized application through
+- `src/frontend/client/tests/` proves authorized application through
   presenter observation, stale-result suppression, capability denial, worker
   failure, unmatched identities, and busy and rejected start behavior on a
   real client.
-- `src/frontend/plugins/root.zig` proves digest-bound capability checks and
+- `src/frontend/plugins/plugins.zig` proves digest-bound capability checks and
   rejects invalid or recursive effect batches.

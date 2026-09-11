@@ -1,125 +1,48 @@
 //! Atomic client configuration generation and its compiled Lua callbacks.
 
-const std = @import("std");
-const core = @import("telar-core");
-const lua = @import("lua-api").c;
-const agents_config = @import("agents.zig");
-const input = @import("../input/root.zig");
-pub const action_mod = input.action;
-const bars = @import("../bars/root.zig");
-const bar_values = @import("bar_values.zig");
-pub const parseBarInterval = bar_values.parseBarInterval;
-pub const parseBarContent = bar_values.parseBarContent;
-const parseBarSegment = bar_values.parseBarSegment;
-const parseBarColor = bar_values.parseBarColor;
-const parseBarIcon = bar_values.parseBarIcon;
-const normalizedNameEql = bar_values.normalizedNameEql;
-
-const commands_config = @import("commands.zig");
 const config_model = @import("model.zig");
-const client_history_config = @import("client_history.zig");
-const default_bindings = @import("default_bindings.zig");
-const history_config = @import("history.zig");
+const std = @import("std");
+const lua_api = @import("lua-api");
+const CallbackContext = @import("telar-client").CallbackContext;
+const BarCallbackContext = @import("BarCallbackContext.zig");
+const FieldTarget = @import("FieldTarget.zig");
+const DecisionInput = @import("DecisionInput.zig");
+const Diagnostic = @import("telar-client").Diagnostic;
+const InputDecision = @import("telar-client").InputDecision;
 const lua_value = @import("lua_value.zig");
-const notifications_config = @import("notifications.zig");
-const plugins_config = @import("plugins.zig");
-const proxy_config = @import("proxy.zig");
-const session_config = @import("session.zig");
-const theme_config = @import("theme.zig");
-const lua_runtime = @import("telar-lua");
-pub const keybind = input.keybind;
-const kitty = @import("../graphics/root.zig").kitty;
-const icons = @import("../ui/root.zig").icons;
-const theme_mod = @import("../ui/root.zig").theme;
-
-pub const Io = std.Io;
-pub const ensureArrayOnly = lua_value.ensureArrayOnly;
-pub const ensureOnlyFields = lua_value.ensureOnlyFields;
-pub const integer = lua_value.integer;
-pub const optionalIntegerField = lua_value.optionalIntegerField;
-pub const optionalMebibytes = lua_value.optionalMebibytes;
-pub const optionalMilliseconds = lua_value.optionalMilliseconds;
-pub const optionalPositiveId = lua_value.optionalPositiveId;
-pub const optionalStringField = lua_value.optionalStringField;
-pub const pop = lua_value.pop;
-const raiseLua = lua_value.raise;
-pub const requiredIntegerField = lua_value.requiredIntegerField;
-pub const requiredStringField = lua_value.requiredStringField;
-pub const string = lua_value.string;
+const InputKeys = @import("telar-client").InputKeys;
+const max_expression_keys = @import("telar-client").max_expression_keys;
+const parseKey_module = @import("telar-client").parseKey;
+const max_expression_paste_bytes = @import("telar-client").max_expression_paste_bytes;
+const InputPaste = @import("telar-client").InputPaste;
+const Generation = @import("Generation.zig");
+const ThemeType = @import("telar-client").Theme;
+const capabilities = @import("../graphics/capabilities.zig");
+const ColorType = @import("telar-core").Color;
+const ActionType = @import("telar-client").Action;
+const NotificationLevelType = @import("telar-core").NotificationLevel;
+const PaneIdType = @import("telar-core").PaneId;
+const KeyType = @import("telar-client").Key;
+const IconType = @import("telar-client").Icon;
+const ClientColor = @import("telar-client").Color;
+const max_intercept_hosts = @import("telar-core").max_intercept_hosts;
+const orderHostname_module = @import("telar-core").orderHostname;
+const default_bindings = @import("default_bindings.zig");
+const first_custom_agent_provider_module = @import("telar-core").first_custom_agent_provider;
+const StatusType = @import("telar-core").Status;
+const AgentProviderType = @import("telar-core").AgentProvider;
+const max_agent_session_title_bytes = @import("telar-core").max_agent_session_title_bytes;
+const AgentAttachmentMarkers = @import("telar-core").AgentAttachmentMarkers;
+const Delivery = @import("telar-client").Delivery;
+const theme_mod = @import("../ui/theme_support.zig");
 
 pub const api_version: u16 = 2;
-pub const default_memory_limit = config_model.default_memory_limit;
-pub const default_load_instruction_limit = config_model.default_load_instruction_limit;
-pub const default_callback_instruction_limit = lua_runtime.default_callback_instruction_limit;
-pub const default_callback_deadline_ns = lua_runtime.default_callback_deadline_ns;
-pub const hook_instruction_interval = lua_runtime.hook_instruction_interval;
-pub const max_bindings = config_model.max_bindings;
-pub const max_binding_keys = config_model.max_binding_keys;
-pub const max_binding_suffix_keys = max_binding_keys - 1;
-pub const max_callbacks = max_bindings;
-pub const max_callback_effects = config_model.max_callback_effects;
-pub const max_expression_keys = config_model.max_expression_keys;
-pub const max_expression_paste_bytes = config_model.max_expression_paste_bytes;
+
+pub const max_binding_suffix_keys = config_model.max_binding_keys - 1;
+
 pub const max_config_bytes = 1024 * 1024;
-pub const max_local_modules = @import("local_modules.zig").max_local_modules;
-pub const max_plugins = config_model.max_plugins;
-pub const max_plugin_path_bytes = config_model.max_plugin_path_bytes;
+
 pub const max_profile_name_bytes = 64;
-pub const max_history_path_bytes = config_model.max_history_path_bytes;
-pub const max_proxy_path_bytes = config_model.max_proxy_path_bytes;
-pub const max_proxy_intercept_hosts = config_model.max_proxy_intercept_hosts;
-pub const max_proxy_intercept_host_bytes = config_model.max_proxy_intercept_host_bytes;
-pub const max_proxy_intercept_bytes = config_model.max_proxy_intercept_bytes;
-pub const max_agent_description_command_args = config_model.max_agent_description_command_args;
-pub const max_agent_description_command_bytes = config_model.max_agent_description_command_bytes;
-pub const max_bar_callbacks = config_model.max_bar_callbacks;
-pub const min_agent_description_timeout_ms = config_model.min_agent_description_timeout_ms;
-pub const max_agent_description_timeout_ms = config_model.max_agent_description_timeout_ms;
-pub const default_binding_count = default_bindings.count;
-pub const default_binding_max_keys = default_bindings.max_keys;
-pub const DefaultBinding = default_bindings.Binding;
-pub const loadDefaultBindings = default_bindings.load;
-pub const resolveBindings = default_bindings.resolve;
-pub const validateKeymap = default_bindings.validate;
-
-pub const ConfiguredBinding = config_model.ConfiguredBinding;
-pub const Diagnostic = config_model.Diagnostic;
-pub const Snapshot = config_model.Snapshot;
-pub const PluginSpec = config_model.PluginSpec;
-pub const RuntimeSnapshot = config_model.RuntimeSnapshot;
-pub const AgentDescriptionCommand = config_model.AgentDescriptionCommand;
-pub const CommandSpec = config_model.CommandSpec;
-pub const SoundConfig = config_model.SoundConfig;
-pub const BarCallbackContext = config_model.BarCallbackContext;
-pub const BarTime = config_model.BarTime;
-pub const BarMetrics = config_model.BarMetrics;
-pub const BarInvocation = config_model.BarInvocation;
-
-const Callback = @import("Callback.zig");
-
-const BarCallback = @import("BarCallback.zig");
-
-pub const CallbackContext = config_model.CallbackContext;
-pub const EffectBatch = config_model.EffectBatch;
-pub const InputKeys = config_model.InputKeys;
-pub const InputPaste = config_model.InputPaste;
-pub const InputDecision = config_model.InputDecision;
-pub const Limits = config_model.Limits;
-
-pub const CallbackInvocation = @import("CallbackInvocation.zig");
-
-const CallbackPreparation = @import("CallbackPreparation.zig");
-
-pub const Meter = lua_runtime.Meter;
-pub const Vm = lua_runtime.Vm;
-
-pub const LoadContext = @import("LoadContext.zig");
-
-pub const SourceInput = @import("SourceInput.zig");
-
-pub const FileInput = @import("FileInput.zig");
-
-pub const Generation = @import("Generation.zig");
 
 pub const bootstrap = @embedFile("bootstrap.lua");
 
@@ -132,8 +55,8 @@ pub fn validProfileName(name: []const u8) bool {
     return true;
 }
 
-pub fn pushReadonlyContext(state: *lua.lua_State, context: CallbackContext) void {
-    lua.lua_createtable(state, 0, 5);
+pub fn pushReadonlyContext(state: *lua_api.c.lua_State, context: CallbackContext) void {
+    lua_api.c.lua_createtable(state, 0, 5);
     setBooleanField(state, .{ .index = -1, .name = "sidebar_visible" }, context.sidebar_visible);
     setIntegerField(state, .{ .index = -1, .name = "tab_count" }, context.tab_count);
     setIntegerField(state, .{ .index = -1, .name = "active_tab_index" }, @as(u32, context.active_tab_index) + 1);
@@ -143,15 +66,15 @@ pub fn pushReadonlyContext(state: *lua.lua_State, context: CallbackContext) void
     freezeTable(state);
 }
 
-pub fn pushReadonlyBarContext(state: *lua.lua_State, context: BarCallbackContext) void {
-    lua.lua_createtable(state, 0, 9);
+pub fn pushReadonlyBarContext(state: *lua_api.c.lua_State, context: BarCallbackContext) void {
+    lua_api.c.lua_createtable(state, 0, 9);
     setBooleanField(state, .{ .index = -1, .name = "sidebar_visible" }, context.client.sidebar_visible);
     setIntegerField(state, .{ .index = -1, .name = "tab_count" }, context.client.tab_count);
     setIntegerField(state, .{ .index = -1, .name = "active_tab_index" }, @as(u32, context.client.active_tab_index) + 1);
     setIntegerField(state, .{ .index = -1, .name = "pane_count" }, context.client.pane_count);
     setIntegerField(state, .{ .index = -1, .name = "focused_pane_id" }, context.client.focused_pane_id);
 
-    lua.lua_createtable(state, 0, 8);
+    lua_api.c.lua_createtable(state, 0, 8);
     setIntegerField(state, .{ .index = -1, .name = "unix_seconds" }, context.time.unix_seconds);
     setIntegerField(state, .{ .index = -1, .name = "year" }, context.time.year);
     setIntegerField(state, .{ .index = -1, .name = "month" }, context.time.month);
@@ -161,9 +84,9 @@ pub fn pushReadonlyBarContext(state: *lua.lua_State, context: BarCallbackContext
     setIntegerField(state, .{ .index = -1, .name = "second" }, context.time.second);
     setIntegerField(state, .{ .index = -1, .name = "weekday" }, context.time.weekday);
     freezeTable(state);
-    lua.lua_setfield(state, -2, "time");
+    lua_api.c.lua_setfield(state, -2, "time");
 
-    lua.lua_createtable(state, 0, 4);
+    lua_api.c.lua_createtable(state, 0, 4);
     setBooleanField(state, .{ .index = -1, .name = "available" }, context.metrics != null);
     if (context.metrics) |metrics| {
         setIntegerField(state, .{ .index = -1, .name = "cpu_percent" }, metrics.cpu_percent);
@@ -173,15 +96,15 @@ pub fn pushReadonlyBarContext(state: *lua.lua_State, context: BarCallbackContext
         }
     }
     freezeTable(state);
-    lua.lua_setfield(state, -2, "metrics");
+    lua_api.c.lua_setfield(state, -2, "metrics");
 
     if (context.command_output) |output| {
-        _ = lua.lua_pushlstring(state, output.ptr, output.len);
-        lua.lua_setfield(state, -2, "output");
+        _ = lua_api.c.lua_pushlstring(state, output.ptr, output.len);
+        lua_api.c.lua_setfield(state, -2, "output");
     }
 
-    _ = lua.lua_pushlstring(state, context.pane_title.ptr, context.pane_title.len);
-    lua.lua_setfield(state, -2, "pane_title");
+    _ = lua_api.c.lua_pushlstring(state, context.pane_title.ptr, context.pane_title.len);
+    lua_api.c.lua_setfield(state, -2, "pane_title");
 
     freezeTable(state);
 }
@@ -196,94 +119,90 @@ pub fn hasControlBytes(text: []const u8) bool {
     return false;
 }
 
-fn freezeTable(state: *lua.lua_State) void {
-    lua.lua_createtable(state, 0, 0);
-    lua.lua_createtable(state, 0, 3);
-    lua.lua_pushvalue(state, -3);
-    lua.lua_setfield(state, -2, "__index");
-    lua.lua_pushcclosure(state, readonlyNewIndex, 0);
-    lua.lua_setfield(state, -2, "__newindex");
-    lua.lua_pushboolean(state, 0);
-    lua.lua_setfield(state, -2, "__metatable");
-    _ = lua.lua_setmetatable(state, -2);
-    lua.lua_remove(state, -2);
+fn freezeTable(state: *lua_api.c.lua_State) void {
+    lua_api.c.lua_createtable(state, 0, 0);
+    lua_api.c.lua_createtable(state, 0, 3);
+    lua_api.c.lua_pushvalue(state, -3);
+    lua_api.c.lua_setfield(state, -2, "__index");
+    lua_api.c.lua_pushcclosure(state, readonlyNewIndex, 0);
+    lua_api.c.lua_setfield(state, -2, "__newindex");
+    lua_api.c.lua_pushboolean(state, 0);
+    lua_api.c.lua_setfield(state, -2, "__metatable");
+    _ = lua_api.c.lua_setmetatable(state, -2);
+    lua_api.c.lua_remove(state, -2);
 }
 
-const FieldTarget = @import("FieldTarget.zig");
-
-fn setBooleanField(state: *lua.lua_State, target: FieldTarget, value: bool) void {
-    const absolute = lua.lua_absindex(state, target.index);
-    lua.lua_pushboolean(state, @intFromBool(value));
-    lua.lua_setfield(state, absolute, target.name);
+fn setBooleanField(state: *lua_api.c.lua_State, target: FieldTarget, value: bool) void {
+    const absolute = lua_api.c.lua_absindex(state, target.index);
+    lua_api.c.lua_pushboolean(state, @intFromBool(value));
+    lua_api.c.lua_setfield(state, absolute, target.name);
 }
 
-fn setIntegerField(state: *lua.lua_State, target: FieldTarget, value: anytype) void {
-    const absolute = lua.lua_absindex(state, target.index);
-    lua.lua_pushinteger(state, @intCast(value));
-    lua.lua_setfield(state, absolute, target.name);
+fn setIntegerField(state: *lua_api.c.lua_State, target: FieldTarget, value: anytype) void {
+    const absolute = lua_api.c.lua_absindex(state, target.index);
+    lua_api.c.lua_pushinteger(state, @intCast(value));
+    lua_api.c.lua_setfield(state, absolute, target.name);
 }
 
-fn readonlyNewIndex(state: ?*lua.lua_State) callconv(.c) c_int {
-    _ = lua.lua_pushstring(state.?, "callback context is immutable");
-    return lua.lua_error(state.?);
+fn readonlyNewIndex(state: ?*lua_api.c.lua_State) callconv(.c) c_int {
+    _ = lua_api.c.lua_pushstring(state.?, "callback context is immutable");
+    return lua_api.c.lua_error(state.?);
 }
 
-const DecisionInput = @import("DecisionInput.zig");
-
-pub fn parseInputDecision(state: *lua.lua_State, input_decision: DecisionInput, diagnostic: *Diagnostic) !InputDecision {
-    const absolute = lua.lua_absindex(state, input_decision.index);
-    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+pub fn parseInputDecision(state: *lua_api.c.lua_State, input_decision: DecisionInput, diagnostic: *Diagnostic) !InputDecision {
+    const absolute = lua_api.c.lua_absindex(state, input_decision.index);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("Lua expression must return a telar.input value", .{});
         return error.InvalidExpressionResult;
     }
-    const kind = try requiredStringField(state, .{ .index = absolute, .name = "input_kind" }, diagnostic);
+    const kind = try lua_value.requiredStringField(state, .{ .index = absolute, .name = "input_kind" }, diagnostic);
     if (std.mem.eql(u8, kind, "consume")) {
-        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"input_kind"}, .path = "input decision" }, diagnostic);
+        try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"input_kind"}, .path = "input decision" }, diagnostic);
         return .consume;
     }
     if (std.mem.eql(u8, kind, "forward")) {
-        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"input_kind"}, .path = "input decision" }, diagnostic);
+        try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"input_kind"}, .path = "input decision" }, diagnostic);
         var keys: InputKeys = .{};
         @memcpy(keys.items[0..input_decision.callback.trigger_len], input_decision.callback.trigger[0..input_decision.callback.trigger_len]);
         keys.len = input_decision.callback.trigger_len;
         return .{ .forward_binding = keys };
     }
     if (std.mem.eql(u8, kind, "keys")) {
-        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "input_kind", "keys" }, .path = "input decision" }, diagnostic);
-        _ = lua.lua_getfield(state, absolute, "keys");
-        defer pop(state, 1);
-        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+        try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "input_kind", "keys" }, .path = "input decision" }, diagnostic);
+        _ = lua_api.c.lua_getfield(state, absolute, "keys");
+        defer lua_value.pop(state, 1);
+        if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
             diagnostic.set("input decision keys must be an array", .{});
             return error.InvalidExpressionResult;
         }
-        const count = lua.lua_rawlen(state, -1);
+        const count = lua_api.c.lua_rawlen(state, -1);
         if (count == 0 or count > max_expression_keys) {
             diagnostic.set("input decision must contain 1..{d} keys", .{max_expression_keys});
             return error.InvalidExpressionResult;
         }
         var keys: InputKeys = .{};
         for (0..count) |key_index| {
-            _ = lua.lua_geti(state, -1, @intCast(key_index + 1));
-            const value = string(state, -1) orelse {
-                pop(state, 1);
+            _ = lua_api.c.lua_geti(state, -1, @intCast(key_index + 1));
+            const value = lua_value.string(state, -1) orelse {
+                lua_value.pop(state, 1);
                 diagnostic.set("input decision key {d} must be a string", .{key_index + 1});
                 return error.InvalidExpressionResult;
             };
-            keys.items[key_index] = keybind.parseKey(value) catch |err| {
+            keys.items[key_index] = parseKey_module(value) catch |err| {
                 diagnostic.set("invalid input decision key {d}: {s}", .{ key_index + 1, @errorName(err) });
-                pop(state, 1);
+                lua_value.pop(state, 1);
                 return error.InvalidExpressionResult;
             };
-            pop(state, 1);
+            lua_value.pop(state, 1);
         }
         keys.len = @intCast(count);
         return .{ .keys = keys };
     }
     if (std.mem.eql(u8, kind, "paste")) {
-        try ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "input_kind", "text" }, .path = "input decision" }, diagnostic);
-        _ = lua.lua_getfield(state, absolute, "text");
-        defer pop(state, 1);
-        const value = string(state, -1) orelse {
+        try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "input_kind", "text" }, .path = "input decision" }, diagnostic);
+        _ = lua_api.c.lua_getfield(state, absolute, "text");
+        defer lua_value.pop(state, 1);
+        const value = lua_value.string(state, -1) orelse {
             diagnostic.set("input decision paste text must be a string", .{});
             return error.InvalidExpressionResult;
         };
@@ -353,46 +272,46 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expect(generation.snapshot.sound.enabled);
     try std.testing.expect(!generation.snapshot.sound.ready);
     try std.testing.expect(generation.snapshot.sound.needs_input);
-    try std.testing.expectEqual(icons.Theme.nerd_font, generation.snapshot.icon_theme);
-    try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
+    try std.testing.expectEqual(ThemeType.nerd_font, generation.snapshot.icon_theme);
+    try std.testing.expectEqual(capabilities.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
     try std.testing.expectEqualDeep(
-        core.ui.Color{ .rgb = .{ 1, 2, 3 } },
+        ColorType{ .rgb = .{ 1, 2, 3 } },
         generation.snapshot.theme.palette.accent,
     );
     try std.testing.expectEqualDeep(
-        action_mod.Action{ .split_pane = .horizontal },
+        ActionType{ .split_pane = .horizontal },
         generation.snapshot.bindings[0].action,
     );
     try std.testing.expectEqualDeep(
-        action_mod.Action{ .lua_callback = .{ .generation = 7, .id = 0 } },
+        ActionType{ .lua_callback = .{ .generation = 7, .id = 0 } },
         generation.snapshot.bindings[1].action,
     );
-    const ctrl_s = try keybind.parseKey("ctrl+s");
+    const ctrl_s = try parseKey_module("ctrl+s");
     try std.testing.expectEqualDeep(ctrl_s, generation.snapshot.prefix);
     try std.testing.expectEqualDeep(ctrl_s, generation.snapshot.bindings[0].keys[0]);
-    try std.testing.expectEqualDeep(try keybind.parseKey("%"), generation.snapshot.bindings[0].keys[1]);
+    try std.testing.expectEqualDeep(try parseKey_module("%"), generation.snapshot.bindings[0].keys[1]);
     try std.testing.expectEqual(@as(u8, 2), generation.snapshot.bindings[0].len);
     try std.testing.expectEqualDeep(ctrl_s, generation.snapshot.bindings[1].keys[0]);
-    try std.testing.expectEqualDeep(try keybind.parseKey("g"), generation.snapshot.bindings[1].keys[1]);
-    try std.testing.expectEqualDeep(try keybind.parseKey("ctrl+g"), generation.snapshot.bindings[2].keys[0]);
+    try std.testing.expectEqualDeep(try parseKey_module("g"), generation.snapshot.bindings[1].keys[1]);
+    try std.testing.expectEqualDeep(try parseKey_module("ctrl+g"), generation.snapshot.bindings[2].keys[0]);
     try std.testing.expectEqual(@as(u8, 1), generation.snapshot.bindings[2].len);
-    try std.testing.expectEqual(action_mod.Action.detach, generation.snapshot.bindings[2].action);
+    try std.testing.expectEqual(ActionType.detach, generation.snapshot.bindings[2].action);
     try std.testing.expectEqualDeep(
-        action_mod.Action{ .resize_pane = .right },
+        ActionType{ .resize_pane = .right },
         generation.snapshot.bindings[3].action,
     );
     try std.testing.expectEqual(
-        action_mod.Action.toggle_pane_fullscreen,
+        ActionType.toggle_pane_fullscreen,
         generation.snapshot.bindings[4].action,
     );
     try std.testing.expectEqualDeep(
-        action_mod.Action{ .resize_sidebar = .left },
+        ActionType{ .resize_sidebar = .left },
         generation.snapshot.bindings[5].action,
     );
     try std.testing.expectEqualDeep(
-        action_mod.Action{ .navigate_pane = .left },
+        ActionType{ .navigate_pane = .left },
         generation.snapshot.bindings[6].action,
     );
 }
@@ -410,10 +329,10 @@ test "focused scroll Lua actions compile for global and prefixed bindings" {
     defer generation.deinit();
 
     try std.testing.expectEqual(@as(u16, 2), generation.snapshot.binding_count);
-    try std.testing.expectEqualDeep(action_mod.Action{ .scroll_pane = .up }, generation.snapshot.bindings[0].action);
-    try std.testing.expectEqualDeep(action_mod.Action{ .scroll_pane = .down }, generation.snapshot.bindings[1].action);
+    try std.testing.expectEqualDeep(ActionType{ .scroll_pane = .up }, generation.snapshot.bindings[0].action);
+    try std.testing.expectEqualDeep(ActionType{ .scroll_pane = .down }, generation.snapshot.bindings[1].action);
     try std.testing.expectEqual(@as(u8, 1), generation.snapshot.bindings[0].len);
-    try std.testing.expectEqualDeep(try keybind.parseKey("alt+up"), generation.snapshot.bindings[0].keys[0]);
+    try std.testing.expectEqualDeep(try parseKey_module("alt+up"), generation.snapshot.bindings[0].keys[0]);
     try std.testing.expectEqual(@as(u8, 2), generation.snapshot.bindings[1].len);
     try std.testing.expectEqualDeep(generation.snapshot.prefix, generation.snapshot.bindings[1].keys[0]);
 }
@@ -446,12 +365,12 @@ test "history palette Lua action constructor compiles" {
 
     try std.testing.expectEqual(@as(u16, 1), generation.snapshot.binding_count);
     try std.testing.expectEqualDeep(
-        try keybind.parseKey("ctrl+r"),
+        try parseKey_module("ctrl+r"),
         generation.snapshot.bindings[0].keys[0],
     );
     try std.testing.expectEqual(@as(u8, 1), generation.snapshot.bindings[0].len);
     try std.testing.expectEqual(
-        action_mod.Action.history_palette,
+        ActionType.history_palette,
         generation.snapshot.bindings[0].action,
     );
 }
@@ -570,9 +489,9 @@ test "Lua callback receives an immutable snapshot and returns bounded effects" {
         &diagnostic,
     );
     try std.testing.expectEqual(@as(u8, 2), batch.len);
-    try std.testing.expectEqualDeep(action_mod.Action.toggle_sidebar, batch.items[0]);
+    try std.testing.expectEqualDeep(ActionType.toggle_sidebar, batch.items[0]);
     try std.testing.expectEqualDeep(
-        action_mod.Action{ .focus_pane = .left },
+        ActionType{ .focus_pane = .left },
         batch.items[1],
     );
 }
@@ -610,12 +529,12 @@ test "Lua callbacks produce bounded clickable notifications" {
     );
     const notification = &batch.items[0].notification;
     try std.testing.expectEqual(@as(u8, 1), batch.len);
-    try std.testing.expectEqual(core.schema.NotificationLevel.warning, notification.level);
+    try std.testing.expectEqual(NotificationLevelType.warning, notification.level);
     try std.testing.expectEqual(@as(u32, 3000), notification.duration_ms);
     try std.testing.expectEqualStrings("Agent waiting", notification.title());
     try std.testing.expectEqualStrings("Review its question", notification.message());
     try std.testing.expectEqual(
-        @as(core.schema.PaneId, @enumFromInt(42)),
+        @as(PaneIdType, @enumFromInt(42)),
         notification.target.pane,
     );
 }
@@ -647,8 +566,8 @@ test "Lua expression returns semantic input instead of terminal bytes" {
     );
     try std.testing.expect(decision == .keys);
     try std.testing.expectEqual(@as(u8, 2), decision.keys.len);
-    try std.testing.expectEqual(keybind.Key.Code.left, decision.keys.items[0].code);
-    try std.testing.expectEqual(keybind.Key.Code.enter, decision.keys.items[1].code);
+    try std.testing.expectEqual(KeyType.Code.left, decision.keys.items[0].code);
+    try std.testing.expectEqual(KeyType.Code.enter, decision.keys.items[1].code);
 }
 
 test "Lua callback cannot mutate its context" {
@@ -761,12 +680,12 @@ test "client bars compile styled static dynamic and command sources" {
 
     const left = &generation.snapshot.bars.bottom[0].static;
     try std.testing.expectEqual(@as(u8, 2), left.segment_count);
-    try std.testing.expectEqual(icons.Icon.cpu, left.slice()[0].icon.?);
+    try std.testing.expectEqual(IconType.cpu, left.slice()[0].icon.?);
     try std.testing.expectEqualStrings(" CPU", left.text(left.slice()[0]));
-    try std.testing.expectEqualDeep(bars.Color{ .palette = .teal }, left.slice()[0].style.foreground.?);
-    try std.testing.expectEqualDeep(bars.Color{ .value = .{ .rgb = .{ 1, 2, 3 } } }, left.slice()[0].style.background.?);
+    try std.testing.expectEqualDeep(ClientColor{ .palette = .teal }, left.slice()[0].style.foreground.?);
+    try std.testing.expectEqualDeep(ClientColor{ .value = .{ .rgb = .{ 1, 2, 3 } } }, left.slice()[0].style.background.?);
     try std.testing.expect(left.slice()[0].style.bold);
-    try std.testing.expectEqualDeep(bars.Color{ .value = .{ .indexed = 7 } }, left.slice()[1].style.foreground.?);
+    try std.testing.expectEqualDeep(ClientColor{ .value = .{ .indexed = 7 } }, left.slice()[1].style.foreground.?);
     try std.testing.expect(left.slice()[1].style.italic);
     try std.testing.expect(generation.snapshot.bars.bottom[1] == .tabs);
 
@@ -805,7 +724,7 @@ test "client bars compile styled static dynamic and command sources" {
     const clock = try generation.invokeBar(.{ .reference = top.callback, .context = context }, &diagnostic);
     try std.testing.expectEqual(@as(u64, std.time.ns_per_s), top.interval_ns);
     try std.testing.expectEqual(@as(u8, 1), clock.segment_count);
-    try std.testing.expectEqual(icons.Icon.battery_full, clock.slice()[0].icon.?);
+    try std.testing.expectEqual(IconType.battery_full, clock.slice()[0].icon.?);
     try std.testing.expectEqualStrings(" 2026-09-01 13:05:09 61%", clock.text(clock.slice()[0]));
     try std.testing.expect(!clock.slice()[0].style.faint);
 
@@ -890,7 +809,7 @@ test "runtime proxy defaults to the Claude Code and Codex API hosts" {
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
-    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    var storage: [max_intercept_hosts][]const u8 = undefined;
     const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
 
     try std.testing.expectEqual(@as(usize, 3), hosts.len);
@@ -904,7 +823,7 @@ test "an explicit empty intercept host list disables interception" {
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = {} } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
-    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    var storage: [max_intercept_hosts][]const u8 = undefined;
     const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
 
     try std.testing.expectEqual(@as(usize, 0), hosts.len);
@@ -961,12 +880,12 @@ test "runtime config compiles bounded graphics, proxy, and description values" {
     try std.testing.expectEqual(@as(usize, 2048), generation.snapshot.runtime.proxy_capture_max_exchange_bytes);
     try std.testing.expectEqual(@as(usize, 8192), generation.snapshot.runtime.proxy_capture_max_total_bytes);
     try std.testing.expectEqual(@as(u32, 1500), generation.snapshot.runtime.proxy_capture_join_timeout_ms);
-    var intercept_host_storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    var intercept_host_storage: [max_intercept_hosts][]const u8 = undefined;
     const intercept_hosts = generation.snapshot.runtime.proxyInterceptHosts(&intercept_host_storage);
     try std.testing.expectEqual(@as(usize, 2), intercept_hosts.len);
     try std.testing.expectEqualStrings("api.example.com", intercept_hosts[0]);
     try std.testing.expectEqualStrings("updates.example.com", intercept_hosts[1]);
-    var arguments: [max_agent_description_command_args][]const u8 = undefined;
+    var arguments: [config_model.max_agent_description_command_args][]const u8 = undefined;
     const description_command = &generation.snapshot.runtime.agent_descriptions;
     try std.testing.expect(description_command.enabled());
     try std.testing.expectEqual(@as(u32, 12_000), description_command.timeout_ms);
@@ -998,7 +917,7 @@ test "runtime engine parses its command, deadline and idle interval" {
     try std.testing.expect(engine.enabled());
     try std.testing.expectEqual(@as(u32, 20_000), engine.timeout_ms);
     try std.testing.expectEqual(@as(u32, 120_000), generation.snapshot.runtime.engine_idle_timeout_ms);
-    var arguments: [max_agent_description_command_args][]const u8 = undefined;
+    var arguments: [config_model.max_agent_description_command_args][]const u8 = undefined;
     const argv = engine.arguments(&arguments);
     try std.testing.expectEqual(@as(usize, 5), argv.len);
     try std.testing.expectEqualStrings("--no-tools", argv[4]);
@@ -1030,7 +949,7 @@ test "runtime proxy accepts wildcard intercept hosts" {
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, runtime = { proxy = { intercept_hosts = { '*.Example.com', '*' } } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
 
-    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    var storage: [max_intercept_hosts][]const u8 = undefined;
     const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
     try std.testing.expectEqual(@as(usize, 2), hosts.len);
     try std.testing.expectEqualStrings("*", hosts[0]);
@@ -1070,11 +989,11 @@ test "runtime proxy accepts and sorts 256 intercept hosts" {
     var diagnostic: Diagnostic = .{};
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "local h = {}; for i = 256, 1, -1 do h[#h + 1] = 'host' .. i .. '.example' end; return { api_version = 2, runtime = { proxy = { intercept_hosts = h } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
-    var storage: [max_proxy_intercept_hosts][]const u8 = undefined;
+    var storage: [max_intercept_hosts][]const u8 = undefined;
     const hosts = generation.snapshot.runtime.proxyInterceptHosts(&storage);
     try std.testing.expectEqual(@as(usize, 256), hosts.len);
     for (hosts[1..], hosts[0 .. hosts.len - 1]) |current, previous|
-        try std.testing.expect(core.proxy.orderHostname(previous, current) == .lt);
+        try std.testing.expect(orderHostname_module(previous, current) == .lt);
 }
 
 test "runtime description command rejects unbounded values" {
@@ -1153,12 +1072,12 @@ test "profile overlays base config before CLI locks are applied" {
     });
     defer generation.deinit();
     try std.testing.expect(!generation.snapshot.sidebar_visible);
-    try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
+    try std.testing.expectEqual(capabilities.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     try std.testing.expectEqual(@as(usize, 16 * 1024 * 1024), generation.snapshot.runtime.graphics_pane_bytes);
     try std.testing.expectEqual(@as(usize, 64 * 1024 * 1024), generation.snapshot.runtime.graphics_global_bytes);
     const binding = generation.snapshot.bindings[0];
-    try std.testing.expectEqualDeep(try keybind.parseKey("ctrl+s"), binding.keys[0]);
-    try std.testing.expectEqualDeep(try keybind.parseKey("f"), binding.keys[1]);
+    try std.testing.expectEqualDeep(try parseKey_module("ctrl+s"), binding.keys[0]);
+    try std.testing.expectEqualDeep(try parseKey_module("f"), binding.keys[1]);
     const decision = try generation.invokeExpression(
         .{ .reference = binding.action.lua_expr, .context = .{
             .sidebar_visible = false,
@@ -1171,8 +1090,8 @@ test "profile overlays base config before CLI locks are applied" {
     );
     try std.testing.expect(decision == .forward_binding);
     try std.testing.expectEqual(@as(u8, 2), decision.forward_binding.len);
-    try std.testing.expectEqualDeep(try keybind.parseKey("ctrl+s"), decision.forward_binding.items[0]);
-    try std.testing.expectEqualDeep(try keybind.parseKey("f"), decision.forward_binding.items[1]);
+    try std.testing.expectEqualDeep(try parseKey_module("ctrl+s"), decision.forward_binding.items[0]);
+    try std.testing.expectEqualDeep(try parseKey_module("f"), decision.forward_binding.items[1]);
 }
 
 test "selected profile must exist" {
@@ -1235,7 +1154,7 @@ test "local modules are contained and participate in reload fingerprints" {
     }, .{ .path = config_path, .number = 1 });
     defer generation.deinit();
     try std.testing.expectEqual(@as(u8, 1), generation.modules.dependency_count);
-    try std.testing.expectEqual(kitty.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
+    try std.testing.expectEqual(capabilities.SidebarRendering.cells, generation.snapshot.sidebar_rendering);
     const before = generation.watchFingerprint(io, config_path);
     {
         var module = try temp.dir.createFile(io, "settings.lua", .{ .truncate = true });
@@ -1319,13 +1238,13 @@ test "runtime agents extend built-ins and add custom manifests" {
     const table = &generation.snapshot.runtime.agent_manifests;
 
     try std.testing.expectEqual(@as(u8, 4), table.count);
-    const gemini = table.find(@enumFromInt(core.schema.first_custom_agent_provider)).?;
+    const gemini = table.find(@enumFromInt(first_custom_agent_provider_module)).?;
     try std.testing.expectEqualStrings("gemini", gemini.nameSlice());
     try std.testing.expectEqual(gemini.provider, table.providerFromExecutable("gemini").?);
     try std.testing.expectEqual(gemini.provider, table.detect("Gemini CLI  esc to cancel").?.provider);
     try std.testing.expectEqualStrings("command", table.commandField(gemini.provider, "run_shell_command").?);
-    try std.testing.expectEqual(core.agent_manifest.Status.working, table.detect("brewing").?.status);
-    try std.testing.expectEqual(core.schema.AgentProvider.claude, table.detect("Claude Code").?.provider);
+    try std.testing.expectEqual(StatusType.working, table.detect("brewing").?.status);
+    try std.testing.expectEqual(AgentProviderType.claude, table.detect("Claude Code").?.provider);
 }
 
 test "runtime agents reject bad names and oversized phrases" {
@@ -1355,17 +1274,17 @@ test "runtime agents carry presentation and the attachment scheme" {
     var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
     const table = &generation.snapshot.runtime.agent_manifests;
-    const gemini: core.schema.AgentProvider = @enumFromInt(core.schema.first_custom_agent_provider);
-    var buffer: [core.agent_manifest.max_placeholder_bytes]u8 = undefined;
+    const gemini: AgentProviderType = @enumFromInt(first_custom_agent_provider_module);
+    var buffer: [max_agent_session_title_bytes]u8 = undefined;
 
     try std.testing.expectEqualStrings("Gemini CLI", table.displayName(gemini));
     try std.testing.expectEqualStrings("Fresh Gemini chat", table.placeholderTitle(gemini, &buffer));
     try std.testing.expectEqualStrings("G", table.icon(gemini));
-    try std.testing.expectEqual(core.agent_manifest.AttachmentMarkers.ordered, table.attachments(gemini));
+    try std.testing.expectEqual(AgentAttachmentMarkers.ordered, table.attachments(gemini));
     try std.testing.expectEqualStrings("Claude", table.displayName(.claude));
     try std.testing.expectEqualStrings("New Claude session", table.placeholderTitle(.claude, &buffer));
-    try std.testing.expectEqual(core.agent_manifest.AttachmentMarkers.stable_number, table.attachments(.claude));
-    try std.testing.expectEqual(core.agent_manifest.AttachmentMarkers.pasted_path, table.attachments(.pi));
+    try std.testing.expectEqual(AgentAttachmentMarkers.stable_number, table.attachments(.claude));
+    try std.testing.expectEqual(AgentAttachmentMarkers.pasted_path, table.attachments(.pi));
 }
 
 test "runtime agents reject bad presentation fields" {
@@ -1402,7 +1321,7 @@ test "notification delivery parses and rejects unknown channels" {
     var diagnostic: Diagnostic = .{};
     var generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { notifications = { delivery = \"system\" } } }", .source_name = "@config.lua", .number = 1 });
     defer generation.deinit();
-    try std.testing.expectEqual(config_model.NotificationDelivery.system, generation.snapshot.notification_delivery);
+    try std.testing.expectEqual(Delivery.system, generation.snapshot.notification_delivery);
 
     var invalid: Diagnostic = .{};
     try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &invalid }, .{ .source = "return { api_version = 2, client = { notifications = { delivery = \"popup\" } } }", .source_name = "@config.lua", .number = 1 }));

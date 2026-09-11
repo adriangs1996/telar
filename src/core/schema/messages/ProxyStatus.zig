@@ -1,5 +1,6 @@
-const ProxyStatus = @This();
 const types = @import("../types.zig");
+const ProxyStatus = @This();
+
 active: bool,
 scope: types.ProxyScope,
 system_trusted: bool,

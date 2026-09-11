@@ -1,16 +1,15 @@
 //! Bounded ownership transfer for accepted proxy connections.
 
+const SlotSnapshotType = @import("SlotSnapshot.zig");
+const SlotsType = @import("Slots.zig");
+const GenericConnectionAdmissionPort = @import("GenericConnectionAdmissionPort.zig").Type;
+const GenericRunner = @import("GenericRunner.zig").Type;
+const ConnectionAdmissionCapture = @import("ConnectionAdmissionCapture.zig");
 const std = @import("std");
-
-pub const Io = std.Io;
 
 pub const SlotSnapshot = @import("SlotSnapshot.zig");
 
 pub const Slots = @import("Slots.zig");
-
-pub const Port = @import("GenericConnectionAdmissionPort.zig").Type;
-
-pub const Runner = @import("GenericRunner.zig").Type;
 
 pub const Step = enum {
     accept,
@@ -28,54 +27,52 @@ pub const AcceptResult = union(enum) {
     canceled,
 };
 
-const Capture = @import("ConnectionAdmissionCapture.zig");
-
-const test_port: Port(Capture, u8) = .{
-    .accept = Capture.accept,
-    .acquire = Capture.acquire,
-    .start = Capture.start,
-    .release = Capture.release,
-    .close = Capture.close,
-    .cancel = Capture.cancel,
+const test_port: GenericConnectionAdmissionPort(ConnectionAdmissionCapture, u8) = .{
+    .accept = ConnectionAdmissionCapture.accept,
+    .acquire = ConnectionAdmissionCapture.acquire,
+    .start = ConnectionAdmissionCapture.start,
+    .release = ConnectionAdmissionCapture.release,
+    .close = ConnectionAdmissionCapture.close,
+    .cancel = ConnectionAdmissionCapture.cancel,
 };
 
-const TestRunner = Runner(Capture, u8, test_port);
+const TestRunner = GenericRunner(ConnectionAdmissionCapture, u8, test_port);
 
-fn fixture(results: []const AcceptResult) Capture {
+fn fixture(results: []const AcceptResult) ConnectionAdmissionCapture {
     std.debug.assert(results.len <= 4);
-    var capture: Capture = .{};
+    var capture: ConnectionAdmissionCapture = .{};
     @memcpy(capture.accepts[0..results.len], results);
     capture.accept_len = results.len;
     return capture;
 }
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const ConnectionAdmissionCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
 test "connection slots never expose a count above their bound" {
-    var slots = Slots.init(2);
+    var slots = SlotsType.init(2);
 
     try std.testing.expect(slots.acquire());
     try std.testing.expect(slots.acquire());
     try std.testing.expect(!slots.acquire());
-    try std.testing.expectEqual(SlotSnapshot{ .active = 2, .limit_drops = 1 }, slots.snapshot());
+    try std.testing.expectEqual(SlotSnapshotType{ .active = 2, .limit_drops = 1 }, slots.snapshot());
 
     slots.release();
     try std.testing.expect(slots.acquire());
-    try std.testing.expectEqual(SlotSnapshot{ .active = 2, .limit_drops = 1 }, slots.snapshot());
+    try std.testing.expectEqual(SlotSnapshotType{ .active = 2, .limit_drops = 1 }, slots.snapshot());
 
     slots.release();
     slots.release();
-    try std.testing.expectEqual(SlotSnapshot{ .active = 0, .limit_drops = 1 }, slots.snapshot());
+    try std.testing.expectEqual(SlotSnapshotType{ .active = 0, .limit_drops = 1 }, slots.snapshot());
 }
 
 test "a zero connection limit rejects and counts every attempt" {
-    var slots = Slots.init(0);
+    var slots = SlotsType.init(0);
 
     try std.testing.expect(!slots.acquire());
     try std.testing.expect(!slots.acquire());
-    try std.testing.expectEqual(SlotSnapshot{ .active = 0, .limit_drops = 2 }, slots.snapshot());
+    try std.testing.expectEqual(SlotSnapshotType{ .active = 0, .limit_drops = 2 }, slots.snapshot());
 }
 
 test "listener closure stops and cancels the worker group" {

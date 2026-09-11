@@ -1,8 +1,10 @@
+const PaneIdType = @import("telar-core").PaneId;
+const PaneAttachmentRequestType = @import("../panes/PaneAttachmentRequest.zig");
 const Effects = @This();
-const source_namespace = @import("tab_snapshot_delivery.zig");
+
 context: *anyopaque,
-ignore_pane_requests: *const fn (*anyopaque, source_namespace.schema.PaneId) void,
-clear_pane_graphics: *const fn (*anyopaque, source_namespace.schema.PaneId) void,
+ignore_pane_requests: *const fn (*anyopaque, PaneIdType) void,
+clear_pane_graphics: *const fn (*anyopaque, PaneIdType) void,
 synchronize_active_resources: *const fn (*anyopaque) anyerror!void,
-attachment_pending: *const fn (*anyopaque, source_namespace.schema.PaneId) bool,
-request_attachment: *const fn (*anyopaque, source_namespace.PaneAttachmentRequest) anyerror!void,
+attachment_pending: *const fn (*anyopaque, PaneIdType) bool,
+request_attachment: *const fn (*anyopaque, PaneAttachmentRequestType) anyerror!void,

@@ -133,12 +133,12 @@ the session volatile.
 - `src/backend/persistence/checkpoint.zig` proves the record round trip,
   version 1 compatibility, title validation and rejection of corrupt,
   truncated and foreign files.
-- `src/backend/agent/tracker.zig` and `src/backend/agent/restored_titles.zig`
+- `src/backend/agent/tracker_support.zig` and `src/backend/agent/restored_titles.zig`
   prove that a restored title reaches only the resumed agent's generation,
   skips title generation and is dropped with its pane.
 - `src/backend/runtime/application/session_checkpoint.zig` proves the
   debounce, coalescing and retry state machine and the atomic private write.
-- `src/backend/workspace/repository.zig` and `src/backend/pane/root.zig` prove
+- `src/backend/workspace/repository_support.zig` and `src/backend/pane/pane_namespace.zig` prove
   identity-preserving restore and counter advancement.
 - `src/backend/runtime/instance.zig` proves a restart round trip through a
   real runtime: workspaces, tabs, panes, their identities and the resumed

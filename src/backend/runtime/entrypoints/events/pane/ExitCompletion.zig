@@ -1,5 +1,6 @@
+const PaneKeyType = @import("../../../../pane/PaneKey.zig");
+const exit = @import("../../../../pty/exit.zig");
 const Completion = @This();
-const source_namespace = @import("exit.zig");
-const pty = @import("../../../../pty/root.zig");
-pane: source_namespace.PaneKey,
-result: anyerror!pty.Exit,
+
+pane: PaneKeyType,
+result: anyerror!exit.Exit,

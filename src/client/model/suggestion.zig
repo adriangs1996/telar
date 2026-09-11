@@ -2,12 +2,9 @@
 //! in flight and one suggested line. Only the awaited reply lands; editing
 //! the request text discards a suggestion so Enter asks again.
 
+const SuggestionState = @import("SuggestionState.zig");
 const std = @import("std");
-const core = @import("telar-core");
-
-pub const schema = core.schema;
-
-pub const max_text_bytes = schema.max_suggestion_bytes;
+const SuggestionStatusType = @import("telar-core").SuggestionStatus;
 
 pub const Phase = enum {
     /// Nothing asked yet, or the request text changed since the last reply.
@@ -17,10 +14,8 @@ pub const Phase = enum {
     failed,
 };
 
-pub const State = @import("SuggestionState.zig");
-
 test "only the awaited reply lands and edits discard it" {
-    var state: State = .{};
+    var state: SuggestionState = .{};
     state.begin();
     state.expect(7);
     try std.testing.expectEqual(Phase.waiting, state.phase);
@@ -44,7 +39,7 @@ test "only the awaited reply lands and edits discard it" {
     state.expect(8);
     try std.testing.expect(state.apply(.{ .request_id = @enumFromInt(8), .status = .timeout }));
     try std.testing.expectEqual(Phase.failed, state.phase);
-    try std.testing.expectEqual(schema.SuggestionStatus.timeout, state.status);
+    try std.testing.expectEqual(SuggestionStatusType.timeout, state.status);
 
     state.expect(9);
     try std.testing.expect(state.apply(.{ .request_id = @enumFromInt(9), .status = .ready }));

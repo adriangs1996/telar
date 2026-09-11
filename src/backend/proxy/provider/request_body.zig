@@ -1,19 +1,11 @@
 //! Provider request-body classification with bounded per-stream ownership.
 
+const Observer = @import("Observer.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const claude = @import("claude_request.zig");
 const request = @import("request_support.zig");
+const Streams = @import("Streams.zig");
 
-pub const ApiDialect = request.ApiDialect;
-pub const RequestClass = request.RequestClass;
 pub const max_concurrent_requests = 128;
-
-pub const Observer = @import("Observer.zig");
-
-pub const Fragment = @import("Fragment.zig");
-
-pub const Streams = @import("Streams.zig");
 
 const primary_body = "{\"messages\":[],\"tools\":[{\"name\":\"Read\"}],\"stream\":true}";
 const auxiliary_body = "{\"messages\":[],\"tools\":[],\"stream\":true}";
@@ -29,8 +21,8 @@ test "request observer distinguishes primary and auxiliary Claude bodies" {
     defer auxiliary.deinit();
     auxiliary.feed(auxiliary_body);
 
-    try std.testing.expectEqual(RequestClass.inference, primary.finish());
-    try std.testing.expectEqual(RequestClass.auxiliary, auxiliary.finish());
+    try std.testing.expectEqual(request.RequestClass.inference, primary.finish());
+    try std.testing.expectEqual(request.RequestClass.auxiliary, auxiliary.finish());
 }
 
 test "request streams classify arbitrarily interleaved bodies independently" {
@@ -46,8 +38,8 @@ test "request streams classify arbitrarily interleaved bodies independently" {
     streams.feed(.{ .stream_id = 1, .bytes = primary_body[primary_split..] });
     streams.feed(.{ .stream_id = 3, .bytes = auxiliary_body[auxiliary_split..] });
 
-    try std.testing.expectEqual(RequestClass.auxiliary, streams.finish(3).?);
-    try std.testing.expectEqual(RequestClass.inference, streams.finish(1).?);
+    try std.testing.expectEqual(request.RequestClass.auxiliary, streams.finish(3).?);
+    try std.testing.expectEqual(request.RequestClass.inference, streams.finish(1).?);
 }
 
 test "finishing a request stream releases its slot for reuse" {
@@ -55,11 +47,11 @@ test "finishing a request stream releases its slot for reuse" {
     defer streams.deinit();
     try std.testing.expect(streams.start(7));
     streams.feed(.{ .stream_id = 7, .bytes = primary_body });
-    try std.testing.expectEqual(RequestClass.inference, streams.finish(7).?);
+    try std.testing.expectEqual(request.RequestClass.inference, streams.finish(7).?);
 
     try std.testing.expect(streams.start(7));
     streams.feed(.{ .stream_id = 7, .bytes = auxiliary_body });
-    try std.testing.expectEqual(RequestClass.auxiliary, streams.finish(7).?);
+    try std.testing.expectEqual(request.RequestClass.auxiliary, streams.finish(7).?);
 }
 
 test "discarding a request stream erases partial input and releases its slot" {
@@ -85,5 +77,5 @@ test "request stream capacity fails closed without disturbing active slots" {
     try std.testing.expect(!streams.start(@intCast(max_concurrent_requests * 2 + 1)));
     try std.testing.expect(!streams.start(1));
     streams.feed(.{ .stream_id = 1, .bytes = primary_body });
-    try std.testing.expectEqual(RequestClass.inference, streams.finish(1).?);
+    try std.testing.expectEqual(request.RequestClass.inference, streams.finish(1).?);
 }

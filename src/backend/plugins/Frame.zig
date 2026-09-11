@@ -1,9 +1,10 @@
-const Frame = @This();
 const std = @import("std");
-const core = @import("telar-core");
+const PaneIdType = @import("telar-core").PaneId;
+const Frame = @This();
+
 gpa: std.mem.Allocator,
 event_id: u64,
-pane: core.schema.PaneId,
+pane: PaneIdType,
 pane_generation: u64,
 storage: []u8,
 len: usize,

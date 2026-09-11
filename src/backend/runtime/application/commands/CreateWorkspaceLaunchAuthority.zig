@@ -1,4 +1,5 @@
+const CreateWorkspacePrepareLaunch = @import("CreateWorkspacePrepareLaunch.zig");
 const LaunchAuthority = @This();
-const PrepareLaunch = @import("CreateWorkspacePrepareLaunch.zig");
+
 context: *anyopaque,
-prepare: *const fn (*anyopaque, PrepareLaunch) anyerror![]const u8,
+prepare: *const fn (*anyopaque, CreateWorkspacePrepareLaunch) anyerror![]const u8,

@@ -1,8 +1,9 @@
-const agent_event_dispatcher = @import("event_dispatcher/agent.zig");
-const client_event_dispatcher = @import("event_dispatcher/client.zig");
-const pane_event_dispatcher = @import("event_dispatcher/pane/root.zig");
-const request_dispatch = @import("request_dispatch.zig");
-const source_namespace = @import("operation_scheduler.zig");
+const GenericAgentDispatcher = @import("event_dispatcher/GenericAgentDispatcher.zig").Type;
+const GenericClientDispatcher = @import("event_dispatcher/GenericClientDispatcher.zig").Type;
+const GenericPaneDispatcher = @import("event_dispatcher/pane/GenericPaneDispatcher.zig").Type;
+const GenericRuntimePort = @import("GenericRuntimePort.zig").Type;
+const Session = @import("../client/Session.zig");
+
 /// Builds the zero-allocation operation scheduler for one Application type.
 ///
 /// ```zig
@@ -10,9 +11,9 @@ const source_namespace = @import("operation_scheduler.zig");
 /// try Operations.startSessionSend(&application, session, payload);
 /// ```
 pub fn Type(comptime Application: type) type {
-    const AgentEvents = agent_event_dispatcher.Dispatcher(Application);
-    const ClientEvents = client_event_dispatcher.Dispatcher(Application);
-    const PaneEvents = pane_event_dispatcher.Dispatcher(Application, .{
+    const AgentEvents = GenericAgentDispatcher(Application);
+    const ClientEvents = GenericClientDispatcher(Application);
+    const PaneEvents = GenericPaneDispatcher(Application, .{
         .schedule_agent_description = AgentEvents.scheduleDescription,
     });
 
@@ -23,7 +24,7 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// const RequestDispatcher = request_dispatch.Dispatcher(Application, Operations.request_runtime_port);
         /// ```
-        pub const request_runtime_port: request_dispatch.RuntimePort(Application) = .{
+        pub const request_runtime_port: GenericRuntimePort(Application) = .{
             .schedule_observation = PaneEvents.Projection.scheduleObservation,
             .schedule_media = PaneEvents.Projection.scheduleMedia,
             .schedule_response = PaneEvents.Io.scheduleResponse,
@@ -35,7 +36,7 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// try Operations.startSessionSend(&application, session, payload);
         /// ```
-        pub fn startSessionSend(application: *Application, session: *source_namespace.ClientSession, payload: []const u8) !void {
+        pub fn startSessionSend(application: *Application, session: *Session, payload: []const u8) !void {
             return ClientEvents.startSend(application, session, payload);
         }
     };

@@ -1,23 +1,26 @@
-const EffectCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("active_pane_resource_delivery.zig");
-const attachments = @import("../../attachments/root.zig");
-const agents = @import("../../root.zig").agents;
-const Effects = @import("ActivePaneResourceDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneFocusType = @import("../../model/PaneFocus.zig");
+const RectType = @import("telar-core").Rect;
+const TargetType = @import("../../attachments/AttachmentTarget.zig");
+const active_pane_resource_delivery = @import("active_pane_resource_delivery.zig");
+const AgentKeyType = @import("../../agents/AgentKey.zig");
+const ActivePaneResourceDeliveryEffects = @import("ActivePaneResourceDeliveryEffects.zig");
 const std = @import("std");
-model: *const client_model.Model,
-expected_focus: ?client_model.PaneFocus = null,
-attachment_area: ?source_namespace.ui.Rect = null,
-attachment_target: ?attachments.Target = null,
-events: [7]source_namespace.Event = undefined,
+const EffectCapture = @This();
+
+model: *const ModelType,
+expected_focus: ?PaneFocusType = null,
+attachment_area: ?RectType = null,
+attachment_target: ?TargetType = null,
+events: [7]active_pane_resource_delivery.Event = undefined,
 event_count: usize = 0,
-geometry_areas: [2]source_namespace.ui.Rect = undefined,
+geometry_areas: [2]RectType = undefined,
 geometry_count: usize = 0,
 committed_focus_observed: bool = true,
-failure: source_namespace.Failure = .none,
-acknowledged: ?agents.AgentKey = null,
+failure: active_pane_resource_delivery.Failure = .none,
+acknowledged: ?AgentKeyType = null,
 
-pub fn effects(capture: *EffectCapture) Effects {
+pub fn effects(capture: *EffectCapture) ActivePaneResourceDeliveryEffects {
     return .{
         .context = capture,
         .sync_attachment_target = syncAttachmentTarget,
@@ -29,13 +32,13 @@ pub fn effects(capture: *EffectCapture) Effects {
     };
 }
 
-fn acknowledgeAgent(raw_context: *anyopaque, key: agents.AgentKey) !void {
+fn acknowledgeAgent(raw_context: *anyopaque, key: AgentKeyType) !void {
     const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.acknowledge_agent);
     capture.acknowledged = key;
 }
 
-fn syncAttachmentTarget(raw_context: *anyopaque, target: ?attachments.Target) ?source_namespace.ui.Rect {
+fn syncAttachmentTarget(raw_context: *anyopaque, target: ?TargetType) ?RectType {
     const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.attachment_target);
     capture.attachment_target = target;
@@ -57,7 +60,7 @@ fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     capture.append(.invalidate_placements);
 }
 
-fn offerPaneGeometry(raw_context: *anyopaque, area: source_namespace.ui.Rect) !void {
+fn offerPaneGeometry(raw_context: *anyopaque, area: RectType) !void {
     const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.pane_geometry);
     capture.geometry_areas[capture.geometry_count] = area;
@@ -71,7 +74,7 @@ fn offerPaneGeometry(raw_context: *anyopaque, area: source_namespace.ui.Rect) !v
     }
 }
 
-fn requestVisibleAttachments(raw_context: *anyopaque, _: source_namespace.ui.Rect) !void {
+fn requestVisibleAttachments(raw_context: *anyopaque, _: RectType) !void {
     const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.request_attachments);
 
@@ -80,7 +83,7 @@ fn requestVisibleAttachments(raw_context: *anyopaque, _: source_namespace.ui.Rec
     }
 }
 
-fn append(capture: *EffectCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectCapture, event: active_pane_resource_delivery.Event) void {
     capture.observeFocus();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -99,6 +102,6 @@ fn observeFocus(capture: *EffectCapture) void {
         capture.model.version().panes == focus.panes_revision;
 }
 
-pub fn eventSlice(capture: *const EffectCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectCapture) []const active_pane_resource_delivery.Event {
     return capture.events[0..capture.event_count];
 }

@@ -1,18 +1,10 @@
 //! Application command for marking one agent generation as seen.
 
+const Tracker = @import("../../../agent/Tracker.zig");
+const AcknowledgeAgentHandler = @import("AcknowledgeAgentHandler.zig");
+const pane_module = @import("telar-core").pane;
 const std = @import("std");
-const core = @import("telar-core");
-const agent_mod = @import("../../../agent/root.zig");
-const pane_mod = @import("../../../pane/root.zig");
-
-pub const schema = core.schema;
-pub const Tracker = agent_mod.Tracker;
-
-pub const AcknowledgeAgent = @import("AcknowledgeAgent.zig");
-
-pub const AcknowledgeAgentResult = agent_mod.AcknowledgeResult;
-
-pub const AcknowledgeAgentHandler = @import("AcknowledgeAgentHandler.zig");
+const tracker_support = @import("../../../agent/tracker_support.zig");
 
 test "AcknowledgeAgentHandler reports an unknown generation without touching the tracker" {
     var agents: Tracker = .{};
@@ -20,11 +12,11 @@ test "AcknowledgeAgentHandler reports an unknown generation without touching the
     const revision = agents.revision;
 
     const result = handler.execute(.{
-        .pane_id = try schema.id.pane(7),
+        .pane_id = try pane_module(7),
         .pane_generation = 1,
         .now_ms = 1_000,
     });
 
-    try std.testing.expectEqual(AcknowledgeAgentResult.unknown_agent, result);
+    try std.testing.expectEqual(tracker_support.AcknowledgeResult.unknown_agent, result);
     try std.testing.expectEqual(revision, agents.revision);
 }

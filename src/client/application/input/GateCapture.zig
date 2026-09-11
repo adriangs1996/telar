@@ -1,10 +1,11 @@
-const GateCapture = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const OpenNamePromptHandler = @import("OpenNamePromptHandler.zig");
+const GateCapture = @This();
+
 blocked: bool = false,
 calls: usize = 0,
 
-pub fn handler(capture: *GateCapture, model: *client_model.Model) OpenNamePromptHandler {
+pub fn handler(capture: *GateCapture, model: *ModelType) OpenNamePromptHandler {
     return .{
         .model = model,
         .workspace_creation = .{

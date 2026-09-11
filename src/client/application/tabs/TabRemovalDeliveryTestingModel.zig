@@ -1,32 +1,36 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_removal_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-model: *client_model.Model,
-removed: source_namespace.schema.TabLocation,
-successor: source_namespace.schema.TabLocation,
-removed_root: source_namespace.schema.PaneId,
-removed_sibling: source_namespace.schema.PaneId,
-successor_root: source_namespace.schema.PaneId,
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const types = @import("../../model/types.zig");
+const TestingModel = @This();
+
+model: *ModelType,
+removed: TabLocationType,
+successor: TabLocationType,
+removed_root: PaneIdType,
+removed_sibling: PaneIdType,
+successor_root: PaneIdType,
 
 pub fn init(with_successor: bool) !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const removed: source_namespace.schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const removed: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const successor: source_namespace.schema.TabLocation = .{
+    const successor: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    const removed_root: source_namespace.schema.PaneId = @enumFromInt(1);
-    const removed_sibling: source_namespace.schema.PaneId = @enumFromInt(2);
-    const successor_root: source_namespace.schema.PaneId = @enumFromInt(3);
+    const removed_root: PaneIdType = @enumFromInt(1);
+    const removed_sibling: PaneIdType = @enumFromInt(2);
+    const successor_root: PaneIdType = @enumFromInt(3);
     try model.workspace.bootstrap(.{ .pane_id = removed_root, .location = removed, .size = .{ .cols = 40, .rows = 10 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = removed_root, .new_pane = removed_sibling, .location = removed, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     if (!model.workspace.active().?.model.focusPane(removed_root)) {
@@ -67,21 +71,21 @@ pub fn deinit(testing: *TestingModel) void {
     std.testing.allocator.destroy(testing.model);
 }
 
-pub fn removeActive(testing: *TestingModel) !client_model.TabRemovalCommit {
+pub fn removeActive(testing: *TestingModel) !types.TabRemovalCommit {
     return testing.model.removeTab(.{
         .location = testing.removed,
         .workspace_removed = false,
     });
 }
 
-pub fn removeInactive(testing: *TestingModel) !client_model.TabRemovalCommit {
+pub fn removeInactive(testing: *TestingModel) !types.TabRemovalCommit {
     return testing.model.removeTab(.{
         .location = testing.successor,
         .workspace_removed = false,
     });
 }
 
-pub fn removeWorkspace(testing: *TestingModel) !client_model.TabRemovalCommit {
+pub fn removeWorkspace(testing: *TestingModel) !types.TabRemovalCommit {
     return testing.model.removeTab(.{
         .location = testing.removed,
         .workspace_removed = true,

@@ -1,34 +1,17 @@
 //! Client use cases for requesting pane closure and applying pane exit.
 
+const ClosePaneTestingModel = @import("ClosePaneTestingModel.zig");
+const ClosePaneRequestCapture = @import("ClosePaneRequestCapture.zig");
+const RequestClosePaneHandler = @import("RequestClosePaneHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const PaneClosure = client_model.PaneClosure;
-pub const PaneExit = client_model.PaneExit;
-
-pub const PaneOperationGate = @import("ClosePanePaneOperationGate.zig");
-
-pub const CloseRequestEffects = @import("CloseRequestEffects.zig");
-
-pub const RequestClosePaneHandler = @import("RequestClosePaneHandler.zig");
-
-pub const PaneExitEffects = @import("PaneExitEffects.zig");
-
-pub const HandlePaneExitHandler = @import("HandlePaneExitHandler.zig");
-
-const TestingModel = @import("ClosePaneTestingModel.zig");
-
-const RequestCapture = @import("ClosePaneRequestCapture.zig");
-
+const VersionType = @import("../../model/Version.zig");
 const ExitCapture = @import("ExitCapture.zig");
+const HandlePaneExitHandler = @import("HandlePaneExitHandler.zig");
 
 test "RequestClosePaneHandler gates and sends without model mutation" {
-    var testing = try TestingModel.init();
+    var testing = try ClosePaneTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{ .blocked = true };
+    var capture: ClosePaneRequestCapture = .{ .blocked = true };
     var handler: RequestClosePaneHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -45,15 +28,15 @@ test "RequestClosePaneHandler gates and sends without model mutation" {
     try std.testing.expectEqualDeep(testing.location, closure.location);
     try std.testing.expectEqualDeep(closure, capture.closure.?);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
     try std.testing.expect(testing.model.workspace.findPane(testing.pane_id) != null);
 }
 
 test "RequestClosePaneHandler rejects detached panes before effects" {
-    var testing = try TestingModel.init();
+    var testing = try ClosePaneTestingModel.init();
     defer testing.deinit();
     testing.model.workspace.findPane(testing.pane_id).?.attached = false;
-    var capture: RequestCapture = .{};
+    var capture: ClosePaneRequestCapture = .{};
     var handler: RequestClosePaneHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -63,13 +46,13 @@ test "RequestClosePaneHandler rejects detached panes before effects" {
     try std.testing.expect((try handler.execute()) == null);
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "RequestClosePaneHandler propagates delivery failure without model mutation" {
-    var testing = try TestingModel.init();
+    var testing = try ClosePaneTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{ .fail = true };
+    var capture: ClosePaneRequestCapture = .{ .fail = true };
     var handler: RequestClosePaneHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -80,11 +63,11 @@ test "RequestClosePaneHandler propagates delivery failure without model mutation
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expect(testing.model.workspace.findPane(testing.pane_id) != null);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "HandlePaneExitHandler commits before cleanup" {
-    var testing = try TestingModel.init();
+    var testing = try ClosePaneTestingModel.init();
     defer testing.deinit();
     var capture: ExitCapture = .{ .model = testing.model, .pane_id = testing.pane_id };
     var handler: HandlePaneExitHandler = .{
@@ -102,7 +85,7 @@ test "HandlePaneExitHandler commits before cleanup" {
 }
 
 test "HandlePaneExitHandler preserves a committed exit after cleanup failure" {
-    var testing = try TestingModel.init();
+    var testing = try ClosePaneTestingModel.init();
     defer testing.deinit();
     var capture: ExitCapture = .{
         .model = testing.model,
@@ -117,12 +100,12 @@ test "HandlePaneExitHandler preserves a committed exit after cleanup failure" {
     try std.testing.expectError(error.CleanupFailed, handler.execute(testing.pane_id));
 
     try std.testing.expect(testing.model.workspace.findPane(testing.pane_id) == null);
-    try std.testing.expectEqualDeep(client_model.Version{ .panes = 1 }, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{ .panes = 1 }, testing.model.version());
     try std.testing.expect(capture.observed_commit);
 }
 
 test "HandlePaneExitHandler applies idempotent cleanup to stale exits" {
-    var testing = try TestingModel.init();
+    var testing = try ClosePaneTestingModel.init();
     defer testing.deinit();
     _ = testing.model.retirePane(testing.pane_id);
     var capture: ExitCapture = .{ .model = testing.model, .pane_id = testing.pane_id };

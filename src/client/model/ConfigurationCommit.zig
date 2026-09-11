@@ -1,5 +1,6 @@
-const ConfigurationCommit = @This();
 const SidebarLayout = @import("SidebarLayout.zig");
+const ConfigurationCommit = @This();
+
 generation: u64,
 configuration_revision: u64,
 sidebar: ?SidebarLayout,

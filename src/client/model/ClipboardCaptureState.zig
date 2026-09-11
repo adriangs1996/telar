@@ -1,17 +1,19 @@
-const State = @This();
-const source_namespace = @import("clipboard_capture.zig");
-const attachments = @import("../attachments/root.zig");
+const ClipboardCaptureType = @import("ClipboardCapture.zig");
+const TargetType = @import("../attachments/AttachmentTarget.zig");
+const types = @import("types.zig");
 const std = @import("std");
-clipboard_capture: ?source_namespace.ClipboardCapture = null,
+const State = @This();
+
+clipboard_capture: ?ClipboardCaptureType = null,
 next_clipboard_capture_id: u64 = 1,
 
 /// Example: `const result = state.clipboardCapture(...);`.
-pub fn clipboardCapture(state: *const State) ?source_namespace.ClipboardCapture {
+pub fn clipboardCapture(state: *const State) ?ClipboardCaptureType {
     return state.clipboard_capture;
 }
 
 /// Example: `const result = state.beginClipboardCapture(...);`.
-pub fn beginClipboardCapture(state: *State, target: attachments.Target) !?source_namespace.ClipboardCapture {
+pub fn beginClipboardCapture(state: *State, target: TargetType) !?ClipboardCaptureType {
     if (state.clipboard_capture != null) {
         return null;
     }
@@ -20,7 +22,7 @@ pub fn beginClipboardCapture(state: *State, target: attachments.Target) !?source
     }
 
     try target.validate();
-    const capture: source_namespace.ClipboardCapture = .{
+    const capture: ClipboardCaptureType = .{
         .id = @enumFromInt(state.next_clipboard_capture_id),
         .target = target,
     };
@@ -31,7 +33,7 @@ pub fn beginClipboardCapture(state: *State, target: attachments.Target) !?source
 }
 
 /// Example: `const result = state.finishClipboardCapture(...);`.
-pub fn finishClipboardCapture(state: *State, id: source_namespace.ClipboardCaptureId) ?source_namespace.ClipboardCapture {
+pub fn finishClipboardCapture(state: *State, id: types.ClipboardCaptureId) ?ClipboardCaptureType {
     const capture = state.clipboard_capture orelse return null;
     if (capture.id != id) {
         return null;
@@ -42,7 +44,7 @@ pub fn finishClipboardCapture(state: *State, id: source_namespace.ClipboardCaptu
 }
 
 /// Example: `const result = state.cancelClipboardCapture(...);`.
-pub fn cancelClipboardCapture(state: *State, target: attachments.Target) bool {
+pub fn cancelClipboardCapture(state: *State, target: TargetType) bool {
     const capture = state.clipboard_capture orelse return false;
     if (!std.meta.eql(capture.target, target)) {
         return false;

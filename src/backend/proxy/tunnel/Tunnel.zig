@@ -1,23 +1,25 @@
-const Tunnel = @This();
 const Dependencies = @import("Dependencies.zig");
-const source_namespace = @import("root.zig");
-const Options = @import("TunnelOptions.zig");
-const http = @import("../http/root.zig");
 const std = @import("std");
-const exchange_mod = @import("exchange_support.zig");
-const provider = @import("../provider/root.zig");
-const tls_adapter = @import("tls.zig");
-const h2_adapter = @import("h2.zig");
-const http1_adapter = @import("http1.zig");
+const TunnelOptions = @import("TunnelOptions.zig");
+const enter_module = @import("telar-core").enter;
+const head_support = @import("../http/head_support.zig");
+const tunnel_namespace = @import("tunnel_namespace.zig");
+const ExchangeType = @import("Exchange.zig");
+const dialect_module = @import("../provider/dialect.zig");
+const EstablisherType = @import("Establisher.zig");
+const H2Connection = @import("H2Connection.zig");
+const Http1Connection = @import("Http1Connection.zig");
+const Tunnel = @This();
+
 dependencies: Dependencies,
-child: source_namespace.net.Stream,
+child: std.Io.net.Stream,
 
 /// Creates the per-connection owner without starting network work.
 ///
 /// ```zig
 /// var tunnel = Tunnel.init(.{ .dependencies = dependencies, .child = child });
 /// ```
-pub fn init(options: Options) Tunnel {
+pub fn init(options: TunnelOptions) Tunnel {
     return .{
         .dependencies = options.dependencies,
         .child = options.child,
@@ -31,53 +33,53 @@ pub fn init(options: Options) Tunnel {
 /// ```zig
 /// try tunnel.run();
 /// ```
-pub fn run(tunnel: *Tunnel) source_namespace.Io.Cancelable!void {
-    const path = source_namespace.diagnostics.enter(.observation);
+pub fn run(tunnel: *Tunnel) std.Io.Cancelable!void {
+    const path = enter_module(.observation);
     defer path.restore();
 
     const dependencies = tunnel.dependencies;
     const io = dependencies.tls.io;
     defer tunnel.child.close(io);
 
-    var head: [http.max_head_bytes]u8 = undefined;
+    var head: [head_support.max_bytes]u8 = undefined;
     defer std.crypto.secureZero(u8, &head);
-    const head_len = source_namespace.readConnectHead(io, tunnel.child, &head) orelse return;
-    var authenticated = switch (source_namespace.Authenticate.execute(tunnel, head[0..head_len])) {
+    const head_len = tunnel_namespace.readConnectHead(io, tunnel.child, &head) orelse return;
+    var authenticated = switch (tunnel_namespace.Authenticate.execute(tunnel, head[0..head_len])) {
         .authenticated => |value| value,
         .rejected => |rejection| {
             if (rejection.metric) |metric| {
-                source_namespace.recordAuthenticationRejection(dependencies.tls.telemetry, metric);
+                tunnel_namespace.recordAuthenticationRejection(dependencies.tls.telemetry, metric);
             }
 
-            source_namespace.reply(io, tunnel.child, rejection.response);
+            tunnel_namespace.reply(io, tunnel.child, rejection.response);
             return;
         },
     };
     defer std.crypto.secureZero(u8, &authenticated.credential.token);
 
     const target = authenticated.target;
-    var exchange: exchange_mod.Exchange = .{
+    var exchange: ExchangeType = .{
         .io = io,
         .pipeline = dependencies.pipeline,
         .telemetry = dependencies.tls.telemetry,
         .credential = authenticated.credential,
-        .dialect = provider.identify(target.host.bytes),
+        .dialect = dialect_module.identify(target.host.bytes),
         .connection_id = dependencies.connection_ids.fetchAdd(1, .monotonic),
         .protocol = .http11,
         .host = target.host,
     };
     defer std.crypto.secureZero(u8, &exchange.credential.token);
 
-    const upstream = source_namespace.connectUpstream(target.host, io, target.port) catch {
+    const upstream = tunnel_namespace.connectUpstream(target.host, io, target.port) catch {
         dependencies.tls.telemetry.record(.upstream_connect_failure);
         exchange.publish(.request_failed, 0);
-        source_namespace.reply(io, tunnel.child, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
+        tunnel_namespace.reply(io, tunnel.child, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
         return;
     };
     defer upstream.close(io);
-    source_namespace.reply(io, tunnel.child, "HTTP/1.1 200 Connection Established\r\n\r\n");
+    tunnel_namespace.reply(io, tunnel.child, "HTTP/1.1 200 Connection Established\r\n\r\n");
 
-    var tls_establisher: tls_adapter.Establisher = .{
+    var tls_establisher: EstablisherType = .{
         .resources = dependencies.tls,
         .exchange = &exchange,
     };
@@ -90,7 +92,7 @@ pub fn run(tunnel: *Tunnel) source_namespace.Io.Cancelable!void {
     var negotiated_h2 = false;
     const session = switch (route) {
         .passthrough => {
-            source_namespace.relayPassthrough(io, tunnel.child, upstream);
+            tunnel_namespace.relayPassthrough(io, tunnel.child, upstream);
             return;
         },
         .http11 => |established| established,
@@ -103,7 +105,7 @@ pub fn run(tunnel: *Tunnel) source_namespace.Io.Cancelable!void {
 
     exchange.protocol = if (negotiated_h2) .h2 else .http11;
     if (negotiated_h2) {
-        var connection = h2_adapter.Connection.init(.{
+        var connection = H2Connection.init(.{
             .io = io,
             .gpa = dependencies.tls.gpa,
             .transforms = dependencies.transforms,
@@ -117,7 +119,7 @@ pub fn run(tunnel: *Tunnel) source_namespace.Io.Cancelable!void {
         return;
     }
 
-    var connection = http1_adapter.Connection.init(.{
+    var connection = Http1Connection.init(.{
         .io = io,
         .transforms = dependencies.transforms,
         .session = session,

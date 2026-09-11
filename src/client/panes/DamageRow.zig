@@ -1,5 +1,6 @@
-const DamageRow = @This();
 const std = @import("std");
+const DamageRow = @This();
+
 start: u16 = std.math.maxInt(u16),
 end: u16 = 0,
 

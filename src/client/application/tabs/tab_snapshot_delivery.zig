@@ -1,31 +1,20 @@
 //! Application policy for delivering client resources after one canonical tab
 //! snapshot commit.
 
+const PaneIdType = @import("telar-core").PaneId;
+const TabSnapshotDeliveryEffectsCapture = @import("TabSnapshotDeliveryEffectsCapture.zig");
+const DeliverTabSnapshotHandler = @import("DeliverTabSnapshotHandler.zig");
+const TabSnapshotDeliveryTestingModel = @import("TabSnapshotDeliveryTestingModel.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../../root.zig").model;
-const pane_attachment_requests = @import("../panes/root.zig").pane_attachment_requests;
-const pane_geometry_delivery = @import("../panes/root.zig").pane_geometry_delivery;
-const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
-
-pub const schema = core.schema;
-pub const tabs_mod = workspace_capability.tabs;
-pub const ui = core.ui;
-
-pub const PaneAttachmentRequest = pane_attachment_requests.PaneAttachmentRequest;
-
-pub const Effects = @import("TabSnapshotDeliveryEffects.zig");
-
-pub const DeliverTabSnapshotHandler = @import("DeliverTabSnapshotHandler.zig");
+const PaneAttachmentRequest = @import("../panes/PaneAttachmentRequest.zig");
 
 pub const Event = union(enum) {
-    ignore_pane: schema.PaneId,
-    clear_graphics: schema.PaneId,
+    ignore_pane: PaneIdType,
+    clear_graphics: PaneIdType,
     synchronize_active_resources,
-    resize: schema.PaneId,
-    attachment_pending: schema.PaneId,
-    request_attachment: schema.PaneId,
+    resize: PaneIdType,
+    attachment_pending: PaneIdType,
+    request_attachment: PaneIdType,
 };
 
 pub const Failure = enum {
@@ -35,11 +24,7 @@ pub const Failure = enum {
     attachment,
 };
 
-const TestingModel = @import("TabSnapshotDeliveryTestingModel.zig");
-
-const EffectsCapture = @import("TabSnapshotDeliveryEffectsCapture.zig");
-
-fn deliveryHandler(capture: *EffectsCapture) DeliverTabSnapshotHandler {
+fn deliveryHandler(capture: *TabSnapshotDeliveryEffectsCapture) DeliverTabSnapshotHandler {
     return .{
         .model = capture.model,
         .geometry_effects = capture.geometryEffects(),
@@ -48,10 +33,10 @@ fn deliveryHandler(capture: *EffectsCapture) DeliverTabSnapshotHandler {
 }
 
 test "DeliverTabSnapshotHandler synchronizes active resources before geometry and attachments" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
     const reconciliation = try testing.reconcileMany();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
     };
@@ -73,9 +58,9 @@ test "DeliverTabSnapshotHandler synchronizes active resources before geometry an
 }
 
 test "DeliverTabSnapshotHandler releases retired resources before active synchronization" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
-    const all = [_]schema.PaneId{ testing.root, testing.discovered, testing.other_pane };
+    const all = [_]PaneIdType{ testing.root, testing.discovered, testing.other_pane };
     _ = try testing.reconcile(&all);
     const tab = testing.model.workspace.find(testing.target.tab_id).?;
     try tab.model.markAttached(testing.discovered, 1);
@@ -86,7 +71,7 @@ test "DeliverTabSnapshotHandler releases retired resources before active synchro
     _ = testing.model.beginPanePaste().?;
     _ = testing.model.syncReportedPaneFocus().?;
     const reconciliation = try testing.reconcileRoot();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
     };
@@ -108,10 +93,10 @@ test "DeliverTabSnapshotHandler releases retired resources before active synchro
 }
 
 test "DeliverTabSnapshotHandler preserves a pending attachment" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
     const reconciliation = try testing.reconcileMany();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
         .pending_attachment = testing.discovered,
@@ -129,10 +114,10 @@ test "DeliverTabSnapshotHandler preserves a pending attachment" {
 }
 
 test "DeliverTabSnapshotHandler skips a detached pane without visible content" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
     const reconciliation = try testing.reconcileIn(&testing.many, .{ .w = 4, .h = 3 });
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
     };
@@ -149,10 +134,10 @@ test "DeliverTabSnapshotHandler skips a detached pane without visible content" {
 }
 
 test "DeliverTabSnapshotHandler leaves inactive tab resources untouched" {
-    var testing = try TestingModel.init(false);
+    var testing = try TabSnapshotDeliveryTestingModel.init(false);
     defer testing.deinit();
     const reconciliation = try testing.reconcileMany();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
     };
@@ -167,10 +152,10 @@ test "DeliverTabSnapshotHandler leaves inactive tab resources untouched" {
 }
 
 test "DeliverTabSnapshotHandler rejects stale topology layout and snapshot state" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
     var reconciliation = try testing.reconcileMany();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
     };
@@ -210,10 +195,10 @@ test "DeliverTabSnapshotHandler rejects stale topology layout and snapshot state
 }
 
 test "DeliverTabSnapshotHandler stops before geometry after active resource failure" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
     const reconciliation = try testing.reconcileMany();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
         .failure = .active_resources,
@@ -227,10 +212,10 @@ test "DeliverTabSnapshotHandler stops before geometry after active resource fail
 }
 
 test "DeliverTabSnapshotHandler stops before attachments after geometry failure" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
     const reconciliation = try testing.reconcileMany();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
         .failure = .resize,
@@ -247,10 +232,10 @@ test "DeliverTabSnapshotHandler stops before attachments after geometry failure"
 }
 
 test "DeliverTabSnapshotHandler preserves earlier effects after attachment failure" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
     const reconciliation = try testing.reconcileMany();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
         .failure = .attachment,

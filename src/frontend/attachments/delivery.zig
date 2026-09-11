@@ -1,15 +1,19 @@
 //! Kitty attachment placements and transmission; the shared catalog owns PNGs.
+
+const SlotStateType = @import("SlotState.zig");
+const GenericCatalog = @import("telar-client").GenericCatalog;
+const ConfigurationType = @import("../graphics/Configuration.zig");
+const Plan = @import("telar-client").Plan;
 const std = @import("std");
-const core = @import("telar-core");
-const ui = core.ui;
-const Io = std.Io;
-const attachments = @import("root.zig");
-const kitty = @import("../graphics/root.zig").kitty;
+const writeTransmissionAbort_module = @import("kitty_protocol").writeTransmissionAbort;
+const kitty_codec = @import("../graphics/kitty_codec.zig");
+const writeDeleteImageRange_module = @import("kitty_protocol").writeDeleteImageRange;
+const writeDeleteImage_module = @import("kitty_protocol").writeDeleteImage;
+const RectType = @import("telar-core").Rect;
+const OutputPlacementType = @import("kitty_protocol").OutputPlacement;
 const presentation = @import("presentation.zig");
-pub const PlacementState = presentation.PlacementState;
-const Plan = attachments.Plan;
-pub const max_items = attachments.max_items;
-pub const Store = @import("telar-client").attachments.Catalog(@This());
+
+pub const Store = GenericCatalog(@This());
 const Slot = Store.Slot;
 const first_image_id: u32 = 0x90000000;
 const first_thumbnail_placement_id: u32 = 0xa0000000;
@@ -19,7 +23,7 @@ const thumbnail_z: i32 = 1500;
 const modal_z: i32 = 2000;
 pub const State = @import("State.zig");
 pub const SlotState = @import("SlotState.zig");
-pub fn configure(store: *Store, configuration: kitty.Configuration) bool {
+pub fn configure(store: *Store, configuration: ConfigurationType) bool {
     const supported = configuration.support == .supported;
     if (store.delivery.supported == supported and store.delivery.cell_width == configuration.cell_width and
         store.delivery.cell_height == configuration.cell_height)
@@ -88,21 +92,21 @@ pub fn transferInProgress(store: *const Store) bool {
     return store.delivery.partial != null or store.delivery.abort_pending;
 }
 
-pub fn write(store: *Store, writer: *Io.Writer) Io.Writer.Error!usize {
+pub fn write(store: *Store, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     if (!store.delivery.supported or !damaged(store)) {
         return 0;
     }
     var written: usize = 0;
     if (store.delivery.abort_pending) {
-        written += try kitty.writeTransmissionAbort(writer);
+        written += try writeTransmissionAbort_module(writer);
         store.delivery.abort_pending = false;
     } else if (store.delivery.partial) |index| {
         const slot = &store.slots[index].?;
-        const progress = try kitty.writePngTransmissionChunks(writer, .{
+        const progress = try kitty_codec.writePngTransmissionChunks(writer, .{
             .external_id = slot.delivery.image_id,
             .png = slot.png,
             .start_offset = slot.delivery.transfer_offset,
-            .budget = kitty.transmission_budget_per_frame,
+            .budget = kitty_codec.transmission_budget_per_frame,
         });
         written += progress.written;
         slot.delivery.transfer_offset = progress.offset;
@@ -117,7 +121,7 @@ pub fn write(store: *Store, writer: *Io.Writer) Io.Writer.Error!usize {
     }
 
     if (store.delivery.delete_all_pending) {
-        written += try kitty.writeDeleteImageRange(
+        written += try writeDeleteImageRange_module(
             writer,
             first_image_id,
             first_image_id + max_host_ids,
@@ -132,7 +136,7 @@ pub fn write(store: *Store, writer: *Io.Writer) Io.Writer.Error!usize {
         };
     } else {
         for (store.delivery.delete_ids[0..store.delivery.delete_count]) |image_id|
-            written += try kitty.writeDeleteImage(writer, image_id);
+            written += try writeDeleteImage_module(writer, image_id);
         store.delivery.delete_count = 0;
     }
 
@@ -142,11 +146,11 @@ pub fn write(store: *Store, writer: *Io.Writer) Io.Writer.Error!usize {
         if (!wanted or !slot.delivery.image_dirty) {
             continue;
         }
-        const progress = try kitty.writePngTransmissionChunks(writer, .{
+        const progress = try kitty_codec.writePngTransmissionChunks(writer, .{
             .external_id = slot.delivery.image_id,
             .png = slot.png,
             .start_offset = 0,
-            .budget = kitty.transmission_budget_per_frame,
+            .budget = kitty_codec.transmission_budget_per_frame,
         });
         written += progress.written;
         slot.delivery.transfer_offset = progress.offset;
@@ -171,7 +175,7 @@ pub fn write(store: *Store, writer: *Io.Writer) Io.Writer.Error!usize {
     return written;
 }
 
-pub fn fitPlacement(store: *const Store, slot: *const Slot, area: ui.Rect) ?kitty.OutputPlacement {
+pub fn fitPlacement(store: *const Store, slot: *const Slot, area: RectType) ?OutputPlacementType {
     return presentation.fitPlacement(.{ .width = slot.width, .height = slot.height }, .{ .width = store.delivery.cell_width, .height = store.delivery.cell_height }, area);
 }
 
@@ -209,7 +213,7 @@ pub fn queueDelete(store: *Store, image_id: u32) void {
     store.delivery.delete_count += 1;
 }
 
-pub fn createSlot(store: *Store) !SlotState {
+pub fn createSlot(store: *Store) !SlotStateType {
     const id = try allocateHostId(store);
     return .{ .image_id = first_image_id + id, .thumbnail = .{ .id = first_thumbnail_placement_id + id, .z = thumbnail_z }, .modal = .{ .id = first_modal_placement_id + id, .z = modal_z } };
 }

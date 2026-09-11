@@ -1,14 +1,17 @@
+const AgentProviderType = @import("telar-core").AgentProvider;
+const max_foreground_name_bytes_module = @import("telar-core").max_foreground_name_bytes;
+const process = @import("process.zig");
 const Cache = @This();
-const source_namespace = @import("root.zig");
+
 process_group_id: ?u32 = null,
-provider: source_namespace.schema.AgentProvider = .unknown,
+provider: AgentProviderType = .unknown,
 attempts: u8 = 0,
-foreground_name: [source_namespace.schema.max_foreground_name_bytes]u8 = @splat(0),
+foreground_name: [max_foreground_name_bytes_module]u8 = @splat(0),
 foreground_name_len: u8 = 0,
 
 pub fn init(executable: []const u8) Cache {
     var cache: Cache = .{};
-    cache.setName(source_namespace.boundedCommandName(executable));
+    cache.setName(process.boundedCommandName(executable));
     return cache;
 }
 

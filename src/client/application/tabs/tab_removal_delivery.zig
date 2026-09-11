@@ -1,33 +1,29 @@
 //! Application policy for delivering disposable client resources after one
 //! canonical tab-removal commit.
 
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const TabRemovalDeliveryTestingModel = @import("TabRemovalDeliveryTestingModel.zig");
+const TabRemovalDeliveryEffectsCapture = @import("TabRemovalDeliveryEffectsCapture.zig");
+const DeliverTabRemovalHandler = @import("DeliverTabRemovalHandler.zig");
+const types = @import("../../model/types.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../../root.zig").model;
 const close_tab = @import("close_tab.zig");
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
-
-pub const schema = core.schema;
-pub const tabs_mod = workspace_capability.tabs;
-
-pub const Effects = @import("TabRemovalDeliveryEffects.zig");
-
-pub const DeliverTabRemovalHandler = @import("DeliverTabRemovalHandler.zig");
 
 pub const Event = union(enum) {
-    retire_tab_requests: schema.TabLocation,
-    clear_graphics: schema.PaneId,
+    retire_tab_requests: TabLocationType,
+    clear_graphics: PaneIdType,
     graphics_visibility: struct {
-        pane_id: schema.PaneId,
+        pane_id: PaneIdType,
         visible: bool,
     },
     synchronize_active_resources,
     tab_snapshot_pending,
-    request_tab_snapshot: schema.TabLocation,
-    forget_workspace: schema.WorkspaceLocation,
-    request_workspace: schema.WorkspaceId,
+    request_tab_snapshot: TabLocationType,
+    forget_workspace: WorkspaceLocationType,
+    request_workspace: WorkspaceIdType,
 };
 
 pub const Failure = enum {
@@ -38,18 +34,14 @@ pub const Failure = enum {
     workspace_handoff,
 };
 
-const TestingModel = @import("TabRemovalDeliveryTestingModel.zig");
-
-const EffectsCapture = @import("TabRemovalDeliveryEffectsCapture.zig");
-
-fn deliveryHandler(testing: *TestingModel, capture: *EffectsCapture) DeliverTabRemovalHandler {
+fn deliveryHandler(testing: *TabRemovalDeliveryTestingModel, capture: *TabRemovalDeliveryEffectsCapture) DeliverTabRemovalHandler {
     return .{
         .model = testing.model,
         .effects = capture.effects(),
     };
 }
 
-fn captureFor(testing: *TestingModel, commit: client_model.TabRemovalCommit) EffectsCapture {
+fn captureFor(testing: *TabRemovalDeliveryTestingModel, commit: types.TabRemovalCommit) TabRemovalDeliveryEffectsCapture {
     return .{
         .model = testing.model,
         .commit = commit,
@@ -57,7 +49,7 @@ fn captureFor(testing: *TestingModel, commit: client_model.TabRemovalCommit) Eff
 }
 
 test "DeliverTabRemovalHandler releases an active tab before activating its successor" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabRemovalDeliveryTestingModel.init(true);
     defer testing.deinit();
     const commit = try testing.removeActive();
     var capture = captureFor(&testing, commit);
@@ -85,7 +77,7 @@ test "DeliverTabRemovalHandler releases an active tab before activating its succ
 }
 
 test "DeliverTabRemovalHandler limits inactive removal to exact tab resources" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabRemovalDeliveryTestingModel.init(true);
     defer testing.deinit();
     const commit = try testing.removeInactive();
     var capture = captureFor(&testing, commit);
@@ -107,7 +99,7 @@ test "DeliverTabRemovalHandler limits inactive removal to exact tab resources" {
 }
 
 test "DeliverTabRemovalHandler coalesces a successor snapshot already in flight" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabRemovalDeliveryTestingModel.init(true);
     defer testing.deinit();
     const commit = try testing.removeActive();
     var capture = captureFor(&testing, commit);
@@ -121,7 +113,7 @@ test "DeliverTabRemovalHandler coalesces a successor snapshot already in flight"
 }
 
 test "DeliverTabRemovalHandler chooses final workspace exit or handoff after cleanup" {
-    var exit_testing = try TestingModel.init(false);
+    var exit_testing = try TabRemovalDeliveryTestingModel.init(false);
     defer exit_testing.deinit();
     const exit_commit = try exit_testing.removeWorkspace();
     var exit_capture = captureFor(&exit_testing, exit_commit);
@@ -139,12 +131,12 @@ test "DeliverTabRemovalHandler chooses final workspace exit or handoff after cle
     }, exit_capture.eventSlice());
     try std.testing.expect(exit_capture.committed_state_observed);
 
-    var handoff_testing = try TestingModel.init(false);
+    var handoff_testing = try TabRemovalDeliveryTestingModel.init(false);
     defer handoff_testing.deinit();
     const handoff_commit = try handoff_testing.removeWorkspace();
     var handoff_capture = captureFor(&handoff_testing, handoff_commit);
     var handoff_handler = deliveryHandler(&handoff_testing, &handoff_capture);
-    const previous: schema.WorkspaceId = @enumFromInt(9);
+    const previous: WorkspaceIdType = @enumFromInt(9);
 
     try std.testing.expectEqual(
         close_tab.TabRemovalDirective.continue_running,
@@ -158,9 +150,9 @@ test "DeliverTabRemovalHandler chooses final workspace exit or handoff after cle
 }
 
 test "DeliverTabRemovalHandler applies exact stale cleanup without resource effects" {
-    var tab_testing = try TestingModel.init(true);
+    var tab_testing = try TabRemovalDeliveryTestingModel.init(true);
     defer tab_testing.deinit();
-    const missing: schema.TabLocation = .{
+    const missing: TabLocationType = .{
         .workspace = tab_testing.removed.workspace,
         .tab_id = @enumFromInt(9),
     };
@@ -176,9 +168,9 @@ test "DeliverTabRemovalHandler applies exact stale cleanup without resource effe
     try std.testing.expectEqualSlices(Event, &.{.{ .retire_tab_requests = missing }}, tab_capture.eventSlice());
     try std.testing.expect(tab_capture.committed_state_observed);
 
-    var workspace_testing = try TestingModel.init(true);
+    var workspace_testing = try TabRemovalDeliveryTestingModel.init(true);
     defer workspace_testing.deinit();
-    const foreign: schema.TabLocation = .{
+    const foreign: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(7),
     };
@@ -196,7 +188,7 @@ test "DeliverTabRemovalHandler applies exact stale cleanup without resource effe
 }
 
 test "DeliverTabRemovalHandler rejects altered removal commits before cleanup" {
-    var testing = try TestingModel.init(true);
+    var testing = try TabRemovalDeliveryTestingModel.init(true);
     defer testing.deinit();
     const commit = try testing.removeActive();
     var capture = captureFor(&testing, commit);
@@ -238,7 +230,7 @@ test "DeliverTabRemovalHandler rejects altered removal commits before cleanup" {
 }
 
 test "DeliverTabRemovalHandler catches active identity and layout ABA plus represented retired panes" {
-    var identity_testing = try TestingModel.init(true);
+    var identity_testing = try TabRemovalDeliveryTestingModel.init(true);
     defer identity_testing.deinit();
     const identity_commit = try identity_testing.removeActive();
     var identity_capture = captureFor(&identity_testing, identity_commit);
@@ -256,7 +248,7 @@ test "DeliverTabRemovalHandler catches active identity and layout ABA plus repre
     try std.testing.expectError(error.StaleTabRemoval, identity_handler.execute(identity_commit, null));
     try std.testing.expectEqual(@as(usize, 0), identity_capture.event_count);
 
-    var layout_testing = try TestingModel.init(true);
+    var layout_testing = try TabRemovalDeliveryTestingModel.init(true);
     defer layout_testing.deinit();
     const layout_commit = try layout_testing.removeActive();
     var layout_capture = captureFor(&layout_testing, layout_commit);
@@ -266,7 +258,7 @@ test "DeliverTabRemovalHandler catches active identity and layout ABA plus repre
     try std.testing.expectError(error.StaleTabRemoval, layout_handler.execute(layout_commit, null));
     try std.testing.expectEqual(@as(usize, 0), layout_capture.event_count);
 
-    var pane_testing = try TestingModel.init(true);
+    var pane_testing = try TabRemovalDeliveryTestingModel.init(true);
     defer pane_testing.deinit();
     const pane_commit = try pane_testing.removeActive();
     var pane_capture = captureFor(&pane_testing, pane_commit);
@@ -280,9 +272,9 @@ test "DeliverTabRemovalHandler catches active identity and layout ABA plus repre
 }
 
 test "DeliverTabRemovalHandler rejects stale absence contradicted by current state" {
-    var tab_testing = try TestingModel.init(true);
+    var tab_testing = try TabRemovalDeliveryTestingModel.init(true);
     defer tab_testing.deinit();
-    const missing: schema.TabLocation = .{
+    const missing: TabLocationType = .{
         .workspace = tab_testing.removed.workspace,
         .tab_id = @enumFromInt(9),
     };
@@ -302,9 +294,9 @@ test "DeliverTabRemovalHandler rejects stale absence contradicted by current sta
     try std.testing.expectError(error.StaleTabRemoval, tab_handler.execute(tab_commit, null));
     try std.testing.expectEqual(@as(usize, 0), tab_capture.event_count);
 
-    var workspace_testing = try TestingModel.init(true);
+    var workspace_testing = try TabRemovalDeliveryTestingModel.init(true);
     defer workspace_testing.deinit();
-    const foreign: schema.TabLocation = .{
+    const foreign: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(7),
     };
@@ -331,7 +323,7 @@ test "DeliverTabRemovalHandler rejects stale absence contradicted by current sta
 }
 
 test "DeliverTabRemovalHandler preserves completed cleanup across delivery failures" {
-    var visibility_testing = try TestingModel.init(true);
+    var visibility_testing = try TabRemovalDeliveryTestingModel.init(true);
     defer visibility_testing.deinit();
     const visibility_commit = try visibility_testing.removeActive();
     var visibility_capture = captureFor(&visibility_testing, visibility_commit);
@@ -352,7 +344,7 @@ test "DeliverTabRemovalHandler preserves completed cleanup across delivery failu
         visibility_capture.eventSlice()[visibility_capture.event_count - 1],
     );
 
-    var resources_testing = try TestingModel.init(true);
+    var resources_testing = try TabRemovalDeliveryTestingModel.init(true);
     defer resources_testing.deinit();
     const resources_commit = try resources_testing.removeActive();
     var resources_capture = captureFor(&resources_testing, resources_commit);
@@ -368,7 +360,7 @@ test "DeliverTabRemovalHandler preserves completed cleanup across delivery failu
         resources_capture.eventSlice()[resources_capture.event_count - 1],
     );
 
-    var snapshot_testing = try TestingModel.init(true);
+    var snapshot_testing = try TabRemovalDeliveryTestingModel.init(true);
     defer snapshot_testing.deinit();
     const snapshot_commit = try snapshot_testing.removeActive();
     var snapshot_capture = captureFor(&snapshot_testing, snapshot_commit);
@@ -390,13 +382,13 @@ test "DeliverTabRemovalHandler preserves completed cleanup across delivery failu
 }
 
 test "DeliverTabRemovalHandler retains forgotten navigation after handoff failure" {
-    var testing = try TestingModel.init(false);
+    var testing = try TabRemovalDeliveryTestingModel.init(false);
     defer testing.deinit();
     const commit = try testing.removeWorkspace();
     var capture = captureFor(&testing, commit);
     capture.failure = .workspace_handoff;
     var handler = deliveryHandler(&testing, &capture);
-    const previous: schema.WorkspaceId = @enumFromInt(9);
+    const previous: WorkspaceIdType = @enumFromInt(9);
 
     try std.testing.expectError(
         error.WorkspaceHandoffFailed,

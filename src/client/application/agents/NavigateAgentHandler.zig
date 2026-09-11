@@ -1,10 +1,11 @@
-const NavigateAgentHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const HandoffGate = @import("HandoffGate.zig");
 const NavigationEffects = @import("NavigationEffects.zig");
-const agents = @import("../../root.zig").agents;
-const source_namespace = @import("agent_navigation.zig");
-model: *const client_model.Model,
+const AgentKeyType = @import("../../agents/AgentKey.zig");
+const agent_navigation = @import("agent_navigation.zig");
+const NavigateAgentHandler = @This();
+
+model: *const ModelType,
 handoffs: HandoffGate,
 effects: NavigationEffects,
 
@@ -14,7 +15,7 @@ effects: NavigationEffects,
 /// ```zig
 /// const outcome = try handler.execute(agent_key);
 /// ```
-pub fn execute(handler: *NavigateAgentHandler, key: agents.AgentKey) !source_namespace.Outcome {
+pub fn execute(handler: *NavigateAgentHandler, key: AgentKeyType) !agent_navigation.Outcome {
     const plan = handler.model.planAgentNavigation(key) orelse return .ignored;
 
     return switch (plan) {

@@ -1,9 +1,10 @@
-const Image = @This();
 const ImageKey = @import("ImageKey.zig");
-const source_namespace = @import("graphics.zig");
+const graphics = @import("graphics.zig");
 const std = @import("std");
+const Image = @This();
+
 key: ImageKey,
-format: source_namespace.Format,
+format: graphics.Format,
 width: u32,
 height: u32,
 byte_len: u64,

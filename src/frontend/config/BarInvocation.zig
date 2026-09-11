@@ -1,5 +1,6 @@
-const BarInvocation = @This();
-const bars = @import("../bars/root.zig");
+const CallbackRefType = @import("telar-client").CallbackRef;
 const BarCallbackContext = @import("BarCallbackContext.zig");
-reference: bars.CallbackRef,
+const BarInvocation = @This();
+
+reference: CallbackRefType,
 context: BarCallbackContext,

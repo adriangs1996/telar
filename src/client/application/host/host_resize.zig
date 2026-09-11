@@ -1,26 +1,21 @@
 //! Application use case for committing one resolved host resize.
 
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-const schema = core.schema;
-
-pub const Effects = @import("HostResizeEffects.zig");
-
-pub const ResizeHostHandler = @import("ResizeHostHandler.zig");
-
-const EffectsCapture = @import("HostResizeEffectsCapture.zig");
+const HostResizeEffectsCapture = @import("HostResizeEffectsCapture.zig");
+const ResizeHostHandler = @import("ResizeHostHandler.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const VersionType = @import("../../model/Version.zig");
 
 test "ResizeHostHandler commits before synchronizing client resources" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{ .model = &model };
+    var capture: HostResizeEffectsCapture = .{ .model = &model };
     var handler: ResizeHostHandler = .{
         .model = &model,
         .effects = capture.port(),
     };
-    const size: schema.TerminalSize = .{
+    const size: TerminalSizeType = .{
         .cols = 100,
         .rows = 30,
         .cell_width_px = 10,
@@ -41,9 +36,9 @@ test "ResizeHostHandler commits before synchronizing client resources" {
 }
 
 test "ResizeHostHandler suppresses repeated and invalid geometry" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{ .model = &model };
+    var capture: HostResizeEffectsCapture = .{ .model = &model };
     var handler: ResizeHostHandler = .{
         .model = &model,
         .effects = capture.port(),
@@ -58,13 +53,13 @@ test "ResizeHostHandler suppresses repeated and invalid geometry" {
         .size = .{ .cols = 80, .rows = 0 },
     }));
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "ResizeHostHandler retains the model commit after effect failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{
+    var capture: HostResizeEffectsCapture = .{
         .model = &model,
         .fail = true,
     };
@@ -72,7 +67,7 @@ test "ResizeHostHandler retains the model commit after effect failure" {
         .model = &model,
         .effects = capture.port(),
     };
-    const size: schema.TerminalSize = .{
+    const size: TerminalSizeType = .{
         .cols = 100,
         .rows = 30,
         .cell_width_px = 10,
@@ -90,7 +85,7 @@ test "ResizeHostHandler retains the model commit after effect failure" {
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqualDeep(size, model.hostSize());
     try std.testing.expectEqual(@as(u32, 1000), model.hostCapabilities().window_width_px);
-    try std.testing.expectEqual(client_model.Version{
+    try std.testing.expectEqual(VersionType{
         .host = 1,
         .host_capabilities = 1,
     }, model.version());

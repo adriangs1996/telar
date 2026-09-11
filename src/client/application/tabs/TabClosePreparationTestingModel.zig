@@ -1,24 +1,26 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_close_preparation.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-model: *client_model.Model,
-location: source_namespace.schema.TabLocation,
-root: source_namespace.schema.PaneId,
-sibling: source_namespace.schema.PaneId,
+const TestingModel = @This();
+
+model: *ModelType,
+location: TabLocationType,
+root: PaneIdType,
+sibling: PaneIdType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const location: source_namespace.schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const root: source_namespace.schema.PaneId = @enumFromInt(1);
-    const sibling: source_namespace.schema.PaneId = @enumFromInt(2);
+    const root: PaneIdType = @enumFromInt(1);
+    const sibling: PaneIdType = @enumFromInt(2);
     try model.workspace.bootstrap(.{ .pane_id = root, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     if (!model.workspace.active().?.model.focusPane(root)) {

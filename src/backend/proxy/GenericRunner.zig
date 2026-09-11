@@ -1,5 +1,6 @@
 const GenericConnectionAdmissionPort = @import("GenericConnectionAdmissionPort.zig").Type;
-const source_namespace = @import("connection_admission.zig");
+const std = @import("std");
+
 /// Creates the accept-loop policy for one proxy service.
 ///
 /// ```zig
@@ -16,7 +17,7 @@ pub fn Type(comptime Context: type, comptime Stream: type, comptime port: Generi
         /// try Admission.run(&context);
         /// ```
         pub fn run(context: *Context) anyerror!void {
-            var workers: source_namespace.Io.Group = .init;
+            var workers: std.Io.Group = .init;
             defer port.cancel(context, &workers);
 
             while (true) {

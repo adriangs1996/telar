@@ -1,5 +1,6 @@
 const GenericAttempt = @import("GenericAttempt.zig").Type;
 const GenericRoute = @import("GenericRoute.zig").Type;
+
 /// Creates the policy command for one authenticated CONNECT tunnel.
 ///
 /// ```zig

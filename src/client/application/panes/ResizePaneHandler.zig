@@ -1,8 +1,10 @@
-const ResizePaneHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const ResizeEffects = @import("ResizeEffects.zig");
-const source_namespace = @import("resize_pane.zig");
-model: *client_model.Model,
+const ResizePaneRequest = @import("../../model/ResizePaneRequest.zig");
+const PaneGeometryChangeType = @import("../../model/PaneGeometryChange.zig");
+const ResizePaneHandler = @This();
+
+model: *ModelType,
 effects: ResizeEffects,
 
 /// Commits one split-edge change before delivering runtime geometry.
@@ -11,7 +13,7 @@ effects: ResizeEffects,
 /// ```zig
 /// const resize = try handler.execute(.{ .direction = .right, .area = area });
 /// ```
-pub fn execute(handler: *ResizePaneHandler, command: source_namespace.ResizePane) !?client_model.PaneGeometryChange {
+pub fn execute(handler: *ResizePaneHandler, command: ResizePaneRequest) !?PaneGeometryChangeType {
     const resize = handler.model.resizePane(command) orelse return null;
 
     try handler.effects.deliver(handler.effects.context, resize);

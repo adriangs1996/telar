@@ -1,4 +1,5 @@
+const paste_routing = @import("paste_routing.zig");
 const Route = @This();
-const source_namespace = @import("paste_routing.zig");
-owner: source_namespace.Owner,
-command: source_namespace.Command,
+
+owner: paste_routing.Owner,
+command: paste_routing.Command,

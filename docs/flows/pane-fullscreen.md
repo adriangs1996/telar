@@ -137,7 +137,7 @@ telemetry. The client does not roll back an unacknowledged resize.
   after a tab round trip and verifies attachment confirmation and input to
   both panes.
 
-- `src/frontend/workspace/layout.zig` proves that fullscreen retains tiled
+- `src/client/workspace/layout_support.zig` proves that fullscreen retains tiled
   ratios, follows display order without wrapping, ignores vertical focus,
   restores spatial navigation, preserves fullscreen through single-pane splits
   and removals, clears on the last removal and round-trips one-leaf snapshots.
@@ -147,23 +147,23 @@ telemetry. The client does not roll back an unacknowledged resize.
   independently of cell-buffer lifetime and placement coordinates.
 - `src/frontend/graphics/pill.zig` covers font size, transparency, quotas, image
   reuse, exact coverage, chunked transfer cancellation and fallback failures.
-- `src/frontend/graphics/rasterizer.zig` covers matching measured/drawn advances
+- `src/frontend/graphics/rasterizer_support.zig` covers matching measured/drawn advances
   and straight-alpha glyph blending without changing opaque blending.
 - `src/frontend/client/presentation/view.zig` covers all cell labels until media
   completion, preserved border gaps, focus changes, resize and fullscreen exit.
 - `src/frontend/workspace/multiplexer.zig` covers border composition, focus
   changes, progress animation and incremental idle rendering.
-- `src/frontend/client/model/tests/panes.zig` covers horizontal fullscreen
+- `src/client/model/tests/panes.zig` covers horizontal fullscreen
   navigation, splitting from one fullscreen pane, geometry commits and no-op
   revision preservation.
 - `src/core/schema_contract_test.zig` accepts single-pane fullscreen updates
   while still rejecting invalid trees and duplicate panes.
-- `src/frontend/client/application/panes/toggle_pane_fullscreen.zig` proves
+- `src/client/application/panes/toggle_pane_fullscreen.zig` proves
   single-pane entry, commit-before-delivery ordering and post-commit failure behavior.
-- `src/frontend/client/application/pane_geometry_delivery.zig` proves shared
+- `src/client/application/panes/pane_geometry_delivery.zig` proves shared
   validation, visible-pane selection, delivery order and retained commits on
   failure.
-- `src/frontend/client/pane_geometry.zig` implements the physical graphics and
+- `src/frontend/client/controllers/panes/pane_geometry.zig` implements the physical graphics and
   runtime delivery ports.
 - `src/frontend/client/tests/pane_lifecycle.zig` proves bordered and borderless
   resizes for a single pane, multi-pane tiled exit resizes and presenter-only

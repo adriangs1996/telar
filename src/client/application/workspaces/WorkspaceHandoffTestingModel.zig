@@ -1,21 +1,23 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("workspace_handoff.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-model: *client_model.Model,
-location: source_namespace.schema.TabLocation,
-pane_id: source_namespace.schema.PaneId,
+const TestingModel = @This();
+
+model: *ModelType,
+location: TabLocationType,
+pane_id: PaneIdType,
 
 pub fn init(occupied: bool) !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
-    const location: source_namespace.schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: source_namespace.schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     if (occupied) {
         try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     }

@@ -1,12 +1,13 @@
-const Capture = @This();
-const source_namespace = @import("view_interaction.zig");
-const Effects = @import("ViewInteractionEffects.zig");
+const view_interaction = @import("view_interaction.zig");
+const ViewInteractionEffects = @import("ViewInteractionEffects.zig");
 const IntentOutcome = @import("IntentOutcome.zig");
-events: [3]source_namespace.Event = undefined,
-count: usize = 0,
-failure: source_namespace.Failure = .none,
+const Capture = @This();
 
-pub fn effects(capture: *Capture) Effects {
+events: [3]view_interaction.Event = undefined,
+count: usize = 0,
+failure: view_interaction.Failure = .none,
+
+pub fn effects(capture: *Capture) ViewInteractionEffects {
     return .{
         .context = capture,
         .apply_intent = applyIntent,
@@ -15,12 +16,12 @@ pub fn effects(capture: *Capture) Effects {
     };
 }
 
-fn record(capture: *Capture, event: source_namespace.Event) void {
+fn record(capture: *Capture, event: view_interaction.Event) void {
     capture.events[capture.count] = event;
     capture.count += 1;
 }
 
-fn applyIntent(context: *anyopaque, intent: source_namespace.Intent) !IntentOutcome {
+fn applyIntent(context: *anyopaque, intent: view_interaction.Intent) !IntentOutcome {
     const capture: *Capture = @ptrCast(@alignCast(context));
     capture.record(.{ .intent = intent });
 

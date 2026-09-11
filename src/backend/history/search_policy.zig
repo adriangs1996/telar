@@ -1,9 +1,6 @@
 //! Pure bounded ranking and command-grouping policy, independent of SQLite.
-const std = @import("std");
-const fuzzy = @import("telar-core").fuzzy;
-const model = @import("model.zig");
 
-pub const FuzzyPage = @import("FuzzyPage.zig");
+const std = @import("std");
 
 const stats_subcommand_leaders = [_][]const u8{
     "git", "docker", "kubectl", "cargo", "zig", "npm", "pnpm", "yarn", "make", "brew", "systemctl",

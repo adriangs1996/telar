@@ -1,5 +1,6 @@
-const Plans = @This();
-const source_namespace = @import("pane_mouse.zig");
+const pane_mouse = @import("pane_mouse.zig");
 const Resolved = @import("Resolved.zig");
+const Plans = @This();
+
 context: *anyopaque,
-resolve: *const fn (*anyopaque, source_namespace.Command) ?Resolved,
+resolve: *const fn (*anyopaque, pane_mouse.Command) ?Resolved,

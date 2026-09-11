@@ -1,12 +1,13 @@
-const ServerOptions = @This();
-const source_namespace = @import("server.zig");
-const backend = @import("telar-backend");
-const Cursor = @import("cursor_support.zig").Cursor;
+const server = @import("server.zig");
+const GraphicsLimitsType = @import("telar-backend").GraphicsLimits;
+const Cursor = @import("Cursor.zig");
 const std = @import("std");
-action: source_namespace.ServerAction = .run,
-mode: source_namespace.ServerMode = .foreground,
+const ServerOptions = @This();
+
+action: server.ServerAction = .run,
+mode: server.ServerMode = .foreground,
 socket: ?[*:0]const u8 = null,
-graphics: backend.runtime.GraphicsLimits = .{},
+graphics: GraphicsLimitsType = .{},
 graphics_pane_set: bool = false,
 graphics_global_set: bool = false,
 config: ?[*:0]const u8 = null,
@@ -58,12 +59,12 @@ pub fn parse(args: []const [*:0]const u8) !ServerOptions {
         } else if (std.mem.eql(u8, arg, "--graphics-pane-mib")) {
             const value = try cursor.require(error.MissingGraphicsPaneLimit);
 
-            options.graphics.pane_bytes = try source_namespace.parseMebibytes(value);
+            options.graphics.pane_bytes = try server.parseMebibytes(value);
             options.graphics_pane_set = true;
         } else if (std.mem.eql(u8, arg, "--graphics-global-mib")) {
             const value = try cursor.require(error.MissingGraphicsGlobalLimit);
 
-            options.graphics.global_bytes = try source_namespace.parseMebibytes(value);
+            options.graphics.global_bytes = try server.parseMebibytes(value);
             options.graphics_global_set = true;
         } else if (std.mem.eql(u8, arg, "--config")) {
             if (options.config != null or options.no_config) {

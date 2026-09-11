@@ -1,30 +1,22 @@
 //! Application routing for one correlated pane-open confirmation.
 
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const PaneSplitType = @import("../../model/PaneSplit.zig");
+const PaneAttachmentType = @import("../../model/PaneAttachment.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const OpenedPane = @import("OpenedPane.zig");
+const Command = @import("Command.zig");
+const PaneOpenDeliveryCapture = @import("PaneOpenDeliveryCapture.zig");
+const DeliverPaneOpenHandler = @import("DeliverPaneOpenHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const OpenedPane = @import("OpenedPane.zig");
 
 pub const Continuation = union(enum) {
     initial_open,
-    create_workspace: schema.TerminalSize,
-    split: client_model.PaneSplit,
-    attach_pane: client_model.PaneAttachment,
+    create_workspace: TerminalSizeType,
+    split: PaneSplitType,
+    attach_pane: PaneAttachmentType,
     ignored,
 };
-
-pub const Command = @import("Command.zig");
-
-pub const WorkspaceCreation = @import("WorkspaceCreation.zig");
-
-pub const PaneSplitConfirmation = @import("PaneSplitConfirmation.zig");
-
-pub const PaneAttachmentConfirmation = @import("PaneAttachmentConfirmation.zig");
-
-pub const Effects = @import("PaneOpenDeliveryEffects.zig");
 
 pub const Outcome = enum {
     workspace_arrived,
@@ -34,8 +26,6 @@ pub const Outcome = enum {
     ignored,
 };
 
-pub const DeliverPaneOpenHandler = @import("DeliverPaneOpenHandler.zig");
-
 pub const Effect = enum {
     arrive_workspace,
     create_workspace,
@@ -43,9 +33,7 @@ pub const Effect = enum {
     confirm_attachment,
 };
 
-const Capture = @import("PaneOpenDeliveryCapture.zig");
-
-const testing_location: schema.TabLocation = .{
+const testing_location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(1) },
     .tab_id = @enumFromInt(2),
 };
@@ -61,18 +49,18 @@ fn testingCommand(continuation: Continuation) Command {
 }
 
 test "DeliverPaneOpenHandler routes every live continuation exactly once" {
-    const requested_size: schema.TerminalSize = .{ .cols = 80, .rows = 24 };
-    const split: client_model.PaneSplit = .{
+    const requested_size: TerminalSizeType = .{ .cols = 80, .rows = 24 };
+    const split: PaneSplitType = .{
         .target_pane = @enumFromInt(4),
         .location = testing_location,
         .axis = .horizontal,
         .area = .{ .w = 40, .h = 10 },
     };
-    const attachment: client_model.PaneAttachment = .{
+    const attachment: PaneAttachmentType = .{
         .pane_id = testing_opened.pane_id,
         .location = testing_location,
     };
-    var capture: Capture = .{};
+    var capture: PaneOpenDeliveryCapture = .{};
     var handler: DeliverPaneOpenHandler = .{ .effects = capture.effects() };
 
     try std.testing.expectEqual(Outcome.workspace_arrived, try handler.execute(testingCommand(.initial_open)));
@@ -99,7 +87,7 @@ test "DeliverPaneOpenHandler routes every live continuation exactly once" {
 }
 
 test "DeliverPaneOpenHandler ignores retired work and propagates delivery failure" {
-    var capture: Capture = .{};
+    var capture: PaneOpenDeliveryCapture = .{};
     var handler: DeliverPaneOpenHandler = .{ .effects = capture.effects() };
 
     try std.testing.expectEqual(Outcome.ignored, try handler.execute(testingCommand(.ignored)));

@@ -1,3 +1,5 @@
+const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
+const ClientTabLayoutType = @import("telar-core").ClientTabLayout;
 const SnapshotStorage = @This();
-const source_namespace = @import("client_layout_store.zig");
-tabs: [source_namespace.schema.max_client_layout_tabs]source_namespace.schema.ClientTabLayout = undefined,
+
+tabs: [max_client_layout_tabs_module]ClientTabLayoutType = undefined,

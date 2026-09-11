@@ -1,17 +1,19 @@
+const Layout = @import("WorkspaceLayout.zig");
+const ClientLayoutNodeIteratorType = @import("telar-core").ClientLayoutNodeIterator;
+const layout_support = @import("layout_support.zig");
 const ClientLayoutBuilder = @This();
-const Layout = @import("Layout.zig");
-const source_namespace = @import("layout_support.zig");
+
 layout: Layout = .{},
-iterator: *source_namespace.schema.ClientLayoutNodeIterator,
+iterator: *ClientLayoutNodeIteratorType,
 next_index: usize = 0,
 
-pub fn build(builder: *ClientLayoutBuilder, parent: ?source_namespace.NodeIndex) !source_namespace.NodeIndex {
+pub fn build(builder: *ClientLayoutBuilder, parent: ?layout_support.NodeIndex) !layout_support.NodeIndex {
     const encoded = try builder.iterator.next() orelse return error.InvalidClientLayoutTree;
-    if (builder.next_index == source_namespace.max_nodes) {
+    if (builder.next_index == layout_support.max_nodes) {
         return error.NodeLimitReached;
     }
 
-    const index: source_namespace.NodeIndex = @intCast(builder.next_index);
+    const index: layout_support.NodeIndex = @intCast(builder.next_index);
     builder.next_index += 1;
     switch (encoded) {
         .pane => |pane_id| {

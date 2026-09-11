@@ -1,3 +1,4 @@
+const types = @import("../../model/types.zig");
 const SelectTab = @This();
-const source_namespace = @import("select_tab.zig");
-target: source_namespace.Target,
+
+target: types.TabSelectionTarget,

@@ -1,36 +1,32 @@
 //! Application policy for one bounded client plugin execution.
 
+const PluginExecutionType = @import("../../model/PluginExecution.zig");
+const PluginResult = @import("PluginResult.zig");
+const types = @import("../../model/types.zig");
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const config = @import("../../config/root.zig");
-const client_diagnostic = @import("../configuration/root.zig").client_diagnostic;
-const client_model = @import("../../root.zig").model;
-
-pub const plugin = core.plugin;
-
-pub const StartEffects = @import("PluginActionStartEffects.zig");
+const PluginActionStartCapture = @import("PluginActionStartCapture.zig");
+const StartPluginActionHandler = @import("StartPluginActionHandler.zig");
+const PluginActionCompletionCapture = @import("PluginActionCompletionCapture.zig");
+const PluginActionCompletionDeliveryCapture = @import("PluginActionCompletionDeliveryCapture.zig");
+const CompletePluginActionHandler = @import("CompletePluginActionHandler.zig");
+const EffectBatchType = @import("../../config/EffectBatch.zig");
 
 pub const StartOutcome = union(enum) {
-    started: client_model.PluginExecution,
+    started: PluginExecutionType,
     busy,
     unavailable,
     rejected: anyerror,
 };
 
-pub const StartDelivery = @import("StartDelivery.zig");
-
-pub const StartPluginActionHandler = @import("StartPluginActionHandler.zig");
-
-pub const PluginResult = @import("PluginResult.zig");
-
 pub const CompletionCommand = union(enum) {
     succeeded: PluginResult,
     failed: struct {
-        execution_id: client_model.PluginExecutionId,
+        execution_id: types.PluginExecutionId,
         reason: anyerror,
     },
 
-    pub fn executionId(command: CompletionCommand) client_model.PluginExecutionId {
+    pub fn executionId(command: CompletionCommand) types.PluginExecutionId {
         return switch (command) {
             .succeeded => |result| result.execution_id,
             .failed => |failure| failure.execution_id,
@@ -57,20 +53,10 @@ pub const CompletionDirective = enum {
     exit_client,
 };
 
-pub const CompletionResult = @import("CompletionResult.zig");
-
-pub const CompletionDelivery = @import("PluginActionCompletionDelivery.zig");
-
-pub const CompletionEffects = @import("PluginActionCompletionEffects.zig");
-
-pub const CompletePluginActionHandler = @import("CompletePluginActionHandler.zig");
-
-const StartCapture = @import("PluginActionStartCapture.zig");
-
 test "StartPluginActionHandler prepares before commit and schedules after commit" {
-    var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 4);
+    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 4);
     defer model.deinit();
-    var capture: StartCapture = .{ .model = &model };
+    var capture: PluginActionStartCapture = .{ .model = &model };
     var handler: StartPluginActionHandler = .{
         .model = &model,
         .effects = capture.port(),
@@ -97,9 +83,9 @@ test "StartPluginActionHandler prepares before commit and schedules after commit
 }
 
 test "StartPluginActionHandler rolls back only an unscheduled reservation" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: StartCapture = .{
+    var capture: PluginActionStartCapture = .{
         .model = &model,
         .prepare_error = error.PluginPreparationFailed,
     };
@@ -128,9 +114,9 @@ test "StartPluginActionHandler rolls back only an unscheduled reservation" {
 }
 
 test "StartPluginActionHandler classifies known preparation failures before reservation" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: StartCapture = .{
+    var capture: PluginActionStartCapture = .{
         .model = &model,
         .prepare_error = error.PluginRegistryUnavailable,
     };
@@ -163,11 +149,7 @@ pub const CompletionEvent = enum {
     apply,
 };
 
-const CompletionCapture = @import("PluginActionCompletionCapture.zig");
-
-const CompletionDeliveryCapture = @import("PluginActionCompletionDeliveryCapture.zig");
-
-fn completionHandler(model: *client_model.Model, capture: *CompletionCapture, delivery: *CompletionDeliveryCapture) CompletePluginActionHandler {
+fn completionHandler(model: *ModelType, capture: *PluginActionCompletionCapture, delivery: *PluginActionCompletionDeliveryCapture) CompletePluginActionHandler {
     return .{
         .model = model,
         .effects = capture.port(),
@@ -175,7 +157,7 @@ fn completionHandler(model: *client_model.Model, capture: *CompletionCapture, de
     };
 }
 
-fn successfulCommand(execution_id: client_model.PluginExecutionId, batch: *const config.EffectBatch) CompletionCommand {
+fn successfulCommand(execution_id: types.PluginExecutionId, batch: *const EffectBatchType) CompletionCommand {
     return .{ .succeeded = .{
         .execution_id = execution_id,
         .package_index = 0,
@@ -186,12 +168,12 @@ fn successfulCommand(execution_id: client_model.PluginExecutionId, batch: *const
 }
 
 test "CompletePluginActionHandler consumes one result before authorization and effects" {
-    var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 2);
+    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 2);
     defer model.deinit();
     const execution = (try model.beginPluginExecution()).?;
-    var batch: config.EffectBatch = .{};
-    var capture: CompletionCapture = .{ .model = &model };
-    var delivery: CompletionDeliveryCapture = .{};
+    var batch: EffectBatchType = .{};
+    var capture: PluginActionCompletionCapture = .{ .model = &model };
+    var delivery: PluginActionCompletionDeliveryCapture = .{};
     var handler = completionHandler(&model, &capture, &delivery);
 
     const result = try handler.execute(successfulCommand(execution.id, &batch));
@@ -209,10 +191,10 @@ test "CompletePluginActionHandler consumes one result before authorization and e
 }
 
 test "CompletePluginActionHandler classifies stale failed and unmatched completions" {
-    var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 2);
+    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 2);
     defer model.deinit();
-    var capture: CompletionCapture = .{ .model = &model };
-    var delivery: CompletionDeliveryCapture = .{};
+    var capture: PluginActionCompletionCapture = .{ .model = &model };
+    var delivery: PluginActionCompletionDeliveryCapture = .{};
     var handler = completionHandler(&model, &capture, &delivery);
     const execution = (try model.beginPluginExecution()).?;
 
@@ -249,14 +231,14 @@ test "CompletePluginActionHandler classifies stale failed and unmatched completi
 }
 
 test "CompletePluginActionHandler distinguishes authorization from effect failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var batch: config.EffectBatch = .{};
-    var capture: CompletionCapture = .{
+    var batch: EffectBatchType = .{};
+    var capture: PluginActionCompletionCapture = .{
         .model = &model,
         .fail_authorize = true,
     };
-    var delivery: CompletionDeliveryCapture = .{};
+    var delivery: PluginActionCompletionDeliveryCapture = .{};
     var handler = completionHandler(&model, &capture, &delivery);
     const denied_execution = (try model.beginPluginExecution()).?;
 
@@ -278,14 +260,14 @@ test "CompletePluginActionHandler distinguishes authorization from effect failur
 }
 
 test "CompletePluginActionHandler delegates exit and preserves completion after delivery failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var batch: config.EffectBatch = .{};
-    var capture: CompletionCapture = .{
+    var batch: EffectBatchType = .{};
+    var capture: PluginActionCompletionCapture = .{
         .model = &model,
         .disposition = .exit_client,
     };
-    var delivery: CompletionDeliveryCapture = .{};
+    var delivery: PluginActionCompletionDeliveryCapture = .{};
     var handler = completionHandler(&model, &capture, &delivery);
     const exiting = (try model.beginPluginExecution()).?;
 

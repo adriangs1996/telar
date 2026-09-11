@@ -1,7 +1,9 @@
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
 const PaneFrameCommit = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
-location: source_namespace.schema.TabLocation,
+
+pane_id: PaneIdType,
+location: TabLocationType,
 frame_id: u64,
 graphics_visible: bool,
 snapshot: bool,

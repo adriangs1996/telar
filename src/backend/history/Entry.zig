@@ -1,14 +1,18 @@
-const Entry = @This();
-const source_namespace = @import("model.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const model = @import("model.zig");
+const HistoryAuthorType = @import("telar-core").HistoryAuthor;
+const HistoryOriginType = @import("telar-core").HistoryOrigin;
 const std = @import("std");
+const Entry = @This();
+
 id: u64,
-pane_id: source_namespace.schema.PaneId,
+pane_id: PaneIdType,
 started_at_ms: i64,
 duration_ns: i64,
 exit_code: ?i32,
-status: source_namespace.CommandStatus,
-author: source_namespace.schema.HistoryAuthor,
-origin: source_namespace.schema.HistoryOrigin = .pane,
+status: model.CommandStatus,
+author: HistoryAuthorType,
+origin: HistoryOriginType = .pane,
 command: []u8,
 cwd: []u8,
 workspace_path: []u8,

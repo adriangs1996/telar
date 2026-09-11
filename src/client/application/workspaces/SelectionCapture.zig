@@ -1,11 +1,12 @@
-const SelectionCapture = @This();
-const source_namespace = @import("workspace_handoff.zig");
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const SelectionGate = @import("SelectionGate.zig");
 const SelectionEffects = @import("SelectionEffects.zig");
+const SelectionCapture = @This();
+
 blocked: bool = false,
 fail: bool = false,
 calls: usize = 0,
-requested: ?source_namespace.schema.WorkspaceId = null,
+requested: ?WorkspaceIdType = null,
 
 pub fn gate(capture: *SelectionCapture) SelectionGate {
     return .{ .context = capture, .pending = pending };
@@ -21,7 +22,7 @@ fn pending(context: *anyopaque) bool {
     return capture.blocked;
 }
 
-fn request(context: *anyopaque, workspace: source_namespace.schema.WorkspaceId) !void {
+fn request(context: *anyopaque, workspace: WorkspaceIdType) !void {
     const capture: *SelectionCapture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.requested = workspace;

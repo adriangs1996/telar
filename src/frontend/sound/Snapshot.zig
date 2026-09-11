@@ -1,5 +1,7 @@
+const ConfigType = @import("Config.zig");
+const AgentSound = @import("telar-core").AgentSound;
 const Snapshot = @This();
-const source_namespace = @import("playback_support.zig");
-configuration: source_namespace.Config,
+
+configuration: ConfigType,
 active: bool,
-queued: ?source_namespace.Kind,
+queued: ?AgentSound,

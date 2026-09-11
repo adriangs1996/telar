@@ -1,6 +1,8 @@
+const RectType = @import("telar-core").Rect;
+const StyleType = @import("telar-core").Style;
 const WriteInput = @This();
-const ui = @import("../ui/root.zig");
-area: ui.Rect,
+
+area: RectType,
 x: *u16,
 text: []const u8,
-style: ui.Style,
+style: StyleType,

@@ -1,4 +1,5 @@
+const proxy = @import("proxy.zig");
 const AuthorityTarget = @This();
-const source_namespace = @import("proxy.zig");
-backend: source_namespace.TrustBackend,
+
+backend: proxy.TrustBackend,
 certificate: []const u8,

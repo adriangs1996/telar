@@ -1,8 +1,10 @@
-const FilePath = @This();
-const source_namespace = @import("file_uri.zig");
-const target_mod = @import("root.zig").target;
+const max_uri_bytes_module = @import("telar-core").max_uri_bytes;
+const TargetType = @import("LinkTarget.zig");
 const std = @import("std");
-storage: [source_namespace.link.max_uri_bytes]u8 = undefined,
+const file_uri = @import("file_uri.zig");
+const FilePath = @This();
+
+storage: [max_uri_bytes_module]u8 = undefined,
 len: u16,
 
 /// Decodes a local `file://` target without filesystem access.
@@ -10,7 +12,7 @@ len: u16,
 /// ```zig
 /// const path = try FilePath.init(&target);
 /// ```
-pub fn init(target: *const target_mod.Target) !FilePath {
+pub fn init(target: *const TargetType) !FilePath {
     if (target.scheme != .file) {
         return error.NotFileLink;
     }
@@ -31,7 +33,7 @@ pub fn init(target: *const target_mod.Target) !FilePath {
     const encoded_path = switch (parsed.path) {
         .raw, .percent_encoded => |value| value,
     };
-    try source_namespace.validateEscapes(encoded_path);
+    try file_uri.validateEscapes(encoded_path);
 
     var path: FilePath = .{ .len = 0 };
     const raw_path = try parsed.path.toRaw(&path.storage);

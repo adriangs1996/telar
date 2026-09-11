@@ -1,5 +1,6 @@
+const AgentManifest = @import("telar-core").AgentManifest;
 const EntryInput = @This();
-const source_namespace = @import("agents.zig");
+
 entry: c_int,
-manifest: *source_namespace.Manifest,
+manifest: *AgentManifest,
 position: usize,

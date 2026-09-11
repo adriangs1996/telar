@@ -1,8 +1,9 @@
+const std = @import("std");
+const SlotSnapshot = @import("SlotSnapshot.zig");
 /// Owns the exact number of admitted connection workers and the number of
 /// sockets rejected at the configured bound.
 const Slots = @This();
-const std = @import("std");
-const SlotSnapshot = @import("SlotSnapshot.zig");
+
 limit: u32,
 active: std.atomic.Value(u32) = .init(0),
 limit_drops: std.atomic.Value(u64) = .init(0),

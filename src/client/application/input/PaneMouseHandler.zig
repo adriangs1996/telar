@@ -1,9 +1,11 @@
-const PaneMouseHandler = @This();
 const Plans = @import("Plans.zig");
-const Effects = @import("PaneMouseEffects.zig");
-const source_namespace = @import("pane_mouse.zig");
+const PaneMouseEffects = @import("PaneMouseEffects.zig");
+const pane_mouse = @import("pane_mouse.zig");
+const mouse_protocol_module = @import("../../input/mouse_protocol.zig");
+const PaneMouseHandler = @This();
+
 plans: Plans,
-effects: Effects,
+effects: PaneMouseEffects,
 
 /// Resolves one pane snapshot, then selects one mouse-selection,
 /// viewport, alternate-scroll or child mouse-report effect.
@@ -11,7 +13,7 @@ effects: Effects,
 /// ```zig
 /// const outcome = try handler.execute(command);
 /// ```
-pub fn execute(self: *PaneMouseHandler, command: source_namespace.Command) !source_namespace.Outcome {
+pub fn execute(self: *PaneMouseHandler, command: pane_mouse.Command) !pane_mouse.Outcome {
     const resolved = self.plans.resolve(self.plans.context, command) orelse return .ignored;
     const plan = resolved.plan;
     const pointer = resolved.pointer;
@@ -33,7 +35,7 @@ pub fn execute(self: *PaneMouseHandler, command: source_namespace.Command) !sour
         else => null,
     };
 
-    const tracked = plan.protocol.sgr and source_namespace.mouse_protocol.tracked(plan.protocol.tracking, pointer.event.kind);
+    const tracked = plan.protocol.sgr and mouse_protocol_module.tracked(plan.protocol.tracking, pointer.event.kind);
 
     if (wheel_delta) |delta| {
         if (!tracked) {

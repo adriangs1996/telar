@@ -1,12 +1,13 @@
-const DetachPaneHandler = @This();
 const Attachments = @import("Attachments.zig");
-const GeometryLease = @import("DetachPaneGeometryLease.zig");
+const DetachPaneGeometryLease = @import("DetachPaneGeometryLease.zig");
 const DetachPane = @import("DetachPane.zig");
-const source_namespace = @import("detach_pane.zig");
+const detach_pane = @import("detach_pane.zig");
 const std = @import("std");
 const DetachPaneExecutor = @import("DetachPaneExecutor.zig");
+const DetachPaneHandler = @This();
+
 attachments: Attachments,
-geometry: GeometryLease,
+geometry: DetachPaneGeometryLease,
 
 /// Commits attachment removal, ends empty-workspace observation, then
 /// releases its geometry. Missing attachments have no effect.
@@ -14,7 +15,7 @@ geometry: GeometryLease,
 /// ```zig
 /// const result = try handler.execute(.{ .pane_id = pane_id });
 /// ```
-pub fn execute(handler: *DetachPaneHandler, command: DetachPane) !source_namespace.DetachPaneResult {
+pub fn execute(handler: *DetachPaneHandler, command: DetachPane) !detach_pane.DetachPaneResult {
     const detached = handler.attachments.detach(handler.attachments.context, command.pane_id) orelse return .not_attached;
     std.debug.assert(detached.pane_id == command.pane_id);
 
@@ -40,7 +41,7 @@ pub fn executor(handler: *DetachPaneHandler) DetachPaneExecutor {
     return .{ .context = handler, .execute_fn = executeErased };
 }
 
-fn executeErased(context: *anyopaque, command: DetachPane) !source_namespace.DetachPaneResult {
+fn executeErased(context: *anyopaque, command: DetachPane) !detach_pane.DetachPaneResult {
     const handler: *DetachPaneHandler = @ptrCast(@alignCast(context));
     return handler.execute(command);
 }

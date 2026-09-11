@@ -1,26 +1,15 @@
 //! Application policy for selecting and delivering client-owned pane geometry.
 
+const PaneBottomReservationType = @import("../../workspace/PaneBottomReservation.zig");
+const ModelType = @import("../../model/Model.zig");
+const TestingLayout = @import("TestingLayout.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../../root.zig").model;
+const PaneGeometryDeliveryEffectCapture = @import("PaneGeometryDeliveryEffectCapture.zig");
+const OfferPaneGeometryHandler = @import("OfferPaneGeometryHandler.zig");
+const OfferActivePaneGeometryHandler = @import("OfferActivePaneGeometryHandler.zig");
+const DeliverPaneGeometryHandler = @import("DeliverPaneGeometryHandler.zig");
 
-pub const layout_mod = workspace_capability.layout;
-pub const multiplexer = workspace_capability.multiplexer;
-pub const schema = core.schema;
-pub const ui = core.ui;
-
-pub const OfferEffects = @import("OfferEffects.zig");
-
-pub const Effects = @import("PaneGeometryDeliveryEffects.zig");
-
-pub const OfferPaneGeometryHandler = @import("OfferPaneGeometryHandler.zig");
-
-pub const OfferActivePaneGeometryHandler = @import("OfferActivePaneGeometryHandler.zig");
-
-pub const DeliverPaneGeometryHandler = @import("DeliverPaneGeometryHandler.zig");
-
-pub fn noBottomReservation(context: *anyopaque) ?layout_mod.PaneBottomReservation {
+pub fn noBottomReservation(context: *anyopaque) ?PaneBottomReservationType {
     _ = context;
 
     return null;
@@ -32,11 +21,7 @@ pub const Event = enum {
     request_attachments,
 };
 
-const EffectCapture = @import("PaneGeometryDeliveryEffectCapture.zig");
-
-const TestingLayout = @import("TestingLayout.zig");
-
-fn prepareModel(model: *client_model.Model) !TestingLayout {
+fn prepareModel(model: *ModelType) !TestingLayout {
     const testing: TestingLayout = .{
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -53,11 +38,11 @@ fn prepareModel(model: *client_model.Model) !TestingLayout {
 }
 
 test "OfferPaneGeometryHandler selects only attached visible panes" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const testing = try prepareModel(&model);
     const active = &model.workspace.active().?.model;
-    var capture: EffectCapture = .{};
+    var capture: PaneGeometryDeliveryEffectCapture = .{};
     var handler: OfferPaneGeometryHandler = .{ .effects = capture.offerEffects() };
 
     try std.testing.expectEqual(@as(usize, 2), try handler.execute(active, testing.area));
@@ -86,13 +71,13 @@ test "OfferPaneGeometryHandler selects only attached visible panes" {
 }
 
 test "OfferPaneGeometryHandler reserves rows only from the target pane" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const testing = try prepareModel(&model);
     const active = &model.workspace.active().?.model;
     const first_size = active.contentSize(testing.first, testing.area).?;
     const second_size = active.contentSize(testing.second, testing.area).?;
-    var capture: EffectCapture = .{};
+    var capture: PaneGeometryDeliveryEffectCapture = .{};
     var handler: OfferPaneGeometryHandler = .{ .effects = capture.offerEffects() };
     capture.bottom_reservation = .{
         .pane_id = testing.second,
@@ -111,10 +96,10 @@ test "OfferPaneGeometryHandler reserves rows only from the target pane" {
 }
 
 test "OfferActivePaneGeometryHandler selects the active tab and propagates delivery failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const testing = try prepareModel(&model);
-    var capture: EffectCapture = .{};
+    var capture: PaneGeometryDeliveryEffectCapture = .{};
     var handler: OfferActivePaneGeometryHandler = .{
         .model = &model,
         .effects = capture.offerEffects(),
@@ -132,9 +117,9 @@ test "OfferActivePaneGeometryHandler selects the active tab and propagates deliv
 }
 
 test "OfferActivePaneGeometryHandler suppresses geometry for an empty client" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectCapture = .{};
+    var capture: PaneGeometryDeliveryEffectCapture = .{};
     var handler: OfferActivePaneGeometryHandler = .{
         .model = &model,
         .effects = capture.offerEffects(),
@@ -145,7 +130,7 @@ test "OfferActivePaneGeometryHandler suppresses geometry for an empty client" {
 }
 
 test "DeliverPaneGeometryHandler validates then invalidates before resize delivery" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const testing = try prepareModel(&model);
     try std.testing.expect(model.workspace.active().?.model.focusPane(testing.first));
@@ -154,7 +139,7 @@ test "DeliverPaneGeometryHandler validates then invalidates before resize delive
         .direction = .right,
         .area = testing.area,
     }).?;
-    var capture: EffectCapture = .{
+    var capture: PaneGeometryDeliveryEffectCapture = .{
         .model = &model,
         .expected_revision = change.panes_revision,
     };
@@ -178,7 +163,7 @@ test "DeliverPaneGeometryHandler validates then invalidates before resize delive
 }
 
 test "DeliverPaneGeometryHandler rejects a superseded matching geometry" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const testing = try prepareModel(&model);
     try std.testing.expect(model.workspace.active().?.model.focusPane(testing.first));
@@ -189,7 +174,7 @@ test "DeliverPaneGeometryHandler rejects a superseded matching geometry" {
     _ = model.togglePaneFullscreen(.{ .area = testing.area }).?;
     _ = model.togglePaneFullscreen(.{ .area = testing.area }).?;
     try std.testing.expect(!model.workspace.activeConst().?.model.layout.isFullscreen());
-    var capture: EffectCapture = .{};
+    var capture: PaneGeometryDeliveryEffectCapture = .{};
     var handler: DeliverPaneGeometryHandler = .{
         .model = &model,
         .effects = capture.effects(),
@@ -200,7 +185,7 @@ test "DeliverPaneGeometryHandler rejects a superseded matching geometry" {
 }
 
 test "DeliverPaneGeometryHandler preserves the commit after partial delivery failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const testing = try prepareModel(&model);
     try std.testing.expect(model.workspace.active().?.model.focusPane(testing.first));
@@ -208,7 +193,7 @@ test "DeliverPaneGeometryHandler preserves the commit after partial delivery fai
         .direction = .right,
         .area = testing.area,
     }).?;
-    var capture: EffectCapture = .{
+    var capture: PaneGeometryDeliveryEffectCapture = .{
         .model = &model,
         .expected_revision = change.panes_revision,
         .fail_resize = 2,

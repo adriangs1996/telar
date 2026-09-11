@@ -1,21 +1,16 @@
 //! Concrete TLS establishment adapter for an authenticated CONNECT exchange.
 
+const GenericTlsTunnelPort = @import("../GenericTlsTunnelPort.zig").Type;
+const Establisher = @import("Establisher.zig");
 const std = @import("std");
-const ca = @import("../ca.zig");
-const metrics = @import("../metrics.zig");
-const interception_policy = @import("../interception_policy.zig");
+const SessionType = @import("../Session.zig");
+const GenericTlsTunnelCommand = @import("../GenericTlsTunnelCommand.zig").Type;
+const GenericAttempt = @import("../GenericAttempt.zig").Type;
 const tls_transport = @import("../tls.zig");
-const tls_tunnel = @import("../tls_tunnel.zig");
-const exchange_mod = @import("exchange_support.zig");
+const GenericEstablished = @import("../GenericEstablished.zig").Type;
+const metrics = @import("../metrics.zig");
 
-pub const Io = std.Io;
-pub const net = Io.net;
-
-pub const Resources = @import("Resources.zig");
-
-pub const Establisher = @import("Establisher.zig");
-
-const port: tls_tunnel.Port(Establisher, net.Stream, *tls_transport.Session) = .{
+const port: GenericTlsTunnelPort(Establisher, std.Io.net.Stream, *SessionType) = .{
     .should_intercept = shouldIntercept,
     .record_passthrough = recordPassthrough,
     .intercept = intercept,
@@ -23,7 +18,7 @@ const port: tls_tunnel.Port(Establisher, net.Stream, *tls_transport.Session) = .
     .publish_failure = publishFailure,
 };
 
-pub const Establish = tls_tunnel.Command(Establisher, port);
+pub const Establish = GenericTlsTunnelCommand(Establisher, port);
 
 fn shouldIntercept(establisher: *Establisher, host: []const u8) bool {
     return establisher.resources.intercept_hosts.contains(host);
@@ -33,7 +28,7 @@ fn recordPassthrough(establisher: *Establisher) void {
     establisher.resources.telemetry.record(.passthrough_connection);
 }
 
-fn intercept(establisher: *Establisher, attempt: tls_tunnel.Attempt(net.Stream)) tls_transport.Error!tls_tunnel.Established(*tls_transport.Session) {
+fn intercept(establisher: *Establisher, attempt: GenericAttempt(std.Io.net.Stream)) tls_transport.Error!GenericEstablished(*SessionType) {
     const resources = establisher.resources;
     const session = try tls_transport.intercept(.{
         .io = resources.io,

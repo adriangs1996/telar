@@ -1,9 +1,29 @@
-const core = @import("telar-core");
-const transport = @import("../../../transport/root.zig");
-const source_namespace = @import("client.zig");
+const SocketChannelType = @import("telar-core").SocketChannel;
+const LocalListenerType = @import("../../../transport/LocalListener.zig");
+const ClientMessage = @import("../../ClientMessage.zig");
+const mark_module = @import("telar-core").mark;
+const now_module = @import("telar-core").now;
+const decodeClient_module = @import("telar-core").decodeClient;
+const enabled_module = @import("telar-core").enabled;
+const elapsed_module = @import("telar-core").elapsed;
+const request_router = @import("../../client/request_router.zig");
 const std = @import("std");
-const event_sources = @import("../../event_sources.zig");
-const delivery_mod = @import("../../delivery/root.zig");
+const ClientSent = @import("../../ClientSent.zig");
+const SessionType = @import("../../client/Session.zig");
+const Write = @import("../../client/Write.zig");
+const GenericAcceptPort = @import("../../client/GenericAcceptPort.zig").Type;
+const GenericAcceptCoordinator = @import("../../client/GenericAcceptCoordinator.zig").Type;
+const SourcesType = @import("../../Sources.zig");
+const GenericHandshakePort = @import("../../client/GenericHandshakePort.zig").Type;
+const GenericHandshakeCoordinator = @import("../../client/GenericHandshakeCoordinator.zig").Type;
+const ClientKeyType = @import("../../../history/ClientKey.zig");
+const CompletionType = @import("../../delivery/Completion.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const GenericRuntimePort = @import("../../client/GenericRuntimePort.zig").Type;
+const GenericCoordinator = @import("../../client/GenericCoordinator.zig").Type;
+const handshake_module = @import("../../../transport/handshake.zig");
+const Read = @import("../../client/Read.zig");
+
 /// Binds client event completions to one concrete Application type.
 ///
 /// ```zig
@@ -17,7 +37,7 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// try ClientEvents.handleAccepted(&application, result, listener);
         /// ```
-        pub fn handleAccepted(application: *Application, result: anyerror!core.transport.SocketChannel, listener: *transport.local.LocalListener) !void {
+        pub fn handleAccepted(application: *Application, result: anyerror!SocketChannelType, listener: *LocalListenerType) !void {
             var runtime: AdmissionRuntime = .{ .application = application, .listener = listener };
             var coordinator = acceptedClientCoordinator(&runtime);
             try coordinator.handle(result);
@@ -41,8 +61,8 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// const should_stop = try ClientEvents.handleMessage(&application, event);
         /// ```
-        pub fn handleMessage(application: *Application, event: source_namespace.ClientMessageEvent) !bool {
-            core.echo_trace.mark(application.io, .runtime_dispatch);
+        pub fn handleMessage(application: *Application, event: ClientMessage) !bool {
+            mark_module(application.io, .runtime_dispatch);
             const session = application.clients.resolve(event.client) orelse {
                 application.metrics.stale_client_messages += 1;
                 return false;
@@ -59,21 +79,21 @@ pub fn Type(comptime Application: type) type {
                 application.dropClient(event.client);
                 return false;
             };
-            const decode_started = source_namespace.diagnostics.now(application.io);
-            const message = source_namespace.schema.decodeClient(payload) catch {
+            const decode_started = now_module(application.io);
+            const message = decodeClient_module(payload) catch {
                 application.dropClient(event.client);
                 return false;
             };
 
-            if (comptime source_namespace.diagnostics.enabled) {
+            if (comptime enabled_module) {
                 application.metrics.client_messages += 1;
                 application.metrics.decode.observe(
-                    source_namespace.diagnostics.elapsed(decode_started, source_namespace.diagnostics.now(application.io)),
+                    elapsed_module(decode_started, now_module(application.io)),
                 );
             }
 
             if (session.role == .undecided) {
-                session.role = switch (source_namespace.client_request_router.classify(std.meta.activeTag(message))) {
+                session.role = switch (request_router.classify(std.meta.activeTag(message))) {
                     .ui => .ui,
                     .control => .control,
                 };
@@ -103,7 +123,7 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// const should_stop = ClientEvents.handleSent(&application, event);
         /// ```
-        pub fn handleSent(application: *Application, event: source_namespace.ClientSentEvent) bool {
+        pub fn handleSent(application: *Application, event: ClientSent) bool {
             var coordinator = clientSendCoordinator(application);
             return coordinator.handle(.{ .client = event.client, .result = event.result });
         }
@@ -114,10 +134,10 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// try ClientEvents.startSend(&application, session, payload);
         /// ```
-        pub fn startSend(application: *Application, session: *source_namespace.ClientSession, payload: []const u8) !void {
+        pub fn startSend(application: *Application, session: *SessionType, payload: []const u8) !void {
             std.debug.assert(!session.send_pending);
             session.send_pending = true;
-            application.select.concurrent(.client_sent, sendSession, .{source_namespace.SessionWrite{
+            application.select.concurrent(.client_sent, sendSession, .{Write{
                 .io = application.io,
                 .key = session.key,
                 .connection = &session.connection,
@@ -130,10 +150,10 @@ pub fn Type(comptime Application: type) type {
 
         const AdmissionRuntime = struct {
             application: *Application,
-            listener: *transport.local.LocalListener,
+            listener: *LocalListenerType,
         };
 
-        const client_accept_runtime_port: source_namespace.client_admission.AcceptPort(AdmissionRuntime, core.transport.SocketChannel) = .{
+        const client_accept_runtime_port: GenericAcceptPort(AdmissionRuntime, SocketChannelType) = .{
             .stopping = clientAdmissionStopping,
             .rearm_accept = rearmClientAccept,
             .has_capacity = clientAdmissionHasCapacity,
@@ -142,7 +162,7 @@ pub fn Type(comptime Application: type) type {
             .start_handshake = startClientHandshake,
         };
 
-        const RuntimeAcceptedClientCoordinator = source_namespace.client_admission.AcceptCoordinator(AdmissionRuntime, core.transport.SocketChannel, client_accept_runtime_port);
+        const RuntimeAcceptedClientCoordinator = GenericAcceptCoordinator(AdmissionRuntime, SocketChannelType, client_accept_runtime_port);
 
         fn acceptedClientCoordinator(runtime: *AdmissionRuntime) RuntimeAcceptedClientCoordinator {
             return RuntimeAcceptedClientCoordinator.init(runtime, &runtime.application.client_admission);
@@ -153,7 +173,7 @@ pub fn Type(comptime Application: type) type {
         }
 
         fn rearmClientAccept(runtime: *AdmissionRuntime) !void {
-            var sources = event_sources.Sources.init(runtime.application.io, runtime.application.select);
+            var sources = SourcesType.init(runtime.application.io, runtime.application.select);
             try sources.acceptClient(runtime.listener);
         }
 
@@ -161,24 +181,24 @@ pub fn Type(comptime Application: type) type {
             return runtime.application.clients.hasCapacity();
         }
 
-        fn shutdownAdmissionConnection(runtime: *AdmissionRuntime, connection: *core.transport.SocketChannel) void {
+        fn shutdownAdmissionConnection(runtime: *AdmissionRuntime, connection: *SocketChannelType) void {
             connection.shutdown(runtime.application.io);
         }
 
-        fn deinitAdmissionConnection(runtime: *AdmissionRuntime, connection: *core.transport.SocketChannel) void {
+        fn deinitAdmissionConnection(runtime: *AdmissionRuntime, connection: *SocketChannelType) void {
             connection.deinit(runtime.application.io);
         }
 
-        fn startClientHandshake(runtime: *AdmissionRuntime, connection: *core.transport.SocketChannel) !void {
+        fn startClientHandshake(runtime: *AdmissionRuntime, connection: *SocketChannelType) !void {
             try runtime.application.select.concurrent(.handshaken, handshakeClient, .{ runtime.application.io, connection });
         }
 
         const ClientHandshakeTypes = struct {
-            pub const Connection = core.transport.SocketChannel;
-            pub const Session = *source_namespace.ClientSession;
+            pub const Connection = SocketChannelType;
+            pub const Session = *SessionType;
         };
 
-        const client_handshake_runtime_port: source_namespace.client_admission.HandshakePort(Application, ClientHandshakeTypes) = .{
+        const client_handshake_runtime_port: GenericHandshakePort(Application, ClientHandshakeTypes) = .{
             .stopping = clientHandshakeStopping,
             .deinit_connection = deinitNegotiatedConnection,
             .admit = admitNegotiatedClient,
@@ -186,7 +206,7 @@ pub fn Type(comptime Application: type) type {
             .drop_session = dropAdmittedClient,
         };
 
-        const RuntimeHandshakenClientCoordinator = source_namespace.client_admission.HandshakeCoordinator(Application, ClientHandshakeTypes, client_handshake_runtime_port);
+        const RuntimeHandshakenClientCoordinator = GenericHandshakeCoordinator(Application, ClientHandshakeTypes, client_handshake_runtime_port);
 
         fn handshakenClientCoordinator(application: *Application) RuntimeHandshakenClientCoordinator {
             return RuntimeHandshakenClientCoordinator.init(application, &application.client_admission);
@@ -196,30 +216,30 @@ pub fn Type(comptime Application: type) type {
             return application.shutdown.isRequested();
         }
 
-        fn deinitNegotiatedConnection(application: *Application, connection: *core.transport.SocketChannel) void {
+        fn deinitNegotiatedConnection(application: *Application, connection: *SocketChannelType) void {
             connection.deinit(application.io);
         }
 
-        fn admitNegotiatedClient(application: *Application, connection: core.transport.SocketChannel) !*source_namespace.ClientSession {
+        fn admitNegotiatedClient(application: *Application, connection: SocketChannelType) !*SessionType {
             return application.clients.add(application.gpa, connection);
         }
 
-        fn startNegotiatedClientRead(application: *Application, session: *source_namespace.ClientSession) !void {
+        fn startNegotiatedClientRead(application: *Application, session: *SessionType) !void {
             try startSessionRead(application, session);
         }
 
-        fn dropAdmittedClient(application: *Application, session: *source_namespace.ClientSession) void {
+        fn dropAdmittedClient(application: *Application, session: *SessionType) void {
             application.dropClient(session.key);
         }
 
         const ClientSendTypes = struct {
-            pub const Client = source_namespace.ClientKey;
-            pub const Session = *source_namespace.ClientSession;
-            pub const Completion = delivery_mod.Completion;
-            pub const Detach = source_namespace.schema.PaneId;
+            pub const Client = ClientKeyType;
+            pub const Session = *SessionType;
+            pub const Completion = CompletionType;
+            pub const Detach = PaneIdType;
         };
 
-        const client_send_runtime_port: source_namespace.client_send_coordinator.RuntimePort(Application, ClientSendTypes) = .{
+        const client_send_runtime_port: GenericRuntimePort(Application, ClientSendTypes) = .{
             .resolve = resolveSentClient,
             .record_stale = recordStaleClientSend,
             .release_send = releaseClientSend,
@@ -235,13 +255,13 @@ pub fn Type(comptime Application: type) type {
             .shutdown_delivered = clientSendShutdownDelivered,
         };
 
-        const RuntimeClientSendCoordinator = source_namespace.client_send_coordinator.Coordinator(Application, ClientSendTypes, client_send_runtime_port);
+        const RuntimeClientSendCoordinator = GenericCoordinator(Application, ClientSendTypes, client_send_runtime_port);
 
         fn clientSendCoordinator(application: *Application) RuntimeClientSendCoordinator {
             return RuntimeClientSendCoordinator.init(application);
         }
 
-        fn resolveSentClient(application: *Application, client: source_namespace.ClientKey) ?*source_namespace.ClientSession {
+        fn resolveSentClient(application: *Application, client: ClientKeyType) ?*SessionType {
             return application.clients.resolve(client);
         }
 
@@ -249,32 +269,32 @@ pub fn Type(comptime Application: type) type {
             application.metrics.stale_client_messages += 1;
         }
 
-        fn releaseClientSend(_: *Application, session: *source_namespace.ClientSession) void {
+        fn releaseClientSend(_: *Application, session: *SessionType) void {
             session.send_pending = false;
         }
 
-        fn sentClientIsClosing(_: *Application, session: *source_namespace.ClientSession) bool {
+        fn sentClientIsClosing(_: *Application, session: *SessionType) bool {
             return session.closing;
         }
 
-        fn finalizeSentClient(application: *Application, client: source_namespace.ClientKey) void {
+        fn finalizeSentClient(application: *Application, client: ClientKeyType) void {
             application.finalizeClient(client);
         }
 
-        fn completeClientDelivery(_: *Application, session: *source_namespace.ClientSession, result: anyerror!void) delivery_mod.Completion {
+        fn completeClientDelivery(_: *Application, session: *SessionType, result: anyerror!void) CompletionType {
             return session.delivery.complete(result);
         }
 
-        fn dropSentClient(application: *Application, client: source_namespace.ClientKey) void {
+        fn dropSentClient(application: *Application, client: ClientKeyType) void {
             application.dropClient(client);
         }
 
-        fn detachAfterClientSend(application: *Application, session: *source_namespace.ClientSession, pane: source_namespace.schema.PaneId) void {
+        fn detachAfterClientSend(application: *Application, session: *SessionType, pane: PaneIdType) void {
             _ = session.attachments.detach(pane);
             application.collect();
         }
 
-        fn sentClientShouldCloseAfterReply(_: *Application, session: *source_namespace.ClientSession) bool {
+        fn sentClientShouldCloseAfterReply(_: *Application, session: *SessionType) bool {
             return session.delivery.shouldCloseAfterReply();
         }
 
@@ -282,7 +302,7 @@ pub fn Type(comptime Application: type) type {
             return application.shutdown.isRequested();
         }
 
-        fn pumpSentClient(application: *Application, session: *source_namespace.ClientSession) !void {
+        fn pumpSentClient(application: *Application, session: *SessionType) !void {
             try application.pump(session);
         }
 
@@ -294,18 +314,18 @@ pub fn Type(comptime Application: type) type {
             return application.shutdownDelivered();
         }
 
-        fn handshakeClient(io: source_namespace.Io, connection: *core.transport.SocketChannel) anyerror!void {
-            const response = try transport.handshake.perform(io, connection);
+        fn handshakeClient(io: std.Io, connection: *SocketChannelType) anyerror!void {
+            const response = try handshake_module.perform(io, connection);
 
             if (response == .rejected) {
                 return error.IncompatibleProtocol;
             }
         }
 
-        fn startSessionRead(application: *Application, session: *source_namespace.ClientSession) !void {
+        fn startSessionRead(application: *Application, session: *SessionType) !void {
             std.debug.assert(!session.read_pending);
             session.read_pending = true;
-            application.select.concurrent(.client_message, receiveSession, .{source_namespace.SessionRead{
+            application.select.concurrent(.client_message, receiveSession, .{Read{
                 .io = application.io,
                 .key = session.key,
                 .connection = &session.connection,
@@ -316,15 +336,15 @@ pub fn Type(comptime Application: type) type {
             };
         }
 
-        fn receiveSession(read: source_namespace.SessionRead) source_namespace.ClientMessageEvent {
+        fn receiveSession(read: Read) ClientMessage {
             const result = read.connection.receive(read.io, read.buffer);
-            core.echo_trace.mark(read.io, .runtime_read);
+            mark_module(read.io, .runtime_read);
             return .{ .client = read.key, .result = result };
         }
 
-        fn sendSession(write: source_namespace.SessionWrite) source_namespace.ClientSentEvent {
-            core.echo_trace.mark(write.io, .runtime_send_start);
-            defer core.echo_trace.mark(write.io, .runtime_send_done);
+        fn sendSession(write: Write) ClientSent {
+            mark_module(write.io, .runtime_send_start);
+            defer mark_module(write.io, .runtime_send_done);
             return .{ .client = write.key, .result = write.connection.send(write.io, write.payload) };
         }
     };

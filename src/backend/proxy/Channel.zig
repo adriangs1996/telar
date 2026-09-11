@@ -1,11 +1,13 @@
-const Channel = @This();
-const source_namespace = @import("observation_queue.zig");
-const middleware = @import("middleware.zig");
-const CredentialGate = @import("CredentialGate.zig");
+const observation_queue = @import("observation_queue.zig");
+const MiddlewareEvent = @import("MiddlewareEvent.zig");
 const std = @import("std");
-const Metrics = @import("ObservationQueueMetrics.zig");
-storage: [source_namespace.capacity]middleware.Event = undefined,
-events: source_namespace.Io.Queue(middleware.Event) = undefined,
+const CredentialGate = @import("CredentialGate.zig");
+const ObserverType = @import("Observer.zig");
+const ObservationQueueMetrics = @import("ObservationQueueMetrics.zig");
+const Channel = @This();
+
+storage: [observation_queue.capacity]MiddlewareEvent = undefined,
+events: std.Io.Queue(MiddlewareEvent) = undefined,
 gate: CredentialGate = undefined,
 queued: std.atomic.Value(u64) = .init(0),
 high_water: std.atomic.Value(u64) = .init(0),
@@ -27,7 +29,7 @@ pub fn init(channel: *Channel, gate: CredentialGate) void {
 /// ```zig
 /// try pipeline.add(channel.observer());
 /// ```
-pub fn observer(channel: *Channel) middleware.Observer {
+pub fn observer(channel: *Channel) ObserverType {
     return .{ .context = channel, .observe = observe };
 }
 
@@ -38,7 +40,7 @@ pub fn observer(channel: *Channel) middleware.Observer {
 /// ```zig
 /// const event = try channel.receive(io);
 /// ```
-pub fn receive(channel: *Channel, io: source_namespace.Io) anyerror!middleware.Event {
+pub fn receive(channel: *Channel, io: std.Io) anyerror!MiddlewareEvent {
     while (true) {
         var event = try channel.events.getOne(io);
         defer std.crypto.secureZero(u8, &event.credential.token);
@@ -55,7 +57,7 @@ pub fn receive(channel: *Channel, io: source_namespace.Io) anyerror!middleware.E
 /// ```zig
 /// channel.close(io);
 /// ```
-pub fn close(channel: *Channel, io: source_namespace.Io) void {
+pub fn close(channel: *Channel, io: std.Io) void {
     channel.events.close(io);
 }
 
@@ -65,7 +67,7 @@ pub fn close(channel: *Channel, io: source_namespace.Io) void {
 /// ```zig
 /// const snapshot = channel.metrics();
 /// ```
-pub fn metrics(channel: *const Channel) Metrics {
+pub fn metrics(channel: *const Channel) ObservationQueueMetrics {
     return .{
         .queued = channel.queued.load(.monotonic),
         .high_water = channel.high_water.load(.monotonic),
@@ -73,12 +75,12 @@ pub fn metrics(channel: *const Channel) Metrics {
     };
 }
 
-fn observe(context: *anyopaque, io: source_namespace.Io, event: middleware.Event) void {
+fn observe(context: *anyopaque, io: std.Io, event: MiddlewareEvent) void {
     const channel: *Channel = @ptrCast(@alignCast(context));
     channel.publish(io, event);
 }
 
-pub fn publish(channel: *Channel, io: source_namespace.Io, event: middleware.Event) void {
+pub fn publish(channel: *Channel, io: std.Io, event: MiddlewareEvent) void {
     if (!channel.gate.accepts(&event.credential)) {
         return;
     }
@@ -103,7 +105,7 @@ pub fn publish(channel: *Channel, io: source_namespace.Io, event: middleware.Eve
 fn reserve(channel: *Channel) ?u64 {
     var current = channel.queued.load(.monotonic);
 
-    while (current < source_namespace.capacity) {
+    while (current < observation_queue.capacity) {
         if (channel.queued.cmpxchgWeak(current, current + 1, .monotonic, .monotonic)) |observed| {
             current = observed;
             continue;

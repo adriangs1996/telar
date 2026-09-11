@@ -1,11 +1,9 @@
 //! Borrowed process command passed across the pane-launch boundary.
 
 const std = @import("std");
-const ChildEnvironment = @import("environment.zig").ChildEnvironment;
+const Command = @import("Command.zig");
 
 pub const max_args = 64;
-
-pub const Command = @import("Command.zig");
 
 test "an empty argument list is rejected" {
     const args = [_][*:0]const u8{};

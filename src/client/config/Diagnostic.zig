@@ -1,5 +1,6 @@
-const Diagnostic = @This();
 const std = @import("std");
+const Diagnostic = @This();
+
 buffer: [512]u8 = undefined,
 len: usize = 0,
 

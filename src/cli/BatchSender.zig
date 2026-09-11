@@ -1,27 +1,34 @@
+const std = @import("std");
+const SocketChannelType = @import("telar-core").SocketChannel;
+const max_import_entries = @import("telar-core").max_import_entries;
+const ImportEntryType = @import("telar-core").ImportEntry;
+const history = @import("history.zig");
+const ImportedEntry = @import("ImportedEntry.zig");
+const max_import_command_bytes_module = @import("telar-core").max_import_command_bytes;
+const RequestIdType = @import("telar-core").RequestId;
+const encodeImportHistory_module = @import("telar-core").encodeImportHistory;
+const decodeServer_module = @import("telar-core").decodeServer;
 /// Accumulates entries and sends one bounded import_history request per
 /// batch, waiting for each acknowledgement before the next batch.
 const BatchSender = @This();
-const source_namespace = @import("history.zig");
-const std = @import("std");
-const core = @import("telar-core");
-const ImportedEntry = @import("ImportedEntry.zig");
-io: source_namespace.Io,
+
+io: std.Io,
 gpa: std.mem.Allocator,
-connection: *core.transport.SocketChannel,
+connection: *SocketChannelType,
 source: []const u8,
-entries: [source_namespace.max_batch_entries]core.schema.ImportEntry = undefined,
-storage: [source_namespace.max_batch_payload]u8 = undefined,
+entries: [max_import_entries]ImportEntryType = undefined,
+storage: [history.max_batch_payload]u8 = undefined,
 used: usize = 0,
 count: usize = 0,
 sequence: u64 = 0,
 total: u64 = 0,
 next_request: u64 = 1,
 
-fn push(sender: *BatchSender, entry: ImportedEntry) !void {
-    if (entry.command.len == 0 or entry.command.len > core.schema.max_import_command_bytes) {
+pub fn push(sender: *BatchSender, entry: ImportedEntry) !void {
+    if (entry.command.len == 0 or entry.command.len > max_import_command_bytes_module) {
         return;
     }
-    if (sender.count == source_namespace.max_batch_entries or entry.command.len > sender.storage.len - sender.used) {
+    if (sender.count == max_import_entries or entry.command.len > sender.storage.len - sender.used) {
         try sender.finish();
     }
 
@@ -32,15 +39,15 @@ fn push(sender: *BatchSender, entry: ImportedEntry) !void {
     sender.count += 1;
 }
 
-fn finish(sender: *BatchSender) !void {
+pub fn finish(sender: *BatchSender) !void {
     if (sender.count == 0) {
         return;
     }
 
-    var send_buffer: [source_namespace.max_batch_payload + 1024]u8 = undefined;
-    const request_id: core.schema.RequestId = @enumFromInt(sender.next_request);
+    var send_buffer: [history.max_batch_payload + 1024]u8 = undefined;
+    const request_id: RequestIdType = @enumFromInt(sender.next_request);
     sender.next_request += 1;
-    try sender.connection.send(sender.io, try core.schema.encodeImportHistory(&send_buffer, .{
+    try sender.connection.send(sender.io, try encodeImportHistory_module(&send_buffer, .{
         .request_id = request_id,
         .source = sender.source,
         .base_sequence = sender.sequence,
@@ -48,7 +55,7 @@ fn finish(sender: *BatchSender) !void {
     }));
 
     var receive_buffer: [1024]u8 = undefined;
-    const response = try core.schema.decodeServer(try sender.connection.receive(sender.io, &receive_buffer));
+    const response = try decodeServer_module(try sender.connection.receive(sender.io, &receive_buffer));
     switch (response) {
         .request_completed => {},
         .request_failed => |failure| {

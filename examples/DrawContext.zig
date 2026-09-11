@@ -1,6 +1,8 @@
-const DrawContext = @This();
 const State = @import("State.zig");
-const source_namespace = @import("sidebar.zig");
+const BufferType = @import("telar-core").Buffer;
+const RectType = @import("telar-core").Rect;
+const DrawContext = @This();
+
 state: *State,
-buffer: *source_namespace.ui.Buffer,
-area: source_namespace.ui.Rect,
+buffer: *BufferType,
+area: RectType,

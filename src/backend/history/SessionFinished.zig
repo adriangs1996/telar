@@ -1,4 +1,5 @@
+const model = @import("model.zig");
 const SessionFinished = @This();
-const source_namespace = @import("model.zig");
-id: source_namespace.SessionId,
+
+id: model.SessionId,
 finished_at_ms: i64,

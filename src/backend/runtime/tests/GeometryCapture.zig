@@ -1,18 +1,20 @@
-const GeometryCapture = @This();
 const Trace = @import("Trace.zig");
-const source_namespace = @import("pane_resize_test.zig");
-const pane_resize_commands = @import("../application/commands/pane_resize.zig");
+const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const PaneResizeGeometryLease = @import("../application/commands/PaneResizeGeometryLease.zig");
+const GeometryCapture = @This();
+
 trace: *Trace,
-attachments: *source_namespace.AttachmentStore,
+attachments: *AttachmentStoreType,
 holds_result: bool = true,
 holds_calls: usize = 0,
 release_calls: usize = 0,
-checked_workspace: ?source_namespace.schema.WorkspaceLocation = null,
-released_workspace: ?source_namespace.schema.WorkspaceLocation = null,
+checked_workspace: ?WorkspaceLocationType = null,
+released_workspace: ?WorkspaceLocationType = null,
 release_saw_empty_store: bool = false,
 release_saw_departed_workspace: bool = false,
 
-pub fn lease(capture: *GeometryCapture) pane_resize_commands.GeometryLease {
+pub fn lease(capture: *GeometryCapture) PaneResizeGeometryLease {
     return .{
         .context = capture,
         .holds = holds,
@@ -20,7 +22,7 @@ pub fn lease(capture: *GeometryCapture) pane_resize_commands.GeometryLease {
     };
 }
 
-fn holds(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) bool {
+fn holds(context: *anyopaque, workspace: WorkspaceLocationType) bool {
     const capture: *GeometryCapture = @ptrCast(@alignCast(context));
     capture.trace.record(.geometry_check);
     capture.holds_calls += 1;
@@ -28,7 +30,7 @@ fn holds(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocati
     return capture.holds_result;
 }
 
-fn release(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) void {
+fn release(context: *anyopaque, workspace: WorkspaceLocationType) void {
     const capture: *GeometryCapture = @ptrCast(@alignCast(context));
     capture.trace.record(.geometry_release);
     capture.release_calls += 1;

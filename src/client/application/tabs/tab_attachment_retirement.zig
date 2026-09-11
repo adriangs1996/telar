@@ -1,17 +1,14 @@
 //! Application policy for retiring one tab's client-owned runtime
 //! attachments without changing semantic presentation state.
 
+const TabDetachmentPlanType = @import("../../model/TabDetachmentPlan.zig");
+const PendingAttachments = @import("PendingAttachments.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabAttachmentRetirementTestingModel = @import("TabAttachmentRetirementTestingModel.zig");
+const TabAttachmentRetirementCapture = @import("TabAttachmentRetirementCapture.zig");
+const RetireTabAttachmentsHandler = @import("RetireTabAttachmentsHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const pane_paste = @import("../input/root.zig").pane_paste;
-
-pub const schema = core.schema;
-
-pub const PendingAttachments = @import("PendingAttachments.zig");
-
-pub const Effects = @import("TabAttachmentRetirementEffects.zig");
+const VersionType = @import("../../model/Version.zig");
 
 /// Counts the exact outbound deliveries required by a captured tab retirement
 /// without changing model or request state.
@@ -19,7 +16,7 @@ pub const Effects = @import("TabAttachmentRetirementEffects.zig");
 /// ```zig
 /// const required = requiredDeliveryCapacity(&plan, pending_attachments);
 /// ```
-pub fn requiredDeliveryCapacity(plan: *const client_model.TabDetachmentPlan, pending_attachments: PendingAttachments) usize {
+pub fn requiredDeliveryCapacity(plan: *const TabDetachmentPlanType, pending_attachments: PendingAttachments) usize {
     var required = @as(usize, @intFromBool(plan.paste_marker_required));
     required += @intFromBool(plan.focus_out_required);
 
@@ -31,15 +28,13 @@ pub fn requiredDeliveryCapacity(plan: *const client_model.TabDetachmentPlan, pen
     return required;
 }
 
-pub const RetireTabAttachmentsHandler = @import("RetireTabAttachmentsHandler.zig");
-
 pub const Event = union(enum) {
     paste,
     focus,
-    pending: schema.PaneId,
-    detach: schema.PaneId,
-    retire: schema.PaneId,
-    hide: schema.PaneId,
+    pending: PaneIdType,
+    detach: PaneIdType,
+    retire: PaneIdType,
+    hide: PaneIdType,
 };
 
 pub const Failure = enum {
@@ -50,11 +45,7 @@ pub const Failure = enum {
     second_hide,
 };
 
-const TestingModel = @import("TabAttachmentRetirementTestingModel.zig");
-
-const Capture = @import("TabAttachmentRetirementCapture.zig");
-
-fn testingHandler(testing: *TestingModel, capture: *Capture) RetireTabAttachmentsHandler {
+fn testingHandler(testing: *TabAttachmentRetirementTestingModel, capture: *TabAttachmentRetirementCapture) RetireTabAttachmentsHandler {
     return .{
         .model = testing.model,
         .paste_effects = capture.pasteEffects(),
@@ -64,9 +55,9 @@ fn testingHandler(testing: *TestingModel, capture: *Capture) RetireTabAttachment
 }
 
 test "tab retirement capacity counts only required deliveries" {
-    var testing = try TestingModel.init();
+    var testing = try TabAttachmentRetirementTestingModel.init();
     defer testing.deinit();
-    var capture: Capture = .{
+    var capture: TabAttachmentRetirementCapture = .{
         .model = testing.model,
         .root = testing.root,
         .sibling = testing.sibling,
@@ -88,9 +79,9 @@ test "tab retirement capacity counts only required deliveries" {
 }
 
 test "RetireTabAttachmentsHandler orders authorities and panes before commit" {
-    var testing = try TestingModel.init();
+    var testing = try TabAttachmentRetirementTestingModel.init();
     defer testing.deinit();
-    var capture: Capture = .{
+    var capture: TabAttachmentRetirementCapture = .{
         .model = testing.model,
         .root = testing.root,
         .sibling = testing.sibling,
@@ -122,11 +113,11 @@ test "RetireTabAttachmentsHandler orders authorities and panes before commit" {
     try std.testing.expectEqual(@as(u64, 0), testing.model.workspace.findPane(testing.root).?.pending_frame_id);
     try std.testing.expectEqual(@as(u64, 0), testing.model.workspace.findPane(testing.sibling).?.pending_frame_id);
     try std.testing.expect(testing.model.workspace.findPane(testing.active_pane).?.attached);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "RetireTabAttachmentsHandler preserves unrelated authorities and skips detached panes" {
-    var testing = try TestingModel.init();
+    var testing = try TabAttachmentRetirementTestingModel.init();
     defer testing.deinit();
     const target_session = testing.model.panePasteSession().?;
     try std.testing.expect(testing.model.finishPanePaste(target_session));
@@ -137,7 +128,7 @@ test "RetireTabAttachmentsHandler preserves unrelated authorities and skips deta
     _ = testing.model.beginPanePaste().?;
     _ = testing.model.syncReportedPaneFocus().?;
     testing.model.workspace.findPane(testing.root).?.attached = false;
-    var capture: Capture = .{
+    var capture: TabAttachmentRetirementCapture = .{
         .model = testing.model,
         .root = testing.root,
         .sibling = testing.sibling,
@@ -159,9 +150,9 @@ test "RetireTabAttachmentsHandler preserves unrelated authorities and skips deta
 }
 
 test "RetireTabAttachmentsHandler rejects a missing exact tab before effects" {
-    var testing = try TestingModel.init();
+    var testing = try TabAttachmentRetirementTestingModel.init();
     defer testing.deinit();
-    var capture: Capture = .{
+    var capture: TabAttachmentRetirementCapture = .{
         .model = testing.model,
         .root = testing.root,
         .sibling = testing.sibling,
@@ -188,8 +179,8 @@ test "RetireTabAttachmentsHandler preserves partial effects and defers attachmen
         paste_retired: bool,
         focus_retired: bool,
     };
-    const root: schema.PaneId = @enumFromInt(1);
-    const sibling: schema.PaneId = @enumFromInt(2);
+    const root: PaneIdType = @enumFromInt(1);
+    const sibling: PaneIdType = @enumFromInt(2);
     const scenarios = [_]Scenario{
         .{
             .failure = .paste,
@@ -242,9 +233,9 @@ test "RetireTabAttachmentsHandler preserves partial effects and defers attachmen
     };
 
     for (scenarios) |scenario| {
-        var testing = try TestingModel.init();
+        var testing = try TabAttachmentRetirementTestingModel.init();
         defer testing.deinit();
-        var capture: Capture = .{
+        var capture: TabAttachmentRetirementCapture = .{
             .model = testing.model,
             .root = testing.root,
             .sibling = testing.sibling,

@@ -1,5 +1,7 @@
 //! Ordered, idempotent teardown for one composed runtime.
 
+const GenericShutdownCoordinator = @import("GenericShutdownCoordinator.zig").Type;
+const Capture = @import("Capture.zig");
 const std = @import("std");
 
 pub const State = enum {
@@ -50,11 +52,7 @@ pub const shutdown_order = [_]Step{
     .destroy_child_environment,
 };
 
-pub const Coordinator = @import("GenericShutdownCoordinatorCoordinator.zig").Type;
-
-const Capture = @import("Capture.zig");
-
-const TestCoordinator = Coordinator(Capture);
+const TestCoordinator = GenericShutdownCoordinator(Capture);
 
 fn expectShutdownOrder(capture: *const Capture) !void {
     const expected = [_]Step{

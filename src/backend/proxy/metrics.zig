@@ -1,9 +1,7 @@
 //! Lock-free counters owned by the proxy service.
 
+const Counters = @import("Counters.zig");
 const std = @import("std");
-const connection_admission = @import("connection_admission.zig");
-const capture = @import("capture/root.zig");
-const observation_queue = @import("observation_queue.zig");
 
 pub const Counter = enum {
     rejected_connection,
@@ -22,12 +20,6 @@ pub const Counter = enum {
     claude_successful_response,
     claude_failure_observation,
 };
-
-pub const LiveState = @import("LiveState.zig");
-
-pub const Snapshot = @import("Snapshot.zig");
-
-pub const Counters = @import("Counters.zig");
 
 test "each proxy counter has one independent snapshot field" {
     var counters: Counters = .{};

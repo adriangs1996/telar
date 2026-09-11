@@ -1,4 +1,5 @@
+const RectType = @import("telar-core").Rect;
 const SidebarFocus = @This();
-const core = @import("telar-core");
-area: core.ui.Rect,
+
+area: RectType,
 color: [3]u8,

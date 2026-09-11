@@ -1,17 +1,12 @@
 //! Kitty image placement encoding.
 
 const std = @import("std");
+const PlacementCommand = @import("PlacementCommand.zig");
 const command = @import("command.zig");
-
-const Io = std.Io;
-
-pub const OutputPlacement = @import("OutputPlacement.zig");
-
-pub const PlacementCommand = @import("PlacementCommand.zig");
 
 /// Places an image without applying application-specific z-index policy.
 /// For example: `try writePlacement(writer, placement)`.
-pub fn writePlacement(writer: *Io.Writer, placement: PlacementCommand) Io.Writer.Error!usize {
+pub fn writePlacement(writer: *std.Io.Writer, placement: PlacementCommand) std.Io.Writer.Error!usize {
     const value = placement.value;
     var written = try command.print(writer, "\x1b[{d};{d}H", .{ value.row + 1, value.column + 1 });
     written += try command.print(
@@ -25,7 +20,7 @@ pub fn writePlacement(writer: *Io.Writer, placement: PlacementCommand) Io.Writer
 
 test "placement preserves the caller's z-index" {
     var output: [512]u8 = undefined;
-    var writer = Io.Writer.fixed(&output);
+    var writer = std.Io.Writer.fixed(&output);
     _ = try writePlacement(&writer, .{
         .image_id = 7,
         .placement_id = 9,

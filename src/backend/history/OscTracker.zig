@@ -1,18 +1,19 @@
-const Tracker = @This();
-const escape = @import("escape.zig");
-const source_namespace = @import("osc.zig");
+const OscScannerType = @import("OscScanner.zig");
+const osc_ops = @import("osc.zig");
 const std = @import("std");
 const Observation = @import("Observation.zig");
 const builtin = @import("builtin");
 const Clock = @import("Clock.zig");
 const SemanticObservation = @import("SemanticObservation.zig");
-const Completion = @import("OscCompletion.zig");
-scanner: escape.OscScanner = .{},
+const OscCompletion = @import("OscCompletion.zig");
+const Tracker = @This();
+
+scanner: OscScannerType = .{},
 zone: Zone = .unknown,
-osc: [source_namespace.max_osc_bytes]u8 = undefined,
+osc: [osc_ops.max_osc_bytes]u8 = undefined,
 osc_len: usize = 0,
 osc_overflow: bool = false,
-command: [source_namespace.max_command_bytes]u8 = undefined,
+command: [osc_ops.max_command_bytes]u8 = undefined,
 command_len: usize = 0,
 command_truncated: bool = false,
 cwd: [std.fs.max_path_bytes]u8 = undefined,
@@ -168,12 +169,12 @@ fn semantic(tracker: *Tracker, observation: SemanticObservation, sink: anytype) 
         }
         tracker.zone = .prompt;
         if (tracker.running) {
-            tracker.emit(.{ .clock = clock, .exit_code = source_namespace.parseExitCode(options), .status = .completed }, sink);
+            tracker.emit(.{ .clock = clock, .exit_code = osc_ops.parseExitCode(options), .status = .completed }, sink);
         }
     }
 }
 
-fn emit(tracker: *Tracker, completion: Completion, sink: anytype) void {
+fn emit(tracker: *Tracker, completion: OscCompletion, sink: anytype) void {
     const duration = @max(@as(i64, 0), completion.clock.awake_ns - tracker.started_awake_ns);
     sink.emit(.{
         .bytes = tracker.command[0..tracker.command_len],
@@ -206,7 +207,7 @@ fn cwdReport(tracker: *Tracker, body: []const u8) void {
         break;
     }
     const encoded = path orelse return;
-    tracker.cwd_len = source_namespace.percentDecode(encoded, &tracker.cwd) orelse return;
+    tracker.cwd_len = osc_ops.percentDecode(encoded, &tracker.cwd) orelse return;
 }
 
 fn setCwd(tracker: *Tracker, cwd: []const u8) void {

@@ -1,38 +1,27 @@
 //! Application use cases for requesting closure and applying tab removal.
 
+const ApplyTabRemoval = @import("ApplyTabRemoval.zig");
+const CloseTabTestingModel = @import("CloseTabTestingModel.zig");
+const CloseTabRequestCapture = @import("CloseTabRequestCapture.zig");
+const RequestCloseTabHandler = @import("RequestCloseTabHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const tab_close_preparation = @import("tab_close_preparation.zig");
-const tab_snapshot_recovery = @import("tab_snapshot_recovery.zig");
-
-pub const schema = core.schema;
-
-pub const TabCloseIntent = @import("TabCloseIntent.zig");
-
-pub const TabOperationGate = @import("CloseTabTabOperationGate.zig");
-
-pub const CloseRequestEffects = @import("CloseRequestEffects.zig");
-
-pub const RequestCloseTabHandler = @import("RequestCloseTabHandler.zig");
-
-pub const RecoverCloseTabHandler = @import("RecoverCloseTabHandler.zig");
+const VersionType = @import("../../model/Version.zig");
+const RecoverCloseTabHandler = @import("RecoverCloseTabHandler.zig");
+const RemovalCapture = @import("RemovalCapture.zig");
+const ApplyTabRemovalHandler = @import("ApplyTabRemovalHandler.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const types = @import("../../model/types.zig");
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 
 pub const RemovalTrigger = enum {
     requested,
     lifecycle,
 };
 
-pub const ApplyTabRemoval = @import("ApplyTabRemoval.zig");
-
 pub const TabRemovalDirective = enum {
     continue_running,
     exit,
 };
-
-pub const RemovalDelivery = @import("RemovalDelivery.zig");
-
-pub const ApplyTabRemovalHandler = @import("ApplyTabRemovalHandler.zig");
 
 pub fn validateWorkspaceTransition(command: ApplyTabRemoval) !void {
     if (!command.workspace_removed and command.previous_workspace != null) {
@@ -57,16 +46,10 @@ pub const RequestStep = enum {
     restore,
 };
 
-const RequestCapture = @import("CloseTabRequestCapture.zig");
-
-const RemovalCapture = @import("RemovalCapture.zig");
-
-const TestingModel = @import("CloseTabTestingModel.zig");
-
 test "tab close request prepares and detaches before delivery" {
-    var testing = try TestingModel.init(true);
+    var testing = try CloseTabTestingModel.init(true);
     defer testing.deinit();
-    var capture: RequestCapture = .{ .blocked = true };
+    var capture: CloseTabRequestCapture = .{ .blocked = true };
     var handler: RequestCloseTabHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -82,14 +65,14 @@ test "tab close request prepares and detaches before delivery" {
     try std.testing.expect(try handler.execute());
     try std.testing.expectEqualSlices(RequestStep, &.{ .prepare, .detach, .send }, capture.recorded());
     try std.testing.expectEqualDeep(testing.first, capture.intent.?.location);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "tab close request suppresses an absent active tab" {
-    var testing = try TestingModel.init(false);
+    var testing = try CloseTabTestingModel.init(false);
     defer testing.deinit();
     _ = testing.model.departWorkspace();
-    var capture: RequestCapture = .{};
+    var capture: CloseTabRequestCapture = .{};
     var handler: RequestCloseTabHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -103,9 +86,9 @@ test "tab close request suppresses an absent active tab" {
 }
 
 test "tab close request rejects preparation without provisional effects" {
-    var testing = try TestingModel.init(true);
+    var testing = try CloseTabTestingModel.init(true);
     defer testing.deinit();
-    var capture: RequestCapture = .{ .prepare_failure = error.NoDeliveryCapacity };
+    var capture: CloseTabRequestCapture = .{ .prepare_failure = error.NoDeliveryCapacity };
     var handler: RequestCloseTabHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -116,14 +99,14 @@ test "tab close request rejects preparation without provisional effects" {
 
     try std.testing.expectError(error.NoDeliveryCapacity, handler.execute());
     try std.testing.expectEqualSlices(RequestStep, &.{.prepare}, capture.recorded());
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "tab close request restores every failure after preparation" {
-    var testing = try TestingModel.init(true);
+    var testing = try CloseTabTestingModel.init(true);
     defer testing.deinit();
 
-    var detach_failure: RequestCapture = .{ .detach_failure = error.DetachFailed };
+    var detach_failure: CloseTabRequestCapture = .{ .detach_failure = error.DetachFailed };
     var detach_handler: RequestCloseTabHandler = .{
         .model = testing.model,
         .gate = detach_failure.gate(),
@@ -134,7 +117,7 @@ test "tab close request restores every failure after preparation" {
     try std.testing.expectError(error.DetachFailed, detach_handler.execute());
     try std.testing.expectEqualSlices(RequestStep, &.{ .prepare, .detach, .restore }, detach_failure.recorded());
 
-    var send_failure: RequestCapture = .{ .send_failure = error.SendFailed };
+    var send_failure: CloseTabRequestCapture = .{ .send_failure = error.SendFailed };
     var send_handler: RequestCloseTabHandler = .{
         .model = testing.model,
         .gate = send_failure.gate(),
@@ -147,9 +130,9 @@ test "tab close request restores every failure after preparation" {
 }
 
 test "tab close request reports a failed repair after provisional failure" {
-    var testing = try TestingModel.init(true);
+    var testing = try CloseTabTestingModel.init(true);
     defer testing.deinit();
-    var capture: RequestCapture = .{
+    var capture: CloseTabRequestCapture = .{
         .send_failure = error.SendFailed,
         .restore_failure = error.RestoreFailed,
     };
@@ -166,9 +149,9 @@ test "tab close request reports a failed repair after provisional failure" {
 }
 
 test "close rejection restores only the still-active tab" {
-    var testing = try TestingModel.init(true);
+    var testing = try CloseTabTestingModel.init(true);
     defer testing.deinit();
-    var capture: RequestCapture = .{};
+    var capture: CloseTabRequestCapture = .{};
     var handler: RecoverCloseTabHandler = .{
         .model = testing.model,
         .snapshots = capture.snapshots(),
@@ -181,7 +164,7 @@ test "close rejection restores only the still-active tab" {
 }
 
 test "tab removal commits before delivery" {
-    var testing = try TestingModel.init(true);
+    var testing = try CloseTabTestingModel.init(true);
     defer testing.deinit();
     var capture: RemovalCapture = .{ .model = testing.model };
     var handler: ApplyTabRemovalHandler = .{
@@ -207,7 +190,7 @@ test "tab removal commits before delivery" {
 }
 
 test "requested tab removal rejects invalid or missing canonical state" {
-    var testing = try TestingModel.init(true);
+    var testing = try CloseTabTestingModel.init(true);
     defer testing.deinit();
     var capture: RemovalCapture = .{ .model = testing.model };
     var handler: ApplyTabRemovalHandler = .{
@@ -239,18 +222,18 @@ test "requested tab removal rejects invalid or missing canonical state" {
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
     try std.testing.expectEqual(@as(usize, 2), testing.model.workspace.count);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "repeated lifecycle tab removal delivers an exact stale commit without mutation" {
-    var testing = try TestingModel.init(true);
+    var testing = try CloseTabTestingModel.init(true);
     defer testing.deinit();
     var capture: RemovalCapture = .{ .model = testing.model };
     var handler: ApplyTabRemovalHandler = .{
         .model = testing.model,
         .delivery = capture.port(),
     };
-    const missing: schema.TabLocation = .{
+    const missing: TabLocationType = .{
         .workspace = testing.first.workspace,
         .tab_id = @enumFromInt(9),
     };
@@ -265,14 +248,14 @@ test "repeated lifecycle tab removal delivers an exact stale commit without muta
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expect(capture.commit.? == .stale);
     try std.testing.expectEqualDeep(missing, capture.commit.?.stale.location);
-    try std.testing.expectEqual(client_model.TabRemovalAbsence.tab, capture.commit.?.stale.absence);
+    try std.testing.expectEqual(types.TabRemovalAbsence.tab, capture.commit.?.stale.absence);
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 2), testing.model.workspace.count);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "stale lifecycle tab removal from a departed workspace is ignored" {
-    var testing = try TestingModel.init(true);
+    var testing = try CloseTabTestingModel.init(true);
     defer testing.deinit();
     const stale = testing.second;
     _ = testing.model.departWorkspace();
@@ -296,17 +279,17 @@ test "stale lifecycle tab removal from a departed workspace is ignored" {
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expect(capture.commit.? == .stale);
-    try std.testing.expectEqual(client_model.TabRemovalAbsence.workspace, capture.commit.?.stale.absence);
+    try std.testing.expectEqual(types.TabRemovalAbsence.workspace, capture.commit.?.stale.absence);
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqualDeep(version, testing.model.version());
 }
 
 test "final workspace removal propagates the delivery directive and predecessor" {
     inline for (.{
-        .{ .previous = @as(?schema.WorkspaceId, null), .expected = TabRemovalDirective.exit },
-        .{ .previous = @as(?schema.WorkspaceId, @enumFromInt(9)), .expected = TabRemovalDirective.continue_running },
+        .{ .previous = @as(?WorkspaceIdType, null), .expected = TabRemovalDirective.exit },
+        .{ .previous = @as(?WorkspaceIdType, @enumFromInt(9)), .expected = TabRemovalDirective.continue_running },
     }) |scenario| {
-        var testing = try TestingModel.init(false);
+        var testing = try CloseTabTestingModel.init(false);
         defer testing.deinit();
         var capture: RemovalCapture = .{
             .model = testing.model,
@@ -333,7 +316,7 @@ test "final workspace removal propagates the delivery directive and predecessor"
 }
 
 test "tab removal preserves its commit after delivery failure" {
-    var testing = try TestingModel.init(true);
+    var testing = try CloseTabTestingModel.init(true);
     defer testing.deinit();
     var capture: RemovalCapture = .{
         .model = testing.model,
@@ -357,7 +340,7 @@ test "tab removal preserves its commit after delivery failure" {
 }
 
 test "final removal preserves its commit after delivery failure" {
-    var testing = try TestingModel.init(false);
+    var testing = try CloseTabTestingModel.init(false);
     defer testing.deinit();
     var capture: RemovalCapture = .{
         .model = testing.model,
@@ -377,6 +360,6 @@ test "final removal preserves its commit after delivery failure" {
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expect(capture.observed_commit);
-    try std.testing.expectEqual(@as(?schema.WorkspaceId, @enumFromInt(9)), capture.previous_workspace);
+    try std.testing.expectEqual(@as(?WorkspaceIdType, @enumFromInt(9)), capture.previous_workspace);
     try std.testing.expect(testing.model.workspaceLocation() == null);
 }

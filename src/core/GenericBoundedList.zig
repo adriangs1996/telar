@@ -1,4 +1,5 @@
-const source_namespace = @import("agent_manifest.zig");
+const agent_manifest = @import("agent_manifest.zig");
+
 /// Fixed-capacity list of short byte strings.
 pub fn Type(comptime capacity: usize, comptime entry_bytes: usize) type {
     return struct {
@@ -10,7 +11,7 @@ pub fn Type(comptime capacity: usize, comptime entry_bytes: usize) type {
         lens: [capacity]u8 = undefined,
         count: u8 = 0,
 
-        pub fn append(list: *Self, text: []const u8) source_namespace.ListError!void {
+        pub fn append(list: *Self, text: []const u8) agent_manifest.ListError!void {
             if (text.len == 0) {
                 return error.EmptyEntry;
             }
@@ -33,7 +34,7 @@ pub fn Type(comptime capacity: usize, comptime entry_bytes: usize) type {
         /// case-insensitively.
         pub fn matches(list: *const Self, haystack: []const u8) bool {
             for (0..list.count) |index| {
-                if (source_namespace.containsAsciiInsensitive(haystack, list.get(index))) {
+                if (agent_manifest.containsAsciiInsensitive(haystack, list.get(index))) {
                     return true;
                 }
             }

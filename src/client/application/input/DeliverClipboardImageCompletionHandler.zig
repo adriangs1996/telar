@@ -1,8 +1,9 @@
-const DeliverClipboardImageCompletionHandler = @This();
-const Effects = @import("ClipboardImageDeliveryEffects.zig");
+const ClipboardImageDeliveryEffects = @import("ClipboardImageDeliveryEffects.zig");
 const clipboard_image = @import("clipboard_image.zig");
-const notification_capability = @import("../../root.zig").notifications;
-effects: Effects,
+const InputType = @import("../../notifications/NotificationInput.zig");
+const DeliverClipboardImageCompletionHandler = @This();
+
+effects: ClipboardImageDeliveryEffects,
 
 /// Keeps expected and stale results quiet while translating classified
 /// media failures into bounded notifications.
@@ -11,7 +12,7 @@ effects: Effects,
 /// try handler.execute(outcome);
 /// ```
 pub fn execute(handler: *DeliverClipboardImageCompletionHandler, outcome: clipboard_image.CompletionOutcome) !void {
-    const input: notification_capability.Input = switch (outcome) {
+    const input: InputType = switch (outcome) {
         .applied, .stale, .ignored, .no_image => return,
         .too_large => .{
             .level = .failure,

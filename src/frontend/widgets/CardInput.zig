@@ -1,6 +1,7 @@
+const RectType = @import("telar-core").Rect;
+const ItemType = @import("telar-client").NotificationItem;
 const CardInput = @This();
-const ui = @import("../ui/root.zig");
-const notifications = @import("telar-client").notifications;
-area: ui.Rect,
-item: *const notifications.Item,
+
+area: RectType,
+item: *const ItemType,
 paint: bool,

@@ -1,16 +1,18 @@
-const Capture = @This();
-const source_namespace = @import("telemetry_tick_coordinator.zig");
+const telemetry_tick_coordinator = @import("telemetry_tick_coordinator.zig");
 const std = @import("std");
-steps: [5]source_namespace.Step = undefined,
+const StateType = @import("State.zig");
+const Capture = @This();
+
+steps: [5]telemetry_tick_coordinator.Step = undefined,
 len: usize = 0,
 sink_available: bool = true,
-failure: ?source_namespace.Step = null,
+failure: ?telemetry_tick_coordinator.Step = null,
 line: []const u8 = "sample\n",
 format_buffer_len: usize = 0,
 write_saw_pending: bool = false,
 written_line: []const u8 = "",
 
-fn record(capture: *Capture, step: source_namespace.Step) !void {
+fn record(capture: *Capture, step: telemetry_tick_coordinator.Step) !void {
     std.debug.assert(capture.len < capture.steps.len);
     capture.steps[capture.len] = step;
     capture.len += 1;
@@ -20,12 +22,12 @@ fn record(capture: *Capture, step: source_namespace.Step) !void {
     }
 }
 
-pub fn available(capture: *Capture, _: *const source_namespace.State) bool {
+pub fn available(capture: *Capture, _: *const StateType) bool {
     capture.record(.available) catch unreachable;
     return capture.sink_available;
 }
 
-pub fn disable(capture: *Capture, _: *source_namespace.State) void {
+pub fn disable(capture: *Capture, _: *StateType) void {
     capture.record(.disable) catch unreachable;
 }
 
@@ -40,7 +42,7 @@ pub fn formatSample(capture: *Capture, buffer: []u8) ![]const u8 {
     return buffer[0..capture.line.len];
 }
 
-pub fn scheduleWrite(capture: *Capture, state: *source_namespace.State, line: []const u8) !void {
+pub fn scheduleWrite(capture: *Capture, state: *StateType, line: []const u8) !void {
     capture.write_saw_pending = state.writePending();
     capture.written_line = line;
     try capture.record(.write);

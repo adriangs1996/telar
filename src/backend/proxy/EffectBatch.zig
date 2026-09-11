@@ -1,11 +1,12 @@
+const middleware = @import("middleware.zig");
+const HeaderView = @import("HeaderView.zig");
 /// Storage is owned by the callback invocation. Future worker adapters copy
 /// the completed batch before returning it to the tunnel actor.
 const EffectBatch = @This();
-const source_namespace = @import("middleware.zig");
-const HeaderView = @import("HeaderView.zig");
-effects: [source_namespace.max_effects]source_namespace.Effect = undefined,
+
+effects: [middleware.max_effects]middleware.Effect = undefined,
 len: u8 = 0,
-bytes: [source_namespace.max_effect_bytes]u8 = undefined,
+bytes: [middleware.max_effect_bytes]u8 = undefined,
 bytes_len: usize = 0,
 
 pub fn remove(batch: *EffectBatch, name: []const u8) !void {
@@ -28,7 +29,7 @@ pub fn set(batch: *EffectBatch, header: HeaderView) !void {
     } });
 }
 
-fn append(batch: *EffectBatch, effect: source_namespace.Effect) !void {
+fn append(batch: *EffectBatch, effect: middleware.Effect) !void {
     if (batch.len == batch.effects.len) {
         return error.TooManyHeaderEffects;
     }

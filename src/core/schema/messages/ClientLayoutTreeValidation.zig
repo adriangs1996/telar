@@ -1,12 +1,15 @@
-const ClientLayoutTreeValidation = @This();
-const source_namespace = @import("layout.zig");
+const types = @import("../types.zig");
+const id = @import("../id.zig");
+const codec = @import("../codec.zig");
 const std = @import("std");
 const ClientLayoutTreeSummary = @import("ClientLayoutTreeSummary.zig");
-panes: [source_namespace.max_panes_per_tab]source_namespace.PaneId = undefined,
+const ClientLayoutTreeValidation = @This();
+
+panes: [types.max_panes_per_tab]id.PaneId = undefined,
 pane_count: usize = 0,
 pending: usize = 1,
 
-pub fn accept(validation: *ClientLayoutTreeValidation, node: source_namespace.ClientLayoutNode) !void {
+pub fn accept(validation: *ClientLayoutTreeValidation, node: types.ClientLayoutNode) !void {
     if (validation.pending == 0) {
         return error.InvalidClientLayoutTree;
     }
@@ -14,8 +17,8 @@ pub fn accept(validation: *ClientLayoutTreeValidation, node: source_namespace.Cl
     validation.pending -= 1;
     switch (node) {
         .pane => |pane_id| {
-            try source_namespace.validatePaneId(pane_id);
-            if (std.mem.findScalar(source_namespace.PaneId, validation.panes[0..validation.pane_count], pane_id) != null) {
+            try codec.validatePaneId(pane_id);
+            if (std.mem.findScalar(id.PaneId, validation.panes[0..validation.pane_count], pane_id) != null) {
                 return error.DuplicatePane;
             }
             if (validation.pane_count == validation.panes.len) {
@@ -26,7 +29,7 @@ pub fn accept(validation: *ClientLayoutTreeValidation, node: source_namespace.Cl
             validation.pane_count += 1;
         },
         .split => |split| {
-            if (split.ratio < source_namespace.min_client_layout_ratio or split.ratio > source_namespace.max_client_layout_ratio) {
+            if (split.ratio < types.min_client_layout_ratio or split.ratio > types.max_client_layout_ratio) {
                 return error.InvalidClientLayoutRatio;
             }
 
@@ -39,7 +42,7 @@ pub fn finish(validation: *const ClientLayoutTreeValidation, layout: ClientLayou
     if (validation.pending != 0 or validation.pane_count == 0 or layout.node_count != validation.pane_count * 2 - 1) {
         return error.InvalidClientLayoutTree;
     }
-    if (std.mem.findScalar(source_namespace.PaneId, validation.panes[0..validation.pane_count], layout.focused_pane) == null) {
+    if (std.mem.findScalar(id.PaneId, validation.panes[0..validation.pane_count], layout.focused_pane) == null) {
         return error.InvalidClientLayoutFocus;
     }
 }

@@ -1,13 +1,14 @@
-const Channel = @This();
-const source_namespace = @import("queue.zig");
+const queue = @import("queue.zig");
 const Envelope = @import("Envelope.zig");
-const CredentialGate = @import("CredentialGate.zig");
 const std = @import("std");
-const Publication = @import("QueuePublication.zig");
-const buffer = @import("buffer_support.zig");
-const Metrics = @import("QueueMetrics.zig");
-storage: [source_namespace.capacity]Envelope = undefined,
-events: source_namespace.Io.Queue(Envelope) = undefined,
+const CredentialGate = @import("CredentialGate.zig");
+const QueuePublication = @import("QueuePublication.zig");
+const HalfType = @import("Half.zig");
+const QueueMetrics = @import("QueueMetrics.zig");
+const Channel = @This();
+
+storage: [queue.capacity]Envelope = undefined,
+events: std.Io.Queue(Envelope) = undefined,
 gate: CredentialGate = undefined,
 queued: std.atomic.Value(u64) = .init(0),
 high_water: std.atomic.Value(u64) = .init(0),
@@ -28,7 +29,7 @@ pub fn init(channel: *Channel, gate: CredentialGate) void {
 /// ```zig
 /// _ = channel.publish(io, .{ .credential = credential, .half = half });
 /// ```
-pub fn publish(channel: *Channel, io: source_namespace.Io, publication: Publication) bool {
+pub fn publish(channel: *Channel, io: std.Io, publication: QueuePublication) bool {
     if (!channel.gate.accepts(&publication.credential)) {
         publication.half.deinit();
         return false;
@@ -59,7 +60,7 @@ pub fn publish(channel: *Channel, io: source_namespace.Io, publication: Publicat
 /// ```zig
 /// const half = try channel.receive(io);
 /// ```
-pub fn receive(channel: *Channel, io: source_namespace.Io) anyerror!*buffer.Half {
+pub fn receive(channel: *Channel, io: std.Io) anyerror!*HalfType {
     while (true) {
         var envelope = try channel.events.getOne(io);
         defer std.crypto.secureZero(u8, &envelope.credential.token);
@@ -78,7 +79,7 @@ pub fn receive(channel: *Channel, io: source_namespace.Io) anyerror!*buffer.Half
 /// ```zig
 /// channel.close(io);
 /// ```
-pub fn close(channel: *Channel, io: source_namespace.Io) void {
+pub fn close(channel: *Channel, io: std.Io) void {
     channel.events.close(io);
 
     while (true) {
@@ -100,7 +101,7 @@ pub fn close(channel: *Channel, io: source_namespace.Io) void {
 /// ```zig
 /// const metrics = channel.metrics();
 /// ```
-pub fn metrics(channel: *const Channel) Metrics {
+pub fn metrics(channel: *const Channel) QueueMetrics {
     return .{
         .queued = channel.queued.load(.monotonic),
         .high_water = channel.high_water.load(.monotonic),
@@ -111,7 +112,7 @@ pub fn metrics(channel: *const Channel) Metrics {
 fn reserve(channel: *Channel) ?u64 {
     var current = channel.queued.load(.monotonic);
 
-    while (current < source_namespace.capacity) {
+    while (current < queue.capacity) {
         if (channel.queued.cmpxchgWeak(current, current + 1, .monotonic, .monotonic)) |observed| {
             current = observed;
             continue;

@@ -1,4 +1,5 @@
+const ConfigurationInputType = @import("../../model/ConfigurationInput.zig");
 const Command = @This();
-const client_model = @import("../../root.zig").model;
-configuration: client_model.ConfigurationInput,
+
+configuration: ConfigurationInputType,
 theme_locked: bool,

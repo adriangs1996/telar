@@ -1,9 +1,10 @@
-const TextDraw = @This();
 const Surface = @import("Surface.zig");
-const Point = @import("RasterizerPoint.zig");
+const RasterizerPoint = @import("RasterizerPoint.zig");
 const Color = @import("Color.zig");
+const TextDraw = @This();
+
 surface: Surface,
-origin: Point,
+origin: RasterizerPoint,
 text: []const u8,
 color: Color,
 max_width: u32,

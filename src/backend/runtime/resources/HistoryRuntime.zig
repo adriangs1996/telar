@@ -1,11 +1,13 @@
-const Runtime = @This();
-const source_namespace = @import("history.zig");
-const history = @import("../../history/root.zig");
+const ServiceConfig = @import("../../history/ServiceConfig.zig");
+const history = @import("history.zig");
 const std = @import("std");
-const RuntimeState = @import("HistoryRuntimeState.zig");
-lifecycle: source_namespace.HistoryLifecycle,
+const HistoryRuntimeState = @import("HistoryRuntimeState.zig");
+const ServiceType = @import("../../history/Service.zig");
+const Runtime = @This();
 
-pub const Config = history.Service.Config;
+lifecycle: history.HistoryLifecycle,
+
+pub const Config = @import("../../history/ServiceConfig.zig");
 
 /// Creates the history service at a stable address and starts its worker.
 /// A database-open failure keeps the service alive in degraded mode.
@@ -14,9 +16,9 @@ pub const Config = history.Service.Config;
 /// var history_runtime = try Runtime.init(io, gpa, .{ .database_path = ":memory:" });
 /// defer history_runtime.deinit();
 /// ```
-pub fn init(io: source_namespace.Io, gpa: std.mem.Allocator, config: Config) !Runtime {
-    const state = try gpa.create(RuntimeState);
-    const history_service = history.Service.init(gpa, config) catch |err| {
+pub fn init(io: std.Io, gpa: std.mem.Allocator, config: ServiceConfig) !Runtime {
+    const state = try gpa.create(HistoryRuntimeState);
+    const history_service = ServiceType.init(gpa, config) catch |err| {
         gpa.destroy(state);
         return err;
     };
@@ -26,7 +28,7 @@ pub fn init(io: source_namespace.Io, gpa: std.mem.Allocator, config: Config) !Ru
         .service = history_service,
     };
 
-    return .{ .lifecycle = try source_namespace.HistoryLifecycle.start(state) };
+    return .{ .lifecycle = try history.HistoryLifecycle.start(state) };
 }
 
 /// Borrows the history service for as long as this runtime remains alive.
@@ -34,7 +36,7 @@ pub fn init(io: source_namespace.Io, gpa: std.mem.Allocator, config: Config) !Ru
 /// ```zig
 /// const service = history_runtime.service();
 /// ```
-pub fn service(runtime: *Runtime) *history.Service {
+pub fn service(runtime: *Runtime) *ServiceType {
     return &runtime.lifecycle.state.service;
 }
 

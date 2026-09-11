@@ -1,7 +1,9 @@
-const ConfirmWorkspaceHandoffHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const WorkspaceArrivalDelivery = @import("WorkspaceArrivalDelivery.zig");
-model: *client_model.Model,
+const WorkspaceArrivalType = @import("../../model/WorkspaceArrival.zig");
+const ConfirmWorkspaceHandoffHandler = @This();
+
+model: *ModelType,
 delivery: WorkspaceArrivalDelivery,
 
 /// Commits a fully constructed workspace before delivering its exact
@@ -10,7 +12,7 @@ delivery: WorkspaceArrivalDelivery,
 /// ```zig
 /// try handler.execute(arrival);
 /// ```
-pub fn execute(handler: *ConfirmWorkspaceHandoffHandler, arrival: client_model.WorkspaceArrival) !void {
+pub fn execute(handler: *ConfirmWorkspaceHandoffHandler, arrival: WorkspaceArrivalType) !void {
     const activation = try handler.model.arriveWorkspace(arrival);
 
     try handler.delivery.deliver(handler.delivery.context, activation);

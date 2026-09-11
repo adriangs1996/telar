@@ -1,10 +1,13 @@
-const Capture = @This();
-const source_namespace = @import("output.zig");
+const output = @import("output.zig");
 const std = @import("std");
-const Ingest = @import("OutputIngest.zig");
-steps: [5]source_namespace.Step = undefined,
+const PaneType = @import("../../../../pane/Pane.zig");
+const OutputIngest = @import("OutputIngest.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const Capture = @This();
+
+steps: [5]output.Step = undefined,
 len: usize = 0,
-failure: ?source_namespace.Step = null,
+failure: ?output.Step = null,
 outstanding_frame: bool = false,
 outstanding_frame_queries: usize = 0,
 observation_saw_history: bool = false,
@@ -12,7 +15,7 @@ media_saw_output: bool = false,
 ingest_saw_borrow: bool = false,
 ingest_bytes: []const u8 = "",
 
-fn record(capture: *Capture, step: source_namespace.Step) !void {
+fn record(capture: *Capture, step: output.Step) !void {
     std.debug.assert(capture.len < capture.steps.len);
     capture.steps[capture.len] = step;
     capture.len += 1;
@@ -22,23 +25,23 @@ fn record(capture: *Capture, step: source_namespace.Step) !void {
     }
 }
 
-pub fn scheduleObservation(capture: *Capture, pane: *source_namespace.Pane) !void {
+pub fn scheduleObservation(capture: *Capture, pane: *PaneType) !void {
     capture.observation_saw_history = pane.history_observer.hasPending();
     try capture.record(.observation);
 }
 
-pub fn scheduleMedia(capture: *Capture, pane: *source_namespace.Pane) !void {
+pub fn scheduleMedia(capture: *Capture, pane: *PaneType) !void {
     capture.media_saw_output = pane.media.hasPending();
     try capture.record(.media);
 }
 
-pub fn startIngest(capture: *Capture, ingest: Ingest) !void {
+pub fn startIngest(capture: *Capture, ingest: OutputIngest) !void {
     capture.ingest_saw_borrow = ingest.pane.ingest_pending;
     capture.ingest_bytes = ingest.bytes;
     try capture.record(.ingest);
 }
 
-pub fn hasOutstandingFrame(capture: *Capture, _: source_namespace.schema.PaneId) bool {
+pub fn hasOutstandingFrame(capture: *Capture, _: PaneIdType) bool {
     capture.outstanding_frame_queries += 1;
     return capture.outstanding_frame;
 }

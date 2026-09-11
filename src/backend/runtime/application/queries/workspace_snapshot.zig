@@ -1,25 +1,18 @@
 //! Application query for a workspace snapshot reference.
 
+const StateType = @import("../../../workspace/State.zig");
+const RepositoryType = @import("../../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_mod = @import("../../../workspace/root.zig");
-
-pub const schema = core.schema;
-
-pub const Request = @import("WorkspaceSnapshotRequest.zig");
-
-pub const Result = @import("WorkspaceSnapshotResult.zig");
-
-pub const Executor = @import("WorkspaceSnapshotExecutor.zig");
-
-pub const Handler = @import("WorkspaceSnapshotHandler.zig");
+const WorkspaceSnapshotHandler = @import("WorkspaceSnapshotHandler.zig");
+const workspace_module = @import("telar-core").workspace;
+const worktree_module = @import("telar-core").worktree;
 
 test "Handler returns an existing workspace snapshot reference" {
-    var state: workspace_mod.State = .{};
-    var workspaces = workspace_mod.Repository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location.workspace;
-    var handler: Handler = .{ .workspaces = workspaces.reader() };
+    var handler: WorkspaceSnapshotHandler = .{ .workspaces = workspaces.reader() };
 
     const result = try handler.executor().execute(.{ .location = location });
 
@@ -27,15 +20,15 @@ test "Handler returns an existing workspace snapshot reference" {
 }
 
 test "Handler rejects missing workspace identities" {
-    var state: workspace_mod.State = .{};
-    var workspaces = workspace_mod.Repository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
-    var handler: Handler = .{ .workspaces = workspaces.reader() };
+    var handler: WorkspaceSnapshotHandler = .{ .workspaces = workspaces.reader() };
 
     try std.testing.expectError(error.WorkspaceNotFound, handler.execute(.{
-        .location = .{ .workspace = try schema.id.workspace(999) },
+        .location = .{ .workspace = try workspace_module(999) },
     }));
     try std.testing.expectError(error.WorkspaceNotFound, handler.execute(.{
-        .location = .{ .worktree = try schema.id.worktree(999) },
+        .location = .{ .worktree = try worktree_module(999) },
     }));
 }

@@ -1,5 +1,6 @@
 //! Bounded semantic classification of streamed Claude Messages request bodies.
 
+const Decoder = @import("Decoder.zig");
 const std = @import("std");
 
 pub const max_inspected_bytes = 8 * 1024 * 1024;
@@ -21,8 +22,6 @@ pub const Position = enum {
     nested_value,
     done,
 };
-
-pub const Decoder = @import("Decoder.zig");
 
 fn classifyEverySplit(input: []const u8, expected: bool) !void {
     for (0..input.len + 1) |split| {

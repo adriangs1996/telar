@@ -1,11 +1,12 @@
+const OpenPaneGeometryLease = @import("OpenPaneGeometryLease.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const GeometryCapture = @This();
-const GeometryLease = @import("OpenPaneGeometryLease.zig");
-const source_namespace = @import("open_pane.zig");
+
 available: bool = true,
 acquire_count: usize = 0,
 release_count: usize = 0,
 
-pub fn port(capture: *GeometryCapture) GeometryLease {
+pub fn port(capture: *GeometryCapture) OpenPaneGeometryLease {
     return .{
         .context = capture,
         .acquire = acquire,
@@ -13,13 +14,13 @@ pub fn port(capture: *GeometryCapture) GeometryLease {
     };
 }
 
-fn acquire(context: *anyopaque, _: source_namespace.schema.WorkspaceLocation) bool {
+fn acquire(context: *anyopaque, _: WorkspaceLocationType) bool {
     const capture: *GeometryCapture = @ptrCast(@alignCast(context));
     capture.acquire_count += 1;
     return capture.available;
 }
 
-fn release(context: *anyopaque, _: source_namespace.schema.WorkspaceLocation) void {
+fn release(context: *anyopaque, _: WorkspaceLocationType) void {
     const capture: *GeometryCapture = @ptrCast(@alignCast(context));
     capture.release_count += 1;
 }

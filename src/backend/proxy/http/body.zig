@@ -3,9 +3,14 @@
 //! The relay preserves wire bytes exactly. It uses the framing already derived
 //! from the head and keeps all buffers fixed-size.
 
+const RouteType = @import("Route.zig");
+const Direction = @import("Direction.zig");
+const Exact = @import("Exact.zig");
 const std = @import("std");
-const head = @import("head_support.zig");
-const tls = @import("../tls.zig");
+const FakeSessionType = @import("FakeSession.zig");
+const Activity = @import("Activity.zig");
+const SessionType = @import("../Session.zig");
+const types = @import("types.zig");
 
 pub const max_chunk_line_bytes = 128;
 
@@ -23,7 +28,7 @@ pub const Fragment = @import("Fragment.zig");
 /// const route: Route = .{ .from = .origin, .to = .child, .framing = .chunked };
 /// const forwarded = relay(session, route, &observer);
 /// ```
-pub fn relay(session: anytype, route: Route, observer: anytype) bool {
+pub fn relay(session: anytype, route: RouteType, observer: anytype) bool {
     const direction: Direction = .{ .from = route.from, .to = route.to };
 
     return switch (route.framing) {
@@ -37,10 +42,6 @@ pub fn relay(session: anytype, route: Route, observer: anytype) bool {
         .until_close => relayUntilClose(session, direction, observer),
     };
 }
-
-const Direction = @import("Direction.zig");
-
-const Exact = @import("Exact.zig");
 
 fn relayUntilClose(session: anytype, direction: Direction, observer: anytype) bool {
     var buffer: [16 * 1024]u8 = undefined;
@@ -147,7 +148,7 @@ fn relayLine(session: anytype, direction: Direction, buffer: []u8) ?usize {
 }
 
 test "chunk lines use one write each and preserve single-byte input boundaries" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     const encoded = "1\r\nx\r\n0\r\n\r\n";
     var fake: FakeSession = .{ .origin_input = encoded, .max_read_bytes = 1 };
     var activity: Activity = .{};
@@ -165,7 +166,7 @@ test "chunk lines use one write each and preserve single-byte input boundaries" 
 }
 
 test "an incomplete chunk line forwards its prefix once" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     var fake: FakeSession = .{ .origin_input = "123\r" };
     var activity: Activity = .{};
     try std.testing.expect(!relay(&fake, testRoute(.origin, .child, .chunked), &activity));
@@ -173,14 +174,12 @@ test "an incomplete chunk line forwards its prefix once" {
     try std.testing.expectEqual(@as(usize, 1), fake.write_calls);
 }
 
-const Activity = @import("Activity.zig");
-
-fn testRoute(from: tls.Session.Side, to: tls.Session.Side, framing: head.Framing) Route {
+fn testRoute(from: SessionType.Side, to: SessionType.Side, framing: types.BodyPlan) RouteType {
     return .{ .from = from, .to = to, .framing = framing };
 }
 
 test "a body without framing consumes and forwards nothing" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     var fake: FakeSession = .{ .child_input = "untouched" };
     var activity: Activity = .{};
 
@@ -191,7 +190,7 @@ test "a body without framing consumes and forwards nothing" {
 }
 
 test "a fixed body stops at its declared length across short reads" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     var fake: FakeSession = .{
         .child_input = "bodyNEXT",
         .max_read_bytes = 2,
@@ -210,7 +209,7 @@ test "a fixed body stops at its declared length across short reads" {
 }
 
 test "an incomplete fixed body reports failure after forwarding its prefix" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     var fake: FakeSession = .{ .child_input = "ab" };
     var activity: Activity = .{};
 
@@ -224,7 +223,7 @@ test "an incomplete fixed body reports failure after forwarding its prefix" {
 }
 
 test "a close-delimited body relays until EOF" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     var fake: FakeSession = .{
         .origin_input = "streamed response",
         .max_read_bytes = 3,
@@ -241,7 +240,7 @@ test "a close-delimited body relays until EOF" {
 }
 
 test "a chunked body preserves chunk framing and trailers" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     const encoded = "4;extension=yes\r\nWiki\r\n" ++
         "5\r\npedia\r\n" ++
         "0\r\nX-Trace: present\r\n\r\n";
@@ -263,7 +262,7 @@ test "a chunked body preserves chunk framing and trailers" {
 }
 
 test "an invalid chunk size reports failure after forwarding its line" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     var fake: FakeSession = .{ .origin_input = "not-hex\r\n" };
     var activity: Activity = .{};
 
@@ -277,7 +276,7 @@ test "an invalid chunk size reports failure after forwarding its line" {
 }
 
 test "an oversized chunk line reports failure at its bound" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     const input: [max_chunk_line_bytes + 2]u8 = @splat('f');
     var fake: FakeSession = .{ .origin_input = &input };
     var activity: Activity = .{};
@@ -292,7 +291,7 @@ test "an oversized chunk line reports failure at its bound" {
 }
 
 test "an incomplete trailer block reports failure" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     const encoded = "0\r\nX-Trace: incomplete\r\n";
     var fake: FakeSession = .{ .origin_input = encoded };
     var activity: Activity = .{};

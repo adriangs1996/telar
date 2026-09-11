@@ -1,21 +1,28 @@
 //! Compact history browser with bounded text storage and visible-cell composition.
 //! History text reaches the host only through the ordinary cell renderer.
 
+const RectType = @import("telar-core").Rect;
+const Geometry = @import("Geometry.zig");
+const ContextType = @import("Context.zig");
+const HistoryBrowserInput = @import("HistoryBrowserInput.zig");
+const GotoPickerOutput = @import("GotoPickerOutput.zig");
+const Drawing = @import("Drawing.zig");
+const StyleType = @import("telar-core").Style;
 const std = @import("std");
-const core = @import("telar-core");
-const ui = @import("../ui/root.zig");
+const Entry = @import("Entry.zig");
+const raw_module = @import("telar-core").raw;
+const measure_module = @import("telar-core").measure;
+const Inspection = @import("Inspection.zig");
+const Detail = @import("Detail.zig");
+const GraphemeIteratorType = @import("telar-core").GraphemeIterator;
+const BufferType = @import("telar-core").Buffer;
 const widget = @import("context_support.zig");
+const theme_support = @import("../ui/theme_support.zig");
 const picker = @import("goto_picker.zig");
-
-pub const Entry = @import("Entry.zig");
-
-pub const Geometry = @import("Geometry.zig");
-
-pub const Input = @import("HistoryBrowserInput.zig");
 
 /// Computes the same compact rectangle for cell composition and graphical overlays.
 /// Example: `const area = modalArea(application, .{ .count = 6, .inspecting = false });`.
-pub fn modalArea(application: ui.Rect, geometry: Geometry) ui.Rect {
+pub fn modalArea(application: RectType, geometry: Geometry) RectType {
     if (application.w < 20 or application.h < 7) {
         return .{};
     }
@@ -33,14 +40,14 @@ pub fn modalArea(application: ui.Rect, geometry: Geometry) ui.Rect {
 
 /// Draws search, visible rows and optional detail without allocating.
 /// Example: `const result = render(context, application, input);`.
-pub fn render(context: *widget.Context, application: ui.Rect, input: Input) picker.Output {
+pub fn render(context: *ContextType, application: RectType, input: HistoryBrowserInput) GotoPickerOutput {
     const area = modalArea(application, .{ .count = @intCast(input.entries.len), .inspecting = input.inspecting });
     if (area.isEmpty()) {
         return .{ .area = area, .cursor = null };
     }
 
     var draw: Drawing = .{ .context = context, .input = input, .background = context.palette.panel_bg };
-    const base: ui.Style = .{ .fg = context.palette.text, .bg = draw.background };
+    const base: StyleType = .{ .fg = context.palette.text, .bg = draw.background };
     if (input.graphical_frame) {
         context.buffer.fillWithoutCorners(area, base);
     } else {
@@ -59,13 +66,13 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) pick
     const footer_y = inner.y + inner.h - 1;
     const query_y = footer_y - 1;
     const detail_y = query_y - 1;
-    const list: ui.Rect = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = detail_y - inner.y };
+    const list: RectType = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = detail_y - inner.y };
     const selected: ?Entry = if (input.entries.len == 0 or input.loading) null else input.entries[@min(input.selection, input.entries.len - 1)];
     if (input.inspecting and selected != null) {
         if (list.w >= 100) {
-            const left: ui.Rect = .{ .x = list.x, .y = list.y, .w = list.w / 2, .h = list.h };
+            const left: RectType = .{ .x = list.x, .y = list.y, .w = list.w / 2, .h = list.h };
             draw.rows(left);
-            const right: ui.Rect = .{ .x = left.x + left.w + 1, .y = list.y, .w = list.w - left.w - 1, .h = list.h };
+            const right: RectType = .{ .x = left.x + left.w + 1, .y = list.y, .w = list.w - left.w - 1, .h = list.h };
             draw.inspect(right, selected.?);
         } else {
             draw.inspect(list, selected.?);
@@ -76,18 +83,18 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) pick
 
     var detail_buffer: [512]u8 = undefined;
     const detail = if (input.error_text.len != 0) input.error_text else if (selected) |entry|
-        std.fmt.bufPrint(&detail_buffer, "{s}  {s}  pane {d}  #{d}", .{ entry.cwd, @tagName(entry.author), core.schema.id.raw(entry.pane_id), entry.id }) catch entry.cwd
+        std.fmt.bufPrint(&detail_buffer, "{s}  {s}  pane {d}  #{d}", .{ entry.cwd, @tagName(entry.author), raw_module(entry.pane_id), entry.id }) catch entry.cwd
     else
         "No selection";
     draw.line(.{ .x = inner.x + 1, .y = detail_y, .w = inner.w -| 2, .h = 1 }, .{ .text = detail, .color = if (input.error_text.len == 0) context.palette.subtext0 else context.palette.red });
 
     var prefix_buffer: [48]u8 = undefined;
     const prefix = std.fmt.bufPrint(&prefix_buffer, "[{s}] > ", .{input.scope}) catch "> ";
-    const query: ui.Rect = .{ .x = inner.x, .y = query_y, .w = inner.w, .h = 1 };
+    const query: RectType = .{ .x = inner.x, .y = query_y, .w = inner.w, .h = 1 };
     context.buffer.fill(query, .{ .glyph = " ", .style = .{ .fg = context.palette.text, .bg = context.palette.surface0 } });
     draw.background = context.palette.surface0;
     draw.line(query, .{ .text = prefix, .color = context.palette.accent });
-    const prefix_width = @min(ui.measure(prefix), query.w);
+    const prefix_width = @min(measure_module(prefix), query.w);
     const field = input.field.view(query.w -| prefix_width);
     draw.line(.{ .x = query.x + prefix_width, .y = query.y, .w = query.w -| prefix_width, .h = 1 }, .{ .text = field.text, .color = context.palette.text });
     draw.background = context.palette.panel_bg;
@@ -106,19 +113,15 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) pick
     return .{ .area = area, .cursor = .{ .cursor_x = query.x + prefix_width + field.cursor, .cursor_y = query.y } };
 }
 
-const Drawing = @import("Drawing.zig");
-
-pub const Inspection = @import("Inspection.zig");
-
 /// Bounds scroll against the same wrapped detail and responsive width used for drawing.
 /// Example: `const limit = inspectionScrollLimit(application, content);`.
-pub fn inspectionScrollLimit(application: ui.Rect, content: Inspection) u32 {
+pub fn inspectionScrollLimit(application: RectType, content: Inspection) u32 {
     const area = modalArea(application, .{ .count = 1, .inspecting = true }).inner(1);
     const width = if (area.w >= 100) area.w - area.w / 2 - 1 else area.w;
     return detailScrollLimit(.{ .w = width, .h = area.h -| 3 }, content);
 }
 
-pub fn detailScrollLimit(area: ui.Rect, content: Inspection) u32 {
+pub fn detailScrollLimit(area: RectType, content: Inspection) u32 {
     if (area.w == 0) {
         return 0;
     }
@@ -127,7 +130,7 @@ pub fn detailScrollLimit(area: ui.Rect, content: Inspection) u32 {
     var count: u32 = 0;
     for (detail.texts()) |text| {
         count += 1;
-        var iterator: ui.GraphemeIterator = .{ .bytes = text };
+        var iterator: GraphemeIteratorType = .{ .bytes = text };
         var x: u16 = 0;
         while (iterator.next()) |cluster| {
             const newline = iterator.index > 0 and text[iterator.index - 1] == '\n';
@@ -145,10 +148,6 @@ pub fn detailScrollLimit(area: ui.Rect, content: Inspection) u32 {
 
     return count -| area.h;
 }
-
-const Detail = @import("Detail.zig");
-
-const Wrapped = @import("Wrapped.zig");
 
 pub fn durationText(ns: i64, storage: []u8) []const u8 {
     const milliseconds = @divTrunc(@max(ns, 0), std.time.ns_per_ms);
@@ -173,7 +172,7 @@ pub fn ageText(ms: i64, storage: []u8) []const u8 {
 }
 
 test "compact geometry follows content and remains inside small terminals" {
-    const application: ui.Rect = .{ .w = 160, .h = 60 };
+    const application: RectType = .{ .w = 160, .h = 60 };
     const small = modalArea(application, .{ .count = 3, .inspecting = false });
     const large = modalArea(application, .{ .count = 100, .inspecting = false });
     try std.testing.expect(small.h < large.h);
@@ -186,7 +185,7 @@ test "compact geometry follows content and remains inside small terminals" {
 
 test "wrapped inspector clamps scroll even beyond 64 thousand lines" {
     const entry: Entry = .{ .id = 1, .pane_id = @enumFromInt(2), .command = "echo hi", .cwd = "/work", .started_at_ms = -1, .duration_ns = 0, .exit_code = 0, .status = .completed, .author = .human };
-    const application: ui.Rect = .{ .w = 56, .h = 20 };
+    const application: RectType = .{ .w = 56, .h = 20 };
     const limit = inspectionScrollLimit(application, .{ .entry = entry, .output = "a\n" ** 32768, .output_hint = "Captured output" });
     try std.testing.expect(limit > 32700);
     try std.testing.expectEqual(@as(u32, 0), inspectionScrollLimit(application, .{ .entry = entry, .output = "done", .output_hint = "Captured output" }));
@@ -195,13 +194,13 @@ test "wrapped inspector clamps scroll even beyond 64 thousand lines" {
 }
 
 test "history renderer puts the query below results and contains control bytes" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 120, 36);
+    var buffer = try BufferType.init(std.testing.allocator, 120, 36);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: widget.Context = .{ .buffer = &buffer, .hits = &hits, .palette = &ui.theme.default_theme.palette, .hovered = null };
+    var context: ContextType = .{ .buffer = &buffer, .hits = &hits, .palette = &theme_support.default_theme.palette, .hovered = null };
     var field: picker.Field = .init("zig");
     const entry: Entry = .{ .id = 1, .pane_id = @enumFromInt(2), .command = "zig build\x1b[2J", .cwd = "/work", .started_at_ms = 1700000000000, .duration_ns = 1800000000, .exit_code = 7, .status = .completed, .author = .human };
-    const input: Input = .{ .field = &field, .entries = &.{entry}, .selection = 0, .scope = "global", .now_ms = 1700000100000 };
+    const input: HistoryBrowserInput = .{ .field = &field, .entries = &.{entry}, .selection = 0, .scope = "global", .now_ms = 1700000100000 };
     const result = render(&context, buffer.area(), input);
     try std.testing.expectEqual(result.area.y + result.area.h - 3, result.cursor.?.cursor_y);
     try std.testing.expectEqualStrings(">", buffer.at(result.area.x + 1, result.cursor.?.cursor_y - 2).?.text());

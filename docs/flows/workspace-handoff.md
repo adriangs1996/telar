@@ -183,34 +183,34 @@ bounded tab and pane stores, returns pane identities in
 outbox. Arrival reuses the empty fixed tab store; only the confirmed pane's
 normal cell buffer and damage-row bootstrap allocations occur before commit.
 
-- `src/frontend/client/application/workspace_handoff.zig` checks selection,
+- `src/client/application/workspaces/workspace_handoff.zig` checks selection,
   gating, request ordering, local recovery, commit-before-effects and exact
   retry conditions.
-- `src/frontend/client/application/workspace_handoff_targeting.zig` checks
+- `src/client/application/workspaces/workspace_handoff_targeting.zig` checks
   bookmarked and direct workspace targets plus exact pane fallback handling.
-- `src/frontend/client/application/workspace_handoff_admission.zig` checks
+- `src/client/application/workspaces/workspace_handoff_admission.zig` checks
   pending-request admission and empty-projection canonical following.
-- `src/frontend/client/application/workspace_arrival_planning.zig` checks
+- `src/client/application/workspaces/workspace_arrival_planning.zig` checks
   shared arrival construction and exact saved-layout identity.
-- `src/frontend/client/application/pane_open_delivery.zig` checks
+- `src/client/application/panes/pane_open_delivery.zig` checks
   successful-open routing, retired work and delivery failure propagation.
-- `src/frontend/client/application/workspace_handoff_preparation.zig` checks
+- `src/client/application/workspaces/workspace_handoff_preparation.zig` checks
   request-identity and delivery-capacity accounting, pending attachments and
   rejection before effects.
-- `src/frontend/client/application/workspace_attachment_retirement.zig` checks
+- `src/client/application/workspaces/workspace_attachment_retirement.zig` checks
   stable multi-tab retirement, empty projections and partial detach failures.
-- `src/frontend/client/application/workspace_handoff_restoration.zig` checks
+- `src/client/application/workspaces/workspace_handoff_restoration.zig` checks
   active-pane graphics order, snapshot coalescence and partial recovery
   failures.
-- `src/frontend/client/application/workspace_transition_delivery.zig` checks
+- `src/client/application/workspaces/workspace_transition_delivery.zig` checks
   resource retirement, exact activation validation, ordered snapshot requests
   and partial failures.
-- `src/frontend/client/model.zig` checks idempotent departure, bounded capture,
+- `src/client/model/Model.zig` checks idempotent departure, bounded capture,
   atomic arrival, rejected arrival and saved-layout staging.
-- `src/frontend/client/client_test.zig` checks protocol order, navigation and
+- `src/frontend/client/tests/` checks protocol order, navigation and
   resource cleanup, request and outbox preflight, the presented empty version,
   confirmed arrival and stale-pane fallback.
-- `src/frontend/client/presenter.zig` owns both empty and populated model
+- `src/frontend/client/presentation/Presenter.zig` owns both empty and populated model
   presentation; neither handoff use case contains a draw decision.
-- `src/backend/runtime/controllers/open_pane.zig` checks authoritative target
+- `src/backend/runtime/entrypoints/requests/open_pane.zig` checks authoritative target
   resolution, attachment and exact failure mapping.

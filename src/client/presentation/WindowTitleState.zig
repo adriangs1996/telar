@@ -1,9 +1,10 @@
-const State = @This();
-const source_namespace = @import("window_title.zig");
+const window_title = @import("window_title.zig");
 const Sink = @import("Sink.zig");
 const SyncInput = @import("SyncInput.zig");
 const std = @import("std");
-sent: [source_namespace.max_title_bytes]u8 = undefined,
+const State = @This();
+
+sent: [window_title.max_title_bytes]u8 = undefined,
 sent_len: u16 = 0,
 ever_sent: bool = false,
 
@@ -14,8 +15,8 @@ pub fn sync(state: *State, sink: Sink, input: SyncInput) !void {
         return;
     }
 
-    var buffer: [source_namespace.max_title_bytes]u8 = undefined;
-    const title = source_namespace.render(&buffer, input.template, input.tokens);
+    var buffer: [window_title.max_title_bytes]u8 = undefined;
+    const title = window_title.render(&buffer, input.template, input.tokens);
     if (state.ever_sent and std.mem.eql(u8, state.sent[0..state.sent_len], title)) {
         return;
     }

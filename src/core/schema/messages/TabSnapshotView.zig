@@ -1,8 +1,10 @@
-const TabSnapshotView = @This();
-const source_namespace = @import("tab.zig");
+const id = @import("../id.zig");
+const TabLocationType = @import("../TabLocation.zig");
 const PaneDescriptorIterator = @import("PaneDescriptorIterator.zig");
-request_id: source_namespace.RequestId,
-location: source_namespace.TabLocation,
+const TabSnapshotView = @This();
+
+request_id: id.RequestId,
+location: TabLocationType,
 pane_count: u16,
 encoded_panes: []const u8,
 

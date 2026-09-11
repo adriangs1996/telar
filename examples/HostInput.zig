@@ -1,21 +1,14 @@
-const HostInput = @This();
-const source_namespace = @import("terminal_browser_pane.zig");
+const FeedContext = @import("FeedContext.zig");
+const Result = @import("Result.zig");
+const parse_module = @import("telar-frontend").parse;
+const terminal_browser_pane = @import("terminal_browser_pane.zig");
 const std = @import("std");
+const HostInput = @This();
+
 pending: [4096]u8 = undefined,
 len: usize = 0,
 
-const Result = struct {
-    stop: bool = false,
-    capabilities_changed: bool = false,
-};
-
-const FeedContext = struct {
-    io: source_namespace.Io,
-    session: *source_namespace.pty.Session,
-    capabilities: *source_namespace.HostCapabilities,
-};
-
-fn feed(input: *HostInput, context: FeedContext, bytes: []const u8) !Result {
+pub fn feed(input: *HostInput, context: FeedContext, bytes: []const u8) !Result {
     if (bytes.len > input.pending.len - input.len) {
         return error.HostInputOverflow;
     }
@@ -24,14 +17,14 @@ fn feed(input: *HostInput, context: FeedContext, bytes: []const u8) !Result {
 
     var result: Result = .{};
     while (input.len != 0) {
-        const parsed = source_namespace.term.parse(input.pending[0..input.len]) orelse break;
+        const parsed = parse_module(input.pending[0..input.len]) orelse break;
         if (parsed.len == 0) {
             break;
         }
         const raw = input.pending[0..parsed.len];
         switch (parsed.event) {
             .terminal_response => |response| {
-                result.capabilities_changed = source_namespace.observeHostCapability(context.capabilities, response) or
+                result.capabilities_changed = terminal_browser_pane.observeHostCapability(context.capabilities, response) or
                     result.capabilities_changed;
             },
             // Unknown host responses are not child input.

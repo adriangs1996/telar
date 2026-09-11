@@ -4,31 +4,31 @@
 //! bodies and responses run concurrently, which observations are published,
 //! and whether the intercepted connection is reused, closed, or upgraded.
 
-const std = @import("std");
+const GenericExchangePort = @import("GenericExchangePort.zig").Type;
+const GenericExchange = @import("GenericExchange.zig").Type;
+const GenericPort = @import("GenericPort.zig").Type;
+const GenericConnection = @import("GenericConnection.zig").Type;
+const ResponseHeadType = @import("ResponseHead.zig");
 const types = @import("types.zig");
+const RequestHeadType = @import("RequestHead.zig");
+const ExchangeState = @import("ExchangeState.zig");
+const std = @import("std");
+const ExchangeCapture = @import("ExchangeCapture.zig");
+const ConnectionCapture = @import("ConnectionCapture.zig");
+const request_support = @import("../provider/request_support.zig");
 
 pub const ExchangeOutcome = union(enum) {
-    complete: types.ResponseHead,
-    early_response: types.ResponseHead,
+    complete: ResponseHeadType,
+    early_response: ResponseHeadType,
     failed,
 };
 
-pub const ExchangePort = @import("GenericExchangePort.zig").Type;
-
-pub const Exchange = @import("GenericExchange.zig").Type;
-
-pub const Port = @import("GenericPort.zig").Type;
-
-pub const Connection = @import("GenericConnection.zig").Type;
-
 pub const Event = union(enum) {
     request_body: bool,
-    response: ?types.ResponseHead,
+    response: ?ResponseHeadType,
 };
 
-const ExchangeState = @import("ExchangeState.zig");
-
-fn testingRequest(body: types.BodyPlan) types.RequestHead {
+fn testingRequest(body: types.BodyPlan) RequestHeadType {
     return .{
         .classification = .inference,
         .body = body,
@@ -36,7 +36,7 @@ fn testingRequest(body: types.BodyPlan) types.RequestHead {
     };
 }
 
-pub fn testingResponse(status_code: u16, kind: types.ResponseKind, connection: types.ConnectionPolicy) types.ResponseHead {
+pub fn testingResponse(status_code: u16, kind: types.ResponseKind, connection: types.ConnectionPolicy) ResponseHeadType {
     return .{
         .status_code = status_code,
         .body = .none,
@@ -70,15 +70,13 @@ test "exchange state rejects either failed relay" {
     try std.testing.expectEqual(ExchangeOutcome.failed, response_failed.accept(.{ .response = null }).?);
 }
 
-const ExchangeCapture = @import("ExchangeCapture.zig");
-
-const exchange_test_port: ExchangePort(ExchangeCapture) = .{
+const exchange_test_port: GenericExchangePort(ExchangeCapture) = .{
     .io = ExchangeCapture.io,
     .relay_body = ExchangeCapture.relayBody,
     .relay_response = ExchangeCapture.relayResponse,
 };
 
-const TestExchange = Exchange(ExchangeCapture, exchange_test_port);
+const TestExchange = GenericExchange(ExchangeCapture, exchange_test_port);
 
 test "bodyless exchange never schedules a body relay" {
     var capture: ExchangeCapture = .{};
@@ -155,9 +153,7 @@ pub const Step = enum {
     upgrade,
 };
 
-const ConnectionCapture = @import("ConnectionCapture.zig");
-
-const connection_test_port: Port(ConnectionCapture) = .{
+const connection_test_port: GenericPort(ConnectionCapture) = .{
     .read_request = ConnectionCapture.readRequest,
     .exchange = ConnectionCapture.exchange,
     .publish_request = ConnectionCapture.publishRequest,
@@ -166,7 +162,7 @@ const connection_test_port: Port(ConnectionCapture) = .{
     .upgrade = ConnectionCapture.upgrade,
 };
 
-const TestConnection = Connection(ConnectionCapture, connection_test_port);
+const TestConnection = GenericConnection(ConnectionCapture, connection_test_port);
 
 fn expectSteps(capture: *const ConnectionCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.step_len]);
@@ -204,7 +200,7 @@ test "a keep-alive response permits the next exchange" {
         .exchange,
         .publish_response,
     });
-    try std.testing.expectEqual(types.RequestClass.auxiliary, capture.published_class.?);
+    try std.testing.expectEqual(request_support.RequestClass.auxiliary, capture.published_class.?);
     try std.testing.expectEqual(@as(u16, 204), capture.published_status.?);
 }
 

@@ -1,39 +1,28 @@
 //! Application transaction for selecting, launching, and attaching a pane.
 
+const WorkspaceCreatedType = @import("../../../workspace/WorkspaceCreated.zig");
+const PaneLaunchedType = @import("../../../pane/PaneLaunched.zig");
+const LaunchViewType = @import("telar-core").LaunchView;
+const TabLocationType = @import("telar-core").TabLocation;
+const pane_module = @import("telar-core").pane;
+const RepositoryType = @import("../../../workspace/Repository.zig");
+const TestingPorts = @import("TestingPorts.zig");
+const OpenPaneHandler = @import("OpenPaneHandler.zig");
+const StateType = @import("../../../workspace/State.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const pane_mod = @import("../../../pane/root.zig");
-const workspace_mod = @import("../../../workspace/root.zig");
-
-pub const schema = core.schema;
-pub const WorkspaceRepository = workspace_mod.Repository;
-
-pub const OpenPane = @import("OpenPane.zig");
-
-pub const OpenPaneResult = @import("OpenPaneResult.zig");
-
-pub const PrepareLaunch = @import("OpenPanePrepareLaunch.zig");
-
-pub const LaunchPane = @import("OpenPaneLaunchPane.zig");
-
-pub const PrepareView = @import("PrepareView.zig");
+const PanesCapture = @import("PanesCapture.zig");
+const OpenPaneAuthorityCapture = @import("OpenPaneAuthorityCapture.zig");
+const OpenPaneGeometryCapture = @import("OpenPaneGeometryCapture.zig");
+const OpenPaneEventCapture = @import("OpenPaneEventCapture.zig");
+const workspace_module = @import("telar-core").workspace;
+const tab_module = @import("telar-core").tab;
+const OpenPane = @import("OpenPane.zig");
+const raw_module = @import("telar-core").raw;
 
 pub const RuntimeEvent = union(enum) {
-    workspace_created: workspace_mod.WorkspaceCreated,
-    pane_launched: pane_mod.PaneLaunched,
+    workspace_created: WorkspaceCreatedType,
+    pane_launched: PaneLaunchedType,
 };
-
-pub const Panes = @import("Panes.zig");
-
-pub const LaunchAuthority = @import("OpenPaneLaunchAuthority.zig");
-
-pub const GeometryLease = @import("OpenPaneGeometryLease.zig");
-
-pub const EventPublisher = @import("OpenPaneEventPublisher.zig");
-
-pub const OpenPaneExecutor = @import("OpenPaneExecutor.zig");
-
-pub const OpenPaneHandler = @import("OpenPaneHandler.zig");
 
 pub fn mapLaunchError(spawn_error: anyerror) anyerror {
     return switch (spawn_error) {
@@ -43,15 +32,7 @@ pub fn mapLaunchError(spawn_error: anyerror) anyerror {
     };
 }
 
-const PanesCapture = @import("PanesCapture.zig");
-
-const AuthorityCapture = @import("OpenPaneAuthorityCapture.zig");
-
-const GeometryCapture = @import("OpenPaneGeometryCapture.zig");
-
-const EventCapture = @import("OpenPaneEventCapture.zig");
-
-fn testingLaunch() schema.LaunchView {
+fn testingLaunch() LaunchViewType {
     return .{
         .cwd = "/requested",
         .argument_count = 1,
@@ -62,16 +43,14 @@ fn testingLaunch() schema.LaunchView {
     };
 }
 
-fn testingPane(location: schema.TabLocation) !pane_mod.PaneLaunched {
+fn testingPane(location: TabLocationType) !PaneLaunchedType {
     return .{
-        .key = .{ .id = try schema.id.pane(17), .generation = 9 },
+        .key = .{ .id = try pane_module(17), .generation = 9 },
         .location = location,
     };
 }
 
-const TestingPorts = @import("TestingPorts.zig");
-
-fn testingHandler(workspaces: *WorkspaceRepository, ports: TestingPorts) OpenPaneHandler {
+fn testingHandler(workspaces: *RepositoryType, ports: TestingPorts) OpenPaneHandler {
     return .{
         .workspaces = workspaces,
         .panes = ports.panes.port(),
@@ -82,15 +61,15 @@ fn testingHandler(workspaces: *WorkspaceRepository, ports: TestingPorts) OpenPan
 }
 
 test "OpenPaneHandler attaches an explicit pane and prepares it only with geometry" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
     const active = try testingPane(location);
     var panes: PanesCapture = .{ .pane_result = active };
-    var authority: AuthorityCapture = .{};
-    var geometry: GeometryCapture = .{};
-    var events: EventCapture = .{};
+    var authority: OpenPaneAuthorityCapture = .{};
+    var geometry: OpenPaneGeometryCapture = .{};
+    var events: OpenPaneEventCapture = .{};
     var handler = testingHandler(&workspaces, .{ .panes = &panes, .authority = &authority, .geometry = &geometry, .events = &events });
 
     const result = try handler.execute(.{
@@ -121,15 +100,15 @@ test "OpenPaneHandler attaches an explicit pane and prepares it only with geomet
 }
 
 test "OpenPaneHandler resolves workspace targets and distinguishes their failures" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
     const active = try testingPane(location);
     var panes: PanesCapture = .{ .first_result = active };
-    var authority: AuthorityCapture = .{};
-    var geometry: GeometryCapture = .{};
-    var events: EventCapture = .{};
+    var authority: OpenPaneAuthorityCapture = .{};
+    var geometry: OpenPaneGeometryCapture = .{};
+    var events: OpenPaneEventCapture = .{};
     var handler = testingHandler(&workspaces, .{ .panes = &panes, .authority = &authority, .geometry = &geometry, .events = &events });
     const workspace_id = switch (location.workspace) {
         .workspace => |id| id,
@@ -150,22 +129,22 @@ test "OpenPaneHandler resolves workspace targets and distinguishes their failure
         .launch = null,
     }));
     try std.testing.expectError(error.WorkspaceNotFound, handler.execute(.{
-        .target = .{ .workspace = try schema.id.workspace(999) },
+        .target = .{ .workspace = try workspace_module(999) },
         .size = .{ .cols = 120, .rows = 40 },
         .launch = null,
     }));
 }
 
 test "OpenPaneHandler reuses a default pane without launch effects" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
     const active = try testingPane(location);
     var panes: PanesCapture = .{ .first_result = active };
-    var authority: AuthorityCapture = .{};
-    var geometry: GeometryCapture = .{};
-    var events: EventCapture = .{};
+    var authority: OpenPaneAuthorityCapture = .{};
+    var geometry: OpenPaneGeometryCapture = .{};
+    var events: OpenPaneEventCapture = .{};
     var handler = testingHandler(&workspaces, .{ .panes = &panes, .authority = &authority, .geometry = &geometry, .events = &events });
 
     const result = try handler.execute(.{
@@ -182,19 +161,19 @@ test "OpenPaneHandler reuses a default pane without launch effects" {
 }
 
 test "OpenPaneHandler commits a new default workspace only after pane launch" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const revision = workspaces.reader().revision();
-    const proposed_location: schema.TabLocation = .{
-        .workspace = .{ .workspace = try schema.id.workspace(1) },
-        .tab_id = try schema.id.tab(1),
+    const proposed_location: TabLocationType = .{
+        .workspace = .{ .workspace = try workspace_module(1) },
+        .tab_id = try tab_module(1),
     };
     const launched = try testingPane(proposed_location);
     var panes: PanesCapture = .{ .launch_result = launched };
-    var authority: AuthorityCapture = .{ .cwd = "/work/new" };
-    var geometry: GeometryCapture = .{};
-    var events: EventCapture = .{};
+    var authority: OpenPaneAuthorityCapture = .{ .cwd = "/work/new" };
+    var geometry: OpenPaneGeometryCapture = .{};
+    var events: OpenPaneEventCapture = .{};
     var handler = testingHandler(&workspaces, .{ .panes = &panes, .authority = &authority, .geometry = &geometry, .events = &events });
 
     const result = try handler.execute(.{
@@ -220,13 +199,13 @@ test "OpenPaneHandler commits a new default workspace only after pane launch" {
 }
 
 test "OpenPaneHandler stops before launch when authority or geometry rejects a new default" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     var panes: PanesCapture = .{};
-    var authority: AuthorityCapture = .{ .failure = error.InvalidLaunchCwd };
-    var geometry: GeometryCapture = .{};
-    var events: EventCapture = .{};
+    var authority: OpenPaneAuthorityCapture = .{ .failure = error.InvalidLaunchCwd };
+    var geometry: OpenPaneGeometryCapture = .{};
+    var events: OpenPaneEventCapture = .{};
     var handler = testingHandler(&workspaces, .{ .panes = &panes, .authority = &authority, .geometry = &geometry, .events = &events });
     const command: OpenPane = .{
         .target = .default,
@@ -261,13 +240,13 @@ test "OpenPaneHandler maps launch failures and rolls back their provisional stat
     };
 
     for (cases) |case| {
-        var state: workspace_mod.State = .{};
-        var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+        var state: StateType = .{};
+        var workspaces = RepositoryType.init(&state, std.testing.allocator);
         defer workspaces.deinit();
         var panes: PanesCapture = .{ .launch_failure = case.launch_error };
-        var authority: AuthorityCapture = .{ .cwd = "/work/new" };
-        var geometry: GeometryCapture = .{};
-        var events: EventCapture = .{};
+        var authority: OpenPaneAuthorityCapture = .{ .cwd = "/work/new" };
+        var geometry: OpenPaneGeometryCapture = .{};
+        var events: OpenPaneEventCapture = .{};
         var handler = testingHandler(&workspaces, .{ .panes = &panes, .authority = &authority, .geometry = &geometry, .events = &events });
 
         try std.testing.expectError(case.expected, handler.execute(.{
@@ -283,14 +262,14 @@ test "OpenPaneHandler maps launch failures and rolls back their provisional stat
 }
 
 test "OpenPaneHandler rolls back a new default workspace on launch failure" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const revision = workspaces.reader().revision();
     var panes: PanesCapture = .{ .launch_failure = error.OutOfMemory };
-    var authority: AuthorityCapture = .{ .cwd = "/work/new" };
-    var geometry: GeometryCapture = .{};
-    var events: EventCapture = .{};
+    var authority: OpenPaneAuthorityCapture = .{ .cwd = "/work/new" };
+    var geometry: OpenPaneGeometryCapture = .{};
+    var events: OpenPaneEventCapture = .{};
     var handler = testingHandler(&workspaces, .{ .panes = &panes, .authority = &authority, .geometry = &geometry, .events = &events });
 
     try std.testing.expectError(error.PaneSpawnFailed, handler.execute(.{
@@ -308,25 +287,25 @@ test "OpenPaneHandler rolls back a new default workspace on launch failure" {
         .workspace => |id| id,
         .worktree => unreachable,
     };
-    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(workspace_id));
+    try std.testing.expectEqual(@as(u64, 1), raw_module(workspace_id));
 }
 
 test "OpenPaneHandler validates default launch and preserves committed effects" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
-    const proposed_location: schema.TabLocation = .{
-        .workspace = .{ .workspace = try schema.id.workspace(1) },
-        .tab_id = try schema.id.tab(1),
+    const proposed_location: TabLocationType = .{
+        .workspace = .{ .workspace = try workspace_module(1) },
+        .tab_id = try tab_module(1),
     };
     const launched = try testingPane(proposed_location);
     var panes: PanesCapture = .{
         .launch_result = launched,
         .attach_failure = error.AttachmentUnavailable,
     };
-    var authority: AuthorityCapture = .{ .cwd = "/work/new" };
-    var geometry: GeometryCapture = .{};
-    var events: EventCapture = .{};
+    var authority: OpenPaneAuthorityCapture = .{ .cwd = "/work/new" };
+    var geometry: OpenPaneGeometryCapture = .{};
+    var events: OpenPaneEventCapture = .{};
     var handler = testingHandler(&workspaces, .{ .panes = &panes, .authority = &authority, .geometry = &geometry, .events = &events });
 
     try std.testing.expectError(error.InvalidOpenRequest, handler.execute(.{
@@ -345,21 +324,21 @@ test "OpenPaneHandler validates default launch and preserves committed effects" 
 }
 
 test "OpenPaneHandler keeps a committed launch when view preparation fails" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
-    const proposed_location: schema.TabLocation = .{
-        .workspace = .{ .workspace = try schema.id.workspace(1) },
-        .tab_id = try schema.id.tab(1),
+    const proposed_location: TabLocationType = .{
+        .workspace = .{ .workspace = try workspace_module(1) },
+        .tab_id = try tab_module(1),
     };
     const launched = try testingPane(proposed_location);
     var panes: PanesCapture = .{
         .launch_result = launched,
         .view_failure = error.ViewUnavailable,
     };
-    var authority: AuthorityCapture = .{ .cwd = "/work/new" };
-    var geometry: GeometryCapture = .{};
-    var events: EventCapture = .{};
+    var authority: OpenPaneAuthorityCapture = .{ .cwd = "/work/new" };
+    var geometry: OpenPaneGeometryCapture = .{};
+    var events: OpenPaneEventCapture = .{};
     var handler = testingHandler(&workspaces, .{ .panes = &panes, .authority = &authority, .geometry = &geometry, .events = &events });
 
     try std.testing.expectError(error.ViewUnavailable, handler.execute(.{

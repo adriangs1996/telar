@@ -1,19 +1,19 @@
 //! Application policy for delivering dependent client state after one agent
 //! snapshot commit.
 
+const AgentStatusChangeType = @import("../../model/AgentStatusChange.zig");
+const InputType = @import("../../notifications/NotificationInput.zig");
+const notification_capability = @import("../../notifications/notifications.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../../root.zig").agents;
-const notification_capability = @import("../../root.zig").notifications;
-const client_model = @import("../../root.zig").model;
+const AgentStatusType = @import("telar-core").AgentStatus;
+const TabLocationType = @import("telar-core").TabLocation;
+const ModelType = @import("../../model/Model.zig");
+const AgentSnapshotCommitType = @import("../../model/AgentSnapshotCommit.zig");
+const AgentInputType = @import("../../agents/AgentInput.zig");
+const AgentSnapshotDeliveryCaptureType = @import("AgentSnapshotDeliveryCaptureType.zig");
+const DeliverAgentSnapshotHandler = @import("DeliverAgentSnapshotHandler.zig");
 
-const schema = core.schema;
-
-pub const Effects = @import("AgentSnapshotDeliveryEffects.zig");
-
-pub const DeliverAgentSnapshotHandler = @import("DeliverAgentSnapshotHandler.zig");
-
-pub fn alertInput(change: client_model.AgentStatusChange, label: []const u8, message_buffer: *[96]u8) ?notification_capability.Input {
+pub fn alertInput(change: AgentStatusChangeType, label: []const u8, message_buffer: *[96]u8) ?InputType {
     const level: notification_capability.Level = switch (change.current) {
         .blocked => .warning,
         .done => .success,
@@ -43,7 +43,7 @@ pub fn alertInput(change: client_model.AgentStatusChange, label: []const u8, mes
     };
 }
 
-fn statusName(status: schema.AgentStatus) []const u8 {
+fn statusName(status: AgentStatusType) []const u8 {
     return switch (status) {
         .blocked => "waiting for input",
         .done => "done",
@@ -66,15 +66,13 @@ pub const Failure = enum {
     animation,
 };
 
-const Capture = @import("AgentSnapshotDeliveryCaptureType.zig");
-
-const testing_location: schema.TabLocation = .{
+const testing_location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(1) },
     .tab_id = @enumFromInt(1),
 };
 
-fn commitStatuses(model: *client_model.Model, revision: u64, statuses: []const schema.AgentStatus) !client_model.AgentSnapshotCommit {
-    var inputs: [6]agents.AgentInput = undefined;
+fn commitStatuses(model: *ModelType, revision: u64, statuses: []const AgentStatusType) !AgentSnapshotCommitType {
+    var inputs: [6]AgentInputType = undefined;
     for (statuses, 0..) |status, index| {
         inputs[index] = .{
             .key = .{ .pane_id = @enumFromInt(index + 1), .pane_generation = 1 },
@@ -102,7 +100,7 @@ fn commitStatuses(model: *client_model.Model, revision: u64, statuses: []const s
     })).?;
 }
 
-pub fn expectedAlert(input: notification_capability.Input, index: usize) bool {
+pub fn expectedAlert(input: InputType, index: usize) bool {
     return switch (index) {
         0 => input.level == .warning and
             std.mem.eql(u8, input.title, "Agent needs input") and
@@ -128,16 +126,16 @@ pub fn expectedAlert(input: notification_capability.Input, index: usize) bool {
     };
 }
 
-fn deliveryHandler(model: *const client_model.Model, capture: *Capture) DeliverAgentSnapshotHandler {
+fn deliveryHandler(model: *const ModelType, capture: *AgentSnapshotDeliveryCaptureType) DeliverAgentSnapshotHandler {
     return .{ .model = model, .effects = capture.effects() };
 }
 
 test "DeliverAgentSnapshotHandler orders attachments bounded alerts and animation" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     _ = try commitStatuses(&model, 1, &.{ .working, .working, .working, .working, .working, .working });
     const commit = try commitStatuses(&model, 2, &.{ .blocked, .done, .failed, .unknown, .blocked, .done });
-    var capture: Capture = .{ .model = &model, .commit = &commit };
+    var capture: AgentSnapshotDeliveryCaptureType = .{ .model = &model, .commit = &commit };
     var handler = deliveryHandler(&model, &capture);
 
     try handler.execute(&commit);
@@ -156,10 +154,10 @@ test "DeliverAgentSnapshotHandler orders attachments bounded alerts and animatio
 }
 
 test "DeliverAgentSnapshotHandler synchronizes resources without status changes" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const commit = try commitStatuses(&model, 1, &.{.working});
-    var capture: Capture = .{ .model = &model, .commit = &commit };
+    var capture: AgentSnapshotDeliveryCaptureType = .{ .model = &model, .commit = &commit };
     var handler = deliveryHandler(&model, &capture);
 
     try handler.execute(&commit);
@@ -173,11 +171,11 @@ test "DeliverAgentSnapshotHandler synchronizes resources without status changes"
 }
 
 test "DeliverAgentSnapshotHandler rejects stale commits before effects" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     _ = try commitStatuses(&model, 1, &.{ .working, .working });
     const commit = try commitStatuses(&model, 2, &.{ .blocked, .done });
-    var capture: Capture = .{ .model = &model, .commit = &commit };
+    var capture: AgentSnapshotDeliveryCaptureType = .{ .model = &model, .commit = &commit };
     var handler = deliveryHandler(&model, &capture);
 
     var altered = commit;
@@ -217,22 +215,22 @@ test "DeliverAgentSnapshotHandler rejects stale commits before effects" {
 }
 
 test "DeliverAgentSnapshotHandler stops after each failed delivery stage" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     _ = try commitStatuses(&model, 1, &.{ .working, .working, .working, .working, .working, .working });
     const commit = try commitStatuses(&model, 2, &.{ .blocked, .done, .failed, .unknown, .blocked, .done });
 
-    var attachments: Capture = .{ .model = &model, .commit = &commit, .failure = .attachments };
+    var attachments: AgentSnapshotDeliveryCaptureType = .{ .model = &model, .commit = &commit, .failure = .attachments };
     var attachments_handler = deliveryHandler(&model, &attachments);
     try std.testing.expectError(error.AttachmentSynchronizationFailed, attachments_handler.execute(&commit));
     try std.testing.expectEqualSlices(Event, &.{.synchronize_attachments}, attachments.eventSlice());
 
-    var alert: Capture = .{ .model = &model, .commit = &commit, .failure = .alert };
+    var alert: AgentSnapshotDeliveryCaptureType = .{ .model = &model, .commit = &commit, .failure = .alert };
     var alert_handler = deliveryHandler(&model, &alert);
     try std.testing.expectError(error.AlertPublicationFailed, alert_handler.execute(&commit));
     try std.testing.expectEqualSlices(Event, &.{ .synchronize_attachments, .publish_alert }, alert.eventSlice());
 
-    var animation: Capture = .{ .model = &model, .commit = &commit, .failure = .animation };
+    var animation: AgentSnapshotDeliveryCaptureType = .{ .model = &model, .commit = &commit, .failure = .animation };
     var animation_handler = deliveryHandler(&model, &animation);
     try std.testing.expectError(error.AnimationSynchronizationFailed, animation_handler.execute(&commit));
     try std.testing.expectEqual(Event.synchronize_animation, animation.eventSlice()[animation.event_count - 1]);

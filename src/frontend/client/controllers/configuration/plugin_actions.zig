@@ -1,39 +1,41 @@
 //! Adapts plugin invocation and worker completion to client application state.
 
-const std = @import("std");
-const config = @import("../../../config/root.zig");
-const input = @import("../../../input/root.zig");
-const plugin_broker = @import("../../../plugins/root.zig");
-const input_application = @import("telar-client").application.input;
-const client_model = @import("telar-client").model;
-const notifications = @import("telar-client").notifications;
-
 const Client = @import("../../Client.zig");
-const client_actions = @import("../input/actions.zig");
-const notification_flow = @import("../notifications/notifications.zig");
-const plugin_action = input_application.plugin_action;
-const plugin_action_delivery = input_application.plugin_action_delivery;
-
-pub const Completion = @import("PluginActionsCompletion.zig");
-
-pub const StartOutcome = plugin_action.StartOutcome;
-
-const Job = @import("PluginActionsJob.zig");
-
+const PluginActionType = @import("telar-client").PluginAction;
+const CallbackContextType = @import("telar-client").CallbackContext;
+const StartOutcome = @import("telar-client").StartOutcome;
 const StartContext = @import("StartContext.zig");
+const StartPluginActionHandlerType = @import("telar-client").StartPluginActionHandler;
+const PluginActionsCompletion = @import("PluginActionsCompletion.zig");
+const CompletePluginActionHandlerType = @import("telar-client").CompletePluginActionHandler;
+const CompletionCommandType = @import("telar-client").CompletionCommand;
+const PluginExecutionType = @import("telar-client").PluginExecution;
+const PluginActionsJob = @import("PluginActionsJob.zig");
+const std = @import("std");
+const plugin_broker = @import("../../../plugins/plugins.zig");
+const DeliverPluginActionStartHandlerType = @import("telar-client").DeliverPluginActionStartHandler;
+const PluginResultType = @import("telar-client").PluginResult;
+const EffectBatchType = @import("telar-client").EffectBatch;
+const BatchDispositionType = @import("telar-client").BatchDisposition;
+const client_actions = @import("../input/actions.zig");
+const CompletionOutcomeType = @import("telar-client").CompletionOutcome;
+const CompletionDirectiveType = @import("telar-client").CompletionDirective;
+const DeliverPluginActionCompletionHandlerType = @import("telar-client").DeliverPluginActionCompletionHandler;
+const InputType = @import("telar-client").NotificationInput;
+const notification_flow = @import("../notifications/notifications.zig");
 
 /// Resolves one configured action and schedules its work outside the input path.
 ///
 /// ```zig
 /// const outcome = try start(client, requested, callback_context);
 /// ```
-pub fn start(client: *Client, requested: input.action.PluginAction, callback_context: config.CallbackContext) !StartOutcome {
+pub fn start(client: *Client, requested: PluginActionType, callback_context: CallbackContextType) !StartOutcome {
     var context: StartContext = .{
         .client = client,
         .requested = requested,
         .callback_context = callback_context,
     };
-    var use_case: plugin_action.StartPluginActionHandler = .{
+    var use_case: StartPluginActionHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = &context,
@@ -56,8 +58,8 @@ pub fn start(client: *Client, requested: input.action.PluginAction, callback_con
 ///     return;
 /// }
 /// ```
-pub fn complete(client: *Client, completion: Completion) !bool {
-    var use_case: plugin_action.CompletePluginActionHandler = .{
+pub fn complete(client: *Client, completion: PluginActionsCompletion) !bool {
+    var use_case: CompletePluginActionHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -69,7 +71,7 @@ pub fn complete(client: *Client, completion: Completion) !bool {
             .deliver = deliverOutcome,
         },
     };
-    const command: plugin_action.CompletionCommand = if (completion.result) |result|
+    const command: CompletionCommandType = if (completion.result) |result|
         .{ .succeeded = .{
             .execution_id = completion.execution_id,
             .package_index = result.package_index,
@@ -95,27 +97,27 @@ fn prepare(raw_context: *anyopaque) !void {
     context.request = try registry.workerRequest(invocation, context.callback_context);
 }
 
-fn schedule(raw_context: *anyopaque, execution: client_model.PluginExecution) !void {
+fn schedule(raw_context: *anyopaque, execution: PluginExecutionType) !void {
     const context: *StartContext = @ptrCast(@alignCast(raw_context));
     const request = context.request orelse return error.PluginRequestMissing;
 
     try context.client.select.concurrent(.plugin_result, executeWorker, .{
         context.client.io,
         context.client.gpa,
-        Job{ .execution_id = execution.id, .request = request },
+        PluginActionsJob{ .execution_id = execution.id, .request = request },
     });
 }
 
-fn executeWorker(io: std.Io, gpa: std.mem.Allocator, job: Job) Completion {
+fn executeWorker(io: std.Io, gpa: std.mem.Allocator, job: PluginActionsJob) PluginActionsCompletion {
     return .{
         .execution_id = job.execution_id,
         .result = plugin_broker.executeWorker(io, gpa, job.request),
     };
 }
 
-fn deliverStartOutcome(raw_context: *anyopaque, outcome: plugin_action.StartOutcome) !void {
+fn deliverStartOutcome(raw_context: *anyopaque, outcome: StartOutcome) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    var use_case: plugin_action_delivery.DeliverPluginActionStartHandler = .{
+    var use_case: DeliverPluginActionStartHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -126,7 +128,7 @@ fn deliverStartOutcome(raw_context: *anyopaque, outcome: plugin_action.StartOutc
     try use_case.execute(outcome);
 }
 
-fn authorize(raw_context: *anyopaque, result: plugin_action.PluginResult) !void {
+fn authorize(raw_context: *anyopaque, result: PluginResultType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const registry = client.plugin_registry orelse return error.PluginRegistryUnavailable;
 
@@ -138,7 +140,7 @@ fn authorize(raw_context: *anyopaque, result: plugin_action.PluginResult) !void 
     });
 }
 
-fn applyBatch(raw_context: *anyopaque, batch: *const config.EffectBatch) !plugin_action.BatchDisposition {
+fn applyBatch(raw_context: *anyopaque, batch: *const EffectBatchType) !BatchDispositionType {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     for (batch.slice()) |effect| {
         if (try client_actions.apply(client, effect) == .stop) {
@@ -149,9 +151,9 @@ fn applyBatch(raw_context: *anyopaque, batch: *const config.EffectBatch) !plugin
     return .continue_client;
 }
 
-fn deliverOutcome(raw_context: *anyopaque, outcome: plugin_action.CompletionOutcome) !plugin_action.CompletionDirective {
+fn deliverOutcome(raw_context: *anyopaque, outcome: CompletionOutcomeType) !CompletionDirectiveType {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    var use_case: plugin_action_delivery.DeliverPluginActionCompletionHandler = .{
+    var use_case: DeliverPluginActionCompletionHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -162,7 +164,7 @@ fn deliverOutcome(raw_context: *anyopaque, outcome: plugin_action.CompletionOutc
     return use_case.execute(outcome);
 }
 
-fn publishNotification(raw_context: *anyopaque, notification: notifications.Input) !void {
+fn publishNotification(raw_context: *anyopaque, notification: InputType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try notification_flow.publishNow(client, notification);

@@ -1,9 +1,11 @@
-const DeliverHostResourcesHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("HostResourceDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const HostResourceDeliveryEffects = @import("HostResourceDeliveryEffects.zig");
+const HostCommitType = @import("../../model/HostCommit.zig");
 const std = @import("std");
-model: *const client_model.Model,
-effects: Effects,
+const DeliverHostResourcesHandler = @This();
+
+model: *const ModelType,
+effects: HostResourceDeliveryEffects,
 
 /// Delivers the resources implied by one current `HostCommit` in graphics,
 /// presentation and pane-geometry order.
@@ -11,7 +13,7 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(commit);
 /// ```
-pub fn execute(handler: *DeliverHostResourcesHandler, commit: client_model.HostCommit) !void {
+pub fn execute(handler: *DeliverHostResourcesHandler, commit: HostCommitType) !void {
     try handler.validate(commit);
 
     if (commit.capabilities) |capabilities| {
@@ -53,7 +55,7 @@ pub fn execute(handler: *DeliverHostResourcesHandler, commit: client_model.HostC
     }
 }
 
-fn validate(handler: *const DeliverHostResourcesHandler, commit: client_model.HostCommit) !void {
+fn validate(handler: *const DeliverHostResourcesHandler, commit: HostCommitType) !void {
     if (commit.capabilities == null and commit.resize == null) {
         return error.EmptyHostCommit;
     }

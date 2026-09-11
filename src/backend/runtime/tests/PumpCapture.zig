@@ -1,8 +1,9 @@
+const DeliveryType = @import("../entrypoints/requests/Delivery.zig");
 const PumpCapture = @This();
-const show_notification_controller = @import("../entrypoints/requests/show_notification.zig");
+
 count: usize = 0,
 
-pub fn delivery(capture: *PumpCapture) show_notification_controller.Delivery {
+pub fn delivery(capture: *PumpCapture) DeliveryType {
     return .{ .context = capture, .pump_all_fn = pumpAll };
 }
 

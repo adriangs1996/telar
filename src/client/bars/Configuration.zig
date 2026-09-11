@@ -1,11 +1,12 @@
-const Configuration = @This();
-const source_namespace = @import("model.zig");
-const Layout = @import("Layout.zig");
+const model = @import("model.zig");
+const Layout = @import("BarLayout.zig");
 const std = @import("std");
-bottom: [3]source_namespace.Source = .{ .metrics, .empty, .tabs },
-top_right: source_namespace.Source = .empty,
+const Configuration = @This();
 
-pub fn source(configuration: *const Configuration, position: source_namespace.Position) *const source_namespace.Source {
+bottom: [3]model.Source = .{ .metrics, .empty, .tabs },
+top_right: model.Source = .empty,
+
+pub fn source(configuration: *const Configuration, position: model.Position) *const model.Source {
     return switch (position) {
         .bottom_left => &configuration.bottom[0],
         .bottom_center => &configuration.bottom[1],
@@ -16,9 +17,9 @@ pub fn source(configuration: *const Configuration, position: source_namespace.Po
 
 pub fn presentation(configuration: *const Configuration) Layout {
     var result: Layout = .{};
-    inline for (std.meta.fields(source_namespace.Position)) |field| {
-        const position: source_namespace.Position = @enumFromInt(field.value);
-        result.set(position, source_namespace.presentationSlot(configuration.source(position)));
+    inline for (std.meta.fields(model.Position)) |field| {
+        const position: model.Position = @enumFromInt(field.value);
+        result.set(position, model.presentationSlot(configuration.source(position)));
         switch (configuration.source(position).*) {
             .dynamic => |value| {
                 result.generation = value.callback.generation;

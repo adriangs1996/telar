@@ -1,16 +1,21 @@
-const AgentOptions = @This();
-const source_namespace = @import("agent.zig");
-const core = @import("telar-core");
+const agent = @import("agent.zig");
+const values = @import("values.zig");
+const AgentStatusType = @import("telar-core").AgentStatus;
+const PaneTextSourceType = @import("telar-core").PaneTextSource;
 const std = @import("std");
-const Cursor = @import("cursor_support.zig").Cursor;
-action: source_namespace.AgentAction,
-target: ?source_namespace.Target = null,
-until: core.schema.AgentStatus = .done,
-timeout_seconds: u32 = source_namespace.default_wait_timeout_seconds,
+const max_agent_session_reference_bytes_module = @import("telar-core").max_agent_session_reference_bytes;
+const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
+const Cursor = @import("Cursor.zig");
+const AgentOptions = @This();
+
+action: agent.AgentAction,
+target: ?values.Target = null,
+until: AgentStatusType = .done,
+timeout_seconds: u32 = values.default_wait_timeout_seconds,
 text: ?[*:0]const u8 = null,
 wait_after_prompt: bool = false,
 lines: u16 = 40,
-source: core.schema.PaneTextSource = .recent,
+source: PaneTextSourceType = .recent,
 json: bool = false,
 socket: ?[*:0]const u8 = null,
 
@@ -20,7 +25,7 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
     }
 
     const action_text = std.mem.span(args[0]);
-    const action: source_namespace.AgentAction = if (std.mem.eql(u8, action_text, "list"))
+    const action: agent.AgentAction = if (std.mem.eql(u8, action_text, "list"))
         .list
     else if (std.mem.eql(u8, action_text, "get"))
         .get
@@ -42,7 +47,7 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
             return error.MissingAgentTarget;
         }
 
-        options.target = source_namespace.Target.parse(args[1]);
+        options.target = values.Target.parse(args[1]);
         index = 2;
     }
 
@@ -52,7 +57,7 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         }
 
         options.text = args[2];
-        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > core.schema.max_agent_session_reference_bytes) {
+        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > max_agent_session_reference_bytes_module) {
             return error.InvalidSessionReference;
         }
 
@@ -65,7 +70,7 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         }
 
         options.text = args[2];
-        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > core.schema.max_pane_text_input_bytes) {
+        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > max_pane_text_input_bytes_module) {
             return error.InvalidPromptText;
         }
 
@@ -89,28 +94,28 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
             }
             const value = try cursor.require(error.MissingWaitStatus);
 
-            options.until = try source_namespace.parseWaitStatus(std.mem.span(value));
+            options.until = try values.parseWaitStatus(std.mem.span(value));
         } else if (std.mem.eql(u8, arg, "--timeout")) {
             if (action != .wait and action != .prompt) {
                 return error.UnknownAgentOption;
             }
             const value = try cursor.require(error.MissingTimeout);
 
-            options.timeout_seconds = try source_namespace.parseTimeoutSeconds(std.mem.span(value));
+            options.timeout_seconds = try values.parseTimeoutSeconds(std.mem.span(value));
         } else if (std.mem.eql(u8, arg, "--lines")) {
             if (action != .read) {
                 return error.UnknownAgentOption;
             }
             const value = try cursor.require(error.MissingLineCount);
 
-            options.lines = try source_namespace.parseLineCount(std.mem.span(value));
+            options.lines = try values.parseLineCount(std.mem.span(value));
         } else if (std.mem.eql(u8, arg, "--source")) {
             if (action != .read) {
                 return error.UnknownAgentOption;
             }
             const value = try cursor.require(error.MissingTextSource);
 
-            options.source = try source_namespace.parseTextSource(std.mem.span(value));
+            options.source = try values.parseTextSource(std.mem.span(value));
         } else if (std.mem.eql(u8, arg, "--socket")) {
             const value = try cursor.require(error.MissingSocketPath);
             if (options.socket != null) {

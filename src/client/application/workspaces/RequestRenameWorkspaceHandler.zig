@@ -1,11 +1,12 @@
-const RequestRenameWorkspaceHandler = @This();
-const client_model = @import("../../root.zig").model;
-const WorkspaceOperationGate = @import("RenameWorkspaceWorkspaceOperationGate.zig");
+const ModelType = @import("../../model/Model.zig");
+const RenameWorkspaceOperationGate = @import("RenameWorkspaceOperationGate.zig");
 const RenameRequestEffects = @import("RenameRequestEffects.zig");
 const RequestRenameWorkspace = @import("RequestRenameWorkspace.zig");
 const std = @import("std");
-model: *const client_model.Model,
-gate: WorkspaceOperationGate,
+const RequestRenameWorkspaceHandler = @This();
+
+model: *const ModelType,
+gate: RenameWorkspaceOperationGate,
 effects: RenameRequestEffects,
 
 /// Validates the prompt target and sends one rename intent. Pending

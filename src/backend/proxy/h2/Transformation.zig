@@ -1,9 +1,11 @@
-const Transformation = @This();
-const source_namespace = @import("root.zig");
-const middleware = @import("../middleware.zig");
+const PeerSettingsType = @import("PeerSettings.zig");
+const TransformPipelineType = @import("../TransformPipeline.zig");
 const std = @import("std");
-source_settings: *source_namespace.PeerSettings,
-target_settings: *source_namespace.PeerSettings,
-pipeline: *const middleware.TransformPipeline,
+const TransformContextType = @import("../TransformContext.zig");
+const Transformation = @This();
+
+source_settings: *PeerSettingsType,
+target_settings: *PeerSettingsType,
+pipeline: *const TransformPipelineType,
 io: std.Io,
-context: middleware.TransformContext,
+context: TransformContextType,

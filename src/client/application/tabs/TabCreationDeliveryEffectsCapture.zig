@@ -1,30 +1,35 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_creation_delivery.zig");
-const pane_paste = @import("../input/root.zig").pane_paste;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
-const Effects = @import("TabCreationDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabCreationType = @import("../../model/TabCreation.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const tab_creation_delivery = @import("tab_creation_delivery.zig");
+const PanePasteEffects = @import("../input/PanePasteEffects.zig");
+const PaneFocusReportingEffects = @import("../panes/PaneFocusReportingEffects.zig");
+const TabAttachmentRetirementEffects = @import("TabAttachmentRetirementEffects.zig");
+const TabCreationDeliveryEffects = @import("TabCreationDeliveryEffects.zig");
+const pane_paste = @import("../input/pane_paste.zig");
+const DeliveryType = @import("../panes/PaneFocusDelivery.zig");
 const std = @import("std");
-model: *client_model.Model,
-creation: client_model.TabCreation,
-previous_root: source_namespace.schema.PaneId,
-previous_sibling: source_namespace.schema.PaneId,
-events: [20]source_namespace.Event = undefined,
+const EffectsCapture = @This();
+
+model: *ModelType,
+creation: TabCreationType,
+previous_root: PaneIdType,
+previous_sibling: PaneIdType,
+events: [20]tab_creation_delivery.Event = undefined,
 event_count: usize = 0,
 committed_creation_observed: bool = true,
 previous_retired_before_sync: bool = false,
-failure: source_namespace.Failure = .none,
+failure: tab_creation_delivery.Failure = .none,
 
-pub fn pasteEffects(capture: *EffectsCapture) pane_paste.Effects {
+pub fn pasteEffects(capture: *EffectsCapture) PanePasteEffects {
     return .{ .context = capture, .deliver = deliverPaste };
 }
 
-pub fn focusEffects(capture: *EffectsCapture) pane_focus_reporting.Effects {
+pub fn focusEffects(capture: *EffectsCapture) PaneFocusReportingEffects {
     return .{ .context = capture, .deliver = deliverFocus };
 }
 
-pub fn attachmentEffects(capture: *EffectsCapture) tab_attachment_retirement.Effects {
+pub fn attachmentEffects(capture: *EffectsCapture) TabAttachmentRetirementEffects {
     return .{
         .context = capture,
         .attachment_pending = attachmentPending,
@@ -34,7 +39,7 @@ pub fn attachmentEffects(capture: *EffectsCapture) tab_attachment_retirement.Eff
     };
 }
 
-pub fn effects(capture: *EffectsCapture) Effects {
+pub fn effects(capture: *EffectsCapture) TabCreationDeliveryEffects {
     return .{
         .context = capture,
         .synchronize_active_resources = synchronizeActiveResources,
@@ -58,7 +63,7 @@ fn deliverPaste(context: *anyopaque, delivery: pane_paste.Delivery) !bool {
     return true;
 }
 
-fn deliverFocus(context: *anyopaque, delivery: pane_focus_reporting.Delivery) !void {
+fn deliverFocus(context: *anyopaque, delivery: DeliveryType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .focus_out = delivery.pane_id });
     if (delivery.direction != .focus_out) {
@@ -69,14 +74,14 @@ fn deliverFocus(context: *anyopaque, delivery: pane_focus_reporting.Delivery) !v
     }
 }
 
-fn attachmentPending(context: *anyopaque, pane_id: source_namespace.schema.PaneId) bool {
+fn attachmentPending(context: *anyopaque, pane_id: PaneIdType) bool {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .attachment_pending = pane_id });
 
     return false;
 }
 
-fn detachPane(context: *anyopaque, pane_id: source_namespace.schema.PaneId) !void {
+fn detachPane(context: *anyopaque, pane_id: PaneIdType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .detach = pane_id });
     if (capture.failure == .second_detach and pane_id == capture.previous_sibling) {
@@ -84,12 +89,12 @@ fn detachPane(context: *anyopaque, pane_id: source_namespace.schema.PaneId) !voi
     }
 }
 
-fn retireAttachment(context: *anyopaque, pane_id: source_namespace.schema.PaneId) void {
+fn retireAttachment(context: *anyopaque, pane_id: PaneIdType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .retire_attachment = pane_id });
 }
 
-fn hideGraphics(context: *anyopaque, pane_id: source_namespace.schema.PaneId) !void {
+fn hideGraphics(context: *anyopaque, pane_id: PaneIdType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .hide_graphics = pane_id });
 }
@@ -111,7 +116,7 @@ fn synchronizeActiveResources(context: *anyopaque) !void {
     }
 }
 
-fn append(capture: *EffectsCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectsCapture, event: tab_creation_delivery.Event) void {
     capture.committed_creation_observed = capture.committed_creation_observed and capture.observesCreation();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -129,6 +134,6 @@ fn observesCreation(capture: *const EffectsCapture) bool {
         version.copy == capture.creation.copy_revision;
 }
 
-pub fn eventSlice(capture: *const EffectsCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectsCapture) []const tab_creation_delivery.Event {
     return capture.events[0..capture.event_count];
 }

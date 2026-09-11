@@ -1,4 +1,5 @@
+const PaneGeometryChangeType = @import("../../model/PaneGeometryChange.zig");
 const ResizeEffects = @This();
-const client_model = @import("../../root.zig").model;
+
 context: *anyopaque,
-deliver: *const fn (*anyopaque, client_model.PaneGeometryChange) anyerror!void,
+deliver: *const fn (*anyopaque, PaneGeometryChangeType) anyerror!void,

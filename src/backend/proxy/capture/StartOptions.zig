@@ -1,11 +1,14 @@
-const StartOptions = @This();
-const identity = @import("../identity.zig");
+const CredentialType = @import("../Credential.zig");
+const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
-const source_namespace = @import("root.zig");
-credential: identity.Credential,
-dialect: middleware.ApiDialect,
+const KeyType = @import("Key.zig");
+const buffer_support = @import("buffer_support.zig");
+const StartOptions = @This();
+
+credential: CredentialType,
+dialect: types.ApiDialect,
 protocol: middleware.Protocol,
-key: source_namespace.Key,
-side: source_namespace.Side,
+key: KeyType,
+side: buffer_support.Side,
 host: []const u8,
 started_at_ms: i64,

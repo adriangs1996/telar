@@ -1,9 +1,11 @@
-const Controller = @This();
-const source_namespace = @import("show_notification.zig");
-const show_notification_commands = @import("../../application/commands/show_notification.zig");
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const ShowNotificationExecutorType = @import("../../application/commands/ShowNotificationExecutor.zig");
 const Delivery = @import("Delivery.zig");
-responses: *source_namespace.ResponseQueue,
-show_notification: show_notification_commands.ShowNotificationExecutor,
+const ShowNotificationType = @import("telar-core").ShowNotification;
+const Controller = @This();
+
+responses: *ResponseQueueType,
+show_notification: ShowNotificationExecutorType,
 delivery: Delivery,
 
 /// Creates one controller scoped to a notification request.
@@ -11,7 +13,7 @@ delivery: Delivery,
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor(), delivery);
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, show_notification: show_notification_commands.ShowNotificationExecutor, delivery: Delivery) Controller {
+pub fn init(responses: *ResponseQueueType, show_notification: ShowNotificationExecutorType, delivery: Delivery) Controller {
     return .{
         .responses = responses,
         .show_notification = show_notification,
@@ -26,7 +28,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, show_notification: show_
 /// ```zig
 /// try controller.showNotification(request);
 /// ```
-pub fn showNotification(controller: *Controller, request: source_namespace.schema.ShowNotification) !void {
+pub fn showNotification(controller: *Controller, request: ShowNotificationType) !void {
     const confirmation = try controller.responses.reserveNotificationShown(request.request_id);
     const result = controller.show_notification.execute(.{
         .notification = request.notification,

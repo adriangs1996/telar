@@ -1,28 +1,15 @@
 //! Coordination for asynchronous pane graphics processing.
 
+const GenericMediaRuntimePort = @import("GenericMediaRuntimePort.zig").Type;
+const MediaCapture = @import("MediaCapture.zig");
+const GenericMediaCoordinator = @import("GenericMediaCoordinator.zig").Type;
+const PaneStore = @import("../../../../pane/PaneStore.zig");
+const RuntimeMetrics = @import("../../../observability/RuntimeMetrics.zig");
+const PaneFixtureType = @import("../../../tests/PaneFixture.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const media_mod = @import("../../../../media/root.zig");
-const pane_mod = @import("../../../../pane/root.zig");
-const media_projection = @import("media_projection.zig");
-const telemetry_mod = @import("../../../observability/root.zig").telemetry;
-const test_support = @import("../../../tests/support.zig");
-
-pub const diagnostics = core.diagnostics;
-pub const Pane = pane_mod.Pane;
-pub const PaneKey = pane_mod.PaneKey;
-pub const PaneStore = pane_mod.PaneStore;
-pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-
-pub const Work = @import("MediaWork.zig");
-
-pub const Completion = @import("MediaCompletion.zig");
-
-pub const Resources = @import("MediaResources.zig");
-
-pub const RuntimePort = @import("GenericMediaRuntimePort.zig").Type;
-
-pub const Coordinator = @import("GenericMediaCoordinator.zig").Type;
+const MediaExpectedMetrics = @import("MediaExpectedMetrics.zig");
+const enabled_module = @import("telar-core").enabled;
+const Pane = @import("../../../../pane/Pane.zig");
 
 pub const Step = enum {
     quotas,
@@ -33,44 +20,40 @@ pub const Step = enum {
     collect,
 };
 
-const Capture = @import("MediaCapture.zig");
-
-const test_port: RuntimePort(Capture) = .{
-    .start = Capture.start,
-    .enforce_quotas = Capture.enforceQuotas,
-    .synchronize_clients = Capture.synchronizeClients,
-    .schedule_response = Capture.scheduleResponse,
-    .pump_clients = Capture.pumpClients,
-    .collect = Capture.collect,
+const test_port: GenericMediaRuntimePort(MediaCapture) = .{
+    .start = MediaCapture.start,
+    .enforce_quotas = MediaCapture.enforceQuotas,
+    .synchronize_clients = MediaCapture.synchronizeClients,
+    .schedule_response = MediaCapture.scheduleResponse,
+    .pump_clients = MediaCapture.pumpClients,
+    .collect = MediaCapture.collect,
 };
 
-const TestCoordinator = Coordinator(Capture, test_port);
+const TestCoordinator = GenericMediaCoordinator(MediaCapture, test_port);
 
-fn testCoordinator(capture: *Capture, panes: *PaneStore, metrics: *RuntimeMetrics) TestCoordinator {
+fn testCoordinator(capture: *MediaCapture, panes: *PaneStore, metrics: *RuntimeMetrics) TestCoordinator {
     return TestCoordinator.init(capture, .{
         .panes = panes,
         .metrics = metrics,
     });
 }
 
-fn beginFixtureMedia(fixture: *test_support.PaneFixture, panes: *PaneStore) !void {
+fn beginFixtureMedia(fixture: *PaneFixtureType, panes: *PaneStore) !void {
     try panes.insert(fixture.pane);
     fixture.pane.queueMediaOutput("media");
     try std.testing.expect(fixture.pane.beginMediaProcessing() != null);
 }
 
-fn queueFollowUp(fixture: *test_support.PaneFixture) void {
+fn queueFollowUp(fixture: *PaneFixtureType) void {
     fixture.pane.queueMediaOutput("follow-up");
 }
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const MediaCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
-const ExpectedMetrics = @import("MediaExpectedMetrics.zig");
-
-fn expectMetrics(metrics: *const RuntimeMetrics, expected: ExpectedMetrics) !void {
-    const actual = if (comptime diagnostics.enabled) expected else ExpectedMetrics{};
+fn expectMetrics(metrics: *const RuntimeMetrics, expected: MediaExpectedMetrics) !void {
+    const actual = if (comptime enabled_module) expected else MediaExpectedMetrics{};
     try std.testing.expectEqual(actual.output_bytes, metrics.media_bytes);
     try std.testing.expectEqual(actual.discarded, metrics.media_discarded_frames);
     try std.testing.expectEqual(actual.unavailable, metrics.media_unavailable_frames);
@@ -81,14 +64,14 @@ fn expectMetrics(metrics: *const RuntimeMetrics, expected: ExpectedMetrics) !voi
 }
 
 test "media completion refreshes graphics before clients and preserves effect order" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureMedia(&fixture, &panes);
     fixture.pane.graphics_revision = std.math.maxInt(u64);
     try fixture.addRgbaImage(7);
-    var capture: Capture = .{ .projection = .{ .staged = 2 } };
+    var capture: MediaCapture = .{ .projection = .{ .staged = 2 } };
     var coordinator = testCoordinator(&capture, &panes, &fixture.metrics);
 
     try coordinator.handle(.{
@@ -123,13 +106,13 @@ test "media completion refreshes graphics before clients and preserves effect or
 }
 
 test "pending media is rearmed between the two client pumps" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureMedia(&fixture, &panes);
     queueFollowUp(&fixture);
-    var capture: Capture = .{};
+    var capture: MediaCapture = .{};
     var coordinator = testCoordinator(&capture, &panes, &fixture.metrics);
 
     try coordinator.handle(.{ .pane = fixture.pane.key(), .stats = .{} });
@@ -142,14 +125,14 @@ test "pending media is rearmed between the two client pumps" {
 }
 
 test "response scheduling failure stops before pumping and media rearm" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureMedia(&fixture, &panes);
     fixture.pane.graphics_present = true;
     queueFollowUp(&fixture);
-    var capture: Capture = .{ .response_failure = true };
+    var capture: MediaCapture = .{ .response_failure = true };
     var coordinator = testCoordinator(&capture, &panes, &fixture.metrics);
 
     try std.testing.expectError(error.SchedulerUnavailable, coordinator.handle(.{
@@ -164,13 +147,13 @@ test "response scheduling failure stops before pumping and media rearm" {
 }
 
 test "media start failure rolls its borrow back after the first client pump" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureMedia(&fixture, &panes);
     queueFollowUp(&fixture);
-    var capture: Capture = .{ .start_failure = true };
+    var capture: MediaCapture = .{ .start_failure = true };
     var coordinator = testCoordinator(&capture, &panes, &fixture.metrics);
 
     try std.testing.expectError(error.SchedulerUnavailable, coordinator.handle(.{
@@ -194,7 +177,7 @@ test "a stale generation cannot release a live media borrow" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: MediaCapture = .{};
     var coordinator = testCoordinator(&capture, &panes, &metrics);
 
     try coordinator.handle(.{

@@ -1,5 +1,6 @@
-const Surface = @This();
 const std = @import("std");
+const Surface = @This();
+
 pixels: []u8,
 width: u32,
 height: u32,

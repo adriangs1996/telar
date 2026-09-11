@@ -1,25 +1,33 @@
-const StubCreateTab = @This();
-const create_tab_commands = @import("../../application/commands/create_tab.zig");
-const source_namespace = @import("create_tab.zig");
+const CreateTabResultType = @import("../../application/commands/CreateTabResult.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const PaneIdType = @import("telar-core").PaneId;
+const EnvironmentModeType = @import("telar-core").EnvironmentMode;
+const CreateTabExecutorType = @import("../../application/commands/CreateTabExecutor.zig");
+const CreateTabType = @import("../../application/commands/CreateTab.zig");
 const std = @import("std");
-result: ?create_tab_commands.CreateTabResult = null,
+const StubCreateTab = @This();
+
+result: ?CreateTabResultType = null,
 failure: ?anyerror = null,
 call_count: usize = 0,
-last_workspace: ?source_namespace.schema.WorkspaceLocation = null,
-last_size: ?source_namespace.schema.TerminalSize = null,
-last_label: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+last_workspace: ?WorkspaceLocationType = null,
+last_size: ?TerminalSizeType = null,
+last_label: [max_tab_label_bytes_module]u8 = undefined,
 last_label_len: usize = 0,
-last_cwd: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+last_cwd: [max_cwd_bytes_module]u8 = undefined,
 last_cwd_len: usize = 0,
-last_cwd_source: ?source_namespace.schema.PaneId = null,
+last_cwd_source: ?PaneIdType = null,
 last_argument_count: u16 = 0,
-last_environment_mode: source_namespace.schema.EnvironmentMode = .inherit_runtime,
+last_environment_mode: EnvironmentModeType = .inherit_runtime,
 
-pub fn executor(stub: *StubCreateTab) create_tab_commands.CreateTabExecutor {
+pub fn executor(stub: *StubCreateTab) CreateTabExecutorType {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, command: create_tab_commands.CreateTab) !create_tab_commands.CreateTabResult {
+fn execute(context: *anyopaque, command: CreateTabType) !CreateTabResultType {
     const stub: *StubCreateTab = @ptrCast(@alignCast(context));
     std.debug.assert(command.label.len <= stub.last_label.len);
     std.debug.assert(command.launch.cwd.len <= stub.last_cwd.len);

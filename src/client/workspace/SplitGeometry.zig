@@ -1,6 +1,8 @@
+const RectType = @import("telar-core").Rect;
+const layout_support = @import("layout_support.zig");
 const SplitGeometry = @This();
-const source_namespace = @import("layout_support.zig");
-area: source_namespace.ui.Rect,
-axis: source_namespace.Axis,
+
+area: RectType,
+axis: layout_support.Axis,
 ratio: u16,
 gap: u16,

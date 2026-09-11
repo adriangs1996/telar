@@ -1,16 +1,19 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const RenameWorkspaceExecutorType = @import("../../application/commands/RenameWorkspaceExecutor.zig");
+const RenameWorkspaceType = @import("telar-core").RenameWorkspace;
+const RequestIdType = @import("telar-core").RequestId;
+const RenameWorkspaceFailure = @import("RenameWorkspaceFailure.zig");
 const Controller = @This();
-const source_namespace = @import("rename_workspace.zig");
-const rename_workspace_commands = @import("../../application/commands/rename_workspace.zig");
-const Failure = @import("RenameWorkspaceFailure.zig");
-responses: *source_namespace.ResponseQueue,
-rename_workspace: rename_workspace_commands.RenameWorkspaceExecutor,
+
+responses: *ResponseQueueType,
+rename_workspace: RenameWorkspaceExecutorType,
 
 /// Creates a controller scoped to one workspace rename request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, rename_workspace: rename_workspace_commands.RenameWorkspaceExecutor) Controller {
+pub fn init(responses: *ResponseQueueType, rename_workspace: RenameWorkspaceExecutorType) Controller {
     return .{ .responses = responses, .rename_workspace = rename_workspace };
 }
 
@@ -20,7 +23,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, rename_workspace: rename
 /// ```zig
 /// try controller.renameWorkspace(request);
 /// ```
-pub fn renameWorkspace(controller: *Controller, request: source_namespace.schema.RenameWorkspace) !void {
+pub fn renameWorkspace(controller: *Controller, request: RenameWorkspaceType) !void {
     const renamed = controller.rename_workspace.execute(.{
         .location = request.workspace,
         .name = request.name,
@@ -46,7 +49,7 @@ pub fn renameWorkspace(controller: *Controller, request: source_namespace.schema
     } });
 }
 
-fn queueFailure(controller: *Controller, request_id: source_namespace.schema.RequestId, failure: Failure) !void {
+fn queueFailure(controller: *Controller, request_id: RequestIdType, failure: RenameWorkspaceFailure) !void {
     try controller.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,

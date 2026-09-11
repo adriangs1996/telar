@@ -1,16 +1,19 @@
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const TabType = @import("telar-client").Tab;
+const std = @import("std");
+const tab_bar = @import("tab_bar.zig");
+const measure_module = @import("telar-core").measure;
+const ContextType = @import("Context.zig");
+const Placement = @import("Placement.zig");
 /// The text a tab shows: its display number, its name and, while one of its
 /// panes is fullscreen, a marker drawn after the name.
 const Label = @This();
-const source_namespace = @import("tab_bar.zig");
-const std = @import("std");
-const ui = @import("../ui/root.zig");
-const widget = @import("context_support.zig");
-const Placement = @import("Placement.zig");
-buffer: [source_namespace.schema.max_tab_label_bytes + 16]u8 = undefined,
+
+buffer: [max_tab_label_bytes_module + 16]u8 = undefined,
 len: usize = 0,
 fullscreen: bool,
 
-pub fn init(tab: *const source_namespace.tabs_mod.Tab, index: usize) Label {
+pub fn init(tab: *const TabType, index: usize) Label {
     var label: Label = .{ .fullscreen = tab.model.layout.isFullscreen() };
     const written = std.fmt.bufPrint(&label.buffer, " {d}:{s} ", .{
         index + 1,
@@ -29,16 +32,16 @@ fn text(label: *const Label) []const u8 {
 }
 
 pub fn width(label: *const Label) u16 {
-    const marker: u16 = if (label.fullscreen) source_namespace.fullscreen_marker_width else 0;
-    return ui.measure(label.text()) + marker;
+    const marker: u16 = if (label.fullscreen) tab_bar.fullscreen_marker_width else 0;
+    return measure_module(label.text()) + marker;
 }
 
 /// Draws the text, then the marker when the whole marker fits.
-pub fn draw(label: *const Label, context: *widget.Context, placement: Placement) void {
+pub fn draw(label: *const Label, context: *ContextType, placement: Placement) void {
     const rect = placement.rect;
-    const text_width = @min(ui.measure(label.text()), rect.w);
+    const text_width = @min(measure_module(label.text()), rect.w);
     _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = rect.x, .y = rect.y }, .text = label.text(), .max_width = text_width, .style = placement.style });
-    if (!label.fullscreen or rect.w < text_width + source_namespace.fullscreen_marker_width) {
+    if (!label.fullscreen or rect.w < text_width + tab_bar.fullscreen_marker_width) {
         return;
     }
 

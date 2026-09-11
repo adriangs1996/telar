@@ -1,4 +1,5 @@
+const PlacementType = @import("telar-core").Placement;
 const FallbackPlacement = @This();
-const source_namespace = @import("kitty.zig");
-placement: source_namespace.graphics.Placement,
+
+placement: PlacementType,
 external_id: u32,

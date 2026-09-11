@@ -1,10 +1,11 @@
-const RequestTabMoveHandler = @This();
-const client_model = @import("../../root.zig").model;
-const TabOperationGate = @import("MoveTabTabOperationGate.zig");
+const ModelType = @import("../../model/Model.zig");
+const MoveTabOperationGate = @import("MoveTabOperationGate.zig");
 const MoveRequestEffects = @import("MoveRequestEffects.zig");
 const RequestTabMove = @import("RequestTabMove.zig");
-model: *const client_model.Model,
-gate: TabOperationGate,
+const RequestTabMoveHandler = @This();
+
+model: *const ModelType,
+gate: MoveTabOperationGate,
 effects: MoveRequestEffects,
 
 /// Sends one move intent for the active tab without changing its local

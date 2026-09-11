@@ -1,19 +1,14 @@
 //! Application use case for committing one runtime agent snapshot.
 
+const AgentStatusType = @import("telar-core").AgentStatus;
+const AgentInputType = @import("../../agents/AgentInput.zig");
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../../root.zig").agents;
-const client_model = @import("../../root.zig").model;
+const AgentSnapshotDeliveryCapture = @import("AgentSnapshotDeliveryCapture.zig");
+const ApplyAgentSnapshotHandler = @import("ApplyAgentSnapshotHandler.zig");
+const VersionType = @import("../../model/Version.zig");
 
-const schema = core.schema;
-
-pub const AgentSnapshotDelivery = @import("AgentSnapshotDelivery.zig");
-
-pub const ApplyAgentSnapshotHandler = @import("ApplyAgentSnapshotHandler.zig");
-
-const DeliveryCapture = @import("AgentSnapshotDeliveryCapture.zig");
-
-fn agentInput(pane: u64, status: schema.AgentStatus) agents.AgentInput {
+fn agentInput(pane: u64, status: AgentStatusType) AgentInputType {
     return .{
         .key = .{ .pane_id = @enumFromInt(pane), .pane_generation = 1 },
         .location = .{
@@ -27,14 +22,14 @@ fn agentInput(pane: u64, status: schema.AgentStatus) agents.AgentInput {
 }
 
 test "ApplyAgentSnapshotHandler commits before exact delivery" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: DeliveryCapture = .{ .model = &model };
+    var capture: AgentSnapshotDeliveryCapture = .{ .model = &model };
     var handler: ApplyAgentSnapshotHandler = .{
         .model = &model,
         .delivery = capture.port(),
     };
-    const initial = [_]agents.AgentInput{
+    const initial = [_]AgentInputType{
         agentInput(1, .working),
         agentInput(2, .working),
         agentInput(3, .working),
@@ -42,7 +37,7 @@ test "ApplyAgentSnapshotHandler commits before exact delivery" {
     };
     _ = try handler.execute(.{ .revision = 1, .agents = &initial });
     capture.reset();
-    const changed = [_]agents.AgentInput{
+    const changed = [_]AgentInputType{
         agentInput(1, .blocked),
         agentInput(2, .ready),
         agentInput(3, .failed),
@@ -54,13 +49,13 @@ test "ApplyAgentSnapshotHandler commits before exact delivery" {
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqual(@as(usize, 4), commit.status_changes.slice().len);
-    try std.testing.expectEqual(client_model.Version{ .agents = 2 }, model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 2 }, model.version());
 }
 
 test "ApplyAgentSnapshotHandler suppresses delivery for stale and rejected snapshots" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: DeliveryCapture = .{ .model = &model };
+    var capture: AgentSnapshotDeliveryCapture = .{ .model = &model };
     var handler: ApplyAgentSnapshotHandler = .{
         .model = &model,
         .delivery = capture.port(),
@@ -78,13 +73,13 @@ test "ApplyAgentSnapshotHandler suppresses delivery for stale and rejected snaps
         .agents = &.{ agent, agent },
     }));
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
-    try std.testing.expectEqual(client_model.Version{ .agents = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 1 }, model.version());
 }
 
 test "ApplyAgentSnapshotHandler preserves a model commit after delivery failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: DeliveryCapture = .{
+    var capture: AgentSnapshotDeliveryCapture = .{
         .model = &model,
         .fail = true,
     };
@@ -100,6 +95,6 @@ test "ApplyAgentSnapshotHandler preserves a model commit after delivery failure"
     }));
 
     try std.testing.expect(capture.observed_commit);
-    try std.testing.expectEqual(client_model.Version{ .agents = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .agents = 1 }, model.version());
     try std.testing.expect(model.knowsAgent(agent.key));
 }

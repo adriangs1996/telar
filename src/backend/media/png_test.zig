@@ -1,9 +1,9 @@
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const std = @import("std");
-const vt = @import("ghostty-vt");
-const core = @import("telar-core");
-const media = @import("root.zig");
+const Harness = @import("Harness.zig");
+const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
 
-pub const size: core.schema.TerminalSize = .{ .cols = 10, .rows = 5, .cell_width_px = 10, .cell_height_px = 20 };
+pub const size: TerminalSizeType = .{ .cols = 10, .rows = 5, .cell_width_px = 10, .cell_height_px = 20 };
 const fixture = @embedFile("testdata/rgba.png");
 const encoded = &encoded_storage;
 const encoded_storage = encoded: {
@@ -12,14 +12,12 @@ const encoded_storage = encoded: {
     break :encoded buffer;
 };
 
-const Harness = @import("Harness.zig");
-
 test "PNG KGP preserves chunk state across every PTY split and keeps cursor policy" {
     const bytes = try std.fmt.allocPrint(std.testing.allocator, "\x1b[3;4H\x1b_Ga=T,f=100,i=7,C=1,c=2,r=2,m=1;{s}\x1b\\\x1b_Gm=0;{s}\x1b\\", .{ encoded[0..48], encoded[48..] });
     defer std.testing.allocator.free(bytes);
 
     for (0..bytes.len + 1) |split| {
-        const harness = try Harness.create(core.graphics.max_image_bytes_per_screen);
+        const harness = try Harness.create(max_image_bytes_per_screen_module);
         defer harness.destroy();
         harness.feed(bytes[0..split]);
         harness.feed(bytes[split..]);
@@ -33,7 +31,7 @@ test "PNG KGP accepts Pi's 4096-character chunks and quiet anonymous placements"
     var base64: [std.base64.standard.Encoder.calcSize(large.len)]u8 = undefined;
     const data = std.base64.standard.Encoder.encode(&base64, large);
     try std.testing.expect(data.len > 8192);
-    const harness = try Harness.create(core.graphics.max_image_bytes_per_screen);
+    const harness = try Harness.create(max_image_bytes_per_screen_module);
     defer harness.destroy();
     harness.feed("\x1b[3;4H");
 
@@ -69,7 +67,7 @@ test "PNG queries validate without storing and malformed uploads recover" {
     const previous_log_level = std.testing.log_level;
     std.testing.log_level = .err;
     defer std.testing.log_level = previous_log_level;
-    const harness = try Harness.create(core.graphics.max_image_bytes_per_screen);
+    const harness = try Harness.create(max_image_bytes_per_screen_module);
     defer harness.destroy();
     const query = try std.fmt.allocPrint(std.testing.allocator, "\x1b_Ga=q,f=100,i=7;{s}\x1b\\", .{encoded});
     defer std.testing.allocator.free(query);

@@ -1,3 +1,6 @@
+const std = @import("std");
+const tlsz = @import("tls");
+const End = @import("End.zig");
 /// One terminated connection: a TLS server towards the child and a TLS client
 /// towards the real host.
 ///
@@ -5,44 +8,13 @@
 /// into the reader and writer next to it, which hold pointers into the buffers
 /// next to those, so a Session must never be copied or moved after `intercept`.
 const Session = @This();
-const source_namespace = @import("tls.zig");
-const std = @import("std");
-const tlsz = @import("tls");
-io: source_namespace.Io,
+
+io: std.Io,
 gpa: std.mem.Allocator,
 rng_source: std.Random.IoSource,
 auth: tlsz.config.CertKeyPair,
 child: End,
 origin: End,
-
-const End = struct {
-    stream: source_namespace.net.Stream,
-    in_buf: [tlsz.input_buffer_len]u8 = undefined,
-    out_buf: [tlsz.output_buffer_len]u8 = undefined,
-    reader: source_namespace.net.Stream.Reader = undefined,
-    writer: source_namespace.net.Stream.Writer = undefined,
-    conn: tlsz.Connection = undefined,
-
-    fn wire(self: *End, io: source_namespace.Io) void {
-        self.reader = self.stream.reader(io, &self.in_buf);
-        self.writer = self.stream.writer(io, &self.out_buf);
-    }
-
-    /// `Io.Reader`/`Io.Writer` collapse every transport failure into one
-    /// error and stash the real one on the side. A handshake that died
-    /// because the peer reset the socket and one that died because we sent
-    /// something wrong are very different findings, so dig the real error
-    /// back out before reporting.
-    fn concrete(self: *End, err: anyerror) anyerror {
-        if (err == error.WriteFailed) {
-            return self.writer.err orelse err;
-        }
-        if (err == error.ReadFailed) {
-            return self.reader.err orelse err;
-        }
-        return err;
-    }
-};
 
 pub const Side = enum { child, origin };
 pub const Protocol = enum { http11, h2 };

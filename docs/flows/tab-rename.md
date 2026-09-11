@@ -110,24 +110,24 @@ client never replays a rename.
 
 ## Proof
 
-- `src/frontend/client/tab_renames.zig` proves one-time response correlation,
+- `src/frontend/client/controllers/tabs/tab_renames.zig` proves one-time response correlation,
   exact identity validation, wire translation and protocol error mapping.
-- `src/frontend/client/application/rename_tab.zig` proves local validation,
+- `src/client/application/tabs/rename_tab.zig` proves local validation,
   gating, exact target resolution, delivery failure and canonical confirmation.
-- `src/frontend/client/name_prompt.zig`,
-  `src/frontend/client/application/name_prompt.zig` and
-  `src/frontend/client/name_prompts.zig` prove editor ownership, submit ordering
+- `src/client/model/name_prompt.zig`,
+  `src/client/application/input/name_prompt.zig` and
+  `src/frontend/client/controllers/input/name_prompts.zig` prove editor ownership, submit ordering
   and prompt retention.
-- `src/frontend/client/outbox.zig` proves bounded storage and ownership of
+- `src/client/connection/outbox_support.zig` proves bounded storage and ownership of
   queued label bytes.
-- `src/frontend/workspace/tabs.zig` proves canonical label validation and
+- `src/client/workspace/tabs.zig` proves canonical label validation and
   no-op detection.
-- `src/frontend/client/model.zig` proves collection and active-identity version
+- `src/client/model/Model.zig` proves collection and active-identity version
   semantics.
-- `src/frontend/client/client_test.zig` proves prompt lifetime, wire
+- `src/frontend/client/tests/` proves prompt lifetime, wire
   correlation, runtime authority, failure notification and presenter pacing.
-- `src/backend/runtime/commands/tab.zig` and
-  `src/backend/runtime/controllers/tab.zig` prove commit ordering, owned events
+- `src/backend/runtime/application/commands/rename_tab.zig` and
+  `src/backend/runtime/entrypoints/requests/rename_tab.zig` prove commit ordering, owned events
   and expected runtime errors.
 - `runtime owns the complete tab lifecycle` in
   `src/transport_integration_test.zig` proves persistence across the process

@@ -1,9 +1,11 @@
+const PaneIdType = @import("telar-core").PaneId;
+const PaneProgressStateType = @import("telar-core").PaneProgressState;
 const PaneProjection = @This();
-const source_namespace = @import("multiplexer.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 cols: u16,
 rows: u16,
 scroll_offset: u32,
 graphics_placeholder: bool,
-progress_state: source_namespace.schema.PaneProgressState,
+progress_state: PaneProgressStateType,
 progress_percent: ?u8,

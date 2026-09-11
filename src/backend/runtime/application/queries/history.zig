@@ -1,23 +1,16 @@
 //! Application boundary for submitting owned history queries.
 
-const std = @import("std");
-const history_mod = @import("../../../history/root.zig");
-
-pub const Query = history_mod.Query;
-pub const QueryOrigin = history_mod.model.QueryOrigin;
-pub const schema = history_mod.model.schema;
-
-pub const Request = @import("HistoryRequest.zig");
-
-pub const ServicePort = @import("ServicePort.zig");
-
-pub const Executor = @import("HistoryExecutor.zig");
-
-pub const Handler = @import("HistoryHandler.zig");
-
+const HistoryRequest = @import("HistoryRequest.zig");
 const SubmissionCapture = @import("SubmissionCapture.zig");
+const HistoryHandler = @import("HistoryHandler.zig");
+const std = @import("std");
+const HistoryScope = @import("telar-core").HistoryScope;
+const PaneIdType = @import("telar-core").PaneId;
+const max_history_query_bytes = @import("telar-core").max_history_query_bytes;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const max_history_results = @import("telar-core").max_history_results;
 
-fn testingRequest() Request {
+fn testingRequest() HistoryRequest {
     return .{
         .request_id = @enumFromInt(11),
         .origin = .{
@@ -38,7 +31,7 @@ fn testingRequest() Request {
 
 test "Handler submits an owned query with its asynchronous reply origin" {
     var capture: SubmissionCapture = .{};
-    var handler: Handler = .{ .service = capture.port() };
+    var handler: HistoryHandler = .{ .service = capture.port() };
     var text = [_]u8{ 'g', 'i', 't' };
     var scope = [_]u8{ '/', 'w', 'o', 'r', 'k' };
     var request = testingRequest();
@@ -53,16 +46,16 @@ test "Handler submits an owned query with its asynchronous reply origin" {
     try std.testing.expectEqual(request.request_id, capture.query.request_id);
     try std.testing.expectEqualDeep(request.origin, capture.query.origin);
     try std.testing.expectEqualStrings("git", capture.query.textSlice());
-    try std.testing.expectEqual(history_mod.model.Scope.workspace, capture.query.scope);
+    try std.testing.expectEqual(HistoryScope.workspace, capture.query.scope);
     try std.testing.expectEqualStrings("/work", capture.query.scopeSlice());
-    try std.testing.expectEqual(schema.PaneId.invalid, capture.query.pane_id);
+    try std.testing.expectEqual(PaneIdType.invalid, capture.query.pane_id);
     try std.testing.expect(capture.query.failed_only);
     try std.testing.expectEqual(@as(u16, 12), capture.query.limit);
 }
 
 test "Handler reports bounded service backpressure after one submission" {
     var capture: SubmissionCapture = .{ .accepted = false };
-    var handler: Handler = .{ .service = capture.port() };
+    var handler: HistoryHandler = .{ .service = capture.port() };
 
     try std.testing.expectError(error.HistoryQueueFull, handler.execute(testingRequest()));
 
@@ -71,10 +64,10 @@ test "Handler reports bounded service backpressure after one submission" {
 
 test "Handler rejects every model constraint before service submission" {
     var capture: SubmissionCapture = .{};
-    var handler: Handler = .{ .service = capture.port() };
-    const long_text = [_]u8{'q'} ** (history_mod.model.max_query_bytes + 1);
-    const long_scope = [_]u8{'s'} ** (schema.max_cwd_bytes + 1);
-    var invalid = [_]Request{
+    var handler: HistoryHandler = .{ .service = capture.port() };
+    const long_text = [_]u8{'q'} ** (max_history_query_bytes + 1);
+    const long_scope = [_]u8{'s'} ** (max_cwd_bytes_module + 1);
+    var invalid = [_]HistoryRequest{
         testingRequest(),
         testingRequest(),
         testingRequest(),
@@ -85,7 +78,7 @@ test "Handler rejects every model constraint before service submission" {
     invalid[0].text = &long_text;
     invalid[1].scope_value = &long_scope;
     invalid[2].limit = 0;
-    invalid[3].limit = history_mod.model.max_results + 1;
+    invalid[3].limit = max_history_results + 1;
     invalid[4].scope = .pane;
     invalid[4].pane_id = .invalid;
     invalid[5].scope = .global;

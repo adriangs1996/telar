@@ -1,5 +1,6 @@
+const PaneIdType = @import("telar-core").PaneId;
 const AcknowledgeFrame = @This();
-const source_namespace = @import("frame_ack.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 frame_id: u64,
 received_at_ns: u64,

@@ -1,10 +1,32 @@
 const WriteJob = @import("WriteJob.zig");
-const source_namespace = @import("session_checkpoint.zig");
-const checkpoint = @import("../../persistence/checkpoint.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-const pane_mod = @import("../../pane/root.zig");
-const agent_mod = @import("../../agent/root.zig");
+const session_checkpoint = @import("session_checkpoint.zig");
 const std = @import("std");
+const checkpoint = @import("../../persistence/checkpoint.zig");
+const ReaderType = @import("../../persistence/Reader.zig");
+const workspace_module = @import("telar-core").workspace;
+const tab_module = @import("telar-core").tab;
+const commands = @import("../../workspace/commands.zig");
+const WorkspaceReader = @import("../../workspace/Reader.zig");
+const PaneStoreType = @import("../../pane/PaneStore.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const state_support = @import("../../workspace/state_support.zig");
+const WorkspaceListEntryType = @import("telar-core").WorkspaceListEntry;
+const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
+const TabDescriptorType = @import("telar-core").TabDescriptor;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const CountersType = @import("../../persistence/Counters.zig");
+const PaneRecordType = @import("../../persistence/PaneRecord.zig");
+const EncoderType = @import("telar-core").Encoder;
+const ArgumentIteratorType = @import("../../persistence/ArgumentIterator.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const SessionTitleType = @import("../../agent/SessionTitle.zig");
+const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
+const LayoutRecordType = @import("../../persistence/LayoutRecord.zig");
+const decodeClient_module = @import("telar-core").decodeClient;
+const PersistenceEncoder = @import("../../persistence/Encoder.zig");
+const raw_module = @import("telar-core").raw;
+const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
+
 /// Binds checkpointing to one application type. `Application` provides
 /// `io`, `gpa`, `session`, `model`, `select`, `workspaceRepository()`,
 /// `launchPane()`, `queueRestoredInput()` and `restoreAgentTitle()`.
@@ -36,7 +58,7 @@ pub fn Type(comptime Application: type) type {
             const path = application.session.path.?;
 
             const job: WriteJob = prepared: {
-                const buffer = try application.gpa.alloc(u8, source_namespace.snapshot_bytes);
+                const buffer = try application.gpa.alloc(u8, session_checkpoint.snapshot_bytes);
                 errdefer application.gpa.free(buffer);
                 const len = try encode(application, buffer);
 
@@ -65,10 +87,10 @@ pub fn Type(comptime Application: type) type {
             if (application.session.pending != null) {
                 return;
             }
-            const buffer = application.gpa.alloc(u8, source_namespace.snapshot_bytes) catch return;
+            const buffer = application.gpa.alloc(u8, session_checkpoint.snapshot_bytes) catch return;
             defer application.gpa.free(buffer);
             const len = encode(application, buffer) catch return;
-            source_namespace.writeFile(.{ .io = application.io, .path = path, .buffer = buffer, .len = len }) catch {
+            session_checkpoint.writeFile(.{ .io = application.io, .path = path, .buffer = buffer, .len = len }) catch {
                 application.session.failures += 1;
                 return;
             };
@@ -86,7 +108,7 @@ pub fn Type(comptime Application: type) type {
         pub fn restore(application: *Application) void {
             const path = application.session.path orelse return;
             const io = application.io;
-            const bytes = source_namespace.Io.Dir.cwd().readFileAlloc(io, path, application.gpa, .limited(checkpoint.max_file_bytes)) catch |err| switch (err) {
+            const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, application.gpa, .limited(checkpoint.max_file_bytes)) catch |err| switch (err) {
                 error.FileNotFound => return,
                 else => {
                     application.session.restore_failed = true;
@@ -106,12 +128,12 @@ pub fn Type(comptime Application: type) type {
         }
 
         fn validate(bytes: []const u8) !void {
-            var reader = try checkpoint.Reader.init(bytes);
+            var reader = try ReaderType.init(bytes);
             while (try reader.next()) |_| {}
         }
 
         fn apply(application: *Application, bytes: []const u8) !void {
-            var reader = try checkpoint.Reader.init(bytes);
+            var reader = try ReaderType.init(bytes);
             var repository = application.workspaceRepository();
             const panes = &application.model.panes;
             var layout_sources_ready = false;
@@ -120,19 +142,19 @@ pub fn Type(comptime Application: type) type {
             while (try reader.next()) |record| switch (record) {
                 .workspace => |workspace| {
                     _ = repository.restoreWorkspace(.{
-                        .id = try source_namespace.schema.id.workspace(workspace.id),
+                        .id = try workspace_module(workspace.id),
                         .path = workspace.path,
                         .explicit_name = if (workspace.name.len != 0) workspace.name else null,
-                        .first_tab_id = try source_namespace.schema.id.tab(workspace.first_tab_id),
+                        .first_tab_id = try tab_module(workspace.first_tab_id),
                         .first_tab_label = workspace.first_tab_label,
                     }) catch continue;
                     application.session.restored_workspaces +|= 1;
                 },
                 .tab => |tab| {
-                    const workspace_id = try source_namespace.schema.id.workspace(tab.workspace_id);
+                    const workspace_id = try workspace_module(tab.workspace_id);
                     repository.restoreTab(.{
                         .workspace = .{ .workspace = workspace_id },
-                        .tab_id = try source_namespace.schema.id.tab(tab.tab_id),
+                        .tab_id = try tab_module(tab.tab_id),
                     }, tab.label) catch continue;
                 },
                 .pane => |pane| restorePane(application, reader.counters, pane) catch continue,
@@ -155,20 +177,20 @@ pub fn Type(comptime Application: type) type {
         fn dropEmptyTabs(application: *Application) void {
             var repository = application.workspaceRepository();
             while (findEmptyTab(repository.reader(), &application.model.panes)) |location| {
-                _ = workspace_mod.removeTab(&repository, location) orelse break;
+                _ = commands.removeTab(&repository, location) orelse break;
                 application.session.dropped_tabs +|= 1;
                 application.noteSessionChange();
             }
         }
 
-        fn findEmptyTab(reader: workspace_mod.Reader, panes: *const pane_mod.PaneStore) ?source_namespace.schema.TabLocation {
-            var entries: [workspace_mod.max_workspaces]source_namespace.schema.WorkspaceListEntry = undefined;
-            var tabs: [workspace_mod.max_tabs_per_workspace]source_namespace.schema.TabDescriptor = undefined;
+        fn findEmptyTab(reader: WorkspaceReader, panes: *const PaneStoreType) ?TabLocationType {
+            var entries: [state_support.max_workspaces]WorkspaceListEntryType = undefined;
+            var tabs: [max_tabs_per_workspace_module]TabDescriptorType = undefined;
             for (reader.listEntries(&entries)) |entry| {
-                const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = entry.workspace };
+                const workspace: WorkspaceLocationType = .{ .workspace = entry.workspace };
                 const snapshot = reader.descriptors(workspace, &tabs) orelse continue;
                 for (snapshot.tabs) |tab| {
-                    const location: source_namespace.schema.TabLocation = .{ .workspace = workspace, .tab_id = tab.tab_id };
+                    const location: TabLocationType = .{ .workspace = workspace, .tab_id = tab.tab_id };
                     if (!panes.hasAt(location)) {
                         return location;
                     }
@@ -178,11 +200,11 @@ pub fn Type(comptime Application: type) type {
             return null;
         }
 
-        fn restorePane(application: *Application, counters: checkpoint.Counters, record: checkpoint.PaneRecord) !void {
-            const workspace_id = try source_namespace.schema.id.workspace(record.workspace_id);
-            const location: source_namespace.schema.TabLocation = .{
+        fn restorePane(application: *Application, counters: CountersType, record: PaneRecordType) !void {
+            const workspace_id = try workspace_module(record.workspace_id);
+            const location: TabLocationType = .{
                 .workspace = .{ .workspace = workspace_id },
-                .tab_id = try source_namespace.schema.id.tab(record.tab_id),
+                .tab_id = try tab_module(record.tab_id),
             };
             const reader = application.workspaceReader();
             if (!reader.contains(location)) {
@@ -191,13 +213,13 @@ pub fn Type(comptime Application: type) type {
             const workspace_path = reader.workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
 
             var argument_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
-            var encoder = source_namespace.schema.wire.Encoder.init(&argument_buffer);
-            var arguments = checkpoint.ArgumentIterator.init(record.arguments);
+            var encoder = EncoderType.init(&argument_buffer);
+            var arguments = ArgumentIteratorType.init(record.arguments);
             while (arguments.next()) |argument| {
                 try encoder.writeSized16(argument);
             }
             const encoded_arguments = encoder.finish();
-            const size: source_namespace.schema.TerminalSize = .{
+            const size: TerminalSizeType = .{
                 .cols = if (record.cols == 0) 80 else record.cols,
                 .rows = if (record.rows == 0) 24 else record.rows,
             };
@@ -220,8 +242,8 @@ pub fn Type(comptime Application: type) type {
             application.session.restored_panes +|= 1;
 
             if (application.session.resume_agents) {
-                var command_buffer: [source_namespace.max_resume_command_bytes]u8 = undefined;
-                if (source_namespace.resumeCommand(&command_buffer, @enumFromInt(record.agent_provider), record.agent_session)) |command| {
+                var command_buffer: [session_checkpoint.max_resume_command_bytes]u8 = undefined;
+                if (session_checkpoint.resumeCommand(&command_buffer, @enumFromInt(record.agent_provider), record.agent_session)) |command| {
                     try application.queueRestoredInput(pane, command);
                     application.session.resumed_agents +|= 1;
                     if (restoredTitle(record)) |title| {
@@ -233,17 +255,17 @@ pub fn Type(comptime Application: type) type {
 
         /// The title travels only with a session the runtime actually resumes;
         /// a plain relaunched shell must not wear the old agent's title.
-        fn restoredTitle(record: checkpoint.PaneRecord) ?agent_mod.SessionTitle {
+        fn restoredTitle(record: PaneRecordType) ?SessionTitleType {
             if (record.agent_title.len == 0) {
                 return null;
             }
 
-            const source = std.enums.fromInt(source_namespace.schema.AgentTitleSource, record.agent_title_source) orelse return null;
-            return agent_mod.SessionTitle.init(record.agent_title, source) catch null;
+            const source = std.enums.fromInt(AgentTitleSourceType, record.agent_title_source) orelse return null;
+            return SessionTitleType.init(record.agent_title, source) catch null;
         }
 
-        fn restoreLayout(application: *Application, record: checkpoint.LayoutRecord) !void {
-            const message = try source_namespace.schema.decodeClient(record.payload);
+        fn restoreLayout(application: *Application, record: LayoutRecordType) !void {
+            const message = try decodeClient_module(record.payload);
             const update = switch (message) {
                 .update_client_layout => |view| view,
                 else => return error.InvalidCheckpoint,
@@ -258,10 +280,10 @@ pub fn Type(comptime Application: type) type {
             });
         }
 
-        fn quarantine(io: source_namespace.Io, path: []const u8) void {
+        fn quarantine(io: std.Io, path: []const u8) void {
             var corrupt_buffer: [std.fs.max_path_bytes]u8 = undefined;
             const corrupt_path = std.fmt.bufPrint(&corrupt_buffer, "{s}.corrupt", .{path}) catch return;
-            source_namespace.Io.Dir.renameAbsolute(path, corrupt_path, io) catch {};
+            std.Io.Dir.renameAbsolute(path, corrupt_path, io) catch {};
         }
 
         /// Encodes the restorable model shape into `buffer`.
@@ -272,32 +294,32 @@ pub fn Type(comptime Application: type) type {
         pub fn encode(application: *Application, buffer: []u8) !usize {
             const reader = application.workspaceReader();
             const panes = &application.model.panes;
-            var encoder = try checkpoint.Encoder.init(buffer, .{
+            var encoder = try PersistenceEncoder.init(buffer, .{
                 .next_workspace_id = application.model.workspaces.next_workspace_id,
                 .next_tab_id = application.model.workspaces.next_tab_id,
                 .next_pane_id = panes.next_id,
                 .next_pane_generation = panes.next_generation,
             });
 
-            var entries: [workspace_mod.max_workspaces]source_namespace.schema.WorkspaceListEntry = undefined;
-            var descriptor_storage: [workspace_mod.max_tabs_per_workspace]source_namespace.schema.TabDescriptor = undefined;
+            var entries: [state_support.max_workspaces]WorkspaceListEntryType = undefined;
+            var descriptor_storage: [max_tabs_per_workspace_module]TabDescriptorType = undefined;
             for (reader.listEntries(&entries)) |entry| {
-                const location: source_namespace.schema.WorkspaceLocation = .{ .workspace = entry.workspace };
+                const location: WorkspaceLocationType = .{ .workspace = entry.workspace };
                 const snapshot = reader.descriptors(location, &descriptor_storage) orelse continue;
                 if (snapshot.tabs.len == 0) {
                     continue;
                 }
                 try encoder.workspace(.{
-                    .id = source_namespace.schema.id.raw(entry.workspace),
+                    .id = raw_module(entry.workspace),
                     .path = entry.path,
                     .name = reader.explicitName(location) orelse "",
-                    .first_tab_id = source_namespace.schema.id.raw(snapshot.tabs[0].tab_id),
+                    .first_tab_id = raw_module(snapshot.tabs[0].tab_id),
                     .first_tab_label = snapshot.tabs[0].label,
                 });
                 for (snapshot.tabs[1..]) |tab| {
                     try encoder.tab(.{
-                        .workspace_id = source_namespace.schema.id.raw(entry.workspace),
-                        .tab_id = source_namespace.schema.id.raw(tab.tab_id),
+                        .workspace_id = raw_module(entry.workspace),
+                        .tab_id = raw_module(tab.tab_id),
                         .label = tab.label,
                     });
                 }
@@ -315,9 +337,9 @@ pub fn Type(comptime Application: type) type {
                 const projected = application.model.agents.projectedProvider(pane.key());
                 const title = if (reference != null) application.model.agents.durableTitle(pane.key()) else null;
                 try encoder.pane(.{
-                    .pane_id = source_namespace.schema.id.raw(pane.id),
-                    .workspace_id = source_namespace.schema.id.raw(pane.location.workspace.workspace),
-                    .tab_id = source_namespace.schema.id.raw(pane.location.tab_id),
+                    .pane_id = raw_module(pane.id),
+                    .workspace_id = raw_module(pane.location.workspace.workspace),
+                    .tab_id = raw_module(pane.location.tab_id),
                     .cwd = pane.cwd.slice(),
                     .cols = pane.size.cols,
                     .rows = pane.size.rows,
@@ -330,7 +352,7 @@ pub fn Type(comptime Application: type) type {
                 });
             }
 
-            var layout_buffer: [source_namespace.schema.max_client_layout_wire_bytes]u8 = undefined;
+            var layout_buffer: [max_client_layout_wire_bytes_module]u8 = undefined;
             const store = &application.model.client_layouts;
             var index: usize = 0;
             while (index < store.capacity()) : (index += 1) {
@@ -346,7 +368,7 @@ pub fn Type(comptime Application: type) type {
         }
 
         fn nowNs(application: *Application) u64 {
-            return @intCast(source_namespace.Io.Timestamp.now(application.io, .awake).toNanoseconds());
+            return @intCast(std.Io.Timestamp.now(application.io, .awake).toNanoseconds());
         }
     };
 }

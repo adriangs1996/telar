@@ -1,5 +1,15 @@
-const source_namespace = @import("io.zig");
-const core = @import("telar-core");
+const InputCompletion = @import("../../../entrypoints/events/pane/InputCompletion.zig");
+const ResponseCompletion = @import("../../../entrypoints/events/pane/ResponseCompletion.zig");
+const PaneType = @import("../../../../pane/Pane.zig");
+const GenericInputRuntimePort = @import("../../../entrypoints/events/pane/GenericInputRuntimePort.zig").Type;
+const GenericInputPump = @import("../../../entrypoints/events/pane/GenericInputPump.zig").Type;
+const InputWrite = @import("../../../entrypoints/events/pane/InputWrite.zig");
+const mark_module = @import("telar-core").mark;
+const enter_module = @import("telar-core").enter;
+const GenericResponseRuntimePort = @import("../../../entrypoints/events/pane/GenericResponseRuntimePort.zig").Type;
+const GenericResponsePump = @import("../../../entrypoints/events/pane/GenericResponsePump.zig").Type;
+const ResponseWrite = @import("../../../entrypoints/events/pane/ResponseWrite.zig");
+
 /// Binds pane input and response writes to one concrete Application type.
 ///
 /// ```zig
@@ -13,7 +23,7 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// try PaneIoEvents.handleInputWritten(&application, event);
         /// ```
-        pub fn handleInputWritten(application: *Application, event: source_namespace.PaneInputEvent) !void {
+        pub fn handleInputWritten(application: *Application, event: InputCompletion) !void {
             var input_pump = paneInputPump(application);
             try input_pump.complete(event);
         }
@@ -24,7 +34,7 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// try PaneIoEvents.handleResponseWritten(&application, event);
         /// ```
-        pub fn handleResponseWritten(application: *Application, event: source_namespace.PaneResponseEvent) !void {
+        pub fn handleResponseWritten(application: *Application, event: ResponseCompletion) !void {
             var response_pump = paneResponsePump(application);
             try response_pump.complete(event);
         }
@@ -35,7 +45,7 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// try PaneIoEvents.scheduleInput(&application, pane);
         /// ```
-        pub fn scheduleInput(application: *Application, pane: *source_namespace.Pane) !void {
+        pub fn scheduleInput(application: *Application, pane: *PaneType) !void {
             var input_pump = paneInputPump(application);
             return input_pump.schedule(pane);
         }
@@ -46,17 +56,17 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// try PaneIoEvents.scheduleResponse(&application, pane);
         /// ```
-        pub fn scheduleResponse(application: *Application, pane: *source_namespace.Pane) !void {
+        pub fn scheduleResponse(application: *Application, pane: *PaneType) !void {
             var response_pump = paneResponsePump(application);
             return response_pump.schedule(pane);
         }
 
-        const pane_input_runtime_port: source_namespace.pane_input_pump.RuntimePort(Application) = .{
+        const pane_input_runtime_port: GenericInputRuntimePort(Application) = .{
             .start = startPaneInputWrite,
             .collect = collectPaneLifecycle,
         };
 
-        const RuntimePaneInputPump = source_namespace.pane_input_pump.Pump(Application, pane_input_runtime_port);
+        const RuntimePaneInputPump = GenericInputPump(Application, pane_input_runtime_port);
 
         fn paneInputPump(application: *Application) RuntimePaneInputPump {
             return RuntimePaneInputPump.init(application, .{
@@ -66,15 +76,15 @@ pub fn Type(comptime Application: type) type {
             });
         }
 
-        fn startPaneInputWrite(application: *Application, write: source_namespace.pane_input_pump.Write) !void {
-            core.echo_trace.mark(application.io, .pty_write_queued);
+        fn startPaneInputWrite(application: *Application, write: InputWrite) !void {
+            mark_module(application.io, .pty_write_queued);
             try application.select.concurrent(.pane_input_written, writePaneInput, .{write});
         }
 
-        fn writePaneInput(write: source_namespace.pane_input_pump.Write) source_namespace.PaneInputEvent {
-            core.echo_trace.mark(write.io, .pty_write_start);
-            defer core.echo_trace.mark(write.io, .pty_write_done);
-            const path = source_namespace.diagnostics.enter(.interactive);
+        fn writePaneInput(write: InputWrite) InputCompletion {
+            mark_module(write.io, .pty_write_start);
+            defer mark_module(write.io, .pty_write_done);
+            const path = enter_module(.interactive);
             defer path.restore();
 
             write.pane.pty_write_mutex.lockUncancelable(write.io);
@@ -87,12 +97,12 @@ pub fn Type(comptime Application: type) type {
             };
         }
 
-        const pane_response_runtime_port: source_namespace.pane_response_pump.RuntimePort(Application) = .{
+        const pane_response_runtime_port: GenericResponseRuntimePort(Application) = .{
             .start = startPaneResponseWrite,
             .collect = collectPaneLifecycle,
         };
 
-        const RuntimePaneResponsePump = source_namespace.pane_response_pump.Pump(Application, pane_response_runtime_port);
+        const RuntimePaneResponsePump = GenericResponsePump(Application, pane_response_runtime_port);
 
         fn paneResponsePump(application: *Application) RuntimePaneResponsePump {
             return RuntimePaneResponsePump.init(application, .{
@@ -102,12 +112,12 @@ pub fn Type(comptime Application: type) type {
             });
         }
 
-        fn startPaneResponseWrite(application: *Application, write: source_namespace.pane_response_pump.Write) !void {
+        fn startPaneResponseWrite(application: *Application, write: ResponseWrite) !void {
             try application.select.concurrent(.pane_response_written, writePaneResponse, .{write});
         }
 
-        fn writePaneResponse(write: source_namespace.pane_response_pump.Write) source_namespace.PaneResponseEvent {
-            const path = source_namespace.diagnostics.enter(.interactive);
+        fn writePaneResponse(write: ResponseWrite) ResponseCompletion {
+            const path = enter_module(.interactive);
             defer path.restore();
 
             write.pane.pty_write_mutex.lockUncancelable(write.io);

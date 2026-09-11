@@ -10,22 +10,18 @@
 //! counting), history capture (OSC payloads), and input classification
 //! (submits and bracketed paste).
 
+pub const OscScanner = @import("OscScanner.zig");
+const OscCapture = @import("OscCapture.zig");
+pub const InputScanner = @import("InputScanner.zig");
 const std = @import("std");
+pub const KittyFramingCounter = @import("KittyFramingCounter.zig");
 
 pub const esc = 0x1b;
 pub const bel = 0x07;
 
-pub const OscScanner = @import("OscScanner.zig");
-
-pub const KittyFramingCounter = @import("KittyFramingCounter.zig");
-
-pub const InputScanner = @import("InputScanner.zig");
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-const OscCapture = @import("OscCapture.zig");
 
 fn collectOsc(scanner: *OscScanner, bytes: []const u8, capture: OscCapture) void {
     for (bytes) |byte| switch (scanner.next(byte)) {

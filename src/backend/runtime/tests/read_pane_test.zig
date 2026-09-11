@@ -1,17 +1,22 @@
 //! Vertical tests for bounded pane text reads.
 
+const PaneFixture = @import("PaneFixture.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const pane_mod = @import("../../pane/root.zig");
-const delivery_mod = @import("../delivery/root.zig");
+const max_pane_text_bytes_module = @import("telar-core").max_pane_text_bytes;
+const max_pane_text_rows_module = @import("telar-core").max_pane_text_rows;
+const PaneStoreType = @import("../../pane/PaneStore.zig");
+const StateType = @import("../../workspace/State.zig");
+const RepositoryType = @import("../../workspace/Repository.zig");
+const ResponseQueueType = @import("../delivery/ResponseQueue.zig");
+const ReadPaneController = @import("../entrypoints/requests/ReadPaneController.zig");
+const max_frame_size_module = @import("telar-core").max_frame_size;
+const QueryResultType = @import("../../history/QueryResult.zig");
+const OutputResultType = @import("../../history/OutputResult.zig");
+const StatsResultType = @import("../../history/StatsResult.zig");
+const EncodeContextType = @import("../delivery/EncodeContext.zig");
+const decodeServer_module = @import("telar-core").decodeServer;
 const encoder = @import("../delivery/encoder.zig");
-const read_pane_controller = @import("../entrypoints/requests/read_pane.zig");
-const history = @import("../../history/root.zig");
-const test_support = @import("support.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-
-const schema = core.schema;
-const PaneFixture = test_support.PaneFixture;
+const FailureCodeType = @import("telar-core").FailureCode;
 
 fn ingestLines(fixture: *PaneFixture) !void {
     _ = try fixture.pane.ingest(
@@ -26,7 +31,7 @@ test "recent rows dump scrollback and screen as plain text, newest last" {
     try fixture.init();
     defer fixture.deinit();
     try ingestLines(&fixture);
-    var storage: [schema.max_pane_text_bytes]u8 = undefined;
+    var storage: [max_pane_text_bytes_module]u8 = undefined;
 
     const dump = fixture.pane.dumpText(.{ .rows = 3, .source = .recent }, &storage);
 
@@ -39,9 +44,9 @@ test "screen rows never reach into scrollback" {
     try fixture.init();
     defer fixture.deinit();
     try ingestLines(&fixture);
-    var storage: [schema.max_pane_text_bytes]u8 = undefined;
+    var storage: [max_pane_text_bytes_module]u8 = undefined;
 
-    const dump = fixture.pane.dumpText(.{ .rows = schema.max_pane_text_rows, .source = .screen }, &storage);
+    const dump = fixture.pane.dumpText(.{ .rows = max_pane_text_rows_module, .source = .screen }, &storage);
 
     try std.testing.expect(!dump.truncated);
     try std.testing.expectEqualStrings("four\nfive\nsix\nseven", storage[0..dump.len]);
@@ -65,19 +70,19 @@ test "read crosses controller and encoder and degrades to a failure for a gone p
     try fixture.init();
     defer fixture.deinit();
     try ingestLines(&fixture);
-    var panes: pane_mod.PaneStore = .{};
+    var panes: PaneStoreType = .{};
     try panes.insert(fixture.pane);
-    var state: workspace_mod.State = .{};
-    var workspaces = workspace_mod.Repository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
-    var responses: delivery_mod.ResponseQueue = .{};
-    var controller = read_pane_controller.Controller.init(&responses);
-    const buffer = try std.testing.allocator.alloc(u8, core.transport.max_frame_size);
+    var responses: ResponseQueueType = .{};
+    var controller = ReadPaneController.init(&responses);
+    const buffer = try std.testing.allocator.alloc(u8, max_frame_size_module);
     defer std.testing.allocator.free(buffer);
-    var history_result: ?*history.model.QueryResult = null;
-    var history_output: ?*history.model.OutputResult = null;
-    var history_stats: ?*history.model.StatsResult = null;
-    const context: encoder.EncodeContext = .{
+    var history_result: ?*QueryResultType = null;
+    var history_output: ?*OutputResultType = null;
+    var history_stats: ?*StatsResultType = null;
+    const context: EncodeContextType = .{
         .buffer = buffer,
         .panes = &panes,
         .workspaces = workspaces.reader(),
@@ -93,7 +98,7 @@ test "read crosses controller and encoder and degrades to a failure for a gone p
         .rows = 3,
         .source = .recent,
     });
-    const text = (try schema.decodeServer(try encoder.encodeResponse(context, &responses.items[0]))).pane_text;
+    const text = (try decodeServer_module(try encoder.encodeResponse(context, &responses.items[0]))).pane_text;
 
     try std.testing.expectEqual(@as(u64, 3), @intFromEnum(text.request_id));
     try std.testing.expectEqual(fixture.pane.id, text.pane_id);
@@ -107,8 +112,8 @@ test "read crosses controller and encoder and degrades to a failure for a gone p
         .rows = 2,
         .source = .screen,
     });
-    const failure = (try schema.decodeServer(try encoder.encodeResponse(context, &responses.items[1]))).request_failed;
+    const failure = (try decodeServer_module(try encoder.encodeResponse(context, &responses.items[1]))).request_failed;
 
     try std.testing.expectEqual(@as(u64, 4), @intFromEnum(failure.request_id));
-    try std.testing.expectEqual(schema.FailureCode.pane_not_found, failure.code);
+    try std.testing.expectEqual(FailureCodeType.pane_not_found, failure.code);
 }

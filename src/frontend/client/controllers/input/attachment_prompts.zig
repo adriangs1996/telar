@@ -1,22 +1,27 @@
 //! Binds Telar's local image previews to Codex, Claude and Pi prompt markers.
 
 const std = @import("std");
-const core = @import("telar-core");
-const attachments = @import("../../../attachments/root.zig");
-const input_capability = @import("../../../input/root.zig");
-const input_application = @import("telar-client").application.input;
-const pane_inputs = @import("pane_inputs.zig");
-
+const max_removal_keys = @import("telar-client").max_removal_keys;
+const max_keys_module = @import("telar-client").max_keys;
 const Client = @import("../../Client.zig");
-const attachment_prompt = input_application.attachment_prompt;
-const key_routing = input_application.key_routing;
-const pane_input = input_application.pane_input;
-const schema = core.schema;
-
-const max_removal_keys = attachments.max_removal_keys;
+const AttachmentsTypesId = @import("telar-client").AttachmentId;
+const DismissAttachmentHandlerType = @import("telar-client").DismissAttachmentHandler;
+const PaneIdType = @import("telar-core").PaneId;
+const ApplicationInputKeyRoutingCommand = @import("telar-client").ApplicationInputKeyRoutingCommand;
+const ObservePaneInputHandlerType = @import("telar-client").ObservePaneInputHandler;
+const editsMarkers_module = @import("telar-client").editsMarkers;
+const TargetType = @import("telar-client").AttachmentTarget;
+const MarkerPolicyType = @import("telar-client").MarkerPolicy;
+const markerPolicy_module = @import("telar-client").markerPolicy;
+const RemovalCommandType = @import("telar-client").RemovalCommand;
+const KeyType = @import("telar-client").Key;
+const pane_inputs = @import("pane_inputs.zig");
+const MarkerDeletionType = @import("telar-client").MarkerDeletion;
+const backslashContinuesPrompt_module = @import("telar-client").backslashContinuesPrompt;
+const promptContinuesAtCursor_module = @import("telar-client").promptContinuesAtCursor;
 
 comptime {
-    std.debug.assert(max_removal_keys <= pane_input.max_keys);
+    std.debug.assert(max_removal_keys <= max_keys_module);
 }
 
 /// Deletes the paired child marker and then retires one local preview.
@@ -24,8 +29,8 @@ comptime {
 /// ```zig
 /// const layout_changed = try dismiss(client, id);
 /// ```
-pub fn dismiss(client: *Client, id: attachments.Id) !bool {
-    var use_case: attachment_prompt.DismissAttachmentHandler = .{ .effects = .{
+pub fn dismiss(client: *Client, id: AttachmentsTypesId) !bool {
+    var use_case: DismissAttachmentHandlerType = .{ .effects = .{
         .context = client,
         .plan = planRemoval,
         .deliver = deliverRemoval,
@@ -41,9 +46,9 @@ pub fn dismiss(client: *Client, id: attachments.Id) !bool {
 /// ```zig
 /// const layout_changed = observe(client, pane_id, command);
 /// ```
-pub fn observe(client: *Client, pane_id: schema.PaneId, command: key_routing.Command) bool {
+pub fn observe(client: *Client, pane_id: PaneIdType, command: ApplicationInputKeyRoutingCommand) bool {
     expectMarkerDeletion(client, pane_id, command);
-    var use_case: attachment_prompt.ObservePaneInputHandler = .{
+    var use_case: ObservePaneInputHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -59,7 +64,7 @@ pub fn observe(client: *Client, pane_id: schema.PaneId, command: key_routing.Com
     return use_case.execute(pane_id, command);
 }
 
-fn expectMarkerDeletion(client: *Client, pane_id: schema.PaneId, command: key_routing.Command) void {
+fn expectMarkerDeletion(client: *Client, pane_id: PaneIdType, command: ApplicationInputKeyRoutingCommand) void {
     const key = switch (command) {
         .bytes => return,
         .key => |value| value,
@@ -70,7 +75,7 @@ fn expectMarkerDeletion(client: *Client, pane_id: schema.PaneId, command: key_ro
     }
 
     const policy = learnedPolicy(client, target) orelse return;
-    if (!attachment_prompt.editsMarkers(policy, key)) {
+    if (!editsMarkers_module(policy, key)) {
         return;
     }
 
@@ -79,9 +84,9 @@ fn expectMarkerDeletion(client: *Client, pane_id: schema.PaneId, command: key_ro
 
 /// Resolves the marker policy of a target whose provider learns marker
 /// identities from committed frames.
-fn learnedPolicy(client: *Client, target: attachments.Target) ?attachments.MarkerPolicy {
+fn learnedPolicy(client: *Client, target: TargetType) ?MarkerPolicyType {
     const markers = client.model.attachmentMarkers(target) orelse return null;
-    const policy = attachment_prompt.markerPolicy(markers);
+    const policy = markerPolicy_module(markers);
 
     return if (policy.learnsIdentity()) policy else null;
 }
@@ -92,7 +97,7 @@ fn learnedPolicy(client: *Client, target: attachments.Target) ?attachments.Marke
 /// ```zig
 /// const layout_changed = reconcileFrame(client, pane_id);
 /// ```
-pub fn reconcileFrame(client: *Client, pane_id: schema.PaneId) bool {
+pub fn reconcileFrame(client: *Client, pane_id: PaneIdType) bool {
     const target = client.view.kittyAttachments().visibleTarget() orelse return false;
     if (target.pane_id != pane_id or learnedPolicy(client, target) == null) {
         return false;
@@ -107,7 +112,7 @@ pub fn reconcileFrame(client: *Client, pane_id: schema.PaneId) bool {
     }) orelse false;
 }
 
-fn planRemoval(raw_context: *anyopaque, id: attachments.Id) ?attachment_prompt.RemovalCommand {
+fn planRemoval(raw_context: *anyopaque, id: AttachmentsTypesId) ?RemovalCommandType {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const target = client.view.kittyAttachments().visibleTarget() orelse return null;
     const model = client.model.activeTabModelConst() orelse return null;
@@ -120,15 +125,15 @@ fn planRemoval(raw_context: *anyopaque, id: attachments.Id) ?attachment_prompt.R
     return .{ .pane_id = target.pane_id, .marker = marker };
 }
 
-fn deliverRemoval(raw_context: *anyopaque, command: attachment_prompt.RemovalCommand) !void {
+fn deliverRemoval(raw_context: *anyopaque, command: RemovalCommandType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    var keys: [max_removal_keys]input_capability.Key = undefined;
+    var keys: [max_removal_keys]KeyType = undefined;
     var len: usize = 0;
-    const movement: input_capability.Key.Code = switch (command.marker.direction) {
+    const movement: KeyType.Code = switch (command.marker.direction) {
         .left => .left,
         .right => .right,
     };
-    const restoration: input_capability.Key.Code = switch (command.marker.direction) {
+    const restoration: KeyType.Code = switch (command.marker.direction) {
         .left => .right,
         .right => .left,
     };
@@ -154,13 +159,13 @@ fn deliverRemoval(raw_context: *anyopaque, command: attachment_prompt.RemovalCom
         return error.AttachmentMarkerDeliveryUnavailable;
 }
 
-fn visibleTarget(raw_context: *anyopaque) ?attachments.Target {
+fn visibleTarget(raw_context: *anyopaque) ?TargetType {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     return client.view.kittyAttachments().visibleTarget();
 }
 
-fn markerAtCursor(raw_context: *anyopaque, deletion: attachments.MarkerDeletion) ?attachments.Id {
+fn markerAtCursor(raw_context: *anyopaque, deletion: MarkerDeletionType) ?AttachmentsTypesId {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const target = client.view.kittyAttachments().visibleTarget() orelse return null;
     const model = client.model.activeTabModelConst() orelse return null;
@@ -172,7 +177,7 @@ fn markerAtCursor(raw_context: *anyopaque, deletion: attachments.MarkerDeletion)
     }, deletion);
 }
 
-fn pendingMarkerAtCursor(raw_context: *anyopaque, deletion: attachments.MarkerDeletion) bool {
+fn pendingMarkerAtCursor(raw_context: *anyopaque, deletion: MarkerDeletionType) bool {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const target = client.model.focusedAttachmentTarget() orelse return false;
     const model = client.model.activeTabModelConst() orelse return false;
@@ -183,35 +188,35 @@ fn pendingMarkerAtCursor(raw_context: *anyopaque, deletion: attachments.MarkerDe
     return client.view.kittyAttachments().pendingMarkerAtDeletion(.{
         .buffer = &pane.buffer,
         .cursor = pane.cursor,
-    }, .{ .deletion = deletion, .policy = attachment_prompt.markerPolicy(markers) });
+    }, .{ .deletion = deletion, .policy = markerPolicy_module(markers) });
 }
 
 /// Reports whether the accepted Enter continues the prompt instead of
 /// submitting it: the agent's editor treats a trailing backslash as a
 /// newline request.
-fn promptContinues(raw_context: *anyopaque, target: attachments.Target) bool {
+fn promptContinues(raw_context: *anyopaque, target: TargetType) bool {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const markers = client.model.attachmentMarkers(target) orelse return false;
-    if (!attachment_prompt.backslashContinuesPrompt(attachment_prompt.markerPolicy(markers))) {
+    if (!backslashContinuesPrompt_module(markerPolicy_module(markers))) {
         return false;
     }
 
     const model = client.model.activeTabModelConst() orelse return false;
     const pane = model.findConst(target.pane_id) orelse return false;
 
-    return attachments.promptContinuesAtCursor(.{
+    return promptContinuesAtCursor_module(.{
         .buffer = &pane.buffer,
         .cursor = pane.cursor,
     });
 }
 
-fn removeAttachment(raw_context: *anyopaque, id: attachments.Id) ?bool {
+fn removeAttachment(raw_context: *anyopaque, id: AttachmentsTypesId) ?bool {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     return client.view.removeAttachment(id);
 }
 
-fn removePrompt(raw_context: *anyopaque, target: attachments.Target) ?bool {
+fn removePrompt(raw_context: *anyopaque, target: TargetType) ?bool {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     return client.view.removePromptAttachments(target);

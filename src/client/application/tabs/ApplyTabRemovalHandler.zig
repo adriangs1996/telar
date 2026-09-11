@@ -1,9 +1,10 @@
-const ApplyTabRemovalHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const RemovalDelivery = @import("RemovalDelivery.zig");
 const ApplyTabRemoval = @import("ApplyTabRemoval.zig");
-const source_namespace = @import("close_tab.zig");
-model: *client_model.Model,
+const close_tab = @import("close_tab.zig");
+const ApplyTabRemovalHandler = @This();
+
+model: *ModelType,
 delivery: RemovalDelivery,
 
 /// Validates and commits one canonical tab-removal fact before delegating
@@ -13,8 +14,8 @@ delivery: RemovalDelivery,
 /// ```zig
 /// const directive = try handler.execute(command);
 /// ```
-pub fn execute(handler: *ApplyTabRemovalHandler, command: ApplyTabRemoval) !source_namespace.TabRemovalDirective {
-    try source_namespace.validateWorkspaceTransition(command);
+pub fn execute(handler: *ApplyTabRemovalHandler, command: ApplyTabRemoval) !close_tab.TabRemovalDirective {
+    try close_tab.validateWorkspaceTransition(command);
 
     const commit = try handler.model.removeTab(.{
         .location = command.location,

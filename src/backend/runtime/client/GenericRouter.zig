@@ -1,5 +1,6 @@
 const GenericHandlers = @import("GenericHandlers.zig").Type;
-const source_namespace = @import("request_router.zig");
+const ClientMessageType = @import("telar-core").ClientMessage;
+
 /// Creates an exhaustive router whose callbacks are resolved at compile time.
 ///
 /// ```zig
@@ -26,7 +27,7 @@ pub fn Type(comptime Context: type, comptime handlers: GenericHandlers(Context))
         /// ```zig
         /// try router.route(message);
         /// ```
-        pub fn route(router: Self, message: source_namespace.schema.ClientMessage) !void {
+        pub fn route(router: Self, message: ClientMessageType) !void {
             return switch (message) {
                 .open_pane => |request| handlers.open_pane(router.context, request),
                 .pane_input => |request| handlers.pane_input(router.context, request),

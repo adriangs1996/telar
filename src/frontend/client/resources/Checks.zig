@@ -1,6 +1,8 @@
+const SupportType = @import("telar-client").Support;
+const capabilities = @import("../../graphics/capabilities.zig");
 /// The client facts `resolve` validates a loaded configuration against.
 const Checks = @This();
-const source_namespace = @import("config_reload.zig");
-kitty_support: source_namespace.kitty.Support,
+
+kitty_support: SupportType,
 sidebar_renderer_locked: bool,
-current_sidebar: source_namespace.kitty.SidebarRendering,
+current_sidebar: capabilities.SidebarRendering,

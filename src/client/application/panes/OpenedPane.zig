@@ -1,5 +1,7 @@
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
 const OpenedPane = @This();
-const source_namespace = @import("pane_open_delivery.zig");
-pane_id: source_namespace.schema.PaneId,
-location: source_namespace.schema.TabLocation,
+
+pane_id: PaneIdType,
+location: TabLocationType,
 created: bool,

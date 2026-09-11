@@ -1,24 +1,23 @@
 //! Adapts terminal protocol replies and probe expiry to client host state.
 
-const std = @import("std");
-const graphics = @import("../../../graphics/root.zig");
-const presentation = @import("../../../presentation/root.zig");
-const host_application = @import("telar-client").application.host;
-const client_clock = @import("telar-client").resources.clock;
-const client_model = @import("telar-client").model;
-const host_resources = @import("host_resources.zig");
-const negotiation = @import("../../resources/host_negotiation.zig");
-const deadline_timer = @import("telar-client").resources.deadline_timer;
-
 const Client = @import("../../Client.zig");
-const host_capability = host_application.host_capabilities;
-const kitty = graphics.kitty;
-const term = presentation.screen;
+const capabilities_module = @import("../../../graphics/capabilities.zig");
+const negotiation = @import("../../resources/host_negotiation.zig");
+const monotonic_module = @import("telar-client").monotonic;
+const wait_module = @import("telar-client").wait;
+const HostCommitType = @import("telar-client").HostCommit;
+const term = @import("../../../presentation/screen_support.zig");
+const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const HandlerType = @import("telar-client").HostCapabilitiesHandler;
+const HostCapabilityObservationType = @import("telar-client").HostCapabilityObservation;
+const HostCapabilitySupportType = @import("telar-client").HostCapabilitySupport;
+const host_resources = @import("host_resources.zig");
+const std = @import("std");
 
 /// Starts the exterior-terminal probes through one owner.
 /// Example: `try begin(client);`.
 pub fn begin(client: *Client) !void {
-    try client.writer.writeAll(kitty.capability_query);
+    try client.writer.writeAll(capabilities_module.query);
     try queryColors(client);
     try client.writer.flush();
 }
@@ -32,7 +31,7 @@ pub fn refresh(client: *Client) !void {
 }
 
 fn queryColors(client: *Client) !void {
-    if (!client.host_negotiation.begin(client_clock.monotonic(client.io))) {
+    if (!client.host_negotiation.begin(monotonic_module(client.io))) {
         return;
     }
 
@@ -45,7 +44,7 @@ pub fn scheduleExpiry(client: *Client) !void {
     const state = &client.host_negotiation;
     switch (state.timer.update(client.io, state.deadline_ns)) {
         .idle, .retained => {},
-        .schedule => client.select.concurrent(.capability_timeout, deadline_timer.wait, .{
+        .schedule => client.select.concurrent(.capability_timeout, wait_module, .{
             client.io, &state.timer,
         }) catch |err| {
             state.timer.schedulingFailed();
@@ -59,9 +58,9 @@ pub fn scheduleExpiry(client: *Client) !void {
 /// ```zig
 /// _ = try handleExpiry(client, result);
 /// ```
-pub fn handleExpiry(client: *Client, result: anyerror!void) !?client_model.HostCommit {
+pub fn handleExpiry(client: *Client, result: anyerror!void) !?HostCommitType {
     try client.host_negotiation.timer.complete(result);
-    if (!client.host_negotiation.expire(client_clock.monotonic(client.io))) {
+    if (!client.host_negotiation.expire(monotonic_module(client.io))) {
         try scheduleExpiry(client);
         return null;
     }
@@ -74,21 +73,21 @@ pub fn handleExpiry(client: *Client, result: anyerror!void) !?client_model.HostC
 /// ```zig
 /// _ = try observe(client, response);
 /// ```
-pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?client_model.HostCommit {
+pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?HostCommitType {
     const color: ?negotiation.Color = switch (response) {
         .foreground_color => .foreground,
         .background_color => .background,
         else => null,
     };
     if (color) |target| {
-        if (!client.host_negotiation.accept(target, client_clock.monotonic(client.io))) {
+        if (!client.host_negotiation.accept(target, monotonic_module(client.io))) {
             return null;
         }
     }
 
-    if (response == .kitty_graphics and response.kitty_graphics.image_id == kitty.zlib_query_image_id) {
+    if (response == .kitty_graphics and response.kitty_graphics.image_id == capabilities_module.zlib_query_image_id) {
         client.host_negotiation.zlib_support = if (response.kitty_graphics.supported) .supported else .unsupported;
-        @import("../../../graphics/root.zig").kitty.delivery.setHostZlib(&client.graphics_store, response.kitty_graphics.supported);
+        kitty_delivery.setHostZlib(&client.graphics_store, response.kitty_graphics.supported);
         return null;
     }
 
@@ -103,7 +102,7 @@ pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?client_
 /// ```zig
 /// _ = try expire(client);
 /// ```
-pub fn expire(client: *Client) !?client_model.HostCommit {
+pub fn expire(client: *Client) !?HostCommitType {
     var use_case = handler(client);
 
     const capabilities = negotiation.settledCapabilities(client.model.hostCapabilities());
@@ -115,7 +114,7 @@ pub fn expire(client: *Client) !?client_model.HostCommit {
     return use_case.reconcile(capabilities);
 }
 
-fn handler(client: *Client) host_capability.Handler {
+fn handler(client: *Client) HandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -130,9 +129,9 @@ fn handler(client: *Client) host_capability.Handler {
 /// ```zig
 /// const observation = translate(response) orelse return;
 /// ```
-pub fn translate(response: term.Event.TerminalResponse) ?client_model.HostCapabilityObservation {
+pub fn translate(response: term.Event.TerminalResponse) ?HostCapabilityObservationType {
     return switch (response) {
-        .kitty_graphics => |reply| if (reply.image_id == kitty.query_image_id)
+        .kitty_graphics => |reply| if (reply.image_id == capabilities_module.query_image_id)
             .{ .images = support(reply.supported) }
         else
             null,
@@ -151,11 +150,11 @@ pub fn translate(response: term.Event.TerminalResponse) ?client_model.HostCapabi
     };
 }
 
-fn support(supported: bool) client_model.HostCapabilitySupport {
+fn support(supported: bool) HostCapabilitySupportType {
     return if (supported) .supported else .unsupported;
 }
 
-fn deliverResources(raw_context: *anyopaque, commit: client_model.HostCommit) !void {
+fn deliverResources(raw_context: *anyopaque, commit: HostCommitType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try host_resources.deliver(client, commit);
@@ -163,14 +162,14 @@ fn deliverResources(raw_context: *anyopaque, commit: client_model.HostCommit) !v
 
 test "Kitty probe replies translate by reserved image identity" {
     try std.testing.expectEqual(
-        client_model.HostCapabilityObservation{ .images = .supported },
+        HostCapabilityObservationType{ .images = .supported },
         translate(.{ .kitty_graphics = .{
-            .image_id = kitty.query_image_id,
+            .image_id = capabilities_module.query_image_id,
             .supported = true,
         } }).?,
     );
     try std.testing.expect(translate(.{ .kitty_graphics = .{
-        .image_id = kitty.zlib_query_image_id,
+        .image_id = capabilities_module.zlib_query_image_id,
         .supported = false,
     } }) == null);
     try std.testing.expect(translate(.{ .kitty_graphics = .{
@@ -181,21 +180,21 @@ test "Kitty probe replies translate by reserved image identity" {
 
 test "Geometry and mouse replies translate without protocol types" {
     try std.testing.expectEqual(
-        client_model.HostCapabilityObservation{ .window_pixels = .{
+        HostCapabilityObservationType{ .window_pixels = .{
             .width = 1200,
             .height = 800,
         } },
         translate(.{ .window_pixels = .{ .width = 1200, .height = 800 } }).?,
     );
     try std.testing.expectEqual(
-        client_model.HostCapabilityObservation{ .cell_pixels = .{
+        HostCapabilityObservationType{ .cell_pixels = .{
             .width = 10,
             .height = 20,
         } },
         translate(.{ .cell_pixels = .{ .width = 10, .height = 20 } }).?,
     );
     try std.testing.expectEqual(
-        client_model.HostCapabilityObservation{ .pointer_pixels = .supported },
+        HostCapabilityObservationType{ .pointer_pixels = .supported },
         translate(.{ .mouse_pixels = .{ .supported = true } }).?,
     );
     try std.testing.expect(translate(.primary_device_attributes) == null);

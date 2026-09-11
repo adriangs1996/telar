@@ -1,7 +1,8 @@
-const TabRenamed = @This();
-const source_namespace = @import("events.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const OwnedTabLabel = @import("OwnedTabLabel.zig");
-location: source_namespace.schema.TabLocation,
+const TabRenamed = @This();
+
+location: TabLocationType,
 label: OwnedTabLabel,
 
 /// Validates and owns the canonical label carried by a tab rename event.
@@ -10,7 +11,7 @@ label: OwnedTabLabel,
 /// ```zig
 /// const event = try TabRenamed.init(location, "server");
 /// ```
-pub fn init(location: source_namespace.schema.TabLocation, label: []const u8) !TabRenamed {
+pub fn init(location: TabLocationType, label: []const u8) !TabRenamed {
     return .{
         .location = location,
         .label = try .init(label),

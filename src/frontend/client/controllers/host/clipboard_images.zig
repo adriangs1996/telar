@@ -1,30 +1,31 @@
 //! Adapts local clipboard media workers to client application state.
 
-const std = @import("std");
-const attachments = @import("../../../attachments/root.zig");
-const input_application = @import("telar-client").application.input;
-const client_model = @import("telar-client").model;
-const notification_capability = @import("telar-client").notifications;
-const notification_flow = @import("../notifications/notifications.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
-
 const Client = @import("../../Client.zig");
-const clipboard_image = input_application.clipboard_image;
-const clipboard_image_delivery = input_application.clipboard_image_delivery;
-
-pub const Completion = @import("Completion.zig");
-
-pub const StartOutcome = clipboard_image.StartOutcome;
-
+const ApplicationInputClipboardImageStartOutcome = @import("telar-client").ApplicationInputClipboardImageStartOutcome;
+const StartClipboardImageHandlerType = @import("telar-client").StartClipboardImageHandler;
+const capture_module = @import("../../../attachments/capture.zig");
+const Completion = @import("Completion.zig");
 const CompletionContext = @import("CompletionContext.zig");
+const ApplicationInputClipboardImageCompletionCommand = @import("telar-client").ApplicationInputClipboardImageCompletionCommand;
+const CompleteClipboardImageHandlerType = @import("telar-client").CompleteClipboardImageHandler;
+const ClipboardCaptureType = @import("telar-client").ClipboardCapture;
+const CaptureRequestType = @import("telar-client").CaptureRequest;
+const markerPolicy_module = @import("telar-client").markerPolicy;
+const std = @import("std");
+const CaptureType = @import("telar-client").Capture;
+const pane_geometry = @import("../panes/pane_geometry.zig");
+const ApplicationInputClipboardImageCompletionOutcome = @import("telar-client").ApplicationInputClipboardImageCompletionOutcome;
+const DeliverClipboardImageCompletionHandlerType = @import("telar-client").DeliverClipboardImageCompletionHandler;
+const InputType = @import("telar-client").NotificationInput;
+const notification_flow = @import("../notifications/notifications.zig");
 
 /// Resolves the current target and schedules one best-effort media capture.
 ///
 /// ```zig
 /// _ = try start(client);
 /// ```
-pub fn start(client: *Client) !StartOutcome {
-    var use_case: clipboard_image.StartClipboardImageHandler = .{
+pub fn start(client: *Client) !ApplicationInputClipboardImageStartOutcome {
+    var use_case: StartClipboardImageHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -32,7 +33,7 @@ pub fn start(client: *Client) !StartOutcome {
         },
     };
 
-    return use_case.execute(attachments.platformSupported());
+    return use_case.execute(capture_module.platformSupported());
 }
 
 /// Consumes one worker event and adopts only its current exact result.
@@ -46,7 +47,7 @@ pub fn complete(client: *Client, completion: Completion) !void {
         capture.deinit(client.gpa);
     };
 
-    const command: clipboard_image.CompletionCommand = if (completion.result) |completed| completed: {
+    const command: ApplicationInputClipboardImageCompletionCommand = if (completion.result) |completed| completed: {
         const capture = client.clipboard_capture_resources.take(completed);
         context.capture = capture;
         break :completed .{ .succeeded = .{
@@ -58,7 +59,7 @@ pub fn complete(client: *Client, completion: Completion) !void {
         .execution_id = completion.execution_id,
         .reason = err,
     } };
-    var use_case: clipboard_image.CompleteClipboardImageHandler = .{
+    var use_case: CompleteClipboardImageHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = &context,
@@ -74,13 +75,13 @@ pub fn complete(client: *Client, completion: Completion) !void {
     _ = try use_case.execute(command);
 }
 
-fn schedule(raw_context: *anyopaque, capture: client_model.ClipboardCapture) !void {
+fn schedule(raw_context: *anyopaque, capture: ClipboardCaptureType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
-    const request: attachments.CaptureRequest = .{
+    const request: CaptureRequestType = .{
         .target = capture.target,
         .sequence = @intFromEnum(capture.id),
         .marker_policy = if (client.model.attachmentMarkers(capture.target)) |markers|
-            input_application.attachment_prompt.markerPolicy(markers)
+            markerPolicy_module(markers)
         else
             .ordered,
     };
@@ -92,10 +93,10 @@ fn schedule(raw_context: *anyopaque, capture: client_model.ClipboardCapture) !vo
     });
 }
 
-fn executeWorker(gpa: std.mem.Allocator, request: attachments.CaptureRequest, orphan: *?*attachments.Capture) Completion {
+fn executeWorker(gpa: std.mem.Allocator, request: CaptureRequestType, orphan: *?*CaptureType) Completion {
     return .{
         .execution_id = @enumFromInt(request.sequence),
-        .result = attachments.captureClipboard(gpa, request, orphan),
+        .result = capture_module.captureClipboard(gpa, request, orphan),
     };
 }
 
@@ -125,9 +126,9 @@ fn resize(raw_context: *anyopaque) !void {
     try pane_geometry.offerActive(context.client, context.client.geometry().area);
 }
 
-fn deliverOutcome(raw_context: *anyopaque, outcome: clipboard_image.CompletionOutcome) !void {
+fn deliverOutcome(raw_context: *anyopaque, outcome: ApplicationInputClipboardImageCompletionOutcome) !void {
     const context: *CompletionContext = @ptrCast(@alignCast(raw_context));
-    var use_case: clipboard_image_delivery.DeliverClipboardImageCompletionHandler = .{
+    var use_case: DeliverClipboardImageCompletionHandlerType = .{
         .effects = .{
             .context = context,
             .publish_notification = publishNotification,
@@ -137,7 +138,7 @@ fn deliverOutcome(raw_context: *anyopaque, outcome: clipboard_image.CompletionOu
     try use_case.execute(outcome);
 }
 
-fn publishNotification(raw_context: *anyopaque, input: notification_capability.Input) !void {
+fn publishNotification(raw_context: *anyopaque, input: InputType) !void {
     const context: *CompletionContext = @ptrCast(@alignCast(raw_context));
 
     try notification_flow.publishNow(context.client, input);

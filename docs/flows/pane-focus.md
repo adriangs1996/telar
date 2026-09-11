@@ -134,18 +134,18 @@ running.
   trip, reconnection on focus, rapid focus changes while attachment is pending,
   and `pane_input` delivery to both panes after confirmation.
 
-- `src/frontend/client/model.zig` proves focus resolution, report transitions,
+- `src/client/model/Model.zig` proves focus resolution, report transitions,
   exact retirement and the absence of presentation revisions for report state.
-- `src/frontend/client/application/focus_pane.zig` proves semantic
+- `src/client/application/panes/focus_pane.zig` proves semantic
   commit-before-delivery ordering.
-- `src/frontend/client/application/active_pane_resource_delivery.zig` proves
+- `src/client/application/panes/active_pane_resource_delivery.zig` proves
   attachment, reporting and geometry order, stale-focus rejection and partial
   failures.
-- `src/frontend/client/application/pane_focus_reporting.zig` proves reporting
+- `src/client/application/panes/pane_focus_reporting.zig` proves reporting
   commit order, focus-out before focus-in, effect failure and silent,
   idempotent canonical retirement.
-- `src/frontend/client/active_pane_resources.zig` implements view, transport,
+- `src/frontend/client/controllers/panes/active_pane_resources.zig` implements view, transport,
   graphics and geometry ports without selecting their order.
-- `src/frontend/client/client_test.zig` proves protocol order, mode opt-in,
+- `src/frontend/client/tests/` proves protocol order, mode opt-in,
   exact tab ownership, silent retirement, capacity reservation, mouse ordering
   and presentation through a substituted runtime socket.

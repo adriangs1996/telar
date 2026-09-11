@@ -1,4 +1,6 @@
+const PaneIdType = @import("telar-core").PaneId;
+const layout_support = @import("layout_support.zig");
 const SplitTarget = @This();
-const source_namespace = @import("layout_support.zig");
-pane_id: source_namespace.schema.PaneId,
-axis: source_namespace.Axis,
+
+pane_id: PaneIdType,
+axis: layout_support.Axis,

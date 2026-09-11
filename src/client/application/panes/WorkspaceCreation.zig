@@ -1,5 +1,6 @@
-const WorkspaceCreation = @This();
-const source_namespace = @import("pane_open_delivery.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const OpenedPane = @import("OpenedPane.zig");
-requested_size: source_namespace.schema.TerminalSize,
+const WorkspaceCreation = @This();
+
+requested_size: TerminalSizeType,
 opened: OpenedPane,

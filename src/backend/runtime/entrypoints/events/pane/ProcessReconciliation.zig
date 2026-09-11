@@ -1,7 +1,8 @@
+const PaneType = @import("../../../../pane/Pane.zig");
+const ProbeType = @import("../../../../process/Probe.zig");
+const HistoryObservationCompletionType = @import("../../../../pane/HistoryObservationCompletion.zig");
 const ProcessReconciliation = @This();
-const source_namespace = @import("observation.zig");
-const agent_process = @import("../../../../process/root.zig");
-const pane_mod = @import("../../../../pane/root.zig");
-pane: *source_namespace.Pane,
-probe: agent_process.Probe,
-transition: pane_mod.HistoryObservationCompletion,
+
+pane: *PaneType,
+probe: ProbeType,
+transition: HistoryObservationCompletionType,

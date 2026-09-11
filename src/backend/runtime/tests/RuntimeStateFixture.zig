@@ -1,26 +1,31 @@
-const RuntimeStateFixture = @This();
-const source_namespace = @import("runtime_state_test.zig");
-const pane_mod = @import("../../pane/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-const agent_mod = @import("../../agent/root.zig");
-const system_metrics_mod = @import("../observability/root.zig").system_metrics;
-const telemetry_mod = @import("../observability/root.zig").telemetry;
+const DeliveryType = @import("../delivery/Delivery.zig");
+const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
+const PaneStoreType = @import("../../pane/PaneStore.zig");
+const StateType = @import("../../workspace/State.zig");
+const TrackerType = @import("../../agent/Tracker.zig");
+const SamplerType = @import("../observability/Sampler.zig");
+const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
 const std = @import("std");
-const delivery_mod = @import("../delivery/root.zig");
-delivery: source_namespace.Delivery,
-attachments: source_namespace.AttachmentStore = .{},
-panes: pane_mod.PaneStore = .{},
-workspaces: workspace_mod.State = .{},
-agents: agent_mod.Tracker = .{},
-system_metrics: system_metrics_mod.Sampler = .{},
-metrics: telemetry_mod.RuntimeMetrics = .{ .started_ns = 0 },
+const SourcesType = @import("../delivery/Sources.zig");
+const ReaderType = @import("../../workspace/Reader.zig");
+const ServerMessageType = @import("telar-core").ServerMessage;
+const decodeServer_module = @import("telar-core").decodeServer;
+const RuntimeStateFixture = @This();
+
+delivery: DeliveryType,
+attachments: AttachmentStoreType = .{},
+panes: PaneStoreType = .{},
+workspaces: StateType = .{},
+agents: TrackerType = .{},
+system_metrics: SamplerType = .{},
+metrics: RuntimeMetricsType = .{ .started_ns = 0 },
 
 pub fn create() !*RuntimeStateFixture {
     const fixture = try std.testing.allocator.create(RuntimeStateFixture);
     errdefer std.testing.allocator.destroy(fixture);
 
     fixture.* = .{
-        .delivery = try source_namespace.Delivery.init(std.testing.allocator),
+        .delivery = try DeliveryType.init(std.testing.allocator),
     };
     fixture.system_metrics = .{
         .revision = 7,
@@ -39,10 +44,10 @@ pub fn destroy(fixture: *RuntimeStateFixture) void {
     std.testing.allocator.destroy(fixture);
 }
 
-fn sources(fixture: *RuntimeStateFixture) delivery_mod.Sources {
+fn sources(fixture: *RuntimeStateFixture) SourcesType {
     return .{
         .panes = &fixture.panes,
-        .workspaces = workspace_mod.Reader.init(&fixture.workspaces),
+        .workspaces = ReaderType.init(&fixture.workspaces),
         .agents = &fixture.agents,
         .system_metrics = &fixture.system_metrics,
         .proxy_active = true,
@@ -50,14 +55,14 @@ fn sources(fixture: *RuntimeStateFixture) delivery_mod.Sources {
     };
 }
 
-pub fn next(fixture: *RuntimeStateFixture) !?source_namespace.schema.ServerMessage {
+pub fn next(fixture: *RuntimeStateFixture) !?ServerMessageType {
     const prepared = (try fixture.delivery.prepare(.{
         .io = std.testing.io,
         .attachments = &fixture.attachments,
         .sources = fixture.sources(),
         .metrics = &fixture.metrics,
     })) orelse return null;
-    const message = try source_namespace.schema.decodeServer(prepared.payload);
+    const message = try decodeServer_module(prepared.payload);
     fixture.delivery.commit(.{
         .prepared = prepared,
         .attachments = &fixture.attachments,

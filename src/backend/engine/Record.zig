@@ -1,11 +1,12 @@
+const std = @import("std");
+const Envelope = @import("Envelope.zig");
+const rpc = @import("rpc.zig");
 /// One parsed record. `text` borrows the parse arena, so copy it before
 /// `deinit`.
 const Record = @This();
-const std = @import("std");
-const Envelope = @import("Envelope.zig");
-const source_namespace = @import("rpc.zig");
+
 parsed: std.json.Parsed(Envelope),
-kind: source_namespace.Kind,
+kind: rpc.Kind,
 
 /// The assistant text of a `get_last_assistant_text` reply, or null when
 /// the session holds no assistant message.

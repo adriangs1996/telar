@@ -1,5 +1,6 @@
+const PaneKeyType = @import("../../../pane/PaneKey.zig");
 const ReportAgentTitle = @This();
-const pane_mod = @import("../../../pane/root.zig");
-pane: pane_mod.PaneKey,
+
+pane: PaneKeyType,
 /// Empty clears an earlier agent title.
 title: []const u8,

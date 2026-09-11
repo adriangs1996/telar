@@ -1,35 +1,24 @@
 //! Application command for renaming a workspace aggregate.
 
+const StateType = @import("../../../workspace/State.zig");
+const RepositoryType = @import("../../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_mod = @import("../../../workspace/root.zig");
+const RenameWorkspaceEventCapture = @import("RenameWorkspaceEventCapture.zig");
+const RenameWorkspaceHandler = @import("RenameWorkspaceHandler.zig");
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const workspace_module = @import("telar-core").workspace;
 
-pub const schema = core.schema;
-pub const WorkspaceRepository = workspace_mod.Repository;
-
-pub const RenameWorkspace = @import("RenameWorkspace.zig");
-
-pub const RenameWorkspaceResult = workspace_mod.WorkspaceRenamed;
-
-pub const EventPublisher = @import("RenameWorkspaceEventPublisher.zig");
-
-pub const RenameWorkspaceExecutor = @import("RenameWorkspaceExecutor.zig");
-
-pub const RenameWorkspaceHandler = @import("RenameWorkspaceHandler.zig");
-
-const EventCapture = @import("RenameWorkspaceEventCapture.zig");
-
-fn testingRepository(state: *workspace_mod.State) WorkspaceRepository {
-    return WorkspaceRepository.init(state, std.testing.allocator);
+fn testingRepository(state: *StateType) RepositoryType {
+    return RepositoryType.init(state, std.testing.allocator);
 }
 
 test "RenameWorkspaceHandler commits before publishing one owned event" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location.workspace;
     const revision = workspaces.reader().revision();
-    var capture: EventCapture = .{ .reader = workspaces.reader() };
+    var capture: RenameWorkspaceEventCapture = .{ .reader = workspaces.reader() };
     var handler: RenameWorkspaceHandler = .{
         .workspaces = &workspaces,
         .events = capture.publisher(),
@@ -52,12 +41,12 @@ test "RenameWorkspaceHandler commits before publishing one owned event" {
 }
 
 test "RenameWorkspaceHandler rejects missing targets and invalid names without effects" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location.workspace;
     const revision = workspaces.reader().revision();
-    var capture: EventCapture = .{ .reader = workspaces.reader() };
+    var capture: RenameWorkspaceEventCapture = .{ .reader = workspaces.reader() };
     var handler: RenameWorkspaceHandler = .{
         .workspaces = &workspaces,
         .events = capture.publisher(),
@@ -68,13 +57,13 @@ test "RenameWorkspaceHandler rejects missing targets and invalid names without e
         .name = "",
     }));
 
-    const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    const oversized: [max_tab_label_bytes_module + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidWorkspaceName, handler.execute(.{
         .location = location,
         .name = &oversized,
     }));
     try std.testing.expectError(error.WorkspaceNotFound, handler.execute(.{
-        .location = .{ .workspace = try schema.id.workspace(999) },
+        .location = .{ .workspace = try workspace_module(999) },
         .name = "missing",
     }));
 

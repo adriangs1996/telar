@@ -1,10 +1,11 @@
-const RequestClosePaneHandler = @This();
-const client_model = @import("../../root.zig").model;
-const PaneOperationGate = @import("ClosePanePaneOperationGate.zig");
+const ModelType = @import("../../model/Model.zig");
+const ClosePaneOperationGate = @import("ClosePaneOperationGate.zig");
 const CloseRequestEffects = @import("CloseRequestEffects.zig");
-const source_namespace = @import("close_pane.zig");
-model: *const client_model.Model,
-gate: PaneOperationGate,
+const PaneClosureType = @import("../../model/PaneClosure.zig");
+const RequestClosePaneHandler = @This();
+
+model: *const ModelType,
+gate: ClosePaneOperationGate,
 effects: CloseRequestEffects,
 
 /// Sends one close request for the active attached pane. The request does
@@ -13,7 +14,7 @@ effects: CloseRequestEffects,
 /// ```zig
 /// const closure = try handler.execute() orelse return;
 /// ```
-pub fn execute(handler: *RequestClosePaneHandler) !?source_namespace.PaneClosure {
+pub fn execute(handler: *RequestClosePaneHandler) !?PaneClosureType {
     if (handler.gate.pending(handler.gate.context)) {
         return null;
     }

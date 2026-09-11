@@ -4,7 +4,10 @@
 //! speak the exact same schema or refuse the connection. Historical decoders
 //! belong here only once Telar promises rolling upgrades to users.
 
+const ServerAccept = @import("ServerAccept.zig");
+const ServerReject = @import("ServerReject.zig");
 const std = @import("std");
+const ClientHello = @import("ClientHello.zig");
 
 pub const SchemaId = [8]u8;
 /// Human-readable schema generation. Bump it on any breaking wire change so a
@@ -34,12 +37,6 @@ pub const Tag = enum(u8) {
 pub const RejectReason = enum(u8) {
     incompatible_schema = 1,
 };
-
-pub const ClientHello = @import("ClientHello.zig");
-
-pub const ServerAccept = @import("ServerAccept.zig");
-
-pub const ServerReject = @import("ServerReject.zig");
 
 pub const ServerResponse = union(enum) {
     accepted: ServerAccept,

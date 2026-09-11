@@ -1,9 +1,10 @@
-const Renderer = @This();
 const Frame = @import("Frame.zig");
 const std = @import("std");
 const Game = @import("Game.zig");
 const Colors = @import("Colors.zig");
 const Pixel = @import("Pixel.zig");
+const Renderer = @This();
+
 frame: Frame,
 
 pub fn deinit(self: *Renderer, allocator: std.mem.Allocator) void {

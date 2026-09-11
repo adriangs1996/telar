@@ -1,16 +1,11 @@
 //! Application boundary for client-owned copy mode.
 
+const CopyModeTestingModel = @import("CopyModeTestingModel.zig");
+const CopyModeEffectsCapture = @import("CopyModeEffectsCapture.zig");
+const CopyModeHandler = @import("CopyModeHandler.zig");
+const types = @import("../../model/types.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const input_capability = @import("../../input/root.zig");
-const client_model = @import("../../root.zig").model;
-const link_capability = @import("../../links/root.zig");
-const set_pane_viewport = @import("../panes/root.zig").set_pane_viewport;
-
-const keybind = input_capability.keybind;
-pub const schema = core.schema;
-
-pub const CopyModeEffects = @import("CopyModeEffects.zig");
+const chord = @import("../../input/chord.zig");
 
 pub const Outcome = enum {
     unchanged,
@@ -18,21 +13,15 @@ pub const Outcome = enum {
     exited,
 };
 
-pub const CopyModeHandler = @import("CopyModeHandler.zig");
-
-const TestingModel = @import("CopyModeTestingModel.zig");
-
-const EffectsCapture = @import("CopyModeEffectsCapture.zig");
-
 test "mouse clicks expand words and lines and copy only once on release" {
-    var testing = try TestingModel.init();
+    var testing = try CopyModeTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: CopyModeEffectsCapture = .{ .model = testing.model };
     var handler: CopyModeHandler = .{ .model = testing.model, .effects = capture.port() };
     const pane = testing.model.workspace.findPane(testing.pane_id).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "one two", .style = .{} });
-    const release: client_model.CopyModeCommand = .{ .pointer = .{ .position = .{ .x = 5, .y = 0 }, .release = true } };
+    const release: types.CopyModeCommand = .{ .pointer = .{ .position = .{ .x = 5, .y = 0 }, .release = true } };
 
     for (0..3) |index| {
         try std.testing.expect(handler.beginPointer(.{
@@ -62,9 +51,9 @@ test "mouse clicks expand words and lines and copy only once on release" {
 }
 
 test "failed mouse copy retains highlighting but releases physical capture" {
-    var testing = try TestingModel.init();
+    var testing = try CopyModeTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model, .fail_copy = true };
+    var capture: CopyModeEffectsCapture = .{ .model = testing.model, .fail_copy = true };
     var handler: CopyModeHandler = .{ .model = testing.model, .effects = capture.port() };
     try std.testing.expect(handler.beginPointer(.{
         .pane_id = testing.pane_id,
@@ -86,18 +75,18 @@ test "failed mouse copy retains highlighting but releases physical capture" {
 }
 
 test "CopyModeHandler copies before exit and synchronizes the committed viewport" {
-    var testing = try TestingModel.init();
+    var testing = try CopyModeTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: CopyModeEffectsCapture = .{ .model = testing.model };
     var handler: CopyModeHandler = .{ .model = testing.model, .effects = capture.port() };
 
     try std.testing.expect(handler.enter());
-    try std.testing.expect(try handler.execute(.{ .key = try keybind.parseKey("v") }) == .changed);
-    try std.testing.expect(try handler.execute(.{ .key = try keybind.parseKey("g") }) == .changed);
+    try std.testing.expect(try handler.execute(.{ .key = try chord.parseKey("v") }) == .changed);
+    try std.testing.expect(try handler.execute(.{ .key = try chord.parseKey("g") }) == .changed);
     try std.testing.expectEqual(@as(u32, 0), testing.model.workspace.findPane(testing.pane_id).?.scroll.offset);
     capture.reset();
 
-    try std.testing.expect(try handler.execute(.{ .key = try keybind.parseKey("enter") }) == .exited);
+    try std.testing.expect(try handler.execute(.{ .key = try chord.parseKey("enter") }) == .exited);
 
     try std.testing.expectEqual(@as(usize, 1), capture.copy_calls);
     try std.testing.expect(capture.copy_observed_active);
@@ -114,17 +103,17 @@ test "CopyModeHandler copies before exit and synchronizes the committed viewport
 }
 
 test "CopyModeHandler retains selection and revision when copy delivery fails" {
-    var testing = try TestingModel.init();
+    var testing = try CopyModeTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model, .fail_copy = true };
+    var capture: CopyModeEffectsCapture = .{ .model = testing.model, .fail_copy = true };
     var handler: CopyModeHandler = .{ .model = testing.model, .effects = capture.port() };
     try std.testing.expect(handler.enter());
-    try std.testing.expect(try handler.execute(.{ .key = try keybind.parseKey("v") }) == .changed);
+    try std.testing.expect(try handler.execute(.{ .key = try chord.parseKey("v") }) == .changed);
     const version = testing.model.version();
 
     try std.testing.expectError(
         error.CopyDeliveryFailed,
-        handler.execute(.{ .key = try keybind.parseKey("enter") }),
+        handler.execute(.{ .key = try chord.parseKey("enter") }),
     );
 
     try std.testing.expect(testing.model.copyModeActive());
@@ -134,7 +123,7 @@ test "CopyModeHandler retains selection and revision when copy delivery fails" {
 }
 
 test "CopyModeHandler opens a link without committing or leaving copy mode" {
-    var testing = try TestingModel.init();
+    var testing = try CopyModeTestingModel.init();
     defer testing.deinit();
     const pane = testing.model.workspace.findPane(testing.pane_id).?;
     try pane.buffer.resize(40, 5);
@@ -142,12 +131,12 @@ test "CopyModeHandler opens a link without committing or leaving copy mode" {
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 4 }, .text = "https://example.com/path", .style = .{} });
     pane.cursor = .{ .visible = true, .x = 10, .y = 4 };
 
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: CopyModeEffectsCapture = .{ .model = testing.model };
     var handler: CopyModeHandler = .{ .model = testing.model, .effects = capture.port() };
     try std.testing.expect(handler.enter());
     const version = testing.model.version();
 
-    try std.testing.expectEqual(Outcome.unchanged, try handler.execute(.{ .key = try keybind.parseKey("o") }));
+    try std.testing.expectEqual(Outcome.unchanged, try handler.execute(.{ .key = try chord.parseKey("o") }));
 
     try std.testing.expectEqualStrings("https://example.com/path", capture.link_opened.?.uri());
     try std.testing.expect(testing.model.copyModeActive());
@@ -155,16 +144,16 @@ test "CopyModeHandler opens a link without committing or leaving copy mode" {
 }
 
 test "CopyModeHandler preserves a movement commit when viewport sync fails" {
-    var testing = try TestingModel.init();
+    var testing = try CopyModeTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model, .fail_viewport = true };
+    var capture: CopyModeEffectsCapture = .{ .model = testing.model, .fail_viewport = true };
     var handler: CopyModeHandler = .{ .model = testing.model, .effects = capture.port() };
     try std.testing.expect(handler.enter());
     const version = testing.model.version();
 
     try std.testing.expectError(
         error.ViewportSyncFailed,
-        handler.execute(.{ .key = try keybind.parseKey("g") }),
+        handler.execute(.{ .key = try chord.parseKey("g") }),
     );
 
     try std.testing.expect(testing.model.copyModeActive());
@@ -176,15 +165,15 @@ test "CopyModeHandler preserves a movement commit when viewport sync fails" {
 }
 
 test "CopyModeHandler suppresses boundary and unhandled no-ops" {
-    var testing = try TestingModel.init();
+    var testing = try CopyModeTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: CopyModeEffectsCapture = .{ .model = testing.model };
     var handler: CopyModeHandler = .{ .model = testing.model, .effects = capture.port() };
     try std.testing.expect(handler.enter());
     const version = testing.model.version();
 
-    try std.testing.expect(try handler.execute(.{ .key = try keybind.parseKey("left") }) == .unchanged);
-    try std.testing.expect(try handler.execute(.{ .key = try keybind.parseKey("z") }) == .unchanged);
+    try std.testing.expect(try handler.execute(.{ .key = try chord.parseKey("left") }) == .unchanged);
+    try std.testing.expect(try handler.execute(.{ .key = try chord.parseKey("z") }) == .unchanged);
 
     try std.testing.expectEqualDeep(version, testing.model.version());
     try std.testing.expectEqual(@as(usize, 0), capture.copy_calls);

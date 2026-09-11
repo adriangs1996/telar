@@ -1,7 +1,8 @@
-const RecoverWorkspaceHandoffHandler = @This();
 const WorkspaceRecoveryEffects = @import("WorkspaceRecoveryEffects.zig");
 const WorkspaceHandoffFailure = @import("WorkspaceHandoffFailure.zig");
-const source_namespace = @import("workspace_handoff.zig");
+const workspace_handoff = @import("workspace_handoff.zig");
+const RecoverWorkspaceHandoffHandler = @This();
+
 effects: WorkspaceRecoveryEffects,
 
 /// Retries the containing workspace only when a remembered pane vanished.
@@ -11,7 +12,7 @@ effects: WorkspaceRecoveryEffects,
 /// ```zig
 /// const recovery = try handler.execute(failure);
 /// ```
-pub fn execute(handler: *RecoverWorkspaceHandoffHandler, failure: WorkspaceHandoffFailure) !source_namespace.WorkspaceRecovery {
+pub fn execute(handler: *RecoverWorkspaceHandoffHandler, failure: WorkspaceHandoffFailure) !workspace_handoff.WorkspaceRecovery {
     const workspace = failure.fallback_workspace orelse return .unrecoverable;
     if (failure.code != .pane_not_found) {
         return .unrecoverable;

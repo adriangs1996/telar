@@ -1,6 +1,7 @@
+const std = @import("std");
 /// The subset of Claude Code hook input telar reads.
 const ClaudeHookInput = @This();
-const std = @import("std");
+
 hook_event_name: []const u8 = "",
 session_id: []const u8 = "",
 agent_id: ?[]const u8 = null,

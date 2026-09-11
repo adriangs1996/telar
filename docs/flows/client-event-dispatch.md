@@ -73,7 +73,7 @@ observation. Release builds keep the same routing without diagnostics counters.
 ## Proof
 
 - `client event paths preserve interactive media and observation budgets` in
-  `src/frontend/client/client_events.zig` covers every event tag.
+  `src/frontend/client/entrypoints/events.zig` covers every event tag.
 - `client event dispatch observes a completed capability expiry` proves that a
   non-terminal commit reaches Presenter before the next event.
 - `client event dispatch skips observation after terminal input` proves that

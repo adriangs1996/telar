@@ -1,7 +1,8 @@
 const std = @import("std");
-const Key = @import("key_support.zig").Key;
-const parseKey = @import("chord.zig").parseKey;
-const source_namespace = @import("keybind.zig");
+const Key = @import("Key.zig");
+const chord = @import("chord.zig");
+const keybind = @import("keybind.zig");
+
 pub fn Type(comptime Action: type, comptime max_keys: usize) type {
     if (max_keys == 0 or max_keys > std.math.maxInt(u8)) {
         @compileError("max_keys must fit in a non-zero u8");
@@ -36,18 +37,18 @@ pub fn Type(comptime Action: type, comptime max_keys: usize) type {
                 return error.SequenceTooLong;
             }
             var binding: Self = .{ .len = @intCast(names.len), .action = action };
-            for (names, 0..) |name, index| binding.keys[index] = try parseKey(name);
+            for (names, 0..) |name, index| binding.keys[index] = try chord.parseKey(name);
             return binding;
         }
 
         pub fn sameSequence(a: *const Self, b: *const Self) bool {
-            return source_namespace.sequenceOrder(a.slice(), b.slice()) == .eq;
+            return keybind.sequenceOrder(a.slice(), b.slice()) == .eq;
         }
 
         /// True when one sequence equals or prefixes the other — the same
         /// overlap Keymap.init rejects as duplicate or ambiguous.
         pub fn conflictsWith(a: *const Self, b: *const Self) bool {
-            const shared = source_namespace.commonPrefix(a.slice(), b.slice());
+            const shared = keybind.commonPrefix(a.slice(), b.slice());
             return shared == a.len or shared == b.len;
         }
 

@@ -1,18 +1,19 @@
-const CursorContext = @This();
-const frontend = @import("telar-frontend");
+const ScreenType = @import("telar-frontend").Screen;
 const std = @import("std");
-const source_namespace = @import("main.zig");
-screen: frontend.term.Screen,
+const main = @import("main.zig");
+const CursorContext = @This();
+
+screen: ScreenType,
 output: []u8,
 
-fn init(gpa: std.mem.Allocator, output: []u8) !CursorContext {
-    var screen = try frontend.term.Screen.init(gpa, source_namespace.cols, source_namespace.rows);
+pub fn init(gpa: std.mem.Allocator, output: []u8) !CursorContext {
+    var screen = try ScreenType.init(gpa, main.cols, main.rows);
     errdefer screen.deinit();
-    var writer = source_namespace.Io.Writer.fixed(output);
+    var writer = std.Io.Writer.fixed(output);
     _ = try screen.flush(&writer);
     return .{ .screen = screen, .output = output };
 }
 
-fn deinit(context: *CursorContext) void {
+pub fn deinit(context: *CursorContext) void {
     context.screen.deinit();
 }

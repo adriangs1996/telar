@@ -4,7 +4,7 @@ buffer: []u8,
 kept: usize = 0,
 truncated: bool = false,
 
-fn keep(state: *CaptureState, bytes: []const u8) void {
+pub fn keep(state: *CaptureState, bytes: []const u8) void {
     if (state.kept >= state.buffer.len) {
         state.truncated = true;
         return;

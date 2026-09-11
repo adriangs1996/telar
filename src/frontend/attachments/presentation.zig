@@ -1,18 +1,12 @@
 //! Preview placement geometry and its committed Kitty output state.
 
-const std = @import("std");
-const core = @import("telar-core");
-pub const Io = std.Io;
-const schema = core.schema;
-const ui = core.ui;
-const path_marker = @import("telar-client").attachments.path_marker;
-const kitty = @import("../graphics/root.zig").kitty;
 const Size = @import("Size.zig");
-
-pub const PlacementState = @import("PlacementState.zig");
+const RectType = @import("telar-core").Rect;
+const OutputPlacementType = @import("kitty_protocol").OutputPlacement;
+const std = @import("std");
 
 /// Example: `const placement = fitPlacement(image_size, cell_size, area);`.
-pub fn fitPlacement(image: Size, cell: Size, area: ui.Rect) ?kitty.OutputPlacement {
+pub fn fitPlacement(image: Size, cell: Size, area: RectType) ?OutputPlacementType {
     if (area.isEmpty()) {
         return null;
     }
@@ -50,7 +44,7 @@ pub fn fitPlacement(image: Size, cell: Size, area: ui.Rect) ?kitty.OutputPlaceme
     };
 }
 
-pub fn optionalPlacementEql(a: ?kitty.OutputPlacement, b: ?kitty.OutputPlacement) bool {
+pub fn optionalPlacementEql(a: ?OutputPlacementType, b: ?OutputPlacementType) bool {
     if (a == null or b == null) {
         return a == null and b == null;
     }

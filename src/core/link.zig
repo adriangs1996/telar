@@ -1,7 +1,10 @@
 //! Pure recognition of supported URI text. Terminal coordinates, OSC 8
 //! metadata and opener policy belong to the process-specific adapters.
 
+const Prefix = @import("Prefix.zig");
 const std = @import("std");
+const Match = @import("Match.zig");
+const DelimiterCounts = @import("DelimiterCounts.zig");
 
 pub const max_uri_bytes = 4096;
 
@@ -10,10 +13,6 @@ pub const Scheme = enum {
     http,
     https,
 };
-
-pub const Match = @import("Match.zig");
-
-const Prefix = @import("Prefix.zig");
 
 const prefixes = [_]Prefix{
     .{ .text = "https://", .scheme = .https },
@@ -173,8 +172,6 @@ fn trimEnd(uri: []const u8) usize {
 
     return end;
 }
-
-const DelimiterCounts = @import("DelimiterCounts.zig");
 
 fn delimiterCounts(uri: []const u8) DelimiterCounts {
     var counts: DelimiterCounts = .{};

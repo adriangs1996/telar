@@ -1,12 +1,13 @@
+const ViewType = @import("telar-client").LayoutView;
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const PaneProgressStateType = @import("telar-core").PaneProgressState;
+const PaletteType = @import("../ui/Palette.zig");
 const BorderInput = @This();
-const layout_mod = @import("telar-client").workspace.layout;
-const Model = @import("telar-client").workspace.multiplexer.Model;
-const source_namespace = @import("multiplexer.zig");
-const theme = @import("../ui/root.zig").theme;
-view: layout_mod.View,
+
+view: ViewType,
 foreground_name: []const u8,
-fullscreen_model: ?*const Model = null,
-progress_state: source_namespace.schema.PaneProgressState,
+fullscreen_model: ?*const MultiplexerModel = null,
+progress_state: PaneProgressStateType,
 progress_percent: ?u8,
 animation_frame: u8,
-palette: *const theme.Palette,
+palette: *const PaletteType,

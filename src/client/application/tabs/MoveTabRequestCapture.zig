@@ -1,13 +1,14 @@
-const RequestCapture = @This();
 const TabMoveIntent = @import("TabMoveIntent.zig");
-const TabOperationGate = @import("MoveTabTabOperationGate.zig");
+const MoveTabOperationGate = @import("MoveTabOperationGate.zig");
 const MoveRequestEffects = @import("MoveRequestEffects.zig");
+const RequestCapture = @This();
+
 blocked: bool = false,
 fail: bool = false,
 calls: usize = 0,
 intent: ?TabMoveIntent = null,
 
-pub fn gate(capture: *RequestCapture) TabOperationGate {
+pub fn gate(capture: *RequestCapture) MoveTabOperationGate {
     return .{ .context = capture, .pending = pending };
 }
 

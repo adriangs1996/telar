@@ -1,21 +1,26 @@
-const PublicationCapture = @This();
-const source_namespace = @import("show_notification.zig");
+const NotificationLevelType = @import("telar-core").NotificationLevel;
+const NotificationTargetType = @import("telar-core").NotificationTarget;
+const max_notification_title_bytes_module = @import("telar-core").max_notification_title_bytes;
+const max_notification_message_bytes_module = @import("telar-core").max_notification_message_bytes;
 const NotificationPublisher = @import("NotificationPublisher.zig");
+const NotificationType = @import("telar-core").Notification;
+const PublicationCapture = @This();
+
 delivered_clients: u8,
 call_count: usize = 0,
-level: source_namespace.schema.NotificationLevel = .info,
+level: NotificationLevelType = .info,
 duration_ms: u32 = 0,
-target: source_namespace.schema.NotificationTarget = .none,
-title: [source_namespace.schema.max_notification_title_bytes]u8 = undefined,
+target: NotificationTargetType = .none,
+title: [max_notification_title_bytes_module]u8 = undefined,
 title_len: usize = 0,
-message: [source_namespace.schema.max_notification_message_bytes]u8 = undefined,
+message: [max_notification_message_bytes_module]u8 = undefined,
 message_len: usize = 0,
 
 pub fn publisher(capture: *PublicationCapture) NotificationPublisher {
     return .{ .context = capture, .publish_fn = publish };
 }
 
-fn publish(context: *anyopaque, notification: source_namespace.schema.Notification) u8 {
+fn publish(context: *anyopaque, notification: NotificationType) u8 {
     const capture: *PublicationCapture = @ptrCast(@alignCast(context));
     capture.call_count += 1;
     capture.level = notification.level;

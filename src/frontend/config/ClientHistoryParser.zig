@@ -1,16 +1,18 @@
-const Parser = @This();
-const lua = @import("lua-api").c;
-const config_model = @import("model.zig");
+const lua_api = @import("lua-api");
+const SnapshotType = @import("Snapshot.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
 const value = @import("lua_value.zig");
 const std = @import("std");
-state: *lua.lua_State,
-snapshot: *config_model.Snapshot,
-diagnostic: *config_model.Diagnostic,
+const Parser = @This();
+
+state: *lua_api.c.lua_State,
+snapshot: *SnapshotType,
+diagnostic: *DiagnosticType,
 
 pub fn parseMatch(parser: *Parser, absolute: c_int) !void {
-    _ = lua.lua_getfield(parser.state, absolute, "match");
+    _ = lua_api.c.lua_getfield(parser.state, absolute, "match");
     defer value.pop(parser.state, 1);
-    if (lua.lua_type(parser.state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
 
@@ -29,23 +31,23 @@ pub fn parseMatch(parser: *Parser, absolute: c_int) !void {
 }
 
 pub fn parseVisibility(parser: *Parser, absolute: c_int) !void {
-    _ = lua.lua_getfield(parser.state, absolute, "show_agent_commands");
+    _ = lua_api.c.lua_getfield(parser.state, absolute, "show_agent_commands");
     defer value.pop(parser.state, 1);
-    if (lua.lua_type(parser.state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
-    if (lua.lua_type(parser.state, -1) != lua.LUA_TBOOLEAN) {
+    if (lua_api.c.lua_type(parser.state, -1) != lua_api.c.LUA_TBOOLEAN) {
         parser.diagnostic.set("config.client.history.show_agent_commands must be a boolean", .{});
         return error.InvalidConfig;
     }
 
-    parser.snapshot.history_show_agent_commands = lua.lua_toboolean(parser.state, -1) != 0;
+    parser.snapshot.history_show_agent_commands = lua_api.c.lua_toboolean(parser.state, -1) != 0;
 }
 
 pub fn parseEnter(parser: *Parser, absolute: c_int) !void {
-    _ = lua.lua_getfield(parser.state, absolute, "enter");
+    _ = lua_api.c.lua_getfield(parser.state, absolute, "enter");
     defer value.pop(parser.state, 1);
-    if (lua.lua_type(parser.state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
 

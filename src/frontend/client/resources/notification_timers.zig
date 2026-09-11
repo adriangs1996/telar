@@ -1,11 +1,8 @@
 //! Owns the replaceable timer used by the client notification lifecycle.
 
-const client_clock = @import("telar-client").resources.clock;
-const deadline_timer = @import("telar-client").resources.deadline_timer;
-
 const Client = @import("../Client.zig");
-
-pub const Scheduler = deadline_timer.Scheduler;
+const monotonic_module = @import("telar-client").monotonic;
+const wait_module = @import("telar-client").wait;
 
 /// Replaces the pending deadline from current model state and starts at most
 /// one client select task.
@@ -15,14 +12,14 @@ pub const Scheduler = deadline_timer.Scheduler;
 /// ```
 pub fn reschedule(client: *Client) !void {
     const scheduler = &client.notification_scheduler;
-    const now_ns = client_clock.monotonic(client.io);
+    const now_ns = monotonic_module(client.io);
     const deadline_ns = client.model.nextNotificationDeadline(
         now_ns,
         client.presenter.pacer.interval,
     );
     switch (scheduler.update(client.io, deadline_ns)) {
         .idle, .retained => {},
-        .schedule => client.select.concurrent(.notification_tick, deadline_timer.wait, .{
+        .schedule => client.select.concurrent(.notification_tick, wait_module, .{
             client.io,
             scheduler,
         }) catch |err| {

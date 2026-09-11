@@ -1,9 +1,11 @@
-const CopyModeHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const CopyModeEffects = @import("CopyModeEffects.zig");
-const input_capability = @import("../../input/root.zig");
-const source_namespace = @import("copy_mode.zig");
-model: *client_model.Model,
+const PointerPressType = @import("../../input/PointerPress.zig");
+const types = @import("../../model/types.zig");
+const copy_mode = @import("copy_mode.zig");
+const CopyModeHandler = @This();
+
+model: *ModelType,
 effects: CopyModeEffects,
 
 /// Enters copy mode without performing runtime or presentation effects.
@@ -17,7 +19,7 @@ pub fn enter(handler: *CopyModeHandler) bool {
 
 /// Starts a client-owned mouse gesture without entering keyboard copy mode.
 /// Example: `_ = handler.beginPointer(press);`.
-pub fn beginPointer(handler: *CopyModeHandler, press: input_capability.copy_mode.PointerPress) bool {
+pub fn beginPointer(handler: *CopyModeHandler, press: PointerPressType) bool {
     return handler.model.beginPointerSelection(press);
 }
 
@@ -28,7 +30,7 @@ pub fn beginPointer(handler: *CopyModeHandler, press: input_capability.copy_mode
 /// ```zig
 /// const outcome = try handler.execute(.{ .key = key });
 /// ```
-pub fn execute(handler: *CopyModeHandler, command: client_model.CopyModeCommand) !source_namespace.Outcome {
+pub fn execute(handler: *CopyModeHandler, command: types.CopyModeCommand) !copy_mode.Outcome {
     defer {
         if (command == .cancel_pointer or (command == .pointer and command.pointer.release)) {
             handler.model.finishPointerGesture();

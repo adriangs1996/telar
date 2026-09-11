@@ -6,14 +6,11 @@
 //! last assistant text. Every failure surfaces as a `Status`; what happens
 //! to the child afterwards is the actor's decision, never the session's.
 
+const SessionType = @import("Session.zig");
 const std = @import("std");
-const rpc = @import("rpc.zig");
 const types = @import("types.zig");
-
-pub const Io = std.Io;
-pub const Options = types.Options;
-pub const Response = types.Response;
-pub const Status = types.Status;
+const fakes = @import("testing.zig");
+const Response = @import("Response.zig");
 
 pub const AskError = error{ Timeout, ReadFailed, Closed, Rejected, InvalidOutput, WriteFailed };
 
@@ -21,14 +18,12 @@ pub const Request = @import("Request.zig");
 
 pub const Session = @import("Session.zig");
 
-pub fn nowMs(io: Io) i64 {
-    return Io.Timestamp.now(io, .real).toMilliseconds();
+pub fn nowMs(io: std.Io) i64 {
+    return std.Io.Timestamp.now(io, .real).toMilliseconds();
 }
 
-const fakes = @import("testing.zig");
-
-fn askOnce(io: Io, arguments: []const []const u8, timeout_ms: u32) !Status {
-    const session = try Session.open(io, std.testing.allocator, fakes.options(arguments, timeout_ms, 60_000));
+fn askOnce(io: std.Io, arguments: []const []const u8, timeout_ms: u32) !types.Status {
+    const session = try SessionType.open(io, std.testing.allocator, fakes.options(arguments, timeout_ms, 60_000));
     defer session.close(io);
 
     var response: Response = .{ .purpose = fakes.purpose, .status = .failed };
@@ -37,24 +32,24 @@ fn askOnce(io: Io, arguments: []const []const u8, timeout_ms: u32) !Status {
 
 test "a session answers a prompt with the settled assistant text" {
     const io = std.testing.io;
-    const session = try Session.open(io, std.testing.allocator, fakes.options(&.{ "/bin/sh", "-c", fakes.fake_engine }, 5000, 60_000));
+    const session = try SessionType.open(io, std.testing.allocator, fakes.options(&.{ "/bin/sh", "-c", fakes.fake_engine }, 5000, 60_000));
     defer session.close(io);
 
     var response: Response = .{ .purpose = fakes.purpose, .status = .failed };
-    try std.testing.expectEqual(Status.success, session.ask(io, .{ .prompt = "Create a title", .response = &response }));
+    try std.testing.expectEqual(types.Status.success, session.ask(io, .{ .prompt = "Create a title", .response = &response }));
     try std.testing.expectEqualStrings("Improve agent sidebar", response.textSlice());
 
     // The same child answers again.
-    try std.testing.expectEqual(Status.success, session.ask(io, .{ .prompt = "Create a title", .response = &response }));
+    try std.testing.expectEqual(types.Status.success, session.ask(io, .{ .prompt = "Create a title", .response = &response }));
     try std.testing.expectEqualStrings("Improve agent sidebar", response.textSlice());
 }
 
 test "protocol failures map to a status" {
     const io = std.testing.io;
-    try std.testing.expectEqual(Status.timeout, try askOnce(io, &.{ "/bin/sh", "-c", fakes.silent_engine }, 100));
-    try std.testing.expectEqual(Status.failed, try askOnce(io, &.{ "/bin/sh", "-c", "read -r line; printf '%s\\n' '{\"type\":\"response\",\"command\":\"prompt\",\"success\":false}'; sleep 5" }, 1000));
-    try std.testing.expectEqual(Status.failed, try askOnce(io, &.{ "/bin/sh", "-c", "exit 0" }, 1000));
-    try std.testing.expectEqual(Status.invalid_output, try askOnce(io, &.{ "/bin/sh", "-c", fakes.empty_reply_engine }, 1000));
+    try std.testing.expectEqual(types.Status.timeout, try askOnce(io, &.{ "/bin/sh", "-c", fakes.silent_engine }, 100));
+    try std.testing.expectEqual(types.Status.failed, try askOnce(io, &.{ "/bin/sh", "-c", "read -r line; printf '%s\\n' '{\"type\":\"response\",\"command\":\"prompt\",\"success\":false}'; sleep 5" }, 1000));
+    try std.testing.expectEqual(types.Status.failed, try askOnce(io, &.{ "/bin/sh", "-c", "exit 0" }, 1000));
+    try std.testing.expectEqual(types.Status.invalid_output, try askOnce(io, &.{ "/bin/sh", "-c", fakes.empty_reply_engine }, 1000));
 }
 
 test "oversized records are dropped and an oversized reply is invalid" {
@@ -70,10 +65,10 @@ test "oversized records are dropped and an oversized reply is invalid" {
         \\head -c 70000 /dev/zero | tr '\0' 'b'; printf '"}}\n'
         \\sleep 5
     }, 5000);
-    try std.testing.expectEqual(Status.invalid_output, status);
+    try std.testing.expectEqual(types.Status.invalid_output, status);
 }
 
 test "a session without a command cannot open" {
     const io = std.testing.io;
-    try std.testing.expectError(error.FileNotFound, Session.open(io, std.testing.allocator, fakes.options(&.{}, 1000, 60_000)));
+    try std.testing.expectError(error.FileNotFound, SessionType.open(io, std.testing.allocator, fakes.options(&.{}, 1000, 60_000)));
 }

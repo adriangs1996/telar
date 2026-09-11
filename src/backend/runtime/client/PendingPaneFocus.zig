@@ -1,7 +1,9 @@
+const RequestIdType = @import("telar-core").RequestId;
+const PaneIdType = @import("telar-core").PaneId;
+const ClientKey = @import("../../history/ClientKey.zig");
 const PendingPaneFocus = @This();
-const core = @import("telar-core");
-const source_namespace = @import("session_support.zig");
-request_id: core.schema.RequestId,
-pane_id: core.schema.PaneId,
+
+request_id: RequestIdType,
+pane_id: PaneIdType,
 pane_generation: u64,
-target: source_namespace.Key,
+target: ClientKey,

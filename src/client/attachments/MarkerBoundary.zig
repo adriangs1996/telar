@@ -1,5 +1,7 @@
+const CursorType = @import("telar-core").Cursor;
+const types = @import("types.zig");
 const MarkerBoundary = @This();
-const source_namespace = @import("markers.zig");
+
 ordinal: u16,
-cursor: source_namespace.schema.frame.Cursor,
-deletion: source_namespace.MarkerDeletion,
+cursor: CursorType,
+deletion: types.MarkerDeletion,

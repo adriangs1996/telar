@@ -1,24 +1,22 @@
 //! Composition root for one long-lived backend runtime.
 
 const std = @import("std");
-const agent_identity = @import("application/coordinators/root.zig").agent_identity;
-const core = @import("telar-core");
-const workspace_mod = @import("../workspace/root.zig");
-const agent_mod = @import("../agent/root.zig");
-const runtime_application = @import("application/root.zig");
-const runtime_config = @import("config.zig");
-const runtime_event = @import("event.zig");
-const event_sources = @import("event_sources.zig");
-const runtime_loop = @import("event_loop.zig");
-const runtime_shutdown_mod = @import("lifecycle/root.zig").shutdown_coordinator;
-const runtime_resources = @import("resources/root.zig");
-
-const Io = std.Io;
-pub const diagnostics = core.diagnostics;
-
-pub const Options = runtime_config.Options;
-pub const Initialization = runtime_config.Initialization;
-pub const IngestTestGate = runtime_config.IngestTestGate;
+const Options = @import("Options.zig");
+const Runtime = @import("Runtime.zig");
+const GenericShutdownCoordinator = @import("lifecycle/GenericShutdownCoordinator.zig").Type;
+const runtime_shutdown_mod = @import("lifecycle/shutdown_coordinator.zig");
+const LaunchViewType = @import("telar-core").LaunchView;
+const EncoderType = @import("telar-core").Encoder;
+const Initialization = @import("Initialization.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const commands = @import("../workspace/commands.zig");
+const agent_identity = @import("application/coordinators/agent_identity.zig");
+const SessionReferenceType = @import("../agent/SessionReference.zig");
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const AgentSnapshotEntryType = @import("telar-core").AgentSnapshotEntry;
+const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
+const AgentTitleStateType = @import("telar-core").AgentTitleState;
+const raw_module = @import("telar-core").raw;
 
 /// Runs one runtime instance until a stop event or fatal runtime error.
 /// `options` is borrowed for the duration of the call.
@@ -29,7 +27,7 @@ pub const IngestTestGate = runtime_config.IngestTestGate;
 ///     .environment = environment,
 /// });
 /// ```
-pub fn serve(io: Io, gpa: std.mem.Allocator, options: Options) !void {
+pub fn serve(io: std.Io, gpa: std.mem.Allocator, options: Options) !void {
     var runtime: Runtime = undefined;
     try runtime.init(.{
         .dependencies = .{ .io = io, .allocator = gpa },
@@ -40,13 +38,7 @@ pub fn serve(io: Io, gpa: std.mem.Allocator, options: Options) !void {
     try runtime.run();
 }
 
-pub const Application = runtime_application.Application;
-pub const EventLoop = runtime_loop.Loop;
-pub const Resources = runtime_resources.Resources;
-
-pub const Runtime = @import("Runtime.zig");
-
-const RuntimeShutdownCoordinator = runtime_shutdown_mod.Coordinator(Runtime);
+const RuntimeShutdownCoordinator = GenericShutdownCoordinator(Runtime);
 
 pub fn runtimeShutdownCoordinator(runtime: *Runtime) RuntimeShutdownCoordinator {
     return RuntimeShutdownCoordinator.init(runtime, &runtime.teardown_state, executeRuntimeShutdownStep);
@@ -75,10 +67,10 @@ fn executeRuntimeShutdownStep(runtime: *Runtime, step: runtime_shutdown_mod.Step
     }
 }
 
-fn expectRuntimeEndpointRemoved(io: Io, endpoint: []const u8) !void {
+fn expectRuntimeEndpointRemoved(io: std.Io, endpoint: []const u8) !void {
     try std.testing.expectError(
         error.FileNotFound,
-        Io.Dir.cwd().statFile(io, endpoint, .{ .follow_symlinks = false }),
+        std.Io.Dir.cwd().statFile(io, endpoint, .{ .follow_symlinks = false }),
     );
 }
 
@@ -146,12 +138,12 @@ test "runtime composition keeps every borrowed capability at a stable address" {
     try expectRuntimeEndpointRemoved(io, endpoint);
 }
 
-fn sleepLaunch(buffer: []u8) !core.schema.LaunchView {
+fn sleepLaunch(buffer: []u8) !LaunchViewType {
     return sleepLaunchIn(buffer, "/");
 }
 
-fn sleepLaunchIn(buffer: []u8, cwd: []const u8) !core.schema.LaunchView {
-    var encoder = core.schema.wire.Encoder.init(buffer);
+fn sleepLaunchIn(buffer: []u8, cwd: []const u8) !LaunchViewType {
+    var encoder = EncoderType.init(buffer);
     try encoder.writeSized16("/bin/sleep");
     try encoder.writeSized16("600");
     return .{
@@ -200,7 +192,7 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
     const logs_tab = try repository.nextTabId();
     _ = try repository.find(kept.location.workspace).?.createTab(logs_tab, "logs");
     repository.recordTabCreated(logs_tab);
-    const logs_location: core.schema.TabLocation = .{ .workspace = kept.location.workspace, .tab_id = logs_tab };
+    const logs_location: TabLocationType = .{ .workspace = kept.location.workspace, .tab_id = logs_tab };
     var logs_buffer: [64]u8 = undefined;
     _ = try first.application.launchPane(.{
         .location = logs_location,
@@ -262,7 +254,7 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
         .launch_cwd = directory,
         .workspace_path = directory,
     });
-    _ = try workspace_mod.renameWorkspace(&repository, ensured.location.workspace, "core");
+    _ = try commands.renameWorkspace(&repository, ensured.location.workspace, "core");
     const logs_tab = try repository.nextTabId();
     _ = try repository.find(ensured.location.workspace).?.createTab(logs_tab, "logs");
     repository.recordTabCreated(logs_tab);
@@ -278,7 +270,7 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     const pane_generation = pane.generation;
     try std.testing.expect(first.application.model.agents.observeSessionReference(
         agent_identity.fromPane(pane),
-        try agent_mod.SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1_000),
+        try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1_000),
     ));
     try std.testing.expect(first.application.model.agents.observeProcess(.{
         .identity = agent_identity.fromPane(pane),
@@ -317,11 +309,11 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
         .process_id = 100,
         .observed_at_ms = 2_000,
     }));
-    var entries: [agent_mod.max_records]core.schema.AgentSnapshotEntry = undefined;
+    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
     const agents = second.application.model.agents.snapshot(&entries);
     try std.testing.expectEqual(@as(usize, 1), agents.len);
     try std.testing.expectEqualStrings("Investigate proxy lifecycle", agents[0].session_title);
-    try std.testing.expectEqual(core.schema.AgentTitleSource.manual, agents[0].title_source);
-    try std.testing.expectEqual(core.schema.AgentTitleState.ready, agents[0].title_state);
-    try std.testing.expect(second.application.model.workspaces.next_tab_id > core.schema.id.raw(logs_tab));
+    try std.testing.expectEqual(AgentTitleSourceType.manual, agents[0].title_source);
+    try std.testing.expectEqual(AgentTitleStateType.ready, agents[0].title_state);
+    try std.testing.expect(second.application.model.workspaces.next_tab_id > raw_module(logs_tab));
 }

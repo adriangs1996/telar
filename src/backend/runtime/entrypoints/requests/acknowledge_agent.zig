@@ -2,24 +2,18 @@
 //! requests have no direct response; a changed projection reaches every
 //! client through the next agent snapshot.
 
+const GenericAcknowledgeAgentController = @import("GenericAcknowledgeAgentController.zig").Type;
+const AcknowledgeAgentStubExecutor = @import("AcknowledgeAgentStubExecutor.zig");
+const pane_module = @import("telar-core").pane;
+const RuntimeMetrics = @import("../../observability/RuntimeMetrics.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const acknowledge_agent_commands = @import("../../application/commands/acknowledge_agent.zig");
-const telemetry_mod = @import("../../observability/root.zig").telemetry;
 
-pub const schema = core.schema;
-pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-
-pub const Controller = @import("GenericAcknowledgeAgentController.zig").Type;
-
-const StubExecutor = @import("AcknowledgeAgentStubExecutor.zig");
-
-const TestController = Controller(*StubExecutor);
+const TestController = GenericAcknowledgeAgentController(*AcknowledgeAgentStubExecutor);
 
 test "Controller maps the exact agent generation and clock" {
-    const pane_id = try schema.id.pane(7);
+    const pane_id = try pane_module(7);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var stub: StubExecutor = .{};
+    var stub: AcknowledgeAgentStubExecutor = .{};
     var controller = TestController.init(&metrics, &stub);
 
     controller.acknowledgeAgent(.{ .pane_id = pane_id, .pane_generation = 3 }, 41);
@@ -33,13 +27,13 @@ test "Controller maps the exact agent generation and clock" {
 
 test "Controller counts only an unknown generation as stale" {
     var metrics: RuntimeMetrics = .{ .started_ns = 0, .stale_client_messages = 4 };
-    var stub: StubExecutor = .{ .result = .unchanged };
+    var stub: AcknowledgeAgentStubExecutor = .{ .result = .unchanged };
     var controller = TestController.init(&metrics, &stub);
 
-    controller.acknowledgeAgent(.{ .pane_id = try schema.id.pane(7), .pane_generation = 3 }, 0);
+    controller.acknowledgeAgent(.{ .pane_id = try pane_module(7), .pane_generation = 3 }, 0);
     try std.testing.expectEqual(@as(u64, 4), metrics.stale_client_messages);
 
     stub.result = .unknown_agent;
-    controller.acknowledgeAgent(.{ .pane_id = try schema.id.pane(7), .pane_generation = 2 }, 0);
+    controller.acknowledgeAgent(.{ .pane_id = try pane_module(7), .pane_generation = 2 }, 0);
     try std.testing.expectEqual(@as(u64, 5), metrics.stale_client_messages);
 }

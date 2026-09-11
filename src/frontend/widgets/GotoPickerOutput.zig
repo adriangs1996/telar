@@ -1,5 +1,6 @@
+const RectType = @import("telar-core").Rect;
+const CursorType = @import("Cursor.zig");
 const Output = @This();
-const ui = @import("../ui/root.zig");
-const widget = @import("context_support.zig");
-area: ui.Rect,
-cursor: ?widget.Cursor,
+
+area: RectType,
+cursor: ?CursorType,

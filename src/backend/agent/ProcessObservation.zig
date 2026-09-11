@@ -1,7 +1,8 @@
-const ProcessObservation = @This();
 const Identity = @import("Identity.zig");
-const source_namespace = @import("types.zig");
+const AgentProviderType = @import("telar-core").AgentProvider;
+const ProcessObservation = @This();
+
 identity: Identity,
-provider: source_namespace.schema.AgentProvider,
+provider: AgentProviderType,
 process_id: u32,
 observed_at_ms: i64,

@@ -1,8 +1,9 @@
-const AdmitWorkspaceHandoffHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const Gate = @import("Gate.zig");
-const source_namespace = @import("workspace_handoff_admission.zig");
-model: *const client_model.Model,
+const workspace_handoff_admission = @import("workspace_handoff_admission.zig");
+const AdmitWorkspaceHandoffHandler = @This();
+
+model: *const ModelType,
 gate: Gate,
 
 /// Admits a requested departure only while idle, or a canonical follow
@@ -11,7 +12,7 @@ gate: Gate,
 /// ```zig
 /// try handler.execute(.requested_departure);
 /// ```
-pub fn execute(handler: *const AdmitWorkspaceHandoffHandler, authority: source_namespace.Authority) !void {
+pub fn execute(handler: *const AdmitWorkspaceHandoffHandler, authority: workspace_handoff_admission.Authority) !void {
     switch (authority) {
         .requested_departure => {
             if (handler.gate.pending(handler.gate.context)) {

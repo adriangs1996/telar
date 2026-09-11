@@ -4,7 +4,7 @@
 //! they are built from, so the codec layer can reference it without cycles.
 
 const id = @import("id.zig");
-const frame = @import("frame_support.zig");
+const ClientLayoutSplit = @import("ClientLayoutSplit.zig");
 
 pub const max_input_bytes = 64 * 1024;
 pub const max_cwd_bytes = 4096;
@@ -50,10 +50,6 @@ pub const min_notification_duration_ms: u32 = 500;
 pub const max_notification_duration_ms: u32 = 60_000;
 pub const default_notification_duration_ms: u32 = 4_000;
 
-pub const TerminalColors = @import("TerminalColors.zig");
-
-pub const TerminalSize = @import("TerminalSize.zig");
-
 pub const PaneTarget = union(enum) {
     default,
     pane: id.PaneId,
@@ -67,16 +63,10 @@ pub const WorkspaceLocation = union(enum) {
     worktree: id.WorktreeId,
 };
 
-pub const TabLocation = @import("TabLocation.zig");
-
 pub const EnvironmentMode = enum(u8) {
     inherit_runtime = 0,
     replace = 1,
 };
-
-pub const EnvironmentEntry = @import("EnvironmentEntry.zig");
-
-pub const Launch = @import("Launch.zig");
 
 pub const TabMoveDirection = enum(u8) {
     previous = 0,
@@ -111,20 +101,12 @@ pub const ClientLayoutAxis = enum(u8) {
     vertical = 1,
 };
 
-pub const ClientLayoutSplit = @import("ClientLayoutSplit.zig");
-
 /// One node in a pre-order binary pane-layout tree. Split children immediately
 /// follow their parent, so the wire never carries disposable client indices.
 pub const ClientLayoutNode = union(enum) {
     pane: id.PaneId,
     split: ClientLayoutSplit,
 };
-
-pub const ClientTabLayout = @import("ClientTabLayout.zig");
-
-pub const ClientLayoutUpdate = @import("ClientLayoutUpdate.zig");
-
-pub const ClientLayoutSnapshot = @import("ClientLayoutSnapshot.zig");
 
 pub const ExitKind = enum(u8) {
     exited = 0,
@@ -167,8 +149,6 @@ pub const PaneTextSource = enum(u8) {
     recent = 1,
 };
 
-pub const SearchMatch = @import("SearchMatch.zig");
-
 /// How text sent to a pane is delivered. `prompt` wraps it in bracketed paste
 /// when the child enabled that mode, appends Enter, and is refused while the
 /// agent is blocked.
@@ -181,10 +161,6 @@ pub const PaneLifecycle = enum(u8) {
     running = 0,
     exited = 1,
 };
-
-pub const PaneDescriptor = @import("PaneDescriptor.zig");
-
-pub const TabDescriptor = @import("TabDescriptor.zig");
 
 pub const HistoryScope = enum(u8) {
     global = 0,
@@ -233,8 +209,6 @@ pub const NotificationTarget = union(enum) {
     tab: id.TabId,
     workspace: id.WorkspaceId,
 };
-
-pub const HistoryEntry = @import("HistoryEntry.zig");
 
 /// Agent vocabulary published by the runtime. These values describe evidence,
 /// not authority to act on behalf of an agent.
@@ -295,8 +269,6 @@ pub const AgentSound = enum(u8) {
     needs_input = 1,
 };
 
-pub const AgentSoundNotification = @import("AgentSoundNotification.zig");
-
 pub const AgentSource = enum(u8) {
     proxy_tls = 0,
     screen = 1,
@@ -353,5 +325,3 @@ pub const AgentTitleState = enum(u8) {
     ready = 2,
     failed = 3,
 };
-
-pub const AgentSnapshotEntry = @import("AgentSnapshotEntry.zig");

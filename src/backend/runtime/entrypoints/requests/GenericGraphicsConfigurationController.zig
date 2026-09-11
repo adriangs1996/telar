@@ -1,4 +1,5 @@
-const source_namespace = @import("graphics_configuration.zig");
+const ConfigureGraphicsType = @import("telar-core").ConfigureGraphics;
+
 /// Builds a statically dispatched graphics configuration controller.
 ///
 /// ```zig
@@ -26,7 +27,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// try controller.configureGraphics(configure);
         /// ```
-        pub inline fn configureGraphics(controller: *Self, configure: source_namespace.schema.ConfigureGraphics) !void {
+        pub inline fn configureGraphics(controller: *Self, configure: ConfigureGraphicsType) !void {
             _ = try controller.executor.execute(.{ .shared = configure.shared });
         }
     };

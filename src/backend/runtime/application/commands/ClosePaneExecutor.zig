@@ -1,6 +1,7 @@
-const ClosePaneExecutor = @This();
 const ClosePane = @import("ClosePane.zig");
 const ClosePaneResult = @import("ClosePaneResult.zig");
+const ClosePaneExecutor = @This();
+
 context: *anyopaque,
 execute_fn: *const fn (*anyopaque, ClosePane) anyerror!ClosePaneResult,
 

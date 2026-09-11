@@ -1,26 +1,31 @@
 //! HTTP/2 adapter for one intercepted CONNECT exchange.
 
-const std = @import("std");
-const core = @import("telar-core");
-const capture = @import("../capture/root.zig");
-const h2 = @import("../h2/root.zig");
-const identity = @import("../identity.zig");
-const metrics = @import("../metrics.zig");
-const middleware = @import("../middleware.zig");
-const provider = @import("../provider/root.zig");
-const tls = @import("../tls.zig");
-const exchange_mod = @import("exchange_support.zig");
-
-pub const Io = std.Io;
-pub const schema = core.schema;
-
-pub const Options = @import("H2Options.zig");
-
-pub const Connection = @import("H2Connection.zig");
-
+const GenericConnectionPort = @import("../h2/GenericConnectionPort.zig").Type;
 const RelayContext = @import("RelayContext.zig");
+const GenericConnection = @import("../h2/GenericConnection.zig").Type;
+const std = @import("std");
+const SettingsType = @import("../h2/Settings.zig");
+const StatsType = @import("../h2/Stats.zig");
+const CaptureStreams = @import("CaptureStreams.zig");
+const EventObserver = @import("EventObserver.zig");
+const h2 = @import("../h2/h2.zig");
+const relay_module = @import("../h2/relay.zig");
+const RelayOptionsType = @import("../h2/RelayOptions.zig");
+const middleware = @import("../middleware.zig");
+const ExchangeType = @import("Exchange.zig");
+const request_support = @import("../provider/request_support.zig");
+const exchange_mod = @import("exchange_support.zig");
+const ResponseBodyType = @import("../h2/ResponseBody.zig");
+const H2TestHarness = @import("H2TestHarness.zig");
+const Streams = @import("../provider/Streams.zig");
+const TransformPipelineType = @import("../TransformPipeline.zig");
+const ResponseStreamsType = @import("../provider/ResponseStreams.zig");
+const ProducerType = @import("../capture/Producer.zig");
+const H2CaptureGate = @import("H2CaptureGate.zig");
+const HeaderFieldType = @import("../h2/HeaderField.zig");
+const JoinerType = @import("../capture/Joiner.zig");
 
-const connection_port: h2.ConnectionPort(RelayContext) = .{
+const connection_port: GenericConnectionPort(RelayContext) = .{
     .io = connectionIo,
     .relay_request = relayRequest,
     .relay_response = relayResponse,
@@ -28,19 +33,13 @@ const connection_port: h2.ConnectionPort(RelayContext) = .{
     .settle = settle,
 };
 
-pub const RelayConnection = h2.Connection(RelayContext, connection_port);
+pub const RelayConnection = GenericConnection(RelayContext, connection_port);
 
-const EventObserver = @import("EventObserver.zig");
-
-const CaptureSlot = @import("CaptureSlot.zig");
-
-const CaptureStreams = @import("CaptureStreams.zig");
-
-fn connectionIo(context: *RelayContext) Io {
+fn connectionIo(context: *RelayContext) std.Io {
     return context.io;
 }
 
-fn relayRequest(context: *RelayContext, settings: *h2.Settings) h2.Stats {
+fn relayRequest(context: *RelayContext, settings: *SettingsType) StatsType {
     var captures = if (context.captures) |producer| CaptureStreams{
         .producer = producer,
         .exchange = context.exchange,
@@ -56,7 +55,7 @@ fn relayRequest(context: *RelayContext, settings: *h2.Settings) h2.Stats {
     return h2.relay(context.session, relayOptions(context, settings, .request), &observer);
 }
 
-fn relayResponse(context: *RelayContext, settings: *h2.Settings) h2.Stats {
+fn relayResponse(context: *RelayContext, settings: *SettingsType) StatsType {
     var captures = if (context.captures) |producer| CaptureStreams{
         .producer = producer,
         .exchange = context.exchange,
@@ -72,7 +71,7 @@ fn relayResponse(context: *RelayContext, settings: *h2.Settings) h2.Stats {
     return h2.relay(context.session, relayOptions(context, settings, .response), &observer);
 }
 
-fn relayOptions(context: *RelayContext, settings: *h2.Settings, direction: h2.Direction) h2.RelayOptions {
+fn relayOptions(context: *RelayContext, settings: *SettingsType, direction: relay_module.Direction) RelayOptionsType {
     const kind: middleware.HeaderKind = switch (direction) {
         .request => .request,
         .response => .response,
@@ -96,7 +95,7 @@ fn relayOptions(context: *RelayContext, settings: *h2.Settings, direction: h2.Di
     });
 }
 
-fn shouldTransform(context: *const RelayContext, direction: h2.Direction) bool {
+fn shouldTransform(context: *const RelayContext, direction: relay_module.Direction) bool {
     if (context.has_custom_transformers) {
         return true;
     }
@@ -104,7 +103,7 @@ fn shouldTransform(context: *const RelayContext, direction: h2.Direction) bool {
     return context.exchange.dialect == .anthropic_messages and direction == .request;
 }
 
-fn recordDecodeFailure(context: *RelayContext, _: h2.Direction) void {
+fn recordDecodeFailure(context: *RelayContext, _: relay_module.Direction) void {
     context.exchange.record(.h2_decode_failure);
 }
 
@@ -114,7 +113,7 @@ fn settle(context: *RelayContext) void {
     context.exchange.publish(.request_failed, 0);
 }
 
-pub fn publishRequestClass(exchange: *exchange_mod.Exchange, stream_id: u32, classification: provider.RequestClass) void {
+pub fn publishRequestClass(exchange: *ExchangeType, stream_id: u32, classification: request_support.RequestClass) void {
     exchange.publishStatus(.{
         .phase = exchange_mod.requestPhase(classification),
         .stream_id = stream_id,
@@ -122,15 +121,9 @@ pub fn publishRequestClass(exchange: *exchange_mod.Exchange, stream_id: u32, cla
     });
 }
 
-pub fn shouldInspectBody(body: h2.ResponseBody) bool {
+pub fn shouldInspectBody(body: ResponseBodyType) bool {
     return body.sse_body and body.status_code >= 200 and body.status_code < 300;
 }
-
-const Capture = @import("H2Capture.zig");
-
-const TestHarness = @import("H2TestHarness.zig");
-
-const ExpectedObservation = @import("ExpectedObservation.zig");
 
 const claude_end_turn_event =
     "event: message_delta\n" ++
@@ -146,9 +139,9 @@ const claude_startup_request =
     "\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}";
 
 test "Claude request bodies refine interleaved route candidates per stream" {
-    var harness: TestHarness = .{};
+    var harness: H2TestHarness = .{};
     try harness.init();
-    var requests = provider.RequestStreams.init(.anthropic_messages);
+    var requests = Streams.init(.anthropic_messages);
     defer requests.deinit();
     var observer: EventObserver = .{
         .exchange = &harness.exchange,
@@ -203,9 +196,9 @@ test "payload inspection requires a successful SSE response body" {
 }
 
 test "built-in Claude negotiation transforms only request heads" {
-    var harness: TestHarness = .{};
+    var harness: H2TestHarness = .{};
     try harness.init();
-    var transforms: middleware.TransformPipeline = .{};
+    var transforms: TransformPipelineType = .{};
     var context: RelayContext = .{
         .io = std.testing.io,
         .transforms = &transforms,
@@ -229,9 +222,9 @@ test "built-in Claude negotiation transforms only request heads" {
 }
 
 test "final DATA publishes Claude completion before transport completion" {
-    var harness: TestHarness = .{};
+    var harness: H2TestHarness = .{};
     try harness.init();
-    var responses = provider.ResponseStreams.init(std.testing.allocator, .anthropic_messages);
+    var responses = ResponseStreamsType.init(std.testing.allocator, .anthropic_messages);
     defer responses.deinit();
     var observer: EventObserver = .{
         .exchange = &harness.exchange,
@@ -274,9 +267,9 @@ test "final DATA publishes Claude completion before transport completion" {
 }
 
 test "decode failure increments only the HTTP2 counter" {
-    var harness: TestHarness = .{};
+    var harness: H2TestHarness = .{};
     try harness.init();
-    var transforms: middleware.TransformPipeline = .{};
+    var transforms: TransformPipelineType = .{};
     var context: RelayContext = .{
         .io = std.testing.io,
         .transforms = &transforms,
@@ -292,11 +285,9 @@ test "decode failure increments only the HTTP2 counter" {
     try std.testing.expectEqual(@as(u64, 1), harness.snapshot().h2_decode_failures);
 }
 
-const CaptureGate = @import("H2CaptureGate.zig");
-
 test "HTTP2 capture keeps interleaved streams independent for unknown dialects" {
     var gate_context: u8 = 0;
-    var producer: capture.Producer = undefined;
+    var producer: ProducerType = undefined;
     try producer.init(std.testing.allocator, .{
         .config = .{
             .enabled = true,
@@ -304,28 +295,28 @@ test "HTTP2 capture keeps interleaved streams independent for unknown dialects" 
             .max_exchange_bytes = 1024,
             .max_total_bytes = 4096,
         },
-        .gate = .{ .context = &gate_context, .is_live = CaptureGate.accepts },
+        .gate = .{ .context = &gate_context, .is_live = H2CaptureGate.accepts },
     });
     defer producer.close(std.testing.io);
-    var harness: TestHarness = .{};
+    var harness: H2TestHarness = .{};
     try harness.init();
     harness.exchange.dialect = .unknown;
-    harness.exchange.host = try Io.net.HostName.init("example.test");
+    harness.exchange.host = try std.Io.net.HostName.init("example.test");
     var requests: CaptureStreams = .{ .producer = &producer, .exchange = &harness.exchange, .side = .request };
     defer requests.deinit();
     var responses: CaptureStreams = .{ .producer = &producer, .exchange = &harness.exchange, .side = .response };
     defer responses.deinit();
     var request_observer: EventObserver = .{ .exchange = &harness.exchange, .captures = &requests };
     var response_observer: EventObserver = .{ .exchange = &harness.exchange, .captures = &responses };
-    const first_request_headers = [_]h2.HeaderField{
+    const first_request_headers = [_]HeaderFieldType{
         .{ .name = ":method", .value = "POST" },
         .{ .name = ":path", .value = "/first" },
     };
-    const second_request_headers = [_]h2.HeaderField{
+    const second_request_headers = [_]HeaderFieldType{
         .{ .name = ":method", .value = "GET" },
         .{ .name = ":path", .value = "/second" },
     };
-    const response_headers = [_]h2.HeaderField{.{ .name = ":status", .value = "200" }};
+    const response_headers = [_]HeaderFieldType{.{ .name = ":status", .value = "200" }};
 
     request_observer.emit(.{ .request_headers = .{ .stream_id = 1, .fields = &first_request_headers } });
     request_observer.emit(.{ .request_headers = .{ .stream_id = 3, .fields = &second_request_headers } });
@@ -343,7 +334,7 @@ test "HTTP2 capture keeps interleaved streams independent for unknown dialects" 
     response_observer.emit(.{ .lifecycle = .{ .phase = .response_finished, .stream_id = 1, .status_code = 200 } });
     response_observer.emit(.{ .lifecycle = .{ .phase = .response_finished, .stream_id = 3, .status_code = 200 } });
 
-    var joiner = capture.Joiner.init(30_000);
+    var joiner = JoinerType.init(30_000);
     defer joiner.deinit();
     var completed: usize = 0;
     var saw_first = false;

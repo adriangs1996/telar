@@ -1,7 +1,11 @@
+const id = @import("../id.zig");
+const types = @import("../types.zig");
+const TerminalSizeType = @import("../TerminalSize.zig");
+const LaunchType = @import("../Launch.zig");
 const CreateTab = @This();
-const source_namespace = @import("tab.zig");
-request_id: source_namespace.RequestId,
-workspace: source_namespace.WorkspaceLocation,
+
+request_id: id.RequestId,
+workspace: types.WorkspaceLocation,
 label: []const u8 = "",
-size: source_namespace.TerminalSize,
-launch: source_namespace.Launch,
+size: TerminalSizeType,
+launch: LaunchType,

@@ -1,10 +1,12 @@
+const FilePathType = @import("../../links/FilePath.zig");
+const TargetType = @import("../../links/LinkTarget.zig");
+const OpenLinkEffects = @import("OpenLinkEffects.zig");
 const Capture = @This();
-const link_capability = @import("../../links/root.zig");
-const Effects = @import("OpenLinkEffects.zig");
-file: ?link_capability.FilePath = null,
-external: ?link_capability.Target = null,
 
-pub fn effects(capture: *Capture) Effects {
+file: ?FilePathType = null,
+external: ?TargetType = null,
+
+pub fn effects(capture: *Capture) OpenLinkEffects {
     return .{
         .context = capture,
         .open_file = openFile,
@@ -12,12 +14,12 @@ pub fn effects(capture: *Capture) Effects {
     };
 }
 
-fn openFile(context: *anyopaque, path: link_capability.FilePath) !void {
+fn openFile(context: *anyopaque, path: FilePathType) !void {
     const capture: *Capture = @ptrCast(@alignCast(context));
     capture.file = path;
 }
 
-fn openExternal(context: *anyopaque, target: link_capability.Target) !void {
+fn openExternal(context: *anyopaque, target: TargetType) !void {
     const capture: *Capture = @ptrCast(@alignCast(context));
     capture.external = target;
 }

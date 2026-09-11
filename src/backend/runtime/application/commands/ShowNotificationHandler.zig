@@ -1,8 +1,9 @@
-const ShowNotificationHandler = @This();
 const NotificationPublisher = @import("NotificationPublisher.zig");
 const ShowNotification = @import("ShowNotification.zig");
 const ShowNotificationResult = @import("ShowNotificationResult.zig");
 const ShowNotificationExecutor = @import("ShowNotificationExecutor.zig");
+const ShowNotificationHandler = @This();
+
 notifications: NotificationPublisher,
 
 /// Broadcasts one already-validated notification and reports only clients

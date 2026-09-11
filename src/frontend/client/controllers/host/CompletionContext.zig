@@ -1,5 +1,6 @@
-const CompletionContext = @This();
 const Client = @import("../../Client.zig");
-const attachments = @import("../../../attachments/root.zig");
+const CaptureType = @import("telar-client").Capture;
+const CompletionContext = @This();
+
 client: *Client,
-capture: ?*attachments.Capture = null,
+capture: ?*CaptureType = null,

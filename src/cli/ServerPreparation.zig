@@ -1,6 +1,8 @@
-const Preparation = @This();
 const std = @import("std");
-const source_namespace = @import("server.zig");
+const ServerOptionsType = @import("arguments/ServerOptions.zig");
+const RuntimeConnectorType = @import("RuntimeConnector.zig");
+const Preparation = @This();
+
 process: std.process.Init,
-options: source_namespace.ServerOptions,
-connector: source_namespace.RuntimeConnector,
+options: ServerOptionsType,
+connector: RuntimeConnectorType,

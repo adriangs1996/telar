@@ -1,9 +1,11 @@
-const SelectTabHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const SnapshotGate = @import("SnapshotGate.zig");
 const SelectionEffects = @import("SelectionEffects.zig");
 const SelectTab = @import("SelectTab.zig");
-model: *client_model.Model,
+const TabSelectionType = @import("../../model/TabSelection.zig");
+const SelectTabHandler = @This();
+
+model: *ModelType,
 snapshots: SnapshotGate,
 effects: SelectionEffects,
 
@@ -13,7 +15,7 @@ effects: SelectionEffects,
 /// ```zig
 /// const selection = try handler.execute(.{ .target = .{ .tab_id = tab_id } });
 /// ```
-pub fn execute(handler: *SelectTabHandler, command: SelectTab) !?client_model.TabSelection {
+pub fn execute(handler: *SelectTabHandler, command: SelectTab) !?TabSelectionType {
     if (handler.snapshots.pending(handler.snapshots.context)) {
         return null;
     }

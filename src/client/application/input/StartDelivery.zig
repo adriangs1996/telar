@@ -1,4 +1,5 @@
+const plugin_action = @import("plugin_action.zig");
 const StartDelivery = @This();
-const source_namespace = @import("plugin_action.zig");
+
 context: *anyopaque,
-deliver: *const fn (*anyopaque, source_namespace.StartOutcome) anyerror!void,
+deliver: *const fn (*anyopaque, plugin_action.StartOutcome) anyerror!void,

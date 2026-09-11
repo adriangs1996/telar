@@ -1,16 +1,20 @@
+const DeleteContextType = @import("DeleteContext.zig");
+const PruneContextType = @import("PruneContext.zig");
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const ServiceType = @import("../../../history/Service.zig");
+const PruneType = @import("../../../history/Prune.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const Controller = @This();
-const source_namespace = @import("prune_history.zig");
-const history_mod = @import("../../../history/root.zig");
-const std = @import("std");
-responses: *source_namespace.ResponseQueue,
-service: *history_mod.Service,
+
+responses: *ResponseQueueType,
+service: *ServiceType,
 
 /// Creates a controller scoped to one delete or prune request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, application.history_service);
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, service: *history_mod.Service) Controller {
+pub fn init(responses: *ResponseQueueType, service: *ServiceType) Controller {
     return .{ .responses = responses, .service = service };
 }
 
@@ -19,7 +23,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, service: *history_mod.Se
 /// ```zig
 /// try controller.deleteHistory(io, origin, request);
 /// ```
-pub fn deleteHistory(controller: *Controller, context: DeleteContext) !void {
+pub fn deleteHistory(controller: *Controller, context: DeleteContextType) !void {
     if (!controller.service.deleteHistory(context.io, .{
         .request_id = context.request.request_id,
         .origin = context.origin,
@@ -34,8 +38,8 @@ pub fn deleteHistory(controller: *Controller, context: DeleteContext) !void {
 /// ```zig
 /// try controller.pruneHistory(io, origin, request);
 /// ```
-pub fn pruneHistory(controller: *Controller, context: PruneContext) !void {
-    const prune = history_mod.model.Prune.init(.{
+pub fn pruneHistory(controller: *Controller, context: PruneContextType) !void {
+    const prune = PruneType.init(.{
         .request_id = context.request.request_id,
         .origin = context.origin,
         .scope = context.request.scope,
@@ -58,19 +62,11 @@ pub fn pruneHistory(controller: *Controller, context: PruneContext) !void {
     }
 }
 
-pub const DeleteContext = struct {
-    io: std.Io,
-    origin: source_namespace.QueryOrigin,
-    request: source_namespace.schema.DeleteHistory,
-};
+pub const DeleteContext = @import("DeleteContext.zig");
 
-pub const PruneContext = struct {
-    io: std.Io,
-    origin: source_namespace.QueryOrigin,
-    request: source_namespace.schema.PruneHistory,
-};
+pub const PruneContext = @import("PruneContext.zig");
 
-fn refuse(controller: *Controller, request_id: source_namespace.schema.RequestId) !void {
+fn refuse(controller: *Controller, request_id: RequestIdType) !void {
     try controller.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = .resource_limit,

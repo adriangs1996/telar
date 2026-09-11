@@ -1,10 +1,12 @@
-const Version = @This();
-const source_namespace = @import("client_layouts.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
 const TabVersion = @import("TabVersion.zig");
 const std = @import("std");
+const Version = @This();
+
 chrome: u64,
-active_tab: source_namespace.schema.TabLocation,
-tabs: [source_namespace.schema.max_client_layout_tabs]TabVersion = undefined,
+active_tab: TabLocationType,
+tabs: [max_client_layout_tabs_module]TabVersion = undefined,
 tab_count: u8 = 0,
 
 pub fn eql(left: *const Version, right: *const Version) bool {

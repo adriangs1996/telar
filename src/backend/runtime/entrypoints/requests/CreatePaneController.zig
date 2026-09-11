@@ -1,16 +1,19 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const CreatePaneExecutorType = @import("../../application/commands/CreatePaneExecutor.zig");
+const CreatePaneViewType = @import("telar-core").CreatePaneView;
+const CreatePaneFailure = @import("CreatePaneFailure.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const Controller = @This();
-const source_namespace = @import("create_pane.zig");
-const create_pane_commands = @import("../../application/commands/create_pane.zig");
-const Failure = @import("CreatePaneFailure.zig");
-responses: *source_namespace.ResponseQueue,
-create_pane: create_pane_commands.CreatePaneExecutor,
+
+responses: *ResponseQueueType,
+create_pane: CreatePaneExecutorType,
 
 /// Creates a controller scoped to one create-pane request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, create_pane: create_pane_commands.CreatePaneExecutor) Controller {
+pub fn init(responses: *ResponseQueueType, create_pane: CreatePaneExecutorType) Controller {
     return .{ .responses = responses, .create_pane = create_pane };
 }
 
@@ -20,13 +23,13 @@ pub fn init(responses: *source_namespace.ResponseQueue, create_pane: create_pane
 /// ```zig
 /// try controller.createPane(request);
 /// ```
-pub fn createPane(controller: *Controller, request: source_namespace.schema.CreatePaneView) !void {
+pub fn createPane(controller: *Controller, request: CreatePaneViewType) !void {
     const launched = controller.create_pane.execute(.{
         .location = request.location,
         .size = request.size,
         .launch = request.launch,
     }) catch |err| {
-        const failure: Failure = switch (err) {
+        const failure: CreatePaneFailure = switch (err) {
             error.TabNotFound => .{ .code = .pane_not_found, .message = "tab not found" },
             error.GeometryUnavailable => .{ .code = .resource_limit, .message = "workspace geometry is leased by another client" },
             error.InvalidLaunchCwd => .{ .code = .invalid_request, .message = "cwd source pane is unavailable" },
@@ -48,7 +51,7 @@ pub fn createPane(controller: *Controller, request: source_namespace.schema.Crea
     } });
 }
 
-fn queueFailure(controller: *Controller, request_id: source_namespace.schema.RequestId, failure: Failure) !void {
+fn queueFailure(controller: *Controller, request_id: RequestIdType, failure: CreatePaneFailure) !void {
     try controller.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,

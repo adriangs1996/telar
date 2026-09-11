@@ -1,13 +1,15 @@
+const DecoderType = @import("../Decoder.zig");
+const HistoryEntryType = @import("../HistoryEntry.zig");
+const history = @import("history.zig");
 const HistoryEntryIterator = @This();
-const wire = @import("../wire.zig");
-const source_namespace = @import("history.zig");
-decoder: wire.Decoder,
+
+decoder: DecoderType,
 remaining: u16,
 
-pub fn next(iterator: *HistoryEntryIterator) !?source_namespace.HistoryEntry {
+pub fn next(iterator: *HistoryEntryIterator) !?HistoryEntryType {
     if (iterator.remaining == 0) {
         return null;
     }
     iterator.remaining -= 1;
-    return try source_namespace.decodeHistoryEntry(&iterator.decoder);
+    return try history.decodeHistoryEntry(&iterator.decoder);
 }

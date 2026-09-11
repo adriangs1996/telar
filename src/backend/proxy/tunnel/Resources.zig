@@ -1,13 +1,13 @@
-const Resources = @This();
-const source_namespace = @import("tls.zig");
 const std = @import("std");
-const ca = @import("../ca.zig");
-const tls_transport = @import("../tls.zig");
-const interception_policy = @import("../interception_policy.zig");
-const metrics = @import("../metrics.zig");
-io: source_namespace.Io,
+const AuthorityType = @import("../Authority.zig");
+const RootsType = @import("../Roots.zig");
+const PolicyType = @import("../Policy.zig");
+const CountersType = @import("../Counters.zig");
+const Resources = @This();
+
+io: std.Io,
 gpa: std.mem.Allocator,
-authority: *ca.Authority,
-roots: *tls_transport.Roots,
-intercept_hosts: *const interception_policy.Policy,
-telemetry: *metrics.Counters,
+authority: *AuthorityType,
+roots: *RootsType,
+intercept_hosts: *const PolicyType,
+telemetry: *CountersType,

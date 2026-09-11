@@ -1,5 +1,6 @@
-const ResponseQueue = @This();
 const std = @import("std");
+const ResponseQueue = @This();
+
 const capacity = 64;
 const max_response_bytes = 1024;
 
@@ -20,14 +21,14 @@ pub fn push(queue: *ResponseQueue, response: []const u8) void {
     queue.len += 1;
 }
 
-fn peek(queue: *const ResponseQueue) ?[]const u8 {
+pub fn peek(queue: *const ResponseQueue) ?[]const u8 {
     if (queue.len == 0) {
         return null;
     }
     return queue.bytes[queue.head][0..queue.lengths[queue.head]];
 }
 
-fn pop(queue: *ResponseQueue) void {
+pub fn pop(queue: *ResponseQueue) void {
     std.debug.assert(queue.len != 0);
     queue.lengths[queue.head] = 0;
     queue.head = @intCast((@as(usize, queue.head) + 1) % capacity);

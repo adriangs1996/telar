@@ -1,10 +1,9 @@
 //! Client adapters for workspace-rename requests.
 
-const workspaces_application = @import("telar-client").application.workspaces;
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-
 const Client = @import("../../Client.zig");
-const rename_workspace = workspaces_application.rename_workspace;
+const RequestRenameWorkspaceHandlerType = @import("telar-client").RequestRenameWorkspaceHandler;
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const RequestedRenameType = @import("telar-client").RequestedRename;
 
 /// Wires a workspace rename to the client's continuation tracker and outbox.
 ///
@@ -12,7 +11,7 @@ const rename_workspace = workspaces_application.rename_workspace;
 /// var handler = requestHandler(client);
 /// _ = try handler.execute(command);
 /// ```
-pub fn requestHandler(client: *Client) rename_workspace.RequestRenameWorkspaceHandler {
+pub fn requestHandler(client: *Client) RequestRenameWorkspaceHandlerType {
     return .{
         .model = &client.model,
         .gate = .{
@@ -31,7 +30,7 @@ fn workspaceOperationPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .workspace_operation);
 }
 
-fn sendRename(context: *anyopaque, requested: rename_workspace.RequestedRename) !void {
+fn sendRename(context: *anyopaque, requested: RequestedRenameType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliverWorkspaceRename(client, .{

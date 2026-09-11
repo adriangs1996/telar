@@ -1,4 +1,5 @@
+const AgentProviderType = @import("telar-core").AgentProvider;
 const TestReadyPrompt = @This();
-const source_namespace = @import("tracker_support.zig");
-provider: source_namespace.schema.AgentProvider,
+
+provider: AgentProviderType,
 observed_at_ms: i64,

@@ -1,12 +1,16 @@
-const DeliverPaneSplitConfirmationHandler = @This();
-const client_model = @import("../../root.zig").model;
-const pane_geometry_delivery = @import("pane_geometry_delivery.zig");
-const Effects = @import("PaneSplitConfirmationDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const OfferEffectsType = @import("OfferEffects.zig");
+const PaneSplitConfirmationDeliveryEffects = @import("PaneSplitConfirmationDeliveryEffects.zig");
+const PaneSplitCommitType = @import("../../model/PaneSplitCommit.zig");
+const OfferPaneGeometryHandlerType = @import("OfferPaneGeometryHandler.zig");
 const std = @import("std");
-const source_namespace = @import("pane_split_confirmation_delivery.zig");
-model: *client_model.Model,
-geometry_effects: pane_geometry_delivery.OfferEffects,
-effects: Effects,
+const TabLocationType = @import("telar-core").TabLocation;
+const TabType = @import("../../workspace/Tab.zig");
+const DeliverPaneSplitConfirmationHandler = @This();
+
+model: *ModelType,
+geometry_effects: OfferEffectsType,
+effects: PaneSplitConfirmationDeliveryEffects,
 
 /// Validates one exact split commit before applying the resource policy
 /// selected by its active, inactive or stale disposition.
@@ -14,13 +18,13 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(commit);
 /// ```
-pub fn execute(handler: *DeliverPaneSplitConfirmationHandler, commit: client_model.PaneSplitCommit) !void {
+pub fn execute(handler: *DeliverPaneSplitConfirmationHandler, commit: PaneSplitCommitType) !void {
     try handler.validate(commit);
 
     switch (commit.disposition) {
         .active => {
             const tab = try handler.exactTab(commit.location);
-            var offer_geometry: pane_geometry_delivery.OfferPaneGeometryHandler = .{
+            var offer_geometry: OfferPaneGeometryHandlerType = .{
                 .effects = handler.geometry_effects,
             };
             _ = try offer_geometry.execute(&tab.model, commit.area);
@@ -45,7 +49,7 @@ pub fn execute(handler: *DeliverPaneSplitConfirmationHandler, commit: client_mod
     }
 }
 
-fn validate(handler: *const DeliverPaneSplitConfirmationHandler, commit: client_model.PaneSplitCommit) !void {
+fn validate(handler: *const DeliverPaneSplitConfirmationHandler, commit: PaneSplitCommitType) !void {
     const version = handler.model.version();
     if (version.workspace != commit.workspace_revision or
         version.tabs != commit.tabs_revision or
@@ -88,7 +92,7 @@ fn validate(handler: *const DeliverPaneSplitConfirmationHandler, commit: client_
     }
 }
 
-fn exactTab(handler: *const DeliverPaneSplitConfirmationHandler, location: source_namespace.schema.TabLocation) !*source_namespace.tabs_mod.Tab {
+fn exactTab(handler: *const DeliverPaneSplitConfirmationHandler, location: TabLocationType) !*TabType {
     const tab = handler.model.workspace.find(location.tab_id) orelse return error.StalePaneSplitConfirmation;
     if (!std.meta.eql(tab.location, location)) {
         return error.StalePaneSplitConfirmation;

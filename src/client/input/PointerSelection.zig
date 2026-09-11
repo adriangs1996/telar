@@ -1,8 +1,9 @@
-const PointerSelection = @This();
 const Point = @import("Point.zig");
-const core = @import("telar-core");
+const GranularityType = @import("telar-core").Granularity;
+const PointerSelection = @This();
+
 start: Point,
 end: Point,
-granularity: core.select.Granularity,
+granularity: GranularityType,
 cols: u16,
 rows: u16,

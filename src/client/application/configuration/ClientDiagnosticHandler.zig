@@ -1,7 +1,9 @@
-const ClientDiagnosticHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const Replacement = @import("Replacement.zig");
-model: *client_model.Model,
+const types = @import("../../model/types.zig");
+const ClientDiagnosticHandler = @This();
+
+model: *ModelType,
 
 /// Commits one validated diagnostic, using the explicit fallback only
 /// when the primary value is malformed.
@@ -9,7 +11,7 @@ model: *client_model.Model,
 /// ```zig
 /// _ = try handler.replace(.{ .diagnostic = diagnostic });
 /// ```
-pub fn replace(handler: *ClientDiagnosticHandler, replacement: Replacement) !client_model.Change {
+pub fn replace(handler: *ClientDiagnosticHandler, replacement: Replacement) !types.Change {
     return handler.model.replaceDiagnostic(replacement.diagnostic) catch |err| switch (err) {
         error.InvalidClientDiagnostic => if (replacement.invalid_fallback) |fallback|
             handler.model.replaceDiagnostic(fallback)
@@ -23,6 +25,6 @@ pub fn replace(handler: *ClientDiagnosticHandler, replacement: Replacement) !cli
 /// ```zig
 /// _ = handler.clear();
 /// ```
-pub fn clear(handler: *ClientDiagnosticHandler) client_model.Change {
+pub fn clear(handler: *ClientDiagnosticHandler) types.Change {
     return handler.model.clearDiagnostic();
 }

@@ -1,6 +1,7 @@
+const PaneIdType = @import("telar-core").PaneId;
 const Effects = @This();
-const source_namespace = @import("pane_frame_delivery.zig");
+
 context: *anyopaque,
-pane_graphics_visible: *const fn (*anyopaque, source_namespace.schema.PaneId) bool,
-set_pane_graphics_visible: *const fn (*anyopaque, source_namespace.schema.PaneId, bool) anyerror!void,
+pane_graphics_visible: *const fn (*anyopaque, PaneIdType) bool,
+set_pane_graphics_visible: *const fn (*anyopaque, PaneIdType, bool) anyerror!void,
 synchronize_active_resources: *const fn (*anyopaque) anyerror!void,

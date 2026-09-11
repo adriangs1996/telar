@@ -1,49 +1,42 @@
 //! Application policy for opening one bounded name prompt from current client
 //! authority and canonical model state.
 
+const TabIdType = @import("telar-core").TabId;
+const copy_mode = @import("../../input/copy_mode.zig");
+const name_prompt = @import("../../model/name_prompt.zig");
+const ModelType = @import("../../model/Model.zig");
+const NamePromptOpeningTestingModel = @import("NamePromptOpeningTestingModel.zig");
+const GateCapture = @import("GateCapture.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const name_prompt = @import("../../root.zig").model.name_prompt;
-
-pub const schema = core.schema;
 
 pub const Intent = union(enum) {
     create_workspace,
     rename_workspace,
     rename_active_tab,
-    rename_tab: schema.TabId,
+    rename_tab: TabIdType,
     /// Copy-mode search input; the only prompt allowed while copy mode is
     /// active, and meaningless outside it.
-    copy_search: name_prompt.Direction,
+    copy_search: copy_mode.Direction,
     goto_picker,
     history_palette,
     suggest_palette,
 };
 
-pub const WorkspaceCreationGate = @import("WorkspaceCreationGate.zig");
-
-pub const OpenNamePromptHandler = @import("OpenNamePromptHandler.zig");
-
-pub fn renameTab(tab_id: schema.TabId, label: []const u8) name_prompt.Begin {
+pub fn renameTab(tab_id: TabIdType, label: []const u8) name_prompt.Begin {
     return .{ .rename_tab = .{
         .tab_id = tab_id,
         .label = label,
     } };
 }
 
-const TestingModel = @import("NamePromptOpeningTestingModel.zig");
-
-const GateCapture = @import("GateCapture.zig");
-
-fn cancelPrompt(model: *client_model.Model) !void {
+fn cancelPrompt(model: *ModelType) !void {
     if (model.name_prompt.apply(.cancel) != .cancelled) {
         return error.PromptNotCancelled;
     }
 }
 
 test "OpenNamePromptHandler copies every canonical opening target" {
-    var testing = try TestingModel.init();
+    var testing = try NamePromptOpeningTestingModel.init();
     defer testing.deinit();
     var capture: GateCapture = .{};
     var handler = capture.handler(testing.model);
@@ -89,7 +82,7 @@ test "OpenNamePromptHandler rejects copy and pane-paste input authority" {
         .suggest_palette,
     };
 
-    var copy = try TestingModel.init();
+    var copy = try NamePromptOpeningTestingModel.init();
     defer copy.deinit();
     try std.testing.expect(copy.model.enterCopyMode());
     const copy_version = copy.model.version();
@@ -102,7 +95,7 @@ test "OpenNamePromptHandler rejects copy and pane-paste input authority" {
     try std.testing.expectEqualDeep(copy_version, copy.model.version());
     try std.testing.expectEqual(@as(usize, 0), copy_capture.calls);
 
-    var paste = try TestingModel.init();
+    var paste = try NamePromptOpeningTestingModel.init();
     defer paste.deinit();
     _ = paste.model.beginPanePaste().?;
     const paste_version = paste.model.version();
@@ -117,7 +110,7 @@ test "OpenNamePromptHandler rejects copy and pane-paste input authority" {
 }
 
 test "OpenNamePromptHandler gates only workspace creation availability" {
-    var testing = try TestingModel.init();
+    var testing = try NamePromptOpeningTestingModel.init();
     defer testing.deinit();
     var capture: GateCapture = .{ .blocked = true };
     var handler = capture.handler(testing.model);
@@ -137,7 +130,7 @@ test "OpenNamePromptHandler gates only workspace creation availability" {
 }
 
 test "OpenNamePromptHandler rejects missing rename targets without mutation" {
-    var testing = try TestingModel.init();
+    var testing = try NamePromptOpeningTestingModel.init();
     defer testing.deinit();
     var capture: GateCapture = .{};
     var handler = capture.handler(testing.model);
@@ -157,7 +150,7 @@ test "OpenNamePromptHandler rejects missing rename targets without mutation" {
 }
 
 test "OpenNamePromptHandler opens the goto picker without extra gates" {
-    var testing = try TestingModel.init();
+    var testing = try NamePromptOpeningTestingModel.init();
     defer testing.deinit();
     var capture: GateCapture = .{ .blocked = true };
     var handler = capture.handler(testing.model);

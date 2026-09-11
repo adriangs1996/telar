@@ -1,34 +1,27 @@
 //! Request controller for notification broadcast and requester confirmation.
 
-const std = @import("std");
-const core = @import("telar-core");
-const show_notification_commands = @import("../../application/commands/show_notification.zig");
-const delivery_mod = @import("../../delivery/root.zig");
-
-pub const schema = core.schema;
-pub const ResponseQueue = delivery_mod.ResponseQueue;
-
-pub const Delivery = @import("Delivery.zig");
-
-pub const Controller = @import("ShowNotificationController.zig");
-
-const StubExecutor = @import("ShowNotificationStubExecutor.zig");
-
+const ResponseQueue = @import("../../delivery/ResponseQueue.zig");
+const ShowNotificationStubExecutor = @import("ShowNotificationStubExecutor.zig");
 const PumpCapture = @import("PumpCapture.zig");
+const ShowNotificationController = @import("ShowNotificationController.zig");
+const RequestIdType = @import("telar-core").RequestId;
+const workspace_module = @import("telar-core").workspace;
+const std = @import("std");
+const NotificationLevelType = @import("telar-core").NotificationLevel;
 
 test "Controller reserves, broadcasts, commits, then pumps exact notification data" {
     var responses: ResponseQueue = .{};
-    var executor: StubExecutor = .{ .responses = &responses, .delivered_clients = 3 };
+    var executor: ShowNotificationStubExecutor = .{ .responses = &responses, .delivered_clients = 3 };
     var pump: PumpCapture = .{ .responses = &responses, .expected_delivered = 3 };
-    var controller = Controller.init(&responses, executor.executor(), pump.delivery());
-    const request_id: schema.RequestId = @enumFromInt(7);
+    var controller = ShowNotificationController.init(&responses, executor.executor(), pump.delivery());
+    const request_id: RequestIdType = @enumFromInt(7);
 
     try controller.showNotification(.{
         .request_id = request_id,
         .notification = .{
             .level = .warning,
             .duration_ms = 2500,
-            .target = .{ .workspace = try schema.id.workspace(9) },
+            .target = .{ .workspace = try workspace_module(9) },
             .title = "Review",
             .message = "Agent waiting",
         },
@@ -36,9 +29,9 @@ test "Controller reserves, broadcasts, commits, then pumps exact notification da
 
     try std.testing.expectEqual(@as(usize, 1), executor.call_count);
     try std.testing.expect(executor.observed_reservation);
-    try std.testing.expectEqual(schema.NotificationLevel.warning, executor.level);
+    try std.testing.expectEqual(NotificationLevelType.warning, executor.level);
     try std.testing.expectEqual(@as(u32, 2500), executor.duration_ms);
-    try std.testing.expectEqual(try schema.id.workspace(9), executor.target.workspace);
+    try std.testing.expectEqual(try workspace_module(9), executor.target.workspace);
     try std.testing.expectEqualStrings("Review", executor.titleSlice());
     try std.testing.expectEqualStrings("Agent waiting", executor.messageSlice());
     const confirmation = responses.peek().?.notification_shown;
@@ -50,9 +43,9 @@ test "Controller reserves, broadcasts, commits, then pumps exact notification da
 
 test "Controller confirms and pumps a zero-recipient broadcast" {
     var responses: ResponseQueue = .{};
-    var executor: StubExecutor = .{ .responses = &responses, .delivered_clients = 0 };
+    var executor: ShowNotificationStubExecutor = .{ .responses = &responses, .delivered_clients = 0 };
     var pump: PumpCapture = .{ .responses = &responses, .expected_delivered = 0 };
-    var controller = Controller.init(&responses, executor.executor(), pump.delivery());
+    var controller = ShowNotificationController.init(&responses, executor.executor(), pump.delivery());
 
     try controller.showNotification(.{
         .request_id = @enumFromInt(8),
@@ -72,9 +65,9 @@ test "Controller queue backpressure prevents broadcast and pumping" {
             .delivered_clients = 0,
         } });
     }
-    var executor: StubExecutor = .{ .responses = &responses, .delivered_clients = 1 };
+    var executor: ShowNotificationStubExecutor = .{ .responses = &responses, .delivered_clients = 1 };
     var pump: PumpCapture = .{ .responses = &responses, .expected_delivered = 1 };
-    var controller = Controller.init(&responses, executor.executor(), pump.delivery());
+    var controller = ShowNotificationController.init(&responses, executor.executor(), pump.delivery());
 
     try std.testing.expectError(error.ResponseQueueFull, controller.showNotification(.{
         .request_id = @enumFromInt(99),

@@ -1,5 +1,6 @@
+const Mouse = @import("../../input/Mouse.zig");
 const PointerCommand = @This();
-const Mouse = @import("../../input/root.zig").Mouse;
+
 event: Mouse,
 exterior_pixels: bool,
 cell_width_px: u16,

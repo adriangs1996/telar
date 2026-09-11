@@ -1,20 +1,8 @@
 //! TLS interception resources owned for the lifetime of one proxy service.
 
 const std = @import("std");
-const ca = @import("../ca.zig");
-const capture = @import("../capture/root.zig");
-const metrics = @import("../metrics.zig");
-const interception_policy = @import("../interception_policy.zig");
-const tls = @import("../tls.zig");
-const tunnel_tls = @import("../tunnel/tls.zig");
-
-pub const Io = std.Io;
-
-pub const Paths = @import("Paths.zig");
-
-pub const Trust = @import("Trust.zig");
-
-pub const Interception = @import("Interception.zig");
+const Interception = @import("Interception.zig");
+const CountersType = @import("../Counters.zig");
 
 test "interception owns trust paths and exposes bounded tunnel resources" {
     const io = std.testing.io;
@@ -39,7 +27,7 @@ test "interception owns trust paths and exposes bounded tunnel resources" {
     });
     defer interception.deinit();
     const trust = interception.clientTrust();
-    var telemetry: metrics.Counters = .{};
+    var telemetry: CountersType = .{};
     const resources = interception.tunnelResources(&telemetry);
 
     try std.testing.expectEqualStrings(certificate_path, trust.certificate_path);

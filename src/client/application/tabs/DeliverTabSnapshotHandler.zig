@@ -1,14 +1,18 @@
-const DeliverTabSnapshotHandler = @This();
-const client_model = @import("../../root.zig").model;
-const pane_geometry_delivery = @import("../panes/root.zig").pane_geometry_delivery;
-const Effects = @import("TabSnapshotDeliveryEffects.zig");
-const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
-const pane_attachment_requests = @import("../panes/root.zig").pane_attachment_requests;
+const ModelType = @import("../../model/Model.zig");
+const OfferEffectsType = @import("../panes/OfferEffects.zig");
+const TabSnapshotDeliveryEffects = @import("TabSnapshotDeliveryEffects.zig");
+const TabReconciliationType = @import("../../model/TabReconciliation.zig");
+const ReleasePaneResourcesHandlerType = @import("../panes/ReleasePaneResourcesHandler.zig");
+const OfferPaneGeometryHandlerType = @import("../panes/OfferPaneGeometryHandler.zig");
+const RequestPaneAttachmentsHandlerType = @import("../panes/RequestPaneAttachmentsHandler.zig");
 const std = @import("std");
-const source_namespace = @import("tab_snapshot_delivery.zig");
-model: *client_model.Model,
-geometry_effects: pane_geometry_delivery.OfferEffects,
-effects: Effects,
+const TabLocationType = @import("telar-core").TabLocation;
+const TabType = @import("../../workspace/Tab.zig");
+const DeliverTabSnapshotHandler = @This();
+
+model: *ModelType,
+geometry_effects: OfferEffectsType,
+effects: TabSnapshotDeliveryEffects,
 
 /// Validates one exact tab reconciliation before releasing retired panes,
 /// repairing active geometry and requesting each missing attachment once.
@@ -19,10 +23,10 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(&reconciliation);
 /// ```
-pub fn execute(handler: *DeliverTabSnapshotHandler, reconciliation: *const client_model.TabReconciliation) !void {
+pub fn execute(handler: *DeliverTabSnapshotHandler, reconciliation: *const TabReconciliationType) !void {
     try handler.validate(reconciliation);
 
-    var release_pane: pane_resource_release.ReleasePaneResourcesHandler = .{
+    var release_pane: ReleasePaneResourcesHandlerType = .{
         .model = handler.model,
         .effects = .{
             .context = handler.effects.context,
@@ -41,12 +45,12 @@ pub fn execute(handler: *DeliverTabSnapshotHandler, reconciliation: *const clien
     const tab = try handler.exactTab(reconciliation.location);
     try handler.effects.synchronize_active_resources(handler.effects.context);
 
-    var offer_geometry: pane_geometry_delivery.OfferPaneGeometryHandler = .{
+    var offer_geometry: OfferPaneGeometryHandlerType = .{
         .effects = handler.geometry_effects,
     };
     _ = try offer_geometry.execute(&tab.model, reconciliation.area);
 
-    var request_attachments: pane_attachment_requests.RequestPaneAttachmentsHandler = .{
+    var request_attachments: RequestPaneAttachmentsHandlerType = .{
         .effects = .{
             .context = handler.effects.context,
             .attachment_pending = handler.effects.attachment_pending,
@@ -56,7 +60,7 @@ pub fn execute(handler: *DeliverTabSnapshotHandler, reconciliation: *const clien
     _ = try request_attachments.execute(tab, reconciliation.area);
 }
 
-fn validate(handler: *const DeliverTabSnapshotHandler, reconciliation: *const client_model.TabReconciliation) !void {
+fn validate(handler: *const DeliverTabSnapshotHandler, reconciliation: *const TabReconciliationType) !void {
     const tab = try handler.exactTab(reconciliation.location);
     const active = handler.model.workspace.activeConst() orelse return error.StaleTabReconciliation;
     const version = handler.model.version();
@@ -72,7 +76,7 @@ fn validate(handler: *const DeliverTabSnapshotHandler, reconciliation: *const cl
     }
 }
 
-fn exactTab(handler: *const DeliverTabSnapshotHandler, location: source_namespace.schema.TabLocation) !*source_namespace.tabs_mod.Tab {
+fn exactTab(handler: *const DeliverTabSnapshotHandler, location: TabLocationType) !*TabType {
     const tab = handler.model.workspace.find(location.tab_id) orelse return error.StaleTabReconciliation;
     if (!std.meta.eql(tab.location, location)) {
         return error.StaleTabReconciliation;

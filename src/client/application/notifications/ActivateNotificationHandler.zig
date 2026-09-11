@@ -1,8 +1,10 @@
-const ActivateNotificationHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const ActivationEffects = @import("ActivationEffects.zig");
 const InteractionCommand = @import("InteractionCommand.zig");
-model: *client_model.Model,
+const NotificationActivationType = @import("../../model/NotificationActivation.zig");
+const ActivateNotificationHandler = @This();
+
+model: *ModelType,
 effects: ActivationEffects,
 
 /// Commits an exit transition, rearms time and then follows its target.
@@ -10,7 +12,7 @@ effects: ActivationEffects,
 /// ```zig
 /// const activation = try handler.execute(command) orelse return;
 /// ```
-pub fn execute(handler: *ActivateNotificationHandler, command: InteractionCommand) !?client_model.NotificationActivation {
+pub fn execute(handler: *ActivateNotificationHandler, command: InteractionCommand) !?NotificationActivationType {
     const activation = handler.model.activateNotification(command.id, command.now_ns) orelse return null;
 
     try handler.effects.timers.reschedule(handler.effects.timers.context);

@@ -1,19 +1,25 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_removal_delivery.zig");
-const Effects = @import("TabRemovalDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const types = @import("../../model/types.zig");
+const tab_removal_delivery = @import("tab_removal_delivery.zig");
+const TabRemovalDeliveryEffects = @import("TabRemovalDeliveryEffects.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const std = @import("std");
-model: *client_model.Model,
-commit: client_model.TabRemovalCommit,
-events: [16]source_namespace.Event = undefined,
+const EffectsCapture = @This();
+
+model: *ModelType,
+commit: types.TabRemovalCommit,
+events: [16]tab_removal_delivery.Event = undefined,
 event_count: usize = 0,
 snapshot_pending: bool = false,
 committed_state_observed: bool = true,
 pane_authorities_released: bool = true,
 focus_retired_before_activation: bool = true,
-failure: source_namespace.Failure = .none,
+failure: tab_removal_delivery.Failure = .none,
 
-pub fn effects(capture: *EffectsCapture) Effects {
+pub fn effects(capture: *EffectsCapture) TabRemovalDeliveryEffects {
     return .{
         .context = capture,
         .retire_tab_requests = retireTabRequests,
@@ -27,12 +33,12 @@ pub fn effects(capture: *EffectsCapture) Effects {
     };
 }
 
-fn retireTabRequests(context: *anyopaque, location: source_namespace.schema.TabLocation) void {
+fn retireTabRequests(context: *anyopaque, location: TabLocationType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .retire_tab_requests = location });
 }
 
-fn clearPaneGraphics(context: *anyopaque, pane_id: source_namespace.schema.PaneId) void {
+fn clearPaneGraphics(context: *anyopaque, pane_id: PaneIdType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .clear_graphics = pane_id });
     if (capture.model.panePasteSession()) |session| {
@@ -43,7 +49,7 @@ fn clearPaneGraphics(context: *anyopaque, pane_id: source_namespace.schema.PaneI
     }
 }
 
-fn setPaneGraphicsVisible(context: *anyopaque, pane_id: source_namespace.schema.PaneId, visible: bool) !void {
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .graphics_visibility = .{
         .pane_id = pane_id,
@@ -73,7 +79,7 @@ fn tabSnapshotPending(context: *anyopaque) bool {
     return capture.snapshot_pending;
 }
 
-fn requestTabSnapshot(context: *anyopaque, location: source_namespace.schema.TabLocation) !void {
+fn requestTabSnapshot(context: *anyopaque, location: TabLocationType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .request_tab_snapshot = location });
     if (capture.failure == .tab_snapshot) {
@@ -81,12 +87,12 @@ fn requestTabSnapshot(context: *anyopaque, location: source_namespace.schema.Tab
     }
 }
 
-fn forgetWorkspace(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) void {
+fn forgetWorkspace(context: *anyopaque, workspace: WorkspaceLocationType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .forget_workspace = workspace });
 }
 
-fn requestWorkspace(context: *anyopaque, workspace: source_namespace.schema.WorkspaceId) !void {
+fn requestWorkspace(context: *anyopaque, workspace: WorkspaceIdType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .request_workspace = workspace });
     if (capture.failure == .workspace_handoff) {
@@ -94,7 +100,7 @@ fn requestWorkspace(context: *anyopaque, workspace: source_namespace.schema.Work
     }
 }
 
-fn append(capture: *EffectsCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectsCapture, event: tab_removal_delivery.Event) void {
     capture.committed_state_observed = capture.committed_state_observed and capture.observesCommit();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -130,6 +136,6 @@ fn observesCommit(capture: *const EffectsCapture) bool {
     };
 }
 
-pub fn eventSlice(capture: *const EffectsCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectsCapture) []const tab_removal_delivery.Event {
     return capture.events[0..capture.event_count];
 }

@@ -1,25 +1,18 @@
 //! Starts one constructed client in the order required by request
 //! correlation, the runtime handshake and asynchronous event sources.
 
-const graphics = @import("../../../graphics/root.zig");
-const platform = @import("../../../platform/root.zig");
-const workspace = @import("../../../workspace/root.zig");
-
 const Client = @import("../../Client.zig");
+const Request = @import("Request.zig");
+const rectSize_module = @import("telar-client").rectSize;
+const host_capabilities = @import("../host/host_capabilities.zig");
+const presentation_lifecycle = @import("../../presentation/presentation_lifecycle.zig");
+const host_inputs = @import("../input/host_inputs.zig");
+const host_resizes = @import("../host/host_resizes.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
 const client_telemetry = @import("../../resources/telemetry.zig");
 const bar_updates = @import("../configuration/bar_updates.zig");
 const config_reloads = @import("../configuration/config_reloads.zig");
-const host_capabilities = @import("../host/host_capabilities.zig");
-const host_resizes = @import("../host/host_resizes.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-const host_inputs = @import("../input/host_inputs.zig");
-const presentation_lifecycle = @import("../../presentation/presentation_lifecycle.zig");
-
-pub const State = @import("State.zig");
-
-const kitty = graphics.kitty;
-
-pub const Request = @import("Request.zig");
+const kitty = @import("../../../graphics/kitty.zig");
 
 /// Starts host negotiation and arms I/O without opening a child before its
 /// terminal defaults are available or the bounded probe expires.
@@ -28,7 +21,7 @@ pub const Request = @import("Request.zig");
 /// try start(client, .{ .resize_watcher = &watcher });
 /// ```
 pub fn start(client: *Client, request: Request) !void {
-    _ = workspace.multiplexer.rectSize(client.geometry().area) orelse
+    _ = rectSize_module(client.geometry().area) orelse
         return error.TerminalTooSmall;
     client.startup.phase = .probing;
     try host_capabilities.begin(client);

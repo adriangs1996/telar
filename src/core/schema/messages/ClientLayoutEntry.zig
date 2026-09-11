@@ -1,5 +1,6 @@
+const TabLocationType = @import("../TabLocation.zig");
 const ClientLayoutEntry = @This();
-const source_namespace = @import("layout.zig");
-location: source_namespace.TabLocation,
+
+location: TabLocationType,
 workspace_active: bool,
 node_count: usize,

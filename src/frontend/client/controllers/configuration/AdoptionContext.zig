@@ -1,8 +1,9 @@
-const AdoptionContext = @This();
 const Client = @import("../../Client.zig");
-const source_namespace = @import("config_reloads.zig");
+const AdoptionType = @import("../../resources/Adoption.zig");
+const AdoptionContext = @This();
+
 client: *Client,
-adoption: source_namespace.Adoption,
+adoption: AdoptionType,
 consumed: bool = false,
 
 pub fn releaseOwned(context: *AdoptionContext) void {

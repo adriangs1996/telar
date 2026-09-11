@@ -1,8 +1,7 @@
 //! Owned environment passed to every process launched inside a Telar pane.
 
 const std = @import("std");
-
-pub const ChildEnvironment = @import("ChildEnvironment.zig");
+const ChildEnvironment = @import("ChildEnvironment.zig");
 
 test "terminal child environment provides Telar's Ghostty compatibility profile" {
     var inherited_map = std.process.Environ.Map.init(std.testing.allocator);

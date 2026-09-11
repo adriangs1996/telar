@@ -1,3 +1,4 @@
+const TabLocationType = @import("telar-core").TabLocation;
 const TabCloseIntent = @This();
-const source_namespace = @import("close_tab.zig");
-location: source_namespace.schema.TabLocation,
+
+location: TabLocationType,

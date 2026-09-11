@@ -1,7 +1,9 @@
+const RectType = @import("telar-core").Rect;
+const AgentType = @import("telar-client").Agent;
+const ColorType = @import("telar-core").Color;
 const AgentLocationInput = @This();
-const ui = @import("../ui/root.zig");
-const agents = @import("telar-client").agents;
-area: ui.Rect,
-agent: *const agents.Agent,
+
+area: RectType,
+agent: *const AgentType,
 pane_index: u16,
-background: ui.Color,
+background: ColorType,

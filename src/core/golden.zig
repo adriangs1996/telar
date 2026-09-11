@@ -1,7 +1,5 @@
-/// One hex string per corpus entry, in corpus order. Regenerate with the
-/// "GOLDEN" print block below when an encoding change is intentional, and
-/// bump `handshake.schema_id` to the new fingerprint in the same commit.
-const golden = @This();
+//! One hex string per protocol corpus entry. An intentional encoding change
+//! updates these fixtures and the handshake schema fingerprint together.
 
 pub const open_pane_default = "01090000000000000000780028000800100005002f776f726b0000000000000000020007002f62696e2f736802002d6c01020004005445524d0e000000787465726d2d323536636f6c6f720500454d50545900000000";
 pub const open_pane_attach = "0102000000000000000129000000000000005000180000000000";

@@ -1,10 +1,12 @@
+const PointType = @import("ui/Point.zig");
+const select = @import("select.zig");
+const BufferType = @import("ui/Buffer.zig");
 const Range = @This();
-const source_namespace = @import("select.zig");
-const ui = @import("ui/root.zig");
-anchor: source_namespace.Point,
-head: source_namespace.Point,
-mode: source_namespace.Mode = .linear,
-granularity: source_namespace.Granularity = .character,
+
+anchor: PointType,
+head: PointType,
+mode: select.Mode = .linear,
+granularity: select.Granularity = .character,
 
 /// A bare click before any drag. A word or line selection collapsed onto
 /// one cell still selects that cell.
@@ -13,8 +15,8 @@ pub fn isEmpty(r: Range) bool {
 }
 
 /// Anchor and head in reading order.
-pub fn ordered(r: Range) [2]source_namespace.Point {
-    return if (source_namespace.pointBefore(r.anchor, r.head) or
+pub fn ordered(r: Range) [2]PointType {
+    return if (select.pointBefore(r.anchor, r.head) or
         (r.anchor.x == r.head.x and r.anchor.y == r.head.y))
         .{ r.anchor, r.head }
     else
@@ -50,13 +52,13 @@ pub fn contains(r: Range, x: u16, y: u16) bool {
 /// Applied on every drag rather than once at the start, because a
 /// double-click-and-drag selects by word all the way along - the behaviour
 /// people rely on without noticing it exists.
-pub fn expanded(r: Range, b: *const ui.Buffer) Range {
+pub fn expanded(r: Range, b: *const BufferType) Range {
     var from, var to = r.ordered();
     switch (r.granularity) {
         .character => {},
         .word => {
-            from.x = source_namespace.wordStart(b, from);
-            to.x = source_namespace.wordEnd(b, to);
+            from.x = select.wordStart(b, from);
+            to.x = select.wordEnd(b, to);
         },
         .line => {
             from.x = 0;

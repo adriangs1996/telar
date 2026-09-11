@@ -1,7 +1,8 @@
+const DigestType = @import("telar-core").Digest;
+const EffectBatchType = @import("telar-client").EffectBatch;
 const BatchAuthorization = @This();
-const source_namespace = @import("root.zig");
-const lua_config = @import("../config/root.zig");
+
 package_index: u8,
 plugin_id: u64,
-digest: source_namespace.plugin.Digest,
-batch: *const lua_config.EffectBatch,
+digest: DigestType,
+batch: *const EffectBatchType,

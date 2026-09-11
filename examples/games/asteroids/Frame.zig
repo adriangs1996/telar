@@ -1,7 +1,8 @@
-const Frame = @This();
 const std = @import("std");
 const Pixel = @import("Pixel.zig");
 const Color = @import("Color.zig");
+const Frame = @This();
+
 pixels: []u8,
 width: usize,
 height: usize,

@@ -1,5 +1,7 @@
+const BufferType = @import("telar-core").Buffer;
+const RectType = @import("telar-core").Rect;
 const RowTarget = @This();
-const source_namespace = @import("blit.zig");
-buffer: *source_namespace.ui.Buffer,
-area: source_namespace.ui.Rect,
+
+buffer: *BufferType,
+area: RectType,
 y: u16,

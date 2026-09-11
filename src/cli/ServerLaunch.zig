@@ -1,30 +1,46 @@
-const Launch = @This();
 const std = @import("std");
-const source_namespace = @import("server.zig");
-const frontend = @import("telar-frontend");
-const backend = @import("telar-backend");
-const core = @import("telar-core");
+const ServerOptionsType = @import("arguments/ServerOptions.zig");
+const RuntimeConnectorType = @import("RuntimeConnector.zig");
+const GenerationType = @import("telar-frontend").Generation;
+const max_intercept_hosts = @import("telar-core").max_intercept_hosts;
+const max_agent_description_command_args_module = @import("telar-frontend").max_agent_description_command_args;
+const AgentDescriptionOptionsType = @import("telar-backend").AgentDescriptionOptions;
+const Options = @import("telar-backend").Options;
+const TableType = @import("telar-core").Table;
+const builtin_table_module = @import("telar-core").builtin_table;
+const FiltersType = @import("telar-core").Filters;
 const HistoryPath = @import("HistoryPath.zig");
-const Preparation = @import("ServerPreparation.zig");
+const Config = @import("telar-backend").Config;
+const ConfigType = @import("telar-backend").ProxyCaptureConfig;
+const max_workers_module = @import("telar-backend").max_workers;
+const ServiceSpec = @import("telar-backend").ServiceSpec;
+const ServerPreparation = @import("ServerPreparation.zig");
 const config = @import("config.zig");
+const server = @import("server.zig");
 const proxy_cli = @import("proxy.zig");
 const plugin_cli = @import("plugin.zig");
+const RegistryType = @import("telar-frontend").Registry;
+const installPackage_module = @import("telar-frontend").installPackage;
+const inspectPackage_module = @import("telar-frontend").inspectPackage;
+const InitializationType = @import("telar-backend").Initialization;
+const Launch = @This();
+
 process: std.process.Init,
-options: source_namespace.ServerOptions,
-connector: source_namespace.RuntimeConnector,
-config_generation: ?*frontend.config.Generation = null,
+options: ServerOptionsType,
+connector: RuntimeConnectorType,
+config_generation: ?*GenerationType = null,
 config_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
 configured_history_buffer: [std.fs.max_path_bytes]u8 = undefined,
 configured_history_path: ?[:0]const u8 = null,
 configured_proxy_directory: ?[]u8 = null,
-proxy_intercept_host_storage: [frontend.config.max_proxy_intercept_hosts][]const u8 = undefined,
+proxy_intercept_host_storage: [max_intercept_hosts][]const u8 = undefined,
 proxy_intercept_hosts: []const []const u8 = &.{},
-description_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined,
-agent_description_options: ?backend.runtime.AgentDescriptionOptions = null,
-engine_arguments: [frontend.config.max_agent_description_command_args][]const u8 = undefined,
-engine_options: ?backend.runtime.EngineOptions = null,
-agent_manifests: core.agent_manifest.Table = core.agent_manifest.builtin_table,
-history_filters: core.history_filter.Filters = .{},
+description_arguments: [max_agent_description_command_args_module][]const u8 = undefined,
+agent_description_options: ?AgentDescriptionOptionsType = null,
+engine_arguments: [max_agent_description_command_args_module][]const u8 = undefined,
+engine_options: ?Options = null,
+agent_manifests: TableType = builtin_table_module,
+history_filters: FiltersType = .{},
 history_output_capture: bool = false,
 session_persist: bool = true,
 session_resume_agents: bool = true,
@@ -39,16 +55,16 @@ default_proxy_directory: ?[]u8 = null,
 proxy_key_buffer: [std.fs.max_path_bytes]u8 = undefined,
 proxy_cert_buffer: [std.fs.max_path_bytes]u8 = undefined,
 proxy_bundle_buffer: [std.fs.max_path_bytes]u8 = undefined,
-proxy_options: ?backend.runtime.ProxyOptions = null,
+proxy_options: ?Config = null,
 proxy_system_trusted: bool = false,
-proxy_capture: backend.proxy.CaptureConfig = .{},
-tap_specs: [backend.plugins.max_workers]backend.plugins.Spec = undefined,
+proxy_capture: ConfigType = .{},
+tap_specs: [max_workers_module]ServiceSpec = undefined,
 tap_spec_count: u8 = 0,
 tap_snapshot_buffer: [std.fs.max_path_bytes]u8 = undefined,
 tap_snapshot_directory: ?[]const u8 = null,
 trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
 
-fn prepare(launch: *Launch, preparation: Preparation) !void {
+pub fn prepare(launch: *Launch, preparation: ServerPreparation) !void {
     launch.* = .{
         .process = preparation.process,
         .options = preparation.options,
@@ -70,7 +86,7 @@ fn prepare(launch: *Launch, preparation: Preparation) !void {
         try launch.prepareRuntimeStorage();
         if (launch.options.fresh) {
             if (launch.session_path) |path| {
-                _ = try source_namespace.setSessionAside(launch.process.io, path);
+                _ = try server.setSessionAside(launch.process.io, path);
             }
         }
         if (launch.config_generation) |generation| {
@@ -79,7 +95,7 @@ fn prepare(launch: *Launch, preparation: Preparation) !void {
     }
 }
 
-fn applyConfig(launch: *Launch, generation: *frontend.config.Generation) !void {
+fn applyConfig(launch: *Launch, generation: *GenerationType) !void {
     const runtime_config = &generation.snapshot.runtime;
     launch.agent_manifests = runtime_config.agent_manifests;
     launch.history_filters = runtime_config.history_filters;
@@ -87,7 +103,7 @@ fn applyConfig(launch: *Launch, generation: *frontend.config.Generation) !void {
     launch.session_persist = runtime_config.session_persist;
     launch.session_resume_agents = runtime_config.session_resume_agents;
     if (runtime_config.sessionPath()) |session_path| {
-        const resolved = try source_namespace.resolveConfigPath(launch.process.gpa, generation.configDir(), session_path);
+        const resolved = try server.resolveConfigPath(launch.process.gpa, generation.configDir(), session_path);
         defer launch.process.gpa.free(resolved);
         launch.configured_session_path = try std.fmt.bufPrint(&launch.configured_session_buffer, "{s}", .{resolved});
     }
@@ -98,7 +114,7 @@ fn applyConfig(launch: *Launch, generation: *frontend.config.Generation) !void {
         launch.options.graphics.global_bytes = runtime_config.graphics_global_bytes;
     }
     if (runtime_config.historyPath()) |history_path| {
-        const resolved = try source_namespace.resolveConfigPath(launch.process.gpa, generation.configDir(), history_path);
+        const resolved = try server.resolveConfigPath(launch.process.gpa, generation.configDir(), history_path);
         defer launch.process.gpa.free(resolved);
         launch.configured_history_path = try std.fmt.bufPrintZ(&launch.configured_history_buffer, "{s}", .{resolved});
     }
@@ -112,7 +128,7 @@ fn applyConfig(launch: *Launch, generation: *frontend.config.Generation) !void {
         .join_timeout_ms = runtime_config.proxy_capture_join_timeout_ms,
     };
     if (runtime_config.proxyCaDir()) |ca_directory| {
-        launch.configured_proxy_directory = try source_namespace.resolveConfigPath(
+        launch.configured_proxy_directory = try server.resolveConfigPath(
             launch.process.gpa,
             generation.configDir(),
             ca_directory,
@@ -138,8 +154,8 @@ fn prepareRuntimeStorage(launch: *Launch) !void {
     launch.history_path = if (launch.configured_history_path) |path|
         .{ .path = path, .managed_directory = null }
     else
-        try source_namespace.resolveHistoryPath(launch.process.minimal.environ, &launch.history_buffer);
-    try source_namespace.prepareHistoryDatabase(launch.process.io, launch.history_path);
+        try server.resolveHistoryPath(launch.process.minimal.environ, &launch.history_buffer);
+    try server.prepareHistoryDatabase(launch.process.io, launch.history_path);
     if (launch.session_persist) {
         launch.session_path = launch.configured_session_path orelse try std.fmt.bufPrint(
             &launch.session_buffer,
@@ -153,15 +169,15 @@ fn prepareRuntimeStorage(launch: *Launch) !void {
     else
         false;
     const proxy_directory = launch.configured_proxy_directory orelse block: {
-        const resolved = try source_namespace.resolveProxyDirectory(launch.process.minimal.environ, &launch.default_proxy_buffer);
+        const resolved = try server.resolveProxyDirectory(launch.process.minimal.environ, &launch.default_proxy_buffer);
         launch.default_proxy_directory = try launch.process.gpa.dupe(u8, resolved);
         break :block launch.default_proxy_directory.?;
     };
     _ = try proxy_cli.rotateIfNeeded(launch.process, proxy_directory);
     launch.proxy_system_trusted = proxy_cli.trusted(launch.process, proxy_directory);
     if (proxy_enabled) {
-        const authority_names = source_namespace.proxyAuthorityNames(launch.proxy_system_trusted);
-        try source_namespace.prepareProxyDirectory(launch.process.io, proxy_directory);
+        const authority_names = server.proxyAuthorityNames(launch.proxy_system_trusted);
+        try server.prepareProxyDirectory(launch.process.io, proxy_directory);
         launch.proxy_options = .{
             .key_path = try std.fmt.bufPrint(&launch.proxy_key_buffer, "{s}/{s}", .{ proxy_directory, authority_names.key }),
             .certificate_path = try std.fmt.bufPrint(&launch.proxy_cert_buffer, "{s}/{s}", .{ proxy_directory, authority_names.certificate }),
@@ -173,10 +189,10 @@ fn prepareRuntimeStorage(launch: *Launch) !void {
     }
 }
 
-fn prepareTapPlugins(launch: *Launch, generation: *frontend.config.Generation) !void {
+fn prepareTapPlugins(launch: *Launch, generation: *GenerationType) !void {
     const trust_path = try plugin_cli.trustPath(launch.process.minimal.environ, &launch.trust_path_buffer);
     const trust = try plugin_cli.loadTrustStore(launch.process, trust_path);
-    const registry = try frontend.plugins.Registry.loadWithTrust(
+    const registry = try RegistryType.loadWithTrust(
         .{
             .gpa = launch.process.gpa,
             .io = launch.process.io,
@@ -190,27 +206,27 @@ fn prepareTapPlugins(launch: *Launch, generation: *frontend.config.Generation) !
         if (!package.manifest.capabilities.contains(.proxy_tap)) {
             continue;
         }
-        const granted = source_namespace.grantedCapabilities(&trust, package);
+        const granted = server.grantedCapabilities(&trust, package);
         if (!granted.contains(.proxy_tap)) {
             continue;
         }
-        if (launch.tap_spec_count == backend.plugins.max_workers) {
+        if (launch.tap_spec_count == max_workers_module) {
             return error.TooManyTapPlugins;
         }
         const snapshot_root = try launch.ensureTapSnapshot();
         var package_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const package_path = try std.fmt.bufPrint(&package_buffer, "{s}/package-{d}", .{ snapshot_root, launch.tap_spec_count });
-        try frontend.plugins.installPackage(launch.process.gpa, launch.process.io, .{
+        try installPackage_module(launch.process.gpa, launch.process.io, .{
             .package = package,
             .destination = package_path,
         });
-        const copied = try frontend.plugins.inspectPackage(launch.process.gpa, launch.process.io, package_path);
+        const copied = try inspectPackage_module(launch.process.gpa, launch.process.io, package_path);
         if (!std.mem.eql(u8, &copied.digest, &package.digest)) {
             return error.PluginChangedDuringInstall;
         }
         var entry_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const entry = try std.fmt.bufPrint(&entry_buffer, "{s}/{s}", .{ package_path, copied.manifest.entry() });
-        launch.tap_specs[launch.tap_spec_count] = try backend.plugins.Spec.init(launch.tap_spec_count, generation.number, .{
+        launch.tap_specs[launch.tap_spec_count] = try ServiceSpec.init(launch.tap_spec_count, generation.number, .{
             .id = copied.manifest.id(),
             .entry = entry,
             .digest = copied.digest,
@@ -229,12 +245,12 @@ fn ensureTapSnapshot(launch: *Launch) ![]const u8 {
     try launch.process.io.randomSecure(&nonce);
     const nonce_hex = std.fmt.bytesToHex(nonce, .lower);
     const path = try std.fmt.bufPrint(&launch.tap_snapshot_buffer, "/tmp/telar-tap-workers-{d}-{s}", .{ std.c.getuid(), &nonce_hex });
-    try source_namespace.Io.Dir.cwd().createDir(launch.process.io, path, source_namespace.File.Permissions.fromMode(0o700));
+    try std.Io.Dir.cwd().createDir(launch.process.io, path, std.Io.File.Permissions.fromMode(0o700));
     launch.tap_snapshot_directory = path;
     return path;
 }
 
-fn runtimeInitialization(launch: *const Launch) backend.runtime.Initialization {
+pub fn runtimeInitialization(launch: *const Launch) InitializationType {
     return .{
         .dependencies = .{
             .io = launch.process.io,
@@ -259,7 +275,7 @@ fn runtimeInitialization(launch: *const Launch) backend.runtime.Initialization {
     };
 }
 
-fn launchDaemon(launch: *const Launch) !void {
+pub fn launchDaemon(launch: *const Launch) !void {
     if (std.c.setsid() < 0) {
         return error.DetachFailed;
     }
@@ -314,9 +330,9 @@ fn launchDaemon(launch: *const Launch) !void {
     _ = daemon;
 }
 
-fn deinit(launch: *Launch) void {
+pub fn deinit(launch: *Launch) void {
     if (launch.tap_snapshot_directory) |directory| {
-        source_namespace.Io.Dir.cwd().deleteTree(launch.process.io, directory) catch {};
+        std.Io.Dir.cwd().deleteTree(launch.process.io, directory) catch {};
         launch.tap_snapshot_directory = null;
     }
     if (launch.default_proxy_directory) |directory| {

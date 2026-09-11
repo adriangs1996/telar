@@ -1,11 +1,12 @@
-const StartPluginActionHandler = @This();
-const client_model = @import("../../root.zig").model;
-const StartEffects = @import("PluginActionStartEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const PluginActionStartEffects = @import("PluginActionStartEffects.zig");
 const StartDelivery = @import("StartDelivery.zig");
-const source_namespace = @import("plugin_action.zig");
+const plugin_action = @import("plugin_action.zig");
 const std = @import("std");
-model: *client_model.Model,
-effects: StartEffects,
+const StartPluginActionHandler = @This();
+
+model: *ModelType,
+effects: PluginActionStartEffects,
 delivery: StartDelivery,
 
 /// Prepares one invocation, starts its worker under one committed identity,
@@ -14,7 +15,7 @@ delivery: StartDelivery,
 /// ```zig
 /// const outcome = try handler.execute();
 /// ```
-pub fn execute(handler: *StartPluginActionHandler) !source_namespace.StartOutcome {
+pub fn execute(handler: *StartPluginActionHandler) !plugin_action.StartOutcome {
     if (handler.model.pluginExecution() != null) {
         return handler.deliver(.busy);
     }
@@ -38,7 +39,7 @@ pub fn execute(handler: *StartPluginActionHandler) !source_namespace.StartOutcom
     return handler.deliver(.{ .started = execution });
 }
 
-fn deliver(handler: *StartPluginActionHandler, outcome: source_namespace.StartOutcome) !source_namespace.StartOutcome {
+fn deliver(handler: *StartPluginActionHandler, outcome: plugin_action.StartOutcome) !plugin_action.StartOutcome {
     try handler.delivery.deliver(handler.delivery.context, outcome);
 
     return outcome;

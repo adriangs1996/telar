@@ -1,12 +1,13 @@
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const CreateWorkspaceGeometryLease = @import("CreateWorkspaceGeometryLease.zig");
 const GeometryCapture = @This();
-const source_namespace = @import("create_workspace.zig");
-const GeometryLease = @import("CreateWorkspaceGeometryLease.zig");
+
 available: bool = true,
 acquire_count: usize = 0,
 release_count: usize = 0,
-last_workspace: ?source_namespace.schema.WorkspaceLocation = null,
+last_workspace: ?WorkspaceLocationType = null,
 
-pub fn port(capture: *GeometryCapture) GeometryLease {
+pub fn port(capture: *GeometryCapture) CreateWorkspaceGeometryLease {
     return .{
         .context = capture,
         .acquire = acquire,
@@ -14,14 +15,14 @@ pub fn port(capture: *GeometryCapture) GeometryLease {
     };
 }
 
-fn acquire(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) bool {
+fn acquire(context: *anyopaque, workspace: WorkspaceLocationType) bool {
     const capture: *GeometryCapture = @ptrCast(@alignCast(context));
     capture.acquire_count += 1;
     capture.last_workspace = workspace;
     return capture.available;
 }
 
-fn release(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) void {
+fn release(context: *anyopaque, workspace: WorkspaceLocationType) void {
     const capture: *GeometryCapture = @ptrCast(@alignCast(context));
     capture.release_count += 1;
     capture.last_workspace = workspace;

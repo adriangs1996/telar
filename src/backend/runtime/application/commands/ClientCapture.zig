@@ -1,34 +1,37 @@
-const ClientCapture = @This();
-const source_namespace = @import("create_tab.zig");
-const LaunchAuthority = @import("CreateTabLaunchAuthority.zig");
-const PaneAttachment = @import("CreateTabPaneAttachment.zig");
-const PrepareLaunch = @import("CreateTabPrepareLaunch.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const PaneIdType = @import("telar-core").PaneId;
+const CreateTabLaunchAuthority = @import("CreateTabLaunchAuthority.zig");
+const CreateTabPaneAttachment = @import("CreateTabPaneAttachment.zig");
+const CreateTabPrepareLaunch = @import("CreateTabPrepareLaunch.zig");
 const std = @import("std");
-const LaunchedPane = @import("CreateTabLaunchedPane.zig");
+const CreateTabLaunchedPane = @import("CreateTabLaunchedPane.zig");
+const ClientCapture = @This();
+
 prepare_failure: ?anyerror = null,
 attach_failure: ?anyerror = null,
 launch_cwd: []const u8 = "/prepared",
 prepare_count: usize = 0,
 attach_count: usize = 0,
-last_workspace: ?source_namespace.schema.WorkspaceLocation = null,
-last_requested_cwd: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+last_workspace: ?WorkspaceLocationType = null,
+last_requested_cwd: [max_cwd_bytes_module]u8 = undefined,
 last_requested_cwd_len: usize = 0,
-last_pane_id: source_namespace.schema.PaneId = .invalid,
+last_pane_id: PaneIdType = .invalid,
 event_count: ?*const usize = null,
 event_observed_before_attach: bool = false,
 
-pub fn authority(capture: *ClientCapture) LaunchAuthority {
+pub fn authority(capture: *ClientCapture) CreateTabLaunchAuthority {
     return .{
         .context = capture,
         .prepare = prepareLaunch,
     };
 }
 
-pub fn attachment(capture: *ClientCapture) PaneAttachment {
+pub fn attachment(capture: *ClientCapture) CreateTabPaneAttachment {
     return .{ .context = capture, .attach = attach };
 }
 
-fn prepareLaunch(context: *anyopaque, request: PrepareLaunch) ![]const u8 {
+fn prepareLaunch(context: *anyopaque, request: CreateTabPrepareLaunch) ![]const u8 {
     const capture: *ClientCapture = @ptrCast(@alignCast(context));
     std.debug.assert(request.launch.cwd.len <= capture.last_requested_cwd.len);
 
@@ -44,7 +47,7 @@ fn prepareLaunch(context: *anyopaque, request: PrepareLaunch) ![]const u8 {
     return capture.launch_cwd;
 }
 
-fn attach(context: *anyopaque, pane: LaunchedPane) !void {
+fn attach(context: *anyopaque, pane: CreateTabLaunchedPane) !void {
     const capture: *ClientCapture = @ptrCast(@alignCast(context));
 
     capture.attach_count += 1;

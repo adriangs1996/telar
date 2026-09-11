@@ -1,29 +1,25 @@
 //! Vertical and application tests for the runtime pane-input flow.
 
+const GenericPaneInputController = @import("../entrypoints/requests/GenericPaneInputController.zig").Type;
+const PaneInputHandlerType = @import("../application/commands/PaneInputHandler.zig");
+const PaneFixture = @import("PaneFixture.zig");
+const PaneInputTestScheduleCapture = @import("PaneInputTestScheduleCapture.zig");
 const std = @import("std");
-const agent_identity = @import("../application/coordinators/root.zig").agent_identity;
-const core = @import("telar-core");
-const agent_mod = @import("../../agent/root.zig");
-const pane_mod = @import("../../pane/root.zig");
-const attachment_mod = @import("../attachment/root.zig");
+const IdentityType = @import("../../agent/Identity.zig");
+const agent_identity = @import("../application/coordinators/agent_identity.zig");
+const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
+const enabled_module = @import("telar-core").enabled;
+const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const pane_module = @import("telar-core").pane;
 const pane_input_commands = @import("../application/commands/pane_input.zig");
-const pane_input_controller = @import("../entrypoints/requests/pane_input.zig");
-const test_support = @import("support.zig");
-const telemetry_mod = @import("../observability/root.zig").telemetry;
+const max_input_bytes_module = @import("telar-core").max_input_bytes;
+const PaneInputQueueType = @import("../../pane/PaneInputQueue.zig");
 
-const schema = core.schema;
-const diagnostics = core.diagnostics;
-pub const Pane = pane_mod.Pane;
-const AttachmentStore = attachment_mod.AttachmentStore;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-const InputController = pane_input_controller.Controller(*pane_input_commands.PaneInputHandler);
-const PaneFixture = test_support.PaneFixture;
+const InputController = GenericPaneInputController(*PaneInputHandlerType);
 
 pub const ScheduleStep = enum { observation, input };
 
-const ScheduleCapture = @import("PaneInputTestScheduleCapture.zig");
-
-fn handlerFor(fixture: *PaneFixture, capture: *ScheduleCapture, observe_agent_input: bool) pane_input_commands.PaneInputHandler {
+fn handlerFor(fixture: *PaneFixture, capture: *PaneInputTestScheduleCapture, observe_agent_input: bool) PaneInputHandlerType {
     return .{
         .io = std.testing.io,
         .attachments = &fixture.attachments,
@@ -33,7 +29,7 @@ fn handlerFor(fixture: *PaneFixture, capture: *ScheduleCapture, observe_agent_in
     };
 }
 
-fn trackAgent(fixture: *PaneFixture) !agent_mod.Identity {
+fn trackAgent(fixture: *PaneFixture) !IdentityType {
     const identity = agent_identity.fromPane(fixture.pane);
     try std.testing.expect(identity.process_id != 0);
     try std.testing.expect(fixture.agents.observeProcess(.{
@@ -46,8 +42,8 @@ fn trackAgent(fixture: *PaneFixture) !agent_mod.Identity {
 }
 
 fn expectHandledMetrics(metrics: *const RuntimeMetrics, byte_count: usize) !void {
-    const expected_events: u64 = if (comptime diagnostics.enabled) 1 else 0;
-    const expected_bytes: u64 = if (comptime diagnostics.enabled) byte_count else 0;
+    const expected_events: u64 = if (comptime enabled_module) 1 else 0;
+    const expected_bytes: u64 = if (comptime enabled_module) byte_count else 0;
     try std.testing.expectEqual(expected_events, metrics.input_events);
     try std.testing.expectEqual(expected_bytes, metrics.input_bytes);
 }
@@ -55,8 +51,8 @@ fn expectHandledMetrics(metrics: *const RuntimeMetrics, byte_count: usize) !void
 test "PaneInputHandler rejects a pane outside the client attachments" {
     var attachments: AttachmentStore = .{};
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: ScheduleCapture = .{};
-    var handler: pane_input_commands.PaneInputHandler = .{
+    var capture: PaneInputTestScheduleCapture = .{};
+    var handler: PaneInputHandlerType = .{
         .io = std.testing.io,
         .attachments = &attachments,
         .metrics = &metrics,
@@ -65,7 +61,7 @@ test "PaneInputHandler rejects a pane outside the client attachments" {
     };
 
     const result = try handler.execute(.{
-        .pane_id = try schema.id.pane(99),
+        .pane_id = try pane_module(99),
         .bytes = "x",
     });
 
@@ -80,7 +76,7 @@ test "PaneInputHandler rejects an exited attached pane before side effects" {
     try fixture.init();
     defer fixture.deinit();
     fixture.pane.exit = .{ .exited = 0 };
-    var capture: ScheduleCapture = .{};
+    var capture: PaneInputTestScheduleCapture = .{};
     var handler = handlerFor(&fixture, &capture, false);
 
     const result = try handler.execute(.{
@@ -102,7 +98,7 @@ test "PaneInputHandler preserves input handling until the pane exit is observed"
     defer fixture.deinit();
 
     try std.testing.expect(fixture.pane.requestClose());
-    var capture: ScheduleCapture = .{ .expected_input = "x" };
+    var capture: PaneInputTestScheduleCapture = .{ .expected_input = "x" };
     var handler = handlerFor(&fixture, &capture, false);
 
     const result = try handler.execute(.{ .pane_id = fixture.pane.id, .bytes = "x" });
@@ -118,7 +114,7 @@ test "pane input crosses controller and handler in observation-before-PTY order"
     defer fixture.deinit();
     const identity = try trackAgent(&fixture);
     var input = [_]u8{ 'h', 'e', 'l', 'p', '\r' };
-    var capture: ScheduleCapture = .{ .expected_input = &input };
+    var capture: PaneInputTestScheduleCapture = .{ .expected_input = &input };
     var handler = handlerFor(&fixture, &capture, true);
     var controller = InputController.init(&fixture.metrics, &handler);
 
@@ -141,7 +137,7 @@ test "PaneInputHandler leaves agent input untouched when descriptions are disabl
     try fixture.init();
     defer fixture.deinit();
     const identity = try trackAgent(&fixture);
-    var capture: ScheduleCapture = .{ .expected_input = "x" };
+    var capture: PaneInputTestScheduleCapture = .{ .expected_input = "x" };
     var handler = handlerFor(&fixture, &capture, false);
 
     try std.testing.expectEqual(
@@ -157,7 +153,7 @@ test "PaneInputHandler stops before the PTY queue when observation scheduling fa
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    var capture: ScheduleCapture = .{ .observation_failure = error.ObserverUnavailable };
+    var capture: PaneInputTestScheduleCapture = .{ .observation_failure = error.ObserverUnavailable };
     var handler = handlerFor(&fixture, &capture, false);
 
     try std.testing.expectError(error.ObserverUnavailable, handler.execute(.{
@@ -176,7 +172,7 @@ test "PaneInputHandler preserves queued bytes when input scheduling fails" {
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    var capture: ScheduleCapture = .{
+    var capture: PaneInputTestScheduleCapture = .{
         .input_failure = error.InputWriterUnavailable,
         .expected_input = "x",
     };
@@ -197,10 +193,10 @@ test "PaneInputHandler drops one whole saturated message and schedules the backl
     var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
-    const block = [_]u8{'a'} ** schema.max_input_bytes;
+    const block = [_]u8{'a'} ** max_input_bytes_module;
     try std.testing.expect(fixture.pane.queuePtyInput(&block));
     try std.testing.expect(fixture.pane.queuePtyInput(&block));
-    var capture: ScheduleCapture = .{};
+    var capture: PaneInputTestScheduleCapture = .{};
     var handler = handlerFor(&fixture, &capture, false);
 
     try std.testing.expectEqual(
@@ -209,7 +205,7 @@ test "PaneInputHandler drops one whole saturated message and schedules the backl
     );
 
     try std.testing.expectEqualSlices(ScheduleStep, &.{ .observation, .input }, capture.steps[0..capture.len]);
-    try std.testing.expectEqual(@as(usize, pane_mod.PaneInputQueue.capacity), fixture.pane.input_queue.len);
+    try std.testing.expectEqual(@as(usize, PaneInputQueueType.capacity), fixture.pane.input_queue.len);
     try std.testing.expectEqual(@as(u64, "drop".len), fixture.pane.input_queue.dropped_bytes);
     try expectHandledMetrics(&fixture.metrics, "drop".len);
 }

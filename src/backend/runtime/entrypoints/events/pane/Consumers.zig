@@ -1,13 +1,15 @@
-const Consumers = @This();
-const core = @import("telar-core");
-const source_namespace = @import("media_projection.zig");
-const attachment_mod = @import("../../../attachment/root.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const AttachmentStoreType = @import("../../../attachment/AttachmentStore.zig");
+const ImageKeyType = @import("telar-core").ImageKey;
+const attachment_mod = @import("../../../attachment/attachment_namespace.zig");
 const std = @import("std");
-pane_id: core.schema.PaneId,
-stores: []const *source_namespace.AttachmentStore,
+const Consumers = @This();
+
+pane_id: PaneIdType,
+stores: []const *AttachmentStoreType,
 
 /// Example: `const needed = consumers.wants(key, true);`.
-pub fn wants(consumers: Consumers, key: core.graphics.ImageKey, shared: bool) bool {
+pub fn wants(consumers: Consumers, key: ImageKeyType, shared: bool) bool {
     for (consumers.stores) |store| {
         const attachment = store.find(consumers.pane_id) orelse continue;
         if (attachment.graphics.shared_transport != shared or attachment_mod.knowsImage(attachment, key)) {

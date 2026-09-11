@@ -1,10 +1,10 @@
 //! Application policy for one streamed host paste owned by a pane.
 
+const PanePasteSessionType = @import("../../model/PanePasteSession.zig");
+const PanePasteTestingModel = @import("PanePasteTestingModel.zig");
+const PanePasteCapture = @import("PanePasteCapture.zig");
+const PanePasteHandler = @import("PanePasteHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
 
 pub const Boundary = enum {
     start,
@@ -13,17 +13,15 @@ pub const Boundary = enum {
 
 pub const Delivery = union(enum) {
     marker: struct {
-        session: client_model.PanePasteSession,
+        session: PanePasteSessionType,
         boundary: Boundary,
     },
     content: struct {
-        session: client_model.PanePasteSession,
+        session: PanePasteSessionType,
         /// Borrowed only for the synchronous delivery effect.
         text: []const u8,
     },
 };
-
-pub const Effects = @import("PanePasteEffects.zig");
 
 pub const Outcome = enum {
     applied,
@@ -31,17 +29,11 @@ pub const Outcome = enum {
     ignored,
 };
 
-pub const PanePasteHandler = @import("PanePasteHandler.zig");
-
-const TestingModel = @import("PanePasteTestingModel.zig");
-
-const Capture = @import("PanePasteCapture.zig");
-
 test "PanePasteHandler preserves captured identity and framing through finish" {
-    var testing = try TestingModel.init(true);
+    var testing = try PanePasteTestingModel.init(true);
     defer testing.deinit();
     const version = testing.model.version();
-    var capture: Capture = .{ .model = testing.model };
+    var capture: PanePasteCapture = .{ .model = testing.model };
     var handler: PanePasteHandler = .{ .model = testing.model, .effects = capture.port() };
 
     try std.testing.expect(try handler.start() == .applied);
@@ -64,9 +56,9 @@ test "PanePasteHandler preserves captured identity and framing through finish" {
 }
 
 test "PanePasteHandler omits markers for a captured unframed session" {
-    var testing = try TestingModel.init(false);
+    var testing = try PanePasteTestingModel.init(false);
     defer testing.deinit();
-    var capture: Capture = .{ .model = testing.model };
+    var capture: PanePasteCapture = .{ .model = testing.model };
     var handler: PanePasteHandler = .{ .model = testing.model, .effects = capture.port() };
 
     try std.testing.expect(try handler.start() == .applied);
@@ -79,9 +71,9 @@ test "PanePasteHandler omits markers for a captured unframed session" {
 }
 
 test "PanePasteHandler rolls back every failed start path" {
-    var unavailable = try TestingModel.init(true);
+    var unavailable = try PanePasteTestingModel.init(true);
     defer unavailable.deinit();
-    var unavailable_capture: Capture = .{ .model = unavailable.model, .available = false };
+    var unavailable_capture: PanePasteCapture = .{ .model = unavailable.model, .available = false };
     var unavailable_handler: PanePasteHandler = .{
         .model = unavailable.model,
         .effects = unavailable_capture.port(),
@@ -90,9 +82,9 @@ test "PanePasteHandler rolls back every failed start path" {
     try std.testing.expect(try unavailable_handler.start() == .unavailable);
     try std.testing.expect(!unavailable.model.panePasteActive());
 
-    var failed = try TestingModel.init(true);
+    var failed = try PanePasteTestingModel.init(true);
     defer failed.deinit();
-    var failed_capture: Capture = .{ .model = failed.model, .fail = true };
+    var failed_capture: PanePasteCapture = .{ .model = failed.model, .fail = true };
     var failed_handler: PanePasteHandler = .{ .model = failed.model, .effects = failed_capture.port() };
 
     try std.testing.expectError(error.PasteDeliveryFailed, failed_handler.start());
@@ -100,9 +92,9 @@ test "PanePasteHandler rolls back every failed start path" {
 }
 
 test "PanePasteHandler retains failed content but always clears failed finish" {
-    var testing = try TestingModel.init(true);
+    var testing = try PanePasteTestingModel.init(true);
     defer testing.deinit();
-    var capture: Capture = .{ .model = testing.model };
+    var capture: PanePasteCapture = .{ .model = testing.model };
     var handler: PanePasteHandler = .{ .model = testing.model, .effects = capture.port() };
 
     try std.testing.expect(try handler.start() == .applied);

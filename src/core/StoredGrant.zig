@@ -1,7 +1,8 @@
-const StoredGrant = @This();
-const source_namespace = @import("plugin.zig");
+const plugin = @import("plugin.zig");
 const Grant = @import("Grant.zig");
-plugin_bytes: [source_namespace.max_id_bytes]u8 = undefined,
+const StoredGrant = @This();
+
+plugin_bytes: [plugin.max_id_bytes]u8 = undefined,
 plugin_len: u8,
 grant: Grant,
 

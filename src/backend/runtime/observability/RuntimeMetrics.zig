@@ -1,5 +1,6 @@
+const TimingType = @import("telar-core").Timing;
 const RuntimeMetrics = @This();
-const source_namespace = @import("telemetry.zig");
+
 started_ns: u64,
 client_messages: u64 = 0,
 stale_client_messages: u64 = 0,
@@ -7,7 +8,7 @@ stale_pane_events: u64 = 0,
 geometry_rejections: u64 = 0,
 input_events: u64 = 0,
 input_bytes: u64 = 0,
-input_write: source_namespace.diagnostics.Timing = .{},
+input_write: TimingType = .{},
 pty_events: u64 = 0,
 pty_bytes: u64 = 0,
 frames: u64 = 0,
@@ -47,7 +48,7 @@ graphics_transfers_prepared: u64 = 0,
 graphics_transfers_adopted: u64 = 0,
 /// Fallback copy of one generation out of live media storage into the
 /// transfer, on the runtime thread.
-graphics_freeze: source_namespace.diagnostics.Timing = .{},
+graphics_freeze: TimingType = .{},
 media_bytes: u64 = 0,
 media_discarded_frames: u64 = 0,
 /// Shared frames dropped with no replacement ingested: the pane kept a
@@ -64,13 +65,13 @@ media_file_frames: u64 = 0,
 media_resets: u64 = 0,
 media_failures: u64 = 0,
 /// One media actor batch: shared frame folding, mapping and decoding.
-media_ingest: source_namespace.diagnostics.Timing = .{},
-system_sample: source_namespace.diagnostics.Timing = .{},
+media_ingest: TimingType = .{},
+system_sample: TimingType = .{},
 system_sample_last_ns: u64 = 0,
-decode: source_namespace.diagnostics.Timing = .{},
-ingest: source_namespace.diagnostics.Timing = .{},
-encode: source_namespace.diagnostics.Timing = .{},
-ack: source_namespace.diagnostics.Timing = .{},
+decode: TimingType = .{},
+ingest: TimingType = .{},
+encode: TimingType = .{},
+ack: TimingType = .{},
 history_captured: u64 = 0,
 history_dropped: u64 = 0,
 history_candidate_input_bytes: u64 = 0,

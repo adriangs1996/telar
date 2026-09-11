@@ -1,8 +1,9 @@
+const PaneKeyType = @import("../../../pane/PaneKey.zig");
+const AgentCommandPhaseType = @import("telar-core").AgentCommandPhase;
 const ReportAgentCommand = @This();
-const pane_mod = @import("../../../pane/root.zig");
-const source_namespace = @import("report_agent_command.zig");
-pane: pane_mod.PaneKey,
-phase: source_namespace.schema.AgentCommandPhase,
+
+pane: PaneKeyType,
+phase: AgentCommandPhaseType,
 provider: []const u8,
 tool_call_id: []const u8,
 command: []const u8,

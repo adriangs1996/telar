@@ -1,8 +1,9 @@
+const sse = @import("sse.zig");
 const CapturedEvent = @This();
-const source_namespace = @import("sse.zig");
-name: [source_namespace.max_event_name_bytes]u8 = undefined,
+
+name: [sse.max_event_name_bytes]u8 = undefined,
 name_len: usize = 0,
-data: [source_namespace.max_data_bytes]u8 = undefined,
+data: [sse.max_data_bytes]u8 = undefined,
 data_len: usize = 0,
 truncated: bool = false,
 

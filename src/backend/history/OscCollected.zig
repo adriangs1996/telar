@@ -1,5 +1,6 @@
-const Collected = @This();
 const Command = @import("Command.zig");
+const Collected = @This();
+
 count: usize = 0,
 last: ?Command = null,
 

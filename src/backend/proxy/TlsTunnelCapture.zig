@@ -1,20 +1,22 @@
-const Capture = @This();
-const source_namespace = @import("tls_tunnel.zig");
+const tls_tunnel = @import("tls_tunnel.zig");
 const tls = @import("tls.zig");
+const SessionType = @import("Session.zig");
 const std = @import("std");
 const GenericAttempt = @import("GenericAttempt.zig").Type;
 const GenericEstablished = @import("GenericEstablished.zig").Type;
-steps: [5]source_namespace.Step = undefined,
+const Capture = @This();
+
+steps: [5]tls_tunnel.Step = undefined,
 len: usize = 0,
 allow_interception: bool = false,
 failure: ?tls.Error = null,
-protocol: tls.Session.Protocol = .http11,
+protocol: SessionType.Protocol = .http11,
 expected_host: []const u8 = "api.openai.com",
 expected_child: u8 = 3,
 expected_origin: u8 = 5,
 recorded_failure: ?tls.Error = null,
 
-fn record(capture: *Capture, step: source_namespace.Step) void {
+fn record(capture: *Capture, step: tls_tunnel.Step) void {
     std.debug.assert(capture.len < capture.steps.len);
     capture.steps[capture.len] = step;
     capture.len += 1;

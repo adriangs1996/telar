@@ -1,27 +1,18 @@
 //! Coordination for one completed pane child wait.
 
+const exit_module = @import("../../../../pty/exit.zig");
+const GenericExitRuntimePort = @import("GenericExitRuntimePort.zig").Type;
+const ExitCapture = @import("ExitCapture.zig");
+const GenericExitCoordinator = @import("GenericExitCoordinator.zig").Type;
+const PaneFixtureType = @import("../../../tests/PaneFixture.zig");
+const PaneStore = @import("../../../../pane/PaneStore.zig");
 const std = @import("std");
-const agent_identity = @import("../../../application/coordinators/root.zig").agent_identity;
-const agent_mod = @import("../../../../agent/root.zig");
-const pane_mod = @import("../../../../pane/root.zig");
-const pty = @import("../../../../pty/root.zig");
-const telemetry_mod = @import("../../../observability/root.zig").telemetry;
-const test_support = @import("../../../tests/support.zig");
+const agent_identity = @import("../../../application/coordinators/agent_identity.zig");
+const Pane = @import("../../../../pane/Pane.zig");
+const TrackerType = @import("../../../../agent/Tracker.zig");
+const RuntimeMetrics = @import("../../../observability/RuntimeMetrics.zig");
 
-pub const Pane = pane_mod.Pane;
-pub const PaneKey = pane_mod.PaneKey;
-pub const PaneStore = pane_mod.PaneStore;
-pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-
-pub const Completion = @import("ExitCompletion.zig");
-
-pub const Resources = @import("ExitResources.zig");
-
-pub const RuntimePort = @import("GenericExitRuntimePort.zig").Type;
-
-pub const Coordinator = @import("GenericExitCoordinator.zig").Type;
-
-pub fn exitOrSynthetic(result: anyerror!pty.Exit) pty.Exit {
+pub fn exitOrSynthetic(result: anyerror!exit_module.Exit) exit_module.Exit {
     return result catch .{ .signaled = .KILL };
 }
 
@@ -32,18 +23,16 @@ pub const Step = enum {
     pump_clients,
 };
 
-const Capture = @import("ExitCapture.zig");
-
-const test_port: RuntimePort(Capture) = .{
-    .revoke_credential = Capture.revokeCredential,
-    .schedule_observation = Capture.scheduleObservation,
-    .collect = Capture.collect,
-    .pump_clients = Capture.pumpClients,
+const test_port: GenericExitRuntimePort(ExitCapture) = .{
+    .revoke_credential = ExitCapture.revokeCredential,
+    .schedule_observation = ExitCapture.scheduleObservation,
+    .collect = ExitCapture.collect,
+    .pump_clients = ExitCapture.pumpClients,
 };
 
-const TestCoordinator = Coordinator(Capture, test_port);
+const TestCoordinator = GenericExitCoordinator(ExitCapture, test_port);
 
-fn testCoordinator(capture: *Capture, fixture: *test_support.PaneFixture, panes: *PaneStore) TestCoordinator {
+fn testCoordinator(capture: *ExitCapture, fixture: *PaneFixtureType, panes: *PaneStore) TestCoordinator {
     return TestCoordinator.init(capture, .{
         .panes = panes,
         .agents = &fixture.agents,
@@ -51,17 +40,17 @@ fn testCoordinator(capture: *Capture, fixture: *test_support.PaneFixture, panes:
     });
 }
 
-fn beginFixtureExit(fixture: *test_support.PaneFixture, panes: *PaneStore) !void {
+fn beginFixtureExit(fixture: *PaneFixtureType, panes: *PaneStore) !void {
     try panes.insert(fixture.pane);
     try std.testing.expect(fixture.pane.beginExitWait());
 }
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const ExitCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
 test "a running pane exit retires agent and credential before lifecycle effects" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
@@ -75,17 +64,17 @@ test "a running pane exit retires agent and credential before lifecycle effects"
         .process_id = process_id,
         .observed_at_ms = 1,
     }));
-    var capture: Capture = .{};
+    var capture: ExitCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
 
     try coordinator.handle(.{
         .pane = fixture.pane.key(),
-        .result = pty.Exit{ .exited = 7 },
+        .result = exit_module.Exit{ .exited = 7 },
     });
 
     try expectSteps(&capture, &.{ .revoke_credential, .collect, .pump_clients });
     try std.testing.expect(capture.revoke_saw_exit);
-    try std.testing.expectEqual(pty.Exit{ .exited = 7 }, fixture.pane.exit.?);
+    try std.testing.expectEqual(exit_module.Exit{ .exited = 7 }, fixture.pane.exit.?);
     try std.testing.expect(!fixture.pane.wait_pending);
     try std.testing.expectEqual(@as(u8, 0), fixture.pane.actor_count);
     try std.testing.expectEqual(@as(usize, 1), panes.exited_count);
@@ -94,18 +83,18 @@ test "a running pane exit retires agent and credential before lifecycle effects"
 }
 
 test "drained output queues exit history before observation" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     fixture.pane.finishPtyOutput();
     var panes: PaneStore = .{};
     try beginFixtureExit(&fixture, &panes);
-    var capture: Capture = .{};
+    var capture: ExitCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
 
     try coordinator.handle(.{
         .pane = fixture.pane.key(),
-        .result = pty.Exit{ .exited = 0 },
+        .result = exit_module.Exit{ .exited = 0 },
     });
 
     try expectSteps(&capture, &.{ .revoke_credential, .observation, .collect, .pump_clients });
@@ -114,19 +103,19 @@ test "drained output queues exit history before observation" {
 }
 
 test "an aborting launch skips exit history even after output drains" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     fixture.pane.launch_state = .aborting;
     fixture.pane.finishPtyOutput();
     var panes: PaneStore = .{};
     try beginFixtureExit(&fixture, &panes);
-    var capture: Capture = .{};
+    var capture: ExitCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
 
     try coordinator.handle(.{
         .pane = fixture.pane.key(),
-        .result = pty.Exit{ .exited = 1 },
+        .result = exit_module.Exit{ .exited = 1 },
     });
 
     try expectSteps(&capture, &.{ .revoke_credential, .collect, .pump_clients });
@@ -135,18 +124,18 @@ test "an aborting launch skips exit history even after output drains" {
 }
 
 test "exit observation failure preserves retirement and skips lifecycle effects" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     fixture.pane.finishPtyOutput();
     var panes: PaneStore = .{};
     try beginFixtureExit(&fixture, &panes);
-    var capture: Capture = .{ .observation_failure = true };
+    var capture: ExitCapture = .{ .observation_failure = true };
     var coordinator = testCoordinator(&capture, &fixture, &panes);
 
     try std.testing.expectError(error.SchedulerUnavailable, coordinator.handle(.{
         .pane = fixture.pane.key(),
-        .result = pty.Exit{ .exited = 0 },
+        .result = exit_module.Exit{ .exited = 0 },
     }));
 
     try expectSteps(&capture, &.{ .revoke_credential, .observation });
@@ -155,12 +144,12 @@ test "exit observation failure preserves retirement and skips lifecycle effects"
 }
 
 test "wait failure commits a synthetic SIGKILL exit" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var panes: PaneStore = .{};
     try beginFixtureExit(&fixture, &panes);
-    var capture: Capture = .{};
+    var capture: ExitCapture = .{};
     var coordinator = testCoordinator(&capture, &fixture, &panes);
 
     try coordinator.handle(.{
@@ -168,7 +157,7 @@ test "wait failure commits a synthetic SIGKILL exit" {
         .result = error.WaitpidFailed,
     });
 
-    try std.testing.expectEqual(pty.Exit{ .signaled = .KILL }, fixture.pane.exit.?);
+    try std.testing.expectEqual(exit_module.Exit{ .signaled = .KILL }, fixture.pane.exit.?);
     try std.testing.expectEqual(@as(usize, 1), panes.exited_count);
 }
 
@@ -180,9 +169,9 @@ test "a stale generation cannot release a live wait borrow" {
     pane.actor_count = 1;
     var panes: PaneStore = .{};
     try panes.insert(&pane);
-    var agents: agent_mod.Tracker = .{};
+    var agents: TrackerType = .{};
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: ExitCapture = .{};
     var coordinator = TestCoordinator.init(&capture, .{
         .panes = &panes,
         .agents = &agents,
@@ -191,7 +180,7 @@ test "a stale generation cannot release a live wait borrow" {
 
     try coordinator.handle(.{
         .pane = .{ .id = pane.id, .generation = pane.generation + 1 },
-        .result = pty.Exit{ .exited = 0 },
+        .result = exit_module.Exit{ .exited = 0 },
     });
 
     try std.testing.expectEqual(@as(u64, 1), metrics.stale_pane_events);
@@ -203,11 +192,11 @@ test "a stale generation cannot release a live wait borrow" {
 
 test "wait failure becomes a synthetic SIGKILL exit" {
     try std.testing.expectEqual(
-        pty.Exit{ .signaled = .KILL },
+        exit_module.Exit{ .signaled = .KILL },
         exitOrSynthetic(error.WaitpidFailed),
     );
     try std.testing.expectEqual(
-        pty.Exit{ .exited = 7 },
-        exitOrSynthetic(pty.Exit{ .exited = 7 }),
+        exit_module.Exit{ .exited = 7 },
+        exitOrSynthetic(exit_module.Exit{ .exited = 7 }),
     );
 }

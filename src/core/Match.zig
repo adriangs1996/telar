@@ -1,6 +1,7 @@
+const link = @import("link.zig");
 const Match = @This();
-const source_namespace = @import("link.zig");
-scheme: source_namespace.Scheme,
+
+scheme: link.Scheme,
 start: usize,
 end: usize,
 

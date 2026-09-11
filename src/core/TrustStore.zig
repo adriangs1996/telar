@@ -1,11 +1,12 @@
-const TrustStore = @This();
-const source_namespace = @import("plugin.zig");
+const plugin_ops = @import("plugin.zig");
 const StoredGrant = @import("StoredGrant.zig");
 const std = @import("std");
-const Manifest = @import("PluginManifest.zig");
+const PluginManifest = @import("PluginManifest.zig");
 const GrantUpdate = @import("GrantUpdate.zig");
 const Grant = @import("Grant.zig");
-entries: [source_namespace.max_grants]StoredGrant = undefined,
+const TrustStore = @This();
+
+entries: [plugin_ops.max_grants]StoredGrant = undefined,
 count: u8 = 0,
 
 pub fn parse(gpa: std.mem.Allocator, source: []const u8) !TrustStore {
@@ -22,22 +23,22 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !TrustStore {
     if (parsed.value.version != 1) {
         return error.IncompatibleTrustStore;
     }
-    if (parsed.value.grants.len > source_namespace.max_grants) {
+    if (parsed.value.grants.len > plugin_ops.max_grants) {
         return error.TooManyTrustGrants;
     }
     var store: TrustStore = .{};
     for (parsed.value.grants) |wire| {
-        if (!source_namespace.validIdentifier(wire.plugin) or wire.plugin.len > source_namespace.max_id_bytes) {
+        if (!plugin_ops.validIdentifier(wire.plugin) or wire.plugin.len > plugin_ops.max_id_bytes) {
             return error.InvalidPluginId;
         }
-        var digest: source_namespace.Digest = undefined;
+        var digest: plugin_ops.Digest = undefined;
         if (wire.digest.len != digest.len * 2) {
             return error.InvalidDigest;
         }
         _ = std.fmt.hexToBytes(&digest, wire.digest) catch return error.InvalidDigest;
-        var capabilities = source_namespace.CapabilitySet.initEmpty();
+        var capabilities = plugin_ops.CapabilitySet.initEmpty();
         for (wire.capabilities) |name| {
-            const capability = try source_namespace.Capability.parse(name);
+            const capability = try plugin_ops.Capability.parse(name);
             if (capabilities.contains(capability)) {
                 return error.DuplicateCapability;
             }
@@ -46,7 +47,7 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !TrustStore {
         var entry: StoredGrant = .{
             .plugin_len = @intCast(wire.plugin.len),
             .grant = .{
-                .plugin_hash = source_namespace.stableId(wire.plugin),
+                .plugin_hash = plugin_ops.stableId(wire.plugin),
                 .digest = digest,
                 .capabilities = capabilities,
             },
@@ -66,25 +67,25 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !TrustStore {
 /// ```zig
 /// try store.upsert(&manifest, .{ .digest = digest, .capabilities = capabilities });
 /// ```
-pub fn upsert(store: *TrustStore, manifest: *const Manifest, update: GrantUpdate) !void {
+pub fn upsert(store: *TrustStore, manifest: *const PluginManifest, update: GrantUpdate) !void {
     for (store.entries[0..store.count]) |*entry| {
         if (!std.mem.eql(u8, entry.pluginId(), manifest.id())) {
             continue;
         }
         entry.grant = .{
-            .plugin_hash = source_namespace.stableId(manifest.id()),
+            .plugin_hash = plugin_ops.stableId(manifest.id()),
             .digest = update.digest,
             .capabilities = update.capabilities,
         };
         return;
     }
-    if (store.count == source_namespace.max_grants) {
+    if (store.count == plugin_ops.max_grants) {
         return error.TooManyTrustGrants;
     }
     var entry: StoredGrant = .{
         .plugin_len = manifest.id_len,
         .grant = .{
-            .plugin_hash = source_namespace.stableId(manifest.id()),
+            .plugin_hash = plugin_ops.stableId(manifest.id()),
             .digest = update.digest,
             .capabilities = update.capabilities,
         },
@@ -94,7 +95,7 @@ pub fn upsert(store: *TrustStore, manifest: *const Manifest, update: GrantUpdate
     store.count += 1;
 }
 
-pub fn grants(store: *const TrustStore, buffer: *[source_namespace.max_grants]Grant) []const Grant {
+pub fn grants(store: *const TrustStore, buffer: *[plugin_ops.max_grants]Grant) []const Grant {
     for (store.entries[0..store.count], 0..) |entry, index| buffer[index] = entry.grant;
     return buffer[0..store.count];
 }

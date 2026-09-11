@@ -1,16 +1,28 @@
 //! Bounded one-shot protocol from a plugin worker back to the client broker.
 
+const max_notification_title_bytes_module = @import("telar-core").max_notification_title_bytes;
+const max_notification_message_bytes_module = @import("telar-core").max_notification_message_bytes;
+const max_callback_effects_module = @import("telar-client").max_callback_effects;
+const EffectBatchType = @import("telar-client").EffectBatch;
 const std = @import("std");
-const action_mod = @import("telar-client").input.action;
-const lua_config = @import("../config/root.zig");
-const core = @import("telar-core");
+const raw_module = @import("telar-core").raw;
+const SplitDirectionType = @import("telar-client").SplitDirection;
+const DirectionType = @import("telar-client").Direction;
+const TabMoveType = @import("telar-client").TabMove;
+const NotificationLevelType = @import("telar-core").NotificationLevel;
+const NotificationTargetType = @import("telar-core").NotificationTarget;
+const pane_module = @import("telar-core").pane;
+const tab_module = @import("telar-core").tab;
+const workspace_module = @import("telar-core").workspace;
+const NotificationType = @import("telar-client").Notification;
+const SidebarDirectionType = @import("telar-client").SidebarDirection;
+const ScrollDirectionType = @import("telar-client").ScrollDirection;
 
-const schema = core.schema;
 const notification_max_bytes = 1 + 1 + 4 + 1 + 8 + 1 +
-    schema.max_notification_title_bytes + 1 + schema.max_notification_message_bytes;
-pub const max_bytes = 1 + lua_config.max_callback_effects * notification_max_bytes;
+    max_notification_title_bytes_module + 1 + max_notification_message_bytes_module;
+pub const max_bytes = 1 + max_callback_effects_module * notification_max_bytes;
 
-pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
+pub fn encode(buffer: []u8, batch: *const EffectBatchType) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     try writer.writeByte(batch.len);
     for (batch.slice()) |action| switch (action) {
@@ -66,15 +78,15 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
                 .none => try writer.writeByte(0),
                 .pane => |pane_id| {
                     try writer.writeByte(1);
-                    try writeU64(&writer, schema.id.raw(pane_id));
+                    try writeU64(&writer, raw_module(pane_id));
                 },
                 .tab => |tab_id| {
                     try writer.writeByte(2);
-                    try writeU64(&writer, schema.id.raw(tab_id));
+                    try writeU64(&writer, raw_module(tab_id));
                 },
                 .workspace => |workspace_id| {
                     try writer.writeByte(3);
-                    try writeU64(&writer, schema.id.raw(workspace_id));
+                    try writeU64(&writer, raw_module(workspace_id));
                 },
             }
             try writeSized8(&writer, value.title());
@@ -85,15 +97,15 @@ pub fn encode(buffer: []u8, batch: *const lua_config.EffectBatch) ![]const u8 {
     return writer.buffered();
 }
 
-pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
+pub fn decode(bytes: []const u8) !EffectBatchType {
     if (bytes.len == 0) {
         return error.TruncatedWorkerResult;
     }
     const count = bytes[0];
-    if (count > lua_config.max_callback_effects) {
+    if (count > max_callback_effects_module) {
         return error.TooManyWorkerEffects;
     }
-    var batch: lua_config.EffectBatch = .{};
+    var batch: EffectBatchType = .{};
     var offset: usize = 1;
     for (0..count) |index| {
         if (offset >= bytes.len) {
@@ -103,11 +115,11 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
         offset += 1;
         batch.items[index] = switch (tag) {
             1 => .{ .split_pane = std.enums.fromInt(
-                action_mod.SplitDirection,
+                SplitDirectionType,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             2 => .{ .focus_pane = std.enums.fromInt(
-                action_mod.Direction,
+                DirectionType,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             3 => .toggle_sidebar,
@@ -118,12 +130,12 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
             8 => .rename_tab,
             9 => .close_tab,
             10 => .{ .move_tab = std.enums.fromInt(
-                action_mod.TabMove,
+                TabMoveType,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             11 => .detach,
             12 => .{ .resize_pane = std.enums.fromInt(
-                action_mod.Direction,
+                DirectionType,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             13 => .toggle_pane_fullscreen,
@@ -133,23 +145,23 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
             17 => .{ .select_workspace = try byte(bytes, &offset) },
             18 => notification: {
                 const level = std.enums.fromInt(
-                    schema.NotificationLevel,
+                    NotificationLevelType,
                     try byte(bytes, &offset),
                 ) orelse return error.InvalidWorkerEffect;
                 const duration_ms = try readU32(bytes, &offset);
-                const target: schema.NotificationTarget = switch (try byte(bytes, &offset)) {
+                const target: NotificationTargetType = switch (try byte(bytes, &offset)) {
                     0 => .none,
-                    1 => .{ .pane = schema.id.pane(try readU64(bytes, &offset)) catch
+                    1 => .{ .pane = pane_module(try readU64(bytes, &offset)) catch
                         return error.InvalidWorkerEffect },
-                    2 => .{ .tab = schema.id.tab(try readU64(bytes, &offset)) catch
+                    2 => .{ .tab = tab_module(try readU64(bytes, &offset)) catch
                         return error.InvalidWorkerEffect },
-                    3 => .{ .workspace = schema.id.workspace(try readU64(bytes, &offset)) catch
+                    3 => .{ .workspace = workspace_module(try readU64(bytes, &offset)) catch
                         return error.InvalidWorkerEffect },
                     else => return error.InvalidWorkerEffect,
                 };
                 const title = try sized8(bytes, &offset);
                 const message = try sized8(bytes, &offset);
-                break :notification .{ .notification = action_mod.Notification.init(.{
+                break :notification .{ .notification = NotificationType.init(.{
                     .level = level,
                     .duration_ms = duration_ms,
                     .target = target,
@@ -158,7 +170,7 @@ pub fn decode(bytes: []const u8) !lua_config.EffectBatch {
                 }) catch return error.InvalidWorkerEffect };
             },
             19 => .{ .resize_sidebar = std.enums.fromInt(
-                action_mod.SidebarDirection,
+                SidebarDirectionType,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             else => return error.UnknownWorkerEffect,
@@ -225,7 +237,7 @@ fn byte(bytes: []const u8, offset: *usize) !u8 {
 }
 
 test "plugin result protocol round trips semantic effects" {
-    var batch: lua_config.EffectBatch = .{};
+    var batch: EffectBatchType = .{};
     batch.items[0] = .{ .focus_pane = .left };
     batch.items[1] = .{ .select_tab_offset = -1 };
     batch.items[2] = .{ .resize_pane = .down };
@@ -234,7 +246,7 @@ test "plugin result protocol round trips semantic effects" {
     batch.items[5] = .{ .resize_sidebar = .right };
     batch.items[6] = .new_workspace;
     batch.items[7] = .{ .select_workspace = 3 };
-    batch.items[8] = .{ .notification = try action_mod.Notification.init(.{
+    batch.items[8] = .{ .notification = try NotificationType.init(.{
         .level = .warning,
         .duration_ms = 3000,
         .target = .{ .workspace = @enumFromInt(9) },
@@ -247,8 +259,8 @@ test "plugin result protocol round trips semantic effects" {
 }
 
 test "plugin result protocol rejects focused scroll effects" {
-    for ([_]action_mod.ScrollDirection{ .up, .down }) |direction| {
-        var batch: lua_config.EffectBatch = .{};
+    for ([_]ScrollDirectionType{ .up, .down }) |direction| {
+        var batch: EffectBatchType = .{};
         batch.items[0] = .{ .scroll_pane = direction };
         batch.len = 1;
         var buffer: [max_bytes]u8 = undefined;
@@ -262,7 +274,7 @@ test "plugin result protocol rejects invalid enum discriminants" {
 }
 
 test "plugin result protocol rejects agent mode toggles" {
-    var batch: lua_config.EffectBatch = .{};
+    var batch: EffectBatchType = .{};
     batch.items[0] = .toggle_agent_mode;
     batch.len = 1;
     var buffer: [max_bytes]u8 = undefined;

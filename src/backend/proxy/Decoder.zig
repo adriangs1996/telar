@@ -1,14 +1,15 @@
+const sse = @import("sse.zig");
+const std = @import("std");
 /// Incremental decoder for one SSE response body.
 ///
 /// Initialize with `.{}`, call `feed` for every response-body chunk in order,
 /// then call `deinit` when the response ends. A decoder owns the unfinished
 /// state of one stream and must not be shared by concurrent responses.
 const Decoder = @This();
-const source_namespace = @import("sse.zig");
-const std = @import("std");
+
 /// The current logical line without its CR, LF, or CRLF terminator.
 /// `feed` consumes terminators instead of storing them here.
-line: [source_namespace.max_line_bytes]u8 = undefined,
+line: [sse.max_line_bytes]u8 = undefined,
 line_len: usize = 0,
 
 /// Whether `feed` is ignoring the rest of a line that exceeded
@@ -16,9 +17,9 @@ line_len: usize = 0,
 discarding_line: bool = false,
 
 /// Fields accumulated for the event that has not reached its blank line.
-event_name: [source_namespace.max_event_name_bytes]u8 = undefined,
+event_name: [sse.max_event_name_bytes]u8 = undefined,
 event_name_len: usize = 0,
-event_data: [source_namespace.max_data_bytes]u8 = undefined,
+event_data: [sse.max_data_bytes]u8 = undefined,
 event_data_len: usize = 0,
 has_data: bool = false,
 event_truncated: bool = false,
@@ -81,10 +82,10 @@ bom_prefix_len: usize = 0,
 pub fn feed(decoder: *Decoder, input: []const u8, sink: anytype) void {
     for (input) |byte| {
         if (!decoder.bom_checked) {
-            if (byte == source_namespace.utf8_bom[decoder.bom_prefix_len]) {
+            if (byte == sse.utf8_bom[decoder.bom_prefix_len]) {
                 decoder.bom_prefix_len += 1;
 
-                if (decoder.bom_prefix_len == source_namespace.utf8_bom.len) {
+                if (decoder.bom_prefix_len == sse.utf8_bom.len) {
                     decoder.bom_checked = true;
                     decoder.bom_prefix_len = 0;
                 }
@@ -95,7 +96,7 @@ pub fn feed(decoder: *Decoder, input: []const u8, sink: anytype) void {
             const prefix_len = decoder.bom_prefix_len;
             decoder.bom_checked = true;
             decoder.bom_prefix_len = 0;
-            for (source_namespace.utf8_bom[0..prefix_len]) |prefix_byte| {
+            for (sse.utf8_bom[0..prefix_len]) |prefix_byte| {
                 decoder.consumeByte(prefix_byte, sink);
             }
         }
@@ -203,7 +204,7 @@ fn isLineEmpty(decoder: *Decoder) bool {
 /// prefix as a truncated field, then ignores the tail until the next line
 /// terminator. The prefix is processed exactly once.
 fn pushByte(decoder: *Decoder, byte: u8) void {
-    if (decoder.line_len < source_namespace.max_line_bytes) {
+    if (decoder.line_len < sse.max_line_bytes) {
         decoder.line[decoder.line_len] = byte;
         decoder.line_len += 1;
     } else {
@@ -281,7 +282,7 @@ fn processLine(decoder: *Decoder) void {
 /// prefix that fits and marks the pending event as truncated.
 fn setEventName(decoder: *Decoder, event_name: []const u8) void {
     decoder.event_name_len = 0;
-    const n = @min(source_namespace.max_event_name_bytes, event_name.len);
+    const n = @min(sse.max_event_name_bytes, event_name.len);
     if (n < event_name.len) {
         decoder.event_truncated = true;
     }
@@ -297,7 +298,7 @@ fn setEventName(decoder: *Decoder, event_name: []const u8) void {
 /// prefix that fits and marks the pending event as truncated. It does not
 /// add separators. `processLine` inserts the LF between data fields.
 fn appendData(decoder: *Decoder, bytes: []const u8) void {
-    const room = source_namespace.max_data_bytes - decoder.event_data_len;
+    const room = sse.max_data_bytes - decoder.event_data_len;
     const n = @min(room, bytes.len);
     if (n < bytes.len) {
         decoder.event_truncated = true;

@@ -1,6 +1,8 @@
-const Transform = @This();
-const middleware = @import("../middleware.zig");
+const TransformPipelineType = @import("../TransformPipeline.zig");
 const std = @import("std");
-pipeline: *const middleware.TransformPipeline,
+const TransformContextType = @import("../TransformContext.zig");
+const Transform = @This();
+
+pipeline: *const TransformPipelineType,
 io: std.Io,
-context: middleware.TransformContext,
+context: TransformContextType,

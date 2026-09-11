@@ -1,16 +1,18 @@
-const HandshakeWorker = @This();
 const std = @import("std");
-const core = @import("telar-core");
-const source_namespace = @import("transport_integration_test.zig");
-const backend = @import("telar-backend");
+const SocketChannelType = @import("telar-core").SocketChannel;
+const SchemaIdType = @import("telar-core").SchemaId;
+const ServerResponseType = @import("telar-core").ServerResponse;
+const performSchema_module = @import("telar-backend").performSchema;
+const HandshakeWorker = @This();
+
 io: std.Io,
-connection: *core.transport.SocketChannel,
-supported: source_namespace.handshake.SchemaId,
-response: ?source_namespace.handshake.ServerResponse = null,
+connection: *SocketChannelType,
+supported: SchemaIdType,
+response: ?ServerResponseType = null,
 failure: ?anyerror = null,
 
 pub fn run(worker: *@This()) void {
-    worker.response = backend.transport.handshake.performSchema(
+    worker.response = performSchema_module(
         worker.io,
         worker.connection,
         worker.supported,

@@ -1,32 +1,14 @@
 //! Immutable borrowed projections and owned presentation-completion values.
-const core = @import("telar-core");
-pub const schema = core.schema;
-const client_model = @import("../model/root.zig");
-const multiplexer = @import("../workspace/root.zig").multiplexer;
-const tabs = @import("../workspace/root.zig").tabs;
-const workspace_list = @import("../workspace/root.zig").workspace_list;
-const agents = @import("../agents/root.zig");
-const notifications = @import("../notifications/root.zig");
-pub const name_prompt = client_model.name_prompt;
-pub const history_palette_state = client_model.history_palette;
-pub const suggestion_state = client_model.suggestion;
-const bars = @import("../bars/root.zig");
-const input = @import("../input/root.zig");
 
-pub const Observation = @import("Observation.zig");
-
-pub const PresentationIngress = @import("PresentationIngress.zig");
-
-pub const Projection = @import("Projection.zig");
-
-pub const Delivery = @import("Delivery.zig");
-
-pub const Context = @import("Context.zig");
+const ModelType = @import("../model/Model.zig");
+const Context = @import("Context.zig");
+const Projection = @import("Projection.zig");
+const CopyProjectionType = @import("../workspace/CopyProjection.zig");
 
 /// Borrows model data only until the synchronous preparation call returns.
 /// Example: `const projection = capture(&model, context);`.
-pub fn capture(model: *const client_model.Model, context: Context) Projection {
-    const copy: ?multiplexer.CopyProjection = if (model.copyModeProjection()) |value|
+pub fn capture(model: *const ModelType, context: Context) Projection {
+    const copy: ?CopyProjectionType = if (model.copyModeProjection()) |value|
         .{ .pane_id = value.pane_id, .view = value.view }
     else
         null;

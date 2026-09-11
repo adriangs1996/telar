@@ -1,21 +1,22 @@
-const Capture = @This();
-const source_namespace = @import("admission.zig");
+const admission = @import("admission.zig");
 const std = @import("std");
 const FakeConnection = @import("FakeConnection.zig");
-steps: [8]source_namespace.Step = undefined,
+const Capture = @This();
+
+steps: [8]admission.Step = undefined,
 len: usize = 0,
 runtime_stopping: bool = false,
 capacity_available: bool = true,
 rearm_failure: bool = false,
 handshake_failure: bool = false,
-state: ?*source_namespace.AdmissionState = null,
+state: ?*admission.AdmissionState = null,
 shutdown_id: ?u8 = null,
 deinitialized_ids: [2]u8 = undefined,
 deinitialized_count: usize = 0,
 started_id: ?u8 = null,
 start_received_slot: bool = false,
 
-fn record(capture: *Capture, step: source_namespace.Step) void {
+fn record(capture: *Capture, step: admission.Step) void {
     std.debug.assert(capture.len < capture.steps.len);
     capture.steps[capture.len] = step;
     capture.len += 1;

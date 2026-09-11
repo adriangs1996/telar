@@ -4,26 +4,14 @@
 //! single-threaded. Callers own the destination buffer and the media-path
 //! scheduling around it.
 
+const BitmapBlend = @import("BitmapBlend.zig");
+const freetype = @import("freetype");
+const Surface = @import("Surface.zig");
+const PixelBlend = @import("PixelBlend.zig");
+const Rasterizer = @import("Rasterizer.zig");
 const std = @import("std");
-const ft = @import("freetype").c;
 
 pub const embedded_font: []const u8 = @embedFile("../assets/JetBrainsMono-Regular.ttf");
-
-pub const Color = @import("Color.zig");
-
-pub const Surface = @import("Surface.zig");
-
-pub const Point = @import("RasterizerPoint.zig");
-
-pub const TextDraw = @import("TextDraw.zig");
-
-const BitmapBlend = @import("BitmapBlend.zig");
-
-const PixelBlend = @import("PixelBlend.zig");
-
-pub const Metrics = @import("Metrics.zig");
-
-pub const Rasterizer = @import("Rasterizer.zig");
 
 pub fn fixed26_6Round(value: anytype) i32 {
     const signed: i64 = @intCast(value);
@@ -31,8 +19,8 @@ pub fn fixed26_6Round(value: anytype) i32 {
 }
 
 pub fn blendBitmap(blend: BitmapBlend) !void {
-    if (blend.bitmap.pixel_mode != ft.FT_PIXEL_MODE_GRAY and
-        blend.bitmap.pixel_mode != ft.FT_PIXEL_MODE_MONO)
+    if (blend.bitmap.pixel_mode != freetype.c.FT_PIXEL_MODE_GRAY and
+        blend.bitmap.pixel_mode != freetype.c.FT_PIXEL_MODE_MONO)
     {
         return error.UnsupportedPixelMode;
     }
@@ -57,7 +45,7 @@ pub fn blendBitmap(blend: BitmapBlend) !void {
             if (target_x < 0 or target_x >= blend.surface.width) {
                 continue;
             }
-            const coverage: u8 = if (blend.bitmap.pixel_mode == ft.FT_PIXEL_MODE_GRAY)
+            const coverage: u8 = if (blend.bitmap.pixel_mode == freetype.c.FT_PIXEL_MODE_GRAY)
                 source_row[source_x]
             else if (source_row[source_x / 8] & (@as(u8, 0x80) >> @intCast(source_x % 8)) != 0)
                 255

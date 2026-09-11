@@ -1,9 +1,10 @@
-const WorkspaceReconciliation = @This();
-const source_namespace = @import("types.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const RemovedWorkspaceTabs = @import("RemovedWorkspaceTabs.zig");
 const RemovedWorkspacePanes = @import("RemovedWorkspacePanes.zig");
-previous_active: source_namespace.schema.TabLocation,
-active: source_namespace.schema.TabLocation,
+const WorkspaceReconciliation = @This();
+
+previous_active: TabLocationType,
+active: TabLocationType,
 removed_tabs: RemovedWorkspaceTabs = .{},
 removed_panes: RemovedWorkspacePanes = .{},
 workspace_changed: bool = false,

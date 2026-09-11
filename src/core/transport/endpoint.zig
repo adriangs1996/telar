@@ -1,8 +1,7 @@
 //! Local endpoint paths shared by the runtime bootstrap and server.
 
+const Local = @import("Local.zig");
 const std = @import("std");
-
-pub const Local = @import("Local.zig");
 
 test "managed endpoints remain inside their own directory" {
     const endpoint = try Local.managed("/tmp/example", "telar-42");

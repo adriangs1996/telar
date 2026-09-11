@@ -1,7 +1,11 @@
+const KeyType = @import("Key.zig");
+const chord = @import("chord.zig");
+
 const std = @import("std");
-pub const Key = @import("key_support.zig").Key;
-const key_lease = @import("key_lease.zig");
-pub const parseKey = @import("chord.zig").parseKey;
+
+pub const Key = @import("Key.zig");
+
+pub const parseKey = chord.parseKey;
 
 pub const Control = enum {
     continue_routing,
@@ -12,24 +16,20 @@ pub const default_escape_timeout_ns: u64 = 25 * std.time.ns_per_ms;
 
 pub const default_sequence_timeout_ns: u64 = 1000 * std.time.ns_per_ms;
 
-pub const default_prefix = parseKey("ctrl+b") catch unreachable;
+pub const default_prefix = chord.parseKey("ctrl+b") catch unreachable;
 
 pub const max_physical_leases = 64;
 
 pub const RepeatPolicy = @import("RepeatPolicy.zig");
 
-pub const Binding = @import("GenericBinding.zig").Type;
-
-pub const Keymap = @import("GenericKeymap.zig").Type;
-
-pub fn commonPrefix(a: []const Key, b: []const Key) usize {
+pub fn commonPrefix(a: []const KeyType, b: []const KeyType) usize {
     const limit = @min(a.len, b.len);
     var index: usize = 0;
     while (index < limit and keyOrder(a[index], b[index]) == .eq) : (index += 1) {}
     return index;
 }
 
-pub fn sequenceOrder(a: []const Key, b: []const Key) std.math.Order {
+pub fn sequenceOrder(a: []const KeyType, b: []const KeyType) std.math.Order {
     const limit = @min(a.len, b.len);
     for (0..limit) |index| {
         const order = keyOrder(a[index], b[index]);
@@ -40,7 +40,7 @@ pub fn sequenceOrder(a: []const Key, b: []const Key) std.math.Order {
     return std.math.order(a.len, b.len);
 }
 
-pub fn keyOrder(a: Key, b: Key) std.math.Order {
+pub fn keyOrder(a: KeyType, b: KeyType) std.math.Order {
     if (a.mods.ctrl != b.mods.ctrl) {
         return std.math.order(@intFromBool(a.mods.ctrl), @intFromBool(b.mods.ctrl));
     }
@@ -63,7 +63,7 @@ pub fn keyOrder(a: Key, b: Key) std.math.Order {
     return std.mem.order(u8, a_char.slice(), b_char.slice());
 }
 
-pub fn isPlainEscape(key: Key) bool {
+pub fn isPlainEscape(key: KeyType) bool {
     if (key.mods.ctrl or key.mods.alt or key.mods.shift) {
         return false;
     }
@@ -74,5 +74,3 @@ pub fn isPlainEscape(key: Key) bool {
 }
 
 pub const RouterLimits = @import("RouterLimits.zig");
-
-pub const Router = @import("GenericRouter.zig").Type;

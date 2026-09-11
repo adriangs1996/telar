@@ -1,8 +1,10 @@
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const TabCreation = @This();
-const source_namespace = @import("types.zig");
-previous: source_namespace.schema.TabLocation,
-created: source_namespace.schema.TabLocation,
-created_root_pane_id: source_namespace.schema.PaneId,
+
+previous: TabLocationType,
+created: TabLocationType,
+created_root_pane_id: PaneIdType,
 created_position: u16,
 previous_layout_revision: u64,
 created_layout_revision: u64,

@@ -1,5 +1,6 @@
+const frame_support = @import("frame_support.zig");
 const Mouse = @This();
-const source_namespace = @import("frame_support.zig");
-tracking: source_namespace.MouseTracking = .none,
+
+tracking: frame_support.MouseTracking = .none,
 sgr: bool = false,
 pixels: bool = false,

@@ -1,6 +1,7 @@
+const goto_picker = @import("goto_picker.zig");
 const Row = @This();
-const source_namespace = @import("goto_picker.zig");
-text: [source_namespace.max_row_bytes]u8 = undefined,
+
+text: [goto_picker.max_row_bytes]u8 = undefined,
 len: u8 = 0,
 selected: bool = false,
 

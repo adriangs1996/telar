@@ -1,8 +1,9 @@
-const PaneMatchesView = @This();
-const source_namespace = @import("pane.zig");
+const id = @import("../id.zig");
 const SearchMatchIterator = @import("SearchMatchIterator.zig");
-request_id: source_namespace.RequestId,
-pane_id: source_namespace.PaneId,
+const PaneMatchesView = @This();
+
+request_id: id.RequestId,
+pane_id: id.PaneId,
 truncated: bool,
 match_count: u16,
 encoded_matches: []const u8,

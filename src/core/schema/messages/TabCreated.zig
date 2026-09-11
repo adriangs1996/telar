@@ -1,7 +1,9 @@
+const id = @import("../id.zig");
+const TabLocationType = @import("../TabLocation.zig");
 const TabCreated = @This();
-const source_namespace = @import("tab.zig");
-request_id: source_namespace.RequestId,
-location: source_namespace.TabLocation,
+
+request_id: id.RequestId,
+location: TabLocationType,
 position: u16,
 label: []const u8,
-root_pane_id: source_namespace.PaneId,
+root_pane_id: id.PaneId,

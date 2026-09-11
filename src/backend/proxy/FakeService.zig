@@ -1,3 +1,4 @@
+const LifecycleCapture = @import("LifecycleCapture.zig");
 const FakeService = @This();
-const Capture = @import("LifecycleCapture.zig");
-capture: *Capture,
+
+capture: *LifecycleCapture,

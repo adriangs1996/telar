@@ -2,36 +2,27 @@
 //! reconciliation. Everything here is pure over a cell buffer and a scroll
 //! position; the client applies the returned effects.
 
+const Point = @import("Point.zig");
+const GranularityType = @import("telar-core").Granularity;
+const Screen = @import("Screen.zig");
+const PointType = @import("telar-core").Point;
+const RangeType = @import("telar-core").Range;
+const State = @import("State.zig");
+const KeyType = @import("Key.zig");
+const Effect = @import("Effect.zig");
+const Viewport = @import("Viewport.zig");
+const ScrollType = @import("telar-core").Scroll;
+const BufferType = @import("telar-core").Buffer;
 const std = @import("std");
-const core = @import("telar-core");
-const keybind = @import("root.zig");
-
-pub const schema = core.schema;
-pub const ui = core.ui;
+const View = @import("CopyModeView.zig");
+const chord = @import("chord.zig");
+const SearchMatchType = @import("telar-core").SearchMatch;
 
 pub const Direction = enum { forward, backward };
 
-pub const max_matches = core.schema.max_search_matches;
-
-pub const Point = @import("Point.zig");
-
-pub const Viewport = @import("Viewport.zig");
-
-pub const Screen = @import("Screen.zig");
-
-pub const PointerPress = @import("PointerPress.zig");
-
-pub const PointerMotion = @import("PointerMotion.zig");
-
-const PointerSelection = @import("PointerSelection.zig");
-
-pub const View = @import("View.zig");
-
-pub const State = @import("State.zig");
-
-pub fn pointerSpan(point: Point, granularity: core.select.Granularity, screen: Screen) [2]Point {
-    const local: ui.Point = .{ .x = point.x, .y = @intCast(point.y - screen.scroll.offset) };
-    var range = (core.select.Range{
+pub fn pointerSpan(point: Point, granularity: GranularityType, screen: Screen) [2]Point {
+    const local: PointType = .{ .x = point.x, .y = @intCast(point.y - screen.scroll.offset) };
+    var range = (RangeType{
         .anchor = local,
         .head = local,
         .granularity = granularity,
@@ -55,11 +46,9 @@ pub fn less(a: Point, b: Point) bool {
     return a.y < b.y or (a.y == b.y and a.x < b.x);
 }
 
-pub const Effect = @import("Effect.zig");
-
 /// Interprets one key over the pane's visible cells. Pure: the only mutation
 /// is the copy-mode state itself.
-pub fn applyKey(state: *State, pressed: keybind.Key, screen: Screen) Effect {
+pub fn applyKey(state: *State, pressed: KeyType, screen: Screen) Effect {
     const buffer = screen.buffer;
     const scroll = screen.scroll;
     const page: i32 = @intCast(@max(@as(u16, 1), buffer.h -| 1));
@@ -147,7 +136,7 @@ pub fn applyKey(state: *State, pressed: keybind.Key, screen: Screen) Effect {
 /// Reconciles the copy cursor with a runtime frame. Pruned scrollback pulls
 /// the cursor and anchor up with it while the viewport sat at the pruned
 /// edge; both are then clamped to the new history length.
-pub fn onFrame(state: *State, previous_offset: u32, scroll: schema.frame.Scroll) void {
+pub fn onFrame(state: *State, previous_offset: u32, scroll: ScrollType) void {
     if (scroll.offset < previous_offset and state.viewport_offset == previous_offset) {
         const pruned = previous_offset - scroll.offset;
         state.cursor.y -|= pruned;
@@ -174,14 +163,14 @@ pub fn onFrame(state: *State, previous_offset: u32, scroll: schema.frame.Scroll)
 
 const WordClass = enum { space, word, punctuation };
 
-fn rowIndex(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, absolute_y: u32) ?u16 {
+fn rowIndex(buffer: *const BufferType, scroll: ScrollType, absolute_y: u32) ?u16 {
     if (absolute_y < scroll.offset or absolute_y >= scroll.offset + buffer.h) {
         return null;
     }
     return @intCast(absolute_y - scroll.offset);
 }
 
-fn firstNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) void {
+fn firstNonBlank(state: *State, buffer: *const BufferType, scroll: ScrollType) void {
     const row = rowIndex(buffer, scroll, state.cursor.y) orelse return state.lineStart();
     var x: u16 = 0;
     while (x < buffer.w) : (x += 1) {
@@ -193,7 +182,7 @@ fn firstNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.S
     state.cursor.x = @min(x, buffer.w -| 1);
 }
 
-fn lastNonBlank(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) void {
+fn lastNonBlank(state: *State, buffer: *const BufferType, scroll: ScrollType) void {
     const row = rowIndex(buffer, scroll, state.cursor.y) orelse return state.lineEnd(buffer.w);
     var x = buffer.w;
     while (x != 0) {
@@ -234,7 +223,7 @@ fn paragraph(state: *State, screen: Screen, direction: i32) void {
     state.vertical(0, .{ .scroll = scroll, .rows = buffer.h });
 }
 
-fn wordClass(buffer: *const ui.Buffer, scroll: schema.frame.Scroll, point: Point) ?WordClass {
+fn wordClass(buffer: *const BufferType, scroll: ScrollType, point: Point) ?WordClass {
     const row = rowIndex(buffer, scroll, point.y) orelse return null;
     const cell = buffer.cells[@as(usize, row) * buffer.w + point.x];
     const text = cell.text();
@@ -317,7 +306,7 @@ fn wordForward(state: *State, screen: Screen, end: bool) void {
     state.vertical(0, .{ .scroll = scroll, .rows = buffer.h });
 }
 
-fn wordBackward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Scroll) void {
+fn wordBackward(state: *State, buffer: *const BufferType, scroll: ScrollType) void {
     var point = previousPoint(state.cursor, buffer.w);
     while (wordClass(buffer, scroll, point) == .space) {
         const previous = previousPoint(point, buffer.w);
@@ -343,7 +332,7 @@ fn wordBackward(state: *State, buffer: *const ui.Buffer, scroll: schema.frame.Sc
 }
 
 test "vertical movement scrolls the viewport only at its edges" {
-    const scroll: schema.frame.Scroll = .{ .total_rows = 100, .offset = 90 };
+    const scroll: ScrollType = .{ .total_rows = 100, .offset = 90 };
     var state = State.init(@enumFromInt(1), .{ .x = 2, .y = 99 }, 90);
     state.vertical(-1, .{ .scroll = scroll, .rows = 10 });
     try std.testing.expectEqual(@as(u32, 90), state.viewport_offset);
@@ -353,7 +342,7 @@ test "vertical movement scrolls the viewport only at its edges" {
 }
 
 test "pointer selection includes both cells of wide glyphs without copying a bare click" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 2);
+    var buffer = try BufferType.init(std.testing.allocator, 10, 2);
     defer buffer.deinit();
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "a界b", .style = .{} });
@@ -370,7 +359,7 @@ test "pointer selection includes both cells of wide glyphs without copying a bar
 }
 
 test "pointer word drags retain the original word when reversing direction" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 13, 2);
+    var buffer = try BufferType.init(std.testing.allocator, 13, 2);
     defer buffer.deinit();
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "one two three", .style = .{} });
@@ -389,11 +378,11 @@ test "pointer word drags retain the original word when reversing direction" {
 }
 
 test "pruned history moves the captured pointer origin with its highlight" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 2);
+    var buffer = try BufferType.init(std.testing.allocator, 10, 2);
     defer buffer.deinit();
     var state = State.init(@enumFromInt(1), .{ .x = 2, .y = 100 }, 100);
     state.beginPointer(.character, .{ .buffer = &buffer, .scroll = .{ .offset = 100, .total_rows = 102 } });
-    const scroll: schema.frame.Scroll = .{ .offset = 90, .total_rows = 92 };
+    const scroll: ScrollType = .{ .offset = 90, .total_rows = 92 };
     onFrame(&state, 100, scroll);
     state.movePointer(.{ .position = .{ .x = 4, .y = 0 } }, .{ .buffer = &buffer, .scroll = scroll });
 
@@ -420,10 +409,10 @@ test "linear and linewise selections are inclusive" {
     try std.testing.expect(linewise.selected(99, 5));
 }
 
-fn testScreen(gpa: std.mem.Allocator, rows: []const []const u8) !ui.Buffer {
+fn testScreen(gpa: std.mem.Allocator, rows: []const []const u8) !BufferType {
     var width: u16 = 0;
     for (rows) |row| width = @max(width, @as(u16, @intCast(row.len)));
-    var buffer = try ui.Buffer.init(gpa, width, @intCast(rows.len));
+    var buffer = try BufferType.init(gpa, width, @intCast(rows.len));
     buffer.fill(buffer.area(), .{ .glyph = " ", .style = .{} });
     for (rows, 0..) |row, y| _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = @intCast(y) }, .text = row, .style = .{} });
     return buffer;
@@ -433,18 +422,18 @@ test "word motions travel by class over the visible cells" {
     const gpa = std.testing.allocator;
     var buffer = try testScreen(gpa, &.{ "foo bar,baz", "        end" });
     defer buffer.deinit();
-    const scroll: schema.frame.Scroll = .{ .total_rows = 2, .offset = 0 };
+    const scroll: ScrollType = .{ .total_rows = 2, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
-    _ = applyKey(&state, try keybind.parseKey("w"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("w"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 4), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("w"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("w"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 7), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("b"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("b"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 4), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("$"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("$"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 10), state.cursor.x);
-    _ = applyKey(&state, try keybind.parseKey("0"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("0"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expectEqual(@as(u16, 0), state.cursor.x);
 }
 
@@ -452,19 +441,19 @@ test "escape clears the selection before it exits" {
     const gpa = std.testing.allocator;
     var buffer = try testScreen(gpa, &.{"abc"});
     defer buffer.deinit();
-    const scroll: schema.frame.Scroll = .{ .total_rows = 1, .offset = 0 };
+    const scroll: ScrollType = .{ .total_rows = 1, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
-    _ = applyKey(&state, try keybind.parseKey("v"), .{ .buffer = &buffer, .scroll = scroll });
+    _ = applyKey(&state, try chord.parseKey("v"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(state.anchor != null);
-    const cleared = applyKey(&state, try keybind.parseKey("escape"), .{ .buffer = &buffer, .scroll = scroll });
+    const cleared = applyKey(&state, try chord.parseKey("escape"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(!cleared.exit);
     try std.testing.expect(state.anchor == null);
-    const exited = applyKey(&state, try keybind.parseKey("escape"), .{ .buffer = &buffer, .scroll = scroll });
+    const exited = applyKey(&state, try chord.parseKey("escape"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(exited.exit and !exited.copy);
-    const copied = applyKey(&state, try keybind.parseKey("y"), .{ .buffer = &buffer, .scroll = scroll });
+    const copied = applyKey(&state, try chord.parseKey("y"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(copied.exit and copied.copy);
-    const ignored = applyKey(&state, try keybind.parseKey("z"), .{ .buffer = &buffer, .scroll = scroll });
+    const ignored = applyKey(&state, try chord.parseKey("z"), .{ .buffer = &buffer, .scroll = scroll });
     try std.testing.expect(!ignored.handled);
 }
 
@@ -486,9 +475,9 @@ test "a pruning frame pulls cursor and anchor up before clamping" {
 }
 
 test "matches select relative to the cursor, highlight and cycle with wrap" {
-    const scroll: schema.frame.Scroll = .{ .total_rows = 40, .offset = 0 };
+    const scroll: ScrollType = .{ .total_rows = 40, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 10 }, 0);
-    const results = [_]schema.SearchMatch{
+    const results = [_]SearchMatchType{
         .{ .x = 2, .y = 4, .len = 3 },
         .{ .x = 1, .y = 12, .len = 2 },
         .{ .x = 5, .y = 30, .len = 4 },
@@ -515,9 +504,9 @@ test "matches select relative to the cursor, highlight and cycle with wrap" {
 }
 
 test "slash and question mark ask for the search input" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 5);
+    var buffer = try BufferType.init(std.testing.allocator, 10, 5);
     defer buffer.deinit();
-    const scroll: schema.frame.Scroll = .{ .total_rows = 5, .offset = 0 };
+    const scroll: ScrollType = .{ .total_rows = 5, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
     const forward = applyKey(&state, .{ .code = .{ .char = .init("/") } }, .{ .buffer = &buffer, .scroll = scroll });
@@ -528,9 +517,9 @@ test "slash and question mark ask for the search input" {
 }
 
 test "o asks the client to open the link under the cursor" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 10, 5);
+    var buffer = try BufferType.init(std.testing.allocator, 10, 5);
     defer buffer.deinit();
-    const scroll: schema.frame.Scroll = .{ .total_rows = 5, .offset = 0 };
+    const scroll: ScrollType = .{ .total_rows = 5, .offset = 0 };
     var state = State.init(@enumFromInt(1), .{ .x = 0, .y = 0 }, 0);
 
     const effect = applyKey(&state, .{ .code = .{ .char = .init("o") } }, .{ .buffer = &buffer, .scroll = scroll });

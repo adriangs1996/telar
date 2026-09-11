@@ -1,4 +1,5 @@
-const source_namespace = @import("projection.zig");
+const PaneType = @import("../../../../pane/Pane.zig");
+
 /// Declares the follow-up operations required by pane projections.
 ///
 /// ```zig
@@ -7,6 +8,6 @@ const source_namespace = @import("projection.zig");
 pub fn Type(comptime Application: type) type {
     return struct {
         schedule_description: *const fn (*Application) void,
-        schedule_response: *const fn (*Application, *source_namespace.Pane) anyerror!void,
+        schedule_response: *const fn (*Application, *PaneType) anyerror!void,
     };
 }

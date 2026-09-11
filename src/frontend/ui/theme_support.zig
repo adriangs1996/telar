@@ -3,8 +3,9 @@
 //! Themes color Telar's chrome. Pane contents keep the colors produced by the
 //! child terminal, and workbench gaps keep the host terminal background.
 
+const ThemeType = @import("Theme.zig");
+const ColorType = @import("telar-core").Color;
 const std = @import("std");
-const ui = @import("telar-core").ui;
 
 pub const Builtin = enum {
     vesper,
@@ -30,7 +31,7 @@ pub const Theme = @import("Theme.zig");
 
 pub const default_theme = builtin(.vesper);
 
-pub fn fromName(name: []const u8) ?Theme {
+pub fn fromName(name: []const u8) ?ThemeType {
     if (eql(name, "vesper")) {
         return builtin(.vesper);
     }
@@ -46,7 +47,7 @@ pub fn fromName(name: []const u8) ?Theme {
     return null;
 }
 
-pub fn builtin(name: Builtin) Theme {
+pub fn builtin(name: Builtin) ThemeType {
     return .{
         .base = name,
         .palette = switch (name) {
@@ -127,11 +128,11 @@ pub fn builtin(name: Builtin) Theme {
     };
 }
 
-fn rgb(red: u8, green: u8, blue: u8) ui.Color {
+fn rgb(red: u8, green: u8, blue: u8) ColorType {
     return .{ .rgb = .{ red, green, blue } };
 }
 
-fn indexed(index: u8) ui.Color {
+fn indexed(index: u8) ColorType {
     return .{ .indexed = index };
 }
 
@@ -165,7 +166,7 @@ test "bundled palettes keep their defining colors" {
 test "overrides replace only the requested color roles" {
     const base = builtin(.vesper);
     const custom = base.withOverrides(.{ .panel_bg = .default, .accent = rgb(1, 2, 3) });
-    try std.testing.expectEqualDeep(ui.Color.default, custom.palette.panel_bg);
+    try std.testing.expectEqualDeep(ColorType.default, custom.palette.panel_bg);
     try std.testing.expectEqualDeep(rgb(1, 2, 3), custom.palette.accent);
     try std.testing.expectEqualDeep(base.palette.text, custom.palette.text);
 }

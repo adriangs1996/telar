@@ -1,10 +1,11 @@
+const DecoderType = @import("../Decoder.zig");
+const SearchMatchType = @import("../SearchMatch.zig");
 const SearchMatchIterator = @This();
-const wire = @import("../wire.zig");
-const source_namespace = @import("pane.zig");
-decoder: wire.Decoder,
+
+decoder: DecoderType,
 remaining: u16,
 
-pub fn next(iterator: *SearchMatchIterator) !?source_namespace.SearchMatch {
+pub fn next(iterator: *SearchMatchIterator) !?SearchMatchType {
     if (iterator.remaining == 0) {
         return null;
     }

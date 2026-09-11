@@ -1,3 +1,16 @@
+const std = @import("std");
+const event = @import("event.zig");
+const LocalListenerType = @import("../transport/LocalListener.zig");
+const event_sources = @import("event_sources.zig");
+const StopSignalCoordinator = @import("lifecycle/StopSignalCoordinator.zig");
+const StopScheduleContext = @import("StopScheduleContext.zig");
+const ServiceType = @import("../history/Service.zig");
+const EngineService = @import("../engine/Service.zig");
+const ProxyRuntime = @import("resources/ProxyRuntime.zig");
+const ProxyScheduleContext = @import("ProxyScheduleContext.zig");
+const ProxyCaptureScheduleContext = @import("ProxyCaptureScheduleContext.zig");
+const PluginsService = @import("../plugins/Service.zig");
+const waitForTick_module = @import("telar-core").waitForTick;
 /// Arms asynchronous infrastructure work and maps each completion to its
 /// corresponding runtime event.
 ///
@@ -6,25 +19,16 @@
 /// try sources.waitForAgentMaintenance();
 /// ```
 const Sources = @This();
-const source_namespace = @import("event_sources.zig");
-const transport = @import("../transport/root.zig");
-const stop_signal_mod = @import("lifecycle/root.zig").stop_signal;
-const StopScheduleContext = @import("StopScheduleContext.zig");
-const history = @import("../history/root.zig");
-const engine = @import("../engine/root.zig");
-const proxy_resource = @import("resources/proxy.zig");
-const ProxyScheduleContext = @import("ProxyScheduleContext.zig");
-const ProxyCaptureScheduleContext = @import("ProxyCaptureScheduleContext.zig");
-const plugins = @import("../plugins/root.zig");
-io: source_namespace.Io,
-select: *source_namespace.Io.Select(source_namespace.RuntimeEvent),
+
+io: std.Io,
+select: *std.Io.Select(event.Event),
 
 /// Borrows the runtime I/O implementation and event selector.
 ///
 /// ```zig
 /// var sources = Sources.init(io, select);
 /// ```
-pub fn init(io: source_namespace.Io, select: *source_namespace.Io.Select(source_namespace.RuntimeEvent)) Sources {
+pub fn init(io: std.Io, select: *std.Io.Select(event.Event)) Sources {
     return .{ .io = io, .select = select };
 }
 
@@ -33,8 +37,8 @@ pub fn init(io: source_namespace.Io, select: *source_namespace.Io.Select(source_
 /// ```zig
 /// try sources.acceptClient(listener);
 /// ```
-pub fn acceptClient(sources: *Sources, listener: *transport.local.LocalListener) !void {
-    try sources.select.concurrent(.accepted, source_namespace.awaitClient, .{ sources.io, listener });
+pub fn acceptClient(sources: *Sources, listener: *LocalListenerType) !void {
+    try sources.select.concurrent(.accepted, event_sources.awaitClient, .{ sources.io, listener });
 }
 
 /// Arms the optional external stop signal.
@@ -42,7 +46,7 @@ pub fn acceptClient(sources: *Sources, listener: *transport.local.LocalListener)
 /// ```zig
 /// try sources.waitForStop(stop_signal);
 /// ```
-pub fn waitForStop(sources: *Sources, stop_signal: *stop_signal_mod.Coordinator) !void {
+pub fn waitForStop(sources: *Sources, stop_signal: *StopSignalCoordinator) !void {
     var context: StopScheduleContext = .{ .sources = sources };
     try stop_signal.arm(context.scheduler());
 }
@@ -52,8 +56,8 @@ pub fn waitForStop(sources: *Sources, stop_signal: *stop_signal_mod.Coordinator)
 /// ```zig
 /// try sources.receiveHistory(history_service);
 /// ```
-pub fn receiveHistory(sources: *Sources, history_service: *history.Service) !void {
-    try sources.select.concurrent(.history_response, history.Service.receiveResponse, .{ history_service, sources.io });
+pub fn receiveHistory(sources: *Sources, history_service: *ServiceType) !void {
+    try sources.select.concurrent(.history_response, ServiceType.receiveResponse, .{ history_service, sources.io });
 }
 
 /// Arms the next engine reply receive.
@@ -61,8 +65,8 @@ pub fn receiveHistory(sources: *Sources, history_service: *history.Service) !voi
 /// ```zig
 /// try sources.receiveEngine(engine_service);
 /// ```
-pub fn receiveEngine(sources: *Sources, engine_service: *engine.Service) !void {
-    try sources.select.concurrent(.engine_response, engine.Service.receiveResponse, .{ engine_service, sources.io });
+pub fn receiveEngine(sources: *Sources, engine_service: *EngineService) !void {
+    try sources.select.concurrent(.engine_response, EngineService.receiveResponse, .{ engine_service, sources.io });
 }
 
 /// Arms the next proxy observation when the proxy is active.
@@ -70,12 +74,12 @@ pub fn receiveEngine(sources: *Sources, engine_service: *engine.Service) !void {
 /// ```zig
 /// try sources.receiveProxyObservation(proxy_runtime);
 /// ```
-pub fn receiveProxyObservation(sources: *Sources, proxy_runtime: *proxy_resource.Runtime) !void {
+pub fn receiveProxyObservation(sources: *Sources, proxy_runtime: *ProxyRuntime) !void {
     var context: ProxyScheduleContext = .{ .sources = sources };
     try proxy_runtime.schedule(context.scheduler());
 }
 
-pub fn receiveProxyCapture(sources: *Sources, proxy_runtime: *proxy_resource.Runtime) !void {
+pub fn receiveProxyCapture(sources: *Sources, proxy_runtime: *ProxyRuntime) !void {
     var context: ProxyCaptureScheduleContext = .{ .sources = sources };
     try proxy_runtime.scheduleCapture(context.scheduler());
 }
@@ -85,8 +89,8 @@ pub fn receiveProxyCapture(sources: *Sources, proxy_runtime: *proxy_resource.Run
 /// ```zig
 /// try sources.receivePluginEffects(plugin_service);
 /// ```
-pub fn receivePluginEffects(sources: *Sources, plugin_service: *plugins.Service) !void {
-    try sources.select.concurrent(.plugin_effects, plugins.Service.receive, .{ plugin_service, sources.io });
+pub fn receivePluginEffects(sources: *Sources, plugin_service: *PluginsService) !void {
+    try sources.select.concurrent(.plugin_effects, PluginsService.receive, .{ plugin_service, sources.io });
 }
 
 /// Arms the next agent-maintenance tick.
@@ -95,7 +99,7 @@ pub fn receivePluginEffects(sources: *Sources, plugin_service: *plugins.Service)
 /// try sources.waitForAgentMaintenance();
 /// ```
 pub fn waitForAgentMaintenance(sources: *Sources) !void {
-    try sources.select.concurrent(.agent_tick, source_namespace.waitForAgentTick, .{sources.io});
+    try sources.select.concurrent(.agent_tick, event_sources.waitForAgentTick, .{sources.io});
 }
 
 /// Arms the next system-metrics tick.
@@ -104,7 +108,7 @@ pub fn waitForAgentMaintenance(sources: *Sources) !void {
 /// try sources.waitForSystemMetrics();
 /// ```
 pub fn waitForSystemMetrics(sources: *Sources) !void {
-    try sources.select.concurrent(.metrics_tick, source_namespace.waitForMetricsTick, .{sources.io});
+    try sources.select.concurrent(.metrics_tick, event_sources.waitForMetricsTick, .{sources.io});
 }
 
 /// Arms the next telemetry tick.
@@ -113,5 +117,5 @@ pub fn waitForSystemMetrics(sources: *Sources) !void {
 /// try sources.waitForTelemetry();
 /// ```
 pub fn waitForTelemetry(sources: *Sources) !void {
-    try sources.select.concurrent(.telemetry_tick, source_namespace.diagnostics.waitForTick, .{sources.io});
+    try sources.select.concurrent(.telemetry_tick, waitForTick_module, .{sources.io});
 }

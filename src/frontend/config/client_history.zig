@@ -1,13 +1,14 @@
 //! Compiler for client history presentation and activation behavior.
 
-const std = @import("std");
-const lua = @import("lua-api").c;
-const config_model = @import("model.zig");
+const lua_api = @import("lua-api");
+const SnapshotType = @import("Snapshot.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
 const value = @import("lua_value.zig");
+const ClientHistoryParser = @import("ClientHistoryParser.zig");
 
-pub fn parse(state: *lua.lua_State, snapshot: *config_model.Snapshot, diagnostic: *config_model.Diagnostic) !void {
-    const absolute = lua.lua_absindex(state, -1);
-    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+pub fn parse(state: *lua_api.c.lua_State, snapshot: *SnapshotType, diagnostic: *DiagnosticType) !void {
+    const absolute = lua_api.c.lua_absindex(state, -1);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.client.history must be a table", .{});
         return error.InvalidConfig;
     }
@@ -17,10 +18,8 @@ pub fn parse(state: *lua.lua_State, snapshot: *config_model.Snapshot, diagnostic
         .allowed = &.{ "show_agent_commands", "enter", "match" },
         .path = "config.client.history",
     }, diagnostic);
-    var parser: Parser = .{ .state = state, .snapshot = snapshot, .diagnostic = diagnostic };
+    var parser: ClientHistoryParser = .{ .state = state, .snapshot = snapshot, .diagnostic = diagnostic };
     try parser.parseMatch(absolute);
     try parser.parseVisibility(absolute);
     try parser.parseEnter(absolute);
 }
-
-const Parser = @import("ClientHistoryParser.zig");

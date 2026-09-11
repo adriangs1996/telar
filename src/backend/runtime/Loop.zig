@@ -1,10 +1,13 @@
+const StopSignalCoordinator = @import("lifecycle/StopSignalCoordinator.zig");
+const event_loop = @import("event_loop.zig");
+const event = @import("event.zig");
+const std = @import("std");
 /// Owns the bounded selector and external stop coordination for one runtime.
 const Loop = @This();
-const stop_signal_module = @import("lifecycle/root.zig").stop_signal;
-const source_namespace = @import("event_loop.zig");
-stop_signal: stop_signal_module.Coordinator,
-storage: [source_namespace.event_capacity]source_namespace.Event,
-select: source_namespace.Io.Select(source_namespace.Event),
+
+stop_signal: StopSignalCoordinator,
+storage: [event_loop.event_capacity]event.Event,
+select: std.Io.Select(event.Event),
 
 /// Initializes bounded event storage without starting any actor.
 ///
@@ -12,9 +15,9 @@ select: source_namespace.Io.Select(source_namespace.Event),
 /// var loop: Loop = undefined;
 /// loop.init(io, stop_queue);
 /// ```
-pub fn init(loop: *Loop, io: source_namespace.Io, stop: ?*source_namespace.Io.Queue(u8)) void {
+pub fn init(loop: *Loop, io: std.Io, stop: ?*std.Io.Queue(u8)) void {
     loop.stop_signal = .init(stop);
-    loop.select = source_namespace.Io.Select(source_namespace.Event).init(io, &loop.storage);
+    loop.select = std.Io.Select(event.Event).init(io, &loop.storage);
 }
 
 /// Returns the selector borrowed by runtime event sources and dispatchers.
@@ -22,7 +25,7 @@ pub fn init(loop: *Loop, io: source_namespace.Io, stop: ?*source_namespace.Io.Qu
 /// ```zig
 /// const select = loop.selector();
 /// ```
-pub fn selector(loop: *Loop) *source_namespace.Io.Select(source_namespace.Event) {
+pub fn selector(loop: *Loop) *std.Io.Select(event.Event) {
     return &loop.select;
 }
 
@@ -31,7 +34,7 @@ pub fn selector(loop: *Loop) *source_namespace.Io.Select(source_namespace.Event)
 /// ```zig
 /// const stop = loop.stopCoordinator();
 /// ```
-pub fn stopCoordinator(loop: *Loop) *stop_signal_module.Coordinator {
+pub fn stopCoordinator(loop: *Loop) *StopSignalCoordinator {
     return &loop.stop_signal;
 }
 
@@ -40,7 +43,7 @@ pub fn stopCoordinator(loop: *Loop) *stop_signal_module.Coordinator {
 /// ```zig
 /// const event = try loop.next();
 /// ```
-pub fn next(loop: *Loop) !source_namespace.Event {
+pub fn next(loop: *Loop) !event.Event {
     return loop.select.await();
 }
 

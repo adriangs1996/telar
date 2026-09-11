@@ -1,9 +1,10 @@
+const ModelType = @import("../../model/Model.zig");
+const PaneFocusReportingEffects = @import("PaneFocusReportingEffects.zig");
+const pane_focus_reporting = @import("pane_focus_reporting.zig");
 const PaneFocusReportingHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("PaneFocusReportingEffects.zig");
-const source_namespace = @import("pane_focus_reporting.zig");
-model: *client_model.Model,
-effects: Effects,
+
+model: *ModelType,
+effects: PaneFocusReportingEffects,
 
 /// Commits one reporting transition before emitting focus-out and
 /// focus-in in protocol order.
@@ -11,7 +12,7 @@ effects: Effects,
 /// ```zig
 /// _ = try handler.execute(.sync);
 /// ```
-pub fn execute(handler: *PaneFocusReportingHandler, command: source_namespace.Command) !source_namespace.Outcome {
+pub fn execute(handler: *PaneFocusReportingHandler, command: pane_focus_reporting.Command) !pane_focus_reporting.Outcome {
     const transition = switch (command) {
         .sync => handler.model.syncReportedPaneFocus(),
         .clear => handler.model.clearReportedPaneFocus(),

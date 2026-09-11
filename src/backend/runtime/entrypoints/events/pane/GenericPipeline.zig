@@ -1,9 +1,11 @@
 const GenericOutputRuntimePort = @import("GenericOutputRuntimePort.zig").Type;
-const Resources = @import("OutputResources.zig");
-const Completion = @import("OutputCompletion.zig");
-const source_namespace = @import("output.zig");
-const pane_mod = @import("../../../../pane/root.zig");
-const Ingest = @import("OutputIngest.zig");
+const OutputResources = @import("OutputResources.zig");
+const OutputCompletion = @import("OutputCompletion.zig");
+const enabled_module = @import("telar-core").enabled;
+const pane_mod = @import("../../../../pane/pane_namespace.zig");
+const OutputIngest = @import("OutputIngest.zig");
+const PaneType = @import("../../../../pane/Pane.zig");
+
 /// Creates a statically dispatched PTY output pipeline.
 ///
 /// ```zig
@@ -14,14 +16,14 @@ pub fn Type(comptime Context: type, comptime port: GenericOutputRuntimePort(Cont
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: OutputResources,
 
         /// Binds one runtime's pane repository and telemetry.
         ///
         /// ```zig
         /// var pipeline = OutputPipeline.init(&context, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: OutputResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -32,7 +34,7 @@ pub fn Type(comptime Context: type, comptime port: GenericOutputRuntimePort(Cont
         /// ```zig
         /// try pipeline.handle(completion);
         /// ```
-        pub fn handle(pipeline: *Self, completion: Completion) !void {
+        pub fn handle(pipeline: *Self, completion: OutputCompletion) !void {
             const pane = pipeline.resources.panes.resolve(completion.pane) orelse {
                 pipeline.resources.metrics.stale_pane_events += 1;
                 return;
@@ -49,7 +51,7 @@ pub fn Type(comptime Context: type, comptime port: GenericOutputRuntimePort(Cont
 
             pane.completePtyOutputRead(.data);
 
-            if (comptime source_namespace.diagnostics.enabled) {
+            if (comptime enabled_module) {
                 pipeline.resources.metrics.pty_events += 1;
                 pipeline.resources.metrics.pty_bytes += output_len;
 
@@ -71,7 +73,7 @@ pub fn Type(comptime Context: type, comptime port: GenericOutputRuntimePort(Cont
             pane.queueMediaOutput(bytes);
             try port.schedule_media(pipeline.context, pane);
 
-            const ingest: Ingest = .{
+            const ingest: OutputIngest = .{
                 .io = pipeline.resources.io,
                 .pane = pane,
                 .bytes = pane.beginOutputIngest(output_len),
@@ -82,7 +84,7 @@ pub fn Type(comptime Context: type, comptime port: GenericOutputRuntimePort(Cont
             };
         }
 
-        fn finishOutput(pipeline: *Self, pane: *source_namespace.Pane) !void {
+        fn finishOutput(pipeline: *Self, pane: *PaneType) !void {
             if (pane.exit) |exit| {
                 pane.queueExitedHistory(exit);
                 try port.schedule_observation(pipeline.context, pane);

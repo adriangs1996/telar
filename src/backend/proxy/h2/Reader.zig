@@ -1,6 +1,7 @@
+const framing = @import("framing.zig");
 const Reader = @This();
-const source_namespace = @import("framing.zig");
-header: [source_namespace.header_bytes]u8 = undefined,
+
+header: [framing.header_bytes]u8 = undefined,
 header_len: u8 = 0,
 payload_len: usize = 0,
 payload_left: usize = 0,
@@ -15,12 +16,12 @@ stream_id: u32 = 0,
 pub fn feed(reader: *Reader, input: []const u8, receiver: anytype) bool {
     var offset: usize = 0;
     while (offset < input.len) {
-        if (reader.header_len < source_namespace.header_bytes) {
-            const take = @min(source_namespace.header_bytes - reader.header_len, input.len - offset);
+        if (reader.header_len < framing.header_bytes) {
+            const take = @min(framing.header_bytes - reader.header_len, input.len - offset);
             @memcpy(reader.header[reader.header_len..][0..take], input[offset..][0..take]);
             reader.header_len += @intCast(take);
             offset += take;
-            if (reader.header_len != source_namespace.header_bytes) {
+            if (reader.header_len != framing.header_bytes) {
                 continue;
             }
 

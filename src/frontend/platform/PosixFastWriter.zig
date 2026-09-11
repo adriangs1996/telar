@@ -1,5 +1,6 @@
-const FastWriter = @This();
 const std = @import("std");
+const FastWriter = @This();
+
 fd: std.c.fd_t,
 
 /// Opens an independent nonblocking description of the controlling tty.

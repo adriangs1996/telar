@@ -1,22 +1,12 @@
 //! Owns one client's bounded I/O lifecycle with the runtime process.
 
+const SocketChannelType = @import("telar-core").SocketChannel;
 const std = @import("std");
-const core = @import("telar-core");
-const client_outbox = @import("outbox_support.zig");
+const RuntimeTransportState = @import("RuntimeTransportState.zig");
+const decodeClient_module = @import("telar-core").decodeClient;
+const ClientIdentityType = @import("telar-core").ClientIdentity;
 
-pub const Io = std.Io;
-pub const schema = core.schema;
-
-pub const capacity = client_outbox.capacity;
-pub const max_input_bytes = client_outbox.max_input_bytes;
-pub const Message = client_outbox.Message;
-pub const Snapshot = client_outbox.Snapshot;
-
-pub const Bootstrap = @import("Bootstrap.zig");
-
-pub const State = @import("RuntimeTransportState.zig");
-
-fn testingSocketPair() ![2]core.transport.SocketChannel {
+fn testingSocketPair() ![2]SocketChannelType {
     var sockets: [2]std.c.fd_t = undefined;
     if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0) {
         return error.SocketPairFailed;
@@ -35,14 +25,14 @@ fn testingSocketPair() ![2]core.transport.SocketChannel {
 }
 
 fn initWithTestingAllocator(gpa: std.mem.Allocator) !void {
-    var connection: core.transport.SocketChannel = undefined;
-    var state = try State.init(gpa, &connection);
+    var connection: SocketChannelType = undefined;
+    var state = try RuntimeTransportState.init(gpa, &connection);
     defer state.deinit(gpa);
 }
 
 test "read reservation survives duplicate scheduling and releases on error" {
-    var connection: core.transport.SocketChannel = undefined;
-    var state = try State.init(std.testing.allocator, &connection);
+    var connection: SocketChannelType = undefined;
+    var state = try RuntimeTransportState.init(std.testing.allocator, &connection);
     defer state.deinit(std.testing.allocator);
     try std.testing.expect(state.beginRead());
     try std.testing.expect(!state.beginRead());
@@ -66,7 +56,7 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
     var channels = try testingSocketPair();
     defer channels[0].deinit(io);
     defer channels[1].deinit(io);
-    var state = try State.init(std.testing.allocator, &channels[0]);
+    var state = try RuntimeTransportState.init(std.testing.allocator, &channels[0]);
     defer state.deinit(std.testing.allocator);
 
     try state.bootstrap(.{
@@ -74,16 +64,16 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
         .client_identity = @enumFromInt(9),
     });
 
-    const configure = try schema.decodeClient((try state.prepareSend()).?);
+    const configure = try decodeClient_module((try state.prepareSend()).?);
     try std.testing.expect(configure == .configure_graphics);
     try std.testing.expect(configure.configure_graphics.shared);
 
     try state.outbox.finishSend({});
-    const colors = try schema.decodeClient((try state.prepareSend()).?);
+    const colors = try decodeClient_module((try state.prepareSend()).?);
     try std.testing.expect(colors == .configure_terminal_colors);
     try state.outbox.finishSend({});
 
-    const runtime_state = try schema.decodeClient((try state.prepareSend()).?);
+    const runtime_state = try decodeClient_module((try state.prepareSend()).?);
     try std.testing.expect(runtime_state == .request_runtime_state);
-    try std.testing.expectEqual(@as(schema.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
+    try std.testing.expectEqual(@as(ClientIdentityType, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
 }

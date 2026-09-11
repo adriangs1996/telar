@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timeline = @import("Timeline.zig");
 
 pub const c = @cImport({
     @cInclude("sqlite3.h");
@@ -38,10 +39,6 @@ pub const insert_sql =
     \\  (session_id, at_ms, kind, ref, command, exit_status, duration_ms, host, port, bytes_up, bytes_down, output, truncated)
     \\VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);
 ;
-
-pub const Row = @import("Row.zig");
-
-pub const Timeline = @import("Timeline.zig");
 
 /// Binds with SQLITE_STATIC (a null destructor): sqlite borrows the bytes
 /// instead of copying them. Safe because `append` binds, steps and clears

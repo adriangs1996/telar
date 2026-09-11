@@ -1,19 +1,14 @@
 //! Application facade for command history.
 
 const std = @import("std");
-const core = @import("telar-core");
-const channel_mod = @import("channel_support.zig");
-const metrics_mod = @import("metrics.zig");
-const model = @import("model.zig");
-const request_factory = @import("request_factory.zig");
-const terminal = @import("terminal.zig");
-const worker_mod = @import("worker_support.zig");
-
-pub const Service = @import("Service.zig");
+const FiltersType = @import("telar-core").Filters;
+const Service = @import("Service.zig");
+const CommandContextType = @import("CommandContext.zig");
+const CommandType = @import("Command.zig");
 
 test "service configuration controls recording and output capture" {
     const io = std.testing.io;
-    var filters: core.history_filter.Filters = .{};
+    var filters: FiltersType = .{};
     try filters.commands.add("vault kv");
     var service = try Service.init(std.testing.allocator, .{
         .database_path = ":memory:",
@@ -24,7 +19,7 @@ test "service configuration controls recording and output capture" {
         service.stop(io);
         service.deinit(io);
     }
-    const context: Service.CommandContext = .{
+    const context: CommandContextType = .{
         .session_id = @splat(7),
         .pane_id = @enumFromInt(1),
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
@@ -33,7 +28,7 @@ test "service configuration controls recording and output capture" {
         .cols = 80,
         .rows = 24,
     };
-    const command: terminal.Command = .{
+    const command: CommandType = .{
         .bytes = "vault kv get secret/x",
         .cwd = "/work",
         .started_at_ms = 1,
@@ -78,7 +73,7 @@ test "agent recording applies secret filtering by default but keeps leading spac
         service.stop(io);
         service.deinit(io);
     }
-    const context: Service.CommandContext = .{
+    const context: CommandContextType = .{
         .session_id = @splat(4),
         .pane_id = @enumFromInt(2),
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
@@ -87,7 +82,7 @@ test "agent recording applies secret filtering by default but keeps leading spac
         .cols = 80,
         .rows = 24,
     };
-    const secret: terminal.Command = .{
+    const secret: CommandType = .{
         .bytes = "deploy token=cleartext",
         .cwd = "/work",
         .started_at_ms = 1,

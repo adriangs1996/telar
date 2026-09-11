@@ -1,4 +1,5 @@
+const PaneIdType = @import("telar-core").PaneId;
 const ResourceState = @This();
-const source_namespace = @import("pane_graphics.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 has_graphics: bool,

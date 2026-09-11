@@ -1,13 +1,15 @@
-const Snapshot = @This();
-const source_namespace = @import("control.zig");
-const Agent = @import("ControlAgent.zig");
-const parser = @import("parser.zig");
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const ControlAgent = @import("ControlAgent.zig");
+const values = @import("arguments/values.zig");
 const std = @import("std");
+const control = @import("control.zig");
+const Snapshot = @This();
+
 revision: u64 = 0,
-entries: [source_namespace.max_entries]Agent = undefined,
+entries: [max_agent_snapshot_entries]ControlAgent = undefined,
 count: usize = 0,
 
-pub fn slice(snapshot: *const Snapshot) []const Agent {
+pub fn slice(snapshot: *const Snapshot) []const ControlAgent {
     return snapshot.entries[0..snapshot.count];
 }
 
@@ -17,9 +19,9 @@ pub fn slice(snapshot: *const Snapshot) []const Agent {
 /// ```zig
 /// const agent = try snapshot.resolve(target, environ) orelse return error.AgentNotFound;
 /// ```
-pub fn resolve(snapshot: *const Snapshot, target: parser.Target, environ: std.process.Environ) !?*const Agent {
+pub fn resolve(snapshot: *const Snapshot, target: values.Target, environ: std.process.Environ) !?*const ControlAgent {
     const wanted_pane: ?u64 = switch (target) {
-        .current => try source_namespace.currentPaneId(environ),
+        .current => try control.currentPaneId(environ),
         .pane => |pane| pane,
         .name => null,
     };
@@ -35,7 +37,7 @@ pub fn resolve(snapshot: *const Snapshot, target: parser.Target, environ: std.pr
     }
 
     const name = std.mem.span(target.name);
-    var found: ?*const Agent = null;
+    var found: ?*const ControlAgent = null;
     for (snapshot.slice()) |*agent| {
         if (!std.ascii.eqlIgnoreCase(agent.titleSlice(), name)) {
             continue;

@@ -1,8 +1,10 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("WorkspaceSnapshotEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const WorkspaceSnapshotEffects = @import("WorkspaceSnapshotEffects.zig");
+const WorkspaceReconciliationType = @import("../../model/WorkspaceReconciliation.zig");
 const std = @import("std");
-model: *const client_model.Model,
+const EffectsCapture = @This();
+
+model: *const ModelType,
 calls: usize = 0,
 observed_commit: bool = false,
 removed_tabs: usize = 0,
@@ -10,11 +12,11 @@ removed_panes: usize = 0,
 active_changed: bool = false,
 fail: bool = false,
 
-pub fn port(capture: *EffectsCapture) Effects {
+pub fn port(capture: *EffectsCapture) WorkspaceSnapshotEffects {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(context: *anyopaque, reconciliation: *const client_model.WorkspaceReconciliation) !void {
+fn deliver(context: *anyopaque, reconciliation: *const WorkspaceReconciliationType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     const version = capture.model.version();
     capture.calls += 1;

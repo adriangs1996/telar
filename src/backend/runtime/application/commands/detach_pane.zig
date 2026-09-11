@@ -1,25 +1,16 @@
 //! Application command for removing one pane from a client session.
 
+const PaneDetachedType = @import("../../attachment/PaneDetached.zig");
+const pane_module = @import("telar-core").pane;
+const workspace_module = @import("telar-core").workspace;
+const Capture = @import("Capture.zig");
+const DetachPaneHandler = @import("DetachPaneHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const attachment_mod = @import("../../attachment/root.zig");
-
-pub const schema = core.schema;
-
-pub const DetachPane = @import("DetachPane.zig");
 
 pub const DetachPaneResult = enum {
     detached,
     not_attached,
 };
-
-pub const Attachments = @import("Attachments.zig");
-
-pub const GeometryLease = @import("DetachPaneGeometryLease.zig");
-
-pub const DetachPaneExecutor = @import("DetachPaneExecutor.zig");
-
-pub const DetachPaneHandler = @import("DetachPaneHandler.zig");
 
 pub const Effect = enum {
     detach,
@@ -27,12 +18,10 @@ pub const Effect = enum {
     release,
 };
 
-const Capture = @import("Capture.zig");
-
-fn testingDetached(last_attachment: bool) !attachment_mod.PaneDetached {
+fn testingDetached(last_attachment: bool) !PaneDetachedType {
     return .{
-        .pane_id = try schema.id.pane(7),
-        .workspace = .{ .workspace = try schema.id.workspace(3) },
+        .pane_id = try pane_module(7),
+        .workspace = .{ .workspace = try workspace_module(3) },
         .last_attachment = last_attachment,
     };
 }
@@ -43,7 +32,7 @@ test "DetachPaneHandler leaves missing attachments and geometry unchanged" {
         .attachments = capture.attachments(),
         .geometry = capture.geometry(),
     };
-    const pane_id = try schema.id.pane(7);
+    const pane_id = try pane_module(7);
 
     const result = try handler.execute(.{ .pane_id = pane_id });
 

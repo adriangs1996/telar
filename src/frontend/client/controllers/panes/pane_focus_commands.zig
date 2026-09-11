@@ -1,14 +1,12 @@
 //! Applies a runtime-routed focus request to this client's disposable layout.
 
-const core = @import("telar-core");
-const workspace = @import("../../../workspace/root.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-const pane_focus = @import("pane_focus.zig");
-
 const Client = @import("../../Client.zig");
-pub const schema = core.schema;
-
+const PaneFocusCommandType = @import("telar-core").PaneFocusCommand;
+const pane_focus = @import("pane_focus.zig");
 const Completion = @import("Completion.zig");
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
+const PaneDirectionType = @import("telar-core").PaneDirection;
+const WorkspaceLayoutSupportDirection = @import("telar-client").WorkspaceLayoutSupportDirection;
 
 /// Revalidates the source pane, applies the directional focus, and reports the
 /// result to the control connection through the runtime.
@@ -16,7 +14,7 @@ const Completion = @import("Completion.zig");
 /// ```zig
 /// try apply(client, command);
 /// ```
-pub fn apply(client: *Client, command: schema.PaneFocusCommand) !void {
+pub fn apply(client: *Client, command: PaneFocusCommandType) !void {
     const current = client.model.planPaneInput(.focused);
     if (current == null or current.?.pane_id != command.pane_id) {
         return complete(client, command, .{ .outcome = .source_not_focused, .focused_pane_id = .invalid });
@@ -34,7 +32,7 @@ pub fn apply(client: *Client, command: schema.PaneFocusCommand) !void {
     return complete(client, command, .{ .outcome = .no_neighbor, .focused_pane_id = command.pane_id });
 }
 
-fn complete(client: *Client, command: schema.PaneFocusCommand, completion: Completion) !void {
+fn complete(client: *Client, command: PaneFocusCommandType, completion: Completion) !void {
     try runtime_transport.enqueue(client, .{ .complete_pane_focus = .{
         .requester = command.requester,
         .request_id = command.request_id,
@@ -45,7 +43,7 @@ fn complete(client: *Client, command: schema.PaneFocusCommand, completion: Compl
     } });
 }
 
-fn direction(value: schema.PaneDirection) workspace.layout.Direction {
+fn direction(value: PaneDirectionType) WorkspaceLayoutSupportDirection {
     return switch (value) {
         .left => .left,
         .right => .right,

@@ -1,11 +1,10 @@
-const std = @import("std");
-const builtin = @import("builtin");
-pub const Io = std.Io;
-pub const File = Io.File;
+const PosixFastWriter = @import("PosixFastWriter.zig");
+const PosixTty = @import("PosixTty.zig");
 
-const Size = @import("types.zig").Size;
-const LocalTime = @import("types.zig").LocalTime;
-const leave_sequence = @import("sequences.zig").leave;
+const LocalTime = @import("LocalTime.zig");
+const std = @import("std");
+const sequences = @import("sequences.zig");
+
 const time = @cImport({
     @cInclude("time.h");
 });
@@ -64,11 +63,11 @@ pub var crash_restore: struct {
 /// `abort`, so catching SIGABRT (plus the hardware faults) covers panics as
 /// well as genuine crashes. The handler defers to the default disposition
 /// afterwards, so exit status and core dumps are unchanged.
-pub fn installCrashRestore(t: *const Tty) void {
+pub fn installCrashRestore(t: *const PosixTty) void {
     crash_restore = .{
         .fd = t.fd,
         .original = t.original,
-        .leave = leave_sequence,
+        .leave = sequences.leave,
     };
     var action: std.posix.Sigaction = .{
         .handler = .{ .handler = onFatalSignal },
@@ -106,14 +105,14 @@ test "fast output attempts at most 4 KiB and yields on a full descriptor" {
     var fds: [2]std.c.fd_t = undefined;
     try std.testing.expect(std.c.pipe(&fds) == 0);
     defer _ = std.c.close(fds[0]);
-    var fast: FastWriter = .{ .fd = fds[1] };
+    var fast: PosixFastWriter = .{ .fd = fds[1] };
     defer fast.deinit();
     const flags = std.posix.O{ .NONBLOCK = true };
     try std.testing.expect(std.c.fcntl(fast.fd, std.posix.F.SETFL, @as(c_int, @bitCast(flags))) == 0);
     const bytes = [_]u8{0x34} ** 8192;
-    try std.testing.expectEqual(@as(usize, 4096), try FastWriter.writeOpaque(&fast, &bytes));
+    try std.testing.expectEqual(@as(usize, 4096), try PosixFastWriter.writeOpaque(&fast, &bytes));
     for (0..1024) |_| {
-        if (try FastWriter.writeOpaque(&fast, &bytes) == 0) {
+        if (try PosixFastWriter.writeOpaque(&fast, &bytes) == 0) {
             return;
         }
     }
@@ -131,7 +130,7 @@ test "emergency restore is armed, idempotent, and disarmable" {
     crash_restore = .{
         .fd = fds[1],
         .original = std.mem.zeroes(std.posix.termios),
-        .leave = leave_sequence,
+        .leave = sequences.leave,
     };
     // Twice: the crash path cannot be choosy about who already ran it, and
     // the tcsetattr on a pipe failing must stay silent.
@@ -140,11 +139,11 @@ test "emergency restore is armed, idempotent, and disarmable" {
     crash_restore.fd = -1;
     _ = std.c.close(fds[1]);
 
-    var buffer: [4 * leave_sequence.len]u8 = undefined;
+    var buffer: [4 * sequences.leave.len]u8 = undefined;
     const got = std.c.read(fds[0], &buffer, buffer.len);
-    try std.testing.expectEqual(@as(isize, 2 * leave_sequence.len), got);
+    try std.testing.expectEqual(@as(isize, 2 * sequences.leave.len), got);
     try std.testing.expectEqualStrings(
-        leave_sequence ++ leave_sequence,
+        sequences.leave ++ sequences.leave,
         buffer[0..@intCast(got)],
     );
 

@@ -1,17 +1,19 @@
 //! Wires pane-split application ports to one disposable client.
 
-const core = @import("telar-core");
-const panes_application = @import("telar-client").application.panes;
-const client_model = @import("telar-client").model;
-const active_pane_resources = @import("active_pane_resources.zig");
-const pane_geometry = @import("pane_geometry.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-
 const Client = @import("../../Client.zig");
+const RequestPaneSplitHandlerType = @import("telar-client").RequestPaneSplitHandler;
+const ConfirmPaneSplitHandlerType = @import("telar-client").ConfirmPaneSplitHandler;
+const RecoverPaneSplitHandlerType = @import("telar-client").RecoverPaneSplitHandler;
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const PaneResizeType = @import("telar-core").PaneResize;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-const schema = core.schema;
-const split_pane = panes_application.split_pane;
-const split_confirmation_delivery = panes_application.pane_split_confirmation_delivery;
+const PaneSplitPlanType = @import("telar-client").PaneSplitPlan;
+const PaneSplitCommitType = @import("telar-client").PaneSplitCommit;
+const DeliverPaneSplitConfirmationHandlerType = @import("telar-client").DeliverPaneSplitConfirmationHandler;
+const pane_geometry = @import("pane_geometry.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const active_pane_resources = @import("active_pane_resources.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 
 /// Wires an interactive split request to provisional resize and delivery.
 ///
@@ -19,7 +21,7 @@ const split_confirmation_delivery = panes_application.pane_split_confirmation_de
 /// var handler = requestHandler(client);
 /// _ = try handler.execute(command);
 /// ```
-pub fn requestHandler(client: *Client) split_pane.RequestPaneSplitHandler {
+pub fn requestHandler(client: *Client) RequestPaneSplitHandlerType {
     return .{
         .model = &client.model,
         .gate = .{
@@ -40,7 +42,7 @@ pub fn requestHandler(client: *Client) split_pane.RequestPaneSplitHandler {
 /// var handler = confirmationHandler(client);
 /// _ = try handler.execute(command);
 /// ```
-pub fn confirmationHandler(client: *Client) split_pane.ConfirmPaneSplitHandler {
+pub fn confirmationHandler(client: *Client) ConfirmPaneSplitHandlerType {
     return .{
         .model = &client.model,
         .effects = .{
@@ -56,7 +58,7 @@ pub fn confirmationHandler(client: *Client) split_pane.ConfirmPaneSplitHandler {
 /// var handler = recoveryHandler(client);
 /// _ = try handler.execute(split);
 /// ```
-pub fn recoveryHandler(client: *Client) split_pane.RecoverPaneSplitHandler {
+pub fn recoveryHandler(client: *Client) RecoverPaneSplitHandlerType {
     return .{
         .model = &client.model,
         .area = client.geometry().area,
@@ -72,7 +74,7 @@ fn paneOperationPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .pane_operation);
 }
 
-fn resizePane(context: *anyopaque, resize: client_model.PaneResize) !void {
+fn resizePane(context: *anyopaque, resize: PaneResizeType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     try runtime_transport.enqueue(client, .{ .pane_resize = .{
         .pane_id = resize.pane_id,
@@ -80,7 +82,7 @@ fn resizePane(context: *anyopaque, resize: client_model.PaneResize) !void {
     } });
 }
 
-fn sendSplit(context: *anyopaque, plan: client_model.PaneSplitPlan) !void {
+fn sendSplit(context: *anyopaque, plan: PaneSplitPlanType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
     try request_lifecycle.deliver(client, .{
@@ -106,9 +108,9 @@ fn sendSplit(context: *anyopaque, plan: client_model.PaneSplitPlan) !void {
     });
 }
 
-fn deliverConfirmation(context: *anyopaque, commit: client_model.PaneSplitCommit) !void {
+fn deliverConfirmation(context: *anyopaque, commit: PaneSplitCommitType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: split_confirmation_delivery.DeliverPaneSplitConfirmationHandler = .{
+    var use_case: DeliverPaneSplitConfirmationHandlerType = .{
         .model = &client.model,
         .geometry_effects = pane_geometry.offerEffects(client),
         .effects = .{
@@ -124,13 +126,13 @@ fn deliverConfirmation(context: *anyopaque, commit: client_model.PaneSplitCommit
     try use_case.execute(commit);
 }
 
-fn detachPane(context: *anyopaque, pane_id: schema.PaneId) !void {
+fn detachPane(context: *anyopaque, pane_id: PaneIdType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try runtime_transport.enqueue(client, .{ .detach_pane = .{ .pane_id = pane_id } });
 }
 
-fn setPaneGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try client.graphics_store.setPaneVisible(pane_id, visible);
@@ -148,7 +150,7 @@ fn workspaceSnapshotPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .workspace_snapshot);
 }
 
-fn requestWorkspaceSnapshot(context: *anyopaque, workspace: schema.WorkspaceLocation) !void {
+fn requestWorkspaceSnapshot(context: *anyopaque, workspace: WorkspaceLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try request_lifecycle.requestWorkspaceSnapshot(client, workspace);

@@ -1,5 +1,5 @@
-const std = @import("std");
 const escape = @import("telar-history-escape");
+const std = @import("std");
 
 const probe =
     "\x1b]133;A\x07" ++

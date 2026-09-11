@@ -1,15 +1,18 @@
+const ClosePaneResultType = @import("../../application/commands/ClosePaneResult.zig");
+const ClosePaneType = @import("../../application/commands/ClosePane.zig");
+const ClosePaneExecutorType = @import("../../application/commands/ClosePaneExecutor.zig");
 const StubClosePane = @This();
-const close_pane_commands = @import("../../application/commands/close_pane.zig");
-result: close_pane_commands.ClosePaneResult,
+
+result: ClosePaneResultType,
 failure: ?anyerror = null,
 call_count: usize = 0,
-last_command: ?close_pane_commands.ClosePane = null,
+last_command: ?ClosePaneType = null,
 
-pub fn executor(stub: *StubClosePane) close_pane_commands.ClosePaneExecutor {
+pub fn executor(stub: *StubClosePane) ClosePaneExecutorType {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, command: close_pane_commands.ClosePane) anyerror!close_pane_commands.ClosePaneResult {
+fn execute(context: *anyopaque, command: ClosePaneType) anyerror!ClosePaneResultType {
     const stub: *StubClosePane = @ptrCast(@alignCast(context));
     stub.call_count += 1;
     stub.last_command = command;

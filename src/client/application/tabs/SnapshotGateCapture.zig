@@ -1,5 +1,6 @@
-const SnapshotGateCapture = @This();
 const SnapshotGate = @import("SnapshotGate.zig");
+const SnapshotGateCapture = @This();
+
 blocked: bool = false,
 
 pub fn port(capture: *SnapshotGateCapture) SnapshotGate {

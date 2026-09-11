@@ -1,5 +1,6 @@
-const Cursor = @This();
 const std = @import("std");
+const Cursor = @This();
+
 bytes: []const u8,
 offset: usize = 0,
 

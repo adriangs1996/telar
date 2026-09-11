@@ -1,34 +1,36 @@
-const Observer = @This();
-const source_namespace = @import("relay.zig");
-const provider = @import("../provider/request_support.zig");
-const framing_module = @import("framing.zig");
-const stream_state = @import("streams.zig");
+const relay = @import("relay.zig");
+const types = @import("../../agent/types.zig");
+const ReaderType = @import("Reader.zig");
+const TrackerType = @import("Tracker.zig");
 const std = @import("std");
 const Decoded = @import("Decoded.zig");
 const HeaderField = @import("HeaderField.zig");
+const provider = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
-inflater: ?*source_namespace.c.nghttp2_hd_inflater = null,
-failed: bool = false,
-dialect: provider.ApiDialect,
-direction: source_namespace.Direction,
+const Observer = @This();
 
-framing: framing_module.Reader = .{},
+inflater: ?*relay.c.nghttp2_hd_inflater = null,
+failed: bool = false,
+dialect: types.ApiDialect,
+direction: relay.Direction,
+
+framing: ReaderType = .{},
 padding: usize = 0,
 
 continuation_stream: u32 = 0,
 block_stream: u32 = 0,
-block_kind: source_namespace.HeaderKind = .none,
+block_kind: relay.HeaderKind = .none,
 block_end_stream: bool = false,
-block: [source_namespace.max_header_block_bytes]u8 = undefined,
+block: [relay.max_header_block_bytes]u8 = undefined,
 block_len: usize = 0,
-streams: stream_state.Tracker = .{},
+streams: TrackerType = .{},
 
-pub fn init(dialect: provider.ApiDialect, direction: source_namespace.Direction) Observer {
+pub fn init(dialect: types.ApiDialect, direction: relay.Direction) Observer {
     var observer: Observer = .{ .dialect = dialect, .direction = direction };
-    if (source_namespace.c.nghttp2_hd_inflate_new(&observer.inflater) != 0 or
-        source_namespace.c.nghttp2_hd_inflate_change_table_size(
+    if (relay.c.nghttp2_hd_inflate_new(&observer.inflater) != 0 or
+        relay.c.nghttp2_hd_inflate_change_table_size(
             observer.inflater,
-            source_namespace.max_header_block_bytes,
+            relay.max_header_block_bytes,
         ) != 0)
     {
         observer.failed = true;
@@ -38,7 +40,7 @@ pub fn init(dialect: provider.ApiDialect, direction: source_namespace.Direction)
 
 pub fn deinit(observer: *Observer) void {
     if (observer.inflater) |inflater| {
-        source_namespace.c.nghttp2_hd_inflate_del(inflater);
+        relay.c.nghttp2_hd_inflate_del(inflater);
     }
     observer.inflater = null;
     std.crypto.secureZero(u8, &observer.block);
@@ -71,31 +73,31 @@ pub fn observe(observer: *Observer, input: []const u8, sink: anytype) void {
 fn beginFrame(observer: *Observer) void {
     observer.padding = 0;
 
-    if (observer.framing.frame_type == source_namespace.frame_headers or observer.framing.frame_type == source_namespace.frame_push_promise) {
-        observer.block_end_stream = observer.framing.flags & source_namespace.flag_end_stream != 0;
+    if (observer.framing.frame_type == relay.frame_headers or observer.framing.frame_type == relay.frame_push_promise) {
+        observer.block_end_stream = observer.framing.flags & relay.flag_end_stream != 0;
     }
 
     if (observer.failed) {
-        if (observer.framing.frame_type == source_namespace.frame_headers and observer.continuation_stream == 0) {
+        if (observer.framing.frame_type == relay.frame_headers and observer.continuation_stream == 0) {
             observer.block_stream = observer.framing.stream_id;
             observer.block_kind = .headers;
         }
         return;
     }
     switch (observer.framing.frame_type) {
-        source_namespace.frame_headers, source_namespace.frame_push_promise => {
+        relay.frame_headers, relay.frame_push_promise => {
             if (observer.continuation_stream != 0 or observer.framing.stream_id == 0) {
                 observer.fail();
                 return;
             }
             observer.block_len = 0;
             observer.block_stream = observer.framing.stream_id;
-            observer.block_kind = if (observer.framing.frame_type == source_namespace.frame_headers)
+            observer.block_kind = if (observer.framing.frame_type == relay.frame_headers)
                 .headers
             else
                 .push_promise;
         },
-        source_namespace.frame_continuation => {
+        relay.frame_continuation => {
             if (observer.continuation_stream == 0 or
                 observer.continuation_stream != observer.framing.stream_id)
             {
@@ -107,7 +109,7 @@ fn beginFrame(observer: *Observer) void {
 }
 
 fn observePayload(observer: *Observer, payload: []const u8, sink: anytype) void {
-    if (observer.framing.frame_type == source_namespace.frame_data and payload.len != 0) {
+    if (observer.framing.frame_type == relay.frame_data and payload.len != 0) {
         if (observer.direction == .response) {
             sink.emit(.{ .lifecycle = .{
                 .phase = .response_activity,
@@ -134,11 +136,11 @@ fn observePayload(observer: *Observer, payload: []const u8, sink: anytype) void 
         }
     }
 
-    if (observer.failed or !source_namespace.isHeaderFrame(observer.framing.frame_type)) {
+    if (observer.failed or !relay.isHeaderFrame(observer.framing.frame_type)) {
         return;
     }
 
-    if (observer.framing.flags & source_namespace.flag_padded != 0 and observer.framing.payload_offset == 0) {
+    if (observer.framing.flags & relay.flag_padded != 0 and observer.framing.payload_offset == 0) {
         if (payload.len == 0) {
             return;
         }
@@ -174,8 +176,8 @@ fn finishFrame(observer: *Observer, sink: anytype) void {
     const completed_flags = observer.framing.flags;
     const completed_stream = observer.framing.stream_id;
 
-    if (source_namespace.isHeaderFrame(completed_type)) {
-        if (completed_flags & source_namespace.flag_end_headers != 0) {
+    if (relay.isHeaderFrame(completed_type)) {
+        if (completed_flags & relay.flag_end_headers != 0) {
             observer.continuation_stream = 0;
             const decoded = if (observer.failed) Decoded{} else observer.decodeBlock(sink);
             if (observer.block_kind == .headers) {
@@ -221,12 +223,12 @@ fn finishFrame(observer: *Observer, sink: anytype) void {
             observer.block_kind = .none;
             observer.block_end_stream = false;
             observer.block_len = 0;
-        } else if (completed_type != source_namespace.frame_continuation) {
+        } else if (completed_type != relay.frame_continuation) {
             observer.continuation_stream = completed_stream;
         }
     }
 
-    if (completed_type == source_namespace.frame_rst_stream and completed_stream != 0) {
+    if (completed_type == relay.frame_rst_stream and completed_stream != 0) {
         sink.emit(.{ .lifecycle = .{
             .phase = .request_failed,
             .stream_id = completed_stream,
@@ -236,7 +238,7 @@ fn finishFrame(observer: *Observer, sink: anytype) void {
         if (observer.direction == .request) {
             observer.streams.finishRequest(completed_stream);
         }
-    } else if (observer.direction == .response and completed_type == source_namespace.frame_goaway and
+    } else if (observer.direction == .response and completed_type == relay.frame_goaway and
         observer.streams.hasActiveResponses())
     {
         sink.emit(.{ .lifecycle = .{
@@ -244,9 +246,9 @@ fn finishFrame(observer: *Observer, sink: anytype) void {
             .stream_id = 0,
             .status_code = 0,
         } });
-    } else if (observer.direction == .response and completed_type == source_namespace.frame_data and
+    } else if (observer.direction == .response and completed_type == relay.frame_data and
         completed_stream != 0 and
-        completed_flags & source_namespace.flag_end_stream != 0)
+        completed_flags & relay.flag_end_stream != 0)
     {
         const status_code = observer.streams.status(completed_stream);
         sink.emit(.{ .lifecycle = .{
@@ -256,9 +258,9 @@ fn finishFrame(observer: *Observer, sink: anytype) void {
         } });
         observer.streams.finishResponse(completed_stream);
     }
-    if (observer.direction == .request and completed_type == source_namespace.frame_data and
+    if (observer.direction == .request and completed_type == relay.frame_data and
         completed_stream != 0 and
-        completed_flags & source_namespace.flag_end_stream != 0)
+        completed_flags & relay.flag_end_stream != 0)
     {
         sink.emit(.{ .request_finished = .{ .stream_id = completed_stream } });
         observer.streams.finishRequest(completed_stream);
@@ -266,7 +268,7 @@ fn finishFrame(observer: *Observer, sink: anytype) void {
 }
 
 fn dataBodyFragment(observer: *Observer, payload: []const u8) ?[]const u8 {
-    const prefix: usize = @intFromBool(observer.framing.flags & source_namespace.flag_padded != 0);
+    const prefix: usize = @intFromBool(observer.framing.flags & relay.flag_padded != 0);
 
     if (prefix != 0 and observer.framing.payload_offset == 0) {
         if (payload.len == 0) {
@@ -294,11 +296,11 @@ fn dataBodyFragment(observer: *Observer, payload: []const u8) ?[]const u8 {
 }
 
 fn headerPrefixLength(observer: *const Observer) ?usize {
-    var prefix: usize = if (observer.framing.flags & source_namespace.flag_padded != 0) 1 else 0;
+    var prefix: usize = if (observer.framing.flags & relay.flag_padded != 0) 1 else 0;
     prefix += switch (observer.framing.frame_type) {
-        source_namespace.frame_headers => if (observer.framing.flags & source_namespace.flag_priority != 0) 5 else 0,
-        source_namespace.frame_push_promise => 4,
-        source_namespace.frame_continuation => 0,
+        relay.frame_headers => if (observer.framing.flags & relay.flag_priority != 0) 5 else 0,
+        relay.frame_push_promise => 4,
+        relay.frame_continuation => 0,
         else => return null,
     };
     if (prefix > observer.framing.payload_len) {
@@ -315,9 +317,9 @@ fn decodeBlock(observer: *Observer, sink: anytype) Decoded {
     var decoded: Decoded = .{};
     var input = observer.block[0..observer.block_len];
     while (true) {
-        var field: source_namespace.c.nghttp2_nv = undefined;
+        var field: relay.c.nghttp2_nv = undefined;
         var flags: c_int = 0;
-        const consumed = source_namespace.c.nghttp2_hd_inflate_hd2(
+        const consumed = relay.c.nghttp2_hd_inflate_hd2(
             inflater,
             &field,
             &flags,
@@ -330,7 +332,7 @@ fn decodeBlock(observer: *Observer, sink: anytype) Decoded {
             return .{};
         }
         input = input[@intCast(consumed)..];
-        if (flags & source_namespace.c.NGHTTP2_HD_INFLATE_EMIT != 0) {
+        if (flags & relay.c.NGHTTP2_HD_INFLATE_EMIT != 0) {
             const name = field.name[0..field.namelen];
             const value = field.value[0..field.valuelen];
             if (observer.block_kind == .headers) {
@@ -374,13 +376,13 @@ fn decodeBlock(observer: *Observer, sink: anytype) Decoded {
                 decoded.identity_encoding = false;
             }
         }
-        if (flags & source_namespace.c.NGHTTP2_HD_INFLATE_FINAL != 0) {
-            if (source_namespace.c.nghttp2_hd_inflate_end_headers(inflater) != 0) {
+        if (flags & relay.c.NGHTTP2_HD_INFLATE_FINAL != 0) {
+            if (relay.c.nghttp2_hd_inflate_end_headers(inflater) != 0) {
                 observer.fail();
             }
             return decoded;
         }
-        if (consumed == 0 and flags & source_namespace.c.NGHTTP2_HD_INFLATE_EMIT == 0) {
+        if (consumed == 0 and flags & relay.c.NGHTTP2_HD_INFLATE_EMIT == 0) {
             observer.fail();
             return .{};
         }

@@ -1,18 +1,23 @@
+const PaneKeyType = @import("../pane/PaneKey.zig");
+const SessionReferenceType = @import("SessionReference.zig");
+const AgentSessionFileKind = @import("telar-core").AgentSessionFileKind;
+const max_agent_session_file_bytes = @import("telar-core").max_agent_session_file_bytes;
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
+const std = @import("std");
 /// One agent's session file and the probe state that belongs to it.
 const Watch = @This();
-const source_namespace = @import("session_file.zig");
-const std = @import("std");
-key: source_namespace.PaneKey,
-session: source_namespace.SessionReference,
-kind: source_namespace.Kind,
-path: [source_namespace.max_path_bytes]u8 = undefined,
+
+key: PaneKeyType,
+session: SessionReferenceType,
+kind: AgentSessionFileKind,
+path: [max_agent_session_file_bytes]u8 = undefined,
 path_len: u16 = 0,
 /// Transcript scan position. Null until the first probe seeds it at the
 /// end of the file, so only names given after the watch began are read.
 offset: ?u64 = null,
 /// The last name handed to the agent, so a state database read every
 /// second reports only changes.
-name: [source_namespace.schema.max_agent_session_title_bytes]u8 = undefined,
+name: [max_agent_session_title_bytes_module]u8 = undefined,
 name_len: u8 = 0,
 name_known: bool = false,
 checked_at_ms: i64 = 0,

@@ -1,17 +1,20 @@
-const Capture = @This();
-const source_namespace = @import("agent_maintenance.zig");
-const agent_mod = @import("../../../agent/root.zig");
+const agent_maintenance = @import("agent_maintenance.zig");
+const TrackerType = @import("../../../agent/Tracker.zig");
+const IdentityType = @import("../../../agent/Identity.zig");
+const AgentStatusType = @import("telar-core").AgentStatus;
 const std = @import("std");
-steps: [3]source_namespace.Step = undefined,
+const Capture = @This();
+
+steps: [3]agent_maintenance.Step = undefined,
 len: usize = 0,
 rearm_failure: bool = false,
 now: i64 = 0,
-agents: ?*const agent_mod.Tracker = null,
-identity: agent_mod.Identity = undefined,
-pump_saw_status: ?source_namespace.schema.AgentStatus = null,
+agents: ?*const TrackerType = null,
+identity: IdentityType = undefined,
+pump_saw_status: ?AgentStatusType = null,
 pump_called: bool = false,
 
-fn record(capture: *Capture, step: source_namespace.Step) void {
+fn record(capture: *Capture, step: agent_maintenance.Step) void {
     std.debug.assert(capture.len < capture.steps.len);
     capture.steps[capture.len] = step;
     capture.len += 1;

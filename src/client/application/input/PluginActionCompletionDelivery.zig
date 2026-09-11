@@ -1,4 +1,5 @@
+const plugin_action = @import("plugin_action.zig");
 const CompletionDelivery = @This();
-const source_namespace = @import("plugin_action.zig");
+
 context: *anyopaque,
-deliver: *const fn (*anyopaque, source_namespace.CompletionOutcome) anyerror!source_namespace.CompletionDirective,
+deliver: *const fn (*anyopaque, plugin_action.CompletionOutcome) anyerror!plugin_action.CompletionDirective,

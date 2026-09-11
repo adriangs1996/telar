@@ -2,11 +2,10 @@
 //! State transitions, resource effects and correlation stay in those adapters.
 //! This dispatcher only maps their control outcomes to the client loop.
 
-const core = @import("telar-core");
-
-const schema = core.schema;
-
 const Client = @import("../Client.zig");
+const ServerMessageType = @import("telar-core").ServerMessage;
+const dispatch_module = @import("telar-client").dispatch;
+
 pub const agent_sounds = @import("../controllers/agents/agent_sounds.zig");
 pub const agent_snapshots = @import("../controllers/agents/agent_snapshots.zig");
 pub const notifications = @import("../controllers/notifications/notifications.zig");
@@ -35,6 +34,6 @@ pub const workspace_lists = @import("../controllers/workspaces/workspace_lists.z
 pub const workspace_snapshots = @import("../controllers/workspaces/workspace_snapshots.zig");
 
 /// Routes one decoded message from the runtime.
-pub fn handleServerMessage(client: *Client, message: schema.ServerMessage) !?u8 {
-    return @import("telar-client").entrypoints.runtime_messages.dispatch(client, message, @This());
+pub fn handleServerMessage(client: *Client, message: ServerMessageType) !?u8 {
+    return dispatch_module(client, message, @This());
 }

@@ -153,7 +153,7 @@ delivery.
 
 ## Proof
 
-- `src/frontend/client/application/input/key_routing.zig` proves capture authority,
+- `src/client/application/input/key_routing.zig` proves capture authority,
   semantic and byte priority, exact-pane leases, prompt repeat ownership,
   orphan and saturation policy, exclusive failures, confirmed delivery and
   `Ctrl+V` ordering.
@@ -166,7 +166,7 @@ delivery.
   delivery through the complete input entrypoint. Held-scroll tests cover both
   viewport directions, burst suppression, endpoint no-ops, global bindings,
   changed focus and copy-mode capture through the router and real adapters.
-- `src/frontend/client/application/input/action_routing.zig` proves that only
+- `src/client/application/input/action_routing.zig` proves that only
   native scroll actions receive a repeat policy and exact-pane owner token.
 - `name-prompt.md`, `copy-mode.md`, `pane-input.md` and `clipboard-image.md`
   prove each downstream owner and effect.

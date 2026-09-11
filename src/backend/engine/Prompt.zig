@@ -1,7 +1,8 @@
+const types = @import("types.zig");
 const Prompt = @This();
-const source_namespace = @import("types.zig");
-purpose: source_namespace.Purpose,
-bytes: [source_namespace.max_prompt_bytes]u8 = undefined,
+
+purpose: types.Purpose,
+bytes: [types.max_prompt_bytes]u8 = undefined,
 len: u16 = 0,
 
 /// Builds a bounded prompt.
@@ -9,8 +10,8 @@ len: u16 = 0,
 /// ```zig
 /// const prompt = try Prompt.init(.{ .suggestion = suggestion }, text);
 /// ```
-pub fn init(purpose: source_namespace.Purpose, text: []const u8) !Prompt {
-    if (text.len == 0 or text.len > source_namespace.max_prompt_bytes) {
+pub fn init(purpose: types.Purpose, text: []const u8) !Prompt {
+    if (text.len == 0 or text.len > types.max_prompt_bytes) {
         return error.InvalidPrompt;
     }
 

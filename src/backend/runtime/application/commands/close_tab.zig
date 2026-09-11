@@ -1,33 +1,21 @@
 //! Application transaction for removing a tab and closing its panes.
 
+const StateType = @import("../../../workspace/State.zig");
+const RepositoryType = @import("../../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_mod = @import("../../../workspace/root.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const CloseTabPaneCapture = @import("CloseTabPaneCapture.zig");
+const CloseTabEventCapture = @import("CloseTabEventCapture.zig");
+const CloseTabHandler = @import("CloseTabHandler.zig");
+const tab_module = @import("telar-core").tab;
+const workspace_module = @import("telar-core").workspace;
 
-pub const schema = core.schema;
-pub const WorkspaceRepository = workspace_mod.Repository;
-
-pub const CloseTab = @import("CloseTab.zig");
-
-pub const CloseTabResult = workspace_mod.TabRemoved;
-
-pub const PaneCloser = @import("PaneCloser.zig");
-
-pub const EventPublisher = @import("CloseTabEventPublisher.zig");
-
-pub const CloseTabExecutor = @import("CloseTabExecutor.zig");
-
-pub const CloseTabHandler = @import("CloseTabHandler.zig");
-
-const PaneCapture = @import("CloseTabPaneCapture.zig");
-
-const EventCapture = @import("CloseTabEventCapture.zig");
-
-fn testingRepository(state: *workspace_mod.State) WorkspaceRepository {
-    return WorkspaceRepository.init(state, std.testing.allocator);
+fn testingRepository(state: *StateType) RepositoryType {
+    return RepositoryType.init(state, std.testing.allocator);
 }
 
-fn insertTestingTab(repository: *WorkspaceRepository, workspace: schema.WorkspaceLocation, label: []const u8) !schema.TabLocation {
+fn insertTestingTab(repository: *RepositoryType, workspace: WorkspaceLocationType, label: []const u8) !TabLocationType {
     const aggregate = repository.find(workspace) orelse return error.WorkspaceNotFound;
     const tab_id = try repository.nextTabId();
     const created = try aggregate.createTab(tab_id, label);
@@ -36,14 +24,14 @@ fn insertTestingTab(repository: *WorkspaceRepository, workspace: schema.Workspac
 }
 
 test "CloseTabHandler commits a tab-only removal before its effects" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const initial = (try workspaces.ensure("/work/project")).location;
     const logs = try insertTestingTab(&workspaces, initial.workspace, "logs");
     const revision = workspaces.reader().revision();
-    var panes: PaneCapture = .{};
-    var events: EventCapture = .{
+    var panes: CloseTabPaneCapture = .{};
+    var events: CloseTabEventCapture = .{
         .reader = workspaces.reader(),
         .pane_close_count = &panes.close_count,
     };
@@ -70,7 +58,7 @@ test "CloseTabHandler commits a tab-only removal before its effects" {
 }
 
 test "CloseTabHandler removes an empty workspace with its stable predecessor" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const first = (try workspaces.ensure("/work/first")).location;
@@ -81,8 +69,8 @@ test "CloseTabHandler removes an empty workspace with its stable predecessor" {
         .worktree => unreachable,
     };
     const revision = workspaces.reader().revision();
-    var panes: PaneCapture = .{};
-    var events: EventCapture = .{
+    var panes: CloseTabPaneCapture = .{};
+    var events: CloseTabEventCapture = .{
         .reader = workspaces.reader(),
         .pane_close_count = &panes.close_count,
     };
@@ -106,13 +94,13 @@ test "CloseTabHandler removes an empty workspace with its stable predecessor" {
 }
 
 test "CloseTabHandler rejects missing targets without effects" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const existing = (try workspaces.ensure("/work/project")).location;
     const revision = workspaces.reader().revision();
-    var panes: PaneCapture = .{};
-    var events: EventCapture = .{
+    var panes: CloseTabPaneCapture = .{};
+    var events: CloseTabEventCapture = .{
         .reader = workspaces.reader(),
         .pane_close_count = &panes.close_count,
     };
@@ -121,12 +109,12 @@ test "CloseTabHandler rejects missing targets without effects" {
         .panes = panes.port(),
         .events = events.publisher(),
     };
-    const missing_tab: schema.TabLocation = .{
+    const missing_tab: TabLocationType = .{
         .workspace = existing.workspace,
-        .tab_id = try schema.id.tab(999),
+        .tab_id = try tab_module(999),
     };
-    const missing_workspace: schema.TabLocation = .{
-        .workspace = .{ .workspace = try schema.id.workspace(999) },
+    const missing_workspace: TabLocationType = .{
+        .workspace = .{ .workspace = try workspace_module(999) },
         .tab_id = existing.tab_id,
     };
 
@@ -140,12 +128,12 @@ test "CloseTabHandler rejects missing targets without effects" {
 }
 
 test "CloseTabHandler does not repeat effects for an already removed tab" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
-    var panes: PaneCapture = .{};
-    var events: EventCapture = .{
+    var panes: CloseTabPaneCapture = .{};
+    var events: CloseTabEventCapture = .{
         .reader = workspaces.reader(),
         .pane_close_count = &panes.close_count,
     };

@@ -1,7 +1,8 @@
 const GenericExitRuntimePort = @import("GenericExitRuntimePort.zig").Type;
-const Resources = @import("ExitResources.zig");
-const Completion = @import("ExitCompletion.zig");
-const source_namespace = @import("exit.zig");
+const ExitResources = @import("ExitResources.zig");
+const ExitCompletion = @import("ExitCompletion.zig");
+const exit_ops = @import("exit.zig");
+
 /// Creates a statically dispatched pane-exit coordinator.
 ///
 /// ```zig
@@ -12,14 +13,14 @@ pub fn Type(comptime Context: type, comptime port: GenericExitRuntimePort(Contex
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: ExitResources,
 
         /// Binds one runtime's pane, agent, and telemetry stores.
         ///
         /// ```zig
         /// var coordinator = ExitCoordinator.init(&context, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: ExitResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -30,10 +31,10 @@ pub fn Type(comptime Context: type, comptime port: GenericExitRuntimePort(Contex
         /// ```zig
         /// try coordinator.handle(completion);
         /// ```
-        pub fn handle(coordinator: *Self, completion: Completion) !void {
+        pub fn handle(coordinator: *Self, completion: ExitCompletion) !void {
             const transition = coordinator.resources.panes.completeExit(
                 completion.pane,
-                source_namespace.exitOrSynthetic(completion.result),
+                exit_ops.exitOrSynthetic(completion.result),
             ) orelse {
                 coordinator.resources.metrics.stale_pane_events += 1;
                 return;

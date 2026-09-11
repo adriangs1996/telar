@@ -1,9 +1,12 @@
+const id = @import("../id.zig");
+const types = @import("../types.zig");
+const codec = @import("../codec.zig");
 const RequestPaneFocus = @This();
-const source_namespace = @import("focus.zig");
-request_id: source_namespace.RequestId,
-pane_id: source_namespace.PaneId,
+
+request_id: id.RequestId,
+pane_id: id.PaneId,
 pane_generation: u64,
-direction: source_namespace.PaneDirection,
+direction: types.PaneDirection,
 
 /// Requires an exact live pane identity and a correlatable request.
 ///
@@ -11,8 +14,8 @@ direction: source_namespace.PaneDirection,
 /// try request.validateWire();
 /// ```
 pub fn validateWire(request: RequestPaneFocus) !void {
-    try source_namespace.validateRequestId(request.request_id);
-    try source_namespace.validatePaneId(request.pane_id);
+    try codec.validateRequestId(request.request_id);
+    try codec.validatePaneId(request.pane_id);
     if (request.pane_generation == 0) {
         return error.InvalidPaneGeneration;
     }

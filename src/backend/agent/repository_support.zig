@@ -3,22 +3,16 @@
 //! This type owns only collection mechanics. It does not interpret
 //! observations, mutate agent lifecycle state, or publish projections.
 
+const Identity = @import("Identity.zig");
+const pane_module = @import("telar-core").pane;
+const Repository = @import("Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const Agent = @import("Agent.zig");
-const pane_mod = @import("../pane/root.zig");
-const types = @import("types.zig");
-
-const schema = core.schema;
-const Identity = types.Identity;
-pub const PaneKey = pane_mod.PaneKey;
-pub const max_records = types.max_records;
-
-pub const Repository = @import("Repository.zig");
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
 
 fn testIdentity(id: u32, generation: u64) !Identity {
     return .{
-        .key = .{ .id = try schema.id.pane(id), .generation = generation },
+        .key = .{ .id = try pane_module(id), .generation = generation },
         .process_id = id,
         .session_id = .{@as(u8, @intCast(id))} ** 16,
     };
@@ -82,15 +76,15 @@ test "insert rejects duplicate pane generations without consuming capacity" {
 test "insert rejects overflow without losing stored aggregates" {
     var repository: Repository = .{};
 
-    for (0..max_records) |index| {
+    for (0..max_agent_snapshot_entries) |index| {
         const identity = try testIdentity(@intCast(index + 1), 1);
         _ = repository.insert(Agent.init(identity)) orelse return error.RepositoryFilledEarly;
     }
 
-    const overflow = try testIdentity(@intCast(max_records + 1), 1);
+    const overflow = try testIdentity(@intCast(max_agent_snapshot_entries + 1), 1);
     try std.testing.expect(repository.insert(Agent.init(overflow)) == null);
 
-    for (0..max_records) |index| {
+    for (0..max_agent_snapshot_entries) |index| {
         const identity = try testIdentity(@intCast(index + 1), 1);
         try std.testing.expect(repository.find(identity.key) != null);
     }

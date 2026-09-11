@@ -1,5 +1,6 @@
+const model = @import("../../history/model.zig");
 const LaunchFailure = @This();
-const history = @import("../../history/root.zig");
+
 shell: []const u8,
-phase: history.LaunchPhase,
+phase: model.LaunchPhase,
 cause: anyerror,

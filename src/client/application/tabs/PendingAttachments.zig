@@ -1,4 +1,5 @@
+const PaneIdType = @import("telar-core").PaneId;
 const PendingAttachments = @This();
-const source_namespace = @import("tab_attachment_retirement.zig");
+
 context: *anyopaque,
-pending: *const fn (*anyopaque, source_namespace.schema.PaneId) bool,
+pending: *const fn (*anyopaque, PaneIdType) bool,

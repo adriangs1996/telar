@@ -1,5 +1,6 @@
-const FallbackFrame = @This();
 const PartialTransmission = @import("PartialTransmission.zig");
-const source_namespace = @import("kitty.zig");
+const kitty_delivery = @import("kitty_delivery.zig");
+const FallbackFrame = @This();
+
 partial: PartialTransmission,
-image: source_namespace.ImageEntry,
+image: kitty_delivery.Store.ImageEntry,

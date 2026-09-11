@@ -12,18 +12,21 @@
 //! compiler, so macOS reports no battery for now. Linux reads procfs and
 //! sysfs, battery included.
 
+const SystemMetricsSample = @import("SystemMetricsSample.zig");
+const SamplerType = @import("Sampler.zig");
 const std = @import("std");
+const CpuTicks = @import("CpuTicks.zig");
+const Raw = @import("Raw.zig");
 const builtin = @import("builtin");
+const darwin = @import("darwin.zig");
 
 pub const Values = @import("Values.zig");
-
-const Raw = @import("Raw.zig");
 
 pub const Sample = @import("SystemMetricsSample.zig");
 
 /// Samples a value-owned copy without borrowing runtime state.
 /// Example: `const result = sampleOwned(io, previous);`.
-pub fn sampleOwned(io: std.Io, previous: Sampler) Sample {
+pub fn sampleOwned(io: std.Io, previous: SamplerType) SystemMetricsSample {
     const started = std.Io.Clock.awake.now(io).nanoseconds;
     var sampler = previous;
     sampler.sample();
@@ -32,8 +35,6 @@ pub fn sampleOwned(io: std.Io, previous: Sampler) Sample {
 }
 
 pub const Sampler = @import("Sampler.zig");
-
-const CpuTicks = @import("CpuTicks.zig");
 
 pub fn cpuPercent(previous: CpuTicks, current: CpuTicks) u8 {
     if (previous.total == 0) {
@@ -64,8 +65,6 @@ pub fn readRaw() ?Raw {
 }
 
 // -- macOS ------------------------------------------------------------------
-
-const darwin = @import("darwin.zig");
 
 fn readDarwin() ?Raw {
     if (builtin.os.tag != .macos) {
@@ -173,7 +172,7 @@ fn meminfoValue(content: []const u8, key: []const u8) ?u64 {
 }
 
 test "Linux system metrics read the live proc filesystem" {
-    if (@import("builtin").os.tag != .linux) {
+    if (builtin.os.tag != .linux) {
         return error.SkipZigTest;
     }
 
@@ -196,7 +195,7 @@ test "memory converts to tenths of a GiB" {
 }
 
 test "the revision moves only when a visible value changes" {
-    var sampler: Sampler = .{};
+    var sampler: SamplerType = .{};
     sampler.apply(.{
         .busy_ticks = 100,
         .total_ticks = 1000,

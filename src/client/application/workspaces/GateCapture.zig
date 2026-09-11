@@ -1,5 +1,6 @@
-const GateCapture = @This();
 const Gate = @import("Gate.zig");
+const GateCapture = @This();
+
 blocked: bool = false,
 calls: usize = 0,
 

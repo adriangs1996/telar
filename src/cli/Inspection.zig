@@ -1,5 +1,6 @@
-const Inspection = @This();
-const source_namespace = @import("proxy.zig");
+const proxy = @import("proxy.zig");
 const Record = @import("Record.zig");
-status: source_namespace.Status,
+const Inspection = @This();
+
+status: proxy.Status,
 record: ?Record,

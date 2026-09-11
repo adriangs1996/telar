@@ -85,15 +85,15 @@ runtime revision through a fresh delivery cursor.
 
 ## Proof
 
-- `src/frontend/workspace/workspace_list.zig` proves fixed-capacity copying,
+- `src/client/workspace/workspace_list.zig` proves fixed-capacity copying,
   stale-revision rejection, UTF-8 truncation and atomic capacity failure.
-- `src/frontend/client/model.zig` proves sole ownership, bounded navigation
+- `src/client/model/Model.zig` proves sole ownership, bounded navigation
   queries and isolated version publication.
-- `src/frontend/client/application/workspace_list_snapshot.zig` proves the use
+- `src/client/application/workspaces/workspace_list_snapshot.zig` proves the use
   case owns outcome classification and changes only committed client state.
-- `src/frontend/client/client_test.zig` proves protocol reconciliation happens
+- `src/frontend/client/tests/` proves protocol reconciliation happens
   before presentation, emits no direct draw and reaches the top bar only after
   presenter observation.
-- `src/backend/runtime/delivery.zig` and
-  `src/backend/workspace/repository.zig` prove the runtime authority and
+- `src/backend/runtime/delivery/` and
+  `src/backend/workspace/repository_support.zig` prove the runtime authority and
   per-client revision cursor.

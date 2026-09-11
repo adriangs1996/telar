@@ -1,16 +1,18 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_graphics.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-model: *client_model.Model,
-pane_id: source_namespace.schema.PaneId,
+const pane_graphics = @import("pane_graphics.zig");
+const TestingModel = @This();
+
+model: *ModelType,
+pane_id: PaneIdType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
-    const pane_id: source_namespace.schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
@@ -24,7 +26,7 @@ pub fn deinit(testing: *TestingModel) void {
     std.testing.allocator.destroy(testing.model);
 }
 
-pub fn command(testing: *const TestingModel) source_namespace.Command {
+pub fn command(testing: *const TestingModel) pane_graphics.Command {
     return .{ .snapshot = .{
         .pane_id = testing.pane_id,
         .revision = 1,

@@ -3,15 +3,10 @@
 //! Filtering refuses to record — it never redacts after the fact.
 
 const std = @import("std");
+const Filters = @import("Filters.zig");
 
 pub const max_patterns = 16;
 pub const max_pattern_bytes = 96;
-
-pub const Input = @import("Input.zig");
-
-pub const PatternList = @import("PatternList.zig");
-
-pub const Filters = @import("Filters.zig");
 
 const SecretRule = union(enum) {
     /// The marker anywhere in the command is enough.

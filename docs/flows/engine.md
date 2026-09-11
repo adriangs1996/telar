@@ -72,12 +72,12 @@ working, and a Pi that renames one of these four degrades to a timeout.
 
 - `src/backend/engine/rpc.zig` proves encoding, escaping and record
   classification.
-- `src/backend/engine/session.zig` proves the dialogue against a shell fake
+- `src/backend/engine/session_support.zig` proves the dialogue against a shell fake
   of the RPC contract: settled text, timeout, rejection, child exit, empty
   and oversized replies.
-- `src/backend/engine/service.zig` proves child reuse, idle kill, which
+- `src/backend/engine/service_support.zig` proves child reuse, idle kill, which
   failures discard the child, missing binary, ring capacity and actor
   shutdown.
 - `src/backend/runtime/resources/engine.zig` and `worker_lifecycle.zig` prove
   ownership rollback and teardown order.
-- `src/frontend/config/root.zig` proves parsing and bounds.
+- `src/frontend/config/` proves parsing and bounds.

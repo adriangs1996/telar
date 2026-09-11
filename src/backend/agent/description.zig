@@ -4,23 +4,15 @@
 //! process arguments, or the interactive path's allocator.
 
 const std = @import("std");
-const core = @import("telar-core");
-const escape = @import("../history/escape.zig");
-const pane_mod = @import("../pane/root.zig");
-
-pub const schema = core.schema;
+const Generation = @import("Generation.zig");
+const Result = @import("Result.zig");
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
+const Capture = @import("Capture.zig");
+const Job = @import("Job.zig");
 
 pub const max_query_bytes = 4096;
 pub const max_pending_jobs = 8;
 pub const max_generator_output_bytes = 512;
-
-pub const Command = @import("Command.zig");
-
-pub const Generation = @import("Generation.zig");
-
-pub const Capture = @import("Capture.zig");
-
-pub const Job = @import("Job.zig");
 
 pub const ResultStatus = enum {
     success,
@@ -29,8 +21,6 @@ pub const ResultStatus = enum {
     invalid_output,
     failed,
 };
-
-pub const Result = @import("Result.zig");
 
 pub const title_prompt_prefix =
     "Create a short session title for the user request below. " ++
@@ -212,7 +202,7 @@ pub fn normalizeQuery(raw: []const u8, output: *[max_query_bytes]u8) ![]const u8
 /// ```zig
 /// const title = try normalizeTitle(raw, &storage);
 /// ```
-pub fn normalizeTitle(raw: []const u8, output: *[schema.max_agent_session_title_bytes]u8) ![]const u8 {
+pub fn normalizeTitle(raw: []const u8, output: *[max_agent_session_title_bytes_module]u8) ![]const u8 {
     var trimmed = std.mem.trim(u8, raw, " \t\r\n");
     if (trimmed.len >= 2 and
         ((trimmed[0] == '"' and trimmed[trimmed.len - 1] == '"') or
@@ -314,7 +304,7 @@ test "query normalization applies editing controls and validates UTF-8" {
 }
 
 test "title normalization accepts one bounded display line" {
-    var output: [schema.max_agent_session_title_bytes]u8 = undefined;
+    var output: [max_agent_session_title_bytes_module]u8 = undefined;
     try std.testing.expectEqualStrings(
         "Improve agent sidebar",
         try normalizeTitle("  \"Improve agent sidebar\"\n", &output),
@@ -323,7 +313,7 @@ test "title normalization accepts one bounded display line" {
         error.InvalidTitleControl,
         normalizeTitle("first\nsecond", &output),
     );
-    const oversized = [_]u8{'x'} ** (schema.max_agent_session_title_bytes + 1);
+    const oversized = [_]u8{'x'} ** (max_agent_session_title_bytes_module + 1);
     try std.testing.expectError(error.InvalidTitleLength, normalizeTitle(&oversized, &output));
 }
 

@@ -1,24 +1,28 @@
-const GraphicsContext = @This();
-const frontend = @import("telar-frontend");
+const StoreType = @import("telar-frontend").Store;
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
 const std = @import("std");
-const source_namespace = @import("main.zig");
-const core = @import("telar-core");
-store: frontend.kitty.Store,
-model: frontend.multiplexer.Model,
+const PaneIdType = @import("telar-core").PaneId;
+const main = @import("main.zig");
+const ImageType = @import("telar-core").Image;
+const KittyGraphicsWriterType = @import("telar-frontend").KittyGraphicsWriter;
+const GraphicsContext = @This();
+
+store: StoreType,
+model: MultiplexerModel,
 output: []u8,
 
-fn init(gpa: std.mem.Allocator, output: []u8) !GraphicsContext {
-    var store = frontend.kitty.Store.init(gpa);
+pub fn init(gpa: std.mem.Allocator, output: []u8) !GraphicsContext {
+    var store = StoreType.init(gpa);
     errdefer store.deinit();
-    var model = frontend.multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     errdefer model.deinit();
-    const pane_id: source_namespace.schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.addRoot(.{
         .pane_id = pane_id,
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
-        .size = .{ .cols = source_namespace.cols, .rows = source_namespace.rows },
+        .size = .{ .cols = main.cols, .rows = main.rows },
     });
-    const metadata: core.graphics.Image = .{
+    const metadata: ImageType = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = 64,
@@ -49,15 +53,15 @@ fn init(gpa: std.mem.Allocator, output: []u8) !GraphicsContext {
     return .{ .store = store, .model = model, .output = output };
 }
 
-fn deinit(context: *GraphicsContext) void {
+pub fn deinit(context: *GraphicsContext) void {
     context.model.deinit();
     context.store.deinit();
 }
 
-fn writer(context: *GraphicsContext) frontend.kitty.KittyGraphicsWriter {
+pub fn writer(context: *GraphicsContext) KittyGraphicsWriterType {
     return .{
         .store = &context.store,
-        .layout_snapshot = context.model.layoutSnapshot(.{ .w = source_namespace.cols, .h = source_namespace.rows }),
+        .layout_snapshot = context.model.layoutSnapshot(.{ .w = main.cols, .h = main.rows }),
         .cell_width = 10,
         .cell_height = 20,
     };

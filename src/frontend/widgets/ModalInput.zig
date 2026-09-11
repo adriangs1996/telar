@@ -1,7 +1,9 @@
+const RectType = @import("telar-core").Rect;
+const SnapshotType = @import("telar-client").AttachmentSnapshot;
+const PlanType = @import("telar-client").Plan;
 const ModalInput = @This();
-const ui = @import("../ui/root.zig");
-const attachments = @import("../attachments/root.zig");
-application: ui.Rect,
-snapshot: *const attachments.Snapshot,
-plan: *attachments.Plan,
+
+application: RectType,
+snapshot: *const SnapshotType,
+plan: *PlanType,
 graphical_frame: bool,

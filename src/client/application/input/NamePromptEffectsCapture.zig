@@ -1,7 +1,9 @@
-const EffectsCapture = @This();
-const name_prompt = @import("../../root.zig").model.name_prompt;
+const NamePromptState = @import("../../model/NamePromptState.zig");
 const SubmitEffects = @import("SubmitEffects.zig");
-prompt: *const name_prompt.State,
+const SubmissionType = @import("../../model/Submission.zig");
+const EffectsCapture = @This();
+
+prompt: *const NamePromptState,
 accept: bool = true,
 fail: bool = false,
 calls: usize = 0,
@@ -13,7 +15,7 @@ pub fn port(capture: *EffectsCapture) SubmitEffects {
     return .{ .context = capture, .submit = submit };
 }
 
-fn submit(context: *anyopaque, submission: name_prompt.Submission) !bool {
+fn submit(context: *anyopaque, submission: SubmissionType) !bool {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.observed_active = capture.prompt.active();

@@ -1,14 +1,15 @@
+const PaneIdType = @import("telar-core").PaneId;
+const AttachedPaneCloserType = @import("../application/commands/AttachedPaneCloser.zig");
 const PaneCapture = @This();
-const source_namespace = @import("close_pane_test.zig");
-const close_pane_commands = @import("../application/commands/close_pane.zig");
-attached_pane: source_namespace.schema.PaneId,
+
+attached_pane: PaneIdType,
 requested: bool = false,
 
-pub fn port(capture: *PaneCapture) close_pane_commands.AttachedPaneCloser {
+pub fn port(capture: *PaneCapture) AttachedPaneCloserType {
     return .{ .context = capture, .request_close = requestClose };
 }
 
-fn requestClose(context: *anyopaque, pane_id: source_namespace.schema.PaneId) ?bool {
+fn requestClose(context: *anyopaque, pane_id: PaneIdType) ?bool {
     const capture: *PaneCapture = @ptrCast(@alignCast(context));
 
     if (pane_id != capture.attached_pane) {

@@ -1,9 +1,10 @@
+const effects = @import("effects.zig");
+const KeyType = @import("../input/Key.zig");
 const InputKeys = @This();
-const source_namespace = @import("effects.zig");
-const keybind = @import("../input/root.zig").keybind;
-items: [source_namespace.max_expression_keys]keybind.Key = undefined,
+
+items: [effects.max_expression_keys]KeyType = undefined,
 len: u8 = 0,
 
-pub fn slice(keys: *const InputKeys) []const keybind.Key {
+pub fn slice(keys: *const InputKeys) []const KeyType {
     return keys.items[0..keys.len];
 }

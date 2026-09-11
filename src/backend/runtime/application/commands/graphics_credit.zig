@@ -1,14 +1,10 @@
 //! Application command for returning graphics transfer capacity to one client
 //! attachment.
 
+const AttachmentStore = @import("../../attachment/AttachmentStore.zig");
+const ReturnGraphicsCreditHandler = @import("ReturnGraphicsCreditHandler.zig");
+const pane_module = @import("telar-core").pane;
 const std = @import("std");
-const core = @import("telar-core");
-const attachment_mod = @import("../../attachment/root.zig");
-
-pub const schema = core.schema;
-pub const AttachmentStore = attachment_mod.AttachmentStore;
-
-pub const ReturnGraphicsCredit = @import("ReturnGraphicsCredit.zig");
 
 pub const ReturnGraphicsCreditResult = enum {
     returned,
@@ -16,14 +12,12 @@ pub const ReturnGraphicsCreditResult = enum {
     invalid_amount,
 };
 
-pub const ReturnGraphicsCreditHandler = @import("ReturnGraphicsCreditHandler.zig");
-
 test "ReturnGraphicsCreditHandler rejects a pane outside the client attachments" {
     var attachments: AttachmentStore = .{};
     var handler: ReturnGraphicsCreditHandler = .{ .attachments = &attachments };
 
     const result = try handler.execute(.{
-        .pane_id = try schema.id.pane(7),
+        .pane_id = try pane_module(7),
         .bytes = 1,
     });
 

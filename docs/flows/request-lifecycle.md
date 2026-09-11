@@ -108,12 +108,12 @@ snapshots.
 
 ## Proof
 
-- `src/frontend/client/request_lifecycle.zig` proves identity bounds, recovery
+- `src/frontend/client/connection/request_lifecycle.zig` proves identity bounds, recovery
   preflight and refusal before tracker overflow.
-- `src/frontend/client/requests.zig` proves single consumption, group and pane
+- `src/client/connection/requests.zig` proves single consumption, group and pane
   lookup, exact close completion and stale-retirement exceptions.
 - `request delivery rolls correlation back when transport is full` in
-  `src/frontend/client/client_test.zig` crosses the public request and transport
+  `src/frontend/client/tests/` crosses the public request and transport
   boundaries and proves transactional rollback.
 - Bootstrap and the request-specific client tests prove exact wire identity,
   owned payload delivery, incompatible continuation rejection and late-response

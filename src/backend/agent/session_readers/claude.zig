@@ -1,13 +1,10 @@
 //! Bounded incremental reads of Claude session transcripts.
 
+const Job = @import("Job.zig");
+const Completion = @import("../Completion.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const types = @import("types.zig");
-const Job = types.Job;
-const Completion = types.Completion;
-const Io = std.Io;
-const schema = core.schema;
 const transcript = @import("../transcript.zig");
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
 
 /// Example: `probe(job, &completion);`.
 /// The first probe of a watch only records where the file ends; later
@@ -16,7 +13,7 @@ const transcript = @import("../transcript.zig");
 /// file that does not exist yet is seeded at zero and read whole once it
 /// appears. A file shorter than the offset was rewritten and is read again.
 pub fn probe(job: Job, completion: *Completion) void {
-    const file = Io.Dir.cwd().openFile(job.io, job.watch.pathSlice(), .{}) catch {
+    const file = std.Io.Dir.cwd().openFile(job.io, job.watch.pathSlice(), .{}) catch {
         if (job.watch.offset == null) {
             completion.offset = 0;
         }
@@ -42,7 +39,7 @@ pub fn probe(job: Job, completion: *Completion) void {
     reader.seekTo(offset) catch return;
     const len = reader.interface.readSliceShort(buffer) catch return;
 
-    var title_buffer: [schema.max_agent_session_title_bytes]u8 = undefined;
+    var title_buffer: [max_agent_session_title_bytes_module]u8 = undefined;
     const result = transcript.scan(buffer[0..len], job.watch.session.slice(), &title_buffer);
     // A line longer than the whole window can never complete: skip it.
     const consumed = if (result.consumed == 0 and len == buffer.len) len else result.consumed;

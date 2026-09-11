@@ -1,9 +1,10 @@
 //! Dispatch policy shared by host drivers. Slice adapters perform delivery.
-const schema = @import("telar-core").schema;
+
+const ServerMessageType = @import("telar-core").ServerMessage;
 
 /// Dispatches borrowed decoded input synchronously. Adapters must own deferred data.
 /// Example: `const exit_code = try dispatch(client, message, Adapters);`.
-pub fn dispatch(client: anytype, message: schema.ServerMessage, comptime Adapters: type) !?u8 {
+pub fn dispatch(client: anytype, message: ServerMessageType, comptime Adapters: type) !?u8 {
     const agent_sounds = Adapters.agent_sounds;
     const agent_snapshots = Adapters.agent_snapshots;
     const notifications = Adapters.notifications;

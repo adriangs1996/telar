@@ -1,11 +1,12 @@
-const RequestRenameTabHandler = @This();
-const client_model = @import("../../root.zig").model;
-const TabOperationGate = @import("RenameTabTabOperationGate.zig");
+const ModelType = @import("../../model/Model.zig");
+const RenameTabOperationGate = @import("RenameTabOperationGate.zig");
 const RenameRequestEffects = @import("RenameRequestEffects.zig");
 const RequestRenameTab = @import("RequestRenameTab.zig");
-const source_namespace = @import("rename_tab.zig");
-model: *const client_model.Model,
-gate: TabOperationGate,
+const rename_tab = @import("rename_tab.zig");
+const RequestRenameTabHandler = @This();
+
+model: *const ModelType,
+gate: RenameTabOperationGate,
 effects: RenameRequestEffects,
 
 /// Validates the label, resolves the prompt's tab identity and sends one
@@ -21,7 +22,7 @@ pub fn execute(handler: *RequestRenameTabHandler, command: RequestRenameTab) !bo
         return false;
     }
 
-    try source_namespace.validateLabel(command.label);
+    try rename_tab.validateLabel(command.label);
     const location = handler.model.tabLocation(command.tab_id) orelse return false;
     try handler.effects.send(handler.effects.context, .{
         .location = location,

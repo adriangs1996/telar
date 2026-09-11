@@ -1,7 +1,9 @@
-const ReturnGraphicsCreditHandler = @This();
-const source_namespace = @import("graphics_credit.zig");
+const AttachmentStoreType = @import("../../attachment/AttachmentStore.zig");
 const ReturnGraphicsCredit = @import("ReturnGraphicsCredit.zig");
-attachments: *source_namespace.AttachmentStore,
+const graphics_credit = @import("graphics_credit.zig");
+const ReturnGraphicsCreditHandler = @This();
+
+attachments: *AttachmentStoreType,
 
 /// Returns only bytes previously consumed by one attachment. The aggregate
 /// rejects over-returned or unrepresentable amounts without changing credit.
@@ -9,7 +11,7 @@ attachments: *source_namespace.AttachmentStore,
 /// ```zig
 /// const result = try handler.execute(.{ .pane_id = pane_id, .bytes = 4096 });
 /// ```
-pub fn execute(handler: *ReturnGraphicsCreditHandler, command: ReturnGraphicsCredit) !source_namespace.ReturnGraphicsCreditResult {
+pub fn execute(handler: *ReturnGraphicsCreditHandler, command: ReturnGraphicsCredit) !graphics_credit.ReturnGraphicsCreditResult {
     return switch (handler.attachments.returnGraphicsCredit(.{
         .pane_id = command.pane_id,
         .bytes = command.bytes,

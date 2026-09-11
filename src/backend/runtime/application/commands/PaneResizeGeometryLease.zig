@@ -1,5 +1,6 @@
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const GeometryLease = @This();
-const source_namespace = @import("pane_resize.zig");
+
 context: *anyopaque,
-holds: *const fn (*anyopaque, source_namespace.schema.WorkspaceLocation) bool,
-release: *const fn (*anyopaque, source_namespace.schema.WorkspaceLocation) void,
+holds: *const fn (*anyopaque, WorkspaceLocationType) bool,
+release: *const fn (*anyopaque, WorkspaceLocationType) void,

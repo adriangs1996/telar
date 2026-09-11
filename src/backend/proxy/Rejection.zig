@@ -1,5 +1,6 @@
+const connect_authentication = @import("connect_authentication.zig");
 const Rejection = @This();
-const source_namespace = @import("connect_authentication.zig");
-reason: source_namespace.RejectionReason,
+
+reason: connect_authentication.RejectionReason,
 response: []const u8,
-metric: ?source_namespace.RejectionMetric,
+metric: ?connect_authentication.RejectionMetric,

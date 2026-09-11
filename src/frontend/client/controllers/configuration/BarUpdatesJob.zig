@@ -1,5 +1,6 @@
+const bar_updates = @import("bar_updates.zig");
+const CommandType = @import("telar-client").BarCommand;
 const Job = @This();
-const source_namespace = @import("bar_updates.zig");
-const bars = @import("../../../bars/root.zig");
-execution_id: source_namespace.CommandExecutionId,
-command: bars.Command,
+
+execution_id: bar_updates.CommandExecutionId,
+command: CommandType,

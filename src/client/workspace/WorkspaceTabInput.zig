@@ -1,5 +1,6 @@
+const TabIdType = @import("telar-core").TabId;
 const WorkspaceTabInput = @This();
-const source_namespace = @import("tabs.zig");
-tab_id: source_namespace.schema.TabId,
+
+tab_id: TabIdType,
 pane_count: u16,
 label: []const u8,

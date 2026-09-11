@@ -2,15 +2,18 @@
 //! decides when and what to paint. This adapter releases async tokens and
 //! supplies concrete effects to the application delivery policy.
 
-const core = @import("telar-core");
-const diagnostics = core.diagnostics;
-
 const Client = @import("../Client.zig");
-const presentation_application = @import("telar-client").application.presentation;
 const presentation_projection = @import("presentation_projection.zig");
+const mark_module = @import("telar-core").mark;
+const TokenType = @import("telar-client").Token;
+const DeliverPresentationHandlerType = @import("telar-client").DeliverPresentationHandler;
+const OutputType = @import("../resources/Output.zig");
+const EffectsType = @import("telar-client").PresentationEffects;
 const runtime_transport = @import("../entrypoints/runtime_io.zig");
-
-const presentation_delivery = presentation_application.presentation_delivery;
+const FrameAckType = @import("telar-core").FrameAck;
+const now_module = @import("telar-core").now;
+const enabled_module = @import("telar-core").enabled;
+const elapsed_module = @import("telar-core").elapsed;
 
 /// Publishes every revision the presenter uses after one client event commits.
 ///
@@ -40,7 +43,7 @@ pub fn handleDraw(client: *Client, result: anyerror!void) !void {
 /// try presentation_lifecycle.presentNow(client);
 /// ```
 pub fn presentNow(client: *Client) !void {
-    core.echo_trace.mark(client.io, .compose_start);
+    mark_module(client.io, .compose_start);
     if (client.output) |*output| {
         if (output.pending) {
             output.draw_deferred = true;
@@ -67,9 +70,9 @@ pub fn presentNow(client: *Client) !void {
     try deliver(client, delivery);
 }
 
-fn deliver(client: *Client, token: @import("Presenter.zig").Token) !void {
+fn deliver(client: *Client, token: TokenType) !void {
     const delivery = client.presenter.presentation_state.complete(token, .delivered) orelse return;
-    var use_case: presentation_delivery.DeliverPresentationHandler = .{
+    var use_case: DeliverPresentationHandlerType = .{
         .model = &client.model,
         .effects = deliveryEffects(client),
     };
@@ -106,20 +109,20 @@ pub fn handleMediaTick(client: *Client, result: anyerror!void) !void {
 pub fn pumpOutput(client: *Client) anyerror!void {
     const output = if (client.output) |*output| output else return;
     const pending = output.begin() orelse return;
-    core.echo_trace.mark(client.io, .host_flush_start);
+    mark_module(client.io, .host_flush_start);
     const work = try output.tryWrite(pending);
     if (work.bytes.len == 0) {
         try handleWritten(client, {});
         return;
     }
 
-    try client.select.concurrent(.host_written, @import("../resources/host_output.zig").Output.write, .{work});
+    try client.select.concurrent(.host_written, OutputType.write, .{work});
 }
 
 /// Commits only the presentation whose bytes reached the host, then folds work.
 /// Example: `try handleWritten(client, result);`.
 pub fn handleWritten(client: *Client, result: anyerror!void) !void {
-    core.echo_trace.mark(client.io, .host_flush_done);
+    mark_module(client.io, .host_flush_done);
     const output = if (client.output) |*output| output else unreachable;
     const token = output.delivery;
     const completed = output.complete(result) catch |err| {
@@ -144,7 +147,7 @@ pub fn handleWritten(client: *Client, result: anyerror!void) !void {
     try pumpOutput(client);
 }
 
-fn deliveryEffects(client: *Client) presentation_delivery.Effects {
+fn deliveryEffects(client: *Client) EffectsType {
     return .{
         .context = client,
         .flush_graphics_credits = flushGraphicsCredits,
@@ -158,14 +161,14 @@ fn flushGraphicsCredits(context: *anyopaque) !void {
     try runtime_transport.flushGraphicsCredits(client);
 }
 
-fn acknowledgeFrame(context: *anyopaque, ack: core.schema.FrameAck) !void {
+fn acknowledgeFrame(context: *anyopaque, ack: FrameAckType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    const ack_started = diagnostics.now(client.io);
+    const ack_started = now_module(client.io);
     try runtime_transport.enqueue(client, .{ .frame_ack = ack });
 
-    if (comptime diagnostics.enabled) {
+    if (comptime enabled_module) {
         client.telemetry.metrics.ack_enqueue.observe(
-            diagnostics.elapsed(ack_started, diagnostics.now(client.io)),
+            elapsed_module(ack_started, now_module(client.io)),
         );
     }
 }

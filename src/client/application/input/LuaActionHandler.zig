@@ -1,18 +1,20 @@
-const LuaActionHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("LuaActionEffects.zig");
-const source_namespace = @import("lua_action.zig");
+const ModelType = @import("../../model/Model.zig");
+const LuaActionEffects = @import("LuaActionEffects.zig");
+const lua_action = @import("lua_action.zig");
 const Failure = @import("Failure.zig");
-const client_diagnostic = @import("../configuration/root.zig").client_diagnostic;
-model: *client_model.Model,
-effects: Effects,
+const client_diagnostic = @import("../configuration/client_diagnostic.zig");
+const ClientDiagnosticHandlerType = @import("../configuration/ClientDiagnosticHandler.zig");
+const LuaActionHandler = @This();
+
+model: *ModelType,
+effects: LuaActionEffects,
 
 /// Evaluates one current Lua action and applies only a fully valid batch.
 ///
 /// ```zig
 /// const outcome = try handler.execute(command);
 /// ```
-pub fn execute(handler: *LuaActionHandler, command: source_namespace.Command) !source_namespace.Outcome {
+pub fn execute(handler: *LuaActionHandler, command: lua_action.Command) !lua_action.Outcome {
     const invocation = handler.effects.invoke(
         handler.effects.context,
         command,
@@ -64,6 +66,6 @@ fn publishFailure(handler: *LuaActionHandler, failure: Failure) !void {
     });
 }
 
-fn diagnosticHandler(handler: *LuaActionHandler) client_diagnostic.ClientDiagnosticHandler {
+fn diagnosticHandler(handler: *LuaActionHandler) ClientDiagnosticHandlerType {
     return .{ .model = handler.model };
 }

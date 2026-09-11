@@ -1,41 +1,64 @@
-const Delivery = @This();
-const source_namespace = @import("root.zig");
+const ResponseQueueType = @import("ResponseQueue.zig");
+const delivery_namespace = @import("delivery_namespace.zig");
+const ClientIdentityType = @import("telar-core").ClientIdentity;
+const max_clipboard_bytes_module = @import("telar-core").max_clipboard_bytes;
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-const core = @import("telar-core");
+const max_frame_size_module = @import("telar-core").max_frame_size;
 const response_queue = @import("response_queue.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const Preparation = @import("Preparation.zig");
 const Prepared = @import("Prepared.zig");
-const history = @import("../../history/root.zig");
+const encodeRuntimeStopping_module = @import("telar-core").encodeRuntimeStopping;
+const QueryResultType = @import("../../history/QueryResult.zig");
+const OutputResultType = @import("../../history/OutputResult.zig");
+const StatsResultType = @import("../../history/StatsResult.zig");
 const runtime_encoder = @import("encoder.zig");
-const client_layout_store = @import("../application/client_layout_store.zig");
-const agent_mod = @import("../../agent/root.zig");
+const encodeResyncRequired_module = @import("telar-core").encodeResyncRequired;
+const encodePaneClipboard_module = @import("telar-core").encodePaneClipboard;
+const SnapshotStorageType = @import("../application/SnapshotStorage.zig");
+const ClientLayoutSnapshotType = @import("telar-core").ClientLayoutSnapshot;
+const encodeClientLayoutSnapshot_module = @import("telar-core").encodeClientLayoutSnapshot;
+const encodeProxyStatus_module = @import("telar-core").encodeProxyStatus;
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const AgentSnapshotEntryType = @import("telar-core").AgentSnapshotEntry;
 const AgentDisplayStorage = @import("AgentDisplayStorage.zig");
-const workspace_mod = @import("../../workspace/root.zig");
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
+const encodeAgentSnapshot_module = @import("telar-core").encodeAgentSnapshot;
+const encodeSystemMetrics_module = @import("telar-core").encodeSystemMetrics;
+const state_support = @import("../../workspace/state_support.zig");
+const WorkspaceListEntryType = @import("telar-core").WorkspaceListEntry;
+const encodeWorkspaceList_module = @import("telar-core").encodeWorkspaceList;
 const Commit = @import("Commit.zig");
 const Completion = @import("Completion.zig");
-const attachment_mod = @import("../attachment/root.zig");
+const enabled_module = @import("telar-core").enabled;
+const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+const PreparedType = @import("../attachment/Prepared.zig");
+const Delivery = @This();
+
 send_buffer: []u8,
-responses: source_namespace.ResponseQueue = .{},
-phase: source_namespace.Phase = .ready,
+responses: ResponseQueueType = .{},
+phase: delivery_namespace.Phase = .ready,
 next_ticket: u64 = 1,
 next_attachment: usize = 0,
 close_after_reply: bool = false,
 stopping_pending: bool = false,
 runtime_state_requested: bool = false,
-client_identity: source_namespace.schema.ClientIdentity = .invalid,
+client_identity: ClientIdentityType = .invalid,
 client_layout_sent: bool = false,
 proxy_status_sent: bool = false,
 agent_revision_sent: u64 = 0,
 agent_snapshot_requested: bool = false,
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
-clipboard_storage: [source_namespace.schema.max_clipboard_bytes]u8 = undefined,
+clipboard_storage: [max_clipboard_bytes_module]u8 = undefined,
 clipboard_len: u32 = 0,
-clipboard_pane: source_namespace.schema.PaneId = .invalid,
+clipboard_pane: PaneIdType = .invalid,
 clipboard_pending: bool = false,
 
 pub fn init(gpa: std.mem.Allocator) !Delivery {
-    return .{ .send_buffer = try gpa.alloc(u8, core.transport.max_frame_size) };
+    return .{ .send_buffer = try gpa.alloc(u8, max_frame_size_module) };
 }
 
 pub fn deinit(delivery: *Delivery, gpa: std.mem.Allocator) void {
@@ -56,7 +79,7 @@ pub fn publishOrResync(delivery: *Delivery, response: response_queue.PendingResp
     delivery.responses.pushOrDrop(response);
 }
 
-pub fn requestWorkspaceResync(delivery: *Delivery, workspace: source_namespace.schema.WorkspaceLocation, previous_workspace: ?source_namespace.schema.WorkspaceId) void {
+pub fn requestWorkspaceResync(delivery: *Delivery, workspace: WorkspaceLocationType, previous_workspace: ?WorkspaceIdType) void {
     delivery.responses.resync_workspace = workspace;
     delivery.responses.resync_previous_workspace = previous_workspace;
 }
@@ -78,7 +101,7 @@ pub fn requestAgentSnapshot(delivery: *Delivery) void {
 /// ```zig
 /// try delivery.requestRuntimeState(identity);
 /// ```
-pub fn requestRuntimeState(delivery: *Delivery, identity: source_namespace.schema.ClientIdentity) !void {
+pub fn requestRuntimeState(delivery: *Delivery, identity: ClientIdentityType) !void {
     if (identity == .invalid) {
         return error.InvalidClientIdentity;
     }
@@ -130,8 +153,8 @@ pub fn queueDropped(delivery: *const Delivery) u64 {
 ///     return error.ClipboardTooLarge;
 /// }
 /// ```
-pub fn setClipboard(delivery: *Delivery, pane_id: source_namespace.schema.PaneId, bytes: []const u8) bool {
-    if (bytes.len > source_namespace.schema.max_clipboard_bytes) {
+pub fn setClipboard(delivery: *Delivery, pane_id: PaneIdType, bytes: []const u8) bool {
+    if (bytes.len > max_clipboard_bytes_module) {
         return false;
     }
 
@@ -157,15 +180,15 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
 
     if (delivery.stopping_pending) {
         return delivery.stage(
-            try source_namespace.schema.encodeRuntimeStopping(buffer),
+            try encodeRuntimeStopping_module(buffer),
             .stopping,
         );
     }
 
     if (delivery.responses.peekManagement()) |entry| {
-        var history_result: ?*history.model.QueryResult = null;
-        var history_output: ?*history.model.OutputResult = null;
-        var history_stats: ?*history.model.StatsResult = null;
+        var history_result: ?*QueryResultType = null;
+        var history_output: ?*OutputResultType = null;
+        var history_stats: ?*StatsResultType = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
             .panes = sources.panes,
@@ -184,7 +207,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
 
     if (delivery.responses.resync_workspace) |workspace| {
         return delivery.stage(
-            try source_namespace.schema.encodeResyncRequired(buffer, .{
+            try encodeResyncRequired_module(buffer, .{
                 .workspace = workspace,
                 .workspace_closed = !workspaces.containsWorkspace(workspace),
                 .previous_workspace = delivery.responses.resync_previous_workspace,
@@ -195,7 +218,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
 
     if (delivery.clipboard_pending) {
         return delivery.stage(
-            try source_namespace.schema.encodePaneClipboard(buffer, .{
+            try encodePaneClipboard_module(buffer, .{
                 .pane_id = delivery.clipboard_pane,
                 .bytes = delivery.clipboard_storage[0..delivery.clipboard_len],
             }),
@@ -204,8 +227,8 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     }
 
     if (delivery.runtime_state_requested and !delivery.client_layout_sent) {
-        var storage: client_layout_store.SnapshotStorage = .{};
-        const snapshot: source_namespace.schema.ClientLayoutSnapshot = if (sources.client_layouts) |store|
+        var storage: SnapshotStorageType = .{};
+        const snapshot: ClientLayoutSnapshotType = if (sources.client_layouts) |store|
             store.snapshot(.{
                 .identity = delivery.client_identity,
                 .sources = .{ .panes = sources.panes, .workspaces = workspaces },
@@ -213,14 +236,14 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         else
             .{ .restored = false };
         return delivery.stage(
-            try source_namespace.schema.encodeClientLayoutSnapshot(buffer, snapshot),
+            try encodeClientLayoutSnapshot_module(buffer, snapshot),
             .client_layout,
         );
     }
 
     if (delivery.runtime_state_requested and !delivery.proxy_status_sent) {
         return delivery.stage(
-            try source_namespace.schema.encodeProxyStatus(buffer, .{
+            try encodeProxyStatus_module(buffer, .{
                 .active = sources.proxy_active,
                 .scope = sources.proxy_scope,
                 .system_trusted = sources.proxy_system_trusted,
@@ -239,8 +262,8 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     if (delivery.agent_snapshot_requested or (delivery.runtime_state_requested and
         delivery.agent_revision_sent < sources.agents.revision))
     {
-        var entry_storage: [agent_mod.max_records]source_namespace.schema.AgentSnapshotEntry = undefined;
-        var display_storage: [agent_mod.max_records]AgentDisplayStorage = undefined;
+        var entry_storage: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+        var display_storage: [max_agent_snapshot_entries]AgentDisplayStorage = undefined;
         const entries = sources.agents.snapshot(&entry_storage);
         var enriched_count: usize = 0;
         for (entries) |entry| {
@@ -259,7 +282,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
             }
             entry_storage[enriched_count].pane_index = pane_index;
             if (workspaces.workspaceName(pane.location.workspace)) |workspace_name| {
-                entry_storage[enriched_count].workspace_label = source_namespace.copyDisplayPrefix(
+                entry_storage[enriched_count].workspace_label = delivery_namespace.copyDisplayPrefix(
                     &display_storage[enriched_count].workspace,
                     workspace_name,
                 );
@@ -268,9 +291,9 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
                 entry_storage[enriched_count].tab_label = tab_label;
             }
             if (entry.title_source == .telar and pane.title.len != 0) {
-                entry_storage[enriched_count].session_title = source_namespace.truncateUtf8(
+                entry_storage[enriched_count].session_title = delivery_namespace.truncateUtf8(
                     pane.title.slice(),
-                    source_namespace.schema.max_agent_session_title_bytes,
+                    max_agent_session_title_bytes_module,
                 );
                 entry_storage[enriched_count].title_source = .terminal;
             } else if (entry.title_source == .telar) {
@@ -279,7 +302,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
                     &display_storage[enriched_count].placeholder,
                 );
             }
-            entry_storage[enriched_count].cwd_label = source_namespace.shortenCwd(
+            entry_storage[enriched_count].cwd_label = delivery_namespace.shortenCwd(
                 &display_storage[enriched_count].cwd,
                 pane.cwd.slice(),
                 sources.home,
@@ -288,7 +311,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         }
         const revision = sources.agents.revision;
         return delivery.stage(
-            try source_namespace.schema.encodeAgentSnapshot(buffer, .{
+            try encodeAgentSnapshot_module(buffer, .{
                 .revision = revision,
                 .entries = entry_storage[0..enriched_count],
             }),
@@ -302,7 +325,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         const revision = sources.system_metrics.revision;
         if (sources.system_metrics.latest) |values| {
             return delivery.stage(
-                try source_namespace.schema.encodeSystemMetrics(buffer, .{
+                try encodeSystemMetrics_module(buffer, .{
                     .revision = revision,
                     .cpu_percent = values.cpu_percent,
                     .memory_used_decigib = values.memory_used_decigib,
@@ -318,10 +341,10 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     if (delivery.runtime_state_requested and
         delivery.workspace_list_revision_sent < workspaces.revision())
     {
-        var entries: [workspace_mod.max_workspaces]source_namespace.schema.WorkspaceListEntry = undefined;
+        var entries: [state_support.max_workspaces]WorkspaceListEntryType = undefined;
         const revision = workspaces.revision();
         return delivery.stage(
-            try source_namespace.schema.encodeWorkspaceList(buffer, .{
+            try encodeWorkspaceList_module(buffer, .{
                 .revision = revision,
                 .entries = workspaces.listEntries(&entries),
             }),
@@ -354,9 +377,9 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     }
 
     if (delivery.responses.peekObservation()) |entry| {
-        var history_result: ?*history.model.QueryResult = null;
-        var history_output: ?*history.model.OutputResult = null;
-        var history_stats: ?*history.model.StatsResult = null;
+        var history_result: ?*QueryResultType = null;
+        var history_output: ?*OutputResultType = null;
+        var history_stats: ?*StatsResultType = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
             .panes = sources.panes,
@@ -411,7 +434,7 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
         .resync => {
             delivery.responses.resync_workspace = null;
             delivery.responses.resync_previous_workspace = null;
-            if (comptime source_namespace.diagnostics.enabled) {
+            if (comptime enabled_module) {
                 metrics.client_resyncs += 1;
             }
         },
@@ -428,7 +451,7 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
             const attachment = attachments.at(work.index) orelse unreachable;
             const effect = attachment.commitPrepared(work.prepared);
             completion.detach_pane = effect.detach_after_send;
-            if (comptime source_namespace.diagnostics.enabled) {
+            if (comptime enabled_module) {
                 if (effect.graphics_message) {
                     metrics.graphics_messages += 1;
                     metrics.graphics_bytes += prepared.payload.len;
@@ -439,7 +462,7 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
                     metrics.graphics_freeze.merge(effect.graphics.freeze);
                 }
             }
-            delivery.next_attachment = (work.index + 1) % source_namespace.AttachmentStore.capacity;
+            delivery.next_attachment = (work.index + 1) % max_panes_per_tab;
         },
     }
     delivery.phase = .{ .in_flight = completion };
@@ -477,10 +500,10 @@ fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) 
     const buffer = delivery.send_buffer;
 
     var checked: usize = 0;
-    while (checked < source_namespace.AttachmentStore.capacity) : (checked += 1) {
-        const index = (delivery.next_attachment + checked) % source_namespace.AttachmentStore.capacity;
+    while (checked < max_panes_per_tab) : (checked += 1) {
+        const index = (delivery.next_attachment + checked) % max_panes_per_tab;
         const attachment = attachments.at(index) orelse continue;
-        const candidate: ?attachment_mod.Attachment.Prepared = switch (lane) {
+        const candidate: ?PreparedType = switch (lane) {
             .cwd => try attachment.prepareCwd(buffer),
             .foreground => try attachment.prepareForeground(buffer),
             .title => try attachment.prepareTitle(buffer),
@@ -496,7 +519,7 @@ fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) 
                     break :graphics null;
                 }
                 if (attachment.pane.media.worker != null and !frozen) {
-                    if (comptime source_namespace.diagnostics.enabled) {
+                    if (comptime enabled_module) {
                         preparation.metrics.graphics_stage_deferred +|= 1;
                     }
                     break :graphics null;
@@ -521,7 +544,7 @@ fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) 
     return null;
 }
 
-pub fn stage(delivery: *Delivery, payload: []const u8, effect: source_namespace.Effect) Prepared {
+pub fn stage(delivery: *Delivery, payload: []const u8, effect: delivery_namespace.Effect) Prepared {
     const ticket = delivery.next_ticket;
     delivery.next_ticket +%= 1;
     if (delivery.next_ticket == 0) {

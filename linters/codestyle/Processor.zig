@@ -1,20 +1,23 @@
-const Processor = @This();
 const std = @import("std");
-const source_namespace = @import("application.zig");
-const reporter_module = @import("reporter_support.zig");
-const source_file = @import("source_file.zig");
-const codestyle = @import("root.zig");
-allocator: std.mem.Allocator,
-io: source_namespace.Io,
-fix: bool,
-reporter: *reporter_module.Reporter,
+const ReporterType = @import("Reporter.zig");
+const SourceFileType = @import("SourceFile.zig");
+const fixer_support = @import("fixes.zig");
+const analyzer_support = @import("analysis.zig");
+const Processor = @This();
 
-fn process(self: Processor, path: []const u8) !void {
-    var file = try source_file.SourceFile.open(self.allocator, self.io, path);
+allocator: std.mem.Allocator,
+io: std.Io,
+fix: bool,
+reporter: *ReporterType,
+
+/// Checks one file, optionally applying safe formatting fixes first.
+/// Example: `try processor.process("src/client/panes/Pane.zig");`.
+pub fn process(self: Processor, path: []const u8) !void {
+    var file = try SourceFileType.open(self.allocator, self.io, path);
     defer file.deinit();
 
     if (self.fix) {
-        const result = try codestyle.fixSource(self.allocator, file.source);
+        const result = try fixer_support.fixSource(self.allocator, file.source);
 
         if (result) |fixed| {
             defer self.allocator.free(fixed);
@@ -29,7 +32,7 @@ fn process(self: Processor, path: []const u8) !void {
 }
 
 fn analyze(self: Processor, path: []const u8, source: [:0]const u8) !void {
-    const violations = try codestyle.lintSource(self.allocator, source);
+    const violations = try analyzer_support.lintFile(self.allocator, source, path);
     defer self.allocator.free(violations);
 
     try self.reporter.report(path, violations);

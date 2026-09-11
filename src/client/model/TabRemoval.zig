@@ -1,10 +1,11 @@
-const TabRemoval = @This();
-const source_namespace = @import("types.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const RemovedPanes = @import("RemovedPanes.zig");
-removed: source_namespace.schema.TabLocation,
+const TabRemoval = @This();
+
+removed: TabLocationType,
 panes: RemovedPanes,
 was_active: bool,
-active: ?source_namespace.schema.TabLocation,
+active: ?TabLocationType,
 workspace_removed: bool,
 active_layout_revision: u64,
 active_tab_revision_before: u64,

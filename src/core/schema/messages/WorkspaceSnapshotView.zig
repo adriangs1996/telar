@@ -1,8 +1,10 @@
-const WorkspaceSnapshotView = @This();
-const source_namespace = @import("workspace.zig");
+const id = @import("../id.zig");
+const types = @import("../types.zig");
 const TabDescriptorIterator = @import("TabDescriptorIterator.zig");
-request_id: source_namespace.RequestId,
-workspace: source_namespace.WorkspaceLocation,
+const WorkspaceSnapshotView = @This();
+
+request_id: id.RequestId,
+workspace: types.WorkspaceLocation,
 name: []const u8,
 tab_count: u16,
 encoded_tabs: []const u8,

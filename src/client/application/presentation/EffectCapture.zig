@@ -1,15 +1,19 @@
+const ModelType = @import("../../model/Model.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+const presentation_delivery = @import("presentation_delivery.zig");
+const FrameAckType = @import("telar-core").FrameAck;
+const Effects = @import("PresentationEffects.zig");
 const EffectCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("presentation_delivery.zig");
-const Effects = @import("Effects.zig");
-model: *client_model.Model,
-pane_id: source_namespace.schema.PaneId,
-events: [source_namespace.multiplexer.max_panes + 2]source_namespace.Event = undefined,
+
+model: *ModelType,
+pane_id: PaneIdType,
+events: [max_panes_per_tab + 2]presentation_delivery.Event = undefined,
 event_count: usize = 0,
-acknowledgements: [source_namespace.multiplexer.max_panes]source_namespace.schema.FrameAck = undefined,
+acknowledgements: [max_panes_per_tab]FrameAckType = undefined,
 acknowledgement_count: usize = 0,
 commit_observed: bool = true,
-failure: source_namespace.Failure = .none,
+failure: presentation_delivery.Failure = .none,
 
 pub fn effects(capture: *EffectCapture) Effects {
     return .{
@@ -30,7 +34,7 @@ fn flushGraphicsCredits(context: *anyopaque) !void {
     }
 }
 
-fn acknowledgeFrame(context: *anyopaque, ack: source_namespace.schema.FrameAck) !void {
+fn acknowledgeFrame(context: *anyopaque, ack: FrameAckType) !void {
     const capture: *EffectCapture = @ptrCast(@alignCast(context));
     capture.observeCommit();
     capture.append(.acknowledgement);
@@ -61,15 +65,15 @@ fn observeCommit(capture: *EffectCapture) void {
     capture.commit_observed = capture.commit_observed and pane.pending_frame_id == 0;
 }
 
-fn append(capture: *EffectCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectCapture, event: presentation_delivery.Event) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
 
-pub fn eventSlice(capture: *const EffectCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectCapture) []const presentation_delivery.Event {
     return capture.events[0..capture.event_count];
 }
 
-pub fn acknowledgementSlice(capture: *const EffectCapture) []const source_namespace.schema.FrameAck {
+pub fn acknowledgementSlice(capture: *const EffectCapture) []const FrameAckType {
     return capture.acknowledgements[0..capture.acknowledgement_count];
 }

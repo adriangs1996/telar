@@ -1,4 +1,6 @@
+const types = @import("types.zig");
+const RectType = @import("telar-core").Rect;
 const PaneFocusRequest = @This();
-const source_namespace = @import("types.zig");
-target: source_namespace.PaneFocusTarget,
-area: source_namespace.ui.Rect,
+
+target: types.PaneFocusTarget,
+area: RectType,

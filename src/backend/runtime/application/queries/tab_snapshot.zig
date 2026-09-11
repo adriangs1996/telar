@@ -1,33 +1,23 @@
 //! Application query for deciding whether a tab has a live snapshot.
 
-const std = @import("std");
-const core = @import("telar-core");
-
-pub const schema = core.schema;
-
-pub const Request = @import("TabSnapshotRequest.zig");
-
-pub const Result = @import("TabSnapshotResult.zig");
-
-pub const Source = @import("Source.zig");
-
-pub const Executor = @import("TabSnapshotExecutor.zig");
-
-pub const Handler = @import("TabSnapshotHandler.zig");
-
+const TabLocationType = @import("telar-core").TabLocation;
+const workspace_module = @import("telar-core").workspace;
+const tab_module = @import("telar-core").tab;
 const SourceCapture = @import("SourceCapture.zig");
+const TabSnapshotHandler = @import("TabSnapshotHandler.zig");
+const std = @import("std");
 
-fn testingLocation() !schema.TabLocation {
+fn testingLocation() !TabLocationType {
     return .{
-        .workspace = .{ .workspace = try schema.id.workspace(3) },
-        .tab_id = try schema.id.tab(7),
+        .workspace = .{ .workspace = try workspace_module(3) },
+        .tab_id = try tab_module(7),
     };
 }
 
 test "Handler returns the requested live tab snapshot reference" {
     const location = try testingLocation();
     var source_capture: SourceCapture = .{ .contains = true, .pane_count = 2 };
-    var handler: Handler = .{ .source = source_capture.source() };
+    var handler: TabSnapshotHandler = .{ .source = source_capture.source() };
 
     const result = try handler.executor().execute(.{ .location = location });
 
@@ -39,7 +29,7 @@ test "Handler returns the requested live tab snapshot reference" {
 
 test "Handler rejects an absent tab without consulting panes" {
     var source_capture: SourceCapture = .{ .contains = false, .pane_count = 4 };
-    var handler: Handler = .{ .source = source_capture.source() };
+    var handler: TabSnapshotHandler = .{ .source = source_capture.source() };
 
     try std.testing.expectError(error.TabNotFound, handler.execute(.{
         .location = try testingLocation(),
@@ -51,7 +41,7 @@ test "Handler rejects an absent tab without consulting panes" {
 
 test "Handler rejects a tab without a running pane" {
     var source_capture: SourceCapture = .{ .contains = true, .pane_count = 0 };
-    var handler: Handler = .{ .source = source_capture.source() };
+    var handler: TabSnapshotHandler = .{ .source = source_capture.source() };
 
     try std.testing.expectError(error.TabNotFound, handler.execute(.{
         .location = try testingLocation(),

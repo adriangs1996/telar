@@ -1,4 +1,5 @@
+const PaneSplitCommitType = @import("../../model/PaneSplitCommit.zig");
 const ConfirmationEffects = @This();
-const client_model = @import("../../root.zig").model;
+
 context: *anyopaque,
-deliver: *const fn (*anyopaque, client_model.PaneSplitCommit) anyerror!void,
+deliver: *const fn (*anyopaque, PaneSplitCommitType) anyerror!void,

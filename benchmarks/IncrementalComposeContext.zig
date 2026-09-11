@@ -1,26 +1,30 @@
-const IncrementalComposeContext = @This();
-const frontend = @import("telar-frontend");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const ScreenType = @import("telar-frontend").Screen;
+const CompositorType = @import("telar-frontend").Compositor;
 const std = @import("std");
 const Fixture = @import("Fixture.zig");
-const source_namespace = @import("main.zig");
-model: frontend.multiplexer.Model,
-screen: frontend.term.Screen,
-compositor: frontend.multiplexer.Compositor,
+const TabLocationType = @import("telar-core").TabLocation;
+const main = @import("main.zig");
+const IncrementalComposeContext = @This();
+
+model: MultiplexerModel,
+screen: ScreenType,
+compositor: CompositorType,
 payloads: [2][]const u8,
 
-fn init(gpa: std.mem.Allocator, fixture: *const Fixture) !IncrementalComposeContext {
-    var model = frontend.multiplexer.Model.init(gpa);
+pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture) !IncrementalComposeContext {
+    var model = MultiplexerModel.init(gpa);
     errdefer model.deinit();
-    const location: source_namespace.schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = source_namespace.cols, .rows = source_namespace.rows } });
-    var screen = try frontend.term.Screen.init(gpa, source_namespace.cols, source_namespace.rows);
+    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = main.cols, .rows = main.rows } });
+    var screen = try ScreenType.init(gpa, main.cols, main.rows);
     errdefer screen.deinit();
-    var compositor = frontend.multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     errdefer compositor.deinit();
-    _ = try source_namespace.composeFullScreen(&compositor, &model, &screen);
+    _ = try main.composeFullScreen(&compositor, &model, &screen);
     model.find(@enumFromInt(1)).?.applied_frame_id = 1;
     return .{
         .model = model,
@@ -30,7 +34,7 @@ fn init(gpa: std.mem.Allocator, fixture: *const Fixture) !IncrementalComposeCont
     };
 }
 
-fn deinit(context: *IncrementalComposeContext) void {
+pub fn deinit(context: *IncrementalComposeContext) void {
     context.compositor.deinit();
     context.screen.deinit();
     context.model.deinit();

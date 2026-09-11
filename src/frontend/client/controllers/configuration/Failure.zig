@@ -1,6 +1,7 @@
+const PositionType = @import("telar-client").Position;
 const Failure = @This();
-const bars = @import("../../../bars/root.zig");
+
 generation: u64,
-position: bars.Position,
+position: PositionType,
 reason: anyerror,
 kind: []const u8,

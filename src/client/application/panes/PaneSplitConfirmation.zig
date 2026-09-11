@@ -1,5 +1,6 @@
-const PaneSplitConfirmation = @This();
-const client_model = @import("../../root.zig").model;
+const PaneSplitType = @import("../../model/PaneSplit.zig");
 const OpenedPane = @import("OpenedPane.zig");
-requested: client_model.PaneSplit,
+const PaneSplitConfirmation = @This();
+
+requested: PaneSplitType,
 opened: OpenedPane,

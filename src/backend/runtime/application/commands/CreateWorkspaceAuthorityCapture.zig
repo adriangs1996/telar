@@ -1,19 +1,20 @@
-const AuthorityCapture = @This();
-const source_namespace = @import("create_workspace.zig");
-const LaunchAuthority = @import("CreateWorkspaceLaunchAuthority.zig");
-const PrepareLaunch = @import("CreateWorkspacePrepareLaunch.zig");
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const CreateWorkspaceLaunchAuthority = @import("CreateWorkspaceLaunchAuthority.zig");
+const CreateWorkspacePrepareLaunch = @import("CreateWorkspacePrepareLaunch.zig");
 const std = @import("std");
+const AuthorityCapture = @This();
+
 failure: ?anyerror = null,
 launch_cwd: []const u8 = "/prepared",
 call_count: usize = 0,
-last_requested_cwd: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+last_requested_cwd: [max_cwd_bytes_module]u8 = undefined,
 last_requested_cwd_len: usize = 0,
 
-pub fn port(capture: *AuthorityCapture) LaunchAuthority {
+pub fn port(capture: *AuthorityCapture) CreateWorkspaceLaunchAuthority {
     return .{ .context = capture, .prepare = prepare };
 }
 
-fn prepare(context: *anyopaque, request: PrepareLaunch) ![]const u8 {
+fn prepare(context: *anyopaque, request: CreateWorkspacePrepareLaunch) ![]const u8 {
     const capture: *AuthorityCapture = @ptrCast(@alignCast(context));
     std.debug.assert(request.launch.cwd.len <= capture.last_requested_cwd.len);
 

@@ -1,14 +1,9 @@
 //! Shared antialiased RGBA fill for client-owned rounded backgrounds.
 
+const Input = @import("Input.zig");
 const std = @import("std");
-
-pub const Size = @import("Size.zig");
-
-pub const Shape = @import("Shape.zig");
-
-const Point = @import("RoundedRectanglePoint.zig");
-
-pub const Input = @import("Input.zig");
+const Shape = @import("Shape.zig");
+const RoundedRectanglePoint = @import("RoundedRectanglePoint.zig");
 
 /// Fills a quota-validated surface. Transparent corners retain the fill RGB
 /// so hosts can interpolate the alpha edge without dark fringes.
@@ -35,7 +30,7 @@ pub fn render(input: Input) void {
     }
 }
 
-fn coverage(point: Point, shape: Shape) u8 {
+fn coverage(point: RoundedRectanglePoint, shape: Shape) u8 {
     if (shape.radius == 0) {
         return 255;
     }
@@ -50,7 +45,7 @@ fn coverage(point: Point, shape: Shape) u8 {
 
     for (0..supersample) |sample_y| {
         for (0..supersample) |sample_x| {
-            const sampled: Point = .{
+            const sampled: RoundedRectanglePoint = .{
                 .x = point.x * units_per_pixel + @as(u32, @intCast(sample_x * 2 + 1)),
                 .y = point.y * units_per_pixel + @as(u32, @intCast(sample_y * 2 + 1)),
             };
@@ -61,7 +56,7 @@ fn coverage(point: Point, shape: Shape) u8 {
     return @intCast((inside * 255 + supersample * supersample / 2) / (supersample * supersample));
 }
 
-fn contains(point: Point, shape: Shape) bool {
+fn contains(point: RoundedRectanglePoint, shape: Shape) bool {
     if ((point.x >= shape.radius and point.x <= shape.size.width - shape.radius) or
         (point.y >= shape.radius and point.y <= shape.size.height - shape.radius))
     {

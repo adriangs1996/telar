@@ -1,15 +1,15 @@
 //! Plugin inspection, installation and digest-bound trust commands.
 
 const std = @import("std");
-const core = @import("telar-core");
-const frontend = @import("telar-frontend");
-const parser = @import("parser.zig");
-const TestEnvironment = @import("test_environment.zig").TestEnvironment;
-
-const Io = std.Io;
-const File = Io.File;
-const Package = frontend.plugins.Package;
-const PluginOptions = parser.PluginOptions;
+const PluginOptions = @import("arguments/PluginOptions.zig");
+const inspectPackage_module = @import("telar-frontend").inspectPackage;
+const PluginWorkerOptionsType = @import("arguments/PluginWorkerOptions.zig");
+const run_module = @import("telar-frontend").run;
+const TrustStoreType = @import("telar-core").TrustStore;
+const Package = @import("telar-frontend").Package;
+const installPackage_module = @import("telar-frontend").installPackage;
+const CapabilitySetType = @import("telar-core").CapabilitySet;
+const TestEnvironment = @import("TestEnvironment.zig");
 
 /// Inspects one package and performs the requested read-only, installation or
 /// trust operation without executing plugin code.
@@ -18,7 +18,7 @@ const PluginOptions = parser.PluginOptions;
 /// try plugin.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: PluginOptions) !void {
-    const package = try frontend.plugins.inspectPackage(init.gpa, init.io, std.mem.span(options.path));
+    const package = try inspectPackage_module(init.gpa, init.io, std.mem.span(options.path));
     switch (options.command) {
         .inspect => try printInspection(init.io, &package),
         .install => try install(init, &package),
@@ -32,8 +32,8 @@ pub fn run(init: std.process.Init, options: PluginOptions) !void {
 /// ```zig
 /// try plugin.runWorker(process_init, options);
 /// ```
-pub fn runWorker(init: std.process.Init, options: parser.PluginWorkerOptions) !void {
-    return frontend.plugins.runWorker(init, .{
+pub fn runWorker(init: std.process.Init, options: PluginWorkerOptionsType) !void {
+    return run_module(init, .{
         .entry_path = std.mem.span(options.entry),
         .action_name = std.mem.span(options.action),
         .context = options.context,
@@ -67,13 +67,13 @@ pub fn trustPath(environ: std.process.Environ, buffer: []u8) ![]const u8 {
 /// ```zig
 /// const store = try plugin.loadTrustStore(process_init, path);
 /// ```
-pub fn loadTrustStore(init: std.process.Init, path: []const u8) !core.plugin.TrustStore {
+pub fn loadTrustStore(init: std.process.Init, path: []const u8) !TrustStoreType {
     return loadStore(init.io, init.gpa, path);
 }
 
-fn printInspection(io: Io, package: *const Package) !void {
+fn printInspection(io: std.Io, package: *const Package) !void {
     var buffer: [4096]u8 = undefined;
-    var output = File.stdout().writerStreaming(io, &buffer);
+    var output = std.Io.File.stdout().writerStreaming(io, &buffer);
     const writer = &output.interface;
     try writer.print("id: {s}\nversion: {s}\nsource: {s}\nrevision: {s}\ndigest: ", .{
         package.manifest.id(),
@@ -107,11 +107,11 @@ fn install(init: std.process.Init, package: *const Package) !void {
         package.manifest.id(),
         &digest_hex,
     });
-    try frontend.plugins.installPackage(init.gpa, init.io, .{ .package = package, .destination = destination });
+    try installPackage_module(init.gpa, init.io, .{ .package = package, .destination = destination });
 
     var output_buffer: [std.fs.max_path_bytes + 64]u8 = undefined;
     const output = try std.fmt.bufPrint(&output_buffer, "telar plugin installed: {s}\n", .{destination});
-    try File.stdout().writeStreamingAll(init.io, output);
+    try std.Io.File.stdout().writeStreamingAll(init.io, output);
 }
 
 fn trust(init: std.process.Init, package: *const Package, options: *const PluginOptions) !void {
@@ -121,7 +121,7 @@ fn trust(init: std.process.Init, package: *const Package, options: *const Plugin
     var store = try loadStore(init.io, init.gpa, path);
     try store.upsert(&package.manifest, .{ .digest = package.digest, .capabilities = granted });
     try writeStore(init.io, path, &store);
-    try File.stdout().writeStreamingAll(init.io, "telar plugin trust updated\n");
+    try std.Io.File.stdout().writeStreamingAll(init.io, "telar plugin trust updated\n");
 }
 
 fn installBase(environ: std.process.Environ, buffer: []u8) ![]const u8 {
@@ -139,12 +139,12 @@ fn installBase(environ: std.process.Environ, buffer: []u8) ![]const u8 {
     return std.fmt.bufPrint(buffer, "{s}/.local/share/telar/plugins", .{home});
 }
 
-fn grantedCapabilities(declared: core.plugin.CapabilitySet, options: *const PluginOptions) !core.plugin.CapabilitySet {
+fn grantedCapabilities(declared: CapabilitySetType, options: *const PluginOptions) !CapabilitySetType {
     if (options.capability_count == 0) {
         return declared;
     }
 
-    var granted = core.plugin.CapabilitySet.initEmpty();
+    var granted = CapabilitySetType.initEmpty();
     for (options.capabilities[0..options.capability_count]) |capability| {
         if (!declared.contains(capability)) {
             return error.CapabilityNotDeclared;
@@ -160,8 +160,8 @@ fn grantedCapabilities(declared: core.plugin.CapabilitySet, options: *const Plug
     return granted;
 }
 
-fn loadStore(io: Io, gpa: std.mem.Allocator, path: []const u8) !core.plugin.TrustStore {
-    const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
+fn loadStore(io: std.Io, gpa: std.mem.Allocator, path: []const u8) !TrustStoreType {
+    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
         error.FileNotFound => return .{},
         else => |other| return other,
     };
@@ -169,15 +169,15 @@ fn loadStore(io: Io, gpa: std.mem.Allocator, path: []const u8) !core.plugin.Trus
         return error.InsecureTrustStore;
     }
 
-    const source = try Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
+    const source = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
     defer gpa.free(source);
-    return core.plugin.TrustStore.parse(gpa, source);
+    return TrustStoreType.parse(gpa, source);
 }
 
-fn writeStore(io: Io, path: []const u8, store: *const core.plugin.TrustStore) !void {
+fn writeStore(io: std.Io, path: []const u8, store: *const TrustStoreType) !void {
     const directory = std.fs.path.dirname(path) orelse return error.InvalidTrustStorePath;
-    _ = try Io.Dir.cwd().createDirPathStatus(io, directory, File.Permissions.fromMode(0o700));
-    try Io.Dir.cwd().setFilePermissions(io, directory, File.Permissions.fromMode(0o700), .{ .follow_symlinks = false });
+    _ = try std.Io.Dir.cwd().createDirPathStatus(io, directory, std.Io.File.Permissions.fromMode(0o700));
+    try std.Io.Dir.cwd().setFilePermissions(io, directory, std.Io.File.Permissions.fromMode(0o700), .{ .follow_symlinks = false });
 
     var nonce: [16]u8 = undefined;
     try io.randomSecure(&nonce);
@@ -186,12 +186,12 @@ fn writeStore(io: Io, path: []const u8, store: *const core.plugin.TrustStore) !v
     const temp = try std.fmt.bufPrint(&temp_buffer, "{s}.tmp-{s}", .{ path, &nonce_hex });
     var committed = false;
     defer if (!committed) {
-        Io.Dir.cwd().deleteFile(io, temp) catch {};
+        std.Io.Dir.cwd().deleteFile(io, temp) catch {};
     };
 
-    var file = try Io.Dir.cwd().createFile(io, temp, .{
+    var file = try std.Io.Dir.cwd().createFile(io, temp, .{
         .truncate = true,
-        .permissions = File.Permissions.fromMode(0o600),
+        .permissions = std.Io.File.Permissions.fromMode(0o600),
     });
     var file_open = true;
     defer if (file_open) {
@@ -204,7 +204,7 @@ fn writeStore(io: Io, path: []const u8, store: *const core.plugin.TrustStore) !v
     try file.sync(io);
     file.close(io);
     file_open = false;
-    try Io.Dir.cwd().rename(temp, Io.Dir.cwd(), path, io);
+    try std.Io.Dir.cwd().rename(temp, std.Io.Dir.cwd(), path, io);
     committed = true;
 }
 
@@ -216,9 +216,9 @@ fn temporaryPath(temp: *std.testing.TmpDir, name: []const u8, buffer: []u8) ![]c
 
 test "plugin data and trust paths prefer their XDG homes" {
     var environment = try TestEnvironment.init(&.{
-        .{ "XDG_DATA_HOME", "/data" },
-        .{ "XDG_CONFIG_HOME", "/config" },
-        .{ "HOME", "/home/adrian" },
+        .{ .name = "XDG_DATA_HOME", .value = "/data" },
+        .{ .name = "XDG_CONFIG_HOME", .value = "/config" },
+        .{ .name = "HOME", .value = "/home/adrian" },
     });
     defer environment.deinit();
     const environ: std.process.Environ = .{ .block = environment.block };
@@ -230,7 +230,7 @@ test "plugin data and trust paths prefer their XDG homes" {
 }
 
 test "plugin data and trust paths fall back to HOME" {
-    var environment = try TestEnvironment.init(&.{.{ "HOME", "/home/adrian" }});
+    var environment = try TestEnvironment.init(&.{.{ .name = "HOME", .value = "/home/adrian" }});
     defer environment.deinit();
     const environ: std.process.Environ = .{ .block = environment.block };
     var data_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -241,7 +241,7 @@ test "plugin data and trust paths fall back to HOME" {
 }
 
 test "explicit plugin grants must be declared and unique" {
-    var declared = core.plugin.CapabilitySet.initEmpty();
+    var declared = CapabilitySetType.initEmpty();
     declared.insert(.history_read);
     declared.insert(.notifications);
     var options: PluginOptions = .{ .command = .trust, .path = "./plugin" };
@@ -262,7 +262,7 @@ test "explicit plugin grants must be declared and unique" {
 }
 
 test "omitting plugin grants accepts every declared capability" {
-    var declared = core.plugin.CapabilitySet.initEmpty();
+    var declared = CapabilitySetType.initEmpty();
     declared.insert(.history_read);
     declared.insert(.notifications);
     const options: PluginOptions = .{ .command = .trust, .path = "./plugin" };
@@ -288,11 +288,11 @@ test "trust-store writes are private and parseable" {
     defer temp.cleanup();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try temporaryPath(&temp, "config/trust.json", &path_buffer);
-    const expected: core.plugin.TrustStore = .{};
+    const expected: TrustStoreType = .{};
 
     try writeStore(std.testing.io, path, &expected);
 
-    const stat = try Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false });
+    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false });
     try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
     const loaded = try loadStore(std.testing.io, std.testing.allocator, path);
     try std.testing.expectEqual(@as(u8, 0), loaded.count);
@@ -303,10 +303,10 @@ test "a group-readable trust store is rejected" {
     defer temp.cleanup();
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try temporaryPath(&temp, "trust.json", &path_buffer);
-    var file = try Io.Dir.cwd().createFile(std.testing.io, path, .{ .permissions = File.Permissions.fromMode(0o600) });
+    var file = try std.Io.Dir.cwd().createFile(std.testing.io, path, .{ .permissions = std.Io.File.Permissions.fromMode(0o600) });
     try file.writeStreamingAll(std.testing.io, "{\"version\":1,\"grants\":[]}\n");
     file.close(std.testing.io);
-    try Io.Dir.cwd().setFilePermissions(std.testing.io, path, File.Permissions.fromMode(0o640), .{ .follow_symlinks = false });
+    try std.Io.Dir.cwd().setFilePermissions(std.testing.io, path, std.Io.File.Permissions.fromMode(0o640), .{ .follow_symlinks = false });
 
     try std.testing.expectError(error.InsecureTrustStore, loadStore(std.testing.io, std.testing.allocator, path));
 }

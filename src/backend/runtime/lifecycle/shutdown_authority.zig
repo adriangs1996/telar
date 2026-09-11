@@ -1,13 +1,8 @@
 //! Runtime shutdown authority and its first-writer transition.
 
+const State = @import("State.zig");
+const ClientKey = @import("../../history/ClientKey.zig");
 const std = @import("std");
-const history_mod = @import("../../history/root.zig");
-
-pub const ClientKey = history_mod.model.ClientKey;
-
-pub const StopRequested = @import("StopRequested.zig");
-
-pub const State = @import("State.zig");
 
 test "the first shutdown requester becomes the stable authority" {
     var state: State = .{};

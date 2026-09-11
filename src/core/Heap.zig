@@ -1,44 +1,30 @@
+const SnapshotType = @import("Snapshot.zig");
+const std = @import("std");
+const diagnostics = @import("diagnostics.zig");
 /// Counting wrapper around the process GPA. Debug builds attribute every
 /// alloc/free to the thread's current `Path`. Release returns the child
 /// unchanged, so the interactive path pays nothing.
 const Heap = @This();
-const source_namespace = @import("diagnostics.zig");
-const std = @import("std");
-child: source_namespace.Allocator,
-live_bytes: source_namespace.Counter = source_namespace.counter_init,
-live_allocs: source_namespace.Counter = source_namespace.counter_init,
-allocs: source_namespace.Counter = source_namespace.counter_init,
-frees: source_namespace.Counter = source_namespace.counter_init,
-alloc_bytes: source_namespace.Counter = source_namespace.counter_init,
-path_allocs: [source_namespace.path_count]source_namespace.Counter = @splat(source_namespace.counter_init),
-path_alloc_bytes: [source_namespace.path_count]source_namespace.Counter = @splat(source_namespace.counter_init),
-interactive_vt_allocs: source_namespace.Counter = source_namespace.counter_init,
-interactive_vt_alloc_bytes: source_namespace.Counter = source_namespace.counter_init,
 
-pub const Snapshot = struct {
-    live_bytes: u64 = 0,
-    live_allocs: u64 = 0,
-    allocs: u64 = 0,
-    frees: u64 = 0,
-    alloc_bytes: u64 = 0,
-    interactive_allocs: u64 = 0,
-    interactive_alloc_bytes: u64 = 0,
-    interactive_vt_allocs: u64 = 0,
-    interactive_vt_alloc_bytes: u64 = 0,
-    media_allocs: u64 = 0,
-    media_alloc_bytes: u64 = 0,
-    observation_allocs: u64 = 0,
-    observation_alloc_bytes: u64 = 0,
-    other_allocs: u64 = 0,
-    other_alloc_bytes: u64 = 0,
-};
+child: std.mem.Allocator,
+live_bytes: diagnostics.Counter = diagnostics.counter_init,
+live_allocs: diagnostics.Counter = diagnostics.counter_init,
+allocs: diagnostics.Counter = diagnostics.counter_init,
+frees: diagnostics.Counter = diagnostics.counter_init,
+alloc_bytes: diagnostics.Counter = diagnostics.counter_init,
+path_allocs: [diagnostics.path_count]diagnostics.Counter = @splat(diagnostics.counter_init),
+path_alloc_bytes: [diagnostics.path_count]diagnostics.Counter = @splat(diagnostics.counter_init),
+interactive_vt_allocs: diagnostics.Counter = diagnostics.counter_init,
+interactive_vt_alloc_bytes: diagnostics.Counter = diagnostics.counter_init,
 
-pub fn init(child: source_namespace.Allocator) Heap {
+pub const Snapshot = @import("Snapshot.zig");
+
+pub fn init(child: std.mem.Allocator) Heap {
     return .{ .child = child };
 }
 
-pub fn allocator(heap: *Heap) source_namespace.Allocator {
-    if (!source_namespace.enabled) {
+pub fn allocator(heap: *Heap) std.mem.Allocator {
+    if (!diagnostics.enabled) {
         return heap.child;
     }
     return .{
@@ -52,57 +38,57 @@ pub fn allocator(heap: *Heap) source_namespace.Allocator {
     };
 }
 
-pub fn snapshot(heap: *const Heap) Snapshot {
+pub fn snapshot(heap: *const Heap) SnapshotType {
     return .{
-        .live_bytes = source_namespace.load(&heap.live_bytes),
-        .live_allocs = source_namespace.load(&heap.live_allocs),
-        .allocs = source_namespace.load(&heap.allocs),
-        .frees = source_namespace.load(&heap.frees),
-        .alloc_bytes = source_namespace.load(&heap.alloc_bytes),
-        .interactive_allocs = source_namespace.load(&heap.path_allocs[@intFromEnum(source_namespace.Path.interactive)]),
-        .interactive_alloc_bytes = source_namespace.load(&heap.path_alloc_bytes[@intFromEnum(source_namespace.Path.interactive)]),
-        .interactive_vt_allocs = source_namespace.load(&heap.interactive_vt_allocs),
-        .interactive_vt_alloc_bytes = source_namespace.load(&heap.interactive_vt_alloc_bytes),
-        .media_allocs = source_namespace.load(&heap.path_allocs[@intFromEnum(source_namespace.Path.media)]),
-        .media_alloc_bytes = source_namespace.load(&heap.path_alloc_bytes[@intFromEnum(source_namespace.Path.media)]),
-        .observation_allocs = source_namespace.load(&heap.path_allocs[@intFromEnum(source_namespace.Path.observation)]),
-        .observation_alloc_bytes = source_namespace.load(&heap.path_alloc_bytes[@intFromEnum(source_namespace.Path.observation)]),
-        .other_allocs = source_namespace.load(&heap.path_allocs[@intFromEnum(source_namespace.Path.other)]),
-        .other_alloc_bytes = source_namespace.load(&heap.path_alloc_bytes[@intFromEnum(source_namespace.Path.other)]),
+        .live_bytes = diagnostics.load(&heap.live_bytes),
+        .live_allocs = diagnostics.load(&heap.live_allocs),
+        .allocs = diagnostics.load(&heap.allocs),
+        .frees = diagnostics.load(&heap.frees),
+        .alloc_bytes = diagnostics.load(&heap.alloc_bytes),
+        .interactive_allocs = diagnostics.load(&heap.path_allocs[@intFromEnum(diagnostics.Path.interactive)]),
+        .interactive_alloc_bytes = diagnostics.load(&heap.path_alloc_bytes[@intFromEnum(diagnostics.Path.interactive)]),
+        .interactive_vt_allocs = diagnostics.load(&heap.interactive_vt_allocs),
+        .interactive_vt_alloc_bytes = diagnostics.load(&heap.interactive_vt_alloc_bytes),
+        .media_allocs = diagnostics.load(&heap.path_allocs[@intFromEnum(diagnostics.Path.media)]),
+        .media_alloc_bytes = diagnostics.load(&heap.path_alloc_bytes[@intFromEnum(diagnostics.Path.media)]),
+        .observation_allocs = diagnostics.load(&heap.path_allocs[@intFromEnum(diagnostics.Path.observation)]),
+        .observation_alloc_bytes = diagnostics.load(&heap.path_alloc_bytes[@intFromEnum(diagnostics.Path.observation)]),
+        .other_allocs = diagnostics.load(&heap.path_allocs[@intFromEnum(diagnostics.Path.other)]),
+        .other_alloc_bytes = diagnostics.load(&heap.path_alloc_bytes[@intFromEnum(diagnostics.Path.other)]),
     };
 }
 
 fn recordAlloc(heap: *Heap, len: usize) void {
-    source_namespace.add(&heap.live_bytes, len);
-    source_namespace.add(&heap.live_allocs, 1);
-    source_namespace.add(&heap.allocs, 1);
-    source_namespace.add(&heap.alloc_bytes, len);
-    const path = @intFromEnum(source_namespace.current_path);
-    source_namespace.add(&heap.path_allocs[path], 1);
-    source_namespace.add(&heap.path_alloc_bytes[path], len);
-    if (source_namespace.current_path == .interactive and source_namespace.terminal_allocation_scope) {
-        source_namespace.add(&heap.interactive_vt_allocs, 1);
-        source_namespace.add(&heap.interactive_vt_alloc_bytes, len);
+    diagnostics.add(&heap.live_bytes, len);
+    diagnostics.add(&heap.live_allocs, 1);
+    diagnostics.add(&heap.allocs, 1);
+    diagnostics.add(&heap.alloc_bytes, len);
+    const path = @intFromEnum(diagnostics.current_path);
+    diagnostics.add(&heap.path_allocs[path], 1);
+    diagnostics.add(&heap.path_alloc_bytes[path], len);
+    if (diagnostics.current_path == .interactive and diagnostics.terminal_allocation_scope) {
+        diagnostics.add(&heap.interactive_vt_allocs, 1);
+        diagnostics.add(&heap.interactive_vt_alloc_bytes, len);
     }
 }
 
 fn recordGrow(heap: *Heap, delta: usize) void {
-    source_namespace.add(&heap.live_bytes, delta);
-    source_namespace.add(&heap.alloc_bytes, delta);
-    source_namespace.add(&heap.path_alloc_bytes[@intFromEnum(source_namespace.current_path)], delta);
-    if (source_namespace.current_path == .interactive and source_namespace.terminal_allocation_scope) {
-        source_namespace.add(&heap.interactive_vt_alloc_bytes, delta);
+    diagnostics.add(&heap.live_bytes, delta);
+    diagnostics.add(&heap.alloc_bytes, delta);
+    diagnostics.add(&heap.path_alloc_bytes[@intFromEnum(diagnostics.current_path)], delta);
+    if (diagnostics.current_path == .interactive and diagnostics.terminal_allocation_scope) {
+        diagnostics.add(&heap.interactive_vt_alloc_bytes, delta);
     }
 }
 
 fn recordShrink(heap: *Heap, delta: usize) void {
-    source_namespace.sub(&heap.live_bytes, delta);
+    diagnostics.sub(&heap.live_bytes, delta);
 }
 
 fn recordFree(heap: *Heap, len: usize) void {
-    source_namespace.sub(&heap.live_bytes, len);
-    source_namespace.sub(&heap.live_allocs, 1);
-    source_namespace.add(&heap.frees, 1);
+    diagnostics.sub(&heap.live_bytes, len);
+    diagnostics.sub(&heap.live_allocs, 1);
+    diagnostics.add(&heap.frees, 1);
 }
 
 // codestyle: allow(maximum-parameter-count)

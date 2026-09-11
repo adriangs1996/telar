@@ -1,8 +1,9 @@
+const observer_support = @import("observer_support.zig");
 const Batch = @This();
-const source_namespace = @import("observer_support.zig");
-bytes: [source_namespace.batch_bytes]u8 = undefined,
+
+bytes: [observer_support.batch_bytes]u8 = undefined,
 len: usize = 0,
-events: [source_namespace.batch_events]source_namespace.Event = undefined,
+events: [observer_support.batch_events]observer_support.Event = undefined,
 event_count: usize = 0,
 reset_before: bool = false,
 
@@ -22,7 +23,7 @@ pub fn pushBytes(batch: *Batch, bytes: []const u8) ?u32 {
     return @intCast(offset);
 }
 
-pub fn pushEvent(batch: *Batch, event: source_namespace.Event) bool {
+pub fn pushEvent(batch: *Batch, event: observer_support.Event) bool {
     if (batch.event_count == batch.events.len) {
         return false;
     }

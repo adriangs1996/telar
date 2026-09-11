@@ -1,31 +1,21 @@
 //! Vertical and application tests for the runtime pane-resize flow.
 
+const GenericPaneResizeController = @import("../entrypoints/requests/GenericPaneResizeController.zig").Type;
+const PaneResizeHandlerType = @import("../application/commands/PaneResizeHandler.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const Trace = @import("Trace.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const attachment_mod = @import("../attachment/root.zig");
+const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const ResizeHarness = @import("ResizeHarness.zig");
+const pane_module = @import("telar-core").pane;
 const pane_resize_commands = @import("../application/commands/pane_resize.zig");
-const pane_resize_controller = @import("../entrypoints/requests/pane_resize.zig");
-const test_support = @import("support.zig");
-const telemetry_mod = @import("../observability/root.zig").telemetry;
+const PaneFixture = @import("PaneFixture.zig");
 
-pub const schema = core.schema;
-const Pane = @import("../../pane/root.zig").Pane;
-pub const AttachmentStore = attachment_mod.AttachmentStore;
-pub const PaneFixture = test_support.PaneFixture;
-const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-const ResizeController = pane_resize_controller.Controller(*pane_resize_commands.PaneResizeHandler);
+const ResizeController = GenericPaneResizeController(*PaneResizeHandlerType);
 
-const resized_size: schema.TerminalSize = .{ .cols = 30, .rows = 8, .cell_width_px = 9, .cell_height_px = 18 };
+const resized_size: TerminalSizeType = .{ .cols = 30, .rows = 8, .cell_width_px = 9, .cell_height_px = 18 };
 
 pub const Effect = enum { geometry_check, observation, media, geometry_release, response };
-
-const Trace = @import("Trace.zig");
-
-const GeometryCapture = @import("GeometryCapture.zig");
-
-const SchedulerCapture = @import("SchedulerCapture.zig");
-
-const ResizeHarness = @import("ResizeHarness.zig");
 
 fn expectEffects(trace: *const Trace, expected: []const Effect) !void {
     try std.testing.expectEqualSlices(Effect, expected, trace.effects[0..trace.len]);
@@ -37,7 +27,7 @@ test "PaneResizeHandler rejects a pane outside the client attachments" {
     harness.init(&attachments, resized_size);
 
     const result = try harness.handler.execute(.{
-        .pane_id = try schema.id.pane(99),
+        .pane_id = try pane_module(99),
         .size = resized_size,
     });
 
@@ -227,7 +217,7 @@ test "PaneResizeHandler retains workspace geometry when another attachment survi
     try fixture.init();
     defer fixture.deinit();
 
-    const second = try fixture.createPane(try schema.id.pane(8));
+    const second = try fixture.createPane(try pane_module(8));
     _ = try fixture.attachments.attach(fixture.attachment_allocator.allocator(), second);
     defer {
         _ = fixture.attachments.detach(second.id);

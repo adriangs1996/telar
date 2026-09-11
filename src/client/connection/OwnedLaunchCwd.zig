@@ -1,7 +1,8 @@
-const OwnedLaunchCwd = @This();
-const source_namespace = @import("outbox_support.zig");
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const std = @import("std");
-bytes: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+const OwnedLaunchCwd = @This();
+
+bytes: [max_cwd_bytes_module]u8 = undefined,
 len: u16 = 0,
 used: bool = false,
 

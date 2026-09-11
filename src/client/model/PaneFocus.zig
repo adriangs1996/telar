@@ -1,7 +1,9 @@
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const PaneFocus = @This();
-const source_namespace = @import("types.zig");
-location: source_namespace.schema.TabLocation,
-previous: source_namespace.schema.PaneId,
-focused: source_namespace.schema.PaneId,
+
+location: TabLocationType,
+previous: PaneIdType,
+focused: PaneIdType,
 geometry_changed: bool,
 panes_revision: u64,

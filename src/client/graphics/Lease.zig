@@ -1,4 +1,5 @@
+const ImageIdentityType = @import("ImageIdentity.zig");
 const Lease = @This();
-const resources = @import("root.zig");
-identity: resources.ImageIdentity,
+
+identity: ImageIdentityType,
 pixels: []const u8

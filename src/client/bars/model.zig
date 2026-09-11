@@ -1,10 +1,14 @@
 //! Bounded configuration and presentation state for client-owned bars.
 
+const ColorType = @import("telar-core").Color;
+const Content = @import("Content.zig");
+const Dynamic = @import("Dynamic.zig");
+const Command = @import("BarCommand.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const ui_icons = @import("../layout/root.zig").icons;
-
-pub const ui = core.ui;
+const measure_module = @import("telar-core").measure;
+const ui_icons = @import("../layout/icons.zig");
+const Configuration = @import("Configuration.zig");
+const State = @import("State.zig");
 
 pub const max_segments = 16;
 pub const max_text_bytes = 512;
@@ -53,22 +57,8 @@ pub const PaletteColor = enum {
 
 pub const Color = union(enum) {
     palette: PaletteColor,
-    value: ui.Color,
+    value: ColorType,
 };
-
-pub const Style = @import("Style.zig");
-
-pub const Segment = @import("Segment.zig");
-
-pub const SegmentInput = @import("SegmentInput.zig");
-
-pub const Content = @import("Content.zig");
-
-pub const CallbackRef = @import("CallbackRef.zig");
-
-pub const Dynamic = @import("Dynamic.zig");
-
-pub const Command = @import("Command.zig");
 
 pub const Source = union(enum) {
     empty,
@@ -87,8 +77,6 @@ pub const Source = union(enum) {
     }
 };
 
-pub const Configuration = @import("Configuration.zig");
-
 pub const Slot = union(enum) {
     empty,
     tabs,
@@ -96,16 +84,10 @@ pub const Slot = union(enum) {
     content: Content,
 };
 
-pub const Layout = @import("Layout.zig");
-
 pub const Change = enum {
     unchanged,
     changed,
 };
-
-pub const Update = @import("Update.zig");
-
-pub const State = @import("State.zig");
 
 pub fn presentationSlot(source: *const Source) Slot {
     return switch (source.*) {
@@ -161,7 +143,7 @@ test "bar content reserves the rendered width of wide Unicode icons" {
     try content.append(.{ .text = "", .icon = .battery_full });
 
     try std.testing.expectEqual(
-        @max(@as(u16, 1), ui.measure(ui_icons.Icon.battery_full.unicodeGlyph())),
+        @max(@as(u16, 1), measure_module(ui_icons.Icon.battery_full.unicodeGlyph())),
         content.width(),
     );
 }

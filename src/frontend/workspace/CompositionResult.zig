@@ -1,5 +1,6 @@
-const CompositionResult = @This();
 const RenderStats = @import("RenderStats.zig");
-const source_namespace = @import("multiplexer.zig");
+const PresentationCommitType = @import("telar-client").PresentationCommit;
+const CompositionResult = @This();
+
 stats: RenderStats,
-commit: source_namespace.PresentationCommit,
+commit: PresentationCommitType,

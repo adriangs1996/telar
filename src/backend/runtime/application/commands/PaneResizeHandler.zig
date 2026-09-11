@@ -1,12 +1,15 @@
-const PaneResizeHandler = @This();
-const source_namespace = @import("pane_resize.zig");
-const GeometryLease = @import("PaneResizeGeometryLease.zig");
-const Scheduler = @import("PaneResizeScheduler.zig");
+const AttachmentStoreType = @import("../../attachment/AttachmentStore.zig");
+const PaneResizeGeometryLease = @import("PaneResizeGeometryLease.zig");
+const PaneResizeScheduler = @import("PaneResizeScheduler.zig");
 const PaneResize = @import("PaneResize.zig");
+const pane_resize = @import("pane_resize.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-attachments: *source_namespace.AttachmentStore,
-geometry: GeometryLease,
-scheduler: Scheduler,
+const PaneResizeHandler = @This();
+
+attachments: *AttachmentStoreType,
+geometry: PaneResizeGeometryLease,
+scheduler: PaneResizeScheduler,
 
 /// Applies an authorized resize immediately while ingestion is idle, then
 /// synchronizes observation, media, and the client's cell buffers in that
@@ -17,7 +20,7 @@ scheduler: Scheduler,
 /// ```zig
 /// const result = try handler.execute(.{ .pane_id = pane_id, .size = size });
 /// ```
-pub fn execute(handler: *PaneResizeHandler, command: PaneResize) !source_namespace.PaneResizeResult {
+pub fn execute(handler: *PaneResizeHandler, command: PaneResize) !pane_resize.PaneResizeResult {
     const attachment = handler.attachments.find(command.pane_id) orelse return .pane_not_attached;
     const pane = attachment.pane;
 
@@ -47,7 +50,7 @@ pub fn execute(handler: *PaneResizeHandler, command: PaneResize) !source_namespa
     return .handled;
 }
 
-fn detachFailedProjection(handler: *PaneResizeHandler, pane_id: source_namespace.schema.PaneId) void {
+fn detachFailedProjection(handler: *PaneResizeHandler, pane_id: PaneIdType) void {
     const detached = handler.attachments.detach(pane_id) orelse return;
 
     if (!detached.last_attachment) {

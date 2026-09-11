@@ -1,5 +1,7 @@
+const PaneResizeType = @import("telar-core").PaneResize;
+const PaneSplitPlanType = @import("../../model/PaneSplitPlan.zig");
 const RequestEffects = @This();
-const client_model = @import("../../root.zig").model;
+
 context: *anyopaque,
-resize: *const fn (*anyopaque, client_model.PaneResize) anyerror!void,
-send: *const fn (*anyopaque, client_model.PaneSplitPlan) anyerror!void,
+resize: *const fn (*anyopaque, PaneResizeType) anyerror!void,
+send: *const fn (*anyopaque, PaneSplitPlanType) anyerror!void,

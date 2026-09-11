@@ -1,4 +1,5 @@
+const ScrollType = @import("telar-core").Scroll;
 const Viewport = @This();
-const source_namespace = @import("copy_mode.zig");
-scroll: source_namespace.schema.frame.Scroll,
+
+scroll: ScrollType,
 rows: u16,

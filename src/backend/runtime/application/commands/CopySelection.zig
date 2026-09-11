@@ -1,6 +1,7 @@
+const PaneIdType = @import("telar-core").PaneId;
 const CopySelection = @This();
-const source_namespace = @import("copy_selection.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 start_x: u16,
 start_y: u32,
 end_x: u16,

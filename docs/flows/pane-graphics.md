@@ -146,12 +146,12 @@ dedicated media queue is a separate scheduling change.
 
 - `src/frontend/graphics/kitty.zig` proves quotas, revision recovery, stale
   suppression, snapshot validation and exact ingress versions.
-- `src/frontend/client/model.zig` proves fallback ownership, no-op behavior and
+- `src/client/model/Model.zig` proves fallback ownership, no-op behavior and
   isolated semantic versions.
-- `src/frontend/client/application/pane_graphics.zig` proves resource-before-
+- `src/client/application/panes/pane_graphics.zig` proves resource-before-
   model ordering, committed-capability policy, bounded fallback traversal,
   repeated-value suppression, recovery selection and downgrade ordering.
-- `src/frontend/client/client_test.zig` proves protocol recovery, physical-only
+- `src/frontend/client/tests/` proves protocol recovery, physical-only
   presenter observation and shared-memory downgrade ordering.
-- `src/frontend/client/presenter.zig` proves that use cases do not choose when
+- `src/frontend/client/presentation/Presenter.zig` proves that use cases do not choose when
   to paint and that semantic and physical revisions fold into one paced frame.

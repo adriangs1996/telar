@@ -1,15 +1,29 @@
 //! The `telar history` command and its terminal-safe text presentation.
 
+const max_history_query_bytes_module = @import("telar-core").max_history_query_bytes;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const std = @import("std");
-const core = @import("telar-core");
-const parser = @import("parser.zig");
-const runtime_connection = @import("runtime_connection.zig");
+const HistoryOptions = @import("arguments/HistoryOptions.zig");
+const RuntimeConnector = @import("RuntimeConnector.zig");
+const encodeQueryHistory_module = @import("telar-core").encodeQueryHistory;
+const max_frame_size_module = @import("telar-core").max_frame_size;
+const decodeServer_module = @import("telar-core").decodeServer;
+const HistoryResultsViewType = @import("telar-core").HistoryResultsView;
+const UtcTimestamp = @import("UtcTimestamp.zig");
+const max_import_source_bytes_module = @import("telar-core").max_import_source_bytes;
+const BatchSender = @import("BatchSender.zig");
+const ImportParser = @import("ImportParser.zig");
+const ResolvedImport = @import("ResolvedImport.zig");
+const history = @import("arguments/history.zig");
+const ImportedEntry = @import("ImportedEntry.zig");
+const encodeDeleteHistory_module = @import("telar-core").encodeDeleteHistory;
+const max_history_results_module = @import("telar-core").max_history_results;
+const encodePruneHistory_module = @import("telar-core").encodePruneHistory;
+const SocketChannelType = @import("telar-core").SocketChannel;
+const encodeReadHistoryOutput_module = @import("telar-core").encodeReadHistoryOutput;
+const encodeHistoryStatsQuery_module = @import("telar-core").encodeHistoryStatsQuery;
 
-pub const Io = std.Io;
-const File = Io.File;
-const HistoryOptions = parser.HistoryOptions;
-const RuntimeConnector = runtime_connection.RuntimeConnector;
-const request_buffer_size = core.schema.max_history_query_bytes + core.schema.max_cwd_bytes + 64;
+const request_buffer_size = max_history_query_bytes_module + max_cwd_bytes_module + 64;
 
 /// Queries the local runtime using the selected history filters and writes
 /// escaped, line-oriented results to stdout.
@@ -38,7 +52,7 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
     var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const scope_value: []const u8 = switch (options.scope) {
         .cwd => cwd: {
-            const len = try Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
+            const len = try std.Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
             break :cwd cwd_buffer[0..len];
         },
         .workspace => std.mem.span(options.scope_value.?),
@@ -47,7 +61,7 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
     const query = if (options.query) |value| std.mem.span(value) else "";
 
     var send_buffer: [request_buffer_size]u8 = undefined;
-    try connection.send(init.io, try core.schema.encodeQueryHistory(&send_buffer, .{
+    try connection.send(init.io, try encodeQueryHistory_module(&send_buffer, .{
         .request_id = @enumFromInt(1),
         .query = query,
         .scope = options.scope,
@@ -58,9 +72,9 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
         .limit = options.limit,
     }));
 
-    const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
     defer init.gpa.free(receive_buffer);
-    const response = try core.schema.decodeServer(try connection.receive(init.io, receive_buffer));
+    const response = try decodeServer_module(try connection.receive(init.io, receive_buffer));
     switch (response) {
         .history_results => |results| try print(init.io, results),
         .request_failed => |failure| {
@@ -71,9 +85,9 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
     }
 }
 
-fn print(io: Io, results: core.schema.HistoryResultsView) !void {
+fn print(io: std.Io, results: HistoryResultsViewType) !void {
     var output_buffer: [16 * 1024]u8 = undefined;
-    var output = File.stdout().writerStreaming(io, &output_buffer);
+    var output = std.Io.File.stdout().writerStreaming(io, &output_buffer);
     const writer = &output.interface;
     var entries = results.entries();
     while (try entries.next()) |entry| {
@@ -115,8 +129,6 @@ fn print(io: Io, results: core.schema.HistoryResultsView) !void {
     try writer.flush();
 }
 
-const UtcTimestamp = @import("UtcTimestamp.zig");
-
 fn utcTimestamp(milliseconds: i64) UtcTimestamp {
     const seconds: u64 = @intCast(@max(@as(i64, 0), @divFloor(milliseconds, 1000)));
     const epoch = std.time.epoch.EpochSeconds{ .secs = seconds };
@@ -133,7 +145,7 @@ fn utcTimestamp(milliseconds: i64) UtcTimestamp {
     };
 }
 
-fn writeField(writer: *Io.Writer, value: []const u8) !void {
+fn writeField(writer: *std.Io.Writer, value: []const u8) !void {
     for (value) |byte| switch (byte) {
         '\n' => try writer.writeAll("\\n"),
         '\r' => try writer.writeAll("\\r"),
@@ -170,7 +182,7 @@ test "negative history timestamps clamp to the Unix epoch" {
 
 test "history fields escape terminal control bytes" {
     var storage: [128]u8 = undefined;
-    var writer = Io.Writer.fixed(&storage);
+    var writer = std.Io.Writer.fixed(&storage);
 
     try writeField(&writer, "echo\n\r\t\x00\x1b\x7f[31m");
 
@@ -179,7 +191,7 @@ test "history fields escape terminal control bytes" {
 
 test "history fields preserve printable UTF-8" {
     var storage: [128]u8 = undefined;
-    var writer = Io.Writer.fixed(&storage);
+    var writer = std.Io.Writer.fixed(&storage);
 
     try writeField(&writer, "git commit -m 'listo ✓'");
 
@@ -187,7 +199,7 @@ test "history fields preserve printable UTF-8" {
 }
 
 const max_histfile_bytes = 32 * 1024 * 1024;
-pub const max_batch_entries = core.schema.max_import_entries;
+
 pub const max_batch_payload = 48 * 1024;
 
 /// Streams one shell histfile to the runtime in bounded idempotent batches.
@@ -196,14 +208,14 @@ pub const max_batch_payload = 48 * 1024;
 fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const resolved = try resolveImport(init, options, &path_buffer);
-    const source_data = try Io.Dir.cwd().readFileAlloc(init.io, resolved.path, init.gpa, .limited(max_histfile_bytes));
+    const source_data = try std.Io.Dir.cwd().readFileAlloc(init.io, resolved.path, init.gpa, .limited(max_histfile_bytes));
     defer init.gpa.free(source_data);
 
     const connector = try RuntimeConnector.init(init, options.socket);
     var connection = try connector.connectOrStart(.{});
     defer connection.deinit(init.io);
 
-    var source_buffer: [core.schema.max_import_source_bytes]u8 = undefined;
+    var source_buffer: [max_import_source_bytes_module]u8 = undefined;
     const source = try std.fmt.bufPrint(&source_buffer, "{s}:{s}", .{ @tagName(resolved.kind), resolved.path });
 
     var sender: BatchSender = .{
@@ -225,12 +237,10 @@ fn runImport(init: std.process.Init, options: HistoryOptions) !void {
 
     try sender.finish();
     var stdout_buffer: [256]u8 = undefined;
-    var output = File.stdout().writerStreaming(init.io, &stdout_buffer);
+    var output = std.Io.File.stdout().writerStreaming(init.io, &stdout_buffer);
     try output.interface.print("imported {d} commands from {s}\n", .{ sender.total, resolved.path });
     try output.interface.flush();
 }
-
-const ResolvedImport = @import("ResolvedImport.zig");
 
 fn resolveImport(init: std.process.Init, options: HistoryOptions, buffer: *[std.fs.max_path_bytes]u8) !ResolvedImport {
     if (options.import_file) |file| {
@@ -238,11 +248,11 @@ fn resolveImport(init: std.process.Init, options: HistoryOptions, buffer: *[std.
         const kind = if (options.import_kind != .auto)
             options.import_kind
         else if (std.mem.endsWith(u8, path, "fish_history"))
-            parser.HistoryImportKind.fish
+            history.HistoryImportKind.fish
         else if (std.mem.indexOf(u8, path, "bash") != null)
-            parser.HistoryImportKind.bash
+            history.HistoryImportKind.bash
         else
-            parser.HistoryImportKind.zsh;
+            history.HistoryImportKind.zsh;
         return .{ .kind = kind, .path = path };
     }
 
@@ -258,18 +268,12 @@ fn resolveImport(init: std.process.Init, options: HistoryOptions, buffer: *[std.
         }
 
         const path = try std.fmt.bufPrint(buffer, "{s}/{s}", .{ home, candidate.path });
-        Io.Dir.cwd().access(init.io, path, .{}) catch continue;
+        std.Io.Dir.cwd().access(init.io, path, .{}) catch continue;
         return .{ .kind = candidate.kind, .path = path };
     }
 
     return error.HistfileNotFound;
 }
-
-const ImportParser = @import("ImportParser.zig");
-
-const ImportedEntry = @import("ImportedEntry.zig");
-
-const BatchSender = @import("BatchSender.zig");
 
 test "zsh extended history parses timestamps and continuations" {
     var state: ImportParser = .{ .kind = .zsh };
@@ -330,12 +334,12 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
     var connection = try connector.connectOrStart(.{});
     defer connection.deinit(init.io);
     var stdout_buffer: [512]u8 = undefined;
-    var output = File.stdout().writerStreaming(init.io, &stdout_buffer);
+    var output = std.Io.File.stdout().writerStreaming(init.io, &stdout_buffer);
     const writer = &output.interface;
 
     var send_buffer: [4096]u8 = undefined;
     if (options.action == .delete) {
-        try connection.send(init.io, try core.schema.encodeDeleteHistory(&send_buffer, .{
+        try connection.send(init.io, try encodeDeleteHistory_module(&send_buffer, .{
             .request_id = @enumFromInt(1),
             .id = options.delete_id,
         }));
@@ -348,7 +352,7 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
     var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const scope_value: []const u8 = switch (options.scope) {
         .cwd => cwd: {
-            const len = try Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
+            const len = try std.Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
             break :cwd cwd_buffer[0..len];
         },
         .workspace => std.mem.span(options.scope_value.?),
@@ -357,18 +361,18 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
     const match = if (options.query) |value| std.mem.span(value) else "";
 
     if (options.dry_run or !options.assume_yes) {
-        try connection.send(init.io, try core.schema.encodeQueryHistory(&send_buffer, .{
+        try connection.send(init.io, try encodeQueryHistory_module(&send_buffer, .{
             .request_id = @enumFromInt(1),
             .query = match,
             .scope = options.scope,
             .scope_value = scope_value,
             .pane_id = options.pane_id,
             .failed_only = options.failed_only,
-            .limit = core.schema.max_history_results,
+            .limit = max_history_results_module,
         }));
-        const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
+        const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
         defer init.gpa.free(receive_buffer);
-        const response = try core.schema.decodeServer(try connection.receive(init.io, receive_buffer));
+        const response = try decodeServer_module(try connection.receive(init.io, receive_buffer));
         const results = switch (response) {
             .history_results => |results| results,
             .request_failed => |failure| {
@@ -380,7 +384,7 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
         if (options.before_ms != 0) {
             try writer.print("{d} newest entries match the text/scope filters; --before applies on top and is not previewable\n", .{results.entry_count});
         } else {
-            try writer.print("would remove {d} entries (counting at most the newest {d})\n", .{ results.entry_count, core.schema.max_history_results });
+            try writer.print("would remove {d} entries (counting at most the newest {d})\n", .{ results.entry_count, max_history_results_module });
         }
         try writer.flush();
         if (options.dry_run) {
@@ -390,7 +394,7 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
         try writer.writeAll("prune permanently? type yes to continue: ");
         try writer.flush();
         var line_buffer: [16]u8 = undefined;
-        var stdin_reader = File.stdin().readerStreaming(init.io, &line_buffer);
+        var stdin_reader = std.Io.File.stdin().readerStreaming(init.io, &line_buffer);
         if (!confirmPrune(&stdin_reader.interface)) {
             try writer.writeAll("aborted\n");
             try writer.flush();
@@ -401,7 +405,7 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
         connection = try connector.connectOrStart(.{});
     }
 
-    try connection.send(init.io, try core.schema.encodePruneHistory(&send_buffer, .{
+    try connection.send(init.io, try encodePruneHistory_module(&send_buffer, .{
         .request_id = @enumFromInt(2),
         .scope = options.scope,
         .scope_value = scope_value,
@@ -415,7 +419,7 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
     try writer.flush();
 }
 
-fn confirmPrune(reader: *Io.Reader) bool {
+fn confirmPrune(reader: *std.Io.Reader) bool {
     const line = reader.takeDelimiter('\n') catch return false;
     const answer = std.mem.trim(u8, line orelse return false, " \r");
 
@@ -423,23 +427,23 @@ fn confirmPrune(reader: *Io.Reader) bool {
 }
 
 test "history prune confirmation stops reading at newline" {
-    var reader = Io.Reader.fixed("yes\nstill open");
+    var reader = std.Io.Reader.fixed("yes\nstill open");
 
     try std.testing.expect(confirmPrune(&reader));
     try std.testing.expectEqualStrings("still open", reader.buffered());
 }
 
 test "history prune confirmation rejects any other line" {
-    var rejected = Io.Reader.fixed("no\n");
-    var empty = Io.Reader.fixed("");
+    var rejected = std.Io.Reader.fixed("no\n");
+    var empty = std.Io.Reader.fixed("");
 
     try std.testing.expect(!confirmPrune(&rejected));
     try std.testing.expect(!confirmPrune(&empty));
 }
 
-fn receivePruned(init: std.process.Init, connection: *core.transport.SocketChannel) !u64 {
+fn receivePruned(init: std.process.Init, connection: *SocketChannelType) !u64 {
     var receive_buffer: [1024]u8 = undefined;
-    const response = try core.schema.decodeServer(try connection.receive(init.io, &receive_buffer));
+    const response = try decodeServer_module(try connection.receive(init.io, &receive_buffer));
     return switch (response) {
         .history_pruned => |pruned| pruned.removed,
         .request_failed => |failure| blk: {
@@ -457,14 +461,14 @@ fn runShow(init: std.process.Init, options: HistoryOptions) !void {
     defer connection.deinit(init.io);
 
     var send_buffer: [64]u8 = undefined;
-    try connection.send(init.io, try core.schema.encodeReadHistoryOutput(&send_buffer, .{
+    try connection.send(init.io, try encodeReadHistoryOutput_module(&send_buffer, .{
         .request_id = @enumFromInt(1),
         .id = options.delete_id,
     }));
 
-    const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
     defer init.gpa.free(receive_buffer);
-    const response = try core.schema.decodeServer(try connection.receive(init.io, receive_buffer));
+    const response = try decodeServer_module(try connection.receive(init.io, receive_buffer));
     const output = switch (response) {
         .history_output => |value| value,
         .request_failed => |failure| {
@@ -480,7 +484,7 @@ fn runShow(init: std.process.Init, options: HistoryOptions) !void {
     }
 
     var stdout_buffer: [4096]u8 = undefined;
-    var writer = File.stdout().writerStreaming(init.io, &stdout_buffer);
+    var writer = std.Io.File.stdout().writerStreaming(init.io, &stdout_buffer);
     try writer.interface.writeAll(output.content);
     try writer.interface.flush();
     if (output.truncated) {
@@ -497,7 +501,7 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
     var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const scope_value: []const u8 = switch (options.scope) {
         .cwd => cwd: {
-            const len = try Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
+            const len = try std.Io.Dir.cwd().realPathFile(init.io, ".", &cwd_buffer);
             break :cwd cwd_buffer[0..len];
         },
         .workspace => std.mem.span(options.scope_value.?),
@@ -506,10 +510,10 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
     const since_ms: i64 = if (options.period_days == 0)
         0
     else
-        Io.Timestamp.now(init.io, .real).toMilliseconds() - @as(i64, options.period_days) * 86_400_000;
+        std.Io.Timestamp.now(init.io, .real).toMilliseconds() - @as(i64, options.period_days) * 86_400_000;
 
     var send_buffer: [4096]u8 = undefined;
-    try connection.send(init.io, try core.schema.encodeHistoryStatsQuery(&send_buffer, .{
+    try connection.send(init.io, try encodeHistoryStatsQuery_module(&send_buffer, .{
         .request_id = @enumFromInt(1),
         .scope = options.scope,
         .scope_value = scope_value,
@@ -517,9 +521,9 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
         .since_ms = since_ms,
     }));
 
-    const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
     defer init.gpa.free(receive_buffer);
-    const response = try core.schema.decodeServer(try connection.receive(init.io, receive_buffer));
+    const response = try decodeServer_module(try connection.receive(init.io, receive_buffer));
     const stats = switch (response) {
         .history_stats_result => |value| value,
         .request_failed => |failure| {
@@ -530,7 +534,7 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
     };
 
     var stdout_buffer: [8 * 1024]u8 = undefined;
-    var output = File.stdout().writerStreaming(init.io, &stdout_buffer);
+    var output = std.Io.File.stdout().writerStreaming(init.io, &stdout_buffer);
     const writer = &output.interface;
     try writer.print("commands: {d}\nunique:   {d}\n", .{ stats.total, stats.unique });
     var top = stats.top();

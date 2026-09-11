@@ -1,23 +1,30 @@
-const StubCreateWorkspace = @This();
-const create_workspace_commands = @import("../../application/commands/create_workspace.zig");
-const source_namespace = @import("create_workspace.zig");
+const CreateWorkspaceResultType = @import("../../application/commands/CreateWorkspaceResult.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const max_workspace_name_bytes_module = @import("telar-core").max_workspace_name_bytes;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const PaneIdType = @import("telar-core").PaneId;
+const EnvironmentModeType = @import("telar-core").EnvironmentMode;
+const CreateWorkspaceExecutorType = @import("../../application/commands/CreateWorkspaceExecutor.zig");
+const CreateWorkspaceType = @import("../../application/commands/CreateWorkspace.zig");
 const std = @import("std");
-result: ?create_workspace_commands.CreateWorkspaceResult = null,
+const StubCreateWorkspace = @This();
+
+result: ?CreateWorkspaceResultType = null,
 failure: ?anyerror = null,
 call_count: usize = 0,
-last_size: ?source_namespace.schema.TerminalSize = null,
-last_name: [source_namespace.schema.max_workspace_name_bytes]u8 = undefined,
+last_size: ?TerminalSizeType = null,
+last_name: [max_workspace_name_bytes_module]u8 = undefined,
 last_name_len: usize = 0,
-last_cwd: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+last_cwd: [max_cwd_bytes_module]u8 = undefined,
 last_cwd_len: usize = 0,
-last_cwd_source: ?source_namespace.schema.PaneId = null,
-last_environment_mode: source_namespace.schema.EnvironmentMode = .inherit_runtime,
+last_cwd_source: ?PaneIdType = null,
+last_environment_mode: EnvironmentModeType = .inherit_runtime,
 
-pub fn executor(stub: *StubCreateWorkspace) create_workspace_commands.CreateWorkspaceExecutor {
+pub fn executor(stub: *StubCreateWorkspace) CreateWorkspaceExecutorType {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, command: create_workspace_commands.CreateWorkspace) !create_workspace_commands.CreateWorkspaceResult {
+fn execute(context: *anyopaque, command: CreateWorkspaceType) !CreateWorkspaceResultType {
     const stub: *StubCreateWorkspace = @ptrCast(@alignCast(context));
     std.debug.assert(command.name.len <= stub.last_name.len);
     std.debug.assert(command.launch.cwd.len <= stub.last_cwd.len);

@@ -1,28 +1,27 @@
 //! Request-scoped controller for workspace-snapshot protocol messages.
 
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const workspace_module = @import("telar-core").workspace;
+const ResponseQueue = @import("../../delivery/ResponseQueue.zig");
+const WorkspaceSnapshotStubQuery = @import("WorkspaceSnapshotStubQuery.zig");
+const WorkspaceSnapshotController = @import("WorkspaceSnapshotController.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_snapshot_query = @import("../../application/queries/workspace_snapshot.zig");
-const delivery_mod = @import("../../delivery/root.zig");
+const FailureCodeType = @import("telar-core").FailureCode;
+const TabLocationType = @import("telar-core").TabLocation;
+const tab_module = @import("telar-core").tab;
 
-pub const schema = core.schema;
-pub const ResponseQueue = delivery_mod.ResponseQueue;
-
-pub const Controller = @import("WorkspaceSnapshotController.zig");
-
-const StubQuery = @import("WorkspaceSnapshotStubQuery.zig");
-
-fn testingLocation() !schema.WorkspaceLocation {
-    return .{ .workspace = try schema.id.workspace(3) };
+fn testingLocation() !WorkspaceLocationType {
+    return .{ .workspace = try workspace_module(3) };
 }
 
 test "Controller maps a workspace snapshot request to its canonical result" {
     const requested_location = try testingLocation();
-    const canonical_location: schema.WorkspaceLocation = .{ .workspace = try schema.id.workspace(4) };
+    const canonical_location: WorkspaceLocationType = .{ .workspace = try workspace_module(4) };
     var responses: ResponseQueue = .{};
-    var query_stub: StubQuery = .{ .result = .{ .location = canonical_location } };
-    var controller = Controller.init(&responses, query_stub.executor());
-    const request_id: schema.RequestId = @enumFromInt(11);
+    var query_stub: WorkspaceSnapshotStubQuery = .{ .result = .{ .location = canonical_location } };
+    var controller = WorkspaceSnapshotController.init(&responses, query_stub.executor());
+    const request_id: RequestIdType = @enumFromInt(11);
 
     try controller.requestWorkspaceSnapshot(.{
         .request_id = request_id,
@@ -39,9 +38,9 @@ test "Controller maps a workspace snapshot request to its canonical result" {
 
 test "Controller maps a missing workspace to one protocol failure" {
     var responses: ResponseQueue = .{};
-    var query_stub: StubQuery = .{ .failure = error.WorkspaceNotFound };
-    var controller = Controller.init(&responses, query_stub.executor());
-    const request_id: schema.RequestId = @enumFromInt(20);
+    var query_stub: WorkspaceSnapshotStubQuery = .{ .failure = error.WorkspaceNotFound };
+    var controller = WorkspaceSnapshotController.init(&responses, query_stub.executor());
+    const request_id: RequestIdType = @enumFromInt(20);
 
     try controller.requestWorkspaceSnapshot(.{
         .request_id = request_id,
@@ -51,14 +50,14 @@ test "Controller maps a missing workspace to one protocol failure" {
     const response = responses.peek().?;
     try std.testing.expect(response.* == .request_failed);
     try std.testing.expectEqual(request_id, response.request_failed.request_id);
-    try std.testing.expectEqual(schema.FailureCode.workspace_not_found, response.request_failed.code);
+    try std.testing.expectEqual(FailureCodeType.workspace_not_found, response.request_failed.code);
     try std.testing.expectEqualStrings("workspace not found", response.request_failed.message);
 }
 
 test "Controller propagates unexpected workspace query failures" {
     var responses: ResponseQueue = .{};
-    var query_stub: StubQuery = .{ .failure = error.QuerySourceUnavailable };
-    var controller = Controller.init(&responses, query_stub.executor());
+    var query_stub: WorkspaceSnapshotStubQuery = .{ .failure = error.QuerySourceUnavailable };
+    var controller = WorkspaceSnapshotController.init(&responses, query_stub.executor());
 
     try std.testing.expectError(error.QuerySourceUnavailable, controller.requestWorkspaceSnapshot(.{
         .request_id = @enumFromInt(30),
@@ -72,9 +71,9 @@ test "Controller propagates unexpected workspace query failures" {
 test "Controller reports response backpressure after a successful workspace query" {
     const location = try testingLocation();
     var responses: ResponseQueue = .{};
-    const tab_location: schema.TabLocation = .{
+    const tab_location: TabLocationType = .{
         .workspace = location,
-        .tab_id = try schema.id.tab(1),
+        .tab_id = try tab_module(1),
     };
 
     while (responses.len < responses.items.len) {
@@ -85,8 +84,8 @@ test "Controller reports response backpressure after a successful workspace quer
         } });
     }
 
-    var query_stub: StubQuery = .{ .result = .{ .location = location } };
-    var controller = Controller.init(&responses, query_stub.executor());
+    var query_stub: WorkspaceSnapshotStubQuery = .{ .result = .{ .location = location } };
+    var controller = WorkspaceSnapshotController.init(&responses, query_stub.executor());
 
     try std.testing.expectError(error.ResponseQueueFull, controller.requestWorkspaceSnapshot(.{
         .request_id = @enumFromInt(31),

@@ -1,6 +1,8 @@
+const max_agent_workspace_label_bytes_module = @import("telar-core").max_agent_workspace_label_bytes;
+const max_agent_cwd_label_bytes_module = @import("telar-core").max_agent_cwd_label_bytes;
+const max_agent_session_title_bytes = @import("telar-core").max_agent_session_title_bytes;
 const AgentDisplayStorage = @This();
-const source_namespace = @import("root.zig");
-const core = @import("telar-core");
-workspace: [source_namespace.schema.max_agent_workspace_label_bytes]u8 = undefined,
-cwd: [source_namespace.schema.max_agent_cwd_label_bytes]u8 = undefined,
-placeholder: [core.agent_manifest.max_placeholder_bytes]u8 = undefined,
+
+workspace: [max_agent_workspace_label_bytes_module]u8 = undefined,
+cwd: [max_agent_cwd_label_bytes_module]u8 = undefined,
+placeholder: [max_agent_session_title_bytes]u8 = undefined,

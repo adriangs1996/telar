@@ -1,6 +1,10 @@
 //! Data-only plugin manifests, capabilities, and digest-bound trust grants.
 
 const std = @import("std");
+const PluginManifest = @import("PluginManifest.zig");
+const WireManifest = @import("WireManifest.zig");
+const Grant = @import("Grant.zig");
+const TrustStore = @import("TrustStore.zig");
 
 pub const manifest_api_version: u16 = 1;
 pub const max_manifest_bytes = 64 * 1024;
@@ -54,13 +58,7 @@ pub const Capability = enum(u8) {
 
 pub const CapabilitySet = std.EnumSet(Capability);
 
-pub const ActionName = @import("ActionName.zig");
-
-pub const Manifest = @import("PluginManifest.zig");
-
-const WireManifest = @import("WireManifest.zig");
-
-pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !Manifest {
+pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !PluginManifest {
     if (source.len > max_manifest_bytes) {
         return error.ManifestTooLarge;
     }
@@ -91,7 +89,7 @@ pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !Manifest {
         return error.TooManyActions;
     }
 
-    var manifest: Manifest = .{
+    var manifest: PluginManifest = .{
         .id_len = @intCast(wire.id.len),
         .version_len = @intCast(wire.version.len),
         .entry_len = @intCast(wire.entry.len),
@@ -126,8 +124,6 @@ pub fn parseManifest(gpa: std.mem.Allocator, source: []const u8) !Manifest {
 
 pub const Digest = [32]u8;
 
-pub const PluginIdentity = @import("PluginIdentity.zig");
-
 pub fn contentDigest(manifest_bytes: []const u8, entry_bytes: []const u8) Digest {
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
     hasher.update("telar-plugin-v1\x00");
@@ -141,15 +137,7 @@ pub fn contentDigest(manifest_bytes: []const u8, entry_bytes: []const u8) Digest
     return hasher.finalResult();
 }
 
-pub const Grant = @import("Grant.zig");
-
 pub const max_grants = 64;
-
-pub const StoredGrant = @import("StoredGrant.zig");
-
-pub const GrantUpdate = @import("GrantUpdate.zig");
-
-pub const TrustStore = @import("TrustStore.zig");
 
 pub fn stableId(name: []const u8) u64 {
     var hash: u64 = 0xcbf29ce484222325;

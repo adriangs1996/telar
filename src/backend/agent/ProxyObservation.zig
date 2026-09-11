@@ -1,3 +1,7 @@
+const Identity = @import("Identity.zig");
+const types = @import("types.zig");
+const ProxyExchange = @import("ProxyExchange.zig");
+const AgentProviderType = @import("telar-core").AgentProvider;
 /// Owned proxy evidence enriched by the runtime with the exact agent identity
 /// that was active when the observation arrived.
 ///
@@ -6,12 +10,10 @@
 /// the API family seen on the wire, never the agent process. Callers exclude
 /// auxiliary traffic before constructing this value.
 const ProxyObservation = @This();
-const Identity = @import("Identity.zig");
-const source_namespace = @import("types.zig");
-const ProxyExchange = @import("ProxyExchange.zig");
+
 identity: Identity,
-dialect: source_namespace.ApiDialect,
-phase: source_namespace.ProxyPhase,
+dialect: types.ApiDialect,
+phase: types.ProxyPhase,
 exchange: ProxyExchange,
 observed_at_ms: i64,
 
@@ -23,7 +25,7 @@ observed_at_ms: i64,
 ///     refreshActivity();
 /// }
 /// ```
-pub fn impliedProvider(observation: *const ProxyObservation) source_namespace.schema.AgentProvider {
+pub fn impliedProvider(observation: *const ProxyObservation) AgentProviderType {
     return switch (observation.dialect) {
         .unknown => .unknown,
         .anthropic_messages => .claude,

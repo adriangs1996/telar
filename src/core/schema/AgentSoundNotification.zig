@@ -1,6 +1,7 @@
-const AgentSoundNotification = @This();
 const id = @import("id.zig");
-const source_namespace = @import("types.zig");
+const types = @import("types.zig");
+const AgentSoundNotification = @This();
+
 pane_id: id.PaneId,
 pane_generation: u64,
-sound: source_namespace.AgentSound,
+sound: types.AgentSound,

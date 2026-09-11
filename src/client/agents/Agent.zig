@@ -1,30 +1,44 @@
-const Agent = @This();
 const AgentKey = @import("AgentKey.zig");
-const source_namespace = @import("snapshot_support.zig");
-const core = @import("telar-core");
+const TabLocationType = @import("telar-core").TabLocation;
+const max_agent_workspace_label_bytes_module = @import("telar-core").max_agent_workspace_label_bytes;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
+const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
+const AgentTitleStateType = @import("telar-core").AgentTitleState;
+const max_agent_cwd_label_bytes_module = @import("telar-core").max_agent_cwd_label_bytes;
+const max_agent_provider_name_bytes_module = @import("telar-core").max_agent_provider_name_bytes;
+const max_agent_display_name_bytes_module = @import("telar-core").max_agent_display_name_bytes;
+const max_agent_icon_bytes_module = @import("telar-core").max_agent_icon_bytes;
+const AgentAttachmentMarkersType = @import("telar-core").AgentAttachmentMarkers;
+const AgentProviderType = @import("telar-core").AgentProvider;
+const AgentStatusType = @import("telar-core").AgentStatus;
+const generic_display_name_module = @import("telar-core").generic_display_name;
 const AgentInput = @import("AgentInput.zig");
+const snapshot_support = @import("snapshot_support.zig");
+const Agent = @This();
+
 key: AgentKey,
-location: source_namespace.schema.TabLocation,
+location: TabLocationType,
 pane_index: u16,
-workspace_label: [source_namespace.schema.max_agent_workspace_label_bytes]u8 = undefined,
+workspace_label: [max_agent_workspace_label_bytes_module]u8 = undefined,
 workspace_label_len: u8 = 0,
-tab_label: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+tab_label: [max_tab_label_bytes_module]u8 = undefined,
 tab_label_len: u8 = 0,
-session_title: [source_namespace.schema.max_agent_session_title_bytes]u8 = undefined,
+session_title: [max_agent_session_title_bytes_module]u8 = undefined,
 session_title_len: u8 = 0,
-title_source: source_namespace.schema.AgentTitleSource,
-title_state: source_namespace.schema.AgentTitleState,
-cwd_label: [source_namespace.schema.max_agent_cwd_label_bytes]u8 = undefined,
+title_source: AgentTitleSourceType,
+title_state: AgentTitleStateType,
+cwd_label: [max_agent_cwd_label_bytes_module]u8 = undefined,
 cwd_label_len: u8 = 0,
-provider_name: [source_namespace.schema.max_agent_provider_name_bytes]u8 = undefined,
+provider_name: [max_agent_provider_name_bytes_module]u8 = undefined,
 provider_name_len: u8 = 0,
-display_name: [source_namespace.schema.max_agent_display_name_bytes]u8 = undefined,
+display_name: [max_agent_display_name_bytes_module]u8 = undefined,
 display_name_len: u8 = 0,
-icon: [source_namespace.schema.max_agent_icon_bytes]u8 = undefined,
+icon: [max_agent_icon_bytes_module]u8 = undefined,
 icon_len: u8 = 0,
-attachments: source_namespace.schema.AgentAttachmentMarkers,
-provider: source_namespace.schema.AgentProvider,
-status: source_namespace.schema.AgentStatus,
+attachments: AgentAttachmentMarkersType,
+provider: AgentProviderType,
+status: AgentStatusType,
 
 /// Manifest name of the provider ("claude"), or "agent" when the runtime
 /// sent none because the provider is unknown.
@@ -51,7 +65,7 @@ pub fn displayName(agent: *const Agent) []const u8 {
         return agent.display_name[0..agent.display_name_len];
     }
 
-    return core.agent_manifest.generic_display_name;
+    return generic_display_name_module;
 }
 
 /// Configured sidebar glyph; empty when the client should use its own
@@ -75,13 +89,13 @@ pub fn init(input: AgentInput) !Agent {
         .attachments = input.attachments,
         .status = input.status,
     };
-    agent.workspace_label_len = try source_namespace.copyLabel(&agent.workspace_label, input.workspace_label);
-    agent.tab_label_len = try source_namespace.copyLabel(&agent.tab_label, input.tab_label);
-    agent.session_title_len = try source_namespace.copyLabel(&agent.session_title, input.session_title);
-    agent.cwd_label_len = try source_namespace.copyLabel(&agent.cwd_label, input.cwd_label);
-    agent.provider_name_len = try source_namespace.copyLabel(&agent.provider_name, input.provider_name);
-    agent.display_name_len = try source_namespace.copyLabel(&agent.display_name, input.display_name);
-    agent.icon_len = try source_namespace.copyLabel(&agent.icon, input.icon);
+    agent.workspace_label_len = try snapshot_support.copyLabel(&agent.workspace_label, input.workspace_label);
+    agent.tab_label_len = try snapshot_support.copyLabel(&agent.tab_label, input.tab_label);
+    agent.session_title_len = try snapshot_support.copyLabel(&agent.session_title, input.session_title);
+    agent.cwd_label_len = try snapshot_support.copyLabel(&agent.cwd_label, input.cwd_label);
+    agent.provider_name_len = try snapshot_support.copyLabel(&agent.provider_name, input.provider_name);
+    agent.display_name_len = try snapshot_support.copyLabel(&agent.display_name, input.display_name);
+    agent.icon_len = try snapshot_support.copyLabel(&agent.icon, input.icon);
 
     return agent;
 }

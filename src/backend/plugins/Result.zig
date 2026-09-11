@@ -1,14 +1,16 @@
-const Result = @This();
 const std = @import("std");
-const core = @import("telar-core");
+const DigestType = @import("telar-core").Digest;
+const PaneIdType = @import("telar-core").PaneId;
 const Batch = @import("Batch.zig");
+const Result = @This();
+
 gpa: std.mem.Allocator,
 package_index: u8,
 plugin_id: u64,
-digest: core.plugin.Digest,
+digest: DigestType,
 generation: u64,
 event_id: u64,
-pane: core.schema.PaneId,
+pane: PaneIdType,
 pane_generation: u64,
 storage: []u8,
 batch: Batch,

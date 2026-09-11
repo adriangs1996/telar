@@ -1,17 +1,12 @@
 //! Bounded lifecycle state for model exchanges observed through the proxy.
 
-const std = @import("std");
-const core = @import("telar-core");
-const evidence_mod = @import("evidence_support.zig");
+const ProxyExchange = @import("ProxyExchange.zig");
 const types = @import("types.zig");
-
-pub const Evidence = evidence_mod.Evidence;
-pub const ProxyExchange = types.ProxyExchange;
-pub const ProxyObservation = types.ProxyObservation;
-pub const ProxyPhase = types.ProxyPhase;
-pub const schema = core.schema;
-
-pub const ProxyState = @import("ProxyState.zig");
+const ProxyObservation = @import("ProxyObservation.zig");
+const ProxyState = @import("ProxyState.zig");
+const AgentStatusType = @import("telar-core").AgentStatus;
+const std = @import("std");
+const AgentProviderType = @import("telar-core").AgentProvider;
 
 pub fn sameExchange(left: ProxyExchange, right: ProxyExchange) bool {
     return left.protocol == right.protocol and
@@ -19,7 +14,7 @@ pub fn sameExchange(left: ProxyExchange, right: ProxyExchange) bool {
         left.stream_id == right.stream_id;
 }
 
-fn testObservation(phase: ProxyPhase, exchange: ProxyExchange, observed_at_ms: i64) ProxyObservation {
+fn testObservation(phase: types.ProxyPhase, exchange: ProxyExchange, observed_at_ms: i64) ProxyObservation {
     return .{
         .identity = .{
             .key = .{ .id = .invalid, .generation = 1 },
@@ -33,10 +28,10 @@ fn testObservation(phase: ProxyPhase, exchange: ProxyExchange, observed_at_ms: i
     };
 }
 
-fn expectProxyEvidence(state: *const ProxyState, status: schema.AgentStatus, observed_at_ms: i64) !void {
+fn expectProxyEvidence(state: *const ProxyState, status: AgentStatusType, observed_at_ms: i64) !void {
     try std.testing.expect(state.currentEvidence() != null);
     const evidence = state.currentEvidence().?;
-    try std.testing.expectEqual(schema.AgentProvider.claude, evidence.provider);
+    try std.testing.expectEqual(AgentProviderType.claude, evidence.provider);
     try std.testing.expectEqual(status, evidence.status);
     try std.testing.expectEqual(observed_at_ms, evidence.observed_at_ms);
 }

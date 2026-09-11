@@ -1,20 +1,23 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("focus_pane.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const PaneFocusType = @import("../../model/PaneFocus.zig");
+const RectType = @import("telar-core").Rect;
 const FocusEffects = @import("FocusEffects.zig");
-model: *const client_model.Model,
-expected: source_namespace.schema.PaneId,
+const EffectsCapture = @This();
+
+model: *const ModelType,
+expected: PaneIdType,
 calls: usize = 0,
 observed_commit: bool = false,
-focus: ?client_model.PaneFocus = null,
-area: ?source_namespace.ui.Rect = null,
+focus: ?PaneFocusType = null,
+area: ?RectType = null,
 fail: bool = false,
 
 pub fn port(capture: *EffectsCapture) FocusEffects {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(context: *anyopaque, focus: client_model.PaneFocus, area: source_namespace.ui.Rect) !void {
+fn deliver(context: *anyopaque, focus: PaneFocusType, area: RectType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.focus = focus;

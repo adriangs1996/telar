@@ -1,4 +1,6 @@
+const PaneTargetType = @import("telar-core").PaneTarget;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const Plan = @This();
-const source_namespace = @import("workspace_handoff_targeting.zig");
-target: source_namespace.schema.PaneTarget,
-fallback_workspace: ?source_namespace.schema.WorkspaceId,
+
+target: PaneTargetType,
+fallback_workspace: ?WorkspaceIdType,

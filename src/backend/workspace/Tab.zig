@@ -1,10 +1,12 @@
+const TabIdType = @import("telar-core").TabId;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 const Tab = @This();
-const source_namespace = @import("workspace_support.zig");
-id: source_namespace.schema.TabId,
-label: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+
+id: TabIdType,
+label: [max_tab_label_bytes_module]u8 = undefined,
 label_len: u8 = 0,
 
-pub fn init(id: source_namespace.schema.TabId, label: []const u8) !Tab {
+pub fn init(id: TabIdType, label: []const u8) !Tab {
     var tab: Tab = .{ .id = id };
     try tab.rename(label);
     return tab;

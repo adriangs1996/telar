@@ -1,20 +1,25 @@
-const EffectCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("host_resource_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const HostCommitType = @import("../../model/HostCommit.zig");
+const host_resource_delivery = @import("host_resource_delivery.zig");
 const SidebarConfiguration = @import("SidebarConfiguration.zig");
-const Effects = @import("HostResourceDeliveryEffects.zig");
+const types = @import("../../model/types.zig");
+const HostResourceDeliveryEffects = @import("HostResourceDeliveryEffects.zig");
+const TerminalColorsType = @import("telar-core").TerminalColors;
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const std = @import("std");
-model: *const client_model.Model,
-commit: client_model.HostCommit,
-events: [10]source_namespace.Event = undefined,
+const EffectCapture = @This();
+
+model: *const ModelType,
+commit: HostCommitType,
+events: [10]host_resource_delivery.Event = undefined,
 event_count: usize = 0,
 sidebar_configurations: [2]SidebarConfiguration = undefined,
 sidebar_configuration_count: usize = 0,
 committed_state_observed: bool = true,
-failure: source_namespace.Failure = .none,
-appearance: ?client_model.HostAppearance = null,
+failure: host_resource_delivery.Failure = .none,
+appearance: ?types.HostAppearance = null,
 
-pub fn effects(capture: *EffectCapture) Effects {
+pub fn effects(capture: *EffectCapture) HostResourceDeliveryEffects {
     return .{
         .context = capture,
         .sync_graphics_fallbacks = syncGraphicsFallbacks,
@@ -28,9 +33,9 @@ pub fn effects(capture: *EffectCapture) Effects {
     };
 }
 
-fn syncTerminalColors(_: *anyopaque, _: source_namespace.schema.TerminalColors) !void {}
+fn syncTerminalColors(_: *anyopaque, _: TerminalColorsType) !void {}
 
-fn applyAppearance(context: *anyopaque, appearance: client_model.HostAppearance) !void {
+fn applyAppearance(context: *anyopaque, appearance: types.HostAppearance) !void {
     const capture: *EffectCapture = @ptrCast(@alignCast(context));
     capture.appearance = appearance;
 }
@@ -56,7 +61,7 @@ fn invalidateGraphicsPlacements(context: *anyopaque) void {
     capture.append(.invalidate_placements);
 }
 
-fn resizePresenter(context: *anyopaque, size: source_namespace.schema.TerminalSize) !void {
+fn resizePresenter(context: *anyopaque, size: TerminalSizeType) !void {
     const capture: *EffectCapture = @ptrCast(@alignCast(context));
     capture.append(.presenter_resize);
     const resize = capture.commit.resize.?;
@@ -68,7 +73,7 @@ fn resizePresenter(context: *anyopaque, size: source_namespace.schema.TerminalSi
     }
 }
 
-fn resizeView(context: *anyopaque, size: source_namespace.schema.TerminalSize) !void {
+fn resizeView(context: *anyopaque, size: TerminalSizeType) !void {
     const capture: *EffectCapture = @ptrCast(@alignCast(context));
     capture.append(.view_resize);
     const resize = capture.commit.resize.?;
@@ -89,7 +94,7 @@ fn syncPaneGeometry(context: *anyopaque) !void {
     }
 }
 
-fn append(capture: *EffectCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectCapture, event: host_resource_delivery.Event) void {
     capture.observeCommit();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -110,6 +115,6 @@ fn observeCommit(capture: *EffectCapture) void {
     }
 }
 
-pub fn eventSlice(capture: *const EffectCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectCapture) []const host_resource_delivery.Event {
     return capture.events[0..capture.event_count];
 }

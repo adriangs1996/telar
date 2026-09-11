@@ -1,30 +1,15 @@
 const std = @import("std");
-
-const Vec2 = @import("Vec2.zig");
+const Renderer = @import("Renderer.zig");
+const Game = @import("Game.zig");
+const Frame = @import("Frame.zig");
+const Pixel = @import("Pixel.zig");
+const Colors = @import("Colors.zig");
 
 pub const Turn = enum {
     left,
     right,
     none,
 };
-
-const Input = @import("Input.zig");
-
-const Bounds = @import("Bounds.zig");
-
-const Ship = @import("Ship.zig");
-
-const Game = @import("Game.zig");
-
-const Color = @import("Color.zig");
-
-const Colors = @import("Colors.zig");
-
-const Pixel = @import("Pixel.zig");
-
-const Frame = @import("Frame.zig");
-
-const Renderer = @import("Renderer.zig");
 
 pub fn main(init: std.process.Init) !void {
     const width: usize = 160;

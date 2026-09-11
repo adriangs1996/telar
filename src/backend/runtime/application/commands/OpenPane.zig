@@ -1,5 +1,8 @@
+const PaneTargetType = @import("telar-core").PaneTarget;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const LaunchViewType = @import("telar-core").LaunchView;
 const OpenPane = @This();
-const source_namespace = @import("open_pane.zig");
-target: source_namespace.schema.PaneTarget,
-size: source_namespace.schema.TerminalSize,
-launch: ?source_namespace.schema.LaunchView,
+
+target: PaneTargetType,
+size: TerminalSizeType,
+launch: ?LaunchViewType,

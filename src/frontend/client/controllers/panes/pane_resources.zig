@@ -1,11 +1,8 @@
 //! Disposable client resources keyed by pane identity.
 
-const core = @import("telar-core");
-const panes_application = @import("telar-client").application.panes;
-
 const Client = @import("../../Client.zig");
-const pane_resource_release = panes_application.pane_resource_release;
-const schema = core.schema;
+const PaneIdType = @import("telar-core").PaneId;
+const ReleasePaneResourcesHandlerType = @import("telar-client").ReleasePaneResourcesHandler;
 
 /// Releases copy, paste, focus and graphics state retained for one pane.
 /// Repeated release is harmless.
@@ -13,8 +10,8 @@ const schema = core.schema;
 /// ```zig
 /// release(client, pane_id);
 /// ```
-pub fn release(client: *Client, pane_id: schema.PaneId) void {
-    var use_case: pane_resource_release.ReleasePaneResourcesHandler = .{
+pub fn release(client: *Client, pane_id: PaneIdType) void {
+    var use_case: ReleasePaneResourcesHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -25,7 +22,7 @@ pub fn release(client: *Client, pane_id: schema.PaneId) void {
     _ = use_case.execute(pane_id);
 }
 
-fn clearGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
+fn clearGraphics(context: *anyopaque, pane_id: PaneIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     client.graphics_store.clearPane(pane_id);

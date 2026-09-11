@@ -2,14 +2,14 @@
 //! the agents running in the local runtime.
 
 const std = @import("std");
-const core = @import("telar-core");
+const AgentOptions = @import("arguments/AgentOptions.zig");
+const SessionType = @import("Session.zig");
 const control = @import("control.zig");
-const parser = @import("parser.zig");
-
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
-const AgentOptions = parser.AgentOptions;
+const ExecutionContextType = @import("ExecutionContext.zig");
+const SnapshotType = @import("Snapshot.zig");
+const PaneRefType = @import("PaneRef.zig");
+const ControlAgent = @import("ControlAgent.zig");
+const TextType = @import("Text.zig");
 
 const poll_interval_ms = 250;
 const prompt_start_grace_ms = 5_000;
@@ -26,10 +26,10 @@ pub const exit_timeout: u8 = 3;
 /// std.process.exit(try agent.run(process_init, options));
 /// ```
 pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
-    var session = try control.Session.open(init, options.socket);
+    var session = try SessionType.open(init, options.socket);
     defer session.close();
     var output_buffer: [16 * 1024]u8 = undefined;
-    var output = File.stdout().writerStreaming(init.io, &output_buffer);
+    var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
     defer writer.flush() catch {};
 
@@ -42,10 +42,8 @@ pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
     };
 }
 
-const Output = control.ExecutionContext;
-
-fn execute(session: *control.Session, options: AgentOptions, output: Output) !u8 {
-    var snapshot: control.Snapshot = .{};
+fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContextType) !u8 {
+    var snapshot: SnapshotType = .{};
     try session.fetchAgents(&snapshot);
 
     switch (options.action) {
@@ -80,9 +78,9 @@ fn execute(session: *control.Session, options: AgentOptions, output: Output) !u8
     }
 }
 
-fn waitFor(session: *control.Session, options: AgentOptions, output: Output) !u8 {
+fn waitFor(session: *SessionType, options: AgentOptions, output: ExecutionContextType) !u8 {
     const deadline = session.nowMs() + @as(i64, options.timeout_seconds) * std.time.ms_per_s;
-    var snapshot: control.Snapshot = .{};
+    var snapshot: SnapshotType = .{};
 
     while (true) {
         try session.fetchAgents(&snapshot);
@@ -104,11 +102,11 @@ fn waitFor(session: *control.Session, options: AgentOptions, output: Output) !u8
     }
 }
 
-fn prompt(session: *control.Session, options: AgentOptions, output: Output) !u8 {
-    var snapshot: control.Snapshot = .{};
+fn prompt(session: *SessionType, options: AgentOptions, output: ExecutionContextType) !u8 {
+    var snapshot: SnapshotType = .{};
     try session.fetchAgents(&snapshot);
     const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
-    const pane: control.Session.PaneRef = .{
+    const pane: PaneRefType = .{
         .pane_id = target.pane_id,
         .pane_generation = target.pane_generation,
     };
@@ -149,7 +147,7 @@ fn prompt(session: *control.Session, options: AgentOptions, output: Output) !u8 
     }
 }
 
-fn writeList(writer: *Io.Writer, snapshot: *const control.Snapshot, json: bool) !void {
+fn writeList(writer: *std.Io.Writer, snapshot: *const SnapshotType, json: bool) !void {
     if (json) {
         try writer.print("{{\"revision\":{d},\"agents\":[", .{snapshot.revision});
         for (snapshot.slice(), 0..) |*agent, index| {
@@ -169,7 +167,7 @@ fn writeList(writer: *Io.Writer, snapshot: *const control.Snapshot, json: bool) 
     }
 }
 
-fn writeOne(writer: *Io.Writer, agent: *const control.Agent, json: bool) !void {
+fn writeOne(writer: *std.Io.Writer, agent: *const ControlAgent, json: bool) !void {
     if (json) {
         try control.writeAgentJson(writer, agent);
         try writer.writeByte('\n');
@@ -180,7 +178,7 @@ fn writeOne(writer: *Io.Writer, agent: *const control.Agent, json: bool) !void {
     try control.writeAgentRow(writer, agent);
 }
 
-fn writeText(writer: *Io.Writer, text: control.Session.Text, json: bool) !void {
+fn writeText(writer: *std.Io.Writer, text: TextType, json: bool) !void {
     if (json) {
         try writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ text.pane_id, text.truncated });
         try control.writeJsonString(writer, text.text);

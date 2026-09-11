@@ -1,6 +1,7 @@
+const CellType = @import("telar-core").Cell;
 const RowSync = @This();
-const ui = @import("telar-core").ui;
-source: []const ui.Cell,
-reference: []const ui.Cell,
+
+source: []const CellType,
+reference: []const CellType,
 start: u16,
 end: u16,

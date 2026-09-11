@@ -104,10 +104,10 @@ retention. Fullscreen rendering still follows [Pane fullscreen](pane-fullscreen.
   ordering and restored navigation.
 - `sidebar preferences survive when retained pane layouts become stale` proves
   chrome recovery without a valid active tree.
-- `src/frontend/client/model/tests/workspaces.zig` covers inactive fullscreen
+- `src/client/model/tests/workspaces.zig` covers inactive fullscreen
   return, workspace creation, allocation-failure rollback, pending arrivals and
   rejected snapshots without cache loss.
-- `src/frontend/workspace/navigation.zig` covers fixed capacity, in-place
+- `src/client/workspace/navigation.zig` covers fixed capacity, in-place
   replacement, overflow eviction and slot reuse.
 - Schema corpus, workspace layout, outbox ownership and event-observation tests
   prove bounded encoding, split-tree reconstruction, causal coalescing and

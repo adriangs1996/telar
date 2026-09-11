@@ -174,24 +174,24 @@ event does not wipe megabytes synchronously.
 
 ## Proof
 
-- `src/frontend/client/model.zig` proves single-flight capture identity, exact
+- `src/client/model/Model.zig` proves single-flight capture identity, exact
   completion, target ownership, validation and identifier exhaustion.
-- `src/frontend/client/application/clipboard_image.zig` proves commit before
+- `src/client/application/input/clipboard_image.zig` proves commit before
   scheduling, complete start classification, exact consumption, stale
   suppression, adoption before resize and failure classification before exact
   delivery.
-- `src/frontend/client/application/clipboard_image_delivery.zig` proves quiet
+- `src/client/application/input/clipboard_image_delivery.zig` proves quiet
   outcomes, notification mapping and publication failure propagation.
-- `src/frontend/client/application/input/attachment_prompt.zig` proves child
+- `src/client/application/input/attachment_prompt.zig` proves child
   marker deletion precedes local retirement, prompt submission cancels an
   in-flight capture, a continued prompt keeps both, and which keys arm a
   deletion watch per policy.
-- `src/frontend/attachments/root.zig` proves cancellation ownership, image
+- `src/frontend/attachments/attachments.zig` proves cancellation ownership, image
   bounds, retained-byte limits, target scoping, marker planning across a
   wrapped placeholder, backslash continuation, the bounded deletion watch and
   ingress revision.
-- `src/frontend/attachments/path_marker.zig` proves Pi path parsing across
+- `src/client/attachments/path_marker.zig` proves Pi path parsing across
   forced wraps, extent limits, screen-order collection and cursor resolution.
-- `src/frontend/client/client_test.zig` proves pane delivery without a target,
+- `src/frontend/client/tests/` proves pane delivery without a target,
   successful resource observation, stale target cleanup, quiet clipboard-empty
   behavior and notification failures without direct presentation.

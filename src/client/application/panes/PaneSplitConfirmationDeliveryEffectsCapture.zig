@@ -1,17 +1,22 @@
+const ModelType = @import("../../model/Model.zig");
+const PaneSplitCommitType = @import("../../model/PaneSplitCommit.zig");
+const pane_split_confirmation_delivery = @import("pane_split_confirmation_delivery.zig");
+const PaneSplitConfirmationDeliveryEffects = @import("PaneSplitConfirmationDeliveryEffects.zig");
+const OfferEffectsType = @import("OfferEffects.zig");
+const PaneResizeType = @import("telar-core").PaneResize;
+const PaneIdType = @import("telar-core").PaneId;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_split_confirmation_delivery.zig");
-const Effects = @import("PaneSplitConfirmationDeliveryEffects.zig");
-const pane_geometry_delivery = @import("pane_geometry_delivery.zig");
-model: *client_model.Model,
-commit: client_model.PaneSplitCommit,
+
+model: *ModelType,
+commit: PaneSplitCommitType,
 snapshot_pending: bool = false,
-events: [8]source_namespace.Event = undefined,
+events: [8]pane_split_confirmation_delivery.Event = undefined,
 event_count: usize = 0,
 committed_state_observed: bool = true,
-failure: source_namespace.Failure = .none,
+failure: pane_split_confirmation_delivery.Failure = .none,
 
-pub fn effects(capture: *EffectsCapture) Effects {
+pub fn effects(capture: *EffectsCapture) PaneSplitConfirmationDeliveryEffects {
     return .{
         .context = capture,
         .detach_pane = detachPane,
@@ -22,14 +27,14 @@ pub fn effects(capture: *EffectsCapture) Effects {
     };
 }
 
-pub fn geometryEffects(capture: *EffectsCapture) pane_geometry_delivery.OfferEffects {
+pub fn geometryEffects(capture: *EffectsCapture) OfferEffectsType {
     return .{
         .context = capture,
         .deliver_resize = deliverResize,
     };
 }
 
-fn deliverResize(raw_context: *anyopaque, resize: source_namespace.schema.PaneResize) !void {
+fn deliverResize(raw_context: *anyopaque, resize: PaneResizeType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .resize = resize.pane_id });
     if (capture.failure == .resize) {
@@ -45,7 +50,7 @@ fn synchronizeActiveResources(raw_context: *anyopaque) !void {
     }
 }
 
-fn detachPane(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId) !void {
+fn detachPane(raw_context: *anyopaque, pane_id: PaneIdType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .detach = pane_id });
     if (capture.failure == .detach) {
@@ -53,7 +58,7 @@ fn detachPane(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId) 
     }
 }
 
-fn setPaneGraphicsVisible(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId, visible: bool) !void {
+fn setPaneGraphicsVisible(raw_context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .graphics_visibility = .{
         .pane_id = pane_id,
@@ -71,7 +76,7 @@ fn workspaceSnapshotPending(raw_context: *anyopaque) bool {
     return capture.snapshot_pending;
 }
 
-fn requestWorkspaceSnapshot(raw_context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) !void {
+fn requestWorkspaceSnapshot(raw_context: *anyopaque, workspace: WorkspaceLocationType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .request_workspace_snapshot = workspace });
     if (capture.failure == .workspace_snapshot) {
@@ -79,7 +84,7 @@ fn requestWorkspaceSnapshot(raw_context: *anyopaque, workspace: source_namespace
     }
 }
 
-fn append(capture: *EffectsCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectsCapture, event: pane_split_confirmation_delivery.Event) void {
     capture.observeCommit();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -114,6 +119,6 @@ fn observeCommit(capture: *EffectsCapture) void {
     }
 }
 
-pub fn eventSlice(capture: *const EffectsCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectsCapture) []const pane_split_confirmation_delivery.Event {
     return capture.events[0..capture.event_count];
 }

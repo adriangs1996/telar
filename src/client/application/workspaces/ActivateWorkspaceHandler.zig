@@ -1,8 +1,10 @@
-const ActivateWorkspaceHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const ActivationEffects = @import("ActivationEffects.zig");
+const WorkspaceActivationType = @import("../../model/WorkspaceActivation.zig");
 const std = @import("std");
-model: *client_model.Model,
+const ActivateWorkspaceHandler = @This();
+
+model: *ModelType,
 effects: ActivationEffects,
 
 /// Validates one exact activation before synchronizing active resources,
@@ -11,7 +13,7 @@ effects: ActivationEffects,
 /// ```zig
 /// try handler.execute(activation);
 /// ```
-pub fn execute(handler: *ActivateWorkspaceHandler, activation: client_model.WorkspaceActivation) !void {
+pub fn execute(handler: *ActivateWorkspaceHandler, activation: WorkspaceActivationType) !void {
     try handler.validate(activation);
     try handler.effects.synchronize_active_resources(handler.effects.context);
     try handler.effects.schedule_host_input(handler.effects.context);
@@ -29,7 +31,7 @@ pub fn execute(handler: *ActivateWorkspaceHandler, activation: client_model.Work
 /// ```zig
 /// try handler.validate(activation);
 /// ```
-pub fn validate(handler: *const ActivateWorkspaceHandler, activation: client_model.WorkspaceActivation) !void {
+pub fn validate(handler: *const ActivateWorkspaceHandler, activation: WorkspaceActivationType) !void {
     const active = handler.model.workspace.activeConst() orelse return error.StaleWorkspaceActivation;
     const root = active.model.findConst(activation.pane_id) orelse return error.StaleWorkspaceActivation;
     const version = handler.model.version();

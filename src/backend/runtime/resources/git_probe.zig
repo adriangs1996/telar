@@ -6,22 +6,15 @@
 //! aggregate and the workspace-list revision.
 
 const std = @import("std");
-const core = @import("telar-core");
-const workspace = @import("../../workspace/root.zig");
-
-pub const Io = std.Io;
-pub const schema = core.schema;
+const Job = @import("Job.zig");
+const Completion = @import("Completion.zig");
 
 pub const probe_interval_ms: i64 = 5_000;
 pub const max_status_bytes = 64 * 1024;
 
-const status_timeout: Io.Timeout = .{
+const status_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(2) },
 };
-
-pub const Job = @import("Job.zig");
-
-pub const Completion = @import("Completion.zig");
 
 /// Runs on a worker: never touches runtime state.
 ///
@@ -40,7 +33,7 @@ pub fn probe(job: Job) Completion {
     return completion;
 }
 
-fn readHead(io: Io, workspace_path: []const u8, buffer: []u8) ?[]const u8 {
+fn readHead(io: std.Io, workspace_path: []const u8, buffer: []u8) ?[]const u8 {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const head_path = std.fmt.bufPrint(&path_buffer, "{s}/.git/HEAD", .{workspace_path}) catch return null;
     if (readSmall(io, head_path, buffer)) |bytes| {
@@ -60,8 +53,8 @@ fn readHead(io: Io, workspace_path: []const u8, buffer: []u8) ?[]const u8 {
     return readSmall(io, linked_head, buffer);
 }
 
-fn readSmall(io: Io, path: []const u8, buffer: []u8) ?[]const u8 {
-    const file = Io.Dir.cwd().openFile(io, path, .{}) catch return null;
+fn readSmall(io: std.Io, path: []const u8, buffer: []u8) ?[]const u8 {
+    const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch return null;
     defer file.close(io);
     var reader = file.readerStreaming(io, &.{});
     const len = reader.interface.readSliceShort(buffer) catch return null;
@@ -87,7 +80,7 @@ pub fn parseHead(bytes: []const u8) []const u8 {
     return trimmed[0..@min(trimmed.len, 8)];
 }
 
-fn statusDirty(io: Io, workspace_path: []const u8) bool {
+fn statusDirty(io: std.Io, workspace_path: []const u8) bool {
     const gpa = std.heap.page_allocator;
     const result = std.process.run(gpa, io, .{
         .argv = &.{ "git", "-C", workspace_path, "status", "--porcelain", "--no-renames" },

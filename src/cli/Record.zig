@@ -1,7 +1,8 @@
-const Record = @This();
-const source_namespace = @import("proxy.zig");
+const proxy = @import("proxy.zig");
 const std = @import("std");
-backend: source_namespace.TrustBackend,
+const Record = @This();
+
+backend: proxy.TrustBackend,
 fingerprint: [40]u8,
 store_path: [std.fs.max_path_bytes]u8 = undefined,
 store_path_len: u16 = 0,

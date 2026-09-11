@@ -1,6 +1,7 @@
+const PaneIdType = @import("telar-core").PaneId;
 const PaneViewportChange = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 offset: u32,
 at_bottom: bool,
 viewport_revision: u64,

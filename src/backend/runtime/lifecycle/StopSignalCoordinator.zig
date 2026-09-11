@@ -1,15 +1,16 @@
-const Coordinator = @This();
-const source_namespace = @import("stop_signal.zig");
-const Scheduler = @import("Scheduler.zig");
 const std = @import("std");
-queue: ?*source_namespace.Io.Queue(u8),
+const Scheduler = @import("Scheduler.zig");
+const stop_signal = @import("stop_signal.zig");
+const Coordinator = @This();
+
+queue: ?*std.Io.Queue(u8),
 
 /// Borrows an optional external queue for the coordinator's lifetime.
 ///
 /// ```zig
 /// const stop_signal = Coordinator.init(&queue);
 /// ```
-pub fn init(queue: ?*source_namespace.Io.Queue(u8)) Coordinator {
+pub fn init(queue: ?*std.Io.Queue(u8)) Coordinator {
     return .{ .queue = queue };
 }
 
@@ -32,7 +33,7 @@ pub fn arm(coordinator: Coordinator, scheduler: Scheduler) !void {
 ///     return;
 /// }
 /// ```
-pub fn complete(coordinator: Coordinator, result: anyerror!void) !source_namespace.Completion {
+pub fn complete(coordinator: Coordinator, result: anyerror!void) !stop_signal.Completion {
     std.debug.assert(coordinator.queue != null);
     try result;
     return .stop;

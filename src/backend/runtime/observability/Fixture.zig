@@ -1,11 +1,12 @@
+const SamplerType = @import("Sampler.zig");
+const SystemMetricsCoordinatorCapture = @import("SystemMetricsCoordinatorCapture.zig");
+const system_metrics_coordinator = @import("system_metrics_coordinator.zig");
 const Fixture = @This();
-const system_metrics = @import("system_metrics.zig");
-const Capture = @import("SystemMetricsCoordinatorCapture.zig");
-const source_namespace = @import("system_metrics_coordinator.zig");
-sampler: system_metrics.Sampler = .{},
-pending: bool = false,
-capture: Capture = .{},
 
-pub fn coordinator(fixture: *Fixture) source_namespace.TestCoordinator {
+sampler: SamplerType = .{},
+pending: bool = false,
+capture: SystemMetricsCoordinatorCapture = .{},
+
+pub fn coordinator(fixture: *Fixture) system_metrics_coordinator.TestCoordinator {
     return .init(&fixture.capture, .{ .sampler = &fixture.sampler, .pending = &fixture.pending });
 }

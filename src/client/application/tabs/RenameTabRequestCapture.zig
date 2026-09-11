@@ -1,16 +1,18 @@
-const RequestCapture = @This();
-const source_namespace = @import("rename_tab.zig");
-const TabOperationGate = @import("RenameTabTabOperationGate.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const RenameTabOperationGate = @import("RenameTabOperationGate.zig");
 const RenameRequestEffects = @import("RenameRequestEffects.zig");
 const TabRenameIntent = @import("TabRenameIntent.zig");
+const RequestCapture = @This();
+
 blocked: bool = false,
 failure: ?anyerror = null,
 calls: usize = 0,
-location: ?source_namespace.schema.TabLocation = null,
-label: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+location: ?TabLocationType = null,
+label: [max_tab_label_bytes_module]u8 = undefined,
 label_len: u8 = 0,
 
-pub fn gate(capture: *RequestCapture) TabOperationGate {
+pub fn gate(capture: *RequestCapture) RenameTabOperationGate {
     return .{ .context = capture, .pending = pending };
 }
 

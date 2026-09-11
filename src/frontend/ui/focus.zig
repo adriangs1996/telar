@@ -6,27 +6,15 @@
 //!
 //!   **Focus lives in the topmost layer that registered anything focusable.**
 
+const GenericFocus = @import("GenericFocus.zig").Type;
 const std = @import("std");
 
 // ---------------------------------------------------------------------------
 // Focus
 // ---------------------------------------------------------------------------
 
-pub const Focus = @import("GenericFocus.zig").Type;
-
-/// Columns `text` will occupy once drawn.
-///
-/// Shares the iterator `writeText` uses, so a measurement and a draw can never
-/// disagree - which is what right alignment and truncation both depend on.
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-const testing = std.testing;
-
 const TestId = union(enum) { field: u16, button: u16, dialog: u16 };
-const TestFocus = Focus(TestId, 32);
+const TestFocus = GenericFocus(TestId, 32);
 
 /// One frame's worth of registrations, so the tests read like drawing code.
 fn drawFrame(f: *TestFocus, base: []const TestId, overlay: ?[]const TestId) void {
@@ -45,7 +33,7 @@ test "focus lands somewhere on the first frame" {
     // finds something to click, which reads as broken rather than as empty.
     var f: TestFocus = .{};
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 } }, null);
-    try testing.expectEqual(TestId{ .field = 0 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .field = 0 }, f.focused().?);
 }
 
 test "tab cycles and wraps within the layer" {
@@ -53,12 +41,12 @@ test "tab cycles and wraps within the layer" {
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 }, .{ .button = 2 } }, null);
 
     f.next();
-    try testing.expectEqual(TestId{ .button = 1 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .button = 1 }, f.focused().?);
     f.next();
     f.next();
-    try testing.expectEqual(TestId{ .field = 0 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .field = 0 }, f.focused().?);
     f.prev();
-    try testing.expectEqual(TestId{ .button = 2 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .button = 2 }, f.focused().?);
 }
 
 test "an overlay takes the keyboard the frame it appears" {
@@ -68,7 +56,7 @@ test "an overlay takes the keyboard the frame it appears" {
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 } }, null);
 
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 } }, &.{ .{ .dialog = 0 }, .{ .dialog = 1 } });
-    try testing.expectEqual(TestId{ .dialog = 0 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .dialog = 0 }, f.focused().?);
 }
 
 test "tab cannot escape an overlay" {
@@ -79,7 +67,7 @@ test "tab cannot escape an overlay" {
 
     for (0..6) |_| {
         f.next();
-        try testing.expect(f.focused().? == .dialog);
+        try std.testing.expect(f.focused().? == .dialog);
     }
 }
 
@@ -88,14 +76,14 @@ test "closing an overlay hands the keyboard back where it was" {
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 }, .{ .button = 2 } }, null);
     f.next();
     f.next();
-    try testing.expectEqual(TestId{ .button = 2 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .button = 2 }, f.focused().?);
 
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 }, .{ .button = 2 } }, &.{.{ .dialog = 0 }});
-    try testing.expectEqual(TestId{ .dialog = 0 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .dialog = 0 }, f.focused().?);
 
     // Dismissed. Not back to the top of the list - back to where the user was.
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 }, .{ .button = 2 } }, null);
-    try testing.expectEqual(TestId{ .button = 2 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .button = 2 }, f.focused().?);
 }
 
 test "focus on a control that stops being drawn is repaired" {
@@ -105,21 +93,21 @@ test "focus on a control that stops being drawn is repaired" {
     var f: TestFocus = .{};
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 7 } }, null);
     f.set(.{ .button = 7 });
-    try testing.expectEqual(TestId{ .button = 7 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .button = 7 }, f.focused().?);
 
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 8 } }, null);
-    try testing.expectEqual(TestId{ .field = 0 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .field = 0 }, f.focused().?);
 }
 
 test "a frame with nothing focusable leaves nothing focused" {
     var f: TestFocus = .{};
     drawFrame(&f, &.{.{ .field = 0 }}, null);
     drawFrame(&f, &.{}, null);
-    try testing.expectEqual(@as(?TestId, null), f.focused());
+    try std.testing.expectEqual(@as(?TestId, null), f.focused());
     // And moving focus over an empty registry does nothing rather than trap.
     f.next();
     f.prev();
-    try testing.expectEqual(@as(?TestId, null), f.focused());
+    try std.testing.expectEqual(@as(?TestId, null), f.focused());
 }
 
 test "setting focus to something undrawn is ignored" {
@@ -129,7 +117,7 @@ test "setting focus to something undrawn is ignored" {
     var f: TestFocus = .{};
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 } }, null);
     f.set(.{ .button = 99 });
-    try testing.expectEqual(TestId{ .field = 0 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .field = 0 }, f.focused().?);
 }
 
 test "focus buried under an overlay is remembered, not lost" {
@@ -144,14 +132,14 @@ test "focus buried under an overlay is remembered, not lost" {
         drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 5 } }, &.{.{ .dialog = 0 }});
     }
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 5 } }, null);
-    try testing.expectEqual(TestId{ .button = 5 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .button = 5 }, f.focused().?);
 }
 
 test "has answers for the focus ring" {
     var f: TestFocus = .{};
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 } }, null);
-    try testing.expect(f.has(.{ .field = 0 }));
-    try testing.expect(!f.has(.{ .button = 1 }));
+    try std.testing.expect(f.has(.{ .field = 0 }));
+    try std.testing.expect(!f.has(.{ .button = 1 }));
 }
 
 test "focus starts where the client says, not where drawing happened to begin" {
@@ -160,19 +148,19 @@ test "focus starts where the client says, not where drawing happened to begin" {
     // every single letter shortcut is dead, and nothing on screen says why.
     var f: TestFocus = .{ .initial = .{ .button = 1 } };
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 }, .{ .button = 2 } }, null);
-    try testing.expectEqual(TestId{ .button = 1 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .button = 1 }, f.focused().?);
 
     // Only a starting point. Once the user moves, it stops applying.
     f.next();
-    try testing.expectEqual(TestId{ .button = 2 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .button = 2 }, f.focused().?);
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 }, .{ .button = 2 } }, null);
-    try testing.expectEqual(TestId{ .button = 2 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .button = 2 }, f.focused().?);
 }
 
 test "a starting point that is not drawn falls back rather than stranding" {
     var f: TestFocus = .{ .initial = .{ .button = 99 } };
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 } }, null);
-    try testing.expectEqual(TestId{ .field = 0 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .field = 0 }, f.focused().?);
 }
 
 test "an overlay still wins over the starting point" {
@@ -180,5 +168,5 @@ test "an overlay still wins over the starting point" {
     // preference expressed for the base layer.
     var f: TestFocus = .{ .initial = .{ .button = 1 } };
     drawFrame(&f, &.{ .{ .field = 0 }, .{ .button = 1 } }, &.{.{ .dialog = 0 }});
-    try testing.expectEqual(TestId{ .dialog = 0 }, f.focused().?);
+    try std.testing.expectEqual(TestId{ .dialog = 0 }, f.focused().?);
 }

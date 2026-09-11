@@ -1,7 +1,9 @@
-const SetPaneViewportHandler = @This();
-const source_namespace = @import("pane_viewport.zig");
+const AttachmentStoreType = @import("../../attachment/AttachmentStore.zig");
 const SetPaneViewport = @import("SetPaneViewport.zig");
-attachments: *source_namespace.AttachmentStore,
+const pane_viewport = @import("pane_viewport.zig");
+const SetPaneViewportHandler = @This();
+
+attachments: *AttachmentStoreType,
 
 /// Changes only the requesting client's scrollback pin. Requests that
 /// resolve to the current offset are idempotent and do not schedule a new
@@ -10,7 +12,7 @@ attachments: *source_namespace.AttachmentStore,
 /// ```zig
 /// const result = try handler.execute(.{ .pane_id = pane_id, .offset = 0 });
 /// ```
-pub fn execute(handler: *SetPaneViewportHandler, command: SetPaneViewport) !source_namespace.SetPaneViewportResult {
+pub fn execute(handler: *SetPaneViewportHandler, command: SetPaneViewport) !pane_viewport.SetPaneViewportResult {
     const update = try handler.attachments.setPaneViewport(.{
         .pane_id = command.pane_id,
         .offset = command.offset,

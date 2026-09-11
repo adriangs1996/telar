@@ -1,142 +1,140 @@
 # Capability map
 
-Telar is organized first by process ownership, then by capability. A
-capability directory exposes its supported surface from `root.zig`. Imports
-between capabilities go through those roots; files beside a root are internal
-implementation.
+Telar is organized by process ownership, then by capability. This map locates
+state and behavior; the maps in `docs/flows/` trace external events. Directory
+locations below are not permission to import every file they contain.
 
-This map answers "where does this state belong?". The maps in `docs/flows/`
-answer "what happens after this external event?".
+Concrete types and generic families follow [Zig source layout](zig-source-layout.md).
+Capabilities expose explicit public files, not mandatory directory barrels.
+The package entrypoints are `src/core/core.zig`, `src/backend/backend.zig`,
+`src/client/client.zig` and `src/frontend/frontend.zig`. They export canonical
+values needed across Zig module boundaries.
+
+For `telar-client`, `src/client/capabilities.json` records:
+
+- `entrypoint`: the package module entrypoint;
+- `capabilities`: explicit directory owners, including nested capabilities;
+- `public`: files another capability may import;
+- `assembly_imports`: additional files the entrypoint imports for test discovery,
+  not permission for another capability to depend on private helpers.
+
+Adding a public entry is an API decision. Do not export a fixture or an internal
+helper just to silence a boundary error. File separation does not make struct
+fields private or transfer mutation authority.
 
 ## Shared core
 
-| Capability | Root | Responsibility |
+| Capability | Location | Responsibility |
 | --- | --- | --- |
-| Schema | `src/core/schema/root.zig` | Bounded runtime-client messages and their encoding |
-| UI values | `src/core/ui/root.zig` | Cells, buffers, geometry and text values shared across the process boundary |
-| Transport | `src/core/transport/root.zig` | Framed byte-stream channels and local endpoint values |
-| Lua runtime | `src/lua/root.zig` | Shared metered VM and restricted standard-library sandbox |
+| Schema | `src/core/schema/` | Bounded runtime-client messages and their encoding |
+| UI values | `src/core/ui/` | Cells, buffers, geometry and shared text values |
+| Transport | `src/core/transport/` | Framed byte streams and local endpoint values |
+| Lua runtime | `src/lua/lua.zig` | Metered VM and restricted standard-library sandbox |
 
-The remaining files in `src/core/` are small pure support modules. Core owns no
-live runtime or client state and imports neither process package.
+Core owns no live runtime or client state and imports neither process package.
 
 ## Executable entrypoints
 
-| Capability | Root | Responsibility |
-| --- | --- | --- |
-| Command line | `src/cli/root.zig` | Parse commands and own each process-specific startup flow |
-
-`src/main.zig` collects process arguments and selects one command-line
-entrypoint. The server entrypoint selects production dependencies and
-initializes the public runtime instance; the client entrypoint prepares the
-disposable frontend process.
+`src/main.zig` collects process arguments and dispatches the parsed command.
+`src/cli/parser.zig` owns command values. Files such as `src/cli/server.zig` and
+`src/cli/client.zig` prepare their process, choose production dependencies and
+invoke the runtime or TUI. Main-build types live in `build/`.
 
 ## Runtime capabilities
 
-| Capability | Root | Owns |
+| Capability | Location | Owns |
 | --- | --- | --- |
-| Runtime | `src/backend/runtime/root.zig` | Public lifecycle for one runtime instance |
-| Pane | `src/backend/pane/root.zig` | One child process, PTY terminal state, cell projection and pane lifecycle |
-| PTY | `src/backend/pty/root.zig` | Verified child launch, PTY I/O and child lifecycle |
-| Media | `src/backend/media/root.zig` | Bounded child Kitty-graphics ingestion |
-| Process | `src/backend/process/root.zig` | Native process metadata and bounded foreground-process observation |
-| Engine | `src/backend/engine/root.zig` | Bounded prompts to one headless agent child on the observation path |
-| Agent | `src/backend/agent/root.zig` | Agent evidence precedence and projected agent state |
-| History | `src/backend/history/root.zig` | Command observation, queries and durable storage |
-| Proxy | `src/backend/proxy/root.zig` | Network observation and TLS proxy actors |
-| Proxy capture | `src/backend/proxy/capture/root.zig` | Bounded exchange buffers, delivery, decoding and runtime-side pairing |
-| Tap plugins | `src/backend/plugins/root.zig` | Supervised runtime-side Lua workers and authorized effect protocol |
-| Transport | `src/backend/transport/root.zig` | Runtime side of local connection and handshake |
+| Runtime | `src/backend/runtime/Runtime.zig` | Lifecycle of one runtime instance |
+| Pane | `src/backend/pane/Pane.zig` | Child, PTY terminal state, cell projection and pane lifecycle |
+| PTY | `src/backend/pty/` | Verified launch, PTY I/O and child lifecycle |
+| Media | `src/backend/media/` | Bounded child Kitty-graphics ingestion |
+| Process | `src/backend/process/` | Native metadata and foreground-process observation |
+| Engine | `src/backend/engine/` | Bounded prompts to one headless agent child |
+| Agent | `src/backend/agent/` | Evidence precedence and projected agent state |
+| History | `src/backend/history/` | Command observation, queries and durable storage |
+| Proxy | `src/backend/proxy/` | Network observation and TLS actors |
+| Proxy capture | `src/backend/proxy/capture/` | Bounded exchanges, delivery, decoding and pairing |
+| Tap plugins | `src/backend/plugins/` | Supervised Lua workers and authorized effects |
+| Transport | `src/backend/transport/` | Runtime-side local connection and handshake |
 
-The shipped `examples/plugins/agent-commands` package is an integration fixture
-across Proxy capture, Tap plugins, and History. Provider-specific JSON and SSE
-classification stays in Lua; the runtime owns only bounded exchange delivery,
-capability authorization, and durable effects.
+The `examples/plugins/agent-commands` package integrates Proxy capture, Tap
+plugins and History. Provider-specific JSON and SSE classification stays in
+Lua; the runtime owns bounded exchange delivery, authorization and durable
+results.
 
-`src/cli/server.zig` selects the production dependencies and initializes the
-public runtime instance. Behind `src/backend/runtime/root.zig`, the lifetime is
-split without changing that public contract:
+### Runtime composition
 
-| Runtime part | File | Responsibility |
+| Part | File or directory | Responsibility |
 | --- | --- | --- |
-| Runtime composition | `src/backend/runtime/instance.zig` | Acquire, compose, run and tear down one runtime |
-| Physical resources | `src/backend/runtime/resources/root.zig` | Own concrete process resources and startup rollback |
-| Event loop | `src/backend/runtime/event_loop.zig` | Own bounded event storage, selection and stop coordination |
-| Application | `src/backend/runtime/application/root.zig` | Own the live model, client application state and cross-capability invariants |
-| Runtime model | `src/backend/runtime/application/model.zig` | Hold authoritative semantic state without implementing behavior |
-| Pane launcher | `src/backend/runtime/application/pane_launcher.zig` | Commit or roll back pane creation and actor startup as one transaction |
-| Event sources | `src/backend/runtime/event_sources.zig` | Arm infrastructure work that produces runtime events |
-| Event dispatcher | `src/backend/runtime/application/event_dispatcher/root.zig` | Classify completions and delegate them to capability-specific adapters |
-| Operation scheduler | `src/backend/runtime/application/operation_scheduler.zig` | Start bounded asynchronous work requested by the application |
-| Request dispatch | `src/backend/runtime/application/request_dispatch.zig` | Build request-scoped controllers and application handlers |
+| Runtime | `src/backend/runtime/Runtime.zig` | Acquire, compose, run and tear down |
+| Resources | `src/backend/runtime/resources/Resources.zig` | Physical ownership and startup rollback |
+| Event loop | `src/backend/runtime/Loop.zig` | Event storage, selection and stop coordination |
+| Application | `src/backend/runtime/application/Application.zig` | Client state and cross-capability invariants |
+| Model | `src/backend/runtime/application/RuntimeModel.zig` | Authoritative semantic state |
+| Pane launcher | `src/backend/runtime/application/GenericPaneLauncher.zig` | Pane creation and actor startup transaction |
+| Event sources | `src/backend/runtime/Sources.zig` | Arm infrastructure work |
+| Event dispatcher | `src/backend/runtime/application/event_dispatcher/GenericEventDispatcher.zig` | Classify completions and delegate |
+| Scheduler | `src/backend/runtime/application/GenericScheduler.zig` | Start bounded asynchronous work |
+| Request dispatch | `src/backend/runtime/application/request_dispatch.zig` | Request-scoped controllers and handlers |
+| Commands and queries | `src/backend/runtime/application/commands/`, `src/backend/runtime/application/queries/` | Synchronous use cases and reads |
+| Coordinators | `src/backend/runtime/application/coordinators/` | Description work and evidence expiry |
+| Request entrypoints | `src/backend/runtime/entrypoints/requests/` | Wire translation, errors and responses |
+| Event entrypoints | `src/backend/runtime/entrypoints/events/` | Actor and resource completion policy |
+| Attachment | `src/backend/runtime/attachment/` | Per-client projection and acknowledgement |
+| Client coordination | `src/backend/runtime/client/` | Admission, routing and send completion |
+| Delivery | `src/backend/runtime/delivery/` | Response scheduling, encoding and send transactions |
+| Lifecycle | `src/backend/runtime/lifecycle/` | Stop authority, signal and ordered teardown |
+| Observability | `src/backend/runtime/observability/` | Host metrics and diagnostic telemetry |
 
-Below that composition layer, directory names describe runtime roles rather
-than repeating backend capability names:
-
-| Runtime role | Location | Responsibility |
-| --- | --- | --- |
-| Application commands | `src/backend/runtime/application/commands/` | Synchronous use cases and transaction policy |
-| Application queries | `src/backend/runtime/application/queries/` | Read-only application operations |
-| Application coordinators | `src/backend/runtime/application/coordinators/root.zig` | Description work and agent evidence expiry |
-| Request entrypoints | `src/backend/runtime/entrypoints/requests/` | Wire translation, expected-error mapping and response enqueueing |
-| Event entrypoints | `src/backend/runtime/entrypoints/events/root.zig` | Completion policy for actors and asynchronous resources |
-| Resource owners | `src/backend/runtime/resources/root.zig` | Startup, stable ownership and teardown of physical resources |
-| Attachment | `src/backend/runtime/attachment/root.zig` | Per-client pane projection and acknowledgement |
-| Client coordination | `src/backend/runtime/client/root.zig` | Admission, request routing and send completion |
-| Delivery | `src/backend/runtime/delivery/root.zig` | Bounded response scheduling, encoding and send transactions |
-| Lifecycle | `src/backend/runtime/lifecycle/root.zig` | Stop authority, external stop signal and ordered teardown |
-| Observability | `src/backend/runtime/observability/root.zig` | Host metrics and diagnostic telemetry |
-
-High fan-out is restricted to composition, actor binding and request dispatch.
-It is a defect in a leaf capability unless an indivisible invariant requires
-it.
+High fan-out belongs in composition, actor binding and request dispatch. A leaf
+capability needs an indivisible invariant to justify it.
 
 ## Shared client capabilities
 
-`telar-client` shares implementation across independent client connections. It
-owns neither runtime truth nor a common instance of navigation or focus.
+`telar-client` shares implementation across independent connections. It owns
+neither runtime truth nor a common instance of navigation or focus.
 
-| Capability | Root | Owns |
+| Capability | Location | Owns |
 | --- | --- | --- |
-| Client model | `src/client/model/root.zig` | Disposable semantic state and aggregate transitions |
-| Application | `src/client/application/root.zig` | Existing command handlers and narrow effect ports |
-| Entrypoints | `src/client/entrypoints/root.zig` | Synchronous decoded-message dispatch to adapters |
-| Panes | `src/client/panes/root.zig` | Cells, damage, child modes and attachment-aware commits |
-| Workspace | `src/client/workspace/root.zig` | Tabs, split topology, navigation and explicit geometry |
-| Input | `src/client/input/root.zig` | Semantic values, bindings, leases, editing and child encoding |
-| Connection | `src/client/connection/root.zig` | Bounded outbox, correlation and transport state |
-| Resources | `src/client/resources/root.zig` | Shared clock and deadline resources |
-| Presentation | `src/client/presentation/root.zig` | Borrowed projections, revisions, completion, geometry and title port |
-| Graphics | `src/client/graphics/root.zig` | Validated image retention, generations, quotas and credits |
-| Attachments | `src/client/attachments/root.zig` | Semantic catalog, markers and sensitive-byte lifetime |
-| Agents | `src/client/agents/root.zig` | Bounded projection of runtime agent state |
-| Notifications and bars | `src/client/notifications/root.zig`, `src/client/bars/root.zig` | Semantic control state |
-| Links | `src/client/links/root.zig` | Targets, URI rules and pointer ownership |
-| Configuration | `src/client/config/root.zig` | Common typed configuration and bounded callback values |
+| Model | `src/client/model/Model.zig` | Disposable semantic state and transitions |
+| Application | `src/client/application/` | Command handlers and narrow effect ports |
+| Entrypoints | `src/client/entrypoints/runtime_messages.zig` | Synchronous decoded-message dispatch |
+| Panes | `src/client/panes/` | Cells, damage, child modes and attachment-aware commits |
+| Workspace | `src/client/workspace/` | Tabs, splits, navigation and explicit geometry |
+| Input | `src/client/input/` | Semantic values, bindings, leases, editing and child encoding |
+| Connection | `src/client/connection/` | Bounded outbox, correlation and transport state |
+| Resources | `src/client/resources/` | Clock and deadline values |
+| Presentation | `src/client/presentation/` | Projections, preparation, completion, geometry and title port |
+| Graphics | `src/client/graphics/` | Image retention, generations, quotas and credits |
+| Attachments | `src/client/attachments/` | Catalog, markers and sensitive-byte lifetime |
+| Agents | `src/client/agents/` | Bounded projection of runtime agent state |
+| Notifications and bars | `src/client/notifications/`, `src/client/bars/` | Semantic control state |
+| Links | `src/client/links/` | Targets, URI rules and pointer ownership |
+| Configuration | `src/client/config/` | Typed configuration and bounded callback values |
 
 ## TUI capabilities
 
-| Capability | Root | Owns |
+| Capability | Location | Owns |
 | --- | --- | --- |
-| Client adapter | `src/frontend/client/root.zig` | TUI assembly, existing event driver, controllers and workers |
-| Sound | `src/frontend/sound/root.zig` | Bounded host-audio playback policy, queue and platform worker |
-| Input | `src/frontend/input/root.zig` | Terminal decoder integration with the shared router |
-| Workspace | `src/frontend/workspace/root.zig` | Cell compositor over the shared workspace model |
-| Presentation | `src/frontend/presentation/root.zig` | Host screen diff, terminal output and pacing |
-| Graphics | `src/frontend/graphics/root.zig` | Host graphics transfer state, renderer policy and overlays |
-| UI | `src/frontend/ui/root.zig` | Client-only focus, hits and theme values |
-| Widgets | `src/frontend/widgets/root.zig` | Chrome and interaction surfaces |
-| Config | `src/frontend/config/root.zig` | Typed configuration and the client-owned Lua generation |
-| Plugins | `src/frontend/plugins/root.zig` | Plugin registry, protocol and isolated worker execution |
-| Platform | `src/frontend/platform/root.zig` | Host TTY and resize adapters |
-| Transport | `src/frontend/transport/root.zig` | Client side of local connection and handshake |
+| Client adapter | `src/frontend/client/Client.zig` | Assembly, event driver, controllers and workers |
+| Sound | `src/frontend/sound/` | Host-audio policy, queue and platform worker |
+| Input | `src/frontend/input/` | Terminal decoder integration with shared routing |
+| Workspace | `src/frontend/workspace/` | Cell compositor over the shared workspace model |
+| Presentation | `src/frontend/presentation/` | Screen diff, terminal output and pacing |
+| Graphics | `src/frontend/graphics/` | Host transfer state, renderer policy and overlays |
+| UI | `src/frontend/ui/` | Client-only focus, hits and theme values |
+| Widgets | `src/frontend/widgets/` | Chrome and interaction surfaces |
+| Config | `src/frontend/config/` | Typed configuration and client-owned Lua generation |
+| Plugins | `src/frontend/plugins/` | Registry, protocol and isolated workers |
+| Platform | `src/frontend/platform/` | Host TTY and resize adapters |
+| Transport | `src/frontend/transport/` | Client-side local connection and handshake |
 
-The TUI client root assembles capabilities. Shared handlers receive the model
-and their named ports, never that concrete aggregate. The internal
-`presentation_projection` adapter supplies host context to the shared projection
-builder and exposes TUI resources separately. `Presenter` owns every
-last-painted cache; the common lifecycle owns observed, prepared and delivered
-revisions. `host_output` retains sealed bytes and a completion token.
+Shared handlers receive their model and named ports, never the concrete TUI
+aggregate. `presentation_projection` supplies host context and exposes physical
+resources separately. `Presenter` owns prepared rendering caches; the shared
+lifecycle owns observed, prepared and delivered revisions. Host output retains
+sealed bytes and the completion token. None of these file moves changes the
+existing event driver or permits cancelling a partially written terminal diff.
 
 ## Dependency direction
 
@@ -146,95 +144,85 @@ telar-frontend -> telar-client -> telar-core <- telar-backend
        +-----------------------------+
 ```
 
-A future native adapter imports `telar-client`. The common client has only one
-named project dependency, `telar-core`. Core's Unicode provider uses Ghostty
-Unicode data; this does not construct a client VT. Guarded retained-media code
-uses POSIX shared memory. The common test binary links no FreeType, AppKit or
-GPU framework.
+A native adapter imports `telar-client`. Its only named project dependency is
+`telar-core`. Core's Unicode provider uses Ghostty data without constructing a
+client VT. Retained media uses guarded POSIX shared memory. The common test
+binary links no FreeType, AppKit or GPU framework.
 
-`zig build check-client-boundaries` checks module names, relative imports and
-public capability roots. `test-client` and `check` include it. `build.zig` also
-asserts process-module direction.
+`zig build check-client-boundaries` checks module direction, literal imports,
+exact path casing and public capability admission. `test-client` and `check`
+include it. Build assertions also reject reverse process-module dependencies.
+`zig build codestyle` checks the AST-based source conventions; `test` and `check`
+run it without enabling fixes. `check` also includes `check-programs`, which
+analyzes executable entrypoints: discovering a program's tests alone does not
+analyze its `main` function.
 
-The important current edges are:
+Principal internal edges remain:
 
 ```text
-frontend/client       -> telar-client, sound, input, workspace, presentation,
-                         graphics, ui, widgets, config, plugins, platform,
-                         transport
-client/application    -> shared model and narrow effect ports
-frontend/input        -> presentation
-frontend/workspace    -> input, presentation, ui
-frontend/widgets      -> agents, workspace, attachments, ui
-frontend/graphics     -> workspace, presentation, ui, widgets
-frontend/config       -> sound, input, graphics, ui
-frontend/plugins      -> input, config
-
-backend/runtime       -> pane, pty, media, process, agent, history, proxy,
-                         plugins, transport
-backend/pane          -> pty, media, process, history
-backend/agent         -> pane, history
+frontend/client    -> client behavior and concrete TUI capabilities
+client/application -> shared model and narrow effect ports
+frontend/input     -> presentation
+frontend/workspace -> input, presentation, ui
+frontend/widgets   -> agents, workspace, attachments, ui
+frontend/graphics  -> workspace, presentation, ui, widgets
+frontend/config    -> sound, input, graphics, ui
+frontend/plugins   -> input, config
+backend/runtime    -> pane, pty, media, process, agent, history, proxy,
+                      plugins, transport
+backend/pane       -> pty, media, process, history
+backend/agent      -> pane, history
 ```
 
-Every arrow also depends on core where it uses shared values or messages. A new
-edge should be justified by ownership or an indivisible invariant. A dependency
-cycle between capability roots is rejected.
+A new edge needs an ownership or invariant justification. Renaming a directory
+or adding an export does not supply one.
 
 ## Process entrypoints
 
-The event loops contain only this dispatch table and termination checks. The
-named handlers own ordering, state transitions and rescheduling.
+The event owners classify completions and delegate. Controllers translate the
+protocol; handlers retain ordering, mutation and rescheduling policy.
 
 ### Client
 
-The client root exports the loop; its internal adapters own the named event
-entrypoints below.
+`src/frontend/client/run.zig` owns the event driver. Its entrypoint is
+`src/frontend/client/entrypoints/events.zig`.
 
 | Event | Entrypoint |
 | --- | --- |
-| Host terminal bytes | [`host_inputs.handleRead`](flows/host-input-to-screen.md) |
-| Input parser deadline | [`host_inputs.handleInputTimeout`](flows/host-input-to-screen.md) |
-| Partial binding deadline | [`host_inputs.handleBindingTimeout`](flows/host-input-to-screen.md) |
-| Host capability deadline | [`host_capabilities.handleExpiry`](flows/host-capabilities.md) |
+| Host bytes and parser/binding deadlines | [`host_inputs`](flows/host-input-to-screen.md) |
+| Capability deadline | [`host_capabilities.handleExpiry`](flows/host-capabilities.md) |
 | Host resize | [`host_resizes.handle`](flows/host-resize.md) |
-| Runtime socket read | [`runtime_transport.handleRead`](flows/runtime-transport.md) |
-| Completed socket write | [`runtime_transport.handleSent`](flows/runtime-transport.md) |
-| Scheduled draw | [`presentation_lifecycle.handleDraw`](flows/presentation-lifecycle.md) |
-| Completed host write | [`presentation_lifecycle.handleWritten`](flows/presentation-lifecycle.md) |
-| Scheduled media pass | [`presentation_lifecycle.handleMediaTick`](flows/presentation-lifecycle.md) |
-| Sidebar animation tick | [`sidebar_animations.handleTick`](flows/sidebar-animation.md) |
+| Runtime socket read/write | [`runtime_transport`](flows/runtime-transport.md) |
+| Draw, host write and media tick | [`presentation_lifecycle`](flows/presentation-lifecycle.md) |
+| Sidebar animation | [`sidebar_animations.handleTick`](flows/sidebar-animation.md) |
 | Notification tick | [`notifications.handleTick`](flows/notifications.md) |
 | Agent sound completion | [`agent_sounds.handlePlayed`](flows/agent-sound.md) |
-| Telemetry tick/write | [`telemetry.handleTick`, `telemetry.handleWritten`](flows/client-telemetry.md) |
+| Telemetry tick/write | [`telemetry`](flows/client-telemetry.md) |
 | Config reload | [`config_reloads.handle`](flows/config-reload.md) |
-| Plugin worker result | [`plugin_actions.complete`](flows/plugin-action.md) |
+| Plugin result | [`plugin_actions.complete`](flows/plugin-action.md) |
 | Clipboard image result | [`clipboard_images.complete`](flows/clipboard-image.md) |
 
 ### Runtime
 
-`Runtime.run` receives every event and handles only stop completion. Every
-non-stop event crosses `application.handle` into
-`event_dispatcher.Dispatcher.handle`, which delegates to the owning adapter.
+`Runtime.run` handles stop completion and delegates other events through the
+application dispatcher. Specialized dispatchers handle client, agent, history,
+observability and pane events.
 
-| Event | Owner after classification |
+| Event | Owner below `src/backend/runtime/` |
 | --- | --- |
-| Accepted socket / completed handshake | `runtime/client/admission.zig` |
-| Client socket read | `runtime/application/event_dispatcher/client.zig` -> `Application.dispatchClientMessage` |
-| Completed client write | `runtime/client/send_coordinator.zig` |
-| History worker result | `runtime/entrypoints/events/history_response.zig` |
-| Proxy observation | `runtime/entrypoints/events/proxy_observation.zig` |
-| Proxy exchange half | `runtime/entrypoints/events/proxy_capture.zig` |
-| Tap plugin effects | `runtime/entrypoints/events/plugin_effects.zig` |
-| Agent expiry / description completion | `runtime/application/coordinators/agent_*.zig` |
-| System metrics tick | `runtime/observability/system_metrics_coordinator.zig` |
-| Completed PTY input write | `runtime/entrypoints/events/pane/input.zig` |
-| Completed terminal response write | `runtime/entrypoints/events/pane/response.zig` |
-| PTY read | `runtime/entrypoints/events/pane/output.zig` |
-| Completed VT ingestion | `runtime/entrypoints/events/pane/ingest.zig` |
-| Observation worker result | `runtime/entrypoints/events/pane/observation.zig` |
-| Media worker result | `runtime/entrypoints/events/pane/media.zig` |
-| Child exit | `runtime/entrypoints/events/pane/exit.zig` |
-| Telemetry tick / write | `runtime/observability/telemetry_tick_coordinator.zig`, telemetry state |
+| Accept / handshake | `client/admission.zig` |
+| Client read | `application/event_dispatcher/client.zig` |
+| Client write | `client/send_coordinator.zig` |
+| History result | `entrypoints/events/history_response.zig` |
+| Proxy observation / exchange | `entrypoints/events/proxy_observation.zig`, `entrypoints/events/proxy_capture.zig` |
+| Plugin effects | `entrypoints/events/plugin_effects.zig` |
+| Agent expiry / description | `application/coordinators/` |
+| Host metrics | `observability/system_metrics_coordinator.zig` |
+| PTY input/response writes | `entrypoints/events/pane/input.zig`, `entrypoints/events/pane/response.zig` |
+| PTY read / VT ingest | `entrypoints/events/pane/output.zig`, `entrypoints/events/pane/ingest.zig` |
+| Observation / media result | `entrypoints/events/pane/observation.zig`, `entrypoints/events/pane/media.zig` |
+| Child exit | `entrypoints/events/pane/exit.zig` |
+| Telemetry | `observability/telemetry_tick_coordinator.zig` |
 
-Entrypoints name causal boundaries. They do not imply that synchronous work may
-cross the interactive, media and observation budgets.
+An entrypoint is a causal boundary, not permission to cross the interactive,
+media or observation budget.

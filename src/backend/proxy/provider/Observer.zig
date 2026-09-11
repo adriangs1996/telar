@@ -1,9 +1,11 @@
+const types = @import("../../agent/types.zig");
+const DecoderType = @import("Decoder.zig");
+const request_support = @import("request_support.zig");
 /// Owns the body classifier for one candidate provider request.
 const Observer = @This();
-const source_namespace = @import("request_body.zig");
-const claude = @import("claude_request.zig");
-dialect: source_namespace.ApiDialect = .unknown,
-claude_decoder: claude.Decoder = .{},
+
+dialect: types.ApiDialect = .unknown,
+claude_decoder: DecoderType = .{},
 active: bool = false,
 
 /// Initializes one observer at its final memory address.
@@ -13,7 +15,7 @@ active: bool = false,
 /// observer.init(.anthropic_messages);
 /// defer observer.deinit();
 /// ```
-pub fn init(observer: *Observer, dialect: source_namespace.ApiDialect) void {
+pub fn init(observer: *Observer, dialect: types.ApiDialect) void {
     observer.* = .{ .dialect = dialect, .active = true };
 
     if (dialect == .anthropic_messages) {
@@ -43,7 +45,7 @@ pub fn feed(observer: *Observer, input: []const u8) void {
 /// ```zig
 /// const classification = observer.finish();
 /// ```
-pub fn finish(observer: *Observer) source_namespace.RequestClass {
+pub fn finish(observer: *Observer) request_support.RequestClass {
     if (!observer.active) {
         return .auxiliary;
     }

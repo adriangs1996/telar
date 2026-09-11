@@ -1,8 +1,9 @@
-const Sampler = @This();
 const Values = @import("Values.zig");
-const source_namespace = @import("system_metrics.zig");
+const system_metrics = @import("system_metrics.zig");
 const Raw = @import("Raw.zig");
 const std = @import("std");
+const Sampler = @This();
+
 revision: u64 = 1,
 latest: ?Values = null,
 previous_busy: u64 = 0,
@@ -16,12 +17,12 @@ previous_total: u64 = 0,
 /// sampler.sample();
 /// ```
 pub fn sample(sampler: *Sampler) void {
-    const raw = source_namespace.readRaw() orelse return;
+    const raw = system_metrics.readRaw() orelse return;
     sampler.apply(raw);
 }
 
 pub fn apply(sampler: *Sampler, raw: Raw) void {
-    const cpu = source_namespace.cpuPercent(
+    const cpu = system_metrics.cpuPercent(
         .{ .busy = sampler.previous_busy, .total = sampler.previous_total },
         .{ .busy = raw.busy_ticks, .total = raw.total_ticks },
     );
@@ -29,7 +30,7 @@ pub fn apply(sampler: *Sampler, raw: Raw) void {
     sampler.previous_total = raw.total_ticks;
     const next: Values = .{
         .cpu_percent = cpu,
-        .memory_used_decigib = source_namespace.decigib(raw.memory_used_bytes),
+        .memory_used_decigib = system_metrics.decigib(raw.memory_used_bytes),
         .battery_percent = raw.battery_percent,
     };
     if (sampler.latest) |current| {

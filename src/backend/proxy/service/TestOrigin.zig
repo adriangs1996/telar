@@ -1,4 +1,5 @@
+const std = @import("std");
 const TestOrigin = @This();
-const source_namespace = @import("service_test.zig");
-listener: source_namespace.net.Server,
+
+listener: std.Io.net.Server,
 port: u16

@@ -1,11 +1,15 @@
-const KeyRoutingHandler = @This();
-const Effects = @import("KeyRoutingEffects.zig");
-const source_namespace = @import("key_routing.zig");
-const Authority = @import("KeyRoutingAuthority.zig");
-const Outcome = @import("KeyRoutingOutcome.zig");
+const KeyRoutingEffects = @import("KeyRoutingEffects.zig");
+const key_routing = @import("key_routing.zig");
+const KeyRoutingAuthority = @import("KeyRoutingAuthority.zig");
+const KeyRoutingOutcome = @import("KeyRoutingOutcome.zig");
+const KeyType = @import("../../input/Key.zig");
 const std = @import("std");
-effects: Effects,
-leases: *source_namespace.Leases,
+const Routed = @import("Routed.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const KeyRoutingHandler = @This();
+
+effects: KeyRoutingEffects,
+leases: *key_routing.Leases,
 
 /// Assigns one synchronous input value to exactly one owner. A successful
 /// unmodified Ctrl+V pane delivery may start one best-effort media preview.
@@ -13,7 +17,7 @@ leases: *source_namespace.Leases,
 /// ```zig
 /// const outcome = try handler.execute(command, authority);
 /// ```
-pub fn execute(handler: *KeyRoutingHandler, command: source_namespace.Command, authority: Authority) !Outcome {
+pub fn execute(handler: *KeyRoutingHandler, command: key_routing.Command, authority: KeyRoutingAuthority) !KeyRoutingOutcome {
     return switch (command) {
         .bytes => |bytes| if (bytes.len == 0)
             .{ .owner = .ignored }
@@ -23,12 +27,7 @@ pub fn execute(handler: *KeyRoutingHandler, command: source_namespace.Command, a
     };
 }
 
-const Routed = struct {
-    outcome: Outcome,
-    lease_owner: source_namespace.LeaseOwner,
-};
-
-fn routeKey(handler: *KeyRoutingHandler, key: source_namespace.keybind.Key, authority: Authority) !Outcome {
+fn routeKey(handler: *KeyRoutingHandler, key: KeyType, authority: KeyRoutingAuthority) !KeyRoutingOutcome {
     const identity = key.physical orelse return (try handler.routeCurrent(.{ .key = key }, authority)).outcome;
 
     return switch (key.phase) {
@@ -38,7 +37,7 @@ fn routeKey(handler: *KeyRoutingHandler, key: source_namespace.keybind.Key, auth
     };
 }
 
-fn routePress(handler: *KeyRoutingHandler, key: source_namespace.keybind.Key, authority: Authority) !Outcome {
+fn routePress(handler: *KeyRoutingHandler, key: KeyType, authority: KeyRoutingAuthority) !KeyRoutingOutcome {
     const identity = key.physical.?;
     if (!handler.leases.acquire(identity, .ignored)) {
         return .{ .owner = .ignored, .lease_overflow = true };
@@ -52,7 +51,7 @@ fn routePress(handler: *KeyRoutingHandler, key: source_namespace.keybind.Key, au
     return routed.outcome;
 }
 
-fn routeRepeat(handler: *KeyRoutingHandler, key: source_namespace.keybind.Key, owner: source_namespace.LeaseOwner) !Outcome {
+fn routeRepeat(handler: *KeyRoutingHandler, key: KeyType, owner: key_routing.LeaseOwner) !KeyRoutingOutcome {
     return switch (owner) {
         .ignored => .{ .owner = .ignored },
         .attachment_modal => .{ .owner = .attachment_modal },
@@ -70,7 +69,7 @@ fn routeRepeat(handler: *KeyRoutingHandler, key: source_namespace.keybind.Key, o
     };
 }
 
-fn routeRelease(handler: *KeyRoutingHandler, key: source_namespace.keybind.Key, owner: source_namespace.LeaseOwner) !Outcome {
+fn routeRelease(handler: *KeyRoutingHandler, key: KeyType, owner: key_routing.LeaseOwner) !KeyRoutingOutcome {
     return switch (owner) {
         .ignored => .{ .owner = .ignored },
         .attachment_modal => .{ .owner = .attachment_modal },
@@ -80,7 +79,7 @@ fn routeRelease(handler: *KeyRoutingHandler, key: source_namespace.keybind.Key, 
     };
 }
 
-fn routeCurrent(handler: *KeyRoutingHandler, command: source_namespace.Command, authority: Authority) !Routed {
+fn routeCurrent(handler: *KeyRoutingHandler, command: key_routing.Command, authority: KeyRoutingAuthority) !Routed {
     switch (command) {
         .bytes => {},
         .key => |key| {
@@ -122,7 +121,7 @@ fn routeCurrent(handler: *KeyRoutingHandler, command: source_namespace.Command, 
         .target = .current,
         .input = command,
     });
-    if (pane_id != null and source_namespace.requestsClipboardPreview(command)) {
+    if (pane_id != null and key_routing.requestsClipboardPreview(command)) {
         handler.effects.preview(handler.effects.context) catch {};
     }
 
@@ -132,7 +131,7 @@ fn routeCurrent(handler: *KeyRoutingHandler, command: source_namespace.Command, 
     };
 }
 
-fn routeLeasedPane(handler: *KeyRoutingHandler, key: source_namespace.keybind.Key, pane_id: source_namespace.schema.PaneId) !Outcome {
+fn routeLeasedPane(handler: *KeyRoutingHandler, key: KeyType, pane_id: PaneIdType) !KeyRoutingOutcome {
     const delivered = try handler.effects.pane(handler.effects.context, .{
         .target = .{ .lease = pane_id },
         .input = .{ .key = key },

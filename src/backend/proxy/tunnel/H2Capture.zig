@@ -1,10 +1,11 @@
+const MiddlewareEvent = @import("../MiddlewareEvent.zig");
+const std = @import("std");
 const Capture = @This();
-const middleware = @import("../middleware.zig");
-const source_namespace = @import("h2.zig");
-events: [16]middleware.Event = undefined,
+
+events: [16]MiddlewareEvent = undefined,
 len: usize = 0,
 
-pub fn observe(context: *anyopaque, _: source_namespace.Io, event: middleware.Event) void {
+pub fn observe(context: *anyopaque, _: std.Io, event: MiddlewareEvent) void {
     const observed: *Capture = @ptrCast(@alignCast(context));
     observed.events[observed.len] = event;
     observed.len += 1;

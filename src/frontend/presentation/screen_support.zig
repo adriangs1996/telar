@@ -1,7 +1,13 @@
+const ScreenType = @import("Screen.zig");
+const ParsedType = @import("Parsed.zig");
+const GenericInput = @import("GenericInput.zig").Type;
 const std = @import("std");
-pub const Io = std.Io;
-const ui = @import("telar-core").ui;
-const diff = @import("diff.zig");
+const StyleType = @import("telar-core").Style;
+const KeyType = @import("telar-client").Key;
+const CharType = @import("telar-client").Char;
+const MouseType = @import("telar-client").Mouse;
+const FunctionKeyParameters = @import("FunctionKeyParameters.zig");
+const KittyModifierEvent = @import("KittyModifierEvent.zig");
 const pointer = @import("pointer.zig");
 
 // The half of a TUI that speaks the terminal's language: the diff, the escape
@@ -20,13 +26,11 @@ const pointer = @import("pointer.zig");
 // Rendering
 // ---------------------------------------------------------------------------
 
-pub const DamageRow = diff.DamageRow;
-
 pub const Screen = @import("Screen.zig");
 
 pub const PatchSink = @import("PatchSink.zig");
 
-pub fn writeStyle(w: *Io.Writer, style: ui.Style) !void {
+pub fn writeStyle(w: *std.Io.Writer, style: StyleType) !void {
     // Reset first: turning attributes off individually needs one code per
     // attribute and a memory of which were on. Resetting costs four bytes.
     try w.writeAll("\x1b[0");
@@ -115,7 +119,7 @@ pub const ClipboardError = error{TooLarge};
 /// ```zig
 /// try writeHostNotification(writer, "Agent done", "Claude in pane 2");
 /// ```
-pub fn writeHostNotification(w: *Io.Writer, title: []const u8, message: []const u8) Io.Writer.Error!void {
+pub fn writeHostNotification(w: *std.Io.Writer, title: []const u8, message: []const u8) std.Io.Writer.Error!void {
     try w.writeAll("\x1b]9;");
     try w.writeAll(title);
     if (message.len != 0) {
@@ -125,7 +129,7 @@ pub fn writeHostNotification(w: *Io.Writer, title: []const u8, message: []const 
     try w.writeAll("\x07");
 }
 
-pub fn writeClipboard(w: *Io.Writer, payload: []const u8) (ClipboardError || Io.Writer.Error)!void {
+pub fn writeClipboard(w: *std.Io.Writer, payload: []const u8) (ClipboardError || std.Io.Writer.Error)!void {
     if (payload.len > max_clipboard_bytes) {
         return error.TooLarge;
     }
@@ -192,9 +196,9 @@ pub const Event = union(enum) {
         primary_device_attributes,
     };
 
-    pub const Key = @import("telar-client").input.Key;
-    pub const Char = @import("telar-client").input.Char;
-    pub const Mouse = @import("telar-client").input.Mouse;
+    pub const Key = KeyType;
+    pub const Char = CharType;
+    pub const Mouse = MouseType;
 };
 
 pub const Parsed = @import("Parsed.zig");
@@ -207,7 +211,7 @@ pub const Parsed = @import("Parsed.zig");
 /// reports `incomplete` with a length of zero and lets the caller keep the
 /// bytes, which is the only honest thing to do.
 /// Surfaces OSC 10/11 color reports and consumes other complete OSC replies.
-fn parseOscReply(input: []const u8) Parsed {
+fn parseOscReply(input: []const u8) ParsedType {
     var end: usize = 2;
     var terminator_len: usize = 0;
     while (end < input.len) : (end += 1) {
@@ -270,7 +274,7 @@ fn parseOscColor(text: []const u8) ?Event.Rgb8 {
     return .{ .r = channels[0], .g = channels[1], .b = channels[2] };
 }
 
-pub fn parse(input: []const u8) ?Parsed {
+pub fn parse(input: []const u8) ?ParsedType {
     if (input.len == 0) {
         return null;
     }
@@ -413,7 +417,7 @@ pub fn parse(input: []const u8) ?Parsed {
     return .{ .event = .incomplete, .len = length };
 }
 
-fn parseKittyKey(body: []const u8, length: usize) ?Parsed {
+fn parseKittyKey(body: []const u8, length: usize) ?ParsedType {
     var fields = std.mem.splitScalar(u8, body, ';');
     const codepoint_text = fields.next() orelse return null;
     const modifier_text = fields.next();
@@ -438,7 +442,7 @@ fn parseKittyKey(body: []const u8, length: usize) ?Parsed {
     };
 }
 
-fn parseCursorKey(body: []const u8, code: Event.Key.Code, length: usize) ?Parsed {
+fn parseCursorKey(body: []const u8, code: Event.Key.Code, length: usize) ?ParsedType {
     const parameters = parseFunctionKeyParameters(body) orelse return null;
     if (parameters.number != 1) {
         return null;
@@ -453,7 +457,7 @@ fn parseCursorKey(body: []const u8, code: Event.Key.Code, length: usize) ?Parsed
     }, length);
 }
 
-fn parseTildeKey(body: []const u8, length: usize) ?Parsed {
+fn parseTildeKey(body: []const u8, length: usize) ?ParsedType {
     if (std.mem.startsWith(u8, body, "27;")) {
         return parseModifyOtherKeys(body, length);
     }
@@ -484,8 +488,6 @@ fn parseTildeKey(body: []const u8, length: usize) ?Parsed {
     }, length);
 }
 
-const FunctionKeyParameters = @import("FunctionKeyParameters.zig");
-
 fn parseFunctionKeyParameters(body: []const u8) ?FunctionKeyParameters {
     var fields = std.mem.splitScalar(u8, body, ';');
     const number_text = fields.next() orelse return null;
@@ -501,8 +503,6 @@ fn parseFunctionKeyParameters(body: []const u8) ?FunctionKeyParameters {
 
     return .{ .number = number, .modifier_event = modifier_event };
 }
-
-const KittyModifierEvent = @import("KittyModifierEvent.zig");
 
 fn parseKittyCodepoints(field: []const u8) ?Event.Key.KittyCodepoints {
     var values = std.mem.splitScalar(u8, field, ':');
@@ -568,7 +568,7 @@ fn parseKittyModifierEvent(field: ?[]const u8) ?KittyModifierEvent {
     return .{ .modifier = modifier, .event = event };
 }
 
-fn parseModifyOtherKeys(body: []const u8, length: usize) ?Parsed {
+fn parseModifyOtherKeys(body: []const u8, length: usize) ?ParsedType {
     var fields = std.mem.splitScalar(u8, body, ';');
     if (!std.mem.eql(u8, fields.next() orelse return null, "27")) {
         return null;
@@ -581,7 +581,7 @@ fn parseModifyOtherKeys(body: []const u8, length: usize) ?Parsed {
     return codepointKey(codepoint, modifier, length);
 }
 
-fn codepointKey(codepoint: u32, modifier: u32, length: usize) ?Parsed {
+fn codepointKey(codepoint: u32, modifier: u32, length: usize) ?ParsedType {
     const mods = parseKeyModifiers(modifier) orelse return null;
     const code = codepointCode(codepoint) orelse return null;
 
@@ -617,7 +617,7 @@ fn parseKeyModifiers(modifier: u32) ?Event.Key.Mods {
     return modsOf((modifier_bits & 0b111) + 1);
 }
 
-fn parseApc(input: []const u8) Parsed {
+fn parseApc(input: []const u8) ParsedType {
     var end: usize = 2;
     while (end + 1 < input.len) : (end += 1) {
         if (input[end] != 0x1b or input[end + 1] != '\\') {
@@ -653,7 +653,7 @@ fn parseApc(input: []const u8) Parsed {
     return .{ .event = .incomplete, .len = 0 };
 }
 
-fn parseByte(input: []const u8) ?Parsed {
+fn parseByte(input: []const u8) ?ParsedType {
     switch (input[0]) {
         // LF is Ctrl+J, also used by host mappings for multiline prompts.
         // Collapsing it into Enter would turn it into CR when re-encoded.
@@ -685,7 +685,7 @@ fn parseByte(input: []const u8) ?Parsed {
     return key(.{ .char = .init(input[0..length]) }, .{}, length);
 }
 
-fn parseAlt(input: []const u8) Parsed {
+fn parseAlt(input: []const u8) ParsedType {
     if (input[1] == 0x1b) {
         // ESC ESC: legacy terminals prefix a whole CSI or SS3 sequence with
         // ESC for a modified key, so Alt+Up arrives as `ESC ESC [ A`. Only
@@ -716,7 +716,7 @@ fn parseAlt(input: []const u8) Parsed {
 }
 
 /// `ESC O X`, application cursor mode.
-fn parseSs3(input: []const u8) ?Parsed {
+fn parseSs3(input: []const u8) ?ParsedType {
     if (input.len < 3) {
         return .{ .event = .incomplete, .len = 0 };
     }
@@ -731,11 +731,11 @@ fn parseSs3(input: []const u8) ?Parsed {
     };
 }
 
-fn key(code: Event.Key.Code, mods: Event.Key.Mods, length: usize) Parsed {
+fn key(code: Event.Key.Code, mods: Event.Key.Mods, length: usize) ParsedType {
     return .{ .event = .{ .key = .{ .code = code, .mods = mods } }, .len = length };
 }
 
-fn physicalKey(pressed: Event.Key, length: usize) Parsed {
+fn physicalKey(pressed: Event.Key, length: usize) ParsedType {
     var leased = pressed;
     leased.physical = physicalIdentity(pressed.code);
 
@@ -745,7 +745,7 @@ fn physicalKey(pressed: Event.Key, length: usize) Parsed {
     };
 }
 
-fn altKey(pressed: Event.Key, length: usize) Parsed {
+fn altKey(pressed: Event.Key, length: usize) ParsedType {
     var modified = pressed;
     modified.mods.alt = true;
 
@@ -776,14 +776,12 @@ fn modsOf(param: u32) Event.Key.Mods {
     };
 }
 
-pub const Input = @import("GenericInput.zig").Type;
-
 /// SGR mouse reporting, `ESC [ < button ; column ; row M|m`.
 ///
 /// Worth preferring over the older encoding because coordinates are decimal
 /// rather than single bytes, so it keeps working past column 223 - which any
 /// full screen terminal passes.
-fn parseMouse(input: []const u8) ?Parsed {
+fn parseMouse(input: []const u8) ?ParsedType {
     var index: usize = 3;
     var fields: [3]u32 = .{ 0, 0, 0 };
     var field: usize = 0;
@@ -839,15 +837,14 @@ fn parseMouse(input: []const u8) ?Parsed {
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
 const KeyCode = Event.Key.Code;
 
 fn expectMouse(input: []const u8, expected: Event.Mouse) !void {
     const parsed = parse(input) orelse return error.NoEvent;
-    try testing.expectEqual(input.len, parsed.len);
-    try testing.expectEqual(expected.x, parsed.event.mouse.x);
-    try testing.expectEqual(expected.y, parsed.event.mouse.y);
-    try testing.expectEqual(expected.kind, parsed.event.mouse.kind);
+    try std.testing.expectEqual(input.len, parsed.len);
+    try std.testing.expectEqual(expected.x, parsed.event.mouse.x);
+    try std.testing.expectEqual(expected.y, parsed.event.mouse.y);
+    try std.testing.expectEqual(expected.kind, parsed.event.mouse.kind);
 }
 
 test "mouse reports are parsed and converted to zero based coordinates" {
@@ -902,38 +899,38 @@ test "a split escape sequence is reported as incomplete, not misread" {
     var cut: usize = 2;
     while (cut < full.len) : (cut += 1) {
         const parsed = parse(full[0..cut]) orelse return error.NoEvent;
-        try testing.expectEqual(Event.incomplete, parsed.event);
-        try testing.expectEqual(@as(usize, 0), parsed.len);
+        try std.testing.expectEqual(Event.incomplete, parsed.event);
+        try std.testing.expectEqual(@as(usize, 0), parsed.len);
     }
     const parsed = parse(full).?;
-    try testing.expectEqual(full.len, parsed.len);
+    try std.testing.expectEqual(full.len, parsed.len);
 }
 
 test "keys" {
-    try testing.expectEqual(KeyCode.up, parse("\x1b[A").?.event.key.code);
-    try testing.expectEqual(KeyCode.down, parse("\x1b[B").?.event.key.code);
-    try testing.expectEqual(KeyCode.enter, parse("\r").?.event.key.code);
-    try testing.expectEqual(KeyCode.escape, parse("\x1b").?.event.key.code);
-    try testing.expect(parse("a").?.event.key.code.char.eql("a"));
+    try std.testing.expectEqual(KeyCode.up, parse("\x1b[A").?.event.key.code);
+    try std.testing.expectEqual(KeyCode.down, parse("\x1b[B").?.event.key.code);
+    try std.testing.expectEqual(KeyCode.enter, parse("\r").?.event.key.code);
+    try std.testing.expectEqual(KeyCode.escape, parse("\x1b").?.event.key.code);
+    try std.testing.expect(parse("a").?.event.key.code.char.eql("a"));
 
     // Ctrl is a modifier on the letter, not a kind of key. A handler that
     // wants Ctrl+C and one that wants "c" then read the same way.
     const ctrl_c = parse("\x03").?.event.key;
-    try testing.expect(ctrl_c.mods.ctrl);
-    try testing.expect(ctrl_c.isCtrl('c'));
+    try std.testing.expect(ctrl_c.mods.ctrl);
+    try std.testing.expect(ctrl_c.isCtrl('c'));
 
     const alt_x = parse("\x1bx").?.event.key;
-    try testing.expect(alt_x.mods.alt);
-    try testing.expect(alt_x.code.char.eql("x"));
+    try std.testing.expect(alt_x.mods.alt);
+    try std.testing.expect(alt_x.code.char.eql("x"));
 
     const ctrl_alt_x = parse("\x1b\x18").?.event.key;
-    try testing.expect(ctrl_alt_x.mods.alt);
-    try testing.expect(ctrl_alt_x.mods.ctrl);
-    try testing.expect(ctrl_alt_x.code.char.eql("x"));
+    try std.testing.expect(ctrl_alt_x.mods.alt);
+    try std.testing.expect(ctrl_alt_x.mods.ctrl);
+    try std.testing.expect(ctrl_alt_x.code.char.eql("x"));
 
     const ctrl_space = parse("\x00").?.event.key;
-    try testing.expect(ctrl_space.mods.ctrl);
-    try testing.expect(ctrl_space.code.char.eql(" "));
+    try std.testing.expect(ctrl_space.mods.ctrl);
+    try std.testing.expect(ctrl_space.code.char.eql(" "));
 }
 
 test "a key event survives the buffer it was parsed from" {
@@ -949,15 +946,15 @@ test "a key event survives the buffer it was parsed from" {
     // Whatever the reader does to its buffer afterwards.
     @memset(&buffer, 0xaa);
 
-    try testing.expect(pressed.code.char.eql("h"));
+    try std.testing.expect(pressed.code.char.eql("h"));
 }
 
 test "a multi byte character is not split across reads" {
     // 'ñ' is two bytes. Reporting the first alone would put a broken codepoint
     // into whatever the key feeds.
     const full = "ñ";
-    try testing.expectEqual(@as(usize, 0), parse(full[0..1]).?.len);
-    try testing.expect(parse(full).?.event.key.code.char.eql("ñ"));
+    try std.testing.expectEqual(@as(usize, 0), parse(full[0..1]).?.len);
+    try std.testing.expect(parse(full).?.event.key.code.char.eql("ñ"));
 }
 
 test "an unknown escape sequence is consumed rather than desynchronising" {
@@ -965,90 +962,90 @@ test "an unknown escape sequence is consumed rather than desynchronising" {
     // costs one dropped event; stopping at the first unknown byte costs every
     // event after it.
     const parsed = parse("\x1b[6;12R").?;
-    try testing.expectEqual(@as(usize, 7), parsed.len);
-    try testing.expectEqual(Event.incomplete, parsed.event);
+    try std.testing.expectEqual(@as(usize, 7), parsed.len);
+    try std.testing.expectEqual(Event.incomplete, parsed.event);
 }
 
 test "the diff sends only what changed" {
-    const gpa = testing.allocator;
-    var screen = try Screen.init(gpa, 40, 10);
+    const gpa = std.testing.allocator;
+    var screen = try ScreenType.init(gpa, 40, 10);
     defer screen.deinit();
 
     var out: [16 * 1024]u8 = undefined;
 
     { // First frame: everything is new.
-        var w = Io.Writer.fixed(&out);
+        var w = std.Io.Writer.fixed(&out);
         screen.buffer().clear(.{});
         _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "hello", .style = .{} });
         const stats = try screen.flush(&w);
-        try testing.expectEqual(@as(usize, 40 * 10), stats.cells);
-        try testing.expectEqual(@as(usize, 40 * 10), stats.scanned);
+        try std.testing.expectEqual(@as(usize, 40 * 10), stats.cells);
+        try std.testing.expectEqual(@as(usize, 40 * 10), stats.scanned);
     }
 
     { // Redrawing the same thing costs nothing at all.
-        var w = Io.Writer.fixed(&out);
+        var w = std.Io.Writer.fixed(&out);
         screen.buffer().clear(.{});
         _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "hello", .style = .{} });
         const stats = try screen.flush(&w);
-        try testing.expectEqual(@as(usize, 0), stats.cells);
-        try testing.expectEqual(@as(usize, 40 * 10), stats.scanned);
+        try std.testing.expectEqual(@as(usize, 0), stats.cells);
+        try std.testing.expectEqual(@as(usize, 40 * 10), stats.scanned);
     }
 
     { // One changed word costs one word.
-        var w = Io.Writer.fixed(&out);
+        var w = std.Io.Writer.fixed(&out);
         screen.buffer().clear(.{});
         _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "world", .style = .{} });
         const stats = try screen.flush(&w);
-        try testing.expectEqual(@as(usize, 4), stats.cells); // h,e,l,l -> w,o,r,l
+        try std.testing.expectEqual(@as(usize, 4), stats.cells); // h,e,l,l -> w,o,r,l
     }
 }
 
 test "a resize forces a full repaint" {
     // Otherwise the diff compares against a screen the terminal no longer has,
     // and the result is the half drawn window everyone recognises.
-    const gpa = testing.allocator;
-    var screen = try Screen.init(gpa, 10, 3);
+    const gpa = std.testing.allocator;
+    var screen = try ScreenType.init(gpa, 10, 3);
     defer screen.deinit();
 
     var out: [8 * 1024]u8 = undefined;
-    var w = Io.Writer.fixed(&out);
+    var w = std.Io.Writer.fixed(&out);
     screen.buffer().clear(.{});
     _ = try screen.flush(&w);
 
     try screen.resize(12, 4);
-    var w2 = Io.Writer.fixed(&out);
+    var w2 = std.Io.Writer.fixed(&out);
     screen.buffer().clear(.{});
     const stats = try screen.flush(&w2);
-    try testing.expectEqual(@as(usize, 12 * 4), stats.cells);
-    try testing.expectEqual(@as(usize, 12 * 4), stats.scanned);
+    try std.testing.expectEqual(@as(usize, 12 * 4), stats.cells);
+    try std.testing.expectEqual(@as(usize, 12 * 4), stats.scanned);
 }
 
 test "a protocol patch scans only its damaged cells" {
-    const gpa = testing.allocator;
-    var screen = try Screen.init(gpa, 10, 3);
+    const gpa = std.testing.allocator;
+    var screen = try ScreenType.init(gpa, 10, 3);
     defer screen.deinit();
 
     var out: [8 * 1024]u8 = undefined;
-    var initial = Io.Writer.fixed(&out);
+    var initial = std.Io.Writer.fixed(&out);
     _ = try screen.flush(&initial);
 
     const patch = try screen.patchCells(12, 2);
     patch[0].bytes[0] = 'x';
     patch[1].bytes[0] = 'y';
 
-    var writer = Io.Writer.fixed(&out);
+    var writer = std.Io.Writer.fixed(&out);
     const stats = try screen.flush(&writer);
-    try testing.expectEqual(@as(usize, 2), stats.scanned);
-    try testing.expectEqual(@as(usize, 2), stats.cells);
+    try std.testing.expectEqual(@as(usize, 2), stats.scanned);
+    try std.testing.expectEqual(@as(usize, 2), stats.cells);
 }
 
 test "damage accumulates as one conservative range per row" {
-    const gpa = testing.allocator;
-    var screen = try Screen.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var screen = try ScreenType.init(gpa, 10, 2);
     defer screen.deinit();
 
     var out: [8 * 1024]u8 = undefined;
-    var initial = Io.Writer.fixed(&out);
+    var initial = std.Io.Writer.fixed(&out);
     _ = try screen.flush(&initial);
 
     const left = try screen.patchCells(1, 1);
@@ -1056,83 +1053,83 @@ test "damage accumulates as one conservative range per row" {
     const right = try screen.patchCells(8, 1);
     right[0].bytes[0] = 'y';
 
-    var writer = Io.Writer.fixed(&out);
+    var writer = std.Io.Writer.fixed(&out);
     const stats = try screen.flush(&writer);
-    try testing.expectEqual(@as(usize, 8), stats.scanned);
-    try testing.expectEqual(@as(usize, 2), stats.cells);
+    try std.testing.expectEqual(@as(usize, 8), stats.scanned);
+    try std.testing.expectEqual(@as(usize, 2), stats.cells);
 }
 
 test "a patch crossing rows keeps exact damage on both" {
-    const gpa = testing.allocator;
-    var screen = try Screen.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var screen = try ScreenType.init(gpa, 10, 2);
     defer screen.deinit();
 
     var out: [8 * 1024]u8 = undefined;
-    var initial = Io.Writer.fixed(&out);
+    var initial = std.Io.Writer.fixed(&out);
     _ = try screen.flush(&initial);
 
     const patch = try screen.patchCells(8, 4);
     for (patch, 0..) |*cell, index| cell.bytes[0] = @intCast('a' + index);
 
-    var writer = Io.Writer.fixed(&out);
+    var writer = std.Io.Writer.fixed(&out);
     const stats = try screen.flush(&writer);
-    try testing.expectEqual(@as(usize, 4), stats.scanned);
-    try testing.expectEqual(@as(usize, 4), stats.cells);
+    try std.testing.expectEqual(@as(usize, 4), stats.scanned);
+    try std.testing.expectEqual(@as(usize, 4), stats.cells);
 }
 
 test "a cursor-only frame scans no cells" {
-    const gpa = testing.allocator;
-    var screen = try Screen.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var screen = try ScreenType.init(gpa, 10, 2);
     defer screen.deinit();
 
     var out: [8 * 1024]u8 = undefined;
-    var initial = Io.Writer.fixed(&out);
+    var initial = std.Io.Writer.fixed(&out);
     _ = try screen.flush(&initial);
 
     screen.cursor = .{ .x = 3, .y = 1 };
-    var writer = Io.Writer.fixed(&out);
+    var writer = std.Io.Writer.fixed(&out);
     const stats = try screen.flush(&writer);
-    try testing.expectEqual(@as(usize, 0), stats.scanned);
-    try testing.expectEqual(@as(usize, 0), stats.cells);
+    try std.testing.expectEqual(@as(usize, 0), stats.scanned);
+    try std.testing.expectEqual(@as(usize, 0), stats.cells);
 }
 
 test "tab and shift-tab are their own keys" {
     // Tab arrives as 0x09, which is also Ctrl+I. Reporting it as `ctrl` would
     // make every focus binding depend on that coincidence.
     const tab = parse("\t").?;
-    try testing.expectEqual(KeyCode.tab, tab.event.key.code);
-    try testing.expectEqual(@as(usize, 1), tab.len);
+    try std.testing.expectEqual(KeyCode.tab, tab.event.key.code);
+    try std.testing.expectEqual(@as(usize, 1), tab.len);
 
     // Shift+Tab is CSI Z. Before this it fell into the unknown-sequence path
     // and vanished, so focus could only ever move forwards.
     const back = parse("\x1b[Z").?;
-    try testing.expectEqual(KeyCode.back_tab, back.event.key.code);
-    try testing.expectEqual(@as(usize, 3), back.len);
+    try std.testing.expectEqual(KeyCode.back_tab, back.event.key.code);
+    try std.testing.expectEqual(@as(usize, 3), back.len);
 }
 
 test "a partial shift-tab asks for more bytes instead of guessing" {
     const partial = parse("\x1b[").?;
-    try testing.expectEqual(Event.incomplete, partial.event);
-    try testing.expectEqual(@as(usize, 0), partial.len);
+    try std.testing.expectEqual(Event.incomplete, partial.event);
+    try std.testing.expectEqual(@as(usize, 0), partial.len);
 }
 
 test "modifiers arrive as modifiers, not as different keys" {
     // `ESC [ 1 ; mod D`. Shift+Left is what a selection is built out of, and
     // before this it fell into the unknown-sequence path and vanished.
     const shift_left = parse("\x1b[1;2D").?.event.key;
-    try testing.expectEqual(KeyCode.left, shift_left.code);
-    try testing.expect(shift_left.mods.shift);
-    try testing.expect(!shift_left.mods.ctrl);
+    try std.testing.expectEqual(KeyCode.left, shift_left.code);
+    try std.testing.expect(shift_left.mods.shift);
+    try std.testing.expect(!shift_left.mods.ctrl);
 
     const ctrl_right = parse("\x1b[1;5C").?.event.key;
-    try testing.expectEqual(KeyCode.right, ctrl_right.code);
-    try testing.expect(ctrl_right.mods.ctrl);
-    try testing.expect(!ctrl_right.mods.shift);
+    try std.testing.expectEqual(KeyCode.right, ctrl_right.code);
+    try std.testing.expect(ctrl_right.mods.ctrl);
+    try std.testing.expect(!ctrl_right.mods.shift);
 
     // Ctrl+Shift+Left: the combination a key union with a `ctrl` variant could
     // not express at all.
     const both = parse("\x1b[1;6D").?.event.key;
-    try testing.expect(both.mods.ctrl and both.mods.shift);
+    try std.testing.expect(both.mods.ctrl and both.mods.shift);
 }
 
 test "Kitty keyboard mode disambiguates Ctrl keys from legacy controls" {
@@ -1144,13 +1141,13 @@ test "Kitty keyboard mode disambiguates Ctrl keys from legacy controls" {
     };
     for (cases) |case| {
         const parsed = parse(case.sequence).?;
-        try testing.expectEqual(case.sequence.len, parsed.len);
-        try testing.expect(parsed.event.key.mods.ctrl);
-        try testing.expect(parsed.event.key.code.char.eql(case.letter));
+        try std.testing.expectEqual(case.sequence.len, parsed.len);
+        try std.testing.expect(parsed.event.key.mods.ctrl);
+        try std.testing.expect(parsed.event.key.code.char.eql(case.letter));
     }
 
-    try testing.expectEqual(KeyCode.escape, parse("\x1b[27u").?.event.key.code);
-    try testing.expectEqual(KeyCode.enter, parse("\x1b[13u").?.event.key.code);
+    try std.testing.expectEqual(KeyCode.escape, parse("\x1b[27u").?.event.key.code);
+    try std.testing.expectEqual(KeyCode.enter, parse("\x1b[13u").?.event.key.code);
 }
 
 test "modified Enter is decoded from CSI-u and modifyOtherKeys" {
@@ -1166,14 +1163,14 @@ test "modified Enter is decoded from CSI-u and modifyOtherKeys" {
     for (cases) |case| {
         const parsed = parse(case.sequence).?;
         const pressed = parsed.event.key;
-        try testing.expectEqual(case.sequence.len, parsed.len);
-        try testing.expectEqual(KeyCode.enter, pressed.code);
-        try testing.expectEqual(case.mods, pressed.mods);
-        try testing.expectEqual(case.phase, pressed.phase);
+        try std.testing.expectEqual(case.sequence.len, parsed.len);
+        try std.testing.expectEqual(KeyCode.enter, pressed.code);
+        try std.testing.expectEqual(case.mods, pressed.mods);
+        try std.testing.expectEqual(case.phase, pressed.phase);
         if (case.physical) {
-            try testing.expectEqual(@as(u32, 13), pressed.physical.?.value);
+            try std.testing.expectEqual(@as(u32, 13), pressed.physical.?.value);
         } else {
-            try testing.expect(pressed.physical == null);
+            try std.testing.expect(pressed.physical == null);
         }
     }
 }
@@ -1202,24 +1199,24 @@ test "Kitty alternate key codes preserve the primary key" {
     };
     for (cases) |case| {
         const parsed = parse(case.sequence).?;
-        try testing.expectEqual(case.sequence.len, parsed.len);
-        try testing.expectEqualDeep(Event{ .key = case.expected }, parsed.event);
+        try std.testing.expectEqual(case.sequence.len, parsed.len);
+        try std.testing.expectEqualDeep(Event{ .key = case.expected }, parsed.event);
     }
 }
 
 test "Kitty key releases remain semantic events without desynchronizing the stream" {
     const release = "\x1b[13::13;2:3u";
     const parsed = parse(release).?;
-    try testing.expectEqual(release.len, parsed.len);
-    try testing.expectEqual(KeyCode.enter, parsed.event.key.code);
-    try testing.expectEqual(Event.Key.Phase.release, parsed.event.key.phase);
-    try testing.expectEqual(@as(u32, 13), parsed.event.key.physical.?.value);
+    try std.testing.expectEqual(release.len, parsed.len);
+    try std.testing.expectEqual(KeyCode.enter, parsed.event.key.code);
+    try std.testing.expectEqual(Event.Key.Phase.release, parsed.event.key.phase);
+    try std.testing.expectEqual(@as(u32, 13), parsed.event.key.physical.?.value);
 
-    var input: Input(32) = .{};
-    try testing.expectEqual(release.len + 1, input.push(release ++ "x"));
-    try testing.expectEqual(Event.Key.Phase.release, input.next().?.key.phase);
-    try testing.expect(input.next().?.key.code.char.eql("x"));
-    try testing.expect(input.next() == null);
+    var input: GenericInput(32) = .{};
+    try std.testing.expectEqual(release.len + 1, input.push(release ++ "x"));
+    try std.testing.expectEqual(Event.Key.Phase.release, input.next().?.key.phase);
+    try std.testing.expect(input.next().?.key.code.char.eql("x"));
+    try std.testing.expect(input.next() == null);
 }
 
 test "Kitty key lifecycles parse at every boundary after the CSI introducer" {
@@ -1234,16 +1231,16 @@ test "Kitty key lifecycles parse at every boundary after the CSI introducer" {
 
     for (cases) |case| {
         for (2..case.sequence.len) |split| {
-            var input: Input(64) = .{};
+            var input: GenericInput(64) = .{};
             _ = input.push(case.sequence[0..split]);
-            try testing.expect(input.next() == null);
+            try std.testing.expect(input.next() == null);
             _ = input.push(case.sequence[split..]);
 
             const pressed = input.next().?.key;
-            try testing.expectEqualDeep(case.code, pressed.code);
-            try testing.expectEqual(case.phase, pressed.phase);
-            try testing.expectEqual(case.physical, pressed.physical.?.value);
-            try testing.expect(input.next() == null);
+            try std.testing.expectEqualDeep(case.code, pressed.code);
+            try std.testing.expectEqual(case.phase, pressed.phase);
+            try std.testing.expectEqual(case.physical, pressed.physical.?.value);
+            try std.testing.expect(input.next() == null);
         }
     }
 }
@@ -1268,16 +1265,16 @@ test "malformed Kitty reports are consumed without producing keys" {
         "\x1b[55296;2u",
     }) |sequence| {
         const parsed = parse(sequence).?;
-        try testing.expectEqual(sequence.len, parsed.len);
-        try testing.expectEqual(Event.incomplete, parsed.event);
+        try std.testing.expectEqual(sequence.len, parsed.len);
+        try std.testing.expectEqual(Event.incomplete, parsed.event);
     }
 }
 
 test "a bare line feed remains Ctrl+J instead of becoming Enter" {
     const parsed = parse("\n").?;
-    try testing.expectEqual(@as(usize, 1), parsed.len);
-    try testing.expect(parsed.event.key.isCtrl('j'));
-    try testing.expectEqualDeep(Event{ .key = .plain(.enter) }, parse("\r").?.event);
+    try std.testing.expectEqual(@as(usize, 1), parsed.len);
+    try std.testing.expect(parsed.event.key.isCtrl('j'));
+    try std.testing.expectEqualDeep(Event{ .key = .plain(.enter) }, parse("\r").?.event);
 }
 
 test "malformed modifyOtherKeys reports are consumed without producing keys" {
@@ -1292,8 +1289,8 @@ test "malformed modifyOtherKeys reports are consumed without producing keys" {
         "\x1b[27;9;13~",
     }) |sequence| {
         const parsed = parse(sequence).?;
-        try testing.expectEqual(sequence.len, parsed.len);
-        try testing.expectEqual(Event.incomplete, parsed.event);
+        try std.testing.expectEqual(sequence.len, parsed.len);
+        try std.testing.expectEqual(Event.incomplete, parsed.event);
     }
 }
 
@@ -1302,30 +1299,30 @@ test "an absent modifier parameter is no modifiers, not every modifier" {
     // subtracting blindly would set every bit - reporting a plain arrow as
     // Ctrl+Alt+Shift.
     const plain = parse("\x1b[D").?.event.key;
-    try testing.expect(!plain.mods.shift and !plain.mods.ctrl and !plain.mods.alt);
+    try std.testing.expect(!plain.mods.shift and !plain.mods.ctrl and !plain.mods.alt);
 }
 
 test "home, end and delete in each of the forms terminals send" {
     for ([_][]const u8{ "\x1b[H", "\x1b[1~", "\x1b[7~", "\x1bOH" }) |sequence| {
-        try testing.expectEqual(KeyCode.home, parse(sequence).?.event.key.code);
+        try std.testing.expectEqual(KeyCode.home, parse(sequence).?.event.key.code);
     }
     for ([_][]const u8{ "\x1b[F", "\x1b[4~", "\x1b[8~", "\x1bOF" }) |sequence| {
-        try testing.expectEqual(KeyCode.end, parse(sequence).?.event.key.code);
+        try std.testing.expectEqual(KeyCode.end, parse(sequence).?.event.key.code);
     }
-    try testing.expectEqual(KeyCode.delete, parse("\x1b[3~").?.event.key.code);
+    try std.testing.expectEqual(KeyCode.delete, parse("\x1b[3~").?.event.key.code);
 }
 
 test "application cursor mode arrows are not dead keys" {
     // A terminal in this mode sends SS3 instead of CSI. Ignoring it makes the
     // arrows stop working in exactly the terminals that use it, which reads as
     // "your app is broken on my machine".
-    try testing.expectEqual(KeyCode.up, parse("\x1bOA").?.event.key.code);
-    try testing.expectEqual(KeyCode.left, parse("\x1bOD").?.event.key.code);
+    try std.testing.expectEqual(KeyCode.up, parse("\x1bOA").?.event.key.code);
+    try std.testing.expectEqual(KeyCode.left, parse("\x1bOD").?.event.key.code);
 }
 
 test "both bytes for backspace are backspace" {
-    try testing.expectEqual(KeyCode.backspace, parse("\x7f").?.event.key.code);
-    try testing.expectEqual(KeyCode.backspace, parse("\x08").?.event.key.code);
+    try std.testing.expectEqual(KeyCode.backspace, parse("\x7f").?.event.key.code);
+    try std.testing.expectEqual(KeyCode.backspace, parse("\x08").?.event.key.code);
 }
 
 test "a paste is bracketed, so a newline inside it is text" {
@@ -1336,7 +1333,7 @@ test "a paste is bracketed, so a newline inside it is text" {
     var at: usize = 0;
 
     const start = parse(paste[at..]).?;
-    try testing.expectEqual(Event.paste_start, start.event);
+    try std.testing.expectEqual(Event.paste_start, start.event);
     at += start.len;
 
     var characters: usize = 0;
@@ -1361,14 +1358,14 @@ test "a paste is bracketed, so a newline inside it is text" {
             else => {},
         }
     }
-    try testing.expectEqual(@as(usize, 0), enters);
-    try testing.expectEqual(@as(usize, 1), newlines);
-    try testing.expectEqual(@as(usize, 6), characters);
-    try testing.expect(at == paste.len);
+    try std.testing.expectEqual(@as(usize, 0), enters);
+    try std.testing.expectEqual(@as(usize, 1), newlines);
+    try std.testing.expectEqual(@as(usize, 6), characters);
+    try std.testing.expect(at == paste.len);
 }
 
 test "a partial paste marker asks for more bytes" {
-    try testing.expectEqual(@as(usize, 0), parse("\x1b[200").?.len);
+    try std.testing.expectEqual(@as(usize, 0), parse("\x1b[200").?.len);
 }
 
 test "page keys use their numbered CSI forms" {
@@ -1380,53 +1377,53 @@ test "the real cursor is placed only when a field asks for it" {
     // A hardware cursor parked wherever the last write landed is a
     // distraction, so the default is hidden. A text field is the exception,
     // and it is the only thing a screen reader or an input method can follow.
-    const gpa = testing.allocator;
-    var screen = try Screen.init(gpa, 10, 3);
+    const gpa = std.testing.allocator;
+    var screen = try ScreenType.init(gpa, 10, 3);
     defer screen.deinit();
 
     var out: [4096]u8 = undefined;
-    var writer: Io.Writer = .fixed(&out);
+    var writer: std.Io.Writer = .fixed(&out);
 
     _ = try screen.flush(&writer);
-    try testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[?25l") != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[?25l") != null);
 
     writer = .fixed(&out);
     screen.cursor = .{ .x = 4, .y = 1 };
     _ = try screen.flush(&writer);
     // One based, row first, and shown.
-    try testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[2;5H") != null);
-    try testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[?25h") != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[2;5H") != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b[?25h") != null);
 }
 
 test "mouse pointer changes fold until a shape or recovery changes" {
-    const gpa = testing.allocator;
-    var screen = try Screen.init(gpa, 10, 3);
+    const gpa = std.testing.allocator;
+    var screen = try ScreenType.init(gpa, 10, 3);
     defer screen.deinit();
 
     var out: [4096]u8 = undefined;
-    var writer: Io.Writer = .fixed(&out);
+    var writer: std.Io.Writer = .fixed(&out);
 
     _ = try screen.flush(&writer);
-    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.default)) != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.default)) != null);
 
     writer = .fixed(&out);
     screen.mouse_pointer = .pointer;
     _ = try screen.flush(&writer);
-    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.pointer)) != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.pointer)) != null);
 
     writer = .fixed(&out);
     _ = try screen.flush(&writer);
-    try testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b]22;") == null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "\x1b]22;") == null);
 
     writer = .fixed(&out);
     screen.mouse_pointer = .ew_resize;
     _ = try screen.flush(&writer);
-    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.ew_resize)) != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.ew_resize)) != null);
 
     writer = .fixed(&out);
     screen.invalidate();
     _ = try screen.flush(&writer);
-    try testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.ew_resize)) != null);
+    try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), pointer.sequence(.ew_resize)) != null);
 }
 
 test "no byte is lost when a read does not fit in what is left" {
@@ -1434,7 +1431,7 @@ test "no byte is lost when a read does not fit in what is left" {
     // larger than its free space; the old code took what fit and discarded the
     // rest. Under a mouse burst that is a keystroke that does nothing, blamed
     // on the terminal.
-    var in: Input(32) = .{};
+    var in: GenericInput(32) = .{};
 
     // Fill it with events that have not been drained yet.
     var burst: [64]u8 = undefined;
@@ -1446,7 +1443,7 @@ test "no byte is lost when a read does not fit in what is left" {
         const took = in.push(burst[offset..]);
         offset += took;
         while (in.next()) |event| {
-            try testing.expect(event.key.code.char.eql("a"));
+            try std.testing.expect(event.key.code.char.eql("a"));
             seen += 1;
         }
         // Progress is guaranteed: either bytes went in or events came out.
@@ -1454,130 +1451,130 @@ test "no byte is lost when a read does not fit in what is left" {
             return error.Stuck;
         }
     }
-    try testing.expectEqual(burst.len, seen);
-    try testing.expectEqual(@as(usize, 0), in.dropped);
+    try std.testing.expectEqual(burst.len, seen);
+    try std.testing.expectEqual(@as(usize, 0), in.dropped);
 }
 
 test "a sequence split across reads survives the split" {
-    var in: Input(64) = .{};
+    var in: GenericInput(64) = .{};
     _ = in.push("\x1b[1");
-    try testing.expectEqual(@as(?Event, null), in.next());
+    try std.testing.expectEqual(@as(?Event, null), in.next());
     _ = in.push(";2D");
 
     const event = in.next().?;
-    try testing.expectEqual(KeyCode.left, event.key.code);
-    try testing.expect(event.key.mods.shift);
+    try std.testing.expectEqual(KeyCode.left, event.key.code);
+    try std.testing.expect(event.key.mods.shift);
 }
 
 test "a buffer full of garbage recovers instead of deadlocking" {
     // An escape that never completes would otherwise sit there forever: `parse`
     // asks for more bytes, there is no room for more bytes, and the actor stops
     // reporting input at all.
-    var in: Input(8) = .{};
+    var in: GenericInput(8) = .{};
     _ = in.push("\x1b[123456");
-    try testing.expectEqual(@as(usize, 8), in.len);
+    try std.testing.expectEqual(@as(usize, 8), in.len);
 
     // Progress rather than a stall, and the loss is counted rather than silent.
     _ = in.next();
-    try testing.expect(in.dropped > 0);
+    try std.testing.expect(in.dropped > 0);
 
     // And it is usable again afterwards.
     while (in.next()) |_| {}
     _ = in.push("x");
-    try testing.expect(in.next().?.key.code.char.eql("x"));
+    try std.testing.expect(in.next().?.key.code.char.eql("x"));
 }
 
 test "several events in one read all come out" {
-    var in: Input(64) = .{};
+    var in: GenericInput(64) = .{};
     _ = in.push("ab\x1b[Ac");
 
     var codes: [4]KeyCode = undefined;
     var count: usize = 0;
     while (in.next()) |event| : (count += 1) codes[count] = event.key.code;
 
-    try testing.expectEqual(@as(usize, 4), count);
-    try testing.expect(codes[0].char.eql("a"));
-    try testing.expect(codes[1].char.eql("b"));
-    try testing.expectEqual(KeyCode.up, codes[2]);
-    try testing.expect(codes[3].char.eql("c"));
+    try std.testing.expectEqual(@as(usize, 4), count);
+    try std.testing.expect(codes[0].char.eql("a"));
+    try std.testing.expect(codes[1].char.eql("b"));
+    try std.testing.expectEqual(KeyCode.up, codes[2]);
+    try std.testing.expect(codes[3].char.eql("c"));
 }
 
 test "an unknown sequence is consumed without being reported" {
     // Terminals volunteer replies nobody asked for. They must not surface as
     // events, and they must not stall the ones behind them.
-    var in: Input(64) = .{};
+    var in: GenericInput(64) = .{};
     _ = in.push("\x1b[6;12Rz");
     const event = in.next().?;
-    try testing.expect(event.key.code.char.eql("z"));
+    try std.testing.expect(event.key.code.char.eql("z"));
 }
 
 test "a sequence aborted by a new escape does not leak keystrokes" {
     // ECMA-48: an ESC aborts the control sequence in progress. Scanning past
     // it for a final byte swallowed the aborting sequence's introducer and
     // delivered its final bytes as typed characters.
-    var in: Input(64) = .{};
+    var in: GenericInput(64) = .{};
     _ = in.push("\x1b[1\x1b[A");
     const event = in.next().?;
-    try testing.expectEqual(KeyCode.up, event.key.code);
-    try testing.expectEqual(@as(?Event, null), in.next());
+    try std.testing.expectEqual(KeyCode.up, event.key.code);
+    try std.testing.expectEqual(@as(?Event, null), in.next());
 
     // The same abort inside a mouse report.
-    var mouse_in: Input(64) = .{};
+    var mouse_in: GenericInput(64) = .{};
     _ = mouse_in.push("\x1b[<0;5\x1b[B");
     const after_mouse = mouse_in.next().?;
-    try testing.expectEqual(KeyCode.down, after_mouse.key.code);
-    try testing.expectEqual(@as(?Event, null), mouse_in.next());
+    try std.testing.expectEqual(KeyCode.down, after_mouse.key.code);
+    try std.testing.expectEqual(@as(?Event, null), mouse_in.next());
 }
 
 test "a legacy alt-prefixed arrow is one modified key" {
     // Traditional terminals send Alt+Up as ESC ESC [ A. Reading the second
     // escape as Alt+Escape typed "[A" into whatever was focused.
     const parsed = parse("\x1b\x1b[A").?;
-    try testing.expectEqual(KeyCode.up, parsed.event.key.code);
-    try testing.expect(parsed.event.key.mods.alt);
-    try testing.expectEqual(@as(usize, 4), parsed.len);
+    try std.testing.expectEqual(KeyCode.up, parsed.event.key.code);
+    try std.testing.expect(parsed.event.key.mods.alt);
+    try std.testing.expectEqual(@as(usize, 4), parsed.len);
 
     // Two escapes alone stay ambiguous until the next byte arrives.
-    try testing.expectEqual(@as(usize, 0), parse("\x1b\x1b").?.len);
+    try std.testing.expectEqual(@as(usize, 0), parse("\x1b\x1b").?.len);
 
     // Followed by anything that cannot start a sequence, it is Alt+Escape.
     const alt_escape = parse("\x1b\x1bx").?;
-    try testing.expectEqual(KeyCode.escape, alt_escape.event.key.code);
-    try testing.expect(alt_escape.event.key.mods.alt);
-    try testing.expectEqual(@as(usize, 2), alt_escape.len);
+    try std.testing.expectEqual(KeyCode.escape, alt_escape.event.key.code);
+    try std.testing.expect(alt_escape.event.key.mods.alt);
+    try std.testing.expectEqual(@as(usize, 2), alt_escape.len);
 }
 
 test "a failed flush forgets nothing the terminal did not receive" {
     // Regression: the diff committed cells into `front` while emitting them,
     // so a writer error mid-flush left the screen claiming cells the terminal
     // never got, and the retry emitted nothing.
-    const gpa = testing.allocator;
-    var screen = try Screen.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var screen = try ScreenType.init(gpa, 10, 2);
     defer screen.deinit();
     var out: [8 * 1024]u8 = undefined;
-    var initial = Io.Writer.fixed(&out);
+    var initial = std.Io.Writer.fixed(&out);
     screen.buffer().clear(.{});
     _ = try screen.flush(&initial);
 
     screen.buffer().clear(.{});
     _ = screen.buffer().writeText(screen.buffer().area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "hola", .style = .{} });
     var tiny: [24]u8 = undefined;
-    var failing = Io.Writer.fixed(&tiny);
-    try testing.expectError(error.WriteFailed, screen.flush(&failing));
+    var failing = std.Io.Writer.fixed(&tiny);
+    try std.testing.expectError(error.WriteFailed, screen.flush(&failing));
 
-    var retry = Io.Writer.fixed(&out);
+    var retry = std.Io.Writer.fixed(&out);
     const stats = try screen.flush(&retry);
-    try testing.expect(stats.cells >= 4);
+    try std.testing.expect(stats.cells >= 4);
 }
 
 test "a copy is one osc 52 sequence with the text in base64" {
     var out: [256]u8 = undefined;
-    var w: Io.Writer = .fixed(&out);
+    var w: std.Io.Writer = .fixed(&out);
     try writeClipboard(&w, "hola");
 
     // `c` is the clipboard proper, not the X11 primary selection - which pastes
     // on middle click and is not what anybody means by "copy".
-    try testing.expectEqualStrings("\x1b]52;c;aG9sYQ==\x07", w.buffered());
+    try std.testing.expectEqualStrings("\x1b]52;c;aG9sYQ==\x07", w.buffered());
 }
 
 test "a payload longer than one chunk still decodes" {
@@ -1588,7 +1585,7 @@ test "a payload longer than one chunk still decodes" {
     for (&payload, 0..) |*byte, i| byte.* = @intCast('a' + i % 26);
 
     var out: [8192]u8 = undefined;
-    var w: Io.Writer = .fixed(&out);
+    var w: std.Io.Writer = .fixed(&out);
     try writeClipboard(&w, &payload);
 
     const written = w.buffered();
@@ -1596,7 +1593,7 @@ test "a payload longer than one chunk still decodes" {
     const Decoder = std.base64.standard.Decoder;
     var decoded: [4000]u8 = undefined;
     try Decoder.decode(&decoded, body);
-    try testing.expectEqualSlices(u8, &payload, &decoded);
+    try std.testing.expectEqualSlices(u8, &payload, &decoded);
 }
 
 test "an oversized copy fails rather than silently doing nothing" {
@@ -1604,10 +1601,10 @@ test "an oversized copy fails rather than silently doing nothing" {
     // reply. Succeeding here would produce a copy that works on one machine and
     // not another, with nothing to look at.
     var out: [64]u8 = undefined;
-    var w: Io.Writer = .fixed(&out);
+    var w: std.Io.Writer = .fixed(&out);
     var huge: [max_clipboard_bytes + 1]u8 = undefined;
     @memset(&huge, 'x');
-    try testing.expectError(error.TooLarge, writeClipboard(&w, &huge));
+    try std.testing.expectError(error.TooLarge, writeClipboard(&w, &huge));
 }
 
 test "OSC 10 supports both terminators and validates all color digits" {
@@ -1615,19 +1612,19 @@ test "OSC 10 supports both terminators and validates all color digits" {
         var buffer: [64]u8 = undefined;
         const reply = try std.fmt.bufPrint(&buffer, "\x1b]10;rgb:ffff/1234/5678{s}", .{terminator});
         const parsed = parse(reply).?;
-        try testing.expectEqual(reply.len, parsed.len);
-        try testing.expectEqual(Event.Rgb8{ .r = 255, .g = 0x12, .b = 0x56 }, parsed.event.terminal_response.foreground_color);
+        try std.testing.expectEqual(reply.len, parsed.len);
+        try std.testing.expectEqual(Event.Rgb8{ .r = 255, .g = 0x12, .b = 0x56 }, parsed.event.terminal_response.foreground_color);
         for (2..reply.len) |end| {
             const partial = parse(reply[0..end]).?;
-            try testing.expect(partial.event == .incomplete);
-            try testing.expectEqual(@as(usize, 0), partial.len);
+            try std.testing.expect(partial.event == .incomplete);
+            try std.testing.expectEqual(@as(usize, 0), partial.len);
         }
     }
 
     const malformed = "\x1b]10;rgb:ffzz/0000/0000\x07";
     const parsed = parse(malformed).?;
-    try testing.expectEqual(malformed.len, parsed.len);
-    try testing.expect(parsed.event == .incomplete);
+    try std.testing.expectEqual(malformed.len, parsed.len);
+    try std.testing.expect(parsed.event == .incomplete);
 }
 
 test "an OSC 11 reply reports the host background and other OSCs are consumed" {

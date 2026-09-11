@@ -1,4 +1,5 @@
+const plugin = @import("plugin.zig");
 const GrantUpdate = @This();
-const source_namespace = @import("plugin.zig");
-digest: source_namespace.Digest,
-capabilities: source_namespace.CapabilitySet,
+
+digest: plugin.Digest,
+capabilities: plugin.CapabilitySet,

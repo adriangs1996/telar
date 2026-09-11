@@ -1,16 +1,14 @@
 //! Periodic expiration coordination for runtime-owned agent projections.
 
+const GenericAgentMaintenanceRuntimePort = @import("GenericAgentMaintenanceRuntimePort.zig").Type;
+const AgentMaintenanceCapture = @import("AgentMaintenanceCapture.zig");
+const GenericAgentMaintenanceCoordinator = @import("GenericAgentMaintenanceCoordinator.zig").Type;
+const IdentityType = @import("../../../agent/Identity.zig");
+const pane_module = @import("telar-core").pane;
+const TrackerType = @import("../../../agent/Tracker.zig");
+const ProxyExchangeType = @import("../../../agent/ProxyExchange.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agent_mod = @import("../../../agent/root.zig");
-
-pub const schema = core.schema;
-
-pub const Resources = @import("AgentMaintenanceResources.zig");
-
-pub const RuntimePort = @import("GenericAgentMaintenanceRuntimePort.zig").Type;
-
-pub const Coordinator = @import("GenericAgentMaintenanceCoordinator.zig").Type;
+const AgentStatusType = @import("telar-core").AgentStatus;
 
 pub const Step = enum {
     rearm_tick,
@@ -18,26 +16,24 @@ pub const Step = enum {
     pump_clients,
 };
 
-const Capture = @import("AgentMaintenanceCapture.zig");
-
-const test_port: RuntimePort(Capture) = .{
-    .rearm_tick = Capture.rearmTick,
-    .now_ms = Capture.nowMs,
-    .pump_clients = Capture.pumpClients,
+const test_port: GenericAgentMaintenanceRuntimePort(AgentMaintenanceCapture) = .{
+    .rearm_tick = AgentMaintenanceCapture.rearmTick,
+    .now_ms = AgentMaintenanceCapture.nowMs,
+    .pump_clients = AgentMaintenanceCapture.pumpClients,
 };
 
-const TestCoordinator = Coordinator(Capture, test_port);
+const TestCoordinator = GenericAgentMaintenanceCoordinator(AgentMaintenanceCapture, test_port);
 
-fn testIdentity() !agent_mod.Identity {
+fn testIdentity() !IdentityType {
     return .{
-        .key = .{ .id = try schema.id.pane(7), .generation = 11 },
+        .key = .{ .id = try pane_module(7), .generation = 11 },
         .process_id = 13,
         .session_id = .{17} ** 16,
     };
 }
 
-fn seedReadyAgent(agents: *agent_mod.Tracker, identity: agent_mod.Identity, completed_at_ms: i64) !void {
-    const exchange: agent_mod.ProxyExchange = .{
+fn seedReadyAgent(agents: *TrackerType, identity: IdentityType, completed_at_ms: i64) !void {
+    const exchange: ProxyExchangeType = .{
         .protocol = .h2,
         .connection_id = 19,
         .stream_id = 23,
@@ -59,33 +55,33 @@ fn seedReadyAgent(agents: *agent_mod.Tracker, identity: agent_mod.Identity, comp
     }));
 }
 
-fn testCoordinator(capture: *Capture, agents: *agent_mod.Tracker) TestCoordinator {
+fn testCoordinator(capture: *AgentMaintenanceCapture, agents: *TrackerType) TestCoordinator {
     capture.agents = agents;
     return TestCoordinator.init(capture, .{ .agents = agents });
 }
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const AgentMaintenanceCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
 test "timer failure preserves projections and stops periodic maintenance" {
-    var agents: agent_mod.Tracker = .{};
+    var agents: TrackerType = .{};
     const identity = try testIdentity();
     try seedReadyAgent(&agents, identity, 100);
-    var capture: Capture = .{ .now = std.math.maxInt(i64), .identity = identity };
+    var capture: AgentMaintenanceCapture = .{ .now = std.math.maxInt(i64), .identity = identity };
     var coordinator = testCoordinator(&capture, &agents);
 
     try coordinator.handle(error.TimerFailed);
 
     try expectSteps(&capture, &.{});
-    try std.testing.expectEqual(schema.AgentStatus.done, agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(AgentStatusType.done, agents.projectedStatus(identity.key).?);
 }
 
 test "rearm failure propagates before reading the clock or expiring evidence" {
-    var agents: agent_mod.Tracker = .{};
+    var agents: TrackerType = .{};
     const identity = try testIdentity();
     try seedReadyAgent(&agents, identity, 100);
-    var capture: Capture = .{
+    var capture: AgentMaintenanceCapture = .{
         .rearm_failure = true,
         .now = std.math.maxInt(i64),
         .identity = identity,
@@ -95,28 +91,28 @@ test "rearm failure propagates before reading the clock or expiring evidence" {
     try std.testing.expectError(error.SchedulerUnavailable, coordinator.handle({}));
 
     try expectSteps(&capture, &.{.rearm_tick});
-    try std.testing.expectEqual(schema.AgentStatus.done, agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(AgentStatusType.done, agents.projectedStatus(identity.key).?);
 }
 
 test "successful maintenance pumps an unchanged projection" {
-    var agents: agent_mod.Tracker = .{};
+    var agents: TrackerType = .{};
     const identity = try testIdentity();
     try seedReadyAgent(&agents, identity, 100);
-    var capture: Capture = .{ .now = 101, .identity = identity };
+    var capture: AgentMaintenanceCapture = .{ .now = 101, .identity = identity };
     var coordinator = testCoordinator(&capture, &agents);
 
     try coordinator.handle({});
 
     try expectSteps(&capture, &.{ .rearm_tick, .clock, .pump_clients });
     try std.testing.expect(capture.pump_called);
-    try std.testing.expectEqual(schema.AgentStatus.done, capture.pump_saw_status.?);
+    try std.testing.expectEqual(AgentStatusType.done, capture.pump_saw_status.?);
 }
 
 test "expired evidence is removed before clients are pumped" {
-    var agents: agent_mod.Tracker = .{};
+    var agents: TrackerType = .{};
     const identity = try testIdentity();
     try seedReadyAgent(&agents, identity, 100);
-    var capture: Capture = .{ .now = std.math.maxInt(i64), .identity = identity };
+    var capture: AgentMaintenanceCapture = .{ .now = std.math.maxInt(i64), .identity = identity };
     var coordinator = testCoordinator(&capture, &agents);
 
     try coordinator.handle({});

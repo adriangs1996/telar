@@ -1,5 +1,8 @@
+const PaneTargetType = @import("telar-core").PaneTarget;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const WorkspaceHandoff = @This();
-const source_namespace = @import("workspace_handoff.zig");
-target: source_namespace.schema.PaneTarget,
-fallback_workspace: ?source_namespace.schema.WorkspaceId,
-size: source_namespace.schema.TerminalSize,
+
+target: PaneTargetType,
+fallback_workspace: ?WorkspaceIdType,
+size: TerminalSizeType,

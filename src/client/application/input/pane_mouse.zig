@@ -1,25 +1,21 @@
 //! Shared pointer and focused-scroll policy after pane resolution.
 
+const PointerCommand = @import("PointerCommand.zig");
+const action_module = @import("../../input/action.zig");
+const ScrollEffect = @import("ScrollEffect.zig");
+const ReportEffect = @import("ReportEffect.zig");
+const PaneMousePlanType = @import("../../workspace/PaneMousePlan.zig");
+const Mouse = @import("../../input/Mouse.zig");
+const Resolved = @import("Resolved.zig");
+const PaneMouseCapture = @import("PaneMouseCapture.zig");
+const PaneMouseHandler = @import("PaneMouseHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const input_capability = @import("../../input/root.zig");
-const Mouse = @import("../../input/root.zig").Mouse;
-const workspace_capability = @import("../../workspace/root.zig");
-
-pub const mouse_protocol = input_capability.mouse_protocol;
-pub const multiplexer = workspace_capability.multiplexer;
-pub const schema = core.schema;
-
-pub const PointerCommand = @import("PointerCommand.zig");
+const MouseTrackingType = @import("telar-core").MouseTracking;
 
 pub const Command = union(enum) {
     pointer: PointerCommand,
-    focused_scroll: input_capability.action.ScrollDirection,
+    focused_scroll: action_module.ScrollDirection,
 };
-
-pub const ScrollEffect = @import("ScrollEffect.zig");
-
-pub const ReportEffect = @import("ReportEffect.zig");
 
 pub const Effect = union(enum) {
     viewport: ScrollEffect,
@@ -36,17 +32,7 @@ pub const Outcome = enum {
     selection_started,
 };
 
-pub const Resolved = @import("Resolved.zig");
-
-pub const Plans = @import("Plans.zig");
-
-pub const Effects = @import("PaneMouseEffects.zig");
-
-pub const PaneMouseHandler = @import("PaneMouseHandler.zig");
-
-const Capture = @import("PaneMouseCapture.zig");
-
-fn testingPlan() multiplexer.PaneMousePlan {
+fn testingPlan() PaneMousePlanType {
     return .{
         .pane_id = @enumFromInt(3),
         .content = .{ .x = 10, .y = 4, .w = 20, .h = 8 },
@@ -100,7 +86,7 @@ test "PaneMouseHandler selects viewport or alternate scroll for untracked wheels
             var resolved = testingResolved(kind);
             resolved.plan.alternate_scroll = case.alternate_scroll;
             resolved.plan.at_bottom = case.at_bottom;
-            var capture: Capture = .{ .resolved = resolved };
+            var capture: PaneMouseCapture = .{ .resolved = resolved };
             var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
             const command = testingCommand(kind);
             const scroll: ScrollEffect = .{
@@ -122,7 +108,7 @@ test "PaneMouseHandler selects viewport or alternate scroll for untracked wheels
 
 test "PaneMouseHandler reports only child-tracked events" {
     const Case = struct {
-        tracking: schema.frame.MouseTracking,
+        tracking: MouseTrackingType,
         sgr: bool = true,
         kind: Mouse.Kind,
         outcome: Outcome,
@@ -142,7 +128,7 @@ test "PaneMouseHandler reports only child-tracked events" {
     for (cases) |case| {
         var resolved = testingResolved(case.kind);
         resolved.plan.protocol = .{ .tracking = case.tracking, .sgr = case.sgr, .pixels = true };
-        var capture: Capture = .{ .resolved = resolved };
+        var capture: PaneMouseCapture = .{ .resolved = resolved };
         var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
         const command = testingCommand(case.kind);
 
@@ -175,7 +161,7 @@ test "PaneMouseHandler preserves the resolved report instead of the original poi
         .cell_width_px = 10,
         .cell_height_px = 20,
     };
-    var capture: Capture = .{ .resolved = resolved };
+    var capture: PaneMouseCapture = .{ .resolved = resolved };
     var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
     const command = testingCommand(.press);
 
@@ -204,12 +190,12 @@ test "PaneMouseHandler applies the shared wheel policy to focused scroll in both
     };
 
     for (cases) |case| {
-        for ([_]input_capability.action.ScrollDirection{ .up, .down }) |direction| {
+        for ([_]action_module.ScrollDirection{ .up, .down }) |direction| {
             var resolved = testingResolved(if (direction == .up) .scroll_up else .scroll_down);
             resolved.plan.alternate_scroll = case.alternate_scroll;
             resolved.plan.at_bottom = case.at_bottom;
             resolved.plan.protocol = .{ .tracking = if (case.tracked) .normal else .none, .sgr = true };
-            var capture: Capture = .{ .resolved = resolved };
+            var capture: PaneMouseCapture = .{ .resolved = resolved };
             var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
             const command: Command = .{ .focused_scroll = direction };
             const scroll: ScrollEffect = .{
@@ -235,7 +221,7 @@ test "PaneMouseHandler ignores unresolved pointer and focused scroll commands" {
     const commands = [_]Command{ testingCommand(.press), .{ .focused_scroll = .up }, .{ .focused_scroll = .down } };
 
     for (commands) |command| {
-        var capture: Capture = .{};
+        var capture: PaneMouseCapture = .{};
         var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
 
         try std.testing.expectEqual(Outcome.ignored, try handler.execute(command));
@@ -253,7 +239,7 @@ test "PaneMouseHandler propagates each selected effect failure without fallback"
             var resolved = testingResolved(.scroll_up);
             resolved.plan.alternate_scroll = effect_tag != .viewport;
             resolved.plan.protocol = .{ .tracking = if (effect_tag == .report) .normal else .none, .sgr = true };
-            var capture: Capture = .{ .resolved = resolved, .fail = true };
+            var capture: PaneMouseCapture = .{ .resolved = resolved, .fail = true };
             var handler: PaneMouseHandler = .{ .plans = capture.plans(), .effects = capture.effects() };
 
             try std.testing.expectError(error.PaneMouseEffectFailed, handler.execute(command));

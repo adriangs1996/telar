@@ -1,21 +1,24 @@
-const RequestCapture = @This();
 const TabCloseIntent = @import("TabCloseIntent.zig");
-const source_namespace = @import("close_tab.zig");
-const TabOperationGate = @import("CloseTabTabOperationGate.zig");
+const close_tab = @import("close_tab.zig");
+const CloseTabOperationGate = @import("CloseTabOperationGate.zig");
 const CloseRequestEffects = @import("CloseRequestEffects.zig");
-const tab_close_preparation = @import("tab_close_preparation.zig");
-const tab_snapshot_recovery = @import("tab_snapshot_recovery.zig");
+const PrepareTabCloseHandlerType = @import("PrepareTabCloseHandler.zig");
+const RequestTabSnapshotRecoveryHandlerType = @import("RequestTabSnapshotRecoveryHandler.zig");
 const std = @import("std");
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const RequestCapture = @This();
+
 blocked: bool = false,
 prepare_failure: ?anyerror = null,
 detach_failure: ?anyerror = null,
 send_failure: ?anyerror = null,
 restore_failure: ?anyerror = null,
 intent: ?TabCloseIntent = null,
-steps: [4]source_namespace.RequestStep = undefined,
+steps: [4]close_tab.RequestStep = undefined,
 step_count: u8 = 0,
 
-pub fn gate(capture: *RequestCapture) TabOperationGate {
+pub fn gate(capture: *RequestCapture) CloseTabOperationGate {
     return .{ .context = capture, .pending = pending };
 }
 
@@ -27,7 +30,7 @@ pub fn requestEffects(capture: *RequestCapture) CloseRequestEffects {
     };
 }
 
-pub fn preparation(capture: *RequestCapture) tab_close_preparation.PrepareTabCloseHandler {
+pub fn preparation(capture: *RequestCapture) PrepareTabCloseHandlerType {
     return .{
         .requests = .{
             .context = capture,
@@ -44,7 +47,7 @@ pub fn preparation(capture: *RequestCapture) tab_close_preparation.PrepareTabClo
     };
 }
 
-pub fn snapshots(capture: *RequestCapture) tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler {
+pub fn snapshots(capture: *RequestCapture) RequestTabSnapshotRecoveryHandlerType {
     return .{ .effects = .{
         .context = capture,
         .pending = snapshotPending,
@@ -69,7 +72,7 @@ fn availableCapacity(_: *anyopaque) usize {
     return std.math.maxInt(usize);
 }
 
-fn attachmentPending(_: *anyopaque, _: source_namespace.schema.PaneId) bool {
+fn attachmentPending(_: *anyopaque, _: PaneIdType) bool {
     return false;
 }
 
@@ -77,7 +80,7 @@ fn snapshotPending(_: *anyopaque) bool {
     return false;
 }
 
-fn detach(context: *anyopaque, _: source_namespace.schema.TabLocation) !void {
+fn detach(context: *anyopaque, _: TabLocationType) !void {
     const capture: *RequestCapture = @ptrCast(@alignCast(context));
     capture.record(.detach);
     if (capture.detach_failure) |failure| {
@@ -94,7 +97,7 @@ fn send(context: *anyopaque, intent: TabCloseIntent) !void {
     }
 }
 
-fn restore(context: *anyopaque, _: source_namespace.schema.TabLocation) !void {
+fn restore(context: *anyopaque, _: TabLocationType) !void {
     const capture: *RequestCapture = @ptrCast(@alignCast(context));
     capture.record(.restore);
     if (capture.restore_failure) |failure| {
@@ -102,11 +105,11 @@ fn restore(context: *anyopaque, _: source_namespace.schema.TabLocation) !void {
     }
 }
 
-fn record(capture: *RequestCapture, step: source_namespace.RequestStep) void {
+fn record(capture: *RequestCapture, step: close_tab.RequestStep) void {
     capture.steps[capture.step_count] = step;
     capture.step_count += 1;
 }
 
-pub fn recorded(capture: *const RequestCapture) []const source_namespace.RequestStep {
+pub fn recorded(capture: *const RequestCapture) []const close_tab.RequestStep {
     return capture.steps[0..capture.step_count];
 }

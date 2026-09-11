@@ -3,8 +3,6 @@
 
 const std = @import("std");
 
-const File = std.Io.File;
-
 pub const text = @embedFile("skill/telar.md");
 
 /// Writes the bundled skill to stdout.
@@ -13,7 +11,7 @@ pub const text = @embedFile("skill/telar.md");
 /// try skill.run(process_init);
 /// ```
 pub fn run(init: std.process.Init) !void {
-    try File.stdout().writeStreamingAll(init.io, text);
+    try std.Io.File.stdout().writeStreamingAll(init.io, text);
 }
 
 test "the bundled skill documents every agent subcommand" {

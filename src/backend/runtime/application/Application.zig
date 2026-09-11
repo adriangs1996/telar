@@ -1,52 +1,79 @@
+const std = @import("std");
+const HeapType = @import("telar-core").Heap;
+const event = @import("../event.zig");
+const ServiceType = @import("../../history/Service.zig");
+const ChildEnvironmentType = @import("../../pty/ChildEnvironment.zig");
+const TableType = @import("telar-core").Table;
+const ProxyRuntime = @import("../resources/ProxyRuntime.zig");
+const PluginsService = @import("../../plugins/Service.zig");
+const AgentDescriptionOptionsType = @import("../AgentDescriptionOptions.zig");
+const StateType = @import("coordinators/State.zig");
+const EngineService = @import("../../engine/Service.zig");
+const LaunchTestFaultType = @import("LaunchTestFault.zig");
+const Store = @import("../client/Store.zig");
+const application_namespace = @import("application_namespace.zig");
+const LifecycleState = @import("../lifecycle/State.zig");
+const state_support = @import("../../workspace/state_support.zig");
+const GeometryLease = @import("GeometryLease.zig");
+const RuntimeModelType = @import("RuntimeModel.zig");
+const SamplerType = @import("../observability/Sampler.zig");
+const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
+const ApplicationState = @import("State.zig");
+const Initialization = @import("Initialization.zig");
+const now_module = @import("telar-core").now;
+const PaneType = @import("../../pane/Pane.zig");
+const Repository = @import("../../workspace/Repository.zig");
+const ReaderType = @import("../../workspace/Reader.zig");
+const LaunchRequestType = @import("LaunchRequest.zig");
+const GenericPaneLauncher = @import("GenericPaneLauncher.zig").Type;
+const SessionTitleType = @import("../../agent/SessionTitle.zig");
+const CompletionType = @import("../resources/Completion.zig");
+const AgentCompletion = @import("../../agent/Completion.zig");
+const raw_module = @import("telar-core").raw;
+const commands = @import("../../workspace/commands.zig");
+const ClientKeyType = @import("../../history/ClientKey.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TerminalColorsType = @import("telar-core").TerminalColors;
+const WorkspaceChange = @import("WorkspaceChange.zig");
+const Session = @import("../client/Session.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const PaneDetachedType = @import("../attachment/PaneDetached.zig");
+const TabRemovedType = @import("../../workspace/TabRemoved.zig");
+const NotificationType = @import("telar-core").Notification;
+const PendingNotificationType = @import("../delivery/PendingNotification.zig");
+const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
+const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+const ClientMessageType = @import("telar-core").ClientMessage;
 /// Owns the live model and application state used by requests and actors.
 const Application = @This();
-const source_namespace = @import("root.zig");
-const std = @import("std");
-const history = @import("../../history/root.zig");
-const pty = @import("../../pty/root.zig");
-const core = @import("telar-core");
-const proxy_resource = @import("../resources/proxy.zig");
-const plugins = @import("../../plugins/root.zig");
-const engine = @import("../../engine/root.zig");
-const shutdown_module = @import("../lifecycle/root.zig").shutdown_authority;
-const GeometryLease = @import("GeometryLease.zig");
-const observability = @import("../observability/root.zig");
-const session_checkpoint = @import("session_checkpoint.zig");
-const Initialization = @import("Initialization.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-const pane_launcher = @import("pane_launcher.zig");
-const agent_mod = @import("../../agent/root.zig");
-const git_status = @import("git_status.zig");
-const session_name = @import("session_name.zig");
-const WorkspaceChange = @import("WorkspaceChange.zig");
-const attachment_mod = @import("../attachment/root.zig");
-io: source_namespace.Io,
+
+io: std.Io,
 gpa: std.mem.Allocator,
-heap: *source_namespace.diagnostics.Heap,
-select: *source_namespace.Io.Select(source_namespace.RuntimeEvent),
-history_service: *history.Service,
-child_environment: *const pty.ChildEnvironment,
+heap: *HeapType,
+select: *std.Io.Select(event.Event),
+history_service: *ServiceType,
+child_environment: *const ChildEnvironmentType,
 inherited_environment: std.process.Environ,
 socket_path: []const u8,
 executable_path: [std.fs.max_path_bytes]u8 = undefined,
 executable_path_len: usize,
-agent_manifests: *const core.agent_manifest.Table,
-proxy_runtime: *proxy_resource.Runtime,
-plugin_service: *plugins.Service,
-agent_description_options: ?source_namespace.AgentDescriptionOptions,
-agent_description_state: source_namespace.agent_description_coordinator.State = .{},
+agent_manifests: *const TableType,
+proxy_runtime: *ProxyRuntime,
+plugin_service: *PluginsService,
+agent_description_options: ?AgentDescriptionOptionsType,
+agent_description_state: StateType = .{},
 /// The headless engine, when `runtime.engine` is configured.
-engine_service: ?*engine.Service,
-launch_fault: ?*source_namespace.LaunchTestFault,
-clients: *source_namespace.ClientStore,
-client_admission: source_namespace.ClientAdmissionState = .{},
-shutdown: shutdown_module.State = .{},
-geometry_leases: [source_namespace.max_workspaces]?GeometryLease = @splat(null),
-model: source_namespace.RuntimeModel,
-system_metrics: observability.system_metrics.Sampler = .{},
+engine_service: ?*EngineService,
+launch_fault: ?*LaunchTestFaultType,
+clients: *Store,
+client_admission: application_namespace.ClientAdmissionState = .{},
+shutdown: LifecycleState = .{},
+geometry_leases: [state_support.max_workspaces]?GeometryLease = @splat(null),
+model: RuntimeModelType,
+system_metrics: SamplerType = .{},
 system_metrics_pending: bool = false,
-metrics: source_namespace.RuntimeMetrics,
-session: session_checkpoint.State = .{},
+metrics: RuntimeMetricsType,
+session: ApplicationState = .{},
 session_name_probe_in_flight: bool = false,
 input_sequence: u64 = 0,
 
@@ -85,7 +112,7 @@ pub fn init(initialization: Initialization) !Application {
             },
             .client_layouts = try .init(initialization.gpa),
         },
-        .metrics = .{ .started_ns = source_namespace.diagnostics.now(initialization.io) },
+        .metrics = .{ .started_ns = now_module(initialization.io) },
     };
 }
 
@@ -94,10 +121,10 @@ pub fn init(initialization: Initialization) !Application {
 /// ```zig
 /// application.shutdownStep(.stop_client_connections);
 /// ```
-pub fn shutdownStep(application: *Application, step: source_namespace.ShutdownStep) void {
+pub fn shutdownStep(application: *Application, step: application_namespace.ShutdownStep) void {
     switch (step) {
         .stop_client_connections => {
-            source_namespace.SessionCheckpoint.writeNow(application);
+            application_namespace.SessionCheckpoint.writeNow(application);
             for (&application.clients.items) |*slot| {
                 if (slot.*) |session| {
                     session.connection.shutdown(application.io);
@@ -127,7 +154,7 @@ pub fn shutdownStep(application: *Application, step: source_namespace.ShutdownSt
         .destroy_panes => application.model.panes.deinit(),
         .destroy_workspaces => {
             application.model.client_layouts.deinit();
-            source_namespace.deinitWorkspaces(application);
+            application_namespace.deinitWorkspaces(application);
         },
     }
 }
@@ -146,7 +173,7 @@ pub fn collect(application: *Application) void {
 /// ```zig
 /// application.revokePaneCredential(pane);
 /// ```
-pub fn revokePaneCredential(application: *Application, pane: *source_namespace.Pane) void {
+pub fn revokePaneCredential(application: *Application, pane: *PaneType) void {
     if (application.proxy_runtime.capability()) |proxy| {
         proxy.revokePane(pane.key());
     }
@@ -157,8 +184,8 @@ pub fn revokePaneCredential(application: *Application, pane: *source_namespace.P
 /// ```zig
 /// var workspaces = application.workspaceRepository();
 /// ```
-pub fn workspaceRepository(application: *Application) source_namespace.WorkspaceRepository {
-    return source_namespace.WorkspaceRepository.init(&application.model.workspaces, application.gpa);
+pub fn workspaceRepository(application: *Application) Repository {
+    return Repository.init(&application.model.workspaces, application.gpa);
 }
 
 /// Returns a read-only view of the current workspace projection.
@@ -166,8 +193,8 @@ pub fn workspaceRepository(application: *Application) source_namespace.Workspace
 /// ```zig
 /// const workspaces = application.workspaceReader();
 /// ```
-pub fn workspaceReader(application: *const Application) workspace_mod.Reader {
-    return workspace_mod.Reader.init(&application.model.workspaces);
+pub fn workspaceReader(application: *const Application) ReaderType {
+    return ReaderType.init(&application.model.workspaces);
 }
 
 /// Starts a pane and returns only after the runtime can observe both its
@@ -175,8 +202,8 @@ pub fn workspaceReader(application: *const Application) workspace_mod.Reader {
 /// ```zig
 /// const pane = try application.launchPane(request);
 /// ```
-pub fn launchPane(application: *Application, request: pane_launcher.LaunchRequest) !*source_namespace.Pane {
-    var launcher: source_namespace.PaneLauncher(source_namespace.RuntimeEvent) = .{
+pub fn launchPane(application: *Application, request: LaunchRequestType) !*PaneType {
+    var launcher: GenericPaneLauncher(event.Event) = .{
         .io = application.io,
         .gpa = application.gpa,
         .select = application.select,
@@ -202,13 +229,13 @@ pub fn launchPane(application: *Application, request: pane_launcher.LaunchReques
 /// ```zig
 /// try application.queueRestoredInput(pane, "claude --resume <id>\r");
 /// ```
-pub fn queueRestoredInput(application: *Application, pane: *source_namespace.Pane, bytes: []const u8) !void {
+pub fn queueRestoredInput(application: *Application, pane: *PaneType, bytes: []const u8) !void {
     if (std.mem.indexOfScalar(u8, bytes, '\r') != null) {
         pane.noteInjectedSubmission();
     }
 
     _ = pane.queuePtyInput(bytes);
-    try source_namespace.RuntimeEvents.schedulePaneInput(application, pane);
+    try application_namespace.RuntimeEvents.schedulePaneInput(application, pane);
 }
 
 /// Hands a checkpointed title to the agent that will resume in a restored
@@ -218,7 +245,7 @@ pub fn queueRestoredInput(application: *Application, pane: *source_namespace.Pan
 /// ```zig
 /// application.restoreAgentTitle(pane, title);
 /// ```
-pub fn restoreAgentTitle(application: *Application, pane: *const source_namespace.Pane, title: agent_mod.SessionTitle) void {
+pub fn restoreAgentTitle(application: *Application, pane: *const PaneType, title: SessionTitleType) void {
     if (!application.model.agents.restoreTitle(pane.key(), title)) {
         return;
     }
@@ -238,7 +265,7 @@ pub fn restoreAgentTitle(application: *Application, pane: *const source_namespac
 /// application.noteSessionChange();
 /// ```
 pub fn noteSessionChange(application: *Application) void {
-    source_namespace.SessionCheckpoint.noteChange(application);
+    application_namespace.SessionCheckpoint.noteChange(application);
 }
 
 /// Rebuilds the model from the checkpoint file. Runs once at startup,
@@ -248,7 +275,7 @@ pub fn noteSessionChange(application: *Application) void {
 /// application.restoreSession();
 /// ```
 pub fn restoreSession(application: *Application) void {
-    source_namespace.SessionCheckpoint.restore(application);
+    application_namespace.SessionCheckpoint.restore(application);
 }
 
 /// Starts a checkpoint write when one is due.
@@ -257,7 +284,7 @@ pub fn restoreSession(application: *Application) void {
 /// try application.flushSessionCheckpoint();
 /// ```
 pub fn flushSessionCheckpoint(application: *Application) !void {
-    try source_namespace.SessionCheckpoint.flushIfDue(application);
+    try application_namespace.SessionCheckpoint.flushIfDue(application);
 }
 
 /// Starts one git probe for the stalest due workspace.
@@ -266,7 +293,7 @@ pub fn flushSessionCheckpoint(application: *Application) !void {
 /// application.tickGitStatus();
 /// ```
 pub fn tickGitStatus(application: *Application) void {
-    source_namespace.GitObserver.tick(application);
+    application_namespace.GitObserver.tick(application);
 }
 
 /// Applies one git probe result.
@@ -274,8 +301,8 @@ pub fn tickGitStatus(application: *Application) void {
 /// ```zig
 /// application.gitStatusCompleted(completion);
 /// ```
-pub fn gitStatusCompleted(application: *Application, completion: git_status.Completion) void {
-    source_namespace.GitObserver.handleCompletion(application, completion);
+pub fn gitStatusCompleted(application: *Application, completion: CompletionType) void {
+    application_namespace.GitObserver.handleCompletion(application, completion);
 }
 
 /// Starts one session-file probe for the stalest due agent.
@@ -284,7 +311,7 @@ pub fn gitStatusCompleted(application: *Application, completion: git_status.Comp
 /// application.tickSessionNames();
 /// ```
 pub fn tickSessionNames(application: *Application) void {
-    source_namespace.SessionNameObserver.tick(application);
+    application_namespace.SessionNameObserver.tick(application);
 }
 
 /// Applies one session-file probe result.
@@ -292,8 +319,8 @@ pub fn tickSessionNames(application: *Application) void {
 /// ```zig
 /// application.sessionNameCompleted(completion);
 /// ```
-pub fn sessionNameCompleted(application: *Application, completion: session_name.Completion) void {
-    source_namespace.SessionNameObserver.handleCompletion(application, completion);
+pub fn sessionNameCompleted(application: *Application, completion: AgentCompletion) void {
+    application_namespace.SessionNameObserver.handleCompletion(application, completion);
 }
 
 /// Completes the in-flight checkpoint write.
@@ -302,7 +329,7 @@ pub fn sessionNameCompleted(application: *Application, completion: session_name.
 /// application.sessionCheckpointWritten(result);
 /// ```
 pub fn sessionCheckpointWritten(application: *Application, result: anyerror!void) void {
-    source_namespace.SessionCheckpoint.handleWritten(application, result);
+    application_namespace.SessionCheckpoint.handleWritten(application, result);
 }
 
 /// Reaps panes whose child exited and which no actor still borrows, then
@@ -330,7 +357,7 @@ fn collectFinished(application: *Application) void {
             }
         } else {
             const location = pane.location;
-            store.index.remove(source_namespace.schema.id.raw(pane.id));
+            store.index.remove(raw_module(pane.id));
             store.exited_count -= 1;
             slot.* = null;
             store.count -= 1;
@@ -344,7 +371,7 @@ fn collectFinished(application: *Application) void {
             application.noteSessionChange();
 
             if (!store.hasAt(location) and workspaces.reader().contains(location)) {
-                const removed = workspace_mod.removeTab(&workspaces, location).?;
+                const removed = commands.removeTab(&workspaces, location).?;
                 application.publishLifecycleTabRemoved(removed);
             }
 
@@ -358,7 +385,7 @@ fn collectFinished(application: *Application) void {
 /// ```zig
 /// application.dropClient(client);
 /// ```
-pub fn dropClient(application: *Application, key: source_namespace.ClientKey) void {
+pub fn dropClient(application: *Application, key: ClientKeyType) void {
     const session = application.clients.resolve(key) orelse return;
     if (!session.closing) {
         application.failPaneFocusesFor(key);
@@ -376,7 +403,7 @@ pub fn dropClient(application: *Application, key: source_namespace.ClientKey) vo
     application.finalizeClient(key);
 }
 
-fn failPaneFocusesFor(application: *Application, key: source_namespace.ClientKey) void {
+fn failPaneFocusesFor(application: *Application, key: ClientKeyType) void {
     for (&application.clients.items) |*slot| {
         const requester = slot.* orelse continue;
         const pending = requester.pending_pane_focus orelse continue;
@@ -403,7 +430,7 @@ fn failPaneFocusesFor(application: *Application, key: source_namespace.ClientKey
 /// ```zig
 /// application.finalizeClient(client);
 /// ```
-pub fn finalizeClient(application: *Application, key: source_namespace.ClientKey) void {
+pub fn finalizeClient(application: *Application, key: ClientKeyType) void {
     const session = application.clients.resolve(key) orelse return;
 
     if (!session.closing or session.read_pending or session.send_pending) {
@@ -418,7 +445,7 @@ pub fn finalizeClient(application: *Application, key: source_namespace.ClientKey
 /// ```zig
 /// if (!application.holdsGeometry(client, workspace)) return error.GeometryUnavailable;
 /// ```
-pub fn holdsGeometry(application: *Application, key: source_namespace.ClientKey, workspace: source_namespace.schema.WorkspaceLocation) bool {
+pub fn holdsGeometry(application: *Application, key: ClientKeyType, workspace: WorkspaceLocationType) bool {
     for (&application.geometry_leases) |*slot| {
         const lease = slot.* orelse continue;
 
@@ -444,7 +471,7 @@ pub fn holdsGeometry(application: *Application, key: source_namespace.ClientKey,
 
 /// Queries authority without acquiring an unowned workspace.
 /// Example: `const owner = application.geometryOwner(workspace) orelse return;`.
-pub fn geometryOwner(application: *const Application, workspace: source_namespace.schema.WorkspaceLocation) ?source_namespace.ClientKey {
+pub fn geometryOwner(application: *const Application, workspace: WorkspaceLocationType) ?ClientKeyType {
     for (application.geometry_leases) |slot| {
         const lease = slot orelse continue;
         if (std.meta.eql(lease.workspace, workspace)) {
@@ -455,7 +482,7 @@ pub fn geometryOwner(application: *const Application, workspace: source_namespac
     return null;
 }
 
-pub fn workspaceTerminalColors(application: *Application, workspace: source_namespace.schema.WorkspaceLocation) source_namespace.schema.TerminalColors {
+pub fn workspaceTerminalColors(application: *Application, workspace: WorkspaceLocationType) TerminalColorsType {
     const owner = application.geometryOwner(workspace) orelse return .{};
     const session = application.clients.resolve(owner) orelse return .{};
     return session.terminal_colors;
@@ -463,7 +490,7 @@ pub fn workspaceTerminalColors(application: *Application, workspace: source_name
 
 /// Updates only workspaces already controlled by this exact generation.
 /// Example: `application.refreshTerminalColors(session.key);`.
-pub fn refreshTerminalColors(application: *Application, key: source_namespace.ClientKey) void {
+pub fn refreshTerminalColors(application: *Application, key: ClientKeyType) void {
     for (application.geometry_leases) |slot| {
         const lease = slot orelse continue;
         if (std.meta.eql(lease.owner, key)) {
@@ -472,7 +499,7 @@ pub fn refreshTerminalColors(application: *Application, key: source_namespace.Cl
     }
 }
 
-fn applyWorkspaceTerminalColors(application: *Application, workspace: source_namespace.schema.WorkspaceLocation, key: source_namespace.ClientKey) void {
+fn applyWorkspaceTerminalColors(application: *Application, workspace: WorkspaceLocationType, key: ClientKeyType) void {
     const session = application.clients.resolve(key) orelse return;
     for (application.model.panes.items) |slot| {
         const pane = slot orelse continue;
@@ -482,7 +509,7 @@ fn applyWorkspaceTerminalColors(application: *Application, workspace: source_nam
     }
 }
 
-fn releaseGeometry(application: *Application, key: source_namespace.ClientKey) void {
+fn releaseGeometry(application: *Application, key: ClientKeyType) void {
     for (&application.geometry_leases) |*slot| {
         const lease = slot.* orelse continue;
 
@@ -504,7 +531,7 @@ fn releaseGeometry(application: *Application, key: source_namespace.ClientKey) v
 /// ```zig
 /// application.releaseGeometryFor(client, workspace);
 /// ```
-pub fn releaseGeometryFor(application: *Application, key: source_namespace.ClientKey, workspace: source_namespace.schema.WorkspaceLocation) void {
+pub fn releaseGeometryFor(application: *Application, key: ClientKeyType, workspace: WorkspaceLocationType) void {
     for (&application.geometry_leases) |*slot| {
         const lease = slot.* orelse continue;
         if (std.meta.eql(lease.owner, key) and std.meta.eql(lease.workspace, workspace)) {
@@ -519,7 +546,7 @@ pub fn releaseGeometryFor(application: *Application, key: source_namespace.Clien
 /// ```zig
 /// application.notifyWorkspaceChanged(origin, workspace);
 /// ```
-pub fn notifyWorkspaceChanged(application: *Application, origin: source_namespace.ClientKey, workspace: source_namespace.schema.WorkspaceLocation) void {
+pub fn notifyWorkspaceChanged(application: *Application, origin: ClientKeyType, workspace: WorkspaceLocationType) void {
     application.notifyWorkspaceChange(.{ .origin = origin, .workspace = workspace });
 }
 
@@ -552,13 +579,13 @@ fn notifyWorkspaceChange(application: *Application, change: WorkspaceChange) voi
 /// ```zig
 /// const detached = application.detachSessionPane(session, pane_id);
 /// ```
-pub fn detachSessionPane(application: *Application, session: *source_namespace.ClientSession, pane_id: source_namespace.schema.PaneId) ?attachment_mod.PaneDetached {
+pub fn detachSessionPane(application: *Application, session: *Session, pane_id: PaneIdType) ?PaneDetachedType {
     const detached = session.attachments.detach(pane_id) orelse return null;
     application.completeSessionWorkspaceDeparture(session, detached);
     return detached;
 }
 
-fn completeSessionWorkspaceDeparture(application: *Application, session: *source_namespace.ClientSession, detached: attachment_mod.PaneDetached) void {
+fn completeSessionWorkspaceDeparture(application: *Application, session: *Session, detached: PaneDetachedType) void {
     if (!detached.last_attachment) {
         return;
     }
@@ -575,7 +602,7 @@ fn completeSessionWorkspaceDeparture(application: *Application, session: *source
 
 /// Completes departures deferred by `pane_exited` only after every pane
 /// that can still publish lifecycle changes for the workspace is reaped.
-fn completeEmptyWorkspaceDepartures(application: *Application, workspace: source_namespace.schema.WorkspaceLocation) void {
+fn completeEmptyWorkspaceDepartures(application: *Application, workspace: WorkspaceLocationType) void {
     if (application.hasPendingExitedPane(workspace)) {
         return;
     }
@@ -596,7 +623,7 @@ fn completeEmptyWorkspaceDepartures(application: *Application, workspace: source
     }
 }
 
-fn hasPendingExitedPane(application: *const Application, workspace: source_namespace.schema.WorkspaceLocation) bool {
+fn hasPendingExitedPane(application: *const Application, workspace: WorkspaceLocationType) bool {
     for (application.model.panes.items) |slot| {
         const pane = slot orelse continue;
 
@@ -610,7 +637,7 @@ fn hasPendingExitedPane(application: *const Application, workspace: source_names
 
 /// Delivers an automatic tab-removal fact to every client that still
 /// observes its workspace. Queue saturation records snapshot recovery.
-fn publishLifecycleTabRemoved(application: *Application, removed: workspace_mod.TabRemoved) void {
+fn publishLifecycleTabRemoved(application: *Application, removed: TabRemovedType) void {
     for (&application.clients.items) |*client_slot| {
         const client = client_slot.* orelse continue;
 
@@ -632,8 +659,8 @@ fn publishLifecycleTabRemoved(application: *Application, removed: workspace_mod.
 /// ```zig
 /// const recipients = application.publishNotification(notification);
 /// ```
-pub fn publishNotification(application: *Application, notification: source_namespace.schema.Notification) u8 {
-    const pending = source_namespace.PendingNotification.init(notification);
+pub fn publishNotification(application: *Application, notification: NotificationType) u8 {
+    const pending = PendingNotificationType.init(notification);
     var delivered: u8 = 0;
 
     for (&application.clients.items) |*slot| {
@@ -656,7 +683,7 @@ pub fn publishNotification(application: *Application, notification: source_names
 /// ```zig
 /// application.publishAgentSound(notification);
 /// ```
-pub fn publishAgentSound(application: *Application, notification: source_namespace.schema.AgentSoundNotification) void {
+pub fn publishAgentSound(application: *Application, notification: AgentSoundNotificationType) void {
     for (&application.clients.items) |*slot| {
         const recipient = slot.* orelse continue;
 
@@ -685,7 +712,7 @@ pub fn pumpAll(application: *Application) void {
     }
 }
 
-fn settlePaneDamage(application: *Application, pane: *source_namespace.Pane) void {
+fn settlePaneDamage(application: *Application, pane: *PaneType) void {
     if (pane.render_pending) {
         return;
     }
@@ -730,7 +757,7 @@ pub fn shutdownDelivered(application: *const Application) bool {
 /// ```zig
 /// try application.pump(session);
 /// ```
-pub fn pump(application: *Application, session: *source_namespace.ClientSession) !void {
+pub fn pump(application: *Application, session: *Session) !void {
     if (!session.active() or session.send_pending) {
         return;
     }
@@ -756,15 +783,15 @@ pub fn pump(application: *Application, session: *source_namespace.ClientSession)
         session.delivery.abort(prepared);
     };
 
-    for (0..attachment_mod.AttachmentStore.capacity) |index| {
+    for (0..max_panes_per_tab) |index| {
         const attachment = session.attachments.at(index) orelse continue;
         if (attachment.pane.media.hasPending()) {
-            try source_namespace.RuntimeEvents.schedulePaneMedia(application, attachment.pane);
+            try application_namespace.RuntimeEvents.schedulePaneMedia(application, attachment.pane);
         }
     }
 
     const prepared = pending orelse return;
-    try source_namespace.Operations.startSessionSend(application, session, prepared.payload);
+    try application_namespace.Operations.startSessionSend(application, session, prepared.payload);
     session.delivery.commit(.{
         .prepared = prepared,
         .attachments = &session.attachments,
@@ -777,6 +804,6 @@ pub fn pump(application: *Application, session: *source_namespace.ClientSession)
 /// ```zig
 /// try application.dispatchClientMessage(session, message);
 /// ```
-pub fn dispatchClientMessage(application: *Application, session: *source_namespace.ClientSession, message: source_namespace.schema.ClientMessage) !void {
-    return source_namespace.RequestDispatcher.dispatch(application, session, message);
+pub fn dispatchClientMessage(application: *Application, session: *Session, message: ClientMessageType) !void {
+    return application_namespace.RequestDispatcher.dispatch(application, session, message);
 }

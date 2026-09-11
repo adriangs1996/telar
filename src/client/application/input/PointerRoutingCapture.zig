@@ -1,8 +1,10 @@
-const Capture = @This();
-const source_namespace = @import("pointer_routing.zig");
+const pointer_routing = @import("pointer_routing.zig");
 const ViewOutcome = @import("ViewOutcome.zig");
-const Effects = @import("PointerRoutingEffects.zig");
-events: [4]source_namespace.Event = undefined,
+const PointerRoutingEffects = @import("PointerRoutingEffects.zig");
+const PointerCommandType = @import("PointerCommand.zig");
+const Capture = @This();
+
+events: [4]pointer_routing.Event = undefined,
 event_count: usize = 0,
 copy_consumed: bool = false,
 link_consumed: bool = false,
@@ -10,9 +12,9 @@ view_outcome: ViewOutcome = .{
     .consume_pane_input = false,
     .pointer_inside = true,
 },
-failure: source_namespace.Failure = .none,
+failure: pointer_routing.Failure = .none,
 
-pub fn port(capture: *Capture) Effects {
+pub fn port(capture: *Capture) PointerRoutingEffects {
     return .{
         .context = capture,
         .copy_mode = copyMode,
@@ -22,12 +24,12 @@ pub fn port(capture: *Capture) Effects {
     };
 }
 
-fn record(capture: *Capture, event: source_namespace.Event) void {
+fn record(capture: *Capture, event: pointer_routing.Event) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
 
-fn copyMode(raw_context: *anyopaque, command: source_namespace.PointerCommand) !bool {
+fn copyMode(raw_context: *anyopaque, command: PointerCommandType) !bool {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     _ = command;
     capture.record(.copy_mode);
@@ -39,7 +41,7 @@ fn copyMode(raw_context: *anyopaque, command: source_namespace.PointerCommand) !
     return capture.copy_consumed;
 }
 
-fn view(raw_context: *anyopaque, command: source_namespace.PointerCommand) !ViewOutcome {
+fn view(raw_context: *anyopaque, command: PointerCommandType) !ViewOutcome {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     _ = command;
     capture.record(.view);
@@ -51,7 +53,7 @@ fn view(raw_context: *anyopaque, command: source_namespace.PointerCommand) !View
     return capture.view_outcome;
 }
 
-fn pane(raw_context: *anyopaque, command: source_namespace.PointerCommand) !void {
+fn pane(raw_context: *anyopaque, command: PointerCommandType) !void {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     _ = command;
     capture.record(.pane);
@@ -61,7 +63,7 @@ fn pane(raw_context: *anyopaque, command: source_namespace.PointerCommand) !void
     }
 }
 
-fn link(raw_context: *anyopaque, command: source_namespace.PointerCommand) !bool {
+fn link(raw_context: *anyopaque, command: PointerCommandType) !bool {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     _ = command;
     capture.record(.link);

@@ -1,10 +1,11 @@
-const Initialization = @This();
-const source_namespace = @import("root.zig");
 const std = @import("std");
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const vt = @import("ghostty-vt");
-io: source_namespace.Io,
+const Initialization = @This();
+
+io: std.Io,
 allocator: std.mem.Allocator,
-size: source_namespace.schema.TerminalSize,
+size: TerminalSizeType,
 storage_limit: usize,
 payload_limit: usize,
 write_pty: ?*const fn (*vt.TerminalStream.Handler, [:0]const u8) void,

@@ -1,7 +1,9 @@
-const ScrollbarInput = @This();
 const State = @import("State.zig");
-const ui = @import("../ui/root.zig");
+const RectType = @import("telar-core").Rect;
+const ColorType = @import("telar-core").Color;
+const ScrollbarInput = @This();
+
 state: *State,
-list: ui.Rect,
+list: RectType,
 total: u16,
-background: ui.Color,
+background: ColorType,

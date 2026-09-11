@@ -1,17 +1,16 @@
 //! Single-flight presentation identity. Preparation never retires model damage.
+
+const LifecycleState = @import("LifecycleState.zig");
+const ObservationType = @import("Observation.zig");
 const std = @import("std");
-const presentation = @import("root.zig");
-const panes = @import("../panes/root.zig");
+const PresentationCommitType = @import("../panes/PresentationCommit.zig");
 
 pub const Token = enum(u64) { _ };
 pub const Outcome = enum { delivered, failed, cancelled };
-pub const Submission = @import("Submission.zig");
-
-pub const State = @import("LifecycleState.zig");
 
 test "failed and cancelled frames remain pending; stale completions cannot retire replacements" {
-    var state: State = .{};
-    const observation: presentation.Observation = .{ .model = .{ .frame = 1 } };
+    var state: LifecycleState = .{};
+    const observation: ObservationType = .{ .model = .{ .frame = 1 } };
     try std.testing.expect(state.observe(observation));
     const first = try state.begin(.{ .observation = observation, .commit = .{} });
     try std.testing.expect(!state.needsPreparation());
@@ -29,11 +28,11 @@ test "failed and cancelled frames remain pending; stale completions cannot retir
 }
 
 test "delivery acknowledges only captured frames even after receiving newer model state" {
-    var state: State = .{};
-    const old: presentation.Observation = .{ .model = .{ .frame = 1 } };
-    const newer: presentation.Observation = .{ .model = .{ .frame = 2 } };
+    var state: LifecycleState = .{};
+    const old: ObservationType = .{ .model = .{ .frame = 1 } };
+    const newer: ObservationType = .{ .model = .{ .frame = 2 } };
     _ = state.observe(old);
-    var commit: panes.PresentationCommit = .{ .len = 1 };
+    var commit: PresentationCommitType = .{ .len = 1 };
     commit.panes[0] = .{ .pane_id = @enumFromInt(1), .frame_id = 7, .attached = true };
     const token = try state.begin(.{ .observation = old, .commit = commit });
     _ = state.observe(newer);

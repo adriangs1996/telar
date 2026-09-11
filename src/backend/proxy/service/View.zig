@@ -1,4 +1,5 @@
+const TransformPipelineType = @import("../TransformPipeline.zig");
 const View = @This();
-const middleware = @import("../middleware.zig");
-transforms: *const middleware.TransformPipeline,
+
+transforms: *const TransformPipelineType,
 has_custom_transformers: bool,

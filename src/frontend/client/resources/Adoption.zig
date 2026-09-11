@@ -1,16 +1,18 @@
+const GenerationType = @import("../../config/Generation.zig");
+const RegistryType = @import("../../plugins/Registry.zig");
+const TrustStoreType = @import("telar-core").TrustStore;
+const host_inputs = @import("../controllers/input/host_inputs.zig");
+const capabilities = @import("../../graphics/capabilities.zig");
+const std = @import("std");
 /// Everything a validated reload hands over: the owned configuration
 /// objects and the values already compiled from them.
 const Adoption = @This();
-const lua_config = @import("../../config/root.zig");
-const plugin_broker = @import("../../plugins/root.zig");
-const core = @import("telar-core");
-const source_namespace = @import("config_reload.zig");
-const std = @import("std");
-generation: *lua_config.Generation,
-registry: *plugin_broker.Registry,
-trust_store: *core.plugin.TrustStore,
-router: source_namespace.InputRouter,
-sidebar_rendering: source_namespace.kitty.SidebarRendering,
+
+generation: *GenerationType,
+registry: *RegistryType,
+trust_store: *TrustStoreType,
+router: host_inputs.Router,
+sidebar_rendering: capabilities.SidebarRendering,
 
 /// Releases an adoption that no client accepted.
 ///

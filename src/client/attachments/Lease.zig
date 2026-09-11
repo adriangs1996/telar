@@ -1,4 +1,5 @@
+const types = @import("types.zig");
 const Lease = @This();
-const attachments = @import("root.zig");
-id: attachments.Id,
+
+id: types.Id,
 png: []const u8

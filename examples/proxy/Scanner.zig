@@ -1,7 +1,8 @@
-const Scanner = @This();
 const vt = @import("ghostty-vt");
 const std = @import("std");
-const source_namespace = @import("osc.zig");
+const osc_ops = @import("osc.zig");
+const Scanner = @This();
+
 state: State = .ground,
 parser: vt.osc.Parser,
 pending: []const u8 = &.{},
@@ -33,13 +34,13 @@ pub fn offsetIn(s: *const Scanner, chunk: []const u8) usize {
 /// Next marker in the current chunk, or null once it is exhausted. Parser
 /// state survives across chunks, so a sequence split by a read boundary is
 /// reported when its terminator finally arrives.
-pub fn next(s: *Scanner) ?source_namespace.Marker {
+pub fn next(s: *Scanner) ?osc_ops.Marker {
     while (s.pending.len > 0) {
         const byte = s.pending[0];
         s.pending = s.pending[1..];
 
         switch (s.state) {
-            .ground => if (byte == source_namespace.esc) {
+            .ground => if (byte == osc_ops.esc) {
                 s.state = .escape;
             },
 
@@ -50,18 +51,18 @@ pub fn next(s: *Scanner) ?source_namespace.Marker {
                 },
                 // A second ESC restarts; anything else introduces some
                 // other sequence this scanner does not care about.
-                source_namespace.esc => {},
+                osc_ops.esc => {},
                 else => s.state = .ground,
             },
 
             .osc => switch (byte) {
-                source_namespace.bel => {
+                osc_ops.bel => {
                     s.state = .ground;
-                    if (s.finish(source_namespace.bel)) |marker| {
+                    if (s.finish(osc_ops.bel)) |marker| {
                         return marker;
                     }
                 },
-                source_namespace.esc => s.state = .osc_escape,
+                osc_ops.esc => s.state = .osc_escape,
                 else => s.parser.next(byte),
             },
 
@@ -69,12 +70,12 @@ pub fn next(s: *Scanner) ?source_namespace.Marker {
                 // ESC \ is ST, the other legal OSC terminator.
                 '\\' => {
                     s.state = .ground;
-                    if (s.finish(source_namespace.st)) |marker| {
+                    if (s.finish(osc_ops.st)) |marker| {
                         return marker;
                     }
                 },
                 // ESC ESC: abandon this one, the second ESC starts anew.
-                source_namespace.esc => {
+                osc_ops.esc => {
                     s.parser.reset();
                     s.state = .escape;
                 },
@@ -89,7 +90,7 @@ pub fn next(s: *Scanner) ?source_namespace.Marker {
     return null;
 }
 
-fn finish(s: *Scanner, terminator: u8) ?source_namespace.Marker {
+fn finish(s: *Scanner, terminator: u8) ?osc_ops.Marker {
     const command = s.parser.end(terminator) orelse return null;
     return switch (command.*) {
         .change_window_title => |title| .{ .title = title },

@@ -1,15 +1,16 @@
-const ResponseBodyObserver = @This();
-const exchange_mod = @import("exchange_support.zig");
-const provider = @import("../provider/root.zig");
-const capture = @import("../capture/root.zig");
+const ExchangeType = @import("Exchange.zig");
+const ResponseObserverType = @import("../provider/ResponseObserver.zig");
+const HalfType = @import("../capture/Half.zig");
 const ResponseObserverOptions = @import("ResponseObserverOptions.zig");
-const http = @import("../http/root.zig");
-exchange: *exchange_mod.Exchange,
-response: provider.ResponseObserver,
-inspect_payload: bool,
-capture_half: ?*capture.Half,
+const Fragment = @import("../http/Fragment.zig");
+const ResponseBodyObserver = @This();
 
-pub fn init(exchange: *exchange_mod.Exchange, options: ResponseObserverOptions) ResponseBodyObserver {
+exchange: *ExchangeType,
+response: ResponseObserverType,
+inspect_payload: bool,
+capture_half: ?*HalfType,
+
+pub fn init(exchange: *ExchangeType, options: ResponseObserverOptions) ResponseBodyObserver {
     return .{
         .exchange = exchange,
         .response = .init(exchange.dialect),
@@ -24,7 +25,7 @@ pub fn init(exchange: *exchange_mod.Exchange, options: ResponseObserverOptions) 
 /// ```zig
 /// observer.observe(.{ .payload = bytes, .forwarded_bytes = bytes.len });
 /// ```
-pub fn observe(observer: *ResponseBodyObserver, fragment: http.BodyFragment) void {
+pub fn observe(observer: *ResponseBodyObserver, fragment: Fragment) void {
     if (observer.capture_half) |half| {
         _ = half.append(.response_body, fragment.payload);
     }

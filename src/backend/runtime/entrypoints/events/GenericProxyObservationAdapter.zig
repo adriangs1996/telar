@@ -1,7 +1,9 @@
 const GenericProxyObservationRuntimePort = @import("GenericProxyObservationRuntimePort.zig").Type;
-const Resources = @import("ProxyObservationResources.zig");
-const proxy_mod = @import("../../../proxy/root.zig");
-const source_namespace = @import("proxy_observation.zig");
+const ProxyObservationResources = @import("ProxyObservationResources.zig");
+const ObservationType = @import("../../../proxy/Observation.zig");
+const enabled_module = @import("telar-core").enabled;
+const proxy_observation = @import("proxy_observation.zig");
+
 /// Creates a statically dispatched proxy-observation adapter.
 ///
 /// ```zig
@@ -12,14 +14,14 @@ pub fn Type(comptime Context: type, comptime port: GenericProxyObservationRuntim
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: ProxyObservationResources,
 
         /// Binds one runtime's pane, agent, and telemetry stores.
         ///
         /// ```zig
         /// var adapter = ProxyObservationAdapter.init(&context, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: ProxyObservationResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -30,7 +32,7 @@ pub fn Type(comptime Context: type, comptime port: GenericProxyObservationRuntim
         /// ```zig
         /// try adapter.handle(receive_result);
         /// ```
-        pub fn handle(adapter: *Self, result: anyerror!proxy_mod.Observation) !void {
+        pub fn handle(adapter: *Self, result: anyerror!ObservationType) !void {
             const event = result catch return;
             try port.rearm_receive(adapter.context);
 
@@ -39,11 +41,11 @@ pub fn Type(comptime Context: type, comptime port: GenericProxyObservationRuntim
                 return;
             };
 
-            if (comptime source_namespace.diagnostics.enabled) {
+            if (comptime enabled_module) {
                 adapter.resources.metrics.proxy_observations +|= 1;
             }
 
-            const observation = source_namespace.translate(event, pane) orelse return;
+            const observation = proxy_observation.translate(event, pane) orelse return;
             _ = adapter.resources.agents.observeProxy(observation);
             port.schedule_description(adapter.context);
             port.pump_clients(adapter.context);

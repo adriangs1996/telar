@@ -1,10 +1,12 @@
-const RequestPaneSplitHandler = @This();
-const client_model = @import("../../root.zig").model;
-const PaneOperationGate = @import("SplitPanePaneOperationGate.zig");
+const ModelType = @import("../../model/Model.zig");
+const SplitPaneOperationGate = @import("SplitPaneOperationGate.zig");
 const RequestEffects = @import("RequestEffects.zig");
-const source_namespace = @import("split_pane.zig");
-model: *client_model.Model,
-gate: PaneOperationGate,
+const RequestPaneSplitType = @import("../../model/RequestPaneSplit.zig");
+const PaneSplitPlanType = @import("../../model/PaneSplitPlan.zig");
+const RequestPaneSplitHandler = @This();
+
+model: *ModelType,
+gate: SplitPaneOperationGate,
 effects: RequestEffects,
 
 /// Plans and provisionally resizes one split before sending it. Any local
@@ -13,7 +15,7 @@ effects: RequestEffects,
 /// ```zig
 /// const plan = try handler.execute(.{ .axis = .horizontal, .area = area });
 /// ```
-pub fn execute(handler: *RequestPaneSplitHandler, request: client_model.RequestPaneSplit) !?source_namespace.PaneSplitPlan {
+pub fn execute(handler: *RequestPaneSplitHandler, request: RequestPaneSplitType) !?PaneSplitPlanType {
     if (handler.gate.pending(handler.gate.context)) {
         return null;
     }

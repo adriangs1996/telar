@@ -1,7 +1,9 @@
 //! Owns query entries until their bounded payload transfers into a result.
 
 const std = @import("std");
-const model = @import("model.zig");
+const Accumulator = @import("Accumulator.zig");
+const EntryType = @import("Entry.zig");
+const QueryType = @import("Query.zig");
 
 test "result accumulation releases rejected entries and survives allocation failures" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, exerciseOwnership, .{});
@@ -10,7 +12,7 @@ test "result accumulation releases rejected entries and survives allocation fail
 fn exerciseOwnership(gpa: std.mem.Allocator) !void {
     var accumulator: Accumulator = .{ .gpa = gpa, .limit = 1 };
     defer accumulator.deinit();
-    const entry: model.Entry = .{
+    const entry: EntryType = .{
         .id = 1,
         .pane_id = @enumFromInt(1),
         .started_at_ms = 0,
@@ -26,7 +28,7 @@ fn exerciseOwnership(gpa: std.mem.Allocator) !void {
     var rejected = entry;
     rejected.command = try gpa.dupe(u8, "pwd");
     try std.testing.expect(!try accumulator.append(rejected));
-    const query = try model.Query.init(.{
+    const query = try QueryType.init(.{
         .request_id = @enumFromInt(1),
         .origin = .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
     });
@@ -36,5 +38,3 @@ fn exerciseOwnership(gpa: std.mem.Allocator) !void {
     try std.testing.expectEqual(@as(usize, 1), result.entries.len);
     try std.testing.expectEqual(@as(usize, 0), accumulator.entries.items.len);
 }
-
-pub const Accumulator = @import("Accumulator.zig");

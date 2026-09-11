@@ -1,8 +1,10 @@
-const ScheduleCapture = @This();
-const source_namespace = @import("pane_input_test.zig");
-const pane_input_commands = @import("../application/commands/pane_input.zig");
+const pane_input_test = @import("pane_input_test.zig");
+const PaneInputScheduler = @import("../application/commands/PaneInputScheduler.zig");
+const PaneType = @import("../../pane/Pane.zig");
 const std = @import("std");
-steps: [2]source_namespace.ScheduleStep = undefined,
+const ScheduleCapture = @This();
+
+steps: [2]pane_input_test.ScheduleStep = undefined,
 len: usize = 0,
 observation_failure: ?anyerror = null,
 input_failure: ?anyerror = null,
@@ -12,7 +14,7 @@ input_saw_history: bool = false,
 expected_input: ?[]const u8 = null,
 input_matched: bool = false,
 
-pub fn scheduler(capture: *ScheduleCapture) pane_input_commands.Scheduler {
+pub fn scheduler(capture: *ScheduleCapture) PaneInputScheduler {
     return .{
         .context = capture,
         .observation = scheduleObservation,
@@ -20,7 +22,7 @@ pub fn scheduler(capture: *ScheduleCapture) pane_input_commands.Scheduler {
     };
 }
 
-fn scheduleObservation(context: *anyopaque, pane: *source_namespace.Pane) !void {
+fn scheduleObservation(context: *anyopaque, pane: *PaneType) !void {
     const capture: *ScheduleCapture = @ptrCast(@alignCast(context));
     capture.record(.observation);
     capture.observation_saw_history = pane.history_observer.hasPending();
@@ -31,7 +33,7 @@ fn scheduleObservation(context: *anyopaque, pane: *source_namespace.Pane) !void 
     }
 }
 
-fn scheduleInput(context: *anyopaque, pane: *source_namespace.Pane) !void {
+fn scheduleInput(context: *anyopaque, pane: *PaneType) !void {
     const capture: *ScheduleCapture = @ptrCast(@alignCast(context));
     capture.record(.input);
     capture.input_saw_history = pane.history_observer.hasPending();
@@ -46,7 +48,7 @@ fn scheduleInput(context: *anyopaque, pane: *source_namespace.Pane) !void {
     }
 }
 
-fn record(capture: *ScheduleCapture, step: source_namespace.ScheduleStep) void {
+fn record(capture: *ScheduleCapture, step: pane_input_test.ScheduleStep) void {
     std.debug.assert(capture.len < capture.steps.len);
     capture.steps[capture.len] = step;
     capture.len += 1;

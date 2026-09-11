@@ -1,5 +1,5 @@
-const darwin = @This();
 const std = @import("std");
+
 // These declarations must match the Darwin C ABI exactly.
 pub extern "c" fn mach_host_self() std.c.mach_port_t;
 pub extern "c" fn host_statistics64(host: std.c.mach_port_t, flavor: c_int, info: [*]u32, count: *u32) c_int;

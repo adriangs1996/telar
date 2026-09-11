@@ -5,13 +5,16 @@
 //! without scaling, so the border keeps one physical thickness on every side.
 //! Modal text and the rectangular body stay in the cell buffer.
 
+const Asset = @import("Asset.zig");
+const ModalRenderKey = @import("ModalRenderKey.zig");
+const CornerPixel = @import("CornerPixel.zig");
+const RoundedRectangle = @import("RoundedRectangle.zig");
+const PixelPoint = @import("PixelPoint.zig");
+const ColorType = @import("telar-core").Color;
+const RectType = @import("telar-core").Rect;
 const std = @import("std");
-const core = @import("telar-core");
-const kitty = @import("kitty.zig");
-const theme = @import("../ui/root.zig").theme;
-
-pub const ui = core.ui;
-pub const Io = std.Io;
+const ModalRenderer = @import("ModalRenderer.zig");
+const theme = @import("../ui/theme_support.zig");
 
 pub const max_cache_bytes: usize = 512 * 1024;
 const first_image_id: u32 = 0x80002000;
@@ -28,13 +31,7 @@ pub const AssetKind = enum(u2) {
     vertical,
 };
 
-const Asset = @import("Asset.zig");
-
-const RenderKey = @import("ModalRenderKey.zig");
-
-pub const Renderer = @import("ModalRenderer.zig");
-
-pub fn renderCorners(asset: *Asset, key: RenderKey) void {
+pub fn renderCorners(asset: *Asset, key: ModalRenderKey) void {
     @memset(asset.pixels, 0);
     for (0..4) |corner| {
         const right = corner % 2 == 1;
@@ -55,12 +52,6 @@ pub fn renderCorners(asset: *Asset, key: RenderKey) void {
         }
     }
 }
-
-const PixelPoint = @import("PixelPoint.zig");
-
-const RoundedRectangle = @import("RoundedRectangle.zig");
-
-const CornerPixel = @import("CornerPixel.zig");
 
 fn renderCornerPixel(asset: *Asset, pixel: CornerPixel) void {
     const width_units = pixel.key.target_width * units_per_pixel;
@@ -136,7 +127,7 @@ pub fn fill(pixels: []u8, color: [3]u8) void {
         pixels[index..][0..4].* = .{ color[0], color[1], color[2], 255 };
 }
 
-pub fn rgb(color: ui.Color) ?[3]u8 {
+pub fn rgb(color: ColorType) ?[3]u8 {
     return switch (color) {
         .rgb => |value| value,
         else => null,
@@ -155,7 +146,7 @@ pub fn placementImageId(index: usize) u32 {
     return imageId(if (index < 4) 0 else if (index < 6) 1 else 2);
 }
 
-pub fn optionalAreaEql(a: ?ui.Rect, b: ?ui.Rect) bool {
+pub fn optionalAreaEql(a: ?RectType, b: ?RectType) bool {
     if (a == null or b == null) {
         return a == null and b == null;
     }
@@ -163,7 +154,7 @@ pub fn optionalAreaEql(a: ?ui.Rect, b: ?ui.Rect) bool {
 }
 
 test "rounded modal assets are exact-size bounded and transparent outside corners" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     renderer.prepare(.{ .x = 2, .y = 1, .w = 80, .h = 28 }, &theme.default_theme.palette);
@@ -187,7 +178,7 @@ test "rounded modal assets are exact-size bounded and transparent outside corner
 }
 
 test "modal assets use the same background as the client chrome" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var palette = theme.default_theme.palette;
@@ -200,13 +191,13 @@ test "modal assets use the same background as the client chrome" {
 }
 
 test "modal frame transmission ends in eight natural-size placements" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    const area: ui.Rect = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
+    const area: RectType = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
     renderer.prepare(area, &theme.default_theme.palette);
 
-    var output: Io.Writer.Allocating = .init(std.testing.allocator);
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer output.deinit();
     while (renderer.damaged()) _ = try renderer.write(&output.writer);
 
@@ -222,20 +213,20 @@ test "modal frame transmission ends in eight natural-size placements" {
 }
 
 test "closing a stale modal frame leaves no media work behind" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    const area: ui.Rect = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
+    const area: RectType = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
     renderer.prepare(area, &theme.default_theme.palette);
 
-    var initial: Io.Writer.Allocating = .init(std.testing.allocator);
+    var initial: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer initial.deinit();
     while (renderer.damaged()) _ = try renderer.write(&initial.writer);
 
     _ = renderer.configure(.{ .support = .supported, .cell_width = 11, .cell_height = 20 });
     renderer.prepare(area, &theme.default_theme.palette);
     renderer.prepare(.{}, &theme.default_theme.palette);
-    var closed: Io.Writer.Allocating = .init(std.testing.allocator);
+    var closed: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer closed.deinit();
     _ = try renderer.write(&closed.writer);
 

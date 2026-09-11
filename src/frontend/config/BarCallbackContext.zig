@@ -1,7 +1,8 @@
-const BarCallbackContext = @This();
-const CallbackContext = @import("telar-client").config.CallbackContext;
+const CallbackContext = @import("telar-client").CallbackContext;
 const BarTime = @import("BarTime.zig");
 const BarMetrics = @import("BarMetrics.zig");
+const BarCallbackContext = @This();
+
 client: CallbackContext,
 time: BarTime,
 metrics: ?BarMetrics,

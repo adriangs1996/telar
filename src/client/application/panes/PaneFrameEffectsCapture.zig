@@ -1,12 +1,15 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_frame.zig");
+const ModelType = @import("../../model/Model.zig");
+const pane_frame = @import("pane_frame.zig");
+const PaneFrameRecoveryType = @import("../../model/PaneFrameRecovery.zig");
+const PaneFrameCommitType = @import("../../model/PaneFrameCommit.zig");
 const PaneFrameEffects = @import("PaneFrameEffects.zig");
-model: *client_model.Model,
-events: [1]source_namespace.EffectEvent = undefined,
+const EffectsCapture = @This();
+
+model: *ModelType,
+events: [1]pane_frame.EffectEvent = undefined,
 event_count: usize = 0,
-recovery: ?client_model.PaneFrameRecovery = null,
-commit: ?client_model.PaneFrameCommit = null,
+recovery: ?PaneFrameRecoveryType = null,
+commit: ?PaneFrameCommitType = null,
 observed_commit: bool = false,
 fail_recovery: bool = false,
 fail_delivery: bool = false,
@@ -19,12 +22,12 @@ pub fn port(capture: *EffectsCapture) PaneFrameEffects {
     };
 }
 
-fn record(capture: *EffectsCapture, event: source_namespace.EffectEvent) void {
+fn record(capture: *EffectsCapture, event: pane_frame.EffectEvent) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
 
-fn recover(context: *anyopaque, recovery: client_model.PaneFrameRecovery) !void {
+fn recover(context: *anyopaque, recovery: PaneFrameRecoveryType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.record(.recover);
     capture.recovery = recovery;
@@ -34,7 +37,7 @@ fn recover(context: *anyopaque, recovery: client_model.PaneFrameRecovery) !void 
     }
 }
 
-fn deliver(context: *anyopaque, commit: client_model.PaneFrameCommit) !void {
+fn deliver(context: *anyopaque, commit: PaneFrameCommitType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     const pane = capture.model.workspace.findPane(commit.pane_id).?;
     capture.record(.deliver);

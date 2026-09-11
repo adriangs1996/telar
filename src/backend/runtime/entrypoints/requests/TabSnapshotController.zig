@@ -1,15 +1,17 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const TabSnapshotExecutor = @import("../../application/queries/TabSnapshotExecutor.zig");
+const RequestTabSnapshotType = @import("telar-core").RequestTabSnapshot;
 const Controller = @This();
-const source_namespace = @import("tab_snapshot.zig");
-const tab_snapshot_query = @import("../../application/queries/tab_snapshot.zig");
-responses: *source_namespace.ResponseQueue,
-query: tab_snapshot_query.Executor,
+
+responses: *ResponseQueueType,
+query: TabSnapshotExecutor,
 
 /// Creates a controller scoped to one tab-snapshot request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, query: tab_snapshot_query.Executor) Controller {
+pub fn init(responses: *ResponseQueueType, query: TabSnapshotExecutor) Controller {
     return .{ .responses = responses, .query = query };
 }
 
@@ -19,7 +21,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, query: tab_snapshot_quer
 /// ```zig
 /// try controller.requestTabSnapshot(request);
 /// ```
-pub fn requestTabSnapshot(controller: *Controller, request: source_namespace.schema.RequestTabSnapshot) !void {
+pub fn requestTabSnapshot(controller: *Controller, request: RequestTabSnapshotType) !void {
     const snapshot = controller.query.execute(.{ .location = request.location }) catch |err| {
         if (err == error.TabNotFound) {
             try controller.responses.push(.{ .request_failed = .{

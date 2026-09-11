@@ -1,4 +1,5 @@
+const history = @import("arguments/history.zig");
 const ResolvedImport = @This();
-const parser = @import("parser.zig");
-kind: parser.HistoryImportKind,
+
+kind: history.HistoryImportKind,
 path: []const u8,

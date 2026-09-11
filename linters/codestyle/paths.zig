@@ -1,7 +1,4 @@
 const std = @import("std");
-
-pub const Io = std.Io;
-
 const Collector = @import("Collector.zig");
 
 /// Resolves file and directory roots into sorted, unique Zig source paths.
@@ -10,7 +7,7 @@ const Collector = @import("Collector.zig");
 /// const files = try collect(allocator, io, &.{"src"});
 /// defer free(allocator, files);
 /// ```
-pub fn collect(allocator: std.mem.Allocator, io: Io, roots: []const []const u8) ![][]u8 {
+pub fn collect(allocator: std.mem.Allocator, io: std.Io, roots: []const []const u8) ![][]u8 {
     var collector: Collector = .{ .allocator = allocator, .io = io };
     errdefer collector.deinit();
 

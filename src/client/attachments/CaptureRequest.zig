@@ -1,6 +1,7 @@
+const Target = @import("AttachmentTarget.zig");
+const types = @import("types.zig");
 const CaptureRequest = @This();
-const Target = @import("Target.zig");
-const source_namespace = @import("types.zig");
+
 target: Target,
 sequence: u64,
-marker_policy: source_namespace.MarkerPolicy = .ordered,
+marker_policy: types.MarkerPolicy = .ordered,

@@ -1,6 +1,7 @@
-const TestOutput = @This();
 const SharedFrameView = @import("SharedFrameView.zig");
 const FileQueryView = @import("FileQueryView.zig");
+const TestOutput = @This();
+
 bytes: [4096]u8 = undefined,
 len: usize = 0,
 direct: bool = false,

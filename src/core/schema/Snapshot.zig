@@ -1,5 +1,7 @@
+const id = @import("id.zig");
+const graphics = @import("graphics.zig");
 const Snapshot = @This();
-const source_namespace = @import("graphics.zig");
-pane_id: source_namespace.PaneId,
+
+pane_id: id.PaneId,
 revision: u64,
-phase: source_namespace.SnapshotPhase,
+phase: graphics.SnapshotPhase,

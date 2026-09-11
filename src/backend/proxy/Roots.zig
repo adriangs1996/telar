@@ -1,10 +1,10 @@
-const Roots = @This();
 const tlsz = @import("tls");
-const source_namespace = @import("tls.zig");
 const std = @import("std");
+const Roots = @This();
+
 bundle: tlsz.config.cert.Bundle,
 
-pub fn load(io: source_namespace.Io, gpa: std.mem.Allocator) !Roots {
+pub fn load(io: std.Io, gpa: std.mem.Allocator) !Roots {
     return .{ .bundle = try tlsz.config.cert.fromSystem(gpa, io) };
 }
 

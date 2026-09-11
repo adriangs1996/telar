@@ -1,13 +1,16 @@
+const id = @import("../id.zig");
+const types = @import("../types.zig");
+const history = @import("history.zig");
 const QueryHistory = @This();
-const source_namespace = @import("history.zig");
-request_id: source_namespace.RequestId,
+
+request_id: id.RequestId,
 query: []const u8 = "",
-scope: source_namespace.HistoryScope = .global,
+scope: types.HistoryScope = .global,
 scope_value: []const u8 = "",
-pane_id: source_namespace.PaneId = .invalid,
+pane_id: id.PaneId = .invalid,
 failed_only: bool = false,
-author: source_namespace.HistoryAuthorFilter = .all,
-match: source_namespace.HistoryMatch = .fts,
+author: types.HistoryAuthorFilter = .all,
+match: history.HistoryMatch = .fts,
 distinct: bool = false,
 limit: u16 = 20,
 offset: u32 = 0,

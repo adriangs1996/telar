@@ -1,10 +1,15 @@
+const suggestion_ops = @import("suggestion.zig");
+const SuggestionStatusType = @import("telar-core").SuggestionStatus;
+const max_suggestion_bytes = @import("telar-core").max_suggestion_bytes;
+const CommandSuggestionType = @import("telar-core").CommandSuggestion;
+const raw_module = @import("telar-core").raw;
 const State = @This();
-const source_namespace = @import("suggestion.zig");
+
 revision: u64 = 0,
 pending_request: u64 = 0,
-phase: source_namespace.Phase = .idle,
-status: source_namespace.schema.SuggestionStatus = .ready,
-text: [source_namespace.max_text_bytes]u8 = undefined,
+phase: suggestion_ops.Phase = .idle,
+status: SuggestionStatusType = .ready,
+text: [max_suggestion_bytes]u8 = undefined,
 text_len: u16 = 0,
 
 /// Clears everything when the palette opens.
@@ -54,15 +59,15 @@ pub fn invalidate(state: *State) void {
 /// ```zig
 /// _ = model.suggestion.apply(.{ .request_id = request_id, .status = .ready, .text = "ls" });
 /// ```
-pub fn apply(state: *State, suggestion: source_namespace.schema.CommandSuggestion) bool {
-    const request_id = source_namespace.schema.id.raw(suggestion.request_id);
+pub fn apply(state: *State, suggestion: CommandSuggestionType) bool {
+    const request_id = raw_module(suggestion.request_id);
     if (request_id == 0 or request_id != state.pending_request) {
         return false;
     }
 
     state.pending_request = 0;
     state.status = suggestion.status;
-    const len = @min(suggestion.text.len, source_namespace.max_text_bytes);
+    const len = @min(suggestion.text.len, max_suggestion_bytes);
     @memcpy(state.text[0..len], suggestion.text[0..len]);
     state.text_len = @intCast(len);
     state.phase = if (suggestion.status == .ready and len != 0) .ready else .failed;

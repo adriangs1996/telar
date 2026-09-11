@@ -1,7 +1,8 @@
-const SidebarContent = @This();
-const core = @import("telar-core");
+const RectType = @import("telar-core").Rect;
 const SidebarFocus = @import("SidebarFocus.zig");
 const SidebarProviderPlacement = @import("SidebarProviderPlacement.zig");
-area: core.ui.Rect,
+const SidebarContent = @This();
+
+area: RectType,
 focused_card: ?SidebarFocus,
 provider_marks: []const SidebarProviderPlacement,

@@ -86,7 +86,7 @@ client never needs the table.
 
 ## Runtime capabilities
 
-`backend/agent/providers/root.zig` resolves `Capabilities` for a provider:
+`src/backend/agent/providers/providers.zig` resolves `Capabilities` for a provider:
 `resume_prefix` (the shell words `session_checkpoint.resumeCommand` types in
 front of a UUID) and `ready_prompt_settles_report` (Codex reports `working`
 from its `Stop` hook, so only its newer input prompt ends that report). Each
@@ -123,10 +123,10 @@ table.
 
 - `src/core/agent_manifest.zig` proves the built-in heuristics, custom index
   assignment, extension by name, list bounds and presentation defaults.
-- `src/backend/agent/providers/root.zig` proves capability resolution.
+- `src/backend/agent/providers/providers.zig` proves capability resolution.
 - `src/backend/proxy/provider/dialect.zig` proves host identification and the
   implied agent per dialect.
-- `src/backend/history/agent_detection.zig` and `src/backend/process/root.zig`
+- `src/backend/history/agent_detection.zig` and `src/backend/process/process.zig`
   prove screen and process detection against the built-in table.
-- `src/frontend/config/generation.zig` proves manifest parsing and its
+- `src/frontend/config/generation_support.zig` proves manifest parsing and its
   diagnostics, including the presentation fields.

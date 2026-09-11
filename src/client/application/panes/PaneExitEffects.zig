@@ -1,4 +1,5 @@
+const types = @import("../../model/types.zig");
 const PaneExitEffects = @This();
-const source_namespace = @import("close_pane.zig");
+
 context: *anyopaque,
-deliver: *const fn (*anyopaque, source_namespace.PaneExit) anyerror!void,
+deliver: *const fn (*anyopaque, types.PaneExit) anyerror!void,

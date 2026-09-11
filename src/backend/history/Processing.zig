@@ -1,7 +1,9 @@
-const Processing = @This();
-const source_namespace = @import("observer_support.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const Stats = @import("Stats.zig");
+const AgentProviderType = @import("telar-core").AgentProvider;
+const Processing = @This();
+
 cwd: ?[]const u8,
-current_size: source_namespace.schema.TerminalSize,
+current_size: TerminalSizeType,
 stats: *Stats,
-provider: source_namespace.schema.AgentProvider = .unknown,
+provider: AgentProviderType = .unknown,

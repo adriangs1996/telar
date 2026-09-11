@@ -1,11 +1,12 @@
+const InputWrite = @import("InputWrite.zig");
 const Capture = @This();
-const Write = @import("InputWrite.zig");
+
 starts: usize = 0,
 collects: usize = 0,
 start_failure: ?anyerror = null,
 last_bytes: []const u8 = "",
 
-pub fn start(capture: *Capture, write: Write) !void {
+pub fn start(capture: *Capture, write: InputWrite) !void {
     capture.starts += 1;
     capture.last_bytes = write.bytes;
 

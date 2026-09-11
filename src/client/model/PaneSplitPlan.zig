@@ -1,7 +1,9 @@
-const PaneSplitPlan = @This();
 const PaneSplit = @import("PaneSplit.zig");
-const source_namespace = @import("types.zig");
+const PaneResizeType = @import("telar-core").PaneResize;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const PaneSplitPlan = @This();
+
 split: PaneSplit,
-provisional_resize: source_namespace.PaneResize,
-restore_resize: source_namespace.PaneResize,
-new_pane_size: source_namespace.schema.TerminalSize,
+provisional_resize: PaneResizeType,
+restore_resize: PaneResizeType,
+new_pane_size: TerminalSizeType,

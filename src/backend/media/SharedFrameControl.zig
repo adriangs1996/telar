@@ -1,10 +1,11 @@
-const SharedFrameControl = @This();
 const SharedFrameKey = @import("SharedFrameKey.zig");
-const core = @import("telar-core");
-const source_namespace = @import("root.zig");
+const FormatType = @import("telar-core").Format;
+const media = @import("media.zig");
+const SharedFrameControl = @This();
+
 key: SharedFrameKey,
 byte_len: usize,
-format: core.graphics.Format,
+format: FormatType,
 width: u32,
 height: u32,
-medium: source_namespace.Medium,
+medium: media.Medium,

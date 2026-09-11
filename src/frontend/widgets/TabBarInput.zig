@@ -1,9 +1,11 @@
+const RectType = @import("telar-core").Rect;
+const TabsModel = @import("telar-client").TabsModel;
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const AlignmentType = @import("telar-client").Alignment;
 const Input = @This();
-const ui = @import("../ui/root.zig");
-const source_namespace = @import("tab_bar.zig");
-const bars = @import("../bars/root.zig");
-area: ui.Rect,
-tabs: ?*const source_namespace.tabs_mod.Model,
-model: *const source_namespace.multiplexer.Model,
-alignment: bars.Alignment = .right,
+
+area: RectType,
+tabs: ?*const TabsModel,
+model: *const MultiplexerModel,
+alignment: AlignmentType = .right,
 animation_frame: u8 = 0,

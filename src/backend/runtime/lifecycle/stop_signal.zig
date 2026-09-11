@@ -1,30 +1,24 @@
 //! Optional infrastructure stop signal for one runtime instance.
 
 const std = @import("std");
-
-pub const Io = std.Io;
+const StopSignalCoordinator = @import("StopSignalCoordinator.zig");
+const ScheduleCapture = @import("ScheduleCapture.zig");
 
 pub const Completion = enum {
     stop,
 };
-
-pub const Scheduler = @import("Scheduler.zig");
-
-pub const Coordinator = @import("StopSignalCoordinator.zig");
 
 /// Waits until the borrowed queue produces one stop token.
 ///
 /// ```zig
 /// try wait(io, &queue);
 /// ```
-pub fn wait(io: Io, queue: *Io.Queue(u8)) !void {
+pub fn wait(io: std.Io, queue: *std.Io.Queue(u8)) !void {
     _ = try queue.getOne(io);
 }
 
-const ScheduleCapture = @import("ScheduleCapture.zig");
-
 test "a disabled stop signal does not schedule a wait" {
-    const coordinator = Coordinator.init(null);
+    const coordinator = StopSignalCoordinator.init(null);
     var capture: ScheduleCapture = .{};
 
     try coordinator.arm(capture.scheduler());
@@ -35,8 +29,8 @@ test "a disabled stop signal does not schedule a wait" {
 
 test "an active stop signal schedules its exact borrowed queue" {
     var storage: [1]u8 = undefined;
-    var queue: Io.Queue(u8) = .init(&storage);
-    const coordinator = Coordinator.init(&queue);
+    var queue: std.Io.Queue(u8) = .init(&storage);
+    const coordinator = StopSignalCoordinator.init(&queue);
     var capture: ScheduleCapture = .{};
 
     try coordinator.arm(capture.scheduler());
@@ -47,8 +41,8 @@ test "an active stop signal schedules its exact borrowed queue" {
 
 test "a scheduling failure is propagated without losing the queue" {
     var storage: [1]u8 = undefined;
-    var queue: Io.Queue(u8) = .init(&storage);
-    const coordinator = Coordinator.init(&queue);
+    var queue: std.Io.Queue(u8) = .init(&storage);
+    const coordinator = StopSignalCoordinator.init(&queue);
     var capture: ScheduleCapture = .{ .failure = error.SchedulerUnavailable };
 
     try std.testing.expectError(error.SchedulerUnavailable, coordinator.arm(capture.scheduler()));
@@ -57,16 +51,16 @@ test "a scheduling failure is propagated without losing the queue" {
 
 test "a successful stop completion terminates the event loop" {
     var storage: [1]u8 = undefined;
-    var queue: Io.Queue(u8) = .init(&storage);
-    const coordinator = Coordinator.init(&queue);
+    var queue: std.Io.Queue(u8) = .init(&storage);
+    const coordinator = StopSignalCoordinator.init(&queue);
 
     try std.testing.expectEqual(Completion.stop, try coordinator.complete({}));
 }
 
 test "a failed stop completion preserves the source error" {
     var storage: [1]u8 = undefined;
-    var queue: Io.Queue(u8) = .init(&storage);
-    const coordinator = Coordinator.init(&queue);
+    var queue: std.Io.Queue(u8) = .init(&storage);
+    const coordinator = StopSignalCoordinator.init(&queue);
 
     try std.testing.expectError(error.StopSourceClosed, coordinator.complete(error.StopSourceClosed));
 }
@@ -74,7 +68,7 @@ test "a failed stop completion preserves the source error" {
 test "wait consumes one queue token" {
     const io = std.testing.io;
     var storage: [1]u8 = undefined;
-    var queue: Io.Queue(u8) = .init(&storage);
+    var queue: std.Io.Queue(u8) = .init(&storage);
     var pending = try io.concurrent(wait, .{ io, &queue });
 
     try queue.putOne(io, 7);

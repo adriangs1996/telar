@@ -1,7 +1,8 @@
+const model = @import("model.zig");
 const Style = @This();
-const source_namespace = @import("model.zig");
-foreground: ?source_namespace.Color = null,
-background: ?source_namespace.Color = null,
+
+foreground: ?model.Color = null,
+background: ?model.Color = null,
 bold: bool = false,
 italic: bool = false,
 faint: bool = false,

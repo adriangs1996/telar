@@ -1,5 +1,6 @@
-const Decoder = @This();
 const std = @import("std");
+const Decoder = @This();
+
 bytes: []const u8,
 index: usize = 0,
 

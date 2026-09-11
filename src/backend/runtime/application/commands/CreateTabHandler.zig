@@ -1,18 +1,20 @@
-const CreateTabHandler = @This();
-const source_namespace = @import("create_tab.zig");
-const LaunchAuthority = @import("CreateTabLaunchAuthority.zig");
-const PaneLauncher = @import("CreateTabPaneLauncher.zig");
-const PaneAttachment = @import("CreateTabPaneAttachment.zig");
-const EventPublisher = @import("CreateTabEventPublisher.zig");
+const Repository = @import("../../../workspace/Repository.zig");
+const CreateTabLaunchAuthority = @import("CreateTabLaunchAuthority.zig");
+const CreateTabPaneLauncher = @import("CreateTabPaneLauncher.zig");
+const CreateTabPaneAttachment = @import("CreateTabPaneAttachment.zig");
+const CreateTabEventPublisher = @import("CreateTabEventPublisher.zig");
 const CreateTab = @import("CreateTab.zig");
 const CreateTabResult = @import("CreateTabResult.zig");
 const std = @import("std");
+const create_tab = @import("create_tab.zig");
 const CreateTabExecutor = @import("CreateTabExecutor.zig");
-workspaces: *source_namespace.WorkspaceRepository,
-authority: LaunchAuthority,
-launcher: PaneLauncher,
-attachment: PaneAttachment,
-events: EventPublisher,
+const CreateTabHandler = @This();
+
+workspaces: *Repository,
+authority: CreateTabLaunchAuthority,
+launcher: CreateTabPaneLauncher,
+attachment: CreateTabPaneAttachment,
+events: CreateTabEventPublisher,
 
 /// Creates a provisional aggregate tab, commits it only after its root
 /// pane is running, publishes the committed event, then attaches the
@@ -44,7 +46,7 @@ pub fn execute(handler: *CreateTabHandler, command: CreateTab) !CreateTabResult 
         .launch = command.launch,
         .launch_cwd = launch_cwd,
         .workspace_path = workspace.pathSlice(),
-    }) catch |err| return source_namespace.mapLaunchError(err);
+    }) catch |err| return create_tab.mapLaunchError(err);
 
     handler.workspaces.recordTabCreated(tab_id);
     committed = true;

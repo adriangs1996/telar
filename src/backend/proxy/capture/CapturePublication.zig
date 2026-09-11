@@ -1,5 +1,6 @@
+const CredentialType = @import("../Credential.zig");
+const HalfType = @import("Half.zig");
 const Publication = @This();
-const identity = @import("../identity.zig");
-const source_namespace = @import("root.zig");
-credential: identity.Credential,
-half: *source_namespace.Half,
+
+credential: CredentialType,
+half: *HalfType,

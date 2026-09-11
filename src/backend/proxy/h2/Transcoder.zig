@@ -1,22 +1,26 @@
-const Transcoder = @This();
-const source_namespace = @import("relay.zig");
-const provider = @import("../provider/request_support.zig");
+const relay = @import("relay.zig");
+const types = @import("../../agent/types.zig");
 const TranscodeConfiguration = @import("TranscodeConfiguration.zig");
-const framing_module = @import("framing.zig");
-const stream_state = @import("streams.zig");
+const ReaderType = @import("Reader.zig");
+const TrackerType = @import("Tracker.zig");
 const std = @import("std");
+const HeadersType = @import("../Headers.zig");
+const provider = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
+const framing_module = @import("framing.zig");
 const PeerSettings = @import("PeerSettings.zig");
 const CompletedFrame = @import("CompletedFrame.zig");
-inflater: ?*source_namespace.c.nghttp2_hd_inflater = null,
-deflater: ?*source_namespace.c.nghttp2_hd_deflater = null,
+const Transcoder = @This();
+
+inflater: ?*relay.c.nghttp2_hd_inflater = null,
+deflater: ?*relay.c.nghttp2_hd_deflater = null,
 failed: bool = false,
-dialect: provider.ApiDialect,
+dialect: types.ApiDialect,
 configuration: TranscodeConfiguration,
 applied_table_size: u32 = 4096,
-applied_inflate_table_size: u32 = source_namespace.max_header_block_bytes,
+applied_inflate_table_size: u32 = relay.max_header_block_bytes,
 
-framing: framing_module.Reader = .{},
+framing: ReaderType = .{},
 
 continuation_stream: u32 = 0,
 block_type: u8 = 0,
@@ -26,24 +30,24 @@ block_prefix: [5]u8 = undefined,
 block_prefix_len: u8 = 0,
 block_prefix_seen: u8 = 0,
 frame_padding: usize = 0,
-compressed: [source_namespace.max_header_block_bytes]u8 = undefined,
+compressed: [relay.max_header_block_bytes]u8 = undefined,
 compressed_len: usize = 0,
-encoded: [2 * source_namespace.max_header_block_bytes]u8 = undefined,
+encoded: [2 * relay.max_header_block_bytes]u8 = undefined,
 setting: [6]u8 = undefined,
 setting_len: u8 = 0,
-streams: stream_state.Tracker = .{},
+streams: TrackerType = .{},
 
-pub fn init(dialect: provider.ApiDialect, configuration: TranscodeConfiguration) Transcoder {
+pub fn init(dialect: types.ApiDialect, configuration: TranscodeConfiguration) Transcoder {
     var transcoder: Transcoder = .{ .dialect = dialect, .configuration = configuration };
-    if (source_namespace.c.nghttp2_hd_inflate_new(&transcoder.inflater) != 0 or
-        source_namespace.c.nghttp2_hd_inflate_change_table_size(
+    if (relay.c.nghttp2_hd_inflate_new(&transcoder.inflater) != 0 or
+        relay.c.nghttp2_hd_inflate_change_table_size(
             transcoder.inflater,
-            source_namespace.max_header_block_bytes,
+            relay.max_header_block_bytes,
         ) != 0)
     {
         transcoder.failed = true;
     }
-    if (source_namespace.c.nghttp2_hd_deflate_new(&transcoder.deflater, source_namespace.max_header_block_bytes) != 0) {
+    if (relay.c.nghttp2_hd_deflate_new(&transcoder.deflater, relay.max_header_block_bytes) != 0) {
         transcoder.failed = true;
     }
     return transcoder;
@@ -51,10 +55,10 @@ pub fn init(dialect: provider.ApiDialect, configuration: TranscodeConfiguration)
 
 pub fn deinit(transcoder: *Transcoder) void {
     if (transcoder.inflater) |inflater| {
-        source_namespace.c.nghttp2_hd_inflate_del(inflater);
+        relay.c.nghttp2_hd_inflate_del(inflater);
     }
     if (transcoder.deflater) |deflater| {
-        source_namespace.c.nghttp2_hd_deflate_del(deflater);
+        relay.c.nghttp2_hd_deflate_del(deflater);
     }
     transcoder.inflater = null;
     transcoder.deflater = null;
@@ -88,7 +92,7 @@ fn beginFrame(transcoder: *Transcoder, port: anytype) bool {
     transcoder.frame_padding = 0;
 
     if (transcoder.continuation_stream != 0) {
-        if (transcoder.framing.frame_type != source_namespace.frame_continuation or
+        if (transcoder.framing.frame_type != relay.frame_continuation or
             transcoder.framing.stream_id != transcoder.continuation_stream)
         {
             transcoder.failed = true;
@@ -96,12 +100,12 @@ fn beginFrame(transcoder: *Transcoder, port: anytype) bool {
         }
         return true;
     }
-    if (transcoder.framing.frame_type == source_namespace.frame_continuation) {
+    if (transcoder.framing.frame_type == relay.frame_continuation) {
         transcoder.failed = true;
         return false;
     }
-    if (transcoder.framing.frame_type == source_namespace.frame_headers or
-        transcoder.framing.frame_type == source_namespace.frame_push_promise)
+    if (transcoder.framing.frame_type == relay.frame_headers or
+        transcoder.framing.frame_type == relay.frame_push_promise)
     {
         if (transcoder.framing.stream_id == 0) {
             transcoder.failed = true;
@@ -111,8 +115,8 @@ fn beginFrame(transcoder: *Transcoder, port: anytype) bool {
         transcoder.block_flags = transcoder.framing.flags;
         transcoder.block_stream = transcoder.framing.stream_id;
         transcoder.block_prefix_len = switch (transcoder.framing.frame_type) {
-            source_namespace.frame_headers => if (transcoder.framing.flags & source_namespace.flag_priority != 0) 5 else 0,
-            source_namespace.frame_push_promise => 4,
+            relay.frame_headers => if (transcoder.framing.flags & relay.flag_priority != 0) 5 else 0,
+            relay.frame_push_promise => 4,
             else => unreachable,
         };
         transcoder.block_prefix_seen = 0;
@@ -127,12 +131,12 @@ fn beginFrame(transcoder: *Transcoder, port: anytype) bool {
 }
 
 fn processPayload(transcoder: *Transcoder, payload: []const u8, port: anytype) bool {
-    if (!source_namespace.isHeaderFrame(transcoder.framing.frame_type)) {
+    if (!relay.isHeaderFrame(transcoder.framing.frame_type)) {
         // Publish peer limits before the last SETTINGS byte reaches the
         // peer. Its next header block may use the newly advertised HPACK
         // table or frame size immediately.
-        if (transcoder.framing.frame_type == source_namespace.c.NGHTTP2_SETTINGS and
-            transcoder.framing.flags & source_namespace.c.NGHTTP2_FLAG_ACK == 0)
+        if (transcoder.framing.frame_type == relay.c.NGHTTP2_SETTINGS and
+            transcoder.framing.flags & relay.c.NGHTTP2_FLAG_ACK == 0)
         {
             transcoder.observeSettings(payload, transcoder.configuration.source_settings);
         }
@@ -140,7 +144,7 @@ fn processPayload(transcoder: *Transcoder, payload: []const u8, port: anytype) b
             transcoder.failed = true;
             return false;
         }
-        if (transcoder.framing.frame_type == source_namespace.frame_data and payload.len != 0) {
+        if (transcoder.framing.frame_type == relay.frame_data and payload.len != 0) {
             if (transcoder.configuration.direction == .response) {
                 port.emit(.{ .lifecycle = .{
                     .phase = .response_activity,
@@ -171,8 +175,8 @@ fn processPayload(transcoder: *Transcoder, payload: []const u8, port: anytype) b
 
     var input_start = transcoder.framing.payload_offset;
     var slice = payload;
-    if (transcoder.framing.frame_type != source_namespace.frame_continuation and
-        transcoder.framing.flags & source_namespace.flag_padded != 0 and input_start == 0)
+    if (transcoder.framing.frame_type != relay.frame_continuation and
+        transcoder.framing.flags & relay.flag_padded != 0 and input_start == 0)
     {
         if (slice.len == 0) {
             return true;
@@ -182,7 +186,7 @@ fn processPayload(transcoder: *Transcoder, payload: []const u8, port: anytype) b
         input_start += 1;
     }
 
-    if (transcoder.framing.frame_type != source_namespace.frame_continuation and
+    if (transcoder.framing.frame_type != relay.frame_continuation and
         transcoder.block_prefix_seen < transcoder.block_prefix_len)
     {
         const take = @min(
@@ -226,8 +230,8 @@ fn finishFrame(transcoder: *Transcoder, port: anytype) bool {
     const completed_flags = transcoder.framing.flags;
     const completed_stream = transcoder.framing.stream_id;
 
-    if (source_namespace.isHeaderFrame(completed_type)) {
-        if (completed_flags & source_namespace.flag_end_headers == 0) {
+    if (relay.isHeaderFrame(completed_type)) {
+        if (completed_flags & relay.flag_end_headers == 0) {
             transcoder.continuation_stream = completed_stream;
         } else {
             transcoder.continuation_stream = 0;
@@ -256,11 +260,11 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
 
     const inflate_table_size = @min(
         target_settings.header_table_size.load(.seq_cst),
-        source_namespace.max_header_block_bytes,
+        relay.max_header_block_bytes,
     );
     if (inflate_table_size != transcoder.applied_inflate_table_size) {
         const inflater = transcoder.inflater orelse return false;
-        if (source_namespace.c.nghttp2_hd_inflate_change_table_size(inflater, inflate_table_size) != 0) {
+        if (relay.c.nghttp2_hd_inflate_change_table_size(inflater, inflate_table_size) != 0) {
             return false;
         }
         transcoder.applied_inflate_table_size = inflate_table_size;
@@ -268,33 +272,33 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
     // The table-size limit must be installed before decoding a block that
     // can begin with an HPACK dynamic-table update.
     var original = transcoder.decodeHeaders() orelse return false;
-    const kind = source_namespace.headerKind(transcoder.block_type, &original);
-    if (!source_namespace.validH2Headers(&original, kind)) {
+    const kind = relay.headerKind(transcoder.block_type, &original);
+    if (!relay.validH2Headers(&original, kind)) {
         return false;
     }
-    if (transcoder.block_type == source_namespace.frame_push_promise and
-        (direction != .response or source_namespace.promisedStreamId(transcoder) == 0 or
-            source_namespace.promisedStreamId(transcoder) & 1 != 0))
+    if (transcoder.block_type == relay.frame_push_promise and
+        (direction != .response or relay.promisedStreamId(transcoder) == 0 or
+            relay.promisedStreamId(transcoder) & 1 != 0))
     {
         return false;
     }
     if (kind == .request or kind == .response) {
-        source_namespace.emitHeaders(port, .{
+        relay.emitHeaders(port, .{
             .direction = direction,
             .stream_id = transcoder.block_stream,
             .headers = &original,
         });
     }
-    var transformed: middleware.Headers = undefined;
+    var transformed: HeadersType = undefined;
     transformed.copyFrom(&original);
     var context = configuration.transform_context;
-    context.stream_id = if (transcoder.block_type == source_namespace.frame_push_promise)
-        source_namespace.promisedStreamId(transcoder)
+    context.stream_id = if (transcoder.block_type == relay.frame_push_promise)
+        relay.promisedStreamId(transcoder)
     else
         transcoder.block_stream;
     context.kind = kind;
     _ = configuration.pipeline.apply(.{ .io = configuration.io, .context = context, .headers = &transformed });
-    if (!source_namespace.compatibleH2Headers(&original, &transformed, context.kind)) {
+    if (!relay.compatibleH2Headers(&original, &transformed, context.kind)) {
         transformed.copyFrom(&original);
     }
 
@@ -316,29 +320,29 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
 
     const table_size = @min(
         target_settings.header_table_size.load(.seq_cst),
-        source_namespace.max_header_block_bytes,
+        relay.max_header_block_bytes,
     );
     if (table_size != transcoder.applied_table_size) {
         const deflater = transcoder.deflater orelse return false;
-        if (source_namespace.c.nghttp2_hd_deflate_change_table_size(deflater, table_size) != 0) {
+        if (relay.c.nghttp2_hd_deflate_change_table_size(deflater, table_size) != 0) {
             return false;
         }
         transcoder.applied_table_size = table_size;
     }
-    var nv: [middleware.max_header_fields]source_namespace.c.nghttp2_nv = undefined;
+    var nv: [middleware.max_header_fields]relay.c.nghttp2_nv = undefined;
     for (transformed.fields[0..transformed.len], 0..) |field, index| nv[index] = .{
         .name = @constCast(transformed.name(field).ptr),
         .value = @constCast(transformed.value(field).ptr),
         .namelen = field.name_len,
         .valuelen = field.value_len,
-        .flags = if (field.sensitive) source_namespace.c.NGHTTP2_NV_FLAG_NO_INDEX else 0,
+        .flags = if (field.sensitive) relay.c.NGHTTP2_NV_FLAG_NO_INDEX else 0,
     };
     const deflater = transcoder.deflater orelse return false;
-    const bound = source_namespace.c.nghttp2_hd_deflate_bound(deflater, &nv, transformed.len);
+    const bound = relay.c.nghttp2_hd_deflate_bound(deflater, &nv, transformed.len);
     if (bound > transcoder.encoded.len) {
         return false;
     }
-    const encoded_len = source_namespace.c.nghttp2_hd_deflate_hd2(
+    const encoded_len = relay.c.nghttp2_hd_deflate_hd2(
         deflater,
         &transcoder.encoded,
         transcoder.encoded.len,
@@ -352,7 +356,7 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
         return false;
     }
 
-    const status_code = source_namespace.parseStatusHeader(&transformed);
+    const status_code = relay.parseStatusHeader(&transformed);
     if (direction == .response and status_code >= 200) {
         _ = transcoder.streams.setResponse(.{
             .stream_id = transcoder.block_stream,
@@ -361,7 +365,7 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
         });
     }
 
-    if (transcoder.block_flags & source_namespace.flag_end_stream != 0) {
+    if (transcoder.block_flags & relay.flag_end_stream != 0) {
         switch (direction) {
             .request => {
                 port.emit(.{ .request_finished = .{ .stream_id = transcoder.block_stream } });
@@ -381,14 +385,14 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
     return true;
 }
 
-fn decodeHeaders(transcoder: *Transcoder) ?middleware.Headers {
+fn decodeHeaders(transcoder: *Transcoder) ?HeadersType {
     const inflater = transcoder.inflater orelse return null;
-    var headers: middleware.Headers = .{};
+    var headers: HeadersType = .{};
     var input = transcoder.compressed[0..transcoder.compressed_len];
     while (true) {
-        var field: source_namespace.c.nghttp2_nv = undefined;
+        var field: relay.c.nghttp2_nv = undefined;
         var flags: c_int = 0;
-        const consumed = source_namespace.c.nghttp2_hd_inflate_hd2(
+        const consumed = relay.c.nghttp2_hd_inflate_hd2(
             inflater,
             &field,
             &flags,
@@ -400,20 +404,20 @@ fn decodeHeaders(transcoder: *Transcoder) ?middleware.Headers {
             return null;
         }
         input = input[@intCast(consumed)..];
-        if (flags & source_namespace.c.NGHTTP2_HD_INFLATE_EMIT != 0) {
+        if (flags & relay.c.NGHTTP2_HD_INFLATE_EMIT != 0) {
             headers.append(.{
                 .name = field.name[0..field.namelen],
                 .value = field.value[0..field.valuelen],
-                .sensitive = field.flags & source_namespace.c.NGHTTP2_NV_FLAG_NO_INDEX != 0,
+                .sensitive = field.flags & relay.c.NGHTTP2_NV_FLAG_NO_INDEX != 0,
             }) catch return null;
         }
-        if (flags & source_namespace.c.NGHTTP2_HD_INFLATE_FINAL != 0) {
-            if (source_namespace.c.nghttp2_hd_inflate_end_headers(inflater) != 0) {
+        if (flags & relay.c.NGHTTP2_HD_INFLATE_FINAL != 0) {
+            if (relay.c.nghttp2_hd_inflate_end_headers(inflater) != 0) {
                 return null;
             }
             return headers;
         }
-        if (consumed == 0 and flags & source_namespace.c.NGHTTP2_HD_INFLATE_EMIT == 0) {
+        if (consumed == 0 and flags & relay.c.NGHTTP2_HD_INFLATE_EMIT == 0) {
             return null;
         }
     }
@@ -435,16 +439,16 @@ fn writeHeaderBlock(transcoder: *Transcoder, port: anytype, encoded_len: usize) 
         const prefix_len: usize = if (first) transcoder.block_prefix_len else 0;
         const fragment_len = @min(encoded_len - offset, max_frame_size - prefix_len);
         const final = offset + fragment_len == encoded_len;
-        var header: [source_namespace.frame_header_len]u8 = undefined;
-        const kind: u8 = if (first) transcoder.block_type else source_namespace.frame_continuation;
+        var header: [framing_module.header_bytes]u8 = undefined;
+        const kind: u8 = if (first) transcoder.block_type else relay.frame_continuation;
         var flags: u8 = if (first)
-            transcoder.block_flags & ~(source_namespace.flag_padded | source_namespace.flag_end_headers)
+            transcoder.block_flags & ~(relay.flag_padded | relay.flag_end_headers)
         else
             0;
         if (final) {
-            flags |= source_namespace.flag_end_headers;
+            flags |= relay.flag_end_headers;
         }
-        source_namespace.writeFrameHeader(
+        relay.writeFrameHeader(
             &header,
             .{
                 .length = prefix_len + fragment_len,
@@ -487,8 +491,8 @@ fn observeSettings(transcoder: *Transcoder, payload: []const u8, settings: *Peer
         const identifier = std.mem.readInt(u16, transcoder.setting[0..2], .big);
         const value = std.mem.readInt(u32, transcoder.setting[2..6], .big);
         switch (identifier) {
-            source_namespace.c.NGHTTP2_SETTINGS_HEADER_TABLE_SIZE => settings.header_table_size.store(value, .seq_cst),
-            source_namespace.c.NGHTTP2_SETTINGS_MAX_FRAME_SIZE => if (value >= 16 * 1024 and
+            relay.c.NGHTTP2_SETTINGS_HEADER_TABLE_SIZE => settings.header_table_size.store(value, .seq_cst),
+            relay.c.NGHTTP2_SETTINGS_MAX_FRAME_SIZE => if (value >= 16 * 1024 and
                 value <= 0x00ff_ffff)
                 settings.max_frame_size.store(value, .seq_cst),
             else => {},
@@ -503,7 +507,7 @@ fn observeCompletedFrame(transcoder: *Transcoder, completed: CompletedFrame, por
     const frame_flags = completed.flags;
     const frame_stream = completed.stream_id;
 
-    if (frame_type == source_namespace.frame_rst_stream and frame_stream != 0) {
+    if (frame_type == relay.frame_rst_stream and frame_stream != 0) {
         port.emit(.{ .lifecycle = .{
             .phase = .request_failed,
             .stream_id = frame_stream,
@@ -513,7 +517,7 @@ fn observeCompletedFrame(transcoder: *Transcoder, completed: CompletedFrame, por
         if (direction == .request) {
             transcoder.streams.finishRequest(frame_stream);
         }
-    } else if (direction == .response and frame_type == source_namespace.frame_goaway and
+    } else if (direction == .response and frame_type == relay.frame_goaway and
         transcoder.streams.hasActiveResponses())
     {
         port.emit(.{ .lifecycle = .{
@@ -521,8 +525,8 @@ fn observeCompletedFrame(transcoder: *Transcoder, completed: CompletedFrame, por
             .stream_id = 0,
             .status_code = 0,
         } });
-    } else if (direction == .response and frame_type == source_namespace.frame_data and
-        frame_stream != 0 and frame_flags & source_namespace.flag_end_stream != 0)
+    } else if (direction == .response and frame_type == relay.frame_data and
+        frame_stream != 0 and frame_flags & relay.flag_end_stream != 0)
     {
         const status_code = transcoder.streams.status(frame_stream);
         port.emit(.{ .lifecycle = .{
@@ -532,8 +536,8 @@ fn observeCompletedFrame(transcoder: *Transcoder, completed: CompletedFrame, por
         } });
         transcoder.streams.finishResponse(frame_stream);
     }
-    if (direction == .request and frame_type == source_namespace.frame_data and
-        frame_stream != 0 and frame_flags & source_namespace.flag_end_stream != 0)
+    if (direction == .request and frame_type == relay.frame_data and
+        frame_stream != 0 and frame_flags & relay.flag_end_stream != 0)
     {
         port.emit(.{ .request_finished = .{ .stream_id = frame_stream } });
         transcoder.streams.finishRequest(frame_stream);
@@ -541,7 +545,7 @@ fn observeCompletedFrame(transcoder: *Transcoder, completed: CompletedFrame, por
 }
 
 fn dataBodyFragment(transcoder: *Transcoder, payload: []const u8) ?[]const u8 {
-    const prefix: usize = @intFromBool(transcoder.framing.flags & source_namespace.flag_padded != 0);
+    const prefix: usize = @intFromBool(transcoder.framing.flags & relay.flag_padded != 0);
 
     if (prefix != 0 and transcoder.framing.payload_offset == 0) {
         if (payload.len == 0) {
@@ -569,11 +573,11 @@ fn dataBodyFragment(transcoder: *Transcoder, payload: []const u8) ?[]const u8 {
 }
 
 fn headerPayloadPrefixLength(transcoder: *const Transcoder) usize {
-    if (transcoder.framing.frame_type == source_namespace.frame_continuation) {
+    if (transcoder.framing.frame_type == relay.frame_continuation) {
         return 0;
     }
     return @as(usize, transcoder.block_prefix_len) +
-        @intFromBool(transcoder.block_flags & source_namespace.flag_padded != 0);
+        @intFromBool(transcoder.block_flags & relay.flag_padded != 0);
 }
 
 fn hasObservableSseBody(transcoder: *const Transcoder, stream_id: u32) bool {

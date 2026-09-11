@@ -1,3 +1,7 @@
+const ClusterType = @import("Cluster.zig");
+const unicode = @import("unicode");
+const std = @import("std");
+const text = @import("text.zig");
 /// Splits text into grapheme clusters and reports each one's column width.
 ///
 /// The segmentation is not ours: `unicode.graphemeWidth` consumes a codepoint
@@ -7,11 +11,7 @@
 /// same emulator laid out, and two disagreeing width tables produce a UI that
 /// drifts one column at a time.
 const GraphemeIterator = @This();
-/// Imported by module name rather than by path so that a build can swap the
-/// width tables out. See `unicode.zig`.
-const unicode = @import("unicode");
-const std = @import("std");
-const source_namespace = @import("text.zig");
+
 bytes: []const u8,
 index: usize = 0,
 
@@ -20,12 +20,9 @@ index: usize = 0,
 /// which costs a rendering artefact and never a wrong byte count.
 const window = 16;
 
-pub const Cluster = struct {
-    bytes: []const u8,
-    width: u8,
-};
+pub const Cluster = @import("Cluster.zig");
 
-pub fn next(it: *GraphemeIterator) ?Cluster {
+pub fn next(it: *GraphemeIterator) ?ClusterType {
     if (it.index >= it.bytes.len) {
         return null;
     }
@@ -84,7 +81,7 @@ pub fn next(it: *GraphemeIterator) ?Cluster {
     // writes cell text verbatim, so a raw newline or escape in a cell
     // moves the host cursor and every cell after it lands on the wrong
     // row. It still owns one column, drawn blank.
-    if (source_namespace.isControl(codepoints[0])) {
+    if (text.isControl(codepoints[0])) {
         return .{ .bytes = " ", .width = 1 };
     }
 

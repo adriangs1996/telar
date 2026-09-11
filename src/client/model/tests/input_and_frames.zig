@@ -1,33 +1,30 @@
-const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../../agents/root.zig");
-const attachments = @import("../../attachments/root.zig");
-const lua_config = @import("../../config/root.zig");
-const graphics = @import("../../environment/root.zig");
-const input_capability = @import("../../input/root.zig");
-const notifications = @import("../../notifications/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../root.zig");
-
-const copy_mode = input_capability.copy_mode;
-const keybind = input_capability;
-const capability_support = graphics;
-pub const schema = core.schema;
-const layout_mod = workspace_capability.layout;
-const multiplexer = workspace_capability.multiplexer;
-const tabs_mod = workspace_capability.tabs;
-const workspace_list_mod = workspace_capability.workspace_list;
-pub const ui = core.ui;
-
 const TestingPaneFrame = @import("TestingPaneFrame.zig");
+const FrameViewType = @import("telar-core").FrameView;
+const SpanType = @import("telar-core").Span;
+const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
+const decodeServer_module = @import("telar-core").decodeServer;
+const ModelType = @import("../Model.zig");
+const std = @import("std");
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const PaneInputPlanType = @import("../PaneInputPlan.zig");
+const ReportedPaneFocusType = @import("../ReportedPaneFocus.zig");
+const PanePasteSessionType = @import("../PanePasteSession.zig");
+const CellType = @import("telar-core").Cell;
+const VersionType = @import("../Version.zig");
+const PaneFrameRecoveryType = @import("../PaneFrameRecovery.zig");
+const types = @import("../types.zig");
+const chord = @import("../../input/chord.zig");
+const CopyModeProjectionType = @import("../CopyModeProjection.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 
-fn testingPaneFrame(buffer: []u8, input: TestingPaneFrame) !schema.frame.FrameView {
-    var spans: [1]schema.frame.Span = undefined;
-    const encoded_spans: []const schema.frame.Span = if (input.cells) |cells| block: {
+fn testingPaneFrame(buffer: []u8, input: TestingPaneFrame) !FrameViewType {
+    var spans: [1]SpanType = undefined;
+    const encoded_spans: []const SpanType = if (input.cells) |cells| block: {
         spans[0] = .{ .start = 0, .cells = cells };
         break :block &spans;
     } else &.{};
-    const encoded = try schema.encodePaneFrame(buffer, .{
+    const encoded = try encodePaneFrame_module(buffer, .{
         .pane_id = input.pane_id,
         .frame_id = input.frame_id,
         .base_frame_id = input.base_frame_id,
@@ -39,14 +36,14 @@ fn testingPaneFrame(buffer: []u8, input: TestingPaneFrame) !schema.frame.FrameVi
         .spans = encoded_spans,
     });
 
-    return (try schema.decodeServer(encoded)).pane_frame;
+    return (try decodeServer_module(encoded)).pane_frame;
 }
 
 test "client presentation mode toggles independently and invalidates chrome" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    var other = client_model.Model.init(std.testing.allocator, true);
+    var other = ModelType.init(std.testing.allocator, true);
     defer other.deinit();
 
     try std.testing.expectEqual(.normal, model.mode);
@@ -67,17 +64,17 @@ test "client presentation mode toggles independently and invalidates chrome" {
 }
 
 test "pane input planning resolves one attached active target without mutation" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.input_modes = .{ .cursor_keys = true, .bracketed_paste = true };
-    const inactive_pane: schema.PaneId = @enumFromInt(2);
+    const inactive_pane: PaneIdType = @enumFromInt(2);
     _ = try model.workspace.addCreated(.{
         .location = .{
             .workspace = location.workspace,
@@ -90,7 +87,7 @@ test "pane input planning resolves one attached active target without mutation" 
     model.workspace.findPane(inactive_pane).?.attached = true;
     try std.testing.expect(model.workspace.select(location.tab_id));
     const version = model.version();
-    const expected: client_model.PaneInputPlan = .{
+    const expected: PaneInputPlanType = .{
         .pane_id = pane_id,
         .input_modes = pane.input_modes,
     };
@@ -109,13 +106,13 @@ test "pane input planning resolves one attached active target without mutation" 
 }
 
 test "pane input planning yields ownership to prompts and copy mode" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     model.name_prompt.begin(.create_workspace);
@@ -133,20 +130,20 @@ test "pane input planning yields ownership to prompts and copy mode" {
 }
 
 test "reported pane focus derives protocol edges outside presentation versions" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: schema.PaneId = @enumFromInt(1);
-    const second: schema.PaneId = @enumFromInt(2);
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const version = model.version();
 
     const disabled = model.syncReportedPaneFocus().?;
 
-    try std.testing.expectEqualDeep(client_model.ReportedPaneFocus{
+    try std.testing.expectEqualDeep(ReportedPaneFocusType{
         .pane_id = first,
         .focus_events = false,
     }, disabled.current.?);
@@ -167,7 +164,7 @@ test "reported pane focus derives protocol edges outside presentation versions" 
 
     try std.testing.expectEqual(first, moved.focus_out.?);
     try std.testing.expectEqual(second, moved.focus_in.?);
-    try std.testing.expectEqualDeep(client_model.ReportedPaneFocus{
+    try std.testing.expectEqualDeep(ReportedPaneFocusType{
         .pane_id = second,
         .focus_events = true,
     }, model.reportedPaneFocus().?);
@@ -182,13 +179,13 @@ test "reported pane focus derives protocol edges outside presentation versions" 
 }
 
 test "reported pane focus distinguishes intentional clear from stale retirement" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.input_modes.focus_events = true;
@@ -213,13 +210,13 @@ test "reported pane focus distinguishes intentional clear from stale retirement"
 }
 
 test "pane paste captures one exact target and framing mode outside presentation versions" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.input_modes.bracketed_paste = true;
@@ -227,7 +224,7 @@ test "pane paste captures one exact target and framing mode outside presentation
 
     const session = model.beginPanePaste().?;
 
-    try std.testing.expectEqualDeep(client_model.PanePasteSession{
+    try std.testing.expectEqualDeep(PanePasteSessionType{
         .pane_id = pane_id,
         .bracketed_paste = true,
     }, session);
@@ -236,7 +233,7 @@ test "pane paste captures one exact target and framing mode outside presentation
     try std.testing.expect(model.beginPanePaste() == null);
     try std.testing.expectEqualDeep(version, model.version());
 
-    const other_location: schema.TabLocation = .{
+    const other_location: TabLocationType = .{
         .workspace = location.workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -255,7 +252,7 @@ test "pane paste captures one exact target and framing mode outside presentation
     try std.testing.expectEqual(pane_id, captured.pane_id);
     try std.testing.expect(!captured.input_modes.bracketed_paste);
 
-    const wrong = client_model.PanePasteSession{ .pane_id = pane_id, .bracketed_paste = false };
+    const wrong = PanePasteSessionType{ .pane_id = pane_id, .bracketed_paste = false };
     try std.testing.expect(!model.finishPanePaste(wrong));
     try std.testing.expect(!model.releasePanePaste(@enumFromInt(9)));
     try std.testing.expect(model.finishPanePaste(session));
@@ -263,13 +260,13 @@ test "pane paste captures one exact target and framing mode outside presentation
 }
 
 test "pane paste release and copy mode keep one input owner" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     _ = model.beginPanePaste().?;
@@ -282,20 +279,20 @@ test "pane paste release and copy mode keep one input owner" {
 }
 
 test "pane frame application commits screen copy state and one frame revision" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.scroll = .{ .total_rows = 4, .offset = 2 };
     pane.cursor = .{ .visible = true, .x = 0, .y = 1 };
     try std.testing.expect(model.enterCopyMode());
-    const cells = [_]ui.Cell{
-        .{ .bytes = [_]u8{'x'} ++ [_]u8{0} ** (ui.Cell.max_bytes - 1) },
+    const cells = [_]CellType{
+        .{ .bytes = [_]u8{'x'} ++ [_]u8{0} ** (CellType.max_bytes - 1) },
         .{},
         .{},
         .{},
@@ -329,17 +326,17 @@ test "pane frame application commits screen copy state and one frame revision" {
     try std.testing.expectEqual(@as(u64, 7), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 7), pane.pending_frame_id);
     try std.testing.expectEqual(@as(u32, 2), model.copyModeProjection().?.view.cursor.y);
-    try std.testing.expectEqualDeep(client_model.Version{ .copy = 2, .frame = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .copy = 2, .frame = 1 }, model.version());
 }
 
 test "pane frame application separates stale detach recovery and invalid input" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.applied_frame_id = 3;
@@ -351,37 +348,37 @@ test "pane frame application separates stale detach recovery and invalid input" 
         .base_frame_id = 2,
     }));
 
-    try std.testing.expectEqualDeep(client_model.PaneFrameRecovery{
+    try std.testing.expectEqualDeep(PaneFrameRecoveryType{
         .pane_id = pane_id,
         .known_frame_id = 3,
     }, recovery.resync);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
 
     pane.attached = false;
     const detached = try model.applyPaneFrame(try testingPaneFrame(&encoded, .{
         .pane_id = pane_id,
         .frame_id = 5,
-        .cells = &[_]ui.Cell{ .{}, .{}, .{}, .{} },
+        .cells = &[_]CellType{ .{}, .{}, .{}, .{} },
     }));
     try std.testing.expect(detached == .detached);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 
     try std.testing.expectError(error.UnexpectedPane, model.applyPaneFrame(try testingPaneFrame(&encoded, .{
         .pane_id = @enumFromInt(9),
-        .cells = &[_]ui.Cell{ .{}, .{}, .{}, .{} },
+        .cells = &[_]CellType{ .{}, .{}, .{}, .{} },
     })));
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "pane frame apply failure does not publish a frame revision" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.applied_frame_id = 3;
@@ -396,17 +393,17 @@ test "pane frame apply failure does not publish a frame revision" {
 
     try std.testing.expectEqual(@as(u64, 3), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "pane graphics fallback versions only semantic changes" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const tab = model.workspace.active().?;
 
@@ -415,28 +412,28 @@ test "pane graphics fallback versions only semantic changes" {
     try std.testing.expect(shown.visible);
     try std.testing.expectEqual(@as(u64, 1), shown.pane_graphics_revision);
     try std.testing.expect(tab.model.find(pane_id).?.graphics_placeholder);
-    try std.testing.expectEqualDeep(client_model.Version{ .pane_graphics = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .pane_graphics = 1 }, model.version());
 
     try std.testing.expect(model.setPaneGraphicsFallback(pane_id, true) == null);
     try std.testing.expect(model.setPaneGraphicsFallback(@enumFromInt(9), true) == null);
-    try std.testing.expectEqualDeep(client_model.Version{ .pane_graphics = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .pane_graphics = 1 }, model.version());
 
     const hidden = model.setPaneGraphicsFallback(pane_id, false).?;
 
     try std.testing.expect(!hidden.visible);
     try std.testing.expectEqual(@as(u64, 2), hidden.pane_graphics_revision);
     try std.testing.expect(!tab.model.find(pane_id).?.graphics_placeholder);
-    try std.testing.expectEqualDeep(client_model.Version{ .pane_graphics = 2 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .pane_graphics = 2 }, model.version());
 }
 
 test "pane cwd metadata stores exact paths and versions only display changes" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const tab = model.workspace.active().?;
 
@@ -445,12 +442,12 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
         .path = "/work/telar",
     } })).?;
 
-    try std.testing.expectEqual(client_model.PaneMetadataKind.cwd, visible.kind);
+    try std.testing.expectEqual(types.PaneMetadataKind.cwd, visible.kind);
     try std.testing.expect(visible.display_changed);
     try std.testing.expectEqual(@as(u64, 1), visible.pane_metadata_revision);
     try std.testing.expectEqual(@as(u64, 0), visible.pane_foreground_revision);
     try std.testing.expectEqualStrings("/work/telar", tab.model.find(pane_id).?.cwdSlice());
-    try std.testing.expectEqualDeep(client_model.Version{ .pane_metadata = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .pane_metadata = 1 }, model.version());
 
     const stored = (try model.updatePaneMetadata(.{ .cwd = .{
         .pane_id = pane_id,
@@ -460,7 +457,7 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
     try std.testing.expect(!stored.display_changed);
     try std.testing.expectEqual(@as(u64, 1), stored.pane_metadata_revision);
     try std.testing.expectEqualStrings("/other/telar", tab.model.find(pane_id).?.cwdSlice());
-    try std.testing.expectEqualDeep(client_model.Version{ .pane_metadata = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .pane_metadata = 1 }, model.version());
     try std.testing.expect((try model.updatePaneMetadata(.{ .cwd = .{
         .pane_id = pane_id,
         .path = "/other/telar",
@@ -474,17 +471,17 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
         .pane_id = pane_id,
         .path = "/other/api",
     } })).?;
-    try std.testing.expectEqualDeep(client_model.Version{ .pane_metadata = 2 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .pane_metadata = 2 }, model.version());
 }
 
 test "pane foreground metadata versions display changes independently" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     const tab = model.workspace.active().?;
 
@@ -493,12 +490,12 @@ test "pane foreground metadata versions display changes independently" {
         .name = "zsh",
     } })).?;
 
-    try std.testing.expectEqual(client_model.PaneMetadataKind.foreground, first.kind);
+    try std.testing.expectEqual(types.PaneMetadataKind.foreground, first.kind);
     try std.testing.expect(first.display_changed);
     try std.testing.expectEqual(@as(u64, 1), first.pane_metadata_revision);
     try std.testing.expectEqual(@as(u64, 1), first.pane_foreground_revision);
     try std.testing.expectEqualStrings("zsh", tab.model.find(pane_id).?.foregroundName());
-    try std.testing.expectEqualDeep(client_model.Version{
+    try std.testing.expectEqualDeep(VersionType{
         .pane_metadata = 1,
         .pane_foreground = 1,
     }, model.version());
@@ -515,20 +512,20 @@ test "pane foreground metadata versions display changes independently" {
         .pane_id = pane_id,
         .name = "bash",
     } })).?;
-    try std.testing.expectEqualDeep(client_model.Version{
+    try std.testing.expectEqualDeep(VersionType{
         .pane_metadata = 2,
         .pane_foreground = 2,
     }, model.version());
 }
 
 test "pane cwd allocation failure preserves metadata and revisions" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
     _ = (try model.updatePaneMetadata(.{ .cwd = .{
         .pane_id = pane_id,
@@ -550,13 +547,13 @@ test "pane cwd allocation failure preserves metadata and revisions" {
 }
 
 test "pane viewport intents are bounded versioned and reserved by copy mode" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.scroll = .{ .total_rows = 20, .offset = 10 };
@@ -570,7 +567,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
     try std.testing.expectEqual(@as(u32, 0), top.offset);
     try std.testing.expect(!top.at_bottom);
     try std.testing.expectEqual(@as(u64, 1), top.viewport_revision);
-    try std.testing.expectEqualDeep(client_model.Version{ .viewport = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .viewport = 1 }, model.version());
     try std.testing.expect(model.setPaneViewport(.{
         .pane_id = pane_id,
         .target = .{ .absolute = 0 },
@@ -592,7 +589,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
         .pane_id = @enumFromInt(9),
         .target = .bottom,
     }) == null);
-    try std.testing.expectEqualDeep(client_model.Version{ .viewport = 2 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .viewport = 2 }, model.version());
 
     pane.scroll.offset = 10;
     try std.testing.expect(model.enterCopyMode());
@@ -604,7 +601,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
     try std.testing.expectEqualDeep(copy_version, model.version());
 
     const copy_commit = model.commitCopyMode(model.planCopyMode(.{
-        .key = try keybind.parseKey("g"),
+        .key = try chord.parseKey("g"),
     }).?).?;
 
     try std.testing.expectEqual(@as(u32, 0), copy_commit.viewport.?.offset);
@@ -614,13 +611,13 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
 }
 
 test "copy mode entry owns one independent model revision" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.scroll = .{ .total_rows = 15, .offset = 10 };
@@ -631,7 +628,7 @@ test "copy mode entry owns one independent model revision" {
 
     try std.testing.expect(model.copyModeActive());
     try std.testing.expectEqual(pane_id, model.copyModeTarget().?);
-    try std.testing.expectEqualDeep(client_model.CopyModeProjection{
+    try std.testing.expectEqualDeep(CopyModeProjectionType{
         .pane_id = pane_id,
         .view = .{
             .cursor = .{ .x = 4, .y = 12 },
@@ -639,9 +636,9 @@ test "copy mode entry owns one independent model revision" {
             .linewise = false,
         },
     }, model.copyModeProjection().?);
-    try std.testing.expectEqualDeep(client_model.Version{ .copy = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .copy = 1 }, model.version());
     try std.testing.expect(!model.enterCopyMode());
-    try std.testing.expectEqualDeep(client_model.Version{ .copy = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .copy = 1 }, model.version());
 
     const leave = model.planCopyMode(.leave).?;
     _ = model.commitCopyMode(leave).?;
@@ -653,9 +650,9 @@ test "copy mode entry owns one independent model revision" {
 }
 
 test "copy mode plans reject no-ops and stale commits" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -663,12 +660,12 @@ test "copy mode plans reject no-ops and stale commits" {
     try std.testing.expect(model.enterCopyMode());
     const version = model.version();
 
-    try std.testing.expect(model.planCopyMode(.{ .key = try keybind.parseKey("left") }) == null);
-    try std.testing.expect(model.planCopyMode(.{ .key = try keybind.parseKey("z") }) == null);
+    try std.testing.expect(model.planCopyMode(.{ .key = try chord.parseKey("left") }) == null);
+    try std.testing.expect(model.planCopyMode(.{ .key = try chord.parseKey("z") }) == null);
     try std.testing.expectEqualDeep(version, model.version());
 
-    const first = model.planCopyMode(.{ .key = try keybind.parseKey("right") }).?;
-    const stale = model.planCopyMode(.{ .key = try keybind.parseKey("right") }).?;
+    const first = model.planCopyMode(.{ .key = try chord.parseKey("right") }).?;
+    const stale = model.planCopyMode(.{ .key = try chord.parseKey("right") }).?;
     const commit = model.commitCopyMode(first).?;
 
     try std.testing.expect(commit.active);
@@ -678,13 +675,13 @@ test "copy mode plans reject no-ops and stale commits" {
 }
 
 test "copy mode plans the textual link under its cursor without mutation" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 5 } });
     const pane = model.workspace.findPane(pane_id).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
@@ -693,22 +690,22 @@ test "copy mode plans the textual link under its cursor without mutation" {
     try std.testing.expect(model.enterCopyMode());
     const version = model.version();
 
-    const plan = model.planCopyMode(.{ .key = try keybind.parseKey("o") }).?;
+    const plan = model.planCopyMode(.{ .key = try chord.parseKey("o") }).?;
 
     try std.testing.expectEqualStrings("file:///tmp/a%20b.txt", plan.open_link.?.uri());
     try std.testing.expectEqualDeep(version, model.version());
-    try std.testing.expect(model.planCopyMode(.{ .key = try keybind.parseKey("o") }) != null);
+    try std.testing.expect(model.planCopyMode(.{ .key = try chord.parseKey("o") }) != null);
 
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
-    try std.testing.expect(model.planCopyMode(.{ .key = try keybind.parseKey("o") }) == null);
+    try std.testing.expect(model.planCopyMode(.{ .key = try chord.parseKey("o") }) == null);
 }
 
 test "an active tab transition releases copy authority" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = second,

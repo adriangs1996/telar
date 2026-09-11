@@ -1,11 +1,12 @@
-const Capture = @This();
 const Route = @import("Route.zig");
-const Effects = @import("PasteRoutingEffects.zig");
+const PasteRoutingEffects = @import("PasteRoutingEffects.zig");
+const Capture = @This();
+
 route_value: ?Route = null,
 calls: usize = 0,
 fail: bool = false,
 
-pub fn effects(capture: *Capture) Effects {
+pub fn effects(capture: *Capture) PasteRoutingEffects {
     return .{ .context = capture, .route = route };
 }
 

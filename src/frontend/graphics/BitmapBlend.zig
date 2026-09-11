@@ -1,9 +1,10 @@
-const BitmapBlend = @This();
 const Surface = @import("Surface.zig");
-const ft = @import("freetype").c;
-const Point = @import("RasterizerPoint.zig");
+const freetype = @import("freetype");
+const RasterizerPoint = @import("RasterizerPoint.zig");
 const Color = @import("Color.zig");
+const BitmapBlend = @This();
+
 surface: Surface,
-bitmap: ft.FT_Bitmap,
-destination: Point,
+bitmap: freetype.c.FT_Bitmap,
+destination: RasterizerPoint,
 color: Color,

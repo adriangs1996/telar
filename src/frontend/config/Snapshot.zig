@@ -1,37 +1,45 @@
-const Snapshot = @This();
-const theme_module = @import("../ui/root.zig").theme;
-const icons = @import("../ui/root.zig").icons;
-const kitty = @import("../graphics/root.zig").kitty;
-const source_namespace = @import("model.zig");
-const bars_module = @import("../bars/root.zig");
+const ThemeType = @import("../ui/Theme.zig");
+const theme_module = @import("../ui/theme_support.zig");
+const ClientTheme = @import("telar-client").Theme;
+const capabilities = @import("../graphics/capabilities.zig");
+const model = @import("model.zig");
+const Config = @import("../sound/Config.zig");
+const Delivery = @import("telar-client").Delivery;
+const ConfigurationType = @import("telar-client").Configuration;
+const KeyType = @import("telar-client").Key;
+const default_prefix_module = @import("telar-client").default_prefix;
+const default_escape_timeout_ns_module = @import("telar-client").default_escape_timeout_ns;
+const default_sequence_timeout_ns_module = @import("telar-client").default_sequence_timeout_ns;
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const PluginSpec = @import("PluginSpec.zig");
-theme: theme_module.Theme = theme_module.default_theme,
-icon_theme: icons.Theme = .unicode,
-sidebar_rendering: kitty.SidebarRendering = .automatic,
+const Snapshot = @This();
+
+theme: ThemeType = theme_module.default_theme,
+icon_theme: ClientTheme = .unicode,
+sidebar_rendering: capabilities.SidebarRendering = .automatic,
 sidebar_visible: bool = true,
 pane_gaps: bool = true,
-window_title_bytes: [source_namespace.max_window_title_bytes]u8 = undefined,
+window_title_bytes: [model.max_window_title_bytes]u8 = undefined,
 window_title_len: u8 = 0,
-sound: source_namespace.SoundConfig = .{},
-notification_delivery: source_namespace.NotificationDelivery = .telar,
+sound: Config = .{},
+notification_delivery: Delivery = .telar,
 history_show_agent_commands: bool = false,
 history_enter_runs: bool = false,
 history_match_fts: bool = false,
-theme_light: ?theme_module.Theme = null,
-theme_dark: ?theme_module.Theme = null,
-bars: bars_module.Configuration = .{},
-prefix: source_namespace.keybind.Key = source_namespace.keybind.default_prefix,
-input_escape_timeout_ns: u64 = source_namespace.keybind.default_escape_timeout_ns,
-input_sequence_timeout_ns: u64 = source_namespace.keybind.default_sequence_timeout_ns,
-bindings: [source_namespace.max_bindings]source_namespace.ConfiguredBinding = undefined,
-bindings_prefixed: [source_namespace.max_bindings]bool = undefined,
+theme_light: ?ThemeType = null,
+theme_dark: ?ThemeType = null,
+bars: ConfigurationType = .{},
+prefix: KeyType = default_prefix_module,
+input_escape_timeout_ns: u64 = default_escape_timeout_ns_module,
+input_sequence_timeout_ns: u64 = default_sequence_timeout_ns_module,
+bindings: [model.max_bindings]model.ConfiguredBinding = undefined,
+bindings_prefixed: [model.max_bindings]bool = undefined,
 binding_count: u16 = 0,
 runtime: RuntimeSnapshot = .{},
-plugins: [source_namespace.max_plugins]PluginSpec = undefined,
+plugins: [model.max_plugins]PluginSpec = undefined,
 plugin_count: u8 = 0,
 
-pub fn bindingSlice(snapshot: *const Snapshot) []const source_namespace.ConfiguredBinding {
+pub fn bindingSlice(snapshot: *const Snapshot) []const model.ConfiguredBinding {
     return snapshot.bindings[0..snapshot.binding_count];
 }
 

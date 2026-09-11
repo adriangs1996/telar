@@ -1,8 +1,10 @@
-const ConfirmPaneAttachmentHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const ConfirmPaneAttachment = @import("ConfirmPaneAttachment.zig");
+const types = @import("../../model/types.zig");
 const std = @import("std");
-model: *client_model.Model,
+const ConfirmPaneAttachmentHandler = @This();
+
+model: *ModelType,
 
 /// Validates the runtime confirmation before committing client attachment
 /// state. Confirmations made stale by a tab change are harmless no-ops.
@@ -10,7 +12,7 @@ model: *client_model.Model,
 /// ```zig
 /// const result = try handler.execute(command);
 /// ```
-pub fn execute(handler: *ConfirmPaneAttachmentHandler, command: ConfirmPaneAttachment) !client_model.PaneAttachmentConfirmation {
+pub fn execute(handler: *ConfirmPaneAttachmentHandler, command: ConfirmPaneAttachment) !types.PaneAttachmentConfirmation {
     if (command.created or !std.meta.eql(command.requested, command.confirmed)) {
         return error.UnexpectedPane;
     }

@@ -1,9 +1,12 @@
-const ArrivalCapture = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
+const VersionType = @import("../../model/Version.zig");
 const WorkspaceArrivalDelivery = @import("WorkspaceArrivalDelivery.zig");
+const WorkspaceActivationType = @import("../../model/WorkspaceActivation.zig");
 const std = @import("std");
-model: *const client_model.Model,
-expected_before: client_model.Version = .{},
+const ArrivalCapture = @This();
+
+model: *const ModelType,
+expected_before: VersionType = .{},
 calls: usize = 0,
 observed_commit: bool = false,
 fail: bool = false,
@@ -12,7 +15,7 @@ pub fn port(capture: *ArrivalCapture) WorkspaceArrivalDelivery {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(context: *anyopaque, activation: client_model.WorkspaceActivation) !void {
+fn deliver(context: *anyopaque, activation: WorkspaceActivationType) !void {
     const capture: *ArrivalCapture = @ptrCast(@alignCast(context));
     const version = capture.model.version();
     capture.calls += 1;

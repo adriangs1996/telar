@@ -1,22 +1,25 @@
-const State = @This();
-const source_namespace = @import("history_palette.zig");
+const PageResultType = @import("PageResult.zig");
+const max_history_results = @import("telar-core").max_history_results;
 const Entry = @import("Entry.zig");
+const HistoryScopeType = @import("telar-core").HistoryScope;
+const Storage = @import("Storage.zig");
 const std = @import("std");
-const Storage = struct {
-    commands: [source_namespace.max_command_storage]u8 = undefined,
-    output: [source_namespace.schema.max_history_output_bytes]u8 = undefined,
-    selected_command: [source_namespace.schema.max_history_command_bytes]u8 = undefined,
-};
+const HistoryEntryType = @import("telar-core").HistoryEntry;
+const history_palette = @import("history_palette.zig");
+const HistoryOutputType = @import("telar-core").HistoryOutput;
+const raw_module = @import("telar-core").raw;
+const RequestFailedType = @import("telar-core").RequestFailed;
+const State = @This();
 
 revision: u64 = 0,
 pending_request: u64 = 0,
-entries: [source_namespace.max_entries]Entry = undefined,
+entries: [max_history_results]Entry = undefined,
 len: u8 = 0,
 phase: enum { idle, loading, ready, failed } = .idle,
 now_ms: i64 = 0,
 enter_runs: bool = false,
 match_fuzzy: bool = true,
-effective_scope: source_namespace.schema.HistoryScope = .global,
+effective_scope: HistoryScopeType = .global,
 storage: ?*Storage = null,
 allocator: ?std.mem.Allocator = null,
 commands_len: u32 = 0,
@@ -91,17 +94,11 @@ pub fn configure(state: *State, options: struct { enter_runs: bool, match_fuzzy:
     state.match_fuzzy = options.match_fuzzy;
 }
 
-pub const PageResult = struct {
-    request_id: u64,
-    entries: []const source_namespace.schema.HistoryEntry,
-    snapshot_id: u64,
-    has_more: bool,
-    now_ms: i64,
-};
+pub const PageResult = @import("PageResult.zig");
 
 /// Reserves correlation and replaces actionable rows in one transition.
 /// Example: `if (!state.beginPageRequest(id, .global)) return;`.
-pub fn beginPageRequest(state: *State, id: u64, scope: source_namespace.schema.HistoryScope) bool {
+pub fn beginPageRequest(state: *State, id: u64, scope: HistoryScopeType) bool {
     if (id == 0 or !state.track(id)) {
         state.rejectQuery();
         return false;
@@ -114,7 +111,7 @@ pub fn beginPageRequest(state: *State, id: u64, scope: source_namespace.schema.H
 
 /// Commits entries, pagination and display time under a single revision.
 /// Example: `_ = state.acceptPageResult(page);`.
-pub fn acceptPageResult(state: *State, result: PageResult) bool {
+pub fn acceptPageResult(state: *State, result: PageResultType) bool {
     if (!state.applyEntries(result.request_id, result.entries)) {
         return false;
     }
@@ -147,7 +144,7 @@ pub fn page(state: *State, direction: enum { older, newer }) bool {
                 return false;
             }
 
-            state.pending_offset = state.page_offset -| source_namespace.max_entries;
+            state.pending_offset = state.page_offset -| max_history_results;
         },
     }
 
@@ -206,7 +203,7 @@ fn expect(state: *State, request_id: u64) void {
 /// ```zig
 /// Internal half of acceptPageResult; metadata commits before publication.
 /// ```
-fn applyEntries(state: *State, request_id: u64, entries: []const source_namespace.schema.HistoryEntry) bool {
+fn applyEntries(state: *State, request_id: u64, entries: []const HistoryEntryType) bool {
     _ = state.retire(request_id);
     if (request_id == 0 or request_id != state.pending_request or state.phase != .loading) {
         return false;
@@ -215,7 +212,7 @@ fn applyEntries(state: *State, request_id: u64, entries: []const source_namespac
     state.len = 0;
     state.commands_len = 0;
     for (entries) |*entry| {
-        if (state.len == source_namespace.max_entries) {
+        if (state.len == max_history_results) {
             break;
         }
 
@@ -229,7 +226,7 @@ fn applyEntries(state: *State, request_id: u64, entries: []const source_namespac
             .duration_ns = entry.duration_ns,
             .captured_truncated = entry.command_truncated,
         };
-        if (entry.command.len <= source_namespace.max_command_bytes) {
+        if (entry.command.len <= history_palette.max_command_bytes) {
             stored.command_complete = true;
         } else if (state.storage) |storage| {
             if (entry.command.len <= storage.commands.len - state.commands_len) {
@@ -241,8 +238,8 @@ fn applyEntries(state: *State, request_id: u64, entries: []const source_namespac
             }
         }
 
-        stored.command_len = source_namespace.copyBounded(&stored.command, entry.command);
-        stored.cwd_len = @intCast(source_namespace.copyBounded(&stored.cwd, entry.cwd));
+        stored.command_len = history_palette.copyBounded(&stored.command, entry.command);
+        stored.cwd_len = @intCast(history_palette.copyBounded(&stored.cwd, entry.cwd));
         state.entries[state.len] = stored;
         state.len += 1;
     }
@@ -301,9 +298,9 @@ pub fn expectOutput(state: *State, request: struct { request_id: u64, id: u64 })
 
 /// Owns output before the receive buffer is reused; stale selections are ignored.
 /// Example: `_ = state.applyOutput(reply);`.
-pub fn applyOutput(state: *State, reply: source_namespace.schema.HistoryOutput) bool {
-    _ = state.retire(source_namespace.schema.id.raw(reply.request_id));
-    if (state.output_request == 0 or source_namespace.schema.id.raw(reply.request_id) != state.output_request or reply.id != state.output_id) {
+pub fn applyOutput(state: *State, reply: HistoryOutputType) bool {
+    _ = state.retire(raw_module(reply.request_id));
+    if (state.output_request == 0 or raw_module(reply.request_id) != state.output_request or reply.id != state.output_id) {
         return false;
     }
 
@@ -319,8 +316,8 @@ pub fn applyOutput(state: *State, reply: source_namespace.schema.HistoryOutput) 
 
 /// Keeps observation failures local to their query or inspector.
 /// Example: `_ = state.fail(reply);`.
-pub fn fail(state: *State, failure: source_namespace.schema.RequestFailed) bool {
-    const request = source_namespace.schema.id.raw(failure.request_id);
+pub fn fail(state: *State, failure: RequestFailedType) bool {
+    const request = raw_module(failure.request_id);
     const owned = state.retire(request);
     if (request == state.pending_request and request != 0) {
         state.phase = .failed;
@@ -341,7 +338,7 @@ pub fn fail(state: *State, failure: source_namespace.schema.RequestFailed) bool 
 /// Records a local actionable error without closing the history browser.
 /// Example: `state.setError("Command unavailable");`.
 pub fn setError(state: *State, message: []const u8) void {
-    state.error_len = @intCast(source_namespace.copyBounded(&state.error_text, message));
+    state.error_len = @intCast(history_palette.copyBounded(&state.error_text, message));
     state.revision +%= 1;
 }
 
@@ -365,7 +362,7 @@ pub fn outputHint(state: *const State) []const u8 {
 
 /// Loads one complete command when the page's shared storage quota was exhausted.
 /// Example: `_ = state.applyFull(reply_id, entries);`.
-pub fn applyFull(state: *State, request_id: u64, entries: []const source_namespace.schema.HistoryEntry) bool {
+pub fn applyFull(state: *State, request_id: u64, entries: []const HistoryEntryType) bool {
     if (request_id == 0 or request_id != state.full_request) {
         return false;
     }

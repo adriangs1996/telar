@@ -1,9 +1,10 @@
-const QueryResult = @This();
-const source_namespace = @import("model.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const QueryOrigin = @import("QueryOrigin.zig");
 const Entry = @import("Entry.zig");
 const std = @import("std");
-request_id: source_namespace.schema.RequestId,
+const QueryResult = @This();
+
+request_id: RequestIdType,
 origin: QueryOrigin,
 entries: []Entry,
 gpa: std.mem.Allocator,

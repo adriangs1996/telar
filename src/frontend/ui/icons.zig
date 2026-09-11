@@ -5,12 +5,10 @@
 //! overlay plan. That keeps layout and interaction usable while making the
 //! selected icon face independent of the host terminal font.
 
+const Icon = @import("telar-client").Icon;
 const std = @import("std");
-const shared = @import("telar-core").ui;
-
-pub const Theme = @import("telar-client").layout.icons.Theme;
-
-pub const Icon = @import("telar-client").layout.icons.Icon;
+const Theme = @import("telar-client").Theme;
+const measure_module = @import("telar-core").measure;
 
 pub fn working(frame: u8) Icon {
     return switch (frame % 4) {
@@ -34,13 +32,9 @@ pub fn battery(percent: u8) Icon {
         .battery_full;
 }
 
-pub const Mark = @import("Mark.zig");
-
 /// Sixty-four visible agents can each contribute a provider and a status
 /// mark. The remaining slots cover the fixed top and bottom chrome.
 pub const max_marks = 160;
-
-pub const Plan = @import("Plan.zig");
 
 test "icon theme names have one canonical spelling" {
     try std.testing.expectEqual(Theme.nerd_font, try Theme.parse("NerdFont"));
@@ -51,21 +45,21 @@ test "icon theme names have one canonical spelling" {
 test "graphical placeholders occupy one terminal cell" {
     inline for (std.meta.fields(Icon)) |field| {
         const icon: Icon = @enumFromInt(field.value);
-        try std.testing.expectEqual(@as(u16, 1), shared.measure(icon.cellFallbackGlyph()));
+        try std.testing.expectEqual(@as(u16, 1), measure_module(icon.cellFallbackGlyph()));
     }
 }
 
 test "sidebar controls retain directional Unicode fallbacks" {
     try std.testing.expectEqualStrings("\u{25c0}", Icon.sidebar_collapse.unicodeGlyph());
     try std.testing.expectEqualStrings("\u{25b6}", Icon.sidebar_expand.unicodeGlyph());
-    try std.testing.expectEqual(@as(u16, 1), shared.measure(Icon.sidebar_collapse.unicodeGlyph()));
-    try std.testing.expectEqual(@as(u16, 1), shared.measure(Icon.sidebar_expand.unicodeGlyph()));
+    try std.testing.expectEqual(@as(u16, 1), measure_module(Icon.sidebar_collapse.unicodeGlyph()));
+    try std.testing.expectEqual(@as(u16, 1), measure_module(Icon.sidebar_expand.unicodeGlyph()));
 }
 
 test "the telar mark keeps one plain cell in every layer" {
     try std.testing.expectEqualStrings("\u{25a3}", Icon.telar_mark.unicodeGlyph());
     try std.testing.expectEqualStrings(" ", Icon.telar_mark.cellFallbackGlyph());
-    try std.testing.expectEqual(@as(u16, 1), shared.measure(Icon.telar_mark.unicodeGlyph()));
+    try std.testing.expectEqual(@as(u16, 1), measure_module(Icon.telar_mark.unicodeGlyph()));
 }
 
 test "battery icon follows charge quarters" {

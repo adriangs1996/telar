@@ -1,14 +1,15 @@
+const graphics = @import("graphics.zig");
 /// A validated POSIX shared memory object name crossing the runtime-client
 /// boundary. The allowlist is exactly what Telar generates: a leading slash
 /// followed by lowercase hex and dashes. Anything else is rejected before a
 /// process calls `shm_open` with it.
 const ShmName = @This();
-const source_namespace = @import("graphics.zig");
-bytes: [source_namespace.max_shm_name_bytes + 1]u8 = undefined,
+
+bytes: [graphics.max_shm_name_bytes + 1]u8 = undefined,
 len: u8 = 0,
 
 pub fn init(name: []const u8) error{InvalidShmName}!ShmName {
-    if (name.len < 2 or name.len > source_namespace.max_shm_name_bytes) {
+    if (name.len < 2 or name.len > graphics.max_shm_name_bytes) {
         return error.InvalidShmName;
     }
     if (name[0] != '/') {

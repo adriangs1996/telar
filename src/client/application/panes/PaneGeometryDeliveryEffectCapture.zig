@@ -1,17 +1,22 @@
-const EffectCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_geometry_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const pane_geometry_delivery = @import("pane_geometry_delivery.zig");
+const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+const PaneResizeType = @import("telar-core").PaneResize;
+const PaneBottomReservationType = @import("../../workspace/PaneBottomReservation.zig");
 const OfferEffects = @import("OfferEffects.zig");
-const Effects = @import("PaneGeometryDeliveryEffects.zig");
-model: ?*const client_model.Model = null,
+const PaneGeometryDeliveryEffects = @import("PaneGeometryDeliveryEffects.zig");
+const RectType = @import("telar-core").Rect;
+const EffectCapture = @This();
+
+model: ?*const ModelType = null,
 expected_revision: u64 = 0,
-events: [5]source_namespace.Event = undefined,
+events: [5]pane_geometry_delivery.Event = undefined,
 event_count: usize = 0,
-resizes: [source_namespace.multiplexer.max_panes]source_namespace.schema.PaneResize = undefined,
+resizes: [max_panes_per_tab]PaneResizeType = undefined,
 resize_count: usize = 0,
 committed_geometry_observed: bool = true,
 fail_resize: ?usize = null,
-bottom_reservation: ?source_namespace.layout_mod.PaneBottomReservation = null,
+bottom_reservation: ?PaneBottomReservationType = null,
 
 pub fn offerEffects(capture: *EffectCapture) OfferEffects {
     return .{
@@ -21,7 +26,7 @@ pub fn offerEffects(capture: *EffectCapture) OfferEffects {
     };
 }
 
-pub fn effects(capture: *EffectCapture) Effects {
+pub fn effects(capture: *EffectCapture) PaneGeometryDeliveryEffects {
     return .{
         .context = capture,
         .invalidate_graphics_placements = invalidateGraphicsPlacements,
@@ -31,7 +36,7 @@ pub fn effects(capture: *EffectCapture) Effects {
     };
 }
 
-fn bottomReservation(raw_context: *anyopaque) ?source_namespace.layout_mod.PaneBottomReservation {
+fn bottomReservation(raw_context: *anyopaque) ?PaneBottomReservationType {
     const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
 
     return capture.bottom_reservation;
@@ -42,12 +47,12 @@ fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     capture.append(.invalidate_placements);
 }
 
-fn requestVisibleAttachments(raw_context: *anyopaque, _: source_namespace.ui.Rect) !void {
+fn requestVisibleAttachments(raw_context: *anyopaque, _: RectType) !void {
     const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.request_attachments);
 }
 
-fn deliverResize(raw_context: *anyopaque, resize: source_namespace.schema.PaneResize) !void {
+fn deliverResize(raw_context: *anyopaque, resize: PaneResizeType) !void {
     const capture: *EffectCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.resize);
     capture.resizes[capture.resize_count] = resize;
@@ -58,7 +63,7 @@ fn deliverResize(raw_context: *anyopaque, resize: source_namespace.schema.PaneRe
     }
 }
 
-fn append(capture: *EffectCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectCapture, event: pane_geometry_delivery.Event) void {
     if (capture.model) |model| {
         capture.committed_geometry_observed = capture.committed_geometry_observed and
             model.version().panes == capture.expected_revision;
@@ -73,6 +78,6 @@ pub fn reset(capture: *EffectCapture) void {
     capture.resize_count = 0;
 }
 
-pub fn eventSlice(capture: *const EffectCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectCapture) []const pane_geometry_delivery.Event {
     return capture.events[0..capture.event_count];
 }

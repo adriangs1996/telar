@@ -1,23 +1,30 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const NotificationLevelType = @import("telar-core").NotificationLevel;
+const NotificationTargetType = @import("telar-core").NotificationTarget;
+const max_notification_title_bytes_module = @import("telar-core").max_notification_title_bytes;
+const max_notification_message_bytes_module = @import("telar-core").max_notification_message_bytes;
+const ShowNotificationExecutorType = @import("../../application/commands/ShowNotificationExecutor.zig");
+const ShowNotificationType = @import("../../application/commands/ShowNotification.zig");
+const ShowNotificationResultType = @import("../../application/commands/ShowNotificationResult.zig");
 const StubExecutor = @This();
-const source_namespace = @import("show_notification.zig");
-const show_notification_commands = @import("../../application/commands/show_notification.zig");
-responses: *source_namespace.ResponseQueue,
+
+responses: *ResponseQueueType,
 delivered_clients: u8,
 call_count: usize = 0,
 observed_reservation: bool = false,
-level: source_namespace.schema.NotificationLevel = .info,
+level: NotificationLevelType = .info,
 duration_ms: u32 = 0,
-target: source_namespace.schema.NotificationTarget = .none,
-title: [source_namespace.schema.max_notification_title_bytes]u8 = undefined,
+target: NotificationTargetType = .none,
+title: [max_notification_title_bytes_module]u8 = undefined,
 title_len: usize = 0,
-message: [source_namespace.schema.max_notification_message_bytes]u8 = undefined,
+message: [max_notification_message_bytes_module]u8 = undefined,
 message_len: usize = 0,
 
-pub fn executor(stub: *StubExecutor) show_notification_commands.ShowNotificationExecutor {
+pub fn executor(stub: *StubExecutor) ShowNotificationExecutorType {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, command: show_notification_commands.ShowNotification) show_notification_commands.ShowNotificationResult {
+fn execute(context: *anyopaque, command: ShowNotificationType) ShowNotificationResultType {
     const stub: *StubExecutor = @ptrCast(@alignCast(context));
     stub.call_count += 1;
     const response = stub.responses.peek().?;

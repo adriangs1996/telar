@@ -1,8 +1,9 @@
-const ClosePaneHandler = @This();
 const AttachedPaneCloser = @import("AttachedPaneCloser.zig");
 const ClosePane = @import("ClosePane.zig");
 const ClosePaneResult = @import("ClosePaneResult.zig");
 const ClosePaneExecutor = @import("ClosePaneExecutor.zig");
+const ClosePaneHandler = @This();
+
 panes: AttachedPaneCloser,
 
 /// Authorizes the pane through the requesting client's attachments and

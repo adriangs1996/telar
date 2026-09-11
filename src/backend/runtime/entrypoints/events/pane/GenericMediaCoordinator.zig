@@ -1,9 +1,11 @@
 const GenericMediaRuntimePort = @import("GenericMediaRuntimePort.zig").Type;
-const Resources = @import("MediaResources.zig");
-const source_namespace = @import("media.zig");
-const Work = @import("MediaWork.zig");
-const Completion = @import("MediaCompletion.zig");
-const media_mod = @import("../../../../media/root.zig");
+const MediaResources = @import("MediaResources.zig");
+const PaneType = @import("../../../../pane/Pane.zig");
+const MediaWork = @import("MediaWork.zig");
+const MediaCompletion = @import("MediaCompletion.zig");
+const enabled_module = @import("telar-core").enabled;
+const StatsType = @import("../../../../media/Stats.zig");
+
 /// Creates a statically dispatched media coordinator.
 ///
 /// ```zig
@@ -14,14 +16,14 @@ pub fn Type(comptime Context: type, comptime port: GenericMediaRuntimePort(Conte
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: MediaResources,
 
         /// Binds one runtime's pane repository and graphics telemetry.
         ///
         /// ```zig
         /// var coordinator = MediaCoordinator.init(&context, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: MediaResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -31,9 +33,9 @@ pub fn Type(comptime Context: type, comptime port: GenericMediaRuntimePort(Conte
         /// ```zig
         /// try coordinator.schedule(pane);
         /// ```
-        pub fn schedule(coordinator: *Self, pane: *source_namespace.Pane) !void {
+        pub fn schedule(coordinator: *Self, pane: *PaneType) !void {
             const borrow = pane.beginMediaProcessing() orelse return;
-            const work: Work = .{ .pane = pane, .current_size = borrow.current_size };
+            const work: MediaWork = .{ .pane = pane, .current_size = borrow.current_size };
 
             port.start(coordinator.context, work) catch |err| {
                 pane.cancelMediaProcessing();
@@ -48,7 +50,7 @@ pub fn Type(comptime Context: type, comptime port: GenericMediaRuntimePort(Conte
         /// ```zig
         /// try coordinator.handle(completion);
         /// ```
-        pub fn handle(coordinator: *Self, completion: Completion) !void {
+        pub fn handle(coordinator: *Self, completion: MediaCompletion) !void {
             const pane = coordinator.resources.panes.resolve(completion.pane) orelse {
                 coordinator.resources.metrics.stale_pane_events += 1;
                 return;
@@ -60,7 +62,7 @@ pub fn Type(comptime Context: type, comptime port: GenericMediaRuntimePort(Conte
             pane.refreshGraphicsProjection();
 
             const projection = port.synchronize_clients(coordinator.context, pane, completion.stats.reset);
-            if (comptime source_namespace.diagnostics.enabled) {
+            if (comptime enabled_module) {
                 coordinator.resources.metrics.graphics_transfers_staged +|= projection.staged;
             }
 
@@ -71,8 +73,8 @@ pub fn Type(comptime Context: type, comptime port: GenericMediaRuntimePort(Conte
             port.pump_clients(coordinator.context);
         }
 
-        fn observeMetrics(coordinator: *Self, stats: media_mod.Stats) void {
-            if (comptime !source_namespace.diagnostics.enabled) {
+        fn observeMetrics(coordinator: *Self, stats: StatsType) void {
+            if (comptime !enabled_module) {
                 return;
             }
 

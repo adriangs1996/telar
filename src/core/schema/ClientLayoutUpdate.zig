@@ -1,6 +1,7 @@
-const ClientLayoutUpdate = @This();
 const TabLocation = @import("TabLocation.zig");
 const ClientTabLayout = @import("ClientTabLayout.zig");
+const ClientLayoutUpdate = @This();
+
 sidebar_visible: bool,
 sidebar_width: u16,
 workspace_list_collapsed: bool,

@@ -1,27 +1,16 @@
 //! Application use case for resizing the focused pane in one client's layout.
 
+const ResizePaneTestingModel = @import("ResizePaneTestingModel.zig");
+const ResizePaneEffectsCapture = @import("ResizePaneEffectsCapture.zig");
+const ResizePaneHandler = @import("ResizePaneHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-pub const ui = core.ui;
-
-pub const ResizePane = client_model.ResizePaneRequest;
-
-pub const ResizeEffects = @import("ResizeEffects.zig");
-
-pub const ResizePaneHandler = @import("ResizePaneHandler.zig");
-
-const TestingModel = @import("ResizePaneTestingModel.zig");
-
-const EffectsCapture = @import("ResizePaneEffectsCapture.zig");
+const VersionType = @import("../../model/Version.zig");
 
 test "ResizePaneHandler commits before delivering runtime geometry" {
-    var testing = try TestingModel.init();
+    var testing = try ResizePaneTestingModel.init();
     defer testing.deinit();
     const width_before = testing.model.workspace.active().?.model.contentSize(testing.first, testing.area).?.cols;
-    var effects: EffectsCapture = .{
+    var effects: ResizePaneEffectsCapture = .{
         .model = testing.model,
         .expected_focused = testing.first,
         .width_before = width_before,
@@ -42,10 +31,10 @@ test "ResizePaneHandler commits before delivering runtime geometry" {
 }
 
 test "ResizePaneHandler suppresses absent layouts and directions without an edge" {
-    var testing = try TestingModel.init();
+    var testing = try ResizePaneTestingModel.init();
     defer testing.deinit();
     const width_before = testing.model.workspace.active().?.model.contentSize(testing.first, testing.area).?.cols;
-    var effects: EffectsCapture = .{
+    var effects: ResizePaneEffectsCapture = .{
         .model = testing.model,
         .expected_focused = testing.first,
         .width_before = width_before,
@@ -60,14 +49,14 @@ test "ResizePaneHandler suppresses absent layouts and directions without an edge
     try std.testing.expect((try handler.execute(.{ .direction = .right, .area = testing.area })) == null);
 
     try std.testing.expectEqual(@as(usize, 0), effects.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "ResizePaneHandler preserves the committed layout after effect failure" {
-    var testing = try TestingModel.init();
+    var testing = try ResizePaneTestingModel.init();
     defer testing.deinit();
     const width_before = testing.model.workspace.active().?.model.contentSize(testing.first, testing.area).?.cols;
-    var effects: EffectsCapture = .{
+    var effects: ResizePaneEffectsCapture = .{
         .model = testing.model,
         .expected_focused = testing.first,
         .width_before = width_before,

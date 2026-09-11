@@ -1,11 +1,13 @@
-/// Bounded interpreter for one streamed provider response.
-const ResponseObserver = @This();
-const source_namespace = @import("root.zig");
-const sse = @import("../sse.zig");
+const types = @import("../../agent/types.zig");
+const DecoderType = @import("../Decoder.zig");
+const SseEvent = @import("../SseEvent.zig");
 const std = @import("std");
 const claude = @import("claude.zig");
-dialect: source_namespace.ApiDialect = .unknown,
-decoder: sse.Decoder = .{},
+/// Bounded interpreter for one streamed provider response.
+const ResponseObserver = @This();
+
+dialect: types.ApiDialect = .unknown,
+decoder: DecoderType = .{},
 completed: bool = false,
 
 /// Starts observing one response from `provider`.
@@ -14,7 +16,7 @@ completed: bool = false,
 /// var observer = ResponseObserver.init(.anthropic_messages);
 /// defer observer.deinit();
 /// ```
-pub fn init(dialect: source_namespace.ApiDialect) ResponseObserver {
+pub fn init(dialect: types.ApiDialect) ResponseObserver {
     return .{ .dialect = dialect };
 }
 
@@ -37,7 +39,7 @@ pub fn feed(observer: *ResponseObserver, input: []const u8) bool {
     const EventSink = struct {
         observer: *ResponseObserver,
 
-        pub fn emit(sink: *@This(), event: sse.Event) void {
+        pub fn emit(sink: *@This(), event: SseEvent) void {
             sink.observer.inspectEvent(event);
         }
     };
@@ -55,7 +57,7 @@ pub fn deinit(observer: *ResponseObserver) void {
     std.crypto.secureZero(u8, std.mem.asBytes(observer));
 }
 
-fn inspectEvent(observer: *ResponseObserver, event: sse.Event) void {
+fn inspectEvent(observer: *ResponseObserver, event: SseEvent) void {
     if (claude.completesTurn(event)) {
         observer.completed = true;
     }

@@ -1,8 +1,12 @@
-const IntegrationContext = @This();
 const FakeSession = @import("FakeSession.zig");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
-const source_namespace = @import("root.zig");
+const SettingsType = @import("Settings.zig");
+const StatsType = @import("Stats.zig");
+const h2 = @import("h2.zig");
+const relay_module = @import("relay.zig");
+const IntegrationContext = @This();
+
 session: FakeSession,
 request_done: *std.Io.Queue(u8),
 event_count: std.atomic.Value(u32) = .init(0),
@@ -14,18 +18,18 @@ pub fn io(_: *IntegrationContext) std.Io {
     return std.testing.io;
 }
 
-pub fn relayRequest(context: *IntegrationContext, settings: *source_namespace.Settings) source_namespace.Stats {
-    const stats = source_namespace.relay(&context.session, source_namespace.relayOptions(.request, settings, .{ .dialect = .anthropic_messages }), context);
+pub fn relayRequest(context: *IntegrationContext, settings: *SettingsType) StatsType {
+    const stats = h2.relay(&context.session, h2.relayOptions(.request, settings, .{ .dialect = .anthropic_messages }), context);
     context.request_done.putOneUncancelable(std.testing.io, 0) catch unreachable;
     return stats;
 }
 
-pub fn relayResponse(context: *IntegrationContext, settings: *source_namespace.Settings) source_namespace.Stats {
+pub fn relayResponse(context: *IntegrationContext, settings: *SettingsType) StatsType {
     _ = context.request_done.getOne(std.testing.io) catch return .{ .decode_failed = true };
-    return source_namespace.relay(&context.session, source_namespace.relayOptions(.response, settings, .{ .dialect = .anthropic_messages }), context);
+    return h2.relay(&context.session, h2.relayOptions(.response, settings, .{ .dialect = .anthropic_messages }), context);
 }
 
-pub fn recordDecodeFailure(context: *IntegrationContext, _: source_namespace.Direction) void {
+pub fn recordDecodeFailure(context: *IntegrationContext, _: relay_module.Direction) void {
     context.decode_failures += 1;
 }
 
@@ -33,7 +37,7 @@ pub fn settle(context: *IntegrationContext) void {
     context.settlements += 1;
 }
 
-pub fn emit(context: *IntegrationContext, event: source_namespace.Event) void {
+pub fn emit(context: *IntegrationContext, event: relay_module.Event) void {
     _ = context.event_count.fetchAdd(1, .monotonic);
 
     switch (event) {

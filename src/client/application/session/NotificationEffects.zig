@@ -1,4 +1,5 @@
+const InputType = @import("../../notifications/NotificationInput.zig");
 const NotificationEffects = @This();
-const notifications = @import("../../root.zig").notifications;
+
 context: *anyopaque,
-publish: *const fn (*anyopaque, notifications.Input) anyerror!void,
+publish: *const fn (*anyopaque, InputType) anyerror!void,

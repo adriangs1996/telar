@@ -1,10 +1,12 @@
+const PaneKeyType = @import("../pane/PaneKey.zig");
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
 /// What one probe found: the next transcript offset and, when a name was
 /// read, the current one. An empty name clears the title.
 const Completion = @This();
-const source_namespace = @import("session_file.zig");
-key: source_namespace.PaneKey,
+
+key: PaneKeyType,
 offset: ?u64,
-title: [source_namespace.schema.max_agent_session_title_bytes]u8 = undefined,
+title: [max_agent_session_title_bytes_module]u8 = undefined,
 title_len: u8 = 0,
 has_title: bool = false,
 

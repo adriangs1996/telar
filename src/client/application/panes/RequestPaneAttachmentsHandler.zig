@@ -1,7 +1,9 @@
+const PaneAttachmentRequestsEffects = @import("PaneAttachmentRequestsEffects.zig");
+const TabType = @import("../../workspace/Tab.zig");
+const RectType = @import("telar-core").Rect;
 const RequestPaneAttachmentsHandler = @This();
-const Effects = @import("PaneAttachmentRequestsEffects.zig");
-const source_namespace = @import("pane_attachment_requests.zig");
-effects: Effects,
+
+effects: PaneAttachmentRequestsEffects,
 
 /// Requests an attachment for each detached pane of `tab` that has visible
 /// content in `area`, and returns how many it requested. A pane with a
@@ -13,7 +15,7 @@ effects: Effects,
 /// ```zig
 /// const count = try handler.execute(tab, area);
 /// ```
-pub fn execute(handler: *RequestPaneAttachmentsHandler, tab: *source_namespace.tabs_mod.Tab, area: source_namespace.ui.Rect) !usize {
+pub fn execute(handler: *RequestPaneAttachmentsHandler, tab: *TabType, area: RectType) !usize {
     var count: usize = 0;
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| {

@@ -1,6 +1,10 @@
+const id = @import("../id.zig");
+const types = @import("../types.zig");
+const TerminalSizeType = @import("../TerminalSize.zig");
+const LaunchViewType = @import("LaunchView.zig");
 const OpenPaneView = @This();
-const source_namespace = @import("pane.zig");
-request_id: source_namespace.RequestId,
-target: source_namespace.PaneTarget,
-size: source_namespace.TerminalSize,
-launch: ?source_namespace.LaunchView,
+
+request_id: id.RequestId,
+target: types.PaneTarget,
+size: TerminalSizeType,
+launch: ?LaunchViewType,

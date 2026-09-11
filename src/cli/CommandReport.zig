@@ -1,6 +1,7 @@
+const AgentCommandPhaseType = @import("telar-core").AgentCommandPhase;
 const CommandReport = @This();
-const source_namespace = @import("hook.zig");
-phase: source_namespace.schema.AgentCommandPhase,
+
+phase: AgentCommandPhaseType,
 provider: []const u8,
 tool_call_id: []const u8,
 command: []const u8,

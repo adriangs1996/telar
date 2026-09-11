@@ -1,4 +1,5 @@
+const TabLocationType = @import("telar-core").TabLocation;
 const TabPanes = @This();
-const source_namespace = @import("create_pane.zig");
+
 context: *anyopaque,
-has_running: *const fn (*anyopaque, source_namespace.schema.TabLocation) bool,
+has_running: *const fn (*anyopaque, TabLocationType) bool,

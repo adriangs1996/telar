@@ -1,6 +1,5 @@
+const Source = @import("Source.zig");
 const WireManifest = @This();
-
-const Source = struct { url: []const u8, revision: []const u8 };
 
 api_version: u16,
 id: []const u8,

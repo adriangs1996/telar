@@ -1,6 +1,7 @@
+const PaneType = @import("../../../../pane/Pane.zig");
+const StatsType = @import("../../../../history/Stats.zig");
 const ScreenReconciliation = @This();
-const source_namespace = @import("observation.zig");
-const history = @import("../../../../history/root.zig");
-pane: *source_namespace.Pane,
-stats: history.observer.Stats,
+
+pane: *PaneType,
+stats: StatsType,
 shell_foreground: bool,

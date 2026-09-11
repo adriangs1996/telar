@@ -1,11 +1,13 @@
-const Content = @This();
-const source_namespace = @import("model.zig");
+const model = @import("model.zig");
 const Segment = @import("Segment.zig");
 const SegmentInput = @import("SegmentInput.zig");
+const measure_module = @import("telar-core").measure;
 const std = @import("std");
-text_bytes: [source_namespace.max_text_bytes]u8 = @splat(0),
+const Content = @This();
+
+text_bytes: [model.max_text_bytes]u8 = @splat(0),
 text_len: u16 = 0,
-segments: [source_namespace.max_segments]Segment = @splat(.{}),
+segments: [model.max_segments]Segment = @splat(.{}),
 segment_count: u8 = 0,
 
 /// Appends one logical segment after validating and compacting its text.
@@ -14,13 +16,13 @@ segment_count: u8 = 0,
 /// try content.append(.{ .text = " CPU", .icon = .cpu });
 /// ```
 pub fn append(content: *Content, input: SegmentInput) !void {
-    if (content.segment_count == source_namespace.max_segments) {
+    if (content.segment_count == model.max_segments) {
         return error.TooManyBarSegments;
     }
     if (input.text.len == 0 and input.icon == null) {
         return error.EmptyBarSegment;
     }
-    if (!source_namespace.validText(input.text)) {
+    if (!model.validText(input.text)) {
         return error.InvalidBarText;
     }
 
@@ -53,9 +55,9 @@ pub fn width(content: *const Content) u16 {
     var result: u16 = 0;
     for (content.slice()) |segment| {
         if (segment.icon) |icon| {
-            result +|= @max(@as(u16, 1), source_namespace.ui.measure(icon.unicodeGlyph()));
+            result +|= @max(@as(u16, 1), measure_module(icon.unicodeGlyph()));
         }
-        result +|= source_namespace.ui.measure(content.text(segment));
+        result +|= measure_module(content.text(segment));
     }
 
     return result;

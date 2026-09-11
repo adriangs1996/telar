@@ -1,8 +1,9 @@
-const Counters = @This();
 const std = @import("std");
-const source_namespace = @import("metrics.zig");
+const metrics = @import("metrics.zig");
 const LiveState = @import("LiveState.zig");
 const Snapshot = @import("Snapshot.zig");
+const Counters = @This();
+
 rejected_connections: std.atomic.Value(u64) = .init(0),
 invalid_authorization_rejections: std.atomic.Value(u64) = .init(0),
 unknown_credential_rejections: std.atomic.Value(u64) = .init(0),
@@ -25,7 +26,7 @@ claude_failure_observations: std.atomic.Value(u64) = .init(0),
 /// ```zig
 /// counters.record(.upstream_connect_failure);
 /// ```
-pub fn record(counters: *Counters, counter: source_namespace.Counter) void {
+pub fn record(counters: *Counters, counter: metrics.Counter) void {
     const selected = switch (counter) {
         .rejected_connection => &counters.rejected_connections,
         .invalid_authorization_rejection => &counters.invalid_authorization_rejections,

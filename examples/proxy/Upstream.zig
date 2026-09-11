@@ -1,6 +1,7 @@
+const event = @import("event.zig");
 const Upstream = @This();
-const source_namespace = @import("event.zig");
+
 /// Pairs with the matching `upstream_closed`.
 id: u64,
-host: source_namespace.Host,
+host: event.Host,
 port: u16,

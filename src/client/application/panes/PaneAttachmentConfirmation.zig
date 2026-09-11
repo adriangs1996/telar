@@ -1,5 +1,6 @@
-const PaneAttachmentConfirmation = @This();
-const client_model = @import("../../root.zig").model;
+const PaneAttachmentType = @import("../../model/PaneAttachment.zig");
 const OpenedPane = @import("OpenedPane.zig");
-requested: client_model.PaneAttachment,
+const PaneAttachmentConfirmation = @This();
+
+requested: PaneAttachmentType,
 opened: OpenedPane,

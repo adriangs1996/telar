@@ -1,15 +1,19 @@
+const DecoderType = @import("Decoder.zig");
+const std = @import("std");
+const ObservedType = @import("Observed.zig");
+const SessionType = @import("Session.zig");
+const RouteType = @import("Route.zig");
+const h2 = @import("h2.zig");
 /// Everything one direction of an h2 connection reported.
 const H2Side = @This();
-const h2 = @import("h2.zig");
-const std = @import("std");
-const tls = @import("tls.zig");
-decoder: h2.Decoder,
+
+decoder: DecoderType,
 text: std.Io.Writer.Allocating,
 body: []u8,
 body_len: usize = 0,
-seen: h2.Observed = .{},
+seen: ObservedType = .{},
 
-fn run(self: *H2Side, session: *tls.Session, route: h2.Route) void {
+pub fn run(self: *H2Side, session: *SessionType, route: RouteType) void {
     h2.relay(session, route, .{
         .decoder = &self.decoder,
         .text = &self.text.writer,

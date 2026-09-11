@@ -1,5 +1,7 @@
+const RectType = @import("telar-core").Rect;
+const ColorType = @import("telar-core").Color;
 const RuleInput = @This();
-const ui = @import("../ui/root.zig");
-area: ui.Rect,
+
+area: RectType,
 y: u16,
-background: ui.Color,
+background: ColorType,

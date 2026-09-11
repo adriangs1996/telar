@@ -1,5 +1,8 @@
+const std = @import("std");
+const PaneStoreType = @import("../../../../pane/PaneStore.zig");
+const RuntimeMetricsType = @import("../../../observability/RuntimeMetrics.zig");
 const Resources = @This();
-const source_namespace = @import("ingest.zig");
-io: source_namespace.Io,
-panes: *source_namespace.PaneStore,
-metrics: *source_namespace.RuntimeMetrics,
+
+io: std.Io,
+panes: *PaneStoreType,
+metrics: *RuntimeMetricsType,

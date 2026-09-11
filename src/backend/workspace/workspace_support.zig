@@ -1,25 +1,22 @@
 //! Workspace aggregate and its tab entities.
 
+const Workspace = @import("Workspace.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const events = @import("events.zig");
-
-pub const schema = core.schema;
-
-pub const max_tabs_per_workspace = schema.max_tabs_per_workspace;
-
-const Tab = @import("Tab.zig");
-
-pub const Workspace = @import("Workspace.zig");
+const workspace_module = @import("telar-core").workspace;
+const tab_module = @import("telar-core").tab;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
+const TabDescriptorType = @import("telar-core").TabDescriptor;
 
 fn testingWorkspace() !Workspace {
     const path = try std.testing.allocator.dupe(u8, "/work/telar");
     errdefer std.testing.allocator.free(path);
 
     return Workspace.init(.{
-        .id = try schema.id.workspace(1),
+        .id = try workspace_module(1),
         .path = path,
-        .default_tab_id = try schema.id.tab(1),
+        .default_tab_id = try tab_module(1),
     });
 }
 
@@ -39,9 +36,9 @@ test "workspace derives its name from its path until explicitly renamed" {
 test "workspace uses its root path as a non-empty derived name" {
     const path = try std.testing.allocator.dupe(u8, "/");
     var workspace = try Workspace.init(.{
-        .id = try schema.id.workspace(1),
+        .id = try workspace_module(1),
         .path = path,
-        .default_tab_id = try schema.id.tab(1),
+        .default_tab_id = try tab_module(1),
     });
     defer workspace.deinit(std.testing.allocator);
 
@@ -49,8 +46,8 @@ test "workspace uses its root path as a non-empty derived name" {
 }
 
 test "workspace rejects paths that cannot cross the runtime protocol" {
-    const workspace_id = try schema.id.workspace(1);
-    const tab_id = try schema.id.tab(1);
+    const workspace_id = try workspace_module(1);
+    const tab_id = try tab_module(1);
     const invalid_paths = [_][]const u8{
         "",
         "bad\x00path",
@@ -67,7 +64,7 @@ test "workspace rejects paths that cannot cross the runtime protocol" {
         }));
     }
 
-    const oversized_source: [schema.max_cwd_bytes + 1]u8 = @splat('x');
+    const oversized_source: [max_cwd_bytes_module + 1]u8 = @splat('x');
     const oversized = try std.testing.allocator.dupe(u8, &oversized_source);
     defer std.testing.allocator.free(oversized);
 
@@ -81,8 +78,8 @@ test "workspace rejects paths that cannot cross the runtime protocol" {
 test "workspace explicit names follow the request label limit" {
     var workspace = try testingWorkspace();
     defer workspace.deinit(std.testing.allocator);
-    const accepted: [schema.max_tab_label_bytes]u8 = @splat('a');
-    const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    const accepted: [max_tab_label_bytes_module]u8 = @splat('a');
+    const oversized: [max_tab_label_bytes_module + 1]u8 = @splat('x');
 
     const renamed = try workspace.rename(&accepted);
 
@@ -95,23 +92,23 @@ test "workspace explicit names follow the request label limit" {
 test "renameTab validates and mutates only the requested tab" {
     var workspace = try testingWorkspace();
     defer workspace.deinit(std.testing.allocator);
-    const logs_id = try schema.id.tab(2);
+    const logs_id = try tab_module(2);
     _ = try workspace.createTab(logs_id, "logs");
 
     const renamed = try workspace.renameTab(logs_id, "server");
     try std.testing.expectEqualStrings("server", workspace.tabLabel(logs_id).?);
-    try std.testing.expectEqualStrings("main", workspace.tabLabel(try schema.id.tab(1)).?);
+    try std.testing.expectEqualStrings("main", workspace.tabLabel(try tab_module(1)).?);
     try std.testing.expectEqualStrings("server", renamed.labelSlice());
     try std.testing.expectEqual(logs_id, renamed.location.tab_id);
 
     try std.testing.expectError(error.InvalidTabLabel, workspace.renameTab(logs_id, ""));
     try std.testing.expectEqualStrings("server", workspace.tabLabel(logs_id).?);
 
-    var oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    var oversized: [max_tab_label_bytes_module + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidTabLabel, workspace.renameTab(logs_id, &oversized));
     try std.testing.expectEqualStrings("server", workspace.tabLabel(logs_id).?);
 
-    try std.testing.expectError(error.TabNotFound, workspace.renameTab(try schema.id.tab(999), "missing"));
+    try std.testing.expectError(error.TabNotFound, workspace.renameTab(try tab_module(999), "missing"));
 
     _ = try workspace.renameTab(logs_id, "api");
     try std.testing.expectEqualStrings("server", renamed.labelSlice());
@@ -120,8 +117,8 @@ test "renameTab validates and mutates only the requested tab" {
 test "tabs are created moved described and removed through the aggregate" {
     var workspace = try testingWorkspace();
     defer workspace.deinit(std.testing.allocator);
-    const logs_id = try schema.id.tab(2);
-    const generated_id = try schema.id.tab(3);
+    const logs_id = try tab_module(2);
+    const generated_id = try tab_module(3);
 
     const logs = try workspace.createTab(logs_id, "logs");
     const generated = try workspace.createTab(generated_id, "");
@@ -137,7 +134,7 @@ test "tabs are created moved described and removed through the aggregate" {
     try std.testing.expectEqual(logs_id, moved.location.tab_id);
     try std.testing.expectEqual(logs_id, workspace.defaultTab());
 
-    var descriptors: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
+    var descriptors: [max_tabs_per_workspace]TabDescriptorType = undefined;
     const snapshot = workspace.writeDescriptors(&descriptors);
     try std.testing.expectEqual(@as(usize, 3), snapshot.len);
     try std.testing.expectEqualStrings("logs", snapshot[0].label);
@@ -152,13 +149,13 @@ test "workspace rejects tabs beyond its fixed capacity without mutation" {
     defer workspace.deinit(std.testing.allocator);
 
     for (2..max_tabs_per_workspace + 1) |raw_id| {
-        _ = try workspace.createTab(try schema.id.tab(raw_id), "tab");
+        _ = try workspace.createTab(try tab_module(raw_id), "tab");
     }
 
     try std.testing.expectEqual(max_tabs_per_workspace, workspace.tabCount());
     try std.testing.expectError(
         error.TabLimitReached,
-        workspace.createTab(try schema.id.tab(max_tabs_per_workspace + 1), "overflow"),
+        workspace.createTab(try tab_module(max_tabs_per_workspace + 1), "overflow"),
     );
     try std.testing.expectEqual(max_tabs_per_workspace, workspace.tabCount());
 }

@@ -1,20 +1,26 @@
-const Renderer = @This();
 const std = @import("std");
-const source_namespace = @import("modal.zig");
+const modal = @import("modal.zig");
 const Asset = @import("Asset.zig");
-const RenderKey = @import("ModalRenderKey.zig");
-const kitty = @import("kitty.zig");
-const theme = @import("../ui/root.zig").theme;
+const ModalRenderKey = @import("ModalRenderKey.zig");
+const RectType = @import("telar-core").Rect;
+const ConfigurationType = @import("Configuration.zig");
+const PaletteType = @import("../ui/Palette.zig");
+const writeTransmissionAbort_module = @import("kitty_protocol").writeTransmissionAbort;
+const writeDeleteImage_module = @import("kitty_protocol").writeDeleteImage;
+const kitty_codec = @import("kitty_codec.zig");
+const writeDeletePlacement_module = @import("kitty_protocol").writeDeletePlacement;
+const Renderer = @This();
+
 gpa: std.mem.Allocator,
-assets: [source_namespace.asset_count]Asset = @splat(.{}),
+assets: [modal.asset_count]Asset = @splat(.{}),
 supported: bool = false,
 cell_width: u16 = 0,
 cell_height: u16 = 0,
-key: ?RenderKey = null,
-desired_area: ?source_namespace.ui.Rect = null,
-emitted_area: ?source_namespace.ui.Rect = null,
+key: ?ModalRenderKey = null,
+desired_area: ?RectType = null,
+emitted_area: ?RectType = null,
 frame_usable: bool = false,
-partial: ?source_namespace.AssetKind = null,
+partial: ?modal.AssetKind = null,
 abort_pending: bool = false,
 
 pub fn init(gpa: std.mem.Allocator) Renderer {
@@ -34,7 +40,7 @@ pub fn retainedBytes(renderer: *const Renderer) usize {
 
 /// Applies host graphics support and cell geometry to modal rendering.
 /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
-pub fn configure(renderer: *Renderer, configuration: kitty.Configuration) bool {
+pub fn configure(renderer: *Renderer, configuration: ConfigurationType) bool {
     const supported = configuration.support == .supported;
     if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
         renderer.cell_height == configuration.cell_height)
@@ -53,14 +59,14 @@ pub fn configure(renderer: *Renderer, configuration: kitty.Configuration) bool {
     return true;
 }
 
-pub fn prepare(renderer: *Renderer, area: source_namespace.ui.Rect, palette: *const theme.Palette) void {
+pub fn prepare(renderer: *Renderer, area: RectType, palette: *const PaletteType) void {
     renderer.frame_usable = renderer.supported and renderer.cell_width != 0 and
         renderer.cell_height != 0 and !area.isEmpty();
-    const background = source_namespace.rgb(palette.panel_bg) orelse {
+    const background = modal.rgb(palette.panel_bg) orelse {
         renderer.hide();
         return;
     };
-    const accent = source_namespace.rgb(palette.accent) orelse {
+    const accent = modal.rgb(palette.accent) orelse {
         renderer.hide();
         return;
     };
@@ -86,7 +92,7 @@ pub fn prepare(renderer: *Renderer, area: source_namespace.ui.Rect, palette: *co
     const shortest = @min(renderer.cell_width, renderer.cell_height);
     const border_width = @max(@as(u16, 1), shortest / 10);
     const radius = @max(@as(u16, 1), @min(@as(u16, 12), shortest / 2));
-    const key: RenderKey = .{
+    const key: ModalRenderKey = .{
         .target_width = target_width,
         .target_height = target_height,
         .cell_width = renderer.cell_width,
@@ -127,7 +133,7 @@ pub fn prepare(renderer: *Renderer, area: source_namespace.ui.Rect, palette: *co
             return;
         };
     }
-    if (total_bytes > source_namespace.max_cache_bytes) {
+    if (total_bytes > modal.max_cache_bytes) {
         renderer.hide();
         return;
     }
@@ -147,17 +153,17 @@ pub fn prepare(renderer: *Renderer, area: source_namespace.ui.Rect, palette: *co
         asset.width = size[0];
         asset.height = size[1];
     }
-    source_namespace.renderCorners(renderer.assetFor(.corners), key);
-    source_namespace.fill(renderer.assetFor(.horizontal).pixels, key.accent);
-    source_namespace.fill(renderer.assetFor(.vertical).pixels, key.accent);
+    modal.renderCorners(renderer.assetFor(.corners), key);
+    modal.fill(renderer.assetFor(.horizontal).pixels, key.accent);
+    modal.fill(renderer.assetFor(.vertical).pixels, key.accent);
     renderer.key = key;
     for (&renderer.assets) |*asset| asset.dirty = true;
 }
 
-pub fn covers(renderer: *const Renderer, area: source_namespace.ui.Rect) bool {
+pub fn covers(renderer: *const Renderer, area: RectType) bool {
     if (!renderer.frame_usable or renderer.partial != null or renderer.abort_pending or
-        !source_namespace.optionalAreaEql(renderer.desired_area, area) or
-        !source_namespace.optionalAreaEql(renderer.emitted_area, area))
+        !modal.optionalAreaEql(renderer.desired_area, area) or
+        !modal.optionalAreaEql(renderer.emitted_area, area))
     {
         return false;
     }
@@ -167,7 +173,7 @@ pub fn covers(renderer: *const Renderer, area: source_namespace.ui.Rect) bool {
 
 pub fn damaged(renderer: *const Renderer) bool {
     if (renderer.abort_pending or renderer.partial != null or
-        !source_namespace.optionalAreaEql(renderer.desired_area, renderer.emitted_area))
+        !modal.optionalAreaEql(renderer.desired_area, renderer.emitted_area))
     {
         return true;
     }
@@ -185,19 +191,19 @@ pub fn transferInProgress(renderer: *const Renderer) bool {
     return renderer.abort_pending or renderer.partial != null;
 }
 
-pub fn write(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_namespace.Io.Writer.Error!usize {
+pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     if (!renderer.damaged()) {
         return 0;
     }
     var written: usize = 0;
     if (renderer.abort_pending) {
-        written += try kitty.writeTransmissionAbort(writer);
+        written += try writeTransmissionAbort_module(writer);
         renderer.abort_pending = false;
     }
     if (!renderer.supported) {
         for (&renderer.assets, 0..) |*asset, index| {
             if (asset.emitted) {
-                written += try kitty.writeDeleteImage(writer, source_namespace.imageId(index));
+                written += try writeDeleteImage_module(writer, modal.imageId(index));
             }
             asset.emitted = false;
             asset.dirty = false;
@@ -217,13 +223,13 @@ pub fn write(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_na
                 continue;
             }
             if (asset.emitted) {
-                written += try kitty.writeDeleteImage(writer, source_namespace.imageId(index));
+                written += try writeDeleteImage_module(writer, modal.imageId(index));
                 asset.emitted = false;
             }
-            const progress = try kitty.writeTransmissionChunks(writer, .{
-                .external_id = source_namespace.imageId(index),
+            const progress = try kitty_codec.writeTransmissionChunks(writer, .{
+                .external_id = modal.imageId(index),
                 .image = .{
-                    .key = .{ .image_id = source_namespace.imageId(index), .generation = 1 },
+                    .key = .{ .image_id = modal.imageId(index), .generation = 1 },
                     .format = .rgba,
                     .width = asset.width,
                     .height = asset.height,
@@ -231,7 +237,7 @@ pub fn write(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_na
                 },
                 .pixels = asset.pixels,
                 .start_offset = asset.transfer_offset,
-                .budget = kitty.transmission_budget_per_frame,
+                .budget = kitty_codec.transmission_budget_per_frame,
                 .compressed = false,
             });
             written += progress.written;
@@ -248,7 +254,7 @@ pub fn write(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_na
         }
     }
 
-    if (!source_namespace.optionalAreaEql(renderer.desired_area, renderer.emitted_area)) {
+    if (!modal.optionalAreaEql(renderer.desired_area, renderer.emitted_area)) {
         if (renderer.emitted_area != null) {
             written += try renderer.deletePlacements(writer);
         }
@@ -263,7 +269,7 @@ pub fn write(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_na
     return written;
 }
 
-pub fn assetFor(renderer: *Renderer, kind: source_namespace.AssetKind) *Asset {
+pub fn assetFor(renderer: *Renderer, kind: modal.AssetKind) *Asset {
     return &renderer.assets[@intFromEnum(kind)];
 }
 
@@ -293,22 +299,22 @@ fn hide(renderer: *Renderer) void {
     renderer.desired_area = null;
 }
 
-fn deletePlacements(renderer: *Renderer, writer: *source_namespace.Io.Writer) source_namespace.Io.Writer.Error!usize {
+fn deletePlacements(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     _ = renderer;
     var written: usize = 0;
-    for (0..source_namespace.placement_count) |index|
-        written += try kitty.writeDeletePlacement(
+    for (0..modal.placement_count) |index|
+        written += try writeDeletePlacement_module(
             writer,
-            source_namespace.placementImageId(index),
-            source_namespace.placementId(index),
+            modal.placementImageId(index),
+            modal.placementId(index),
         );
     return written;
 }
 
-fn writePlacements(renderer: *const Renderer, writer: *source_namespace.Io.Writer, area: source_namespace.ui.Rect) source_namespace.Io.Writer.Error!usize {
+fn writePlacements(renderer: *const Renderer, writer: *std.Io.Writer, area: RectType) std.Io.Writer.Error!usize {
     const key = renderer.key.?;
-    const horizontal = renderer.assets[@intFromEnum(source_namespace.AssetKind.horizontal)];
-    const vertical = renderer.assets[@intFromEnum(source_namespace.AssetKind.vertical)];
+    const horizontal = renderer.assets[@intFromEnum(modal.AssetKind.horizontal)];
+    const vertical = renderer.assets[@intFromEnum(modal.AssetKind.vertical)];
     const right = area.x + area.w - 1;
     const bottom = area.y + area.h - 1;
     var written: usize = 0;
@@ -319,9 +325,9 @@ fn writePlacements(renderer: *const Renderer, writer: *source_namespace.Io.Write
         .{ right, bottom },
     };
     for (corner_positions, 0..) |position, index| {
-        written += try kitty.writeUiPlacement(writer, .{
-            .image_id = source_namespace.imageId(@intFromEnum(source_namespace.AssetKind.corners)),
-            .placement_id = source_namespace.placementId(index),
+        written += try kitty_codec.writeUiPlacement(writer, .{
+            .image_id = modal.imageId(@intFromEnum(modal.AssetKind.corners)),
+            .placement_id = modal.placementId(index),
             .value = .{
                 .column = position[0],
                 .row = position[1],
@@ -334,12 +340,12 @@ fn writePlacements(renderer: *const Renderer, writer: *source_namespace.Io.Write
                 .columns = 0,
                 .rows = 0,
             },
-            .z = source_namespace.z_index,
+            .z = modal.z_index,
         });
     }
-    written += try kitty.writeUiPlacement(writer, .{
-        .image_id = source_namespace.imageId(@intFromEnum(source_namespace.AssetKind.horizontal)),
-        .placement_id = source_namespace.placementId(4),
+    written += try kitty_codec.writeUiPlacement(writer, .{
+        .image_id = modal.imageId(@intFromEnum(modal.AssetKind.horizontal)),
+        .placement_id = modal.placementId(4),
         .value = .{
             .column = area.x + 1,
             .row = area.y,
@@ -352,11 +358,11 @@ fn writePlacements(renderer: *const Renderer, writer: *source_namespace.Io.Write
             .columns = 0,
             .rows = 0,
         },
-        .z = source_namespace.z_index,
+        .z = modal.z_index,
     });
-    written += try kitty.writeUiPlacement(writer, .{
-        .image_id = source_namespace.imageId(@intFromEnum(source_namespace.AssetKind.horizontal)),
-        .placement_id = source_namespace.placementId(5),
+    written += try kitty_codec.writeUiPlacement(writer, .{
+        .image_id = modal.imageId(@intFromEnum(modal.AssetKind.horizontal)),
+        .placement_id = modal.placementId(5),
         .value = .{
             .column = area.x + 1,
             .row = bottom,
@@ -369,11 +375,11 @@ fn writePlacements(renderer: *const Renderer, writer: *source_namespace.Io.Write
             .columns = 0,
             .rows = 0,
         },
-        .z = source_namespace.z_index,
+        .z = modal.z_index,
     });
-    written += try kitty.writeUiPlacement(writer, .{
-        .image_id = source_namespace.imageId(@intFromEnum(source_namespace.AssetKind.vertical)),
-        .placement_id = source_namespace.placementId(6),
+    written += try kitty_codec.writeUiPlacement(writer, .{
+        .image_id = modal.imageId(@intFromEnum(modal.AssetKind.vertical)),
+        .placement_id = modal.placementId(6),
         .value = .{
             .column = area.x,
             .row = area.y + 1,
@@ -386,11 +392,11 @@ fn writePlacements(renderer: *const Renderer, writer: *source_namespace.Io.Write
             .columns = 0,
             .rows = 0,
         },
-        .z = source_namespace.z_index,
+        .z = modal.z_index,
     });
-    written += try kitty.writeUiPlacement(writer, .{
-        .image_id = source_namespace.imageId(@intFromEnum(source_namespace.AssetKind.vertical)),
-        .placement_id = source_namespace.placementId(7),
+    written += try kitty_codec.writeUiPlacement(writer, .{
+        .image_id = modal.imageId(@intFromEnum(modal.AssetKind.vertical)),
+        .placement_id = modal.placementId(7),
         .value = .{
             .column = right,
             .row = area.y + 1,
@@ -403,7 +409,7 @@ fn writePlacements(renderer: *const Renderer, writer: *source_namespace.Io.Write
             .columns = 0,
             .rows = 0,
         },
-        .z = source_namespace.z_index,
+        .z = modal.z_index,
     });
     return written;
 }

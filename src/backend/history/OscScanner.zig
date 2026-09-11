@@ -1,9 +1,10 @@
+const escape_ops = @import("escape.zig");
 /// Frames `ESC ]` OSC sequences and streams their payload as events.
 ///
 /// Raw C1 introducers are deliberately not honoured: the emulator parses the
 /// stream as UTF-8, where 0x9d and 0x9c are continuation bytes.
 const OscScanner = @This();
-const source_namespace = @import("escape.zig");
+
 state: State = .ground,
 
 const State = enum { ground, escape, osc, osc_escape };
@@ -22,7 +23,7 @@ pub const Event = union(enum) {
 pub fn next(scanner: *OscScanner, input: u8) Event {
     switch (scanner.state) {
         .ground => {
-            if (input == source_namespace.esc) {
+            if (input == escape_ops.esc) {
                 scanner.state = .escape;
             }
             return .none;
@@ -36,11 +37,11 @@ pub fn next(scanner: *OscScanner, input: u8) Event {
             return .none;
         },
         .osc => switch (input) {
-            source_namespace.bel => {
+            escape_ops.bel => {
                 scanner.state = .ground;
                 return .end;
             },
-            source_namespace.esc => {
+            escape_ops.esc => {
                 scanner.state = .osc_escape;
                 return .none;
             },
@@ -53,7 +54,7 @@ pub fn next(scanner: *OscScanner, input: u8) Event {
             }
             // An ESC that was not a terminator abandons the sequence.
             // A second ESC may still open a fresh escape.
-            scanner.state = if (input == source_namespace.esc) .escape else .ground;
+            scanner.state = if (input == escape_ops.esc) .escape else .ground;
             return .none;
         },
     }

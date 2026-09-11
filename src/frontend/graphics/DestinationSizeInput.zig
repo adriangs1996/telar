@@ -1,6 +1,7 @@
+const PlacementType = @import("telar-core").Placement;
 const DestinationSizeInput = @This();
-const source_namespace = @import("kitty.zig");
-placement: source_namespace.graphics.Placement,
+
+placement: PlacementType,
 source_width: u32,
 source_height: u32,
 cell_width: u16,

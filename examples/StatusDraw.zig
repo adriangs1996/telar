@@ -1,7 +1,9 @@
-const StatusDraw = @This();
-const source_namespace = @import("sidebar.zig");
+const RectType = @import("telar-core").Rect;
 const Task = @import("Task.zig");
-area: source_namespace.ui.Rect,
+const ColorType = @import("telar-core").Color;
+const StatusDraw = @This();
+
+area: RectType,
 y: u16,
 task: Task,
-background: source_namespace.ui.Color,
+background: ColorType,

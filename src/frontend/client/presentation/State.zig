@@ -1,54 +1,87 @@
-const State = @This();
-const ui = @import("../../ui/root.zig");
-const source_namespace = @import("view.zig");
-const theme_mod = @import("../../ui/root.zig").theme;
-const core = @import("telar-core");
-const widgets = @import("../../widgets/root.zig");
-const kitty = @import("../../graphics/root.zig").kitty;
-const icon_graphics = @import("../../graphics/root.zig").icons;
-const toast_graphics = @import("../../graphics/root.zig").toast;
-const modal_graphics = @import("../../graphics/root.zig").modal;
-const pill_graphics = @import("../../graphics/root.zig").pill;
-const attachments = @import("../../attachments/root.zig");
+const BufferType = @import("telar-core").Buffer;
+const LayoutRegions = @import("../../widgets/LayoutRegions.zig");
+const StateType = @import("telar-client").WorkspaceState;
+const ThemeType = @import("../../ui/Theme.zig");
+const ClientTheme = @import("telar-client").Theme;
+const context_support = @import("../../widgets/context_support.zig");
+const default_width = @import("telar-client").default_width;
+const PointType = @import("telar-core").Point;
+const RectType = @import("telar-core").Rect;
+const WidgetsState = @import("../../widgets/State.zig");
+const capabilities = @import("../../graphics/capabilities.zig");
+const KittySidebarRendererType = @import("../../graphics/KittySidebarRenderer.zig");
+const IconsRenderer = @import("../../graphics/IconsRenderer.zig");
+const ToastRenderer = @import("../../graphics/ToastRenderer.zig");
+const ModalRenderer = @import("../../graphics/ModalRenderer.zig");
+const PillRenderer = @import("../../graphics/PillRenderer.zig");
+const delivery_module = @import("../../attachments/delivery.zig");
 const GraphicsPlan = @import("GraphicsPlan.zig");
 const std = @import("std");
+const theme_mod = @import("../../ui/theme_support.zig");
 const Dimensions = @import("Dimensions.zig");
 const Appearance = @import("Appearance.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const notifications = @import("telar-client").notifications;
+const RegionType = @import("telar-client").Region;
+const PaletteType = @import("../../ui/Palette.zig");
+const ConfigurationType = @import("../../graphics/Configuration.zig");
+const PaneBottomReservationType = @import("telar-client").PaneBottomReservation;
+const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
+const TargetType = @import("telar-client").AttachmentTarget;
+const CaptureType = @import("telar-client").Capture;
+const AttachmentsTypesId = @import("telar-client").AttachmentId;
+const MarkerScreenType = @import("telar-client").MarkerScreen;
+const CenterType = @import("telar-client").Center;
+const screen_support = @import("../../presentation/screen_support.zig");
+const ViewInteractionCommand = @import("telar-client").ViewInteractionCommand;
+const view_ops = @import("view.zig");
+const ScreenType = @import("../../presentation/Screen.zig");
+const StyleType = @import("telar-core").Style;
 const RenderInput = @import("RenderInput.zig");
 const RenderStats = @import("RenderStats.zig");
-scratch: ui.Buffer,
-regions: source_namespace.Regions,
-geometry_state: @import("telar-client").workspace.geometry.State,
-theme: theme_mod.Theme,
-icon_theme: ui.icons.Theme,
-hits: source_namespace.Hits = .{},
+const ContextType = @import("../../widgets/Context.zig");
+const LayoutSnapshot = @import("telar-client").LayoutSnapshot;
+const composition_module = @import("../../widgets/composition.zig");
+const history_browser_module = @import("../../widgets/history_browser.zig");
+const goto_picker_module = @import("../../widgets/goto_picker.zig");
+const toast_module = @import("../../widgets/toast.zig");
+const CursorType = @import("../../widgets/Cursor.zig");
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const SidebarProviderPlacementType = @import("../../graphics/SidebarProviderPlacement.zig");
+const kitty_sidebar_module = @import("../../graphics/kitty_sidebar.zig");
+const PointerShape = @import("telar-core").PointerShape;
+const PaneIdType = @import("telar-core").PaneId;
+const State = @This();
+
+scratch: BufferType,
+regions: LayoutRegions,
+geometry_state: StateType,
+theme: ThemeType,
+icon_theme: ClientTheme,
+hits: context_support.Hits = .{},
 sidebar_requested: bool = true,
-sidebar_preferred_width: u16 = source_namespace.sidebar_width,
+sidebar_preferred_width: u16 = default_width,
 sidebar_resize_active: bool = false,
-hovered: ?source_namespace.Action = null,
-pointer_position: ?core.ui.Point = null,
+hovered: ?context_support.Action = null,
+pointer_position: ?PointType = null,
 // Last projected content bounds distinguish border crossings without
 // invalidating chrome for every mouse move within the same pane.
-pointer_content: ui.Rect = .{},
-sidebar: widgets.sidebar.State = .{},
+pointer_content: RectType = .{},
+sidebar: WidgetsState = .{},
 workspace_list_collapsed: bool = false,
 dirty: bool = true,
 interaction_revision: u64 = 0,
-sidebar_rendering: kitty.ResolvedSidebarRendering = .cells,
+sidebar_rendering: capabilities.ResolvedSidebarRendering = .cells,
 toast_overlay_drawn: bool = false,
-kitty_sidebar: kitty.KittySidebarRenderer,
-kitty_icons: icon_graphics.Renderer,
-kitty_toasts: toast_graphics.Renderer,
-kitty_modal: modal_graphics.Renderer,
-kitty_pill: pill_graphics.Renderer,
-attachment_store: attachments.Store,
+kitty_sidebar: KittySidebarRendererType,
+kitty_icons: IconsRenderer,
+kitty_toasts: ToastRenderer,
+kitty_modal: ModalRenderer,
+kitty_pill: PillRenderer,
+attachment_store: delivery_module.Store,
 graphics_plan: GraphicsPlan = .{},
 graphics_plan_dirty: bool = false,
 cell_width_px: u16 = 0,
 cell_height_px: u16 = 0,
-modal_overlay_area: ui.Rect = .{},
+modal_overlay_area: RectType = .{},
 
 pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
     return initWithTheme(gpa, .{ .width = width, .height = height }, theme_mod.default_theme);
@@ -59,7 +92,7 @@ pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
 /// ```zig
 /// var view = try State.initWithTheme(gpa, .{ .width = 80, .height = 24 }, theme);
 /// ```
-pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_theme: theme_mod.Theme) !State {
+pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_theme: ThemeType) !State {
     return initWithAppearance(gpa, dimensions, .{ .theme = selected_theme });
 }
 
@@ -69,9 +102,9 @@ pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_th
 /// var view = try State.initWithAppearance(gpa, .{ .width = 80, .height = 24 }, .{ .theme = theme, .icons = .nerd_font });
 /// ```
 pub fn initWithAppearance(gpa: std.mem.Allocator, dimensions: Dimensions, appearance: Appearance) !State {
-    const regions: source_namespace.Regions = .calculate(dimensions.width, dimensions.height, .{
+    const regions: LayoutRegions = .calculate(dimensions.width, dimensions.height, .{
         .visible = true,
-        .preferred_width = source_namespace.sidebar_width,
+        .preferred_width = default_width,
     });
 
     return .{
@@ -108,12 +141,12 @@ pub fn resize(state: *State, width: u16, height: u16) !void {
     state.dirty = true;
 }
 
-pub fn workbench(state: *const State) ui.Rect {
+pub fn workbench(state: *const State) RectType {
     return state.geometry().area;
 }
 
 /// Example: `const region = view.geometry();`.
-pub fn geometry(state: *const State) @import("telar-client").workspace.geometry.Region {
+pub fn geometry(state: *const State) RegionType {
     return state.geometry_state.current;
 }
 
@@ -135,17 +168,17 @@ fn recalculateRegions(state: *State, width: u16, height: u16) void {
     state.geometry_state.update(state.regions.workbench);
 }
 
-pub fn palette(state: *const State) *const theme_mod.Palette {
+pub fn palette(state: *const State) *const PaletteType {
     return &state.theme.palette;
 }
 
-pub fn setTheme(state: *State, selected_theme: theme_mod.Theme) void {
+pub fn setTheme(state: *State, selected_theme: ThemeType) void {
     state.theme = selected_theme;
     state.hovered = null;
     state.dirty = true;
 }
 
-pub fn setIconTheme(state: *State, selected_theme: ui.icons.Theme) void {
+pub fn setIconTheme(state: *State, selected_theme: ClientTheme) void {
     if (state.icon_theme == selected_theme) {
         return;
     }
@@ -237,13 +270,13 @@ pub fn resetSidebarScroll(state: *State) void {
 /// ```zig
 /// try view.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 8, .cell_height = 16 });
 /// ```
-pub fn configureSidebar(state: *State, requested: kitty.SidebarRendering, configuration: kitty.Configuration) !void {
+pub fn configureSidebar(state: *State, requested: capabilities.SidebarRendering, configuration: ConfigurationType) !void {
     const resolved = try requested.resolve(configuration.support);
     const toast_changed = state.kitty_toasts.configure(configuration);
     const modal_changed = state.kitty_modal.configure(configuration);
     const pill_changed = state.kitty_pill.configure(configuration);
     const icons_changed = state.kitty_icons.configure(configuration);
-    const attachments_changed = @import("../../attachments/root.zig").delivery.configure(&state.attachment_store, configuration);
+    const attachments_changed = delivery_module.configure(&state.attachment_store, configuration);
     if (state.sidebar_rendering != resolved or state.cell_width_px != configuration.cell_width or
         state.cell_height_px != configuration.cell_height or toast_changed or icons_changed or
         modal_changed or pill_changed or attachments_changed)
@@ -255,27 +288,27 @@ pub fn configureSidebar(state: *State, requested: kitty.SidebarRendering, config
     }
 }
 
-pub fn kittySidebar(state: *State) *kitty.KittySidebarRenderer {
+pub fn kittySidebar(state: *State) *KittySidebarRendererType {
     return &state.kitty_sidebar;
 }
 
-pub fn kittyToasts(state: *State) *toast_graphics.Renderer {
+pub fn kittyToasts(state: *State) *ToastRenderer {
     return &state.kitty_toasts;
 }
 
-pub fn kittyModal(state: *State) *modal_graphics.Renderer {
+pub fn kittyModal(state: *State) *ModalRenderer {
     return &state.kitty_modal;
 }
 
-pub fn kittyPill(state: *State) *pill_graphics.Renderer {
+pub fn kittyPill(state: *State) *PillRenderer {
     return &state.kitty_pill;
 }
 
-pub fn kittyIcons(state: *State) *icon_graphics.Renderer {
+pub fn kittyIcons(state: *State) *IconsRenderer {
     return &state.kitty_icons;
 }
 
-pub fn kittyAttachments(state: *State) *attachments.Store {
+pub fn kittyAttachments(state: *State) *delivery_module.Store {
     return &state.attachment_store;
 }
 
@@ -285,14 +318,14 @@ pub fn kittyAttachments(state: *State) *attachments.Store {
 /// ```zig
 /// const reservation = view.attachmentReservation();
 /// ```
-pub fn attachmentReservation(state: *const State) ?workspace_capability.layout.PaneBottomReservation {
+pub fn attachmentReservation(state: *const State) ?PaneBottomReservationType {
     const target = state.attachment_store.visibleTarget() orelse return null;
 
     return .{
         .pane_id = target.pane_id,
-        .preferred_height = widgets.attachment_preview.shelf_height,
-        .minimum_height = widgets.attachment_preview.shelf_minimum_height,
-        .minimum_pane_height = widgets.attachment_preview.pane_minimum_height,
+        .preferred_height = attachment_preview_module.shelf_height,
+        .minimum_height = attachment_preview_module.shelf_minimum_height,
+        .minimum_pane_height = attachment_preview_module.pane_minimum_height,
     };
 }
 
@@ -302,7 +335,7 @@ pub fn attachmentReservation(state: *const State) ?workspace_capability.layout.P
 /// ```zig
 /// const layout_changed = view.syncAttachmentTarget(target);
 /// ```
-pub fn syncAttachmentTarget(state: *State, target: ?attachments.Target) bool {
+pub fn syncAttachmentTarget(state: *State, target: ?TargetType) bool {
     const change = state.attachment_store.setTarget(target);
     if (!change.changed) {
         return false;
@@ -312,7 +345,7 @@ pub fn syncAttachmentTarget(state: *State, target: ?attachments.Target) bool {
     return change.layout_changed;
 }
 
-pub fn adoptAttachment(state: *State, capture: *attachments.Capture) !bool {
+pub fn adoptAttachment(state: *State, capture: *CaptureType) !bool {
     const had_items = state.attachment_store.hasVisibleItems();
     try state.attachment_store.adopt(capture);
     const has_items = state.attachment_store.hasVisibleItems();
@@ -327,7 +360,7 @@ pub fn adoptAttachment(state: *State, capture: *attachments.Capture) !bool {
 /// ```zig
 /// const layout_changed = view.removeAttachment(id) orelse return;
 /// ```
-pub fn removeAttachment(state: *State, id: attachments.Id) ?bool {
+pub fn removeAttachment(state: *State, id: AttachmentsTypesId) ?bool {
     const had_items = state.attachment_store.hasVisibleItems();
     if (!state.attachment_store.remove(id)) {
         return null;
@@ -345,7 +378,7 @@ pub fn removeAttachment(state: *State, id: attachments.Id) ?bool {
 /// ```zig
 /// const layout_changed = view.removePromptAttachments(target) orelse return;
 /// ```
-pub fn removePromptAttachments(state: *State, target: attachments.Target) ?bool {
+pub fn removePromptAttachments(state: *State, target: TargetType) ?bool {
     const had_items = state.attachment_store.hasVisibleItems();
     if (state.attachment_store.removeVisible(target) == 0) {
         return null;
@@ -364,7 +397,7 @@ pub fn removePromptAttachments(state: *State, target: attachments.Target) ?bool 
 /// ```zig
 /// const layout_changed = view.reconcileAttachmentMarkers(target, screen) orelse return;
 /// ```
-pub fn reconcileAttachmentMarkers(state: *State, target: attachments.Target, screen: attachments.MarkerScreen) ?bool {
+pub fn reconcileAttachmentMarkers(state: *State, target: TargetType, screen: MarkerScreenType) ?bool {
     const had_items = state.attachment_store.hasVisibleItems();
     if (state.attachment_store.reconcileMarkers(target, screen) == 0) {
         return null;
@@ -399,7 +432,7 @@ pub fn closeAttachmentModal(state: *State) bool {
 /// ```zig
 /// _ = try view.prepareGraphics(model.notificationSnapshot(), media_idle);
 /// ```
-pub fn prepareGraphics(state: *State, snapshot: *const notifications.Center, media_idle: bool) !bool {
+pub fn prepareGraphics(state: *State, snapshot: *const CenterType, media_idle: bool) !bool {
     if (!state.graphics_plan_dirty and
         !(media_idle and state.kitty_toasts.preparationDeferred()))
     {
@@ -412,7 +445,7 @@ pub fn prepareGraphics(state: *State, snapshot: *const notifications.Center, med
         .palette = state.palette(),
         .icon_theme = state.icon_theme,
     });
-    @import("../../attachments/root.zig").delivery.prepare(&state.attachment_store, state.graphics_plan.attachments);
+    delivery_module.prepare(&state.attachment_store, state.graphics_plan.attachments);
     state.kitty_modal.prepare(state.graphics_plan.modal_area, state.palette());
     state.kitty_pill.prepare(&state.graphics_plan.pill_labels, state.palette());
     try state.kitty_sidebar.prepare(.{
@@ -439,11 +472,11 @@ pub fn graphicsPreparationPending(state: *const State) bool {
 /// ```zig
 /// const covered = view.graphicalToastsCover(model.notificationSnapshot());
 /// ```
-pub fn graphicalToastsCover(state: *const State, snapshot: *const notifications.Center) bool {
+pub fn graphicalToastsCover(state: *const State, snapshot: *const CenterType) bool {
     return state.kitty_toasts.covers(snapshot);
 }
 
-pub fn graphicalModalCovers(state: *const State, area: ui.Rect) bool {
+pub fn graphicalModalCovers(state: *const State, area: RectType) bool {
     return state.kitty_modal.covers(area);
 }
 
@@ -463,8 +496,8 @@ pub fn graphicalPillCoversPlan(state: *const State) bool {
 /// ```zig
 /// const interaction = view.handleMouse(mouse);
 /// ```
-pub fn handleMouse(state: *State, mouse: source_namespace.term.Event.Mouse) source_namespace.Interaction {
-    var result: source_namespace.Interaction = .{};
+pub fn handleMouse(state: *State, mouse: screen_support.Event.Mouse) ViewInteractionCommand {
+    var result: ViewInteractionCommand = .{};
     if (state.attachment_store.hasModal()) {
         result.consumed = true;
     }
@@ -475,7 +508,7 @@ pub fn handleMouse(state: *State, mouse: source_namespace.term.Event.Mouse) sour
     state.pointer_position = .{ .x = mouse.x, .y = mouse.y };
     const hovered = state.hits.at(mouse.x, mouse.y);
 
-    if (!source_namespace.optionalActionEql(state.hovered, hovered) or crossed_content) {
+    if (!view_ops.optionalActionEql(state.hovered, hovered) or crossed_content) {
         state.hovered = hovered;
         state.recordInteraction();
     }
@@ -582,14 +615,14 @@ fn recordInteraction(state: *State) void {
 
 /// A rejected configuration paints one red line over the bottom row so
 /// the message survives until the next successful reload.
-fn renderDiagnosticBanner(state: *State, screen: *source_namespace.term.Screen, diagnostic: ?[]const u8) void {
+fn renderDiagnosticBanner(state: *State, screen: *ScreenType, diagnostic: ?[]const u8) void {
     const message = diagnostic orelse return;
     const banner = state.regions.bottom;
     if (banner.isEmpty()) {
         return;
     }
     const colors = state.palette();
-    const style: ui.Style = .{
+    const style: StyleType = .{
         .fg = colors.text,
         .bg = colors.red,
         .flags = .{ .bold = true },
@@ -599,7 +632,7 @@ fn renderDiagnosticBanner(state: *State, screen: *source_namespace.term.Screen, 
     _ = screen.back.writeText(banner, .{ .point = .{ .x = banner.x + prefix_width, .y = banner.y }, .text = message, .style = style });
 }
 
-pub fn render(state: *State, screen: *source_namespace.term.Screen, input: RenderInput) !RenderStats {
+pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderStats {
     // Resolve against rebuilt hits on chrome/layout changes, and against
     // current pane metadata even when cell/chrome rendering is a no-op.
     defer screen.mouse_pointer = state.mousePointerShape(input);
@@ -607,7 +640,7 @@ pub fn render(state: *State, screen: *source_namespace.term.Screen, input: Rende
     // repainted the bottom row — so it lands on both exit paths.
     defer state.renderDiagnosticBanner(screen, input.diagnostic);
     if (!input.force and !state.dirty and !state.attachment_store.hasModal() and
-        source_namespace.pickerPrompt(input.prompt) == null and
+        view_ops.pickerPrompt(input.prompt) == null and
         !input.notifications.hasItems() and !state.toast_overlay_drawn)
     {
         return .{};
@@ -621,7 +654,7 @@ pub fn render(state: *State, screen: *source_namespace.term.Screen, input: Rende
         .rgb => |value| value,
         .default, .indexed => null,
     } else null;
-    var context: widgets.Context = .{
+    var context: ContextType = .{
         .buffer = &state.scratch,
         .hits = &state.hits,
         .palette = state.palette(),
@@ -632,8 +665,8 @@ pub fn render(state: *State, screen: *source_namespace.term.Screen, input: Rende
         else
             null,
     };
-    var fallback_layout: workspace_capability.layout.Snapshot = .{};
-    var fallback_attachment_area: ui.Rect = .{};
+    var fallback_layout: LayoutSnapshot = .{};
+    var fallback_attachment_area: RectType = .{};
     const layout = if (input.compositor) |compositor|
         compositor.layoutSnapshot()
     else layout: {
@@ -646,20 +679,20 @@ pub fn render(state: *State, screen: *source_namespace.term.Screen, input: Rende
     else
         fallback_attachment_area;
     const previous_pill_area = state.graphics_plan.pill_labels.area.intersect(state.scratch.area());
-    const label_plan = if (input.compositor) |compositor| compositor.fullscreenLabels() else &source_namespace.empty_pane_labels;
+    const label_plan = if (input.compositor) |compositor| compositor.fullscreenLabels() else &view_ops.empty_pane_labels;
     const label_area = label_plan.area;
     if (input.compositor) |compositor| {
         compositor.copyArea(&state.scratch, previous_pill_area);
         compositor.copyArea(&state.scratch, label_area);
     }
 
-    const composed = widgets.composition.render(&context, .{
+    const composed = composition_module.render(&context, .{
         .regions = state.regions,
         .tabs = input.tabs,
         .model = input.model,
         .layout = layout,
-        .rename_field = source_namespace.promptField(input.prompt),
-        .rename_kind = source_namespace.promptKind(input.prompt),
+        .rename_field = view_ops.promptField(input.prompt),
+        .rename_kind = view_ops.promptKind(input.prompt),
         .sidebar_snapshot = input.agents,
         .sidebar_state = &state.sidebar,
         .sidebar_transparent = hybrid,
@@ -679,22 +712,22 @@ pub fn render(state: *State, screen: *source_namespace.term.Screen, input: Rende
         .bar_state = input.bar_state,
     });
     const attachment_snapshot = state.attachment_store.snapshot();
-    var attachment_plan = widgets.attachment_preview.renderShelf(
+    var attachment_plan = attachment_preview_module.renderShelf(
         &context,
         attachment_area,
         &attachment_snapshot,
     );
-    const picker_prompt = source_namespace.pickerPrompt(input.prompt);
+    const picker_prompt = view_ops.pickerPrompt(input.prompt);
     const application_area = context.buffer.area();
     const current_modal_area = if (attachment_snapshot.modal != null)
-        widgets.attachment_preview.modalArea(application_area)
+        attachment_preview_module.modalArea(application_area)
     else if (picker_prompt) |prompt|
         if (prompt.target() == .history)
-            widgets.history_browser.modalArea(application_area, .{ .count = input.history.len, .inspecting = prompt.inspecting() })
+            history_browser_module.modalArea(application_area, .{ .count = input.history.len, .inspecting = prompt.inspecting() })
         else
-            widgets.goto_picker.modalArea(application_area)
+            goto_picker_module.modalArea(application_area)
     else
-        ui.Rect{};
+        RectType{};
     const graphical_modal = state.graphicalModalCovers(current_modal_area);
     if (input.compositor) |compositor| {
         if (!state.modal_overlay_area.isEmpty()) {
@@ -706,15 +739,15 @@ pub fn render(state: *State, screen: *source_namespace.term.Screen, input: Rende
             compositor.copyArea(&state.scratch, current_modal_area.intersect(state.regions.workbench));
         }
     }
-    const toast_area = widgets.toast.overlayArea(state.regions.workbench);
+    const toast_area = toast_module.overlayArea(state.regions.workbench);
     const has_toasts = input.notifications.hasItems() and !toast_area.isEmpty();
     const pill_occluded = !label_area.intersect(current_modal_area).isEmpty() or
         (has_toasts and !label_area.intersect(toast_area).isEmpty());
-    const pill_plan = if (pill_occluded) &source_namespace.empty_pane_labels else label_plan;
+    const pill_plan = if (pill_occluded) &view_ops.empty_pane_labels else label_plan;
     state.kitty_pill.observe(pill_plan, state.palette());
     if (state.kitty_pill.coversText(pill_plan, state.palette())) {
         for (pill_plan.slice()) |label| {
-            const area: ui.Rect = .{ .x = pill_plan.area.x + label.offset, .y = pill_plan.area.y, .w = label.width, .h = 1 };
+            const area: RectType = .{ .x = pill_plan.area.x + label.offset, .y = pill_plan.area.y, .w = label.width, .h = 1 };
             state.scratch.fill(area, .{ .glyph = " ", .style = .{} });
         }
     }
@@ -726,22 +759,22 @@ pub fn render(state: *State, screen: *source_namespace.term.Screen, input: Rende
         }
         if (has_toasts) {
             if (graphical_toasts) {
-                widgets.toast.registerHits(&context, toast_area, input.notifications);
+                toast_module.registerHits(&context, toast_area, input.notifications);
             } else {
-                widgets.toast.render(&context, toast_area, input.notifications);
+                toast_module.render(&context, toast_area, input.notifications);
             }
         }
     }
-    var drawn_modal_area = widgets.attachment_preview.renderModal(&context, .{
+    var drawn_modal_area = attachment_preview_module.renderModal(&context, .{
         .application = application_area,
         .snapshot = &attachment_snapshot,
         .plan = &attachment_plan,
         .graphical_frame = graphical_modal,
     });
-    var picker_cursor: ?widgets.Cursor = null;
+    var picker_cursor: ?CursorType = null;
     if (picker_prompt) |prompt| {
         if (drawn_modal_area.isEmpty()) {
-            const picker_output = source_namespace.renderGotoPicker(&context, application_area, .{
+            const picker_output = view_ops.renderGotoPicker(&context, application_area, .{
                 .prompt = prompt,
                 .agents = input.agents,
                 .workspaces = input.workspaces,
@@ -755,10 +788,10 @@ pub fn render(state: *State, screen: *source_namespace.term.Screen, input: Rende
         }
     }
     if (hybrid) {
-        var provider_marks: [widgets.sidebar.max_provider_marks]kitty.SidebarProviderPlacement = undefined;
+        var provider_marks: [max_agent_snapshot_entries]SidebarProviderPlacementType = undefined;
         var provider_mark_count: usize = 0;
         for (composed.sidebar.provider_marks[0..composed.sidebar.provider_mark_count]) |mark| {
-            const provider = kitty.SidebarProvider.fromAgent(mark.provider) orelse continue;
+            const provider = kitty_sidebar_module.SidebarProvider.fromAgent(mark.provider) orelse continue;
             provider_marks[provider_mark_count] = .{ .area = mark.area, .provider = provider };
             provider_mark_count += 1;
         }
@@ -784,22 +817,22 @@ pub fn render(state: *State, screen: *source_namespace.term.Screen, input: Rende
     state.graphics_plan_dirty = true;
 
     var stats: RenderStats = .{};
-    stats = source_namespace.addStats(stats, try source_namespace.syncRegion(screen, &state.scratch, state.regions.top));
-    stats = source_namespace.addStats(stats, try source_namespace.syncRegion(screen, &state.scratch, state.regions.sidebar));
-    stats = source_namespace.addStats(stats, try source_namespace.syncRegion(screen, &state.scratch, state.regions.bottom));
-    stats = source_namespace.addStats(stats, try source_namespace.syncRegion(screen, &state.scratch, attachment_area));
-    stats = source_namespace.addStats(stats, try source_namespace.syncRegion(screen, &state.scratch, previous_pill_area));
-    stats = source_namespace.addStats(stats, try source_namespace.syncRegion(screen, &state.scratch, label_area));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, state.regions.top));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, state.regions.sidebar));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, state.regions.bottom));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, attachment_area));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, previous_pill_area));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, label_area));
     if (has_toasts or state.toast_overlay_drawn) {
-        stats = source_namespace.addStats(stats, try source_namespace.syncRegion(screen, &state.scratch, toast_area));
+        stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, toast_area));
     }
     if (!state.modal_overlay_area.isEmpty()) {
-        stats = source_namespace.addStats(stats, try source_namespace.syncRegion(screen, &state.scratch, state.modal_overlay_area));
+        stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, state.modal_overlay_area));
     }
     if (!drawn_modal_area.isEmpty() and
         !std.meta.eql(drawn_modal_area, state.modal_overlay_area))
     {
-        stats = source_namespace.addStats(stats, try source_namespace.syncRegion(screen, &state.scratch, drawn_modal_area));
+        stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, drawn_modal_area));
     }
     if (composed.cursor) |cursor| {
         screen.cursor = .{
@@ -819,7 +852,7 @@ pub fn render(state: *State, screen: *source_namespace.term.Screen, input: Rende
     return stats;
 }
 
-pub fn mousePointerShape(state: *State, input: RenderInput) source_namespace.pointer.Shape {
+pub fn mousePointerShape(state: *State, input: RenderInput) PointerShape {
     state.pointer_content = .{};
 
     if (input.copy_mode_active or input.prompt != null) {
@@ -851,7 +884,7 @@ pub fn mousePointerShape(state: *State, input: RenderInput) source_namespace.poi
     };
 }
 
-fn panePointerShape(state: *State, input: RenderInput, pane_id: source_namespace.schema.PaneId) source_namespace.pointer.Shape {
+fn panePointerShape(state: *State, input: RenderInput, pane_id: PaneIdType) PointerShape {
     if (state.attachment_store.hasModal()) {
         return .default;
     }
@@ -861,7 +894,7 @@ fn panePointerShape(state: *State, input: RenderInput, pane_id: source_namespace
         return .default;
     }
 
-    var fallback: workspace_capability.layout.Snapshot = .{};
+    var fallback: LayoutSnapshot = .{};
     const layout = if (input.compositor) |compositor|
         compositor.layoutSnapshot()
     else layout: {

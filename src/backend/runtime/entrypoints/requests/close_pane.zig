@@ -1,25 +1,24 @@
 //! Request-scoped controller for the close-pane protocol message.
 
-const std = @import("std");
-const core = @import("telar-core");
-const close_pane_commands = @import("../../application/commands/close_pane.zig");
-const delivery_mod = @import("../../delivery/root.zig");
-
-pub const schema = core.schema;
-pub const ResponseQueue = delivery_mod.ResponseQueue;
-
-pub const Controller = @import("ClosePaneController.zig");
-
+const pane_module = @import("telar-core").pane;
+const ResponseQueue = @import("../../delivery/ResponseQueue.zig");
 const StubClosePane = @import("StubClosePane.zig");
+const ClosePaneController = @import("ClosePaneController.zig");
+const std = @import("std");
+const RequestIdType = @import("telar-core").RequestId;
+const FailureCodeType = @import("telar-core").FailureCode;
+const TabLocationType = @import("telar-core").TabLocation;
+const workspace_module = @import("telar-core").workspace;
+const tab_module = @import("telar-core").tab;
 
 test "Controller requests pane closure without inventing an acknowledgement" {
-    const pane_id = try schema.id.pane(7);
+    const pane_id = try pane_module(7);
     var responses: ResponseQueue = .{};
     var stub: StubClosePane = .{ .result = .{
         .pane_id = pane_id,
         .newly_requested = true,
     } };
-    var controller = Controller.init(&responses, stub.executor());
+    var controller = ClosePaneController.init(&responses, stub.executor());
 
     try controller.closePane(.{
         .request_id = @enumFromInt(11),
@@ -32,32 +31,32 @@ test "Controller requests pane closure without inventing an acknowledgement" {
 }
 
 test "Controller maps a detached pane to one protocol failure" {
-    const pane_id = try schema.id.pane(7);
-    const request_id: schema.RequestId = @enumFromInt(20);
+    const pane_id = try pane_module(7);
+    const request_id: RequestIdType = @enumFromInt(20);
     var responses: ResponseQueue = .{};
     var stub: StubClosePane = .{
         .result = .{ .pane_id = pane_id, .newly_requested = false },
         .failure = error.PaneNotAttached,
     };
-    var controller = Controller.init(&responses, stub.executor());
+    var controller = ClosePaneController.init(&responses, stub.executor());
 
     try controller.closePane(.{ .request_id = request_id, .pane_id = pane_id });
 
     const response = responses.peek().?;
     try std.testing.expect(response.* == .request_failed);
     try std.testing.expectEqual(request_id, response.request_failed.request_id);
-    try std.testing.expectEqual(schema.FailureCode.pane_not_found, response.request_failed.code);
+    try std.testing.expectEqual(FailureCodeType.pane_not_found, response.request_failed.code);
     try std.testing.expectEqualStrings("pane not attached", response.request_failed.message);
 }
 
 test "Controller propagates unexpected pane close failures" {
-    const pane_id = try schema.id.pane(7);
+    const pane_id = try pane_module(7);
     var responses: ResponseQueue = .{};
     var stub: StubClosePane = .{
         .result = .{ .pane_id = pane_id, .newly_requested = false },
         .failure = error.PaneCloserUnavailable,
     };
-    var controller = Controller.init(&responses, stub.executor());
+    var controller = ClosePaneController.init(&responses, stub.executor());
 
     try std.testing.expectError(error.PaneCloserUnavailable, controller.closePane(.{
         .request_id = @enumFromInt(30),
@@ -69,10 +68,10 @@ test "Controller propagates unexpected pane close failures" {
 }
 
 test "Controller reports backpressure while mapping a detached pane" {
-    const pane_id = try schema.id.pane(7);
-    const filler_location: schema.TabLocation = .{
-        .workspace = .{ .workspace = try schema.id.workspace(3) },
-        .tab_id = try schema.id.tab(4),
+    const pane_id = try pane_module(7);
+    const filler_location: TabLocationType = .{
+        .workspace = .{ .workspace = try workspace_module(3) },
+        .tab_id = try tab_module(4),
     };
     var responses: ResponseQueue = .{};
 
@@ -88,7 +87,7 @@ test "Controller reports backpressure while mapping a detached pane" {
         .result = .{ .pane_id = pane_id, .newly_requested = false },
         .failure = error.PaneNotAttached,
     };
-    var controller = Controller.init(&responses, stub.executor());
+    var controller = ClosePaneController.init(&responses, stub.executor());
 
     try std.testing.expectError(error.ResponseQueueFull, controller.closePane(.{
         .request_id = @enumFromInt(31),

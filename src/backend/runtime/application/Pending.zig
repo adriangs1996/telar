@@ -1,7 +1,9 @@
+const RequestIdType = @import("telar-core").RequestId;
+const PaneKeyType = @import("../../pane/PaneKey.zig");
+const Cursor = @import("../../pane/Cursor.zig");
 const Pending = @This();
-const source_namespace = @import("pane_search.zig");
-const pane_mod = @import("../../pane/root.zig");
-request_id: source_namespace.schema.RequestId,
-pane: pane_mod.PaneKey,
-cursor: pane_mod.TextSearch,
+
+request_id: RequestIdType,
+pane: PaneKeyType,
+cursor: Cursor,
 deadline_ns: i128,

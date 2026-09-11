@@ -1,10 +1,11 @@
+const WorkspaceHandoffRestorationEffects = @import("WorkspaceHandoffRestorationEffects.zig");
+const RequestTabSnapshotRecoveryHandlerType = @import("../tabs/RequestTabSnapshotRecoveryHandler.zig");
+const ModelType = @import("../../model/Model.zig");
+const workspace_handoff_restoration = @import("workspace_handoff_restoration.zig");
 const RestoreWorkspaceHandoffHandler = @This();
-const Effects = @import("WorkspaceHandoffRestorationEffects.zig");
-const tab_snapshot_recovery = @import("../tabs/root.zig").tab_snapshot_recovery;
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("workspace_handoff_restoration.zig");
-effects: Effects,
-snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
+
+effects: WorkspaceHandoffRestorationEffects,
+snapshots: RequestTabSnapshotRecoveryHandlerType,
 
 /// Restores active-pane graphics in captured order and requests one
 /// canonical tab snapshot unless recovery is already pending.
@@ -12,7 +13,7 @@ snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
 /// ```zig
 /// _ = try handler.execute(model);
 /// ```
-pub fn execute(handler: *RestoreWorkspaceHandoffHandler, model: *const client_model.Model) !source_namespace.Outcome {
+pub fn execute(handler: *RestoreWorkspaceHandoffHandler, model: *const ModelType) !workspace_handoff_restoration.Outcome {
     const location = model.activeTabLocation() orelse return .no_active_tab;
     const plan = try model.planTabDetachment(location);
 

@@ -1,27 +1,28 @@
+const claude_request = @import("claude_request.zig");
+const std = @import("std");
 /// Incrementally recognizes a primary Claude Code request without retaining
 /// prompts, tool inputs, or any other body content.
 ///
 /// The decoder must remain at a stable address between `init` and `deinit`
 /// because its JSON scanner uses the decoder's fixed allocator storage.
 const Decoder = @This();
-const source_namespace = @import("claude_request.zig");
-const std = @import("std");
-allocator_storage: [source_namespace.allocator_bytes]u8 = undefined,
+
+allocator_storage: [claude_request.allocator_bytes]u8 = undefined,
 fixed_allocator: std.heap.FixedBufferAllocator = undefined,
 scanner: std.json.Scanner = undefined,
 initialized: bool = false,
 invalid: bool = false,
 document_finished: bool = false,
 bytes_seen: usize = 0,
-position: source_namespace.Position = .document,
-field: source_namespace.Field = .other,
+position: claude_request.Position = .document,
+field: claude_request.Field = .other,
 value_depth: usize = 0,
 tools_array_depth: usize = 0,
 stream_seen: bool = false,
 stream_enabled: bool = false,
 tools_seen: bool = false,
 tools_nonempty: bool = false,
-key: [source_namespace.max_key_bytes]u8 = undefined,
+key: [claude_request.max_key_bytes]u8 = undefined,
 key_len: usize = 0,
 key_overflow: bool = false,
 
@@ -37,7 +38,7 @@ pub fn init(decoder: *Decoder) void {
     decoder.fixed_allocator = .init(&decoder.allocator_storage);
     decoder.scanner = .initStreaming(decoder.fixed_allocator.allocator());
     decoder.initialized = true;
-    decoder.scanner.ensureTotalStackCapacity(source_namespace.max_json_depth) catch {
+    decoder.scanner.ensureTotalStackCapacity(claude_request.max_json_depth) catch {
         decoder.invalid = true;
     };
 }
@@ -54,7 +55,7 @@ pub fn feed(decoder: *Decoder, input: []const u8) void {
         return;
     }
 
-    if (input.len > source_namespace.max_inspected_bytes -| decoder.bytes_seen) {
+    if (input.len > claude_request.max_inspected_bytes -| decoder.bytes_seen) {
         decoder.invalid = true;
         return;
     }
@@ -173,7 +174,7 @@ fn consumeValue(decoder: *Decoder, token: std.json.Token) void {
     switch (token) {
         .object_begin, .array_begin => {
             const depth = decoder.scanner.stackHeight();
-            if (depth > source_namespace.max_json_depth) {
+            if (depth > claude_request.max_json_depth) {
                 decoder.invalid = true;
                 return;
             }
@@ -203,7 +204,7 @@ fn consumeValue(decoder: *Decoder, token: std.json.Token) void {
 
 fn consumeNestedValue(decoder: *Decoder, token: std.json.Token) void {
     if (token == .object_begin or token == .array_begin) {
-        if (decoder.scanner.stackHeight() > source_namespace.max_json_depth) {
+        if (decoder.scanner.stackHeight() > claude_request.max_json_depth) {
             decoder.invalid = true;
             return;
         }

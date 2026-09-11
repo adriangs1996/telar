@@ -2,25 +2,25 @@
 //! shows the newest reply for the newest query, so stale replies are ignored
 //! by request id instead of queued.
 
+const HistoryPaletteState = @import("HistoryPaletteState.zig");
 const std = @import("std");
-const core = @import("telar-core");
+const HistoryScopeType = @import("telar-core").HistoryScope;
+const PageResultType = @import("PageResult.zig");
+const HistoryEntryType = @import("telar-core").HistoryEntry;
+const HistoryOutputType = @import("telar-core").HistoryOutput;
+const max_history_command_bytes_module = @import("telar-core").max_history_command_bytes;
 
-pub const schema = core.schema;
-
-pub const max_entries = schema.max_history_results;
 pub const max_command_bytes = 512;
 pub const max_entry_cwd_bytes = 256;
 pub const max_command_storage = 768 * 1024;
 
-pub const Entry = @import("Entry.zig");
-
 test "page results commit metadata once and stale replies cannot alter it" {
-    var state: State = .{};
+    var state: HistoryPaletteState = .{};
     try std.testing.expect(state.beginPageRequest(1, .cwd));
-    try std.testing.expectEqual(schema.HistoryScope.cwd, state.effective_scope);
+    try std.testing.expectEqual(HistoryScopeType.cwd, state.effective_scope);
     try std.testing.expect(state.beginPageRequest(2, .workspace));
     const before = state.revision;
-    const page: State.PageResult = .{ .request_id = 2, .entries = &.{}, .snapshot_id = 30, .has_more = true, .now_ms = 100 };
+    const page: PageResultType = .{ .request_id = 2, .entries = &.{}, .snapshot_id = 30, .has_more = true, .now_ms = 100 };
     var stale = page;
     stale.request_id = 1;
     stale.snapshot_id = 99;
@@ -36,8 +36,6 @@ test "page results commit metadata once and stale replies cannot alter it" {
     try std.testing.expectEqual(before + 1, state.revision);
 }
 
-pub const State = @import("HistoryPaletteState.zig");
-
 pub fn copyBounded(buffer: []u8, source: []const u8) u16 {
     var len = @min(buffer.len, source.len);
     while (len < source.len and len > 0 and source[len] & 0xc0 == 0x80) {
@@ -49,12 +47,12 @@ pub fn copyBounded(buffer: []u8, source: []const u8) u16 {
 }
 
 test "only the awaited reply lands and commands stay bounded" {
-    var state: State = .{};
+    var state: HistoryPaletteState = .{};
     state.begin();
     try std.testing.expect(state.beginPageRequest(7, .global));
 
     const long = "x" ** (max_command_bytes + 32);
-    const entries = [_]schema.HistoryEntry{
+    const entries = [_]HistoryEntryType{
         .{
             .id = 1,
             .pane_id = @enumFromInt(1),
@@ -89,11 +87,11 @@ test "only the awaited reply lands and commands stay bounded" {
 }
 
 test "history retains full command bytes and rejects actions on stale results" {
-    var state: State = .{};
+    var state: HistoryPaletteState = .{};
     try state.prepare(std.testing.allocator);
     defer state.deinit();
     var command = [_]u8{'x'} ** (max_command_bytes + 100);
-    const entry: schema.HistoryEntry = .{ .id = 7, .pane_id = @enumFromInt(1), .started_at_ms = 123, .duration_ns = 9000, .exit_code = 1, .status = .completed, .command = &command, .cwd = "/work", .workspace_path = "/work" };
+    const entry: HistoryEntryType = .{ .id = 7, .pane_id = @enumFromInt(1), .started_at_ms = 123, .duration_ns = 9000, .exit_code = 1, .status = .completed, .command = &command, .cwd = "/work", .workspace_path = "/work" };
     try std.testing.expect(state.beginPageRequest(1, .global));
     try std.testing.expect(state.acceptPageResult(.{ .request_id = 1, .entries = &.{entry}, .snapshot_id = 0, .has_more = false, .now_ms = 0 }));
     command[0] = 'z';
@@ -107,7 +105,7 @@ test "history retains full command bytes and rejects actions on stale results" {
 }
 
 test "inspector owns output and ignores replies and failures from replaced selections" {
-    var state: State = .{};
+    var state: HistoryPaletteState = .{};
     try state.prepare(std.testing.allocator);
     defer state.deinit();
     try std.testing.expect(state.track(5));
@@ -115,7 +113,7 @@ test "inspector owns output and ignores replies and failures from replaced selec
     try std.testing.expect(state.track(6));
     state.expectOutput(.{ .request_id = 6, .id = 11 });
     var content = [_]u8{ 'o', 'k' };
-    const reply: schema.HistoryOutput = .{ .request_id = @enumFromInt(6), .id = 11, .truncated = true, .observed_bytes = 100, .content = &content };
+    const reply: HistoryOutputType = .{ .request_id = @enumFromInt(6), .id = 11, .truncated = true, .observed_bytes = 100, .content = &content };
     try std.testing.expect(state.applyOutput(reply));
     content[0] = 'x';
     try std.testing.expectEqualStrings("ok", state.outputSlice());
@@ -127,9 +125,9 @@ test "inspector owns output and ignores replies and failures from replaced selec
 }
 
 test "captured truncation blocks paste and unicode previews end at a codepoint boundary" {
-    var state: State = .{};
+    var state: HistoryPaletteState = .{};
     const command = "x" ** (max_command_bytes - 1) ++ "é";
-    const entry: schema.HistoryEntry = .{ .id = 7, .pane_id = @enumFromInt(1), .started_at_ms = 0, .duration_ns = 0, .exit_code = null, .status = .completed, .command = command, .cwd = "", .workspace_path = "", .command_truncated = true };
+    const entry: HistoryEntryType = .{ .id = 7, .pane_id = @enumFromInt(1), .started_at_ms = 0, .duration_ns = 0, .exit_code = null, .status = .completed, .command = command, .cwd = "", .workspace_path = "", .command_truncated = true };
     try std.testing.expect(state.beginPageRequest(1, .global));
     try std.testing.expect(state.acceptPageResult(.{ .request_id = 1, .entries = &.{entry}, .snapshot_id = 0, .has_more = false, .now_ms = 0 }));
     try std.testing.expect(state.commandAt(0) == null);
@@ -138,11 +136,11 @@ test "captured truncation blocks paste and unicode previews end at a codepoint b
 }
 
 test "command storage exhaustion uses one correlated full-command fallback" {
-    var state: State = .{};
+    var state: HistoryPaletteState = .{};
     try state.prepare(std.testing.allocator);
     defer state.deinit();
-    const command = "x" ** schema.max_history_command_bytes;
-    var entries: [14]schema.HistoryEntry = undefined;
+    const command = "x" ** max_history_command_bytes_module;
+    var entries: [14]HistoryEntryType = undefined;
     for (&entries, 0..) |*entry, index| {
         entry.* = .{ .id = index + 1, .pane_id = @enumFromInt(1), .started_at_ms = 0, .duration_ns = 0, .exit_code = 0, .status = .completed, .command = command, .cwd = "", .workspace_path = "" };
     }

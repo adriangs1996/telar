@@ -1,10 +1,13 @@
-const Capture = @This();
-const source_namespace = @import("agent_description.zig");
+const agent_description = @import("agent_description.zig");
 const State = @import("State.zig");
 const Started = @import("Started.zig");
-const agent_mod = @import("../../../agent/root.zig");
+const DescriptionFinishedType = @import("../../../agent/DescriptionFinished.zig");
 const std = @import("std");
-steps: [8]source_namespace.Step = undefined,
+const CommandType = @import("../../../agent/Command.zig");
+const JobType = @import("../../../agent/Job.zig");
+const Capture = @This();
+
+steps: [8]agent_description.Step = undefined,
 len: usize = 0,
 start_failure: bool = false,
 expected_query: []const u8 = "",
@@ -12,17 +15,17 @@ state: ?*const State = null,
 starts: [2]Started = undefined,
 start_count: usize = 0,
 start_saw_idle: bool = false,
-persisted: [2]agent_mod.DescriptionFinished = undefined,
+persisted: [2]DescriptionFinishedType = undefined,
 persisted_count: usize = 0,
 persist_saw_idle: bool = false,
 
-fn record(capture: *Capture, step: source_namespace.Step) void {
+fn record(capture: *Capture, step: agent_description.Step) void {
     std.debug.assert(capture.len < capture.steps.len);
     capture.steps[capture.len] = step;
     capture.len += 1;
 }
 
-pub fn start(capture: *Capture, _: source_namespace.description.Command, job: source_namespace.description.Job) !void {
+pub fn start(capture: *Capture, _: CommandType, job: JobType) !void {
     capture.record(.start);
     capture.start_saw_idle = !capture.state.?.isPending();
     std.debug.assert(capture.start_count < capture.starts.len);
@@ -38,7 +41,7 @@ pub fn start(capture: *Capture, _: source_namespace.description.Command, job: so
     }
 }
 
-pub fn persist(capture: *Capture, finished: agent_mod.DescriptionFinished) void {
+pub fn persist(capture: *Capture, finished: DescriptionFinishedType) void {
     capture.record(.persist);
     capture.persist_saw_idle = !capture.state.?.isPending();
     std.debug.assert(capture.persisted_count < capture.persisted.len);

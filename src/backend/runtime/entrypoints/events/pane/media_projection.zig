@@ -1,17 +1,17 @@
 //! Synchronization of one pane's graphics state across client attachments.
 
+const Pane = @import("../../../../pane/Pane.zig");
+const AttachmentStore = @import("../../../attachment/AttachmentStore.zig");
+const Stats = @import("Stats.zig");
+const Consumers = @import("Consumers.zig");
+const ImageKeyType = @import("telar-core").ImageKey;
+const PaneIdType = @import("telar-core").PaneId;
+const attachment_mod = @import("../../../attachment/attachment_namespace.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const attachment_mod = @import("../../../attachment/root.zig");
-const media_mod = @import("../../../../media/root.zig");
-const pane_mod = @import("../../../../pane/root.zig");
-const test_support = @import("../../../tests/support.zig");
-
-pub const AttachmentStore = attachment_mod.AttachmentStore;
-const Pane = pane_mod.Pane;
-const shared_memory_supported = pane_mod.shared_transfer.shared_memory_supported;
-
-pub const Stats = @import("Stats.zig");
+const ShmNameType = @import("telar-core").ShmName;
+const PaneFixtureType = @import("../../../tests/PaneFixture.zig");
+const shared_transfer_module = @import("../../../../media/shared_transfer.zig");
+const StatsType = @import("../../../../media/Stats.zig");
 
 /// Invalidates reset projections first, then freezes at most one transfer per
 /// client while the pane's media storage is idle. A failed freeze abandons
@@ -63,7 +63,7 @@ fn discardUnwanted(pane: *Pane, stores: []const *AttachmentStore) void {
     }
 }
 
-fn wanted(key: core.graphics.ImageKey, pane_id: core.schema.PaneId, stores: []const *AttachmentStore) bool {
+fn wanted(key: ImageKeyType, pane_id: PaneIdType, stores: []const *AttachmentStore) bool {
     for (stores) |store| {
         const attachment = store.find(pane_id) orelse continue;
         if (!attachment.graphics.shared_transport) {
@@ -82,9 +82,7 @@ fn wanted(key: core.graphics.ImageKey, pane_id: core.schema.PaneId, stores: []co
     return false;
 }
 
-const Consumers = @import("Consumers.zig");
-
-fn objectExists(name: core.graphics.ShmName) bool {
+fn objectExists(name: ShmNameType) bool {
     const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
     if (std.posix.errno(fd) != .SUCCESS) {
         return false;
@@ -93,13 +91,13 @@ fn objectExists(name: core.graphics.ShmName) bool {
     return true;
 }
 
-fn liveKey(fixture: *test_support.PaneFixture, image_id: u32) core.graphics.ImageKey {
+fn liveKey(fixture: *PaneFixtureType, image_id: u32) ImageKeyType {
     const image = fixture.pane.media.terminal.screens.active.kitty_images.imageById(image_id).?;
     return .{ .image_id = image.id, .generation = image.generation };
 }
 
 test "shared transport clients are counted on the pane for the media actor" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
 
@@ -113,17 +111,17 @@ test "shared transport clients are counted on the pane for the media actor" {
 }
 
 test "a generation the media actor froze is adopted without a runtime-thread copy" {
-    if (comptime !shared_memory_supported) {
+    if (comptime !shared_transfer_module.shared_memory_supported) {
         return error.SkipZigTest;
     }
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     _ = fixture.attachments.configureGraphics(true);
     try fixture.addRgbaImage(7);
     const key = liveKey(&fixture, 7);
 
-    var stats: media_mod.Stats = .{};
+    var stats: StatsType = .{};
     fixture.pane.prepareSharedTransfers(&stats);
 
     try std.testing.expectEqual(@as(u64, 1), stats.prepared_frames);
@@ -147,21 +145,21 @@ test "a generation the media actor froze is adopted without a runtime-thread cop
     try std.testing.expectEqual(used_before, fixture.pane.media_allocator.used);
 
     // A second batch offers nothing for a generation already handed out.
-    var again: media_mod.Stats = .{};
+    var again: StatsType = .{};
     fixture.pane.prepareSharedTransfers(&again);
     try std.testing.expectEqual(@as(u64, 0), again.prepared_frames);
 }
 
 test "a replaced generation releases the object the actor parked for it" {
-    if (comptime !shared_memory_supported) {
+    if (comptime !shared_transfer_module.shared_memory_supported) {
         return error.SkipZigTest;
     }
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     _ = fixture.attachments.configureGraphics(true);
     try fixture.addRgbaImage(7);
-    var first: media_mod.Stats = .{};
+    var first: StatsType = .{};
     fixture.pane.prepareSharedTransfers(&first);
     const first_key = liveKey(&fixture, 7);
     const first_name = fixture.pane.media_ingestion.prepared_transfers.take(first_key).?.name;
@@ -173,7 +171,7 @@ test "a replaced generation releases the object the actor parked for it" {
     const used_before = fixture.pane.media_allocator.used;
 
     try fixture.addRgbaImage(7);
-    var second: media_mod.Stats = .{};
+    var second: StatsType = .{};
     fixture.pane.prepareSharedTransfers(&second);
 
     const second_key = liveKey(&fixture, 7);
@@ -186,10 +184,10 @@ test "a replaced generation releases the object the actor parked for it" {
 }
 
 test "parked generations every client already knows are released at synchronization" {
-    if (comptime !shared_memory_supported) {
+    if (comptime !shared_transfer_module.shared_memory_supported) {
         return error.SkipZigTest;
     }
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     _ = fixture.attachments.configureGraphics(true);
@@ -200,7 +198,7 @@ test "parked generations every client already knows are released at synchronizat
     fixture.pane.refreshGraphicsProjection();
     attachment.graphics.observed_revision = fixture.pane.graphics_revision;
     const used_before = fixture.pane.media_allocator.used;
-    var stats: media_mod.Stats = .{};
+    var stats: StatsType = .{};
     fixture.pane.prepareSharedTransfers(&stats);
     const parked_name = fixture.pane.media_ingestion.prepared_transfers.items[0].?.name;
     const stores = [_]*AttachmentStore{&fixture.attachments};
@@ -215,7 +213,7 @@ test "parked generations every client already knows are released at synchronizat
 }
 
 test "detach releases a parked fallback and its quota before another consumer arrives" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     try fixture.addRgbaImage(63);
@@ -234,7 +232,7 @@ test "detach releases a parked fallback and its quota before another consumer ar
 }
 
 test "missing generations release all bounded transfer request slots" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     const queue = &fixture.pane.media_ingestion.transfer_preparation;
@@ -253,7 +251,7 @@ test "missing generations release all bounded transfer request slots" {
 }
 
 test "a media reset invalidates every attached client before staging" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var second: AttachmentStore = .{};
@@ -271,7 +269,7 @@ test "a media reset invalidates every attached client before staging" {
 }
 
 test "one idle-boundary pass freezes at most one transfer per client" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     try fixture.addRgbaImage(7);
@@ -290,7 +288,7 @@ test "one idle-boundary pass freezes at most one transfer per client" {
 }
 
 test "a failed freeze abandons only its client graphics projection" {
-    var fixture: test_support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     try fixture.addRgbaImage(7);

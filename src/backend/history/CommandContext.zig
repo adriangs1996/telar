@@ -1,10 +1,15 @@
-const CommandContext = @This();
+const HistoryAuthorType = @import("telar-core").HistoryAuthor;
+const HistoryOriginType = @import("telar-core").HistoryOrigin;
 const model = @import("model.zig");
-author: model.schema.HistoryAuthor = .human,
-origin: model.schema.HistoryOrigin = .pane,
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const CommandContext = @This();
+
+author: HistoryAuthorType = .human,
+origin: HistoryOriginType = .pane,
 session_id: model.SessionId,
-pane_id: model.schema.PaneId,
-location: model.schema.TabLocation,
+pane_id: PaneIdType,
+location: TabLocationType,
 sequence: u64,
 workspace_path: []const u8,
 cols: u16,

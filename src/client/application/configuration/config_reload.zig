@@ -1,15 +1,12 @@
 //! Application use case for adopting one client configuration generation.
 
-const std = @import("std");
-const bars = @import("../../bars/root.zig");
+const ModelType = @import("../../model/Model.zig");
 const client_diagnostic = @import("client_diagnostic.zig");
-const client_model = @import("../../root.zig").model;
-
-pub const Command = @import("ConfigReloadCommand.zig");
-
-pub const Effects = @import("ConfigReloadEffects.zig");
-
-pub const ApplyConfigHandler = @import("ApplyConfigHandler.zig");
+const std = @import("std");
+const EffectsCapture = @import("EffectsCapture.zig");
+const ApplyConfigHandler = @import("ApplyConfigHandler.zig");
+const VersionType = @import("../../model/Version.zig");
+const ConfigurationType = @import("../../bars/Configuration.zig");
 
 pub const Event = enum {
     adopt_resources,
@@ -29,14 +26,12 @@ pub const Failure = enum {
     pane_geometry,
 };
 
-const EffectsCapture = @import("EffectsCapture.zig");
-
-fn installDiagnostic(model: *client_model.Model) !void {
+fn installDiagnostic(model: *ModelType) !void {
     _ = try model.replaceDiagnostic(client_diagnostic.formatted("previous configuration failed", .{}));
 }
 
 test "ApplyConfigHandler owns ordered sidebar adoption after the model commit" {
-    var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 1);
+    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 1);
     defer model.deinit();
     try installDiagnostic(&model);
     var capture: EffectsCapture = .{ .model = &model };
@@ -66,7 +61,7 @@ test "ApplyConfigHandler owns ordered sidebar adoption after the model commit" {
     try std.testing.expectEqualDeep(commit.sidebar.?, capture.sidebar.?);
     try std.testing.expect(!model.sidebarVisible());
     try std.testing.expect(!model.paneGaps());
-    try std.testing.expectEqual(client_model.Version{
+    try std.testing.expectEqual(VersionType{
         .configuration = 1,
         .diagnostic = 2,
         .panes = 1,
@@ -75,7 +70,7 @@ test "ApplyConfigHandler owns ordered sidebar adoption after the model commit" {
 }
 
 test "ApplyConfigHandler orders pane layout delivery and honors a locked theme" {
-    var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 1);
+    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 1);
     defer model.deinit();
     var capture: EffectsCapture = .{ .model = &model };
     var handler: ApplyConfigHandler = .{
@@ -105,7 +100,7 @@ test "ApplyConfigHandler orders pane layout delivery and honors a locked theme" 
 }
 
 test "ApplyConfigHandler rejects stale input before clearing diagnostics or effects" {
-    var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 2);
+    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 2);
     defer model.deinit();
     try installDiagnostic(&model);
     var capture: EffectsCapture = .{ .model = &model };
@@ -125,18 +120,18 @@ test "ApplyConfigHandler rejects stale input before clearing diagnostics or effe
 
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);
     try std.testing.expectEqualStrings("previous configuration failed", model.diagnostic().?);
-    try std.testing.expectEqual(client_model.Version{ .diagnostic = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
 }
 
 test "ApplyConfigHandler rearms changed bars after their generation is adopted" {
-    const configuration: bars.Configuration = .{
+    const configuration: ConfigurationType = .{
         .bottom = .{
             .{ .dynamic = .{ .callback = .{ .generation = 2, .id = 0 }, .interval_ns = std.time.ns_per_s } },
             .empty,
             .tabs,
         },
     };
-    var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 1);
+    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 1);
     defer model.deinit();
     var capture: EffectsCapture = .{ .model = &model };
     var handler: ApplyConfigHandler = .{ .model = &model, .effects = capture.port() };
@@ -163,14 +158,14 @@ test "ApplyConfigHandler rearms changed bars after their generation is adopted" 
 }
 
 test "ApplyConfigHandler retains adopted bars when rearming fails" {
-    const configuration: bars.Configuration = .{
+    const configuration: ConfigurationType = .{
         .bottom = .{
             .{ .dynamic = .{ .callback = .{ .generation = 2, .id = 0 }, .interval_ns = std.time.ns_per_s } },
             .empty,
             .tabs,
         },
     };
-    var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 1);
+    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 1);
     defer model.deinit();
     var capture: EffectsCapture = .{ .model = &model, .failure = .synchronize_bars };
     var handler: ApplyConfigHandler = .{ .model = &model, .effects = capture.port() };
@@ -226,7 +221,7 @@ test "ApplyConfigHandler preserves every applied stage after delivery failures" 
     };
 
     for (scenarios) |scenario| {
-        var model = client_model.Model.initWithConfiguration(std.testing.allocator, true, 1);
+        var model = ModelType.initWithConfiguration(std.testing.allocator, true, 1);
         defer model.deinit();
         try installDiagnostic(&model);
         var capture: EffectsCapture = .{

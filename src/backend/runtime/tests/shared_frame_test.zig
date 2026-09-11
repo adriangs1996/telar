@@ -3,15 +3,13 @@
 //! the emulator's storage and, for local clients, the parked transfer.
 
 const std = @import("std");
-const core = @import("telar-core");
-const backend_media = @import("../../media/root.zig");
-const pane_mod = @import("../../pane/root.zig");
-const attachment_mod = @import("../attachment/root.zig");
+const PaneFixtureType = @import("PaneFixture.zig");
+const StatsType = @import("../../media/Stats.zig");
+const shared_transfer_module = @import("../../media/shared_transfer.zig");
+const Frame = @import("Frame.zig");
+const ImageKeyType = @import("telar-core").ImageKey;
+const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const media_projection = @import("../entrypoints/events/pane/media_projection.zig");
-const support = @import("support.zig");
-
-const shared_memory_supported = pane_mod.shared_transfer.shared_memory_supported;
-const AttachmentStore = attachment_mod.AttachmentStore;
 
 pub fn createChildObject(name: [:0]const u8, pixels: []const u8) !void {
     const fd = std.c.shm_open(
@@ -52,27 +50,25 @@ fn readObject(name: [:0]const u8, buffer: []u8) !void {
     @memcpy(buffer, map[0..buffer.len]);
 }
 
-const Frame = @import("Frame.zig");
-
 fn encodedPath(buffer: []u8, path: []const u8) []const u8 {
     const Encoder = std.base64.standard.Encoder;
     return Encoder.encode(buffer[0..Encoder.calcSize(path.len)], path);
 }
 
-fn ingest(fixture: *support.PaneFixture, bytes: []const u8) !backend_media.Stats {
+fn ingest(fixture: *PaneFixtureType, bytes: []const u8) !StatsType {
     fixture.pane.media.queueOutput(bytes);
     try std.testing.expect(fixture.pane.media.seal());
-    var stats: backend_media.Stats = .{};
+    var stats: StatsType = .{};
     fixture.pane.processMedia(fixture.pane.size, &stats);
     fixture.pane.media.finishSealed();
     return stats;
 }
 
 test "a shared frame is copied once into the object that becomes emulator storage" {
-    if (comptime !shared_memory_supported) {
+    if (comptime !shared_transfer_module.shared_memory_supported) {
         return error.SkipZigTest;
     }
-    var fixture: support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     _ = fixture.attachments.configureGraphics(true);
@@ -99,7 +95,7 @@ test "a shared frame is copied once into the object that becomes emulator storag
     try std.testing.expect(fixture.pane.media_allocator.used >= used_before + pixels.len);
     const used_after_first = fixture.pane.media_allocator.used;
 
-    const key: core.graphics.ImageKey = .{ .image_id = 7, .generation = image.generation };
+    const key: ImageKeyType = .{ .image_id = 7, .generation = image.generation };
     try std.testing.expect(fixture.pane.media_ingestion.prepared_transfers.holds(key));
     const parked = fixture.pane.media_ingestion.prepared_transfers.items[0].?;
     try std.testing.expectEqual(@as(usize, 0), parked.reserved_len);
@@ -120,10 +116,10 @@ test "a shared frame is copied once into the object that becomes emulator storag
 }
 
 test "replacing a direct frame unmaps the previous object and keeps quota flat" {
-    if (comptime !shared_memory_supported) {
+    if (comptime !shared_transfer_module.shared_memory_supported) {
         return error.SkipZigTest;
     }
-    var fixture: support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     _ = fixture.attachments.configureGraphics(true);
@@ -154,10 +150,10 @@ test "replacing a direct frame unmaps the previous object and keeps quota flat" 
 }
 
 test "a frame published through a validated file loads with one copy and leaves the file alone" {
-    if (comptime !shared_memory_supported) {
+    if (comptime !shared_transfer_module.shared_memory_supported) {
         return error.SkipZigTest;
     }
-    var fixture: support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     _ = fixture.attachments.configureGraphics(true);
@@ -184,10 +180,10 @@ test "a frame published through a validated file loads with one copy and leaves 
 }
 
 test "file frames that fail validation keep the current image and count as unavailable" {
-    if (comptime !shared_memory_supported) {
+    if (comptime !shared_transfer_module.shared_memory_supported) {
         return error.SkipZigTest;
     }
-    var fixture: support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var temp = std.testing.tmpDir(.{});
@@ -246,10 +242,10 @@ test "file frames that fail validation keep the current image and count as unava
 }
 
 test "the pane answers file capability queries the emulator would refuse" {
-    if (comptime !shared_memory_supported) {
+    if (comptime !shared_transfer_module.shared_memory_supported) {
         return error.SkipZigTest;
     }
-    var fixture: support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     var temp = std.testing.tmpDir(.{});
@@ -285,10 +281,10 @@ test "the pane answers file capability queries the emulator would refuse" {
 }
 
 test "without a shared-transport client the frame still loads with one copy and parks nothing" {
-    if (comptime !shared_memory_supported) {
+    if (comptime !shared_transfer_module.shared_memory_supported) {
         return error.SkipZigTest;
     }
-    var fixture: support.PaneFixture = .{};
+    var fixture: PaneFixtureType = .{};
     try fixture.init();
     defer fixture.deinit();
     const pixels = [_]u8{ 1, 2, 3, 255, 4, 5, 6, 255 };

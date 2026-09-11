@@ -1,11 +1,14 @@
-const RuntimeConnector = @This();
 const std = @import("std");
-const core = @import("telar-core");
-const source_namespace = @import("runtime_connection.zig");
-const frontend = @import("telar-frontend");
+const LocalType = @import("telar-core").Local;
+const runtime_connection = @import("runtime_connection.zig");
+const SocketChannelType = @import("telar-core").SocketChannel;
+const connect_module = @import("telar-frontend").connect;
 const RuntimeConfigSelection = @import("RuntimeConfigSelection.zig");
+const perform_module = @import("telar-frontend").perform;
+const RuntimeConnector = @This();
+
 process: std.process.Init,
-endpoint: core.endpoint.Local,
+endpoint: LocalType,
 
 /// Resolves the local runtime endpoint from an explicit socket or the
 /// process environment. It does not access the filesystem or connect yet.
@@ -16,7 +19,7 @@ endpoint: core.endpoint.Local,
 pub fn init(process: std.process.Init, override: ?[*:0]const u8) !RuntimeConnector {
     return .{
         .process = process,
-        .endpoint = try source_namespace.resolveEndpoint(process.minimal.environ, override),
+        .endpoint = try runtime_connection.resolveEndpoint(process.minimal.environ, override),
     };
 }
 
@@ -37,13 +40,13 @@ pub fn endpointPath(connector: *const RuntimeConnector) []const u8 {
 /// ```
 pub fn prepareServerDirectory(connector: *const RuntimeConnector) !void {
     const directory = connector.endpoint.managedDirectory() orelse return;
-    const permissions = source_namespace.File.Permissions.fromMode(0o700);
-    source_namespace.Io.Dir.createDirAbsolute(connector.process.io, directory, permissions) catch |err| switch (err) {
+    const permissions = std.Io.File.Permissions.fromMode(0o700);
+    std.Io.Dir.createDirAbsolute(connector.process.io, directory, permissions) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => |other| return other,
     };
 
-    const stat = try source_namespace.Io.Dir.cwd().statFile(connector.process.io, directory, .{ .follow_symlinks = false });
+    const stat = try std.Io.Dir.cwd().statFile(connector.process.io, directory, .{ .follow_symlinks = false });
     if (stat.kind != .directory) {
         return error.InvalidRuntimeDirectory;
     }
@@ -51,14 +54,14 @@ pub fn prepareServerDirectory(connector: *const RuntimeConnector) !void {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const directory_z = std.fmt.bufPrintZ(&path_buffer, "{s}", .{directory}) catch
         return error.NameTooLong;
-    var native_stat: source_namespace.native.struct_stat = undefined;
-    if (source_namespace.native.fstatat(std.c.AT.FDCWD, directory_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
+    var native_stat: runtime_connection.native.struct_stat = undefined;
+    if (runtime_connection.native.fstatat(std.c.AT.FDCWD, directory_z, &native_stat, std.c.AT.SYMLINK_NOFOLLOW) != 0) {
         return error.InvalidRuntimeDirectory;
     }
 
-    try source_namespace.checkRuntimeDirectoryOwner(native_stat.st_uid, std.c.getuid());
+    try runtime_connection.checkRuntimeDirectoryOwner(native_stat.st_uid, std.c.getuid());
 
-    try source_namespace.Io.Dir.cwd().setFilePermissions(connector.process.io, directory, permissions, .{ .follow_symlinks = false });
+    try std.Io.Dir.cwd().setFilePermissions(connector.process.io, directory, permissions, .{ .follow_symlinks = false });
 }
 
 /// Connects to an already running runtime and completes schema negotiation.
@@ -68,8 +71,8 @@ pub fn prepareServerDirectory(connector: *const RuntimeConnector) !void {
 /// var connection = try connector.connect();
 /// defer connection.deinit(process_init.io);
 /// ```
-pub fn connect(connector: *const RuntimeConnector) !core.transport.SocketChannel {
-    const connection = try frontend.transport.local.connect(connector.process.io, connector.endpoint.path());
+pub fn connect(connector: *const RuntimeConnector) !SocketChannelType {
+    const connection = try connect_module(connector.process.io, connector.endpoint.path());
     return connector.finishHandshake(connection);
 }
 
@@ -80,8 +83,8 @@ pub fn connect(connector: *const RuntimeConnector) !core.transport.SocketChannel
 /// var connection = try connector.connectOrStart(.{});
 /// defer connection.deinit(process_init.io);
 /// ```
-pub fn connectOrStart(connector: *const RuntimeConnector, config: RuntimeConfigSelection) !core.transport.SocketChannel {
-    const first = frontend.transport.local.connect(connector.process.io, connector.endpoint.path()) catch |err| switch (err) {
+pub fn connectOrStart(connector: *const RuntimeConnector, config: RuntimeConfigSelection) !SocketChannelType {
+    const first = connect_module(connector.process.io, connector.endpoint.path()) catch |err| switch (err) {
         error.PermissionDenied,
         error.NotDir,
         error.SymLinkLoop,
@@ -103,11 +106,11 @@ pub fn connectOrStart(connector: *const RuntimeConnector, config: RuntimeConfigS
 
     try connector.prepareServerDirectory();
     try connector.startRuntime(config);
-    for (0..source_namespace.runtime_start_attempts) |_| {
-        if (frontend.transport.local.connect(connector.process.io, connector.endpoint.path())) |connection| {
+    for (0..runtime_connection.runtime_start_attempts) |_| {
+        if (connect_module(connector.process.io, connector.endpoint.path())) |connection| {
             return connector.finishHandshake(connection);
         } else |_| {
-            connector.process.io.sleep(.fromMilliseconds(source_namespace.runtime_start_interval_ms), .awake) catch {};
+            connector.process.io.sleep(.fromMilliseconds(runtime_connection.runtime_start_interval_ms), .awake) catch {};
         }
     }
 
@@ -156,11 +159,11 @@ fn startRuntime(connector: *const RuntimeConnector, config: RuntimeConfigSelecti
     }
 }
 
-fn finishHandshake(connector: *const RuntimeConnector, connection: core.transport.SocketChannel) !core.transport.SocketChannel {
+fn finishHandshake(connector: *const RuntimeConnector, connection: SocketChannelType) !SocketChannelType {
     var result = connection;
     errdefer result.deinit(connector.process.io);
 
-    const response = try frontend.transport.handshake.perform(connector.process.io, &result);
+    const response = try perform_module(connector.process.io, &result);
     switch (response) {
         .accepted => return result,
         .rejected => |rejected| {

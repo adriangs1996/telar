@@ -1,3 +1,6 @@
+const WindowsTty = @import("WindowsTty.zig");
+const Size = @import("Size.zig");
+const std = @import("std");
 /// Notices resizes by looking, because the alternative steals keystrokes.
 ///
 /// Windows reports a resize as a `WINDOW_BUFFER_SIZE_EVENT` record on the
@@ -18,21 +21,19 @@
 /// is one constant-cost poll per client on Windows only, independent of pane
 /// count. It disappears when console records are translated centrally.
 const ResizeWatcher = @This();
-const Tty = @import("WindowsTty.zig");
-const Size = @import("types.zig").Size;
-const source_namespace = @import("windows.zig");
-tty: *Tty,
+
+tty: *WindowsTty,
 last: Size,
 
 const interval_ms = 100;
 
-pub fn init(tty: *Tty) !ResizeWatcher {
+pub fn init(tty: *WindowsTty) !ResizeWatcher {
     return .{ .tty = tty, .last = tty.size() };
 }
 
 pub fn deinit(_: *ResizeWatcher) void {}
 
-pub fn wait(w: *ResizeWatcher, io: source_namespace.Io) source_namespace.Io.Cancelable!void {
+pub fn wait(w: *ResizeWatcher, io: std.Io) std.Io.Cancelable!void {
     while (true) {
         try io.sleep(.fromMilliseconds(interval_ms), .awake);
         const now = w.tty.size();

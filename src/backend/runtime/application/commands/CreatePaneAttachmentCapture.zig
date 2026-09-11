@@ -1,17 +1,18 @@
+const PaneLaunchedType = @import("../../../pane/PaneLaunched.zig");
+const CreatePaneAttachment = @import("CreatePaneAttachment.zig");
 const AttachmentCapture = @This();
-const pane_mod = @import("../../../pane/root.zig");
-const PaneAttachment = @import("CreatePanePaneAttachment.zig");
+
 failure: ?anyerror = null,
 event_count: ?*const usize = null,
 call_count: usize = 0,
-last: ?pane_mod.PaneLaunched = null,
+last: ?PaneLaunchedType = null,
 event_observed_before_attach: bool = false,
 
-pub fn port(capture: *AttachmentCapture) PaneAttachment {
+pub fn port(capture: *AttachmentCapture) CreatePaneAttachment {
     return .{ .context = capture, .attach = attach };
 }
 
-fn attach(context: *anyopaque, launched: pane_mod.PaneLaunched) !void {
+fn attach(context: *anyopaque, launched: PaneLaunchedType) !void {
     const capture: *AttachmentCapture = @ptrCast(@alignCast(context));
     capture.call_count += 1;
     capture.last = launched;

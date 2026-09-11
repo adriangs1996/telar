@@ -3,34 +3,29 @@
 //! Application handlers may hold an event while a wider runtime transaction
 //! remains provisional and publish it only after that transaction commits.
 
+const GenericOwnedWorkspaceName = @import("GenericOwnedWorkspaceName.zig").Type;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const max_workspace_name_bytes_module = @import("telar-core").max_workspace_name_bytes;
+const TabLocationType = @import("telar-core").TabLocation;
+const workspace_module = @import("telar-core").workspace;
+const tab_module = @import("telar-core").tab;
+const TabCreated = @import("TabCreated.zig");
 const std = @import("std");
-const core = @import("telar-core");
+const TabRemoved = @import("TabRemoved.zig");
+const worktree_module = @import("telar-core").worktree;
+const TabRenamed = @import("TabRenamed.zig");
+const TabMoved = @import("TabMoved.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const WorkspaceRenamed = @import("WorkspaceRenamed.zig");
+const WorkspaceCreated = @import("WorkspaceCreated.zig");
 
-pub const schema = core.schema;
+pub const OwnedExplicitWorkspaceName = GenericOwnedWorkspaceName(max_tab_label_bytes_module);
+pub const OwnedCreatedWorkspaceName = GenericOwnedWorkspaceName(max_workspace_name_bytes_module);
 
-const OwnedTabLabel = @import("OwnedTabLabel.zig");
-
-const OwnedWorkspaceName = @import("GenericOwnedWorkspaceName.zig").Type;
-
-pub const OwnedExplicitWorkspaceName = OwnedWorkspaceName(schema.max_tab_label_bytes);
-pub const OwnedCreatedWorkspaceName = OwnedWorkspaceName(schema.max_workspace_name_bytes);
-
-pub const TabCreated = @import("TabCreated.zig");
-
-pub const TabRemoved = @import("TabRemoved.zig");
-
-pub const TabRenamed = @import("TabRenamed.zig");
-
-pub const TabMoved = @import("TabMoved.zig");
-
-pub const WorkspaceRenamed = @import("WorkspaceRenamed.zig");
-
-pub const WorkspaceCreated = @import("WorkspaceCreated.zig");
-
-fn testingLocation() !schema.TabLocation {
+fn testingLocation() !TabLocationType {
     return .{
-        .workspace = .{ .workspace = try schema.id.workspace(3) },
-        .tab_id = try schema.id.tab(7),
+        .workspace = .{ .workspace = try workspace_module(3) },
+        .tab_id = try tab_module(7),
     };
 }
 
@@ -51,13 +46,13 @@ test "TabCreated rejects labels it cannot own" {
 
     try std.testing.expectError(error.InvalidTabLabel, TabCreated.init(location, 1, ""));
 
-    const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    const oversized: [max_tab_label_bytes_module + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidTabLabel, TabCreated.init(location, 1, &oversized));
 }
 
 test "TabRemoved represents tab-only and whole-workspace removals" {
     const location = try testingLocation();
-    const previous = try schema.id.workspace(2);
+    const previous = try workspace_module(2);
     const tab_only = try TabRemoved.init(location, false, null);
     const whole_workspace = try TabRemoved.init(location, true, previous);
 
@@ -77,20 +72,20 @@ test "TabRemoved rejects impossible workspace handoffs" {
 
     try std.testing.expectError(
         error.UnexpectedPreviousWorkspace,
-        TabRemoved.init(location, false, try schema.id.workspace(2)),
+        TabRemoved.init(location, false, try workspace_module(2)),
     );
     try std.testing.expectError(
         error.InvalidPreviousWorkspace,
         TabRemoved.init(location, true, removed_workspace),
     );
 
-    const worktree_location: schema.TabLocation = .{
-        .workspace = .{ .worktree = try schema.id.worktree(4) },
+    const worktree_location: TabLocationType = .{
+        .workspace = .{ .worktree = try worktree_module(4) },
         .tab_id = location.tab_id,
     };
     try std.testing.expectError(
         error.InvalidPreviousWorkspace,
-        TabRemoved.init(worktree_location, true, try schema.id.workspace(2)),
+        TabRemoved.init(worktree_location, true, try workspace_module(2)),
     );
 }
 
@@ -110,7 +105,7 @@ test "TabRenamed rejects labels it cannot own" {
 
     try std.testing.expectError(error.InvalidTabLabel, TabRenamed.init(location, ""));
 
-    const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    const oversized: [max_tab_label_bytes_module + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidTabLabel, TabRenamed.init(location, &oversized));
 }
 
@@ -123,7 +118,7 @@ test "TabMoved identifies the committed tab and canonical position" {
 }
 
 test "WorkspaceRenamed owns its canonical name" {
-    const location: schema.WorkspaceLocation = .{ .workspace = try schema.id.workspace(3) };
+    const location: WorkspaceLocationType = .{ .workspace = try workspace_module(3) };
     var source = [_]u8{ 'b', 'a', 'c', 'k', 'e', 'n', 'd' };
     const event = try WorkspaceRenamed.init(location, &source);
 
@@ -134,11 +129,11 @@ test "WorkspaceRenamed owns its canonical name" {
 }
 
 test "WorkspaceRenamed rejects names the aggregate cannot store" {
-    const location: schema.WorkspaceLocation = .{ .workspace = try schema.id.workspace(3) };
+    const location: WorkspaceLocationType = .{ .workspace = try workspace_module(3) };
 
     try std.testing.expectError(error.InvalidWorkspaceName, WorkspaceRenamed.init(location, ""));
 
-    const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    const oversized: [max_tab_label_bytes_module + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidWorkspaceName, WorkspaceRenamed.init(location, &oversized));
 }
 
@@ -155,12 +150,12 @@ test "WorkspaceCreated owns its canonical name and root tab identity" {
 
 test "WorkspaceCreated owns path-derived names beyond the explicit label limit" {
     const location = try testingLocation();
-    var source: [schema.max_tab_label_bytes + 1]u8 = @splat('p');
+    var source: [max_tab_label_bytes_module + 1]u8 = @splat('p');
     const event = try WorkspaceCreated.init(location, &source);
 
     @memset(&source, 'x');
 
-    try std.testing.expectEqual(@as(usize, schema.max_tab_label_bytes + 1), event.nameSlice().len);
+    try std.testing.expectEqual(@as(usize, max_tab_label_bytes_module + 1), event.nameSlice().len);
     try std.testing.expect(std.mem.allEqual(u8, event.nameSlice(), 'p'));
 }
 
@@ -169,6 +164,6 @@ test "WorkspaceCreated rejects names the aggregate cannot store" {
 
     try std.testing.expectError(error.InvalidWorkspaceName, WorkspaceCreated.init(location, ""));
 
-    const oversized: [schema.max_workspace_name_bytes + 1]u8 = @splat('x');
+    const oversized: [max_workspace_name_bytes_module + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidWorkspaceName, WorkspaceCreated.init(location, &oversized));
 }

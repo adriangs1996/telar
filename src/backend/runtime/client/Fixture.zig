@@ -1,10 +1,11 @@
+const admission = @import("admission.zig");
+const AdmissionCapture = @import("AdmissionCapture.zig");
 const Fixture = @This();
-const source_namespace = @import("admission.zig");
-const Capture = @import("AdmissionCapture.zig");
-state: source_namespace.AdmissionState = .{},
-capture: Capture = .{},
 
-pub fn coordinator(fixture: *Fixture) source_namespace.TestCoordinator {
+state: admission.AdmissionState = .{},
+capture: AdmissionCapture = .{},
+
+pub fn coordinator(fixture: *Fixture) admission.TestCoordinator {
     fixture.capture.state = &fixture.state;
-    return source_namespace.TestCoordinator.init(&fixture.capture, &fixture.state);
+    return admission.TestCoordinator.init(&fixture.capture, &fixture.state);
 }

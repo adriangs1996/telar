@@ -1,5 +1,6 @@
+const PaneIdType = @import("telar-core").PaneId;
 const PaneGraphicsFallbackCommit = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 visible: bool,
 pane_graphics_revision: u64,

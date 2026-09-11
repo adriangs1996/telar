@@ -1,4 +1,5 @@
+const open_pane = @import("open_pane.zig");
 const EventPublisher = @This();
-const source_namespace = @import("open_pane.zig");
+
 context: *anyopaque,
-publish: *const fn (*anyopaque, source_namespace.RuntimeEvent) void,
+publish: *const fn (*anyopaque, open_pane.RuntimeEvent) void,

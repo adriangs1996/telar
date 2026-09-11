@@ -1,9 +1,11 @@
-const StubExecutor = @This();
 const send_pane_text_commands = @import("../../application/commands/send_pane_text.zig");
-result: send_pane_text_commands.SendPaneTextResult = .handled,
-command: ?send_pane_text_commands.SendPaneText = null,
+const SendPaneTextType = @import("../../application/commands/SendPaneText.zig");
+const StubExecutor = @This();
 
-pub fn execute(stub: *StubExecutor, command: send_pane_text_commands.SendPaneText) !send_pane_text_commands.SendPaneTextResult {
+result: send_pane_text_commands.SendPaneTextResult = .handled,
+command: ?SendPaneTextType = null,
+
+pub fn execute(stub: *StubExecutor, command: SendPaneTextType) !send_pane_text_commands.SendPaneTextResult {
     stub.command = command;
     return stub.result;
 }

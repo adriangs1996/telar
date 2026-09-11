@@ -1,7 +1,8 @@
-const PaneExitTransition = @This();
 const Pane = @import("Pane.zig");
-const pty = @import("../pty/root.zig");
+const exit_module = @import("../pty/exit.zig");
+const PaneExitTransition = @This();
+
 pane: *Pane,
-exit: pty.Exit,
+exit: exit_module.Exit,
 launch_aborting: bool,
 output_done: bool,

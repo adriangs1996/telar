@@ -1,12 +1,13 @@
+const RangeType = @import("telar-core").Range;
 const Options = @This();
-const source_namespace = @import("blit.zig");
+
 /// Cells to draw as selected, in coordinates relative to `area`.
 ///
 /// Passed in rather than read off the render state because the gesture
 /// belongs to the application: the emulator has a selection concept, but
 /// which drag the user is making, and whether it is even aimed at this
 /// pane, is not something it can know.
-selection: ?source_namespace.sel.Range = null,
+selection: ?RangeType = null,
 
 /// Draw the pane's cursor. Off for unfocused panes: two visible cursors in
 /// one screen is worse than none, and the real cursor is placed by `term`.

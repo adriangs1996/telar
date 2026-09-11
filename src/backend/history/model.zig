@@ -1,13 +1,28 @@
 //! Owned values exchanged with the history worker.
 
+const SessionTitle = @import("SessionTitle.zig");
 const std = @import("std");
-const core = @import("telar-core");
+const Query = @import("Query.zig");
+const RequestIdType = @import("telar-core").RequestId;
+const HistoryScopeType = @import("telar-core").HistoryScope;
+const QueryOrigin = @import("QueryOrigin.zig");
+const max_history_query_bytes_module = @import("telar-core").max_history_query_bytes;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const max_history_results_module = @import("telar-core").max_history_results;
+const LaunchAttempt = @import("LaunchAttempt.zig");
+const SessionStarted = @import("SessionStarted.zig");
+const SessionFinished = @import("SessionFinished.zig");
+const CommandFinished = @import("CommandFinished.zig");
+const ImportBatch = @import("ImportBatch.zig");
+const Delete = @import("Delete.zig");
+const Prune = @import("Prune.zig");
+const StatsQuery = @import("StatsQuery.zig");
+const QueryResult = @import("QueryResult.zig");
+const Failure = @import("Failure.zig");
+const Pruned = @import("Pruned.zig");
+const OutputResult = @import("OutputResult.zig");
+const StatsResult = @import("StatsResult.zig");
 
-pub const schema = core.schema;
-
-pub const max_query_bytes = schema.max_history_query_bytes;
-pub const max_results = schema.max_history_results;
-pub const max_result_payload_bytes = core.transport.max_frame_size;
 pub const encoded_result_header_bytes = 20;
 pub const encoded_entry_overhead_bytes = 51;
 
@@ -19,19 +34,11 @@ pub const LaunchPhase = enum(u8) {
     output_actor = 2,
 };
 
-pub const ClientKey = @import("ClientKey.zig");
-
 pub const CommandStatus = enum(u8) {
     completed = 0,
     interrupted = 1,
     running = 2,
 };
-
-pub const SessionStarted = @import("SessionStarted.zig");
-
-pub const SessionFinished = @import("SessionFinished.zig");
-
-pub const SessionTitle = @import("SessionTitle.zig");
 
 test "session titles validate text and source authority before persistence" {
     const session_id = [_]u8{1} ** 16;
@@ -50,16 +57,6 @@ test "session titles validate text and source authority before persistence" {
         SessionTitle.init(.{ .id = session_id, .title = "manual", .source = .manual, .state = .pending }),
     );
 }
-
-pub const LaunchAttempt = @import("LaunchAttempt.zig");
-
-pub const CommandFinished = @import("CommandFinished.zig");
-
-pub const Scope = schema.HistoryScope;
-
-pub const QueryOrigin = @import("QueryOrigin.zig");
-
-pub const Query = @import("Query.zig");
 
 test "history queries own request text and scope bytes" {
     var text = [_]u8{ 'g', 'i', 't' };
@@ -82,11 +79,11 @@ test "history queries own request text and scope bytes" {
 
     try std.testing.expectEqualStrings("git", query.textSlice());
     try std.testing.expectEqualStrings("/work", query.scopeSlice());
-    try std.testing.expectEqual(@as(schema.RequestId, @enumFromInt(7)), query.request_id);
+    try std.testing.expectEqual(@as(RequestIdType, @enumFromInt(7)), query.request_id);
     try std.testing.expectEqual(@as(u64, 3), query.origin.client.id);
     try std.testing.expectEqual(@as(u64, 4), query.origin.client.generation);
     try std.testing.expect(query.origin.close_after_reply);
-    try std.testing.expectEqual(Scope.workspace, query.scope);
+    try std.testing.expectEqual(HistoryScopeType.workspace, query.scope);
     try std.testing.expect(query.failed_only);
     try std.testing.expectEqual(@as(u16, 9), query.limit);
 }
@@ -96,8 +93,8 @@ test "history query validation rejects values that cannot enter the worker" {
         .client = .{ .id = 1, .generation = 2 },
         .close_after_reply = false,
     };
-    const long_text = [_]u8{'q'} ** (max_query_bytes + 1);
-    const long_scope = [_]u8{'s'} ** (schema.max_cwd_bytes + 1);
+    const long_text = [_]u8{'q'} ** (max_history_query_bytes_module + 1);
+    const long_scope = [_]u8{'s'} ** (max_cwd_bytes_module + 1);
 
     try std.testing.expectError(error.QueryTooLong, Query.init(.{
         .request_id = @enumFromInt(1),
@@ -117,7 +114,7 @@ test "history query validation rejects values that cannot enter the worker" {
     try std.testing.expectError(error.InvalidLimit, Query.init(.{
         .request_id = @enumFromInt(1),
         .origin = origin,
-        .limit = max_results + 1,
+        .limit = max_history_results_module + 1,
     }));
     try std.testing.expectError(error.InvalidPaneId, Query.init(.{
         .request_id = @enumFromInt(1),
@@ -145,26 +142,6 @@ pub const Request = union(enum) {
     stats: StatsQuery,
 };
 
-pub const StatsQuery = @import("StatsQuery.zig");
-
-pub const StatsTop = @import("StatsTop.zig");
-
-pub const StatsResult = @import("StatsResult.zig");
-
-pub const Delete = @import("Delete.zig");
-
-pub const Prune = @import("Prune.zig");
-
-pub const Pruned = @import("Pruned.zig");
-
-pub const ImportBatch = @import("ImportBatch.zig");
-
-pub const Entry = @import("Entry.zig");
-
-pub const QueryResult = @import("QueryResult.zig");
-
-pub const Failure = @import("Failure.zig");
-
 pub const Response = union(enum) {
     query_result: *QueryResult,
     failed: Failure,
@@ -172,8 +149,6 @@ pub const Response = union(enum) {
     output_result: *OutputResult,
     stats_result: *StatsResult,
 };
-
-pub const OutputResult = @import("OutputResult.zig");
 
 pub fn deinitRequest(request: Request, gpa: std.mem.Allocator) void {
     switch (request) {

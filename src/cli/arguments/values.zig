@@ -1,11 +1,9 @@
 //! Shared typed CLI values; no command dispatch or side effects.
 
 const std = @import("std");
-const core = @import("telar-core");
-const backend = @import("telar-backend");
-const frontend = @import("telar-frontend");
-const pty = backend.pty;
-const Cursor = @import("cursor_support.zig").Cursor;
+const AgentStatusType = @import("telar-core").AgentStatus;
+const max_pane_text_rows_module = @import("telar-core").max_pane_text_rows;
+const PaneTextSourceType = @import("telar-core").PaneTextSource;
 
 pub const Target = union(enum) {
     /// The pane this process runs in, from `TELAR_PANE_ID`.
@@ -47,7 +45,7 @@ pub fn parseHookAgent(text: []const u8) !HookAgent {
     return error.UnknownHookAgent;
 }
 
-pub fn parseWaitStatus(text: []const u8) !core.schema.AgentStatus {
+pub fn parseWaitStatus(text: []const u8) !AgentStatusType {
     if (std.mem.eql(u8, text, "done")) {
         return .done;
     }
@@ -78,14 +76,14 @@ pub fn parseTimeoutSeconds(text: []const u8) !u32 {
 
 pub fn parseLineCount(text: []const u8) !u16 {
     const lines = std.fmt.parseUnsigned(u16, text, 10) catch return error.InvalidLineCount;
-    if (lines == 0 or lines > core.schema.max_pane_text_rows) {
+    if (lines == 0 or lines > max_pane_text_rows_module) {
         return error.InvalidLineCount;
     }
 
     return lines;
 }
 
-pub fn parseTextSource(text: []const u8) !core.schema.PaneTextSource {
+pub fn parseTextSource(text: []const u8) !PaneTextSourceType {
     if (std.mem.eql(u8, text, "screen")) {
         return .screen;
     }

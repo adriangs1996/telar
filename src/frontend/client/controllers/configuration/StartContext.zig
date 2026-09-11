@@ -1,9 +1,10 @@
-const StartContext = @This();
 const Client = @import("../../Client.zig");
-const input = @import("../../../input/root.zig");
-const config = @import("../../../config/root.zig");
-const plugin_broker = @import("../../../plugins/root.zig");
+const PluginActionType = @import("telar-client").PluginAction;
+const CallbackContextType = @import("telar-client").CallbackContext;
+const WorkerRequestType = @import("../../../plugins/WorkerRequest.zig");
+const StartContext = @This();
+
 client: *Client,
-requested: input.action.PluginAction,
-callback_context: config.CallbackContext,
-request: ?plugin_broker.WorkerRequest = null,
+requested: PluginActionType,
+callback_context: CallbackContextType,
+request: ?WorkerRequestType = null,

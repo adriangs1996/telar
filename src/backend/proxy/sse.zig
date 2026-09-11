@@ -18,7 +18,11 @@
 //! an unfinished line and event across `feed` calls. All storage is fixed-size
 //! so observing a response cannot allocate or grow without a bound.
 
+const DecoderType = @import("Decoder.zig");
+const SseCapture = @import("SseCapture.zig");
+const CapturedExpectation = @import("CapturedExpectation.zig");
 const std = @import("std");
+const CountExpectation = @import("CountExpectation.zig");
 
 /// Maximum number of bytes retained for one `event` field value.
 pub const max_event_name_bytes = 128;
@@ -37,15 +41,7 @@ pub const Decoder = @import("Decoder.zig");
 
 pub const max_captured_events = 4;
 
-const CapturedEvent = @import("CapturedEvent.zig");
-
-const Capture = @import("SseCapture.zig");
-
-const CapturedExpectation = @import("CapturedExpectation.zig");
-
-const CountExpectation = @import("CountExpectation.zig");
-
-fn expectCaptured(capture: *const Capture, index: usize, expected: CapturedExpectation) !void {
+fn expectCaptured(capture: *const SseCapture, index: usize, expected: CapturedExpectation) !void {
     if (index >= capture.len) {
         std.debug.print("\nMissing SSE event at index {d}. Only {d} event(s) were emitted.\n", .{ index, capture.len });
         return error.MissingSseEvent;
@@ -61,7 +57,7 @@ fn expectCaptured(capture: *const Capture, index: usize, expected: CapturedExpec
     }
 }
 
-fn expectEventCount(decoder: *const Decoder, capture: *const Capture, expected: CountExpectation) !void {
+fn expectEventCount(decoder: *const DecoderType, capture: *const SseCapture, expected: CountExpectation) !void {
     if (capture.len == expected.count) {
         return;
     }
@@ -111,9 +107,9 @@ const end_turn_event =
     "\n";
 
 test "a complete SSE event is emitted at its blank line" {
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(end_turn_event, &capture);
 
@@ -122,9 +118,9 @@ test "a complete SSE event is emitted at its blank line" {
 }
 
 test "an event is not emitted before its blank line" {
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(
         "event: message_stop\n" ++
@@ -140,9 +136,9 @@ test "an event is not emitted before its blank line" {
 
 test "an SSE event survives every possible two-chunk split" {
     for (0..end_turn_event.len + 1) |split| {
-        var decoder: Decoder = .{};
+        var decoder: DecoderType = .{};
         defer decoder.deinit();
-        var capture: Capture = .{};
+        var capture: SseCapture = .{};
 
         decoder.feed(end_turn_event[0..split], &capture);
         decoder.feed(end_turn_event[split..], &capture);
@@ -159,9 +155,9 @@ test "an SSE event survives every possible two-chunk split" {
 }
 
 test "an SSE event survives one-byte input chunks" {
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     for (0..end_turn_event.len) |index|
         decoder.feed(end_turn_event[index..][0..1], &capture);
@@ -175,9 +171,9 @@ test "CRLF line endings do not become part of event fields" {
         "event: message_stop\r\n" ++
         "data: {\"type\":\"message_stop\"}\r\n" ++
         "\r\n";
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -191,9 +187,9 @@ test "multiple data fields are joined with one LF" {
         "data: first\n" ++
         "data: second\n" ++
         "\n";
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -208,9 +204,9 @@ test "comment lines do not alter the event" {
         ": ignored between fields\n" ++
         "data: {}\n" ++
         "\n";
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -219,9 +215,9 @@ test "comment lines do not alter the event" {
 }
 
 test "an absent event field uses the SSE default name" {
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed("data: payload\n\n", &capture);
 
@@ -230,9 +226,9 @@ test "an absent event field uses the SSE default name" {
 }
 
 test "an event without data is not emitted" {
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed("event: message_stop\n\n", &capture);
 
@@ -241,9 +237,9 @@ test "an event without data is not emitted" {
 
 test "an oversized event is marked truncated and the next event still parses" {
     const oversized: [max_line_bytes + 1]u8 = @splat('x');
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(
         "event: oversized\n" ++
@@ -271,9 +267,9 @@ test "a data line at max_line_bytes is retained completely" {
     const field = "data: ";
     const payload_len = max_line_bytes - field.len;
     const payload: [payload_len]u8 = @splat('x');
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(field, &capture);
     decoder.feed(&payload, &capture);
@@ -287,9 +283,9 @@ test "an oversized data line retains its bounded prefix" {
     const field = "data: ";
     const retained_payload_len = max_line_bytes - field.len;
     const payload: [retained_payload_len + 1]u8 = @splat('x');
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(field, &capture);
     decoder.feed(&payload, &capture);
@@ -306,9 +302,9 @@ test "a later event field replaces previous event name" {
         "data: payload\n" ++
         "\n";
 
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -322,9 +318,9 @@ test "an event without data does not leak its name into the next event" {
         "\n" ++
         "data: payload\n" ++
         "\n";
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -343,9 +339,9 @@ test "one leading UTF-8 BOM is ignored across every two-chunk split" {
         "\r\n";
 
     for (0..input.len + 1) |split| {
-        var decoder: Decoder = .{};
+        var decoder: DecoderType = .{};
         defer decoder.deinit();
-        var capture: Capture = .{};
+        var capture: SseCapture = .{};
 
         decoder.feed(input[0..split], &capture);
         decoder.feed(input[split..], &capture);
@@ -369,9 +365,9 @@ test "a BOM-like UTF-8 prefix is replayed when it diverges" {
 
     for (inputs) |input| {
         for (0..input.len + 1) |split| {
-            var decoder: Decoder = .{};
+            var decoder: DecoderType = .{};
             defer decoder.deinit();
-            var capture: Capture = .{};
+            var capture: SseCapture = .{};
 
             decoder.feed(input[0..split], &capture);
             decoder.feed(input[split..], &capture);
@@ -390,9 +386,9 @@ test "only the first UTF-8 BOM is ignored" {
         "\n" ++
         "data: visible\n" ++
         "\n";
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -408,9 +404,9 @@ test "LF CRLF and lone CR line endings survive every two-chunk split" {
         "\r";
 
     for (0..input.len + 1) |split| {
-        var decoder: Decoder = .{};
+        var decoder: DecoderType = .{};
         defer decoder.deinit();
-        var capture: Capture = .{};
+        var capture: SseCapture = .{};
 
         decoder.feed(input[0..split], &capture);
         decoder.feed(input[split..], &capture);
@@ -427,9 +423,9 @@ test "LF CRLF and lone CR line endings survive every two-chunk split" {
 }
 
 test "a CRLF pair is one line ending rather than two" {
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed("data: payload\r\n", &capture);
     try expectEventCount(&decoder, &capture, .{ .count = 0, .hint = "The LF following a CR must be swallowed instead of becoming a blank line." });
@@ -448,9 +444,9 @@ test "fields without a colon have an empty value" {
         "data\n" ++
         "data\n" ++
         "\n";
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -465,9 +461,9 @@ test "field parsing uses the first colon and removes exactly one leading space" 
         "data:  spaced\n" ++
         "data:value:with:colons\n" ++
         "\n";
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -483,9 +479,9 @@ test "field names are case-sensitive and unknown fields are ignored" {
         "justsometext\n" ++
         "data: kept\n" ++
         "\n";
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -498,9 +494,9 @@ test "valid UTF-8 bytes are preserved in event names and data" {
         "event: r\xC3\xA9ponse\n" ++
         "data: ok\xE2\x80\xA6\n" ++
         "\n";
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -515,9 +511,9 @@ test "empty data fields and NUL bytes are preserved" {
         "data: \x00\n" ++
         "data:\n" ++
         "\n";
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(input, &capture);
 
@@ -528,9 +524,9 @@ test "empty data fields and NUL bytes are preserved" {
 
 test "an oversized line resynchronizes at a lone CR" {
     const oversized: [max_line_bytes + 1]u8 = @splat('x');
-    var decoder: Decoder = .{};
+    var decoder: DecoderType = .{};
     defer decoder.deinit();
-    var capture: Capture = .{};
+    var capture: SseCapture = .{};
 
     decoder.feed(
         "event: oversized\n" ++

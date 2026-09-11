@@ -1,28 +1,16 @@
 //! Application use case for changing focus inside one client's active tab.
 
+const FocusPaneTestingModel = @import("FocusPaneTestingModel.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-pub const ui = core.ui;
-
-pub const Target = client_model.PaneFocusTarget;
-pub const FocusPane = client_model.PaneFocusRequest;
-
-pub const FocusEffects = @import("FocusEffects.zig");
-
-pub const FocusPaneHandler = @import("FocusPaneHandler.zig");
-
-const TestingModel = @import("FocusPaneTestingModel.zig");
-
-const EffectsCapture = @import("FocusPaneEffectsCapture.zig");
+const FocusPaneEffectsCapture = @import("FocusPaneEffectsCapture.zig");
+const FocusPaneHandler = @import("FocusPaneHandler.zig");
+const VersionType = @import("../../model/Version.zig");
 
 test "FocusPaneHandler commits before delivering active-pane resources" {
-    var testing = try TestingModel.init();
+    var testing = try FocusPaneTestingModel.init();
     defer testing.deinit();
     try std.testing.expect(testing.model.workspace.active().?.model.toggleFullscreen());
-    var effects: EffectsCapture = .{ .model = testing.model, .expected = testing.first };
+    var effects: FocusPaneEffectsCapture = .{ .model = testing.model, .expected = testing.first };
     var handler: FocusPaneHandler = .{
         .model = testing.model,
         .effects = effects.port(),
@@ -43,9 +31,9 @@ test "FocusPaneHandler commits before delivering active-pane resources" {
 }
 
 test "FocusPaneHandler suppresses repeated missing and directionless targets" {
-    var testing = try TestingModel.init();
+    var testing = try FocusPaneTestingModel.init();
     defer testing.deinit();
-    var effects: EffectsCapture = .{ .model = testing.model, .expected = testing.second };
+    var effects: FocusPaneEffectsCapture = .{ .model = testing.model, .expected = testing.second };
     var handler: FocusPaneHandler = .{
         .model = testing.model,
         .effects = effects.port(),
@@ -70,13 +58,13 @@ test "FocusPaneHandler suppresses repeated missing and directionless targets" {
         .area = testing.area,
     })) == null);
     try std.testing.expectEqual(@as(usize, 0), effects.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "FocusPaneHandler preserves committed focus after effect failure" {
-    var testing = try TestingModel.init();
+    var testing = try FocusPaneTestingModel.init();
     defer testing.deinit();
-    var effects: EffectsCapture = .{
+    var effects: FocusPaneEffectsCapture = .{
         .model = testing.model,
         .expected = testing.first,
         .fail = true,

@@ -1,10 +1,11 @@
-const StartClipboardImageHandler = @This();
-const client_model = @import("../../root.zig").model;
-const StartEffects = @import("ClipboardImageStartEffects.zig");
-const source_namespace = @import("clipboard_image.zig");
+const ModelType = @import("../../model/Model.zig");
+const ClipboardImageStartEffects = @import("ClipboardImageStartEffects.zig");
+const clipboard_image = @import("clipboard_image.zig");
 const std = @import("std");
-model: *client_model.Model,
-effects: StartEffects,
+const StartClipboardImageHandler = @This();
+
+model: *ModelType,
+effects: ClipboardImageStartEffects,
 
 /// Resolves one supported focused target and commits its capture identity
 /// before scheduling the media worker.
@@ -12,7 +13,7 @@ effects: StartEffects,
 /// ```zig
 /// const outcome = try handler.execute(platform_supported);
 /// ```
-pub fn execute(handler: *StartClipboardImageHandler, platform_supported: bool) !source_namespace.StartOutcome {
+pub fn execute(handler: *StartClipboardImageHandler, platform_supported: bool) !clipboard_image.StartOutcome {
     if (!platform_supported) {
         return .unsupported;
     }

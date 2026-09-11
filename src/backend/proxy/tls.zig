@@ -1,11 +1,11 @@
 //! TLS termination towards the child and the real origin.
 
+const InterceptOptionsType = @import("InterceptOptions.zig");
+const SessionType = @import("Session.zig");
 const std = @import("std");
 const tlsz = @import("tls");
-const ca = @import("ca.zig");
-
-pub const Io = std.Io;
-pub const net = Io.net;
+const Cursor = @import("Cursor.zig");
+const MintOptions = @import("MintOptions.zig");
 
 pub const Error = error{
     ContextFailed,
@@ -32,8 +32,8 @@ pub const Session = @import("Session.zig");
 /// const session = try intercept(options);
 /// defer session.deinit();
 /// ```
-pub fn intercept(options: InterceptOptions) Error!*Session {
-    const session = options.gpa.create(Session) catch return error.ContextFailed;
+pub fn intercept(options: InterceptOptionsType) Error!*SessionType {
+    const session = options.gpa.create(SessionType) catch return error.ContextFailed;
     errdefer {
         std.crypto.secureZero(u8, std.mem.asBytes(session));
         options.gpa.destroy(session);
@@ -62,7 +62,7 @@ pub fn intercept(options: InterceptOptions) Error!*Session {
         .{
             .host = options.host,
             .root_ca = options.roots.bundle,
-            .now = Io.Clock.real.now(options.io),
+            .now = std.Io.Clock.real.now(options.io),
             .rng = session.random.interface(),
             .alpn_protocols = offer,
         },
@@ -75,7 +75,7 @@ pub fn intercept(options: InterceptOptions) Error!*Session {
         &session.child.writer.interface,
         .{
             .auth = &session.auth,
-            .now = Io.Clock.real.now(options.io),
+            .now = std.Io.Clock.real.now(options.io),
             .rng = session.random.interface(),
             .alpn_protocols = mirroredAlpn(session.origin.connection.alpn_protocol),
             .cipher_suites_tls12 = &tlsz.config.cipher_suites.tls12_secure,
@@ -94,7 +94,7 @@ fn mirroredAlpn(selected: ?[]const u8) []const []const u8 {
     return &alpn_http11_only;
 }
 
-fn peekAlpnOffer(reader: *Io.Reader) []const []const u8 {
+fn peekAlpnOffer(reader: *std.Io.Reader) []const []const u8 {
     return parseAlpnOffer(reader) catch &alpn_offer;
 }
 
@@ -104,7 +104,7 @@ const handshake_record: u8 = 0x16;
 const client_hello: u8 = 0x01;
 const alpn_extension: u16 = 16;
 
-fn parseAlpnOffer(reader: *Io.Reader) ![]const []const u8 {
+fn parseAlpnOffer(reader: *std.Io.Reader) ![]const []const u8 {
     const header = try reader.peek(tls_record_header_len);
     if (header[0] != handshake_record) {
         return error.NotAHandshake;
@@ -158,10 +158,6 @@ fn parseAlpnOffer(reader: *Io.Reader) ![]const []const u8 {
     return &.{};
 }
 
-const Cursor = @import("Cursor.zig");
-
-const MintOptions = @import("MintOptions.zig");
-
 fn mintAuth(options: MintOptions) Error!tlsz.config.CertKeyPair {
     var leaf = options.authority.mint(options.io, options.host) catch {
         return error.MintFailed;
@@ -187,9 +183,9 @@ fn mintAuth(options: MintOptions) Error!tlsz.config.CertKeyPair {
 }
 
 fn fakeClientHello(output: []u8, protocols: []const []const u8) []u8 {
-    var writer = Io.Writer.fixed(output);
+    var writer = std.Io.Writer.fixed(output);
     var alpn_buffer: [128]u8 = undefined;
-    var names = Io.Writer.fixed(&alpn_buffer);
+    var names = std.Io.Writer.fixed(&alpn_buffer);
     for (protocols) |name| {
         names.writeByte(@intCast(name.len)) catch unreachable;
         names.writeAll(name) catch unreachable;
@@ -197,7 +193,7 @@ fn fakeClientHello(output: []u8, protocols: []const []const u8) []u8 {
     const name_list = names.buffered();
 
     var extension_buffer: [160]u8 = undefined;
-    var extensions = Io.Writer.fixed(&extension_buffer);
+    var extensions = std.Io.Writer.fixed(&extension_buffer);
     if (protocols.len != 0) {
         extensions.writeInt(u16, alpn_extension, .big) catch unreachable;
         extensions.writeInt(u16, @intCast(name_list.len + 2), .big) catch unreachable;
@@ -226,7 +222,7 @@ fn fakeClientHello(output: []u8, protocols: []const []const u8) []u8 {
 }
 
 fn offerOf(hello: []const u8) []const []const u8 {
-    var reader = Io.Reader.fixed(hello);
+    var reader = std.Io.Reader.fixed(hello);
     return peekAlpnOffer(&reader);
 }
 
@@ -255,7 +251,7 @@ test "malformed ClientHello falls back without consuming bytes" {
     for (tls_record_header_len..hello.len) |cut|
         try std.testing.expectEqual(@as(usize, 2), offerOf(hello[0..cut]).len);
 
-    var reader = Io.Reader.fixed(hello);
+    var reader = std.Io.Reader.fixed(hello);
     _ = peekAlpnOffer(&reader);
     try std.testing.expectEqualSlices(u8, hello, reader.buffered());
 }

@@ -1,9 +1,12 @@
-const Effects = @This();
-const source_namespace = @import("key_routing.zig");
+const key_routing = @import("key_routing.zig");
+const KeyType = @import("../../input/Key.zig");
 const PaneCommand = @import("PaneCommand.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const Effects = @This();
+
 context: *anyopaque,
 close_modal: *const fn (*anyopaque) void,
-prompt: *const fn (*anyopaque, source_namespace.Command) anyerror!void,
-copy_key: *const fn (*anyopaque, source_namespace.keybind.Key) anyerror!void,
-pane: *const fn (*anyopaque, PaneCommand) anyerror!?source_namespace.schema.PaneId,
+prompt: *const fn (*anyopaque, key_routing.Command) anyerror!void,
+copy_key: *const fn (*anyopaque, KeyType) anyerror!void,
+pane: *const fn (*anyopaque, PaneCommand) anyerror!?PaneIdType,
 preview: *const fn (*anyopaque) anyerror!void,

@@ -1,13 +1,15 @@
-const CloseTabHandler = @This();
-const source_namespace = @import("close_tab.zig");
+const Repository = @import("../../../workspace/Repository.zig");
 const PaneCloser = @import("PaneCloser.zig");
-const EventPublisher = @import("CloseTabEventPublisher.zig");
+const CloseTabEventPublisher = @import("CloseTabEventPublisher.zig");
 const CloseTab = @import("CloseTab.zig");
-const workspace_mod = @import("../../../workspace/root.zig");
+const TabRemoved = @import("../../../workspace/TabRemoved.zig");
+const commands = @import("../../../workspace/commands.zig");
 const CloseTabExecutor = @import("CloseTabExecutor.zig");
-workspaces: *source_namespace.WorkspaceRepository,
+const CloseTabHandler = @This();
+
+workspaces: *Repository,
 panes: PaneCloser,
-events: EventPublisher,
+events: CloseTabEventPublisher,
 
 /// Commits one tab removal, starts closing its runtime panes, then
 /// publishes the resulting domain fact. A missing tab has no effects.
@@ -16,8 +18,8 @@ events: EventPublisher,
 /// ```zig
 /// const removed = try handler.execute(.{ .location = location });
 /// ```
-pub fn execute(handler: *CloseTabHandler, command: CloseTab) !source_namespace.CloseTabResult {
-    const removed = workspace_mod.removeTab(handler.workspaces, command.location) orelse return error.TabNotFound;
+pub fn execute(handler: *CloseTabHandler, command: CloseTab) !TabRemoved {
+    const removed = commands.removeTab(handler.workspaces, command.location) orelse return error.TabNotFound;
 
     handler.panes.close_all(handler.panes.context, removed.location);
     handler.events.publish(handler.events.context, removed);
@@ -34,7 +36,7 @@ pub fn executor(handler: *CloseTabHandler) CloseTabExecutor {
     return .{ .context = handler, .execute_fn = executeErased };
 }
 
-fn executeErased(context: *anyopaque, command: CloseTab) !source_namespace.CloseTabResult {
+fn executeErased(context: *anyopaque, command: CloseTab) !TabRemoved {
     const handler: *CloseTabHandler = @ptrCast(@alignCast(context));
     return handler.execute(command);
 }

@@ -1,9 +1,11 @@
-const ExitCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("close_pane.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const PaneExitEffects = @import("PaneExitEffects.zig");
-model: *const client_model.Model,
-pane_id: source_namespace.schema.PaneId,
+const types = @import("../../model/types.zig");
+const ExitCapture = @This();
+
+model: *const ModelType,
+pane_id: PaneIdType,
 calls: usize = 0,
 observed_commit: bool = false,
 fail: bool = false,
@@ -12,7 +14,7 @@ pub fn port(capture: *ExitCapture) PaneExitEffects {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(context: *anyopaque, transition: source_namespace.PaneExit) !void {
+fn deliver(context: *anyopaque, transition: types.PaneExit) !void {
     const capture: *ExitCapture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.observed_commit = capture.model.workspace.activeConst().?.model.findConst(capture.pane_id) == null;

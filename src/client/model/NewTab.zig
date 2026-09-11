@@ -1,4 +1,6 @@
+const CreatedTabType = @import("../workspace/CreatedTab.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const NewTab = @This();
-const source_namespace = @import("types.zig");
-created: source_namespace.tabs_mod.CreatedTab,
-size: source_namespace.schema.TerminalSize,
+
+created: CreatedTabType,
+size: TerminalSizeType,

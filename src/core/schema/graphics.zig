@@ -1,33 +1,27 @@
-const std = @import("std");
+const EncoderType = @import("Encoder.zig");
+const Snapshot = @import("Snapshot.zig");
+const DecoderType = @import("Decoder.zig");
+const Image = @import("Image.zig");
 const shared = @import("../graphics.zig");
+const SharedImage = @import("SharedImage.zig");
+const ShmName = @import("../ShmName.zig");
+const ImageType = @import("../Image.zig");
+const ImageChunk = @import("ImageChunk.zig");
+const Placement = @import("Placement.zig");
+const DeleteImage = @import("DeleteImage.zig");
+const DeletePlacement = @import("DeletePlacement.zig");
 const id = @import("id.zig");
-const wire = @import("wire.zig");
-
-pub const PaneId = id.PaneId;
-pub const ShmName = shared.ShmName;
+const ImageKeyType = @import("../ImageKey.zig");
+const std = @import("std");
 
 pub const SnapshotPhase = enum(u8) { begin = 0, end = 1 };
 
-pub const Snapshot = @import("Snapshot.zig");
-
-pub const Image = @import("Image.zig");
-
-pub const ImageChunk = @import("ImageChunk.zig");
-
-pub const SharedImage = @import("SharedImage.zig");
-
-pub const Placement = @import("Placement.zig");
-
-pub const DeleteImage = @import("DeleteImage.zig");
-
-pub const DeletePlacement = @import("DeletePlacement.zig");
-
-pub fn encodeSnapshot(e: *wire.Encoder, value: Snapshot) !void {
+pub fn encodeSnapshot(e: *EncoderType, value: Snapshot) !void {
     try header(e, value.pane_id, value.revision);
     try e.writeByte(@intFromEnum(value.phase));
 }
 
-pub fn decodeSnapshot(d: *wire.Decoder) !Snapshot {
+pub fn decodeSnapshot(d: *DecoderType) !Snapshot {
     const h = try decodeHeader(d);
     return .{
         .pane_id = h.pane_id,
@@ -40,7 +34,7 @@ pub fn decodeSnapshot(d: *wire.Decoder) !Snapshot {
     };
 }
 
-pub fn encodeImage(e: *wire.Encoder, value: Image) !void {
+pub fn encodeImage(e: *EncoderType, value: Image) !void {
     _ = try value.image.validate(shared.max_image_bytes_per_pane);
     try header(e, value.pane_id, value.revision);
     try imageKey(e, value.image.key);
@@ -50,7 +44,7 @@ pub fn encodeImage(e: *wire.Encoder, value: Image) !void {
     try e.writeInt(u64, value.image.byte_len);
 }
 
-pub fn decodeImage(d: *wire.Decoder) !Image {
+pub fn decodeImage(d: *DecoderType) !Image {
     const h = try decodeHeader(d);
     const value: Image = .{
         .pane_id = h.pane_id,
@@ -71,11 +65,11 @@ pub fn decodeImage(d: *wire.Decoder) !Image {
     return value;
 }
 
-pub fn encodeSharedImage(e: *wire.Encoder, value: SharedImage) !void {
+pub fn encodeSharedImage(e: *EncoderType, value: SharedImage) !void {
     _ = try value.image.validate(shared.max_image_bytes_per_pane);
     // Re-validate the buffered name so a corrupted length can never leak
     // stack bytes onto the wire.
-    _ = try shared.ShmName.init(value.name.slice());
+    _ = try ShmName.init(value.name.slice());
     try header(e, value.pane_id, value.revision);
     try imageKey(e, value.image.key);
     try e.writeByte(@intFromEnum(value.image.format));
@@ -85,9 +79,9 @@ pub fn encodeSharedImage(e: *wire.Encoder, value: SharedImage) !void {
     try e.writeSized32(value.name.slice());
 }
 
-pub fn decodeSharedImage(d: *wire.Decoder) !SharedImage {
+pub fn decodeSharedImage(d: *DecoderType) !SharedImage {
     const h = try decodeHeader(d);
-    const image: shared.Image = .{
+    const image: ImageType = .{
         .key = try decodeImageKey(d),
         .format = switch (try d.readByte()) {
             24 => .rgb,
@@ -103,11 +97,11 @@ pub fn decodeSharedImage(d: *wire.Decoder) !SharedImage {
         .pane_id = h.pane_id,
         .revision = h.revision,
         .image = image,
-        .name = try shared.ShmName.init(try d.readSized32()),
+        .name = try ShmName.init(try d.readSized32()),
     };
 }
 
-pub fn encodeImageChunk(e: *wire.Encoder, value: ImageChunk) !void {
+pub fn encodeImageChunk(e: *EncoderType, value: ImageChunk) !void {
     if (value.bytes.len == 0 or value.bytes.len > shared.max_ipc_chunk_bytes) {
         return error.InvalidGraphicsChunkLength;
     }
@@ -117,7 +111,7 @@ pub fn encodeImageChunk(e: *wire.Encoder, value: ImageChunk) !void {
     try e.writeSized32(value.bytes);
 }
 
-pub fn decodeImageChunk(d: *wire.Decoder) !ImageChunk {
+pub fn decodeImageChunk(d: *DecoderType) !ImageChunk {
     const h = try decodeHeader(d);
     const value: ImageChunk = .{
         .pane_id = h.pane_id,
@@ -132,7 +126,7 @@ pub fn decodeImageChunk(d: *wire.Decoder) !ImageChunk {
     return value;
 }
 
-pub fn encodePlacement(e: *wire.Encoder, value: Placement) !void {
+pub fn encodePlacement(e: *EncoderType, value: Placement) !void {
     try header(e, value.pane_id, value.revision);
     const p = value.placement;
     if (p.virtual_id == 0) {
@@ -154,7 +148,7 @@ pub fn encodePlacement(e: *wire.Encoder, value: Placement) !void {
     try e.writeInt(i32, p.z_index);
 }
 
-pub fn decodePlacement(d: *wire.Decoder) !Placement {
+pub fn decodePlacement(d: *DecoderType) !Placement {
     const h = try decodeHeader(d);
     return .{
         .pane_id = h.pane_id,
@@ -178,17 +172,17 @@ pub fn decodePlacement(d: *wire.Decoder) !Placement {
     };
 }
 
-pub fn encodeDeleteImage(e: *wire.Encoder, value: DeleteImage) !void {
+pub fn encodeDeleteImage(e: *EncoderType, value: DeleteImage) !void {
     try header(e, value.pane_id, value.revision);
     try imageKey(e, value.key);
 }
 
-pub fn decodeDeleteImage(d: *wire.Decoder) !DeleteImage {
+pub fn decodeDeleteImage(d: *DecoderType) !DeleteImage {
     const h = try decodeHeader(d);
     return .{ .pane_id = h.pane_id, .revision = h.revision, .key = try decodeImageKey(d) };
 }
 
-pub fn encodeDeletePlacement(e: *wire.Encoder, value: DeletePlacement) !void {
+pub fn encodeDeletePlacement(e: *EncoderType, value: DeletePlacement) !void {
     if (value.virtual_id == 0) {
         return error.InvalidGraphicsIdentity;
     }
@@ -198,7 +192,7 @@ pub fn encodeDeletePlacement(e: *wire.Encoder, value: DeletePlacement) !void {
     try e.writeInt(u32, value.placement_id);
 }
 
-pub fn decodeDeletePlacement(d: *wire.Decoder) !DeletePlacement {
+pub fn decodeDeletePlacement(d: *DecoderType) !DeletePlacement {
     const h = try decodeHeader(d);
     return .{
         .pane_id = h.pane_id,
@@ -209,7 +203,7 @@ pub fn decodeDeletePlacement(d: *wire.Decoder) !DeletePlacement {
     };
 }
 
-fn decodeVirtualId(d: *wire.Decoder) !u64 {
+fn decodeVirtualId(d: *DecoderType) !u64 {
     const virtual_id = try d.readInt(u64);
     if (virtual_id == 0) {
         return error.InvalidGraphicsIdentity;
@@ -217,7 +211,7 @@ fn decodeVirtualId(d: *wire.Decoder) !u64 {
     return virtual_id;
 }
 
-fn header(e: *wire.Encoder, pane_id: PaneId, revision: u64) !void {
+fn header(e: *EncoderType, pane_id: id.PaneId, revision: u64) !void {
     if (pane_id == .invalid or revision == 0) {
         return error.InvalidGraphicsIdentity;
     }
@@ -225,7 +219,7 @@ fn header(e: *wire.Encoder, pane_id: PaneId, revision: u64) !void {
     try e.writeInt(u64, revision);
 }
 
-fn decodeHeader(d: *wire.Decoder) !struct { pane_id: PaneId, revision: u64 } {
+fn decodeHeader(d: *DecoderType) !struct { pane_id: id.PaneId, revision: u64 } {
     const pane_id = try id.pane(try d.readInt(u64));
     const revision = try d.readInt(u64);
     if (revision == 0) {
@@ -234,7 +228,7 @@ fn decodeHeader(d: *wire.Decoder) !struct { pane_id: PaneId, revision: u64 } {
     return .{ .pane_id = pane_id, .revision = revision };
 }
 
-fn imageKey(e: *wire.Encoder, key: shared.ImageKey) !void {
+fn imageKey(e: *EncoderType, key: ImageKeyType) !void {
     if (key.image_id == 0 or key.generation == 0) {
         return error.InvalidGraphicsIdentity;
     }
@@ -242,8 +236,8 @@ fn imageKey(e: *wire.Encoder, key: shared.ImageKey) !void {
     try e.writeInt(u64, key.generation);
 }
 
-fn decodeImageKey(d: *wire.Decoder) !shared.ImageKey {
-    const key: shared.ImageKey = .{
+fn decodeImageKey(d: *DecoderType) !ImageKeyType {
+    const key: ImageKeyType = .{
         .image_id = try d.readInt(u32),
         .generation = try d.readInt(u64),
     };
@@ -255,7 +249,7 @@ fn decodeImageKey(d: *wire.Decoder) !shared.ImageKey {
 
 test "graphics image metadata and chunks round trip" {
     var bytes: [256]u8 = undefined;
-    var encoder = wire.Encoder.init(&bytes);
+    var encoder = EncoderType.init(&bytes);
     const image: Image = .{
         .pane_id = @enumFromInt(1),
         .revision = 3,
@@ -268,14 +262,14 @@ test "graphics image metadata and chunks round trip" {
         },
     };
     try encodeImage(&encoder, image);
-    var decoder = wire.Decoder.init(encoder.finish());
+    var decoder = DecoderType.init(encoder.finish());
     try std.testing.expectEqualDeep(image, try decodeImage(&decoder));
     try decoder.ensureEnd();
 }
 
 test "graphics IPC chunks have an explicit upper bound" {
     var bytes: [128]u8 = undefined;
-    var encoder = wire.Encoder.init(&bytes);
+    var encoder = EncoderType.init(&bytes);
     const oversized = @as([*]const u8, @ptrFromInt(1))[0 .. shared.max_ipc_chunk_bytes + 1];
     try std.testing.expectError(error.InvalidGraphicsChunkLength, encodeImageChunk(&encoder, .{
         .pane_id = @enumFromInt(1),

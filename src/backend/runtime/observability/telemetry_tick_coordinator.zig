@@ -1,13 +1,11 @@
 //! Coordination for one completed runtime telemetry tick.
 
+const GenericTelemetryTickCoordinatorRuntimePort = @import("GenericTelemetryTickCoordinatorRuntimePort.zig").Type;
+const TelemetryTickCoordinatorCapture = @import("TelemetryTickCoordinatorCapture.zig");
+const GenericTelemetryTickCoordinator = @import("GenericTelemetryTickCoordinator.zig").Type;
 const std = @import("std");
+const State = @import("State.zig");
 const telemetry = @import("telemetry.zig");
-
-pub const State = telemetry.State;
-
-pub const RuntimePort = @import("GenericTelemetryTickCoordinatorRuntimePort.zig").Type;
-
-pub const Coordinator = @import("GenericTelemetryTickCoordinatorCoordinator.zig").Type;
 
 pub const Step = enum {
     available,
@@ -17,24 +15,22 @@ pub const Step = enum {
     disable,
 };
 
-const Capture = @import("TelemetryTickCoordinatorCapture.zig");
-
-const test_port: RuntimePort(Capture) = .{
-    .available = Capture.available,
-    .disable = Capture.disable,
-    .schedule_tick = Capture.scheduleTick,
-    .format_sample = Capture.formatSample,
-    .schedule_write = Capture.scheduleWrite,
+const test_port: GenericTelemetryTickCoordinatorRuntimePort(TelemetryTickCoordinatorCapture) = .{
+    .available = TelemetryTickCoordinatorCapture.available,
+    .disable = TelemetryTickCoordinatorCapture.disable,
+    .schedule_tick = TelemetryTickCoordinatorCapture.scheduleTick,
+    .format_sample = TelemetryTickCoordinatorCapture.formatSample,
+    .schedule_write = TelemetryTickCoordinatorCapture.scheduleWrite,
 };
 
-const TestCoordinator = Coordinator(Capture, test_port);
+const TestCoordinator = GenericTelemetryTickCoordinator(TelemetryTickCoordinatorCapture, test_port);
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const TelemetryTickCoordinatorCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
 test "a failed tick retires the sink without scheduling more work" {
-    var capture: Capture = .{};
+    var capture: TelemetryTickCoordinatorCapture = .{};
     var state: State = .{};
     state.beginWrite();
     var coordinator = TestCoordinator.init(&capture, &state);
@@ -46,7 +42,7 @@ test "a failed tick retires the sink without scheduling more work" {
 }
 
 test "an unavailable sink does not rearm the periodic tick" {
-    var capture: Capture = .{ .sink_available = false };
+    var capture: TelemetryTickCoordinatorCapture = .{ .sink_available = false };
     var state: State = .{};
     var coordinator = TestCoordinator.init(&capture, &state);
 
@@ -56,7 +52,7 @@ test "an unavailable sink does not rearm the periodic tick" {
 }
 
 test "tick scheduling failure retires the sink" {
-    var capture: Capture = .{ .failure = .tick };
+    var capture: TelemetryTickCoordinatorCapture = .{ .failure = .tick };
     var state: State = .{};
     state.beginWrite();
     var coordinator = TestCoordinator.init(&capture, &state);
@@ -68,7 +64,7 @@ test "tick scheduling failure retires the sink" {
 }
 
 test "an in-flight write coalesces the sample after rearming the tick" {
-    var capture: Capture = .{};
+    var capture: TelemetryTickCoordinatorCapture = .{};
     var state: State = .{};
     state.beginWrite();
     var coordinator = TestCoordinator.init(&capture, &state);
@@ -80,7 +76,7 @@ test "an in-flight write coalesces the sample after rearming the tick" {
 }
 
 test "formatting failure discards only the current sample" {
-    var capture: Capture = .{ .failure = .format };
+    var capture: TelemetryTickCoordinatorCapture = .{ .failure = .format };
     var state: State = .{};
     var coordinator = TestCoordinator.init(&capture, &state);
 
@@ -91,7 +87,7 @@ test "formatting failure discards only the current sample" {
 }
 
 test "a formatted sample is borrowed before its write is scheduled" {
-    var capture: Capture = .{};
+    var capture: TelemetryTickCoordinatorCapture = .{};
     var state: State = .{};
     var coordinator = TestCoordinator.init(&capture, &state);
 
@@ -105,7 +101,7 @@ test "a formatted sample is borrowed before its write is scheduled" {
 }
 
 test "write scheduling failure releases the buffer and retires the sink" {
-    var capture: Capture = .{ .failure = .write };
+    var capture: TelemetryTickCoordinatorCapture = .{ .failure = .write };
     var state: State = .{};
     var coordinator = TestCoordinator.init(&capture, &state);
 

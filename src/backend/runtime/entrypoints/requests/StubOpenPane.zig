@@ -1,15 +1,18 @@
+const OpenPaneResultType = @import("../../application/commands/OpenPaneResult.zig");
+const OpenPaneType = @import("../../application/commands/OpenPane.zig");
+const OpenPaneExecutorType = @import("../../application/commands/OpenPaneExecutor.zig");
 const StubOpenPane = @This();
-const open_pane_commands = @import("../../application/commands/open_pane.zig");
-result: ?open_pane_commands.OpenPaneResult = null,
+
+result: ?OpenPaneResultType = null,
 failure: ?anyerror = null,
 call_count: usize = 0,
-last_command: ?open_pane_commands.OpenPane = null,
+last_command: ?OpenPaneType = null,
 
-pub fn executor(stub: *StubOpenPane) open_pane_commands.OpenPaneExecutor {
+pub fn executor(stub: *StubOpenPane) OpenPaneExecutorType {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, command: open_pane_commands.OpenPane) anyerror!open_pane_commands.OpenPaneResult {
+fn execute(context: *anyopaque, command: OpenPaneType) anyerror!OpenPaneResultType {
     const stub: *StubOpenPane = @ptrCast(@alignCast(context));
     stub.call_count += 1;
     stub.last_command = command;

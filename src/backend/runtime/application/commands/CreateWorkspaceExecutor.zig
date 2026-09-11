@@ -1,6 +1,7 @@
-const CreateWorkspaceExecutor = @This();
 const CreateWorkspace = @import("CreateWorkspace.zig");
 const CreateWorkspaceResult = @import("CreateWorkspaceResult.zig");
+const CreateWorkspaceExecutor = @This();
+
 context: *anyopaque,
 execute_fn: *const fn (*anyopaque, CreateWorkspace) anyerror!CreateWorkspaceResult,
 

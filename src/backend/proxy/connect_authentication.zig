@@ -1,10 +1,15 @@
 //! Authentication and target policy for one HTTP CONNECT request.
 
+const TargetType = @import("Target.zig");
+const AuthenticatedType = @import("Authenticated.zig");
+const RejectionType = @import("Rejection.zig");
+const GenericCredentialPort = @import("GenericCredentialPort.zig").Type;
+const GenericConnectAuthenticationCommand = @import("GenericConnectAuthenticationCommand.zig").Type;
 const std = @import("std");
-const core = @import("telar-core");
-const identity = @import("identity.zig");
-
-pub const net = std.Io.net;
+const max_hostname_bytes_module = @import("telar-core").max_hostname_bytes;
+const TestStore = @import("TestStore.zig");
+const CredentialType = @import("Credential.zig");
+const ExpectedRejection = @import("ExpectedRejection.zig");
 
 const authentication_required_response =
     "HTTP/1.1 407 Proxy Authentication Required\r\n" ++
@@ -34,15 +39,11 @@ pub const RejectionReason = enum {
 pub const Rejection = @import("Rejection.zig");
 
 pub const Decision = union(enum) {
-    authenticated: Authenticated,
-    rejected: Rejection,
+    authenticated: AuthenticatedType,
+    rejected: RejectionType,
 };
 
-pub const CredentialPort = @import("GenericCredentialPort.zig").Type;
-
-pub const Command = @import("GenericConnectAuthenticationCommand.zig").Type;
-
-pub fn parseTarget(head: []const u8) ?Target {
+pub fn parseTarget(head: []const u8) ?TargetType {
     const line_end = std.mem.indexOf(u8, head, "\r\n") orelse return null;
     var parts = std.mem.splitScalar(u8, head[0..line_end], ' ');
     if (!std.mem.eql(u8, parts.next() orelse return null, "CONNECT")) {
@@ -60,11 +61,11 @@ pub fn parseTarget(head: []const u8) ?Target {
     }
 
     const host_bytes = authority[0..colon];
-    if (host_bytes.len > core.proxy.max_hostname_bytes) {
+    if (host_bytes.len > max_hostname_bytes_module) {
         return null;
     }
 
-    const host = net.HostName.init(host_bytes) catch return null;
+    const host = std.Io.net.HostName.init(host_bytes) catch return null;
     const port_text = authority[colon + 1 ..];
     if (port_text.len == 0) {
         return null;
@@ -108,15 +109,13 @@ pub fn rejectInvalidTarget() Decision {
     } };
 }
 
-const TestStore = @import("TestStore.zig");
-
-const test_credential_port: CredentialPort(TestStore) = .{
+const test_credential_port: GenericCredentialPort(TestStore) = .{
     .contains = TestStore.contains,
 };
 
-const TestCommand = Command(TestStore, test_credential_port);
+const TestCommand = GenericConnectAuthenticationCommand(TestStore, test_credential_port);
 
-fn testCredential() identity.Credential {
+fn testCredential() CredentialType {
     return .{
         .pane_id = @enumFromInt(7),
         .pane_generation = 12,
@@ -133,8 +132,6 @@ fn requestHead(start_line: []const u8, output: []u8) ![]const u8 {
     const basic = std.base64.standard.Encoder.encode(&encoded, raw);
     return std.fmt.bufPrint(output, "{s}\r\nProxy-Authorization: Basic {s}\r\n\r\n", .{ start_line, basic });
 }
-
-const ExpectedRejection = @import("ExpectedRejection.zig");
 
 fn expectRejected(decision: Decision, expected: ExpectedRejection) !void {
     const rejection = switch (decision) {
@@ -217,7 +214,7 @@ test "authenticated malformed targets map to a bad request without an auth metri
         "CONNECT api.openai.com:0 HTTP/1.1",
         "CONNECT api.openai.com:+443 HTTP/1.1",
         "CONNECT api.openai.com:65536 HTTP/1.1",
-        "CONNECT " ++ "a" ** (core.proxy.max_hostname_bytes + 1) ++ ":443 HTTP/1.1",
+        "CONNECT " ++ "a" ** (max_hostname_bytes_module + 1) ++ ":443 HTTP/1.1",
     };
 
     for (invalid_start_lines) |start_line| {

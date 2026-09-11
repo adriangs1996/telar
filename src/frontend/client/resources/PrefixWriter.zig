@@ -1,6 +1,7 @@
+const std = @import("std");
 const PrefixWriter = @This();
-const source_namespace = @import("host_output.zig");
-writer: *source_namespace.Io.Writer,
+
+writer: *std.Io.Writer,
 limit: usize,
 
 pub fn write(context: *anyopaque, bytes: []const u8) !usize {

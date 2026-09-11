@@ -1,21 +1,15 @@
 //! Protocol controller for one client's graphics transport declaration. The
 //! command has no management response and allocates no resources.
 
+const GenericGraphicsConfigurationController = @import("GenericGraphicsConfigurationController.zig").Type;
+const GraphicsConfigurationStubExecutor = @import("GraphicsConfigurationStubExecutor.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const graphics_configuration_commands = @import("../../application/commands/graphics_configuration.zig");
 
-pub const schema = core.schema;
-
-pub const Controller = @import("GenericGraphicsConfigurationController.zig").Type;
-
-const StubExecutor = @import("GraphicsConfigurationStubExecutor.zig");
-
-const TestController = Controller(*StubExecutor);
+const TestController = GenericGraphicsConfigurationController(*GraphicsConfigurationStubExecutor);
 
 test "Controller maps both graphics transport declarations exactly" {
     for ([_]bool{ false, true }) |shared| {
-        var stub: StubExecutor = .{};
+        var stub: GraphicsConfigurationStubExecutor = .{};
         var controller = TestController.init(&stub);
 
         try controller.configureGraphics(.{ .shared = shared });
@@ -26,7 +20,7 @@ test "Controller maps both graphics transport declarations exactly" {
 }
 
 test "Controller accepts an idempotent graphics configuration result" {
-    var stub: StubExecutor = .{ .result = .unchanged };
+    var stub: GraphicsConfigurationStubExecutor = .{ .result = .unchanged };
     var controller = TestController.init(&stub);
 
     try controller.configureGraphics(.{ .shared = true });
@@ -35,7 +29,7 @@ test "Controller accepts an idempotent graphics configuration result" {
 }
 
 test "Controller propagates graphics configuration infrastructure failures" {
-    var stub: StubExecutor = .{ .failure = error.GraphicsConfigurationUnavailable };
+    var stub: GraphicsConfigurationStubExecutor = .{ .failure = error.GraphicsConfigurationUnavailable };
     var controller = TestController.init(&stub);
 
     try std.testing.expectError(

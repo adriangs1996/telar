@@ -1,5 +1,6 @@
-const Options = @This();
 const Dependencies = @import("Dependencies.zig");
-const source_namespace = @import("root.zig");
+const std = @import("std");
+const Options = @This();
+
 dependencies: Dependencies,
-child: source_namespace.net.Stream,
+child: std.Io.net.Stream,

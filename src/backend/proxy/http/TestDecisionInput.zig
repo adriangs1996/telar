@@ -1,6 +1,7 @@
+const TransformPipelineType = @import("../TransformPipeline.zig");
 const TestDecisionInput = @This();
-const middleware = @import("../middleware.zig");
+
 original: []const u8,
 is_response: bool,
-pipeline: *const middleware.TransformPipeline,
+pipeline: *const TransformPipelineType,
 output: []u8,

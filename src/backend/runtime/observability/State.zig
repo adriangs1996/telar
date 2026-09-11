@@ -1,8 +1,10 @@
-const State = @This();
-const source_namespace = @import("telemetry.zig");
+const SinkType = @import("telar-core").Sink;
+const telemetry = @import("telemetry.zig");
 const std = @import("std");
-sink: source_namespace.diagnostics.Sink = .{},
-line: [source_namespace.max_line_bytes]u8 = undefined,
+const State = @This();
+
+sink: SinkType = .{},
+line: [telemetry.max_line_bytes]u8 = undefined,
 write_pending: bool = false,
 
 /// Creates the runtime-owned telemetry sink and its bounded line buffer.
@@ -10,8 +12,8 @@ write_pending: bool = false,
 /// ```zig
 /// var state = State.init(io, endpoint, "runtime");
 /// ```
-pub fn init(io: source_namespace.Io, endpoint: []const u8, suffix: []const u8) State {
-    return .{ .sink = source_namespace.diagnostics.Sink.init(io, endpoint, suffix) };
+pub fn init(io: std.Io, endpoint: []const u8, suffix: []const u8) State {
+    return .{ .sink = SinkType.init(io, endpoint, suffix) };
 }
 
 /// Closes the sink without invalidating an in-flight write completion.
@@ -19,7 +21,7 @@ pub fn init(io: source_namespace.Io, endpoint: []const u8, suffix: []const u8) S
 /// ```zig
 /// state.deinit(io);
 /// ```
-pub fn deinit(state: *State, io: source_namespace.Io) void {
+pub fn deinit(state: *State, io: std.Io) void {
     state.sink.deinit(io);
 }
 
@@ -81,7 +83,7 @@ pub fn cancelWrite(state: *State) void {
 /// ```zig
 /// const action = state.finishWrite(result);
 /// ```
-pub fn finishWrite(state: *State, result: anyerror!void) source_namespace.WriteCompletion {
+pub fn finishWrite(state: *State, result: anyerror!void) telemetry.WriteCompletion {
     std.debug.assert(state.write_pending);
     state.write_pending = false;
 
@@ -94,7 +96,7 @@ pub fn finishWrite(state: *State, result: anyerror!void) source_namespace.WriteC
 /// ```zig
 /// try state.write(io, line);
 /// ```
-pub fn write(state: *State, io: source_namespace.Io, line: []const u8) !void {
+pub fn write(state: *State, io: std.Io, line: []const u8) !void {
     std.debug.assert(state.write_pending);
     try state.sink.write(io, line);
 }

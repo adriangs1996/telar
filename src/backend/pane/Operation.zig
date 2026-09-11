@@ -1,9 +1,11 @@
-const Operation = @This();
-const source_namespace = @import("blit.zig");
+const BufferType = @import("telar-core").Buffer;
+const RectType = @import("telar-core").Rect;
 const vt = @import("ghostty-vt");
 const Options = @import("Options.zig");
-buffer: *source_namespace.ui.Buffer,
-area: source_namespace.ui.Rect,
+const Operation = @This();
+
+buffer: *BufferType,
+area: RectType,
 terminal: *const vt.Terminal,
 state: *vt.RenderState,
 options: Options,

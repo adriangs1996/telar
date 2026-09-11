@@ -1,9 +1,11 @@
+const max_search_matches_module = @import("telar-core").max_search_matches;
+const SearchMatchType = @import("telar-core").SearchMatch;
 const Matches = @This();
-const source_namespace = @import("search_pane.zig");
-items: [source_namespace.schema.max_search_matches]source_namespace.schema.SearchMatch = undefined,
+
+items: [max_search_matches_module]SearchMatchType = undefined,
 count: u8 = 0,
 truncated: bool = false,
 
-pub fn slice(matches: *const Matches) []const source_namespace.schema.SearchMatch {
+pub fn slice(matches: *const Matches) []const SearchMatchType {
     return matches.items[0..matches.count];
 }

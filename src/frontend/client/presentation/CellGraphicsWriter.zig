@@ -1,10 +1,13 @@
+const KittyGraphicsWriterType = @import("../../graphics/KittyGraphicsWriter.zig");
+const PillRenderer = @import("../../graphics/PillRenderer.zig");
+const std = @import("std");
 const CellGraphicsWriter = @This();
-const source_namespace = @import("Presenter.zig");
-panes: ?source_namespace.kitty.KittyGraphicsWriter = null,
-pill: *source_namespace.pill_graphics.Renderer,
+
+panes: ?KittyGraphicsWriterType = null,
+pill: *PillRenderer,
 pill_bytes: usize = 0,
 
-pub fn writeOpaque(context: *anyopaque, writer: *source_namespace.Io.Writer) source_namespace.Io.Writer.Error!usize {
+pub fn writeOpaque(context: *anyopaque, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     const self: *CellGraphicsWriter = @ptrCast(@alignCast(context));
     self.pill_bytes = try self.pill.writeRetirements(writer);
     const pane_bytes = if (self.panes) |*panes| try panes.write(writer) else 0;

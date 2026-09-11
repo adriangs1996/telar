@@ -1,4 +1,5 @@
+const PaneLaunchedType = @import("../../../pane/PaneLaunched.zig");
 const OpenPaneResult = @This();
-const pane_mod = @import("../../../pane/root.zig");
-pane: pane_mod.PaneLaunched,
+
+pane: PaneLaunchedType,
 created: bool,

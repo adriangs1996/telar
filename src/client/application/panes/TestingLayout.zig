@@ -1,6 +1,9 @@
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const RectType = @import("telar-core").Rect;
 const TestingLayout = @This();
-const source_namespace = @import("pane_geometry_delivery.zig");
-location: source_namespace.schema.TabLocation,
-first: source_namespace.schema.PaneId,
-second: source_namespace.schema.PaneId,
-area: source_namespace.ui.Rect,
+
+location: TabLocationType,
+first: PaneIdType,
+second: PaneIdType,
+area: RectType,

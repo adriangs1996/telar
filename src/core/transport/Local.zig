@@ -1,5 +1,6 @@
-const Local = @This();
 const std = @import("std");
+const Local = @This();
+
 storage: [std.Io.net.UnixAddress.max_len]u8 = undefined,
 path_len: usize,
 directory_len: usize = 0,

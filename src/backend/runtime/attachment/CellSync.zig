@@ -1,17 +1,35 @@
-const Sync = @This();
-const core = @import("telar-core");
-const source_namespace = @import("cell.zig");
+const BufferType = @import("telar-core").Buffer;
+const CursorType = @import("telar-core").Cursor;
+const MouseType = @import("telar-core").Mouse;
+const InputModesType = @import("telar-core").InputModes;
+const PointerShapeType = @import("telar-core").PointerShape;
+const ScrollType = @import("telar-core").Scroll;
 const vt = @import("ghostty-vt");
+const Outstanding = @import("Outstanding.zig");
 const std = @import("std");
-const pane_mod = @import("../../pane/root.zig");
+const PaneType = @import("../../pane/Pane.zig");
+const pane_mod = @import("../../pane/pane_namespace.zig");
+const enterTerminalAllocations_module = @import("telar-core").enterTerminalAllocations;
+const elapsed_module = @import("telar-core").elapsed;
+const Projection = @import("Projection.zig");
+const blit_module = @import("../../pane/blit.zig");
 const Preparation = @import("Preparation.zig");
-acknowledged: core.ui.Buffer,
-acknowledged_cursor: source_namespace.schema.frame.Cursor = .{},
-acknowledged_mouse: source_namespace.schema.frame.Mouse = .{},
-acknowledged_input_modes: source_namespace.schema.frame.InputModes = .{},
-acknowledged_pointer_shape: source_namespace.schema.frame.PointerShape = .default,
-acknowledged_scroll: source_namespace.schema.frame.Scroll = .{ .total_rows = 1, .offset = 0 },
-projected: core.ui.Buffer,
+const now_module = @import("telar-core").now;
+const max_span_count_module = @import("telar-core").max_span_count;
+const SpanType = @import("telar-core").Span;
+const DiffType = @import("../../pane/Diff.zig");
+const damage_module = @import("../../pane/damage.zig");
+const enabled_module = @import("telar-core").enabled;
+const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
+const Sync = @This();
+
+acknowledged: BufferType,
+acknowledged_cursor: CursorType = .{},
+acknowledged_mouse: MouseType = .{},
+acknowledged_input_modes: InputModesType = .{},
+acknowledged_pointer_shape: PointerShapeType = .default,
+acknowledged_scroll: ScrollType = .{ .total_rows = 1, .offset = 0 },
+projected: BufferType,
 projected_damage: []bool,
 projected_state: vt.RenderState = .empty,
 viewport_pin: ?*vt.Pin = null,
@@ -23,15 +41,10 @@ outstanding: ?Outstanding = null,
 snapshot_pending: bool = true,
 gpa: std.mem.Allocator,
 
-const Outstanding = struct {
-    frame_id: u64,
-    sent_ns: u64,
-};
-
-pub fn init(gpa: std.mem.Allocator, pane: *source_namespace.Pane) !Sync {
-    var acknowledged = try core.ui.Buffer.init(gpa, pane.screen.w, pane.screen.h);
+pub fn init(gpa: std.mem.Allocator, pane: *PaneType) !Sync {
+    var acknowledged = try BufferType.init(gpa, pane.screen.w, pane.screen.h);
     errdefer acknowledged.deinit();
-    var projected = try core.ui.Buffer.init(gpa, pane.screen.w, pane.screen.h);
+    var projected = try BufferType.init(gpa, pane.screen.w, pane.screen.h);
     errdefer projected.deinit();
     const projected_damage = try gpa.alloc(bool, pane.screen.h);
     errdefer gpa.free(projected_damage);
@@ -45,7 +58,7 @@ pub fn init(gpa: std.mem.Allocator, pane: *source_namespace.Pane) !Sync {
     };
 }
 
-pub fn deinit(sync: *Sync, pane: *source_namespace.Pane) void {
+pub fn deinit(sync: *Sync, pane: *PaneType) void {
     sync.clearViewport(pane);
     sync.projected_state.deinit(sync.gpa);
     sync.gpa.free(sync.projected_damage);
@@ -53,7 +66,7 @@ pub fn deinit(sync: *Sync, pane: *source_namespace.Pane) void {
     sync.acknowledged.deinit();
 }
 
-pub fn resizeIfNeeded(sync: *Sync, pane: *source_namespace.Pane) !bool {
+pub fn resizeIfNeeded(sync: *Sync, pane: *PaneType) !bool {
     if (sync.acknowledged.w == pane.screen.w and
         sync.acknowledged.h == pane.screen.h)
     {
@@ -72,7 +85,7 @@ pub fn resizeIfNeeded(sync: *Sync, pane: *source_namespace.Pane) !bool {
     return true;
 }
 
-fn syncViewportScreen(sync: *Sync, pane: *source_namespace.Pane) void {
+fn syncViewportScreen(sync: *Sync, pane: *PaneType) void {
     const active_key = pane.terminal.screens.active_key;
     if (sync.viewport_screen == active_key) {
         return;
@@ -81,7 +94,7 @@ fn syncViewportScreen(sync: *Sync, pane: *source_namespace.Pane) void {
     sync.viewport_screen = active_key;
 }
 
-pub fn clearViewport(sync: *Sync, pane: *source_namespace.Pane) void {
+pub fn clearViewport(sync: *Sync, pane: *PaneType) void {
     if (sync.viewport_pin) |pin| {
         const screen = pane.terminal.screens.get(sync.viewport_screen).?;
         screen.scroll(.{ .active = {} });
@@ -97,8 +110,8 @@ pub fn clearViewport(sync: *Sync, pane: *source_namespace.Pane) void {
 /// ```zig
 /// const changed = try sync.setViewport(pane, requested_offset);
 /// ```
-pub fn setViewport(sync: *Sync, pane: *source_namespace.Pane, requested: u32) !bool {
-    const terminal_allocations = source_namespace.diagnostics.enterTerminalAllocations();
+pub fn setViewport(sync: *Sync, pane: *PaneType, requested: u32) !bool {
+    const terminal_allocations = enterTerminalAllocations_module();
     defer terminal_allocations.restore();
 
     sync.syncViewportScreen(pane);
@@ -152,17 +165,10 @@ pub fn acknowledge(sync: *Sync, frame_id: u64, now_ns: u64) ?u64 {
     }
     sync.acknowledged_frame_id = frame_id;
     sync.outstanding = null;
-    return source_namespace.diagnostics.elapsed(outstanding.sent_ns, now_ns);
+    return elapsed_module(outstanding.sent_ns, now_ns);
 }
 
-const Projection = struct {
-    buffer: *const core.ui.Buffer,
-    damaged_rows: []const bool,
-    cursor: source_namespace.schema.frame.Cursor,
-    scroll: source_namespace.schema.frame.Scroll,
-};
-
-pub fn project(sync: *Sync, pane: *source_namespace.Pane, force: bool) !Projection {
+pub fn project(sync: *Sync, pane: *PaneType, force: bool) !Projection {
     sync.syncViewportScreen(pane);
     const screen = pane.terminal.screens.active;
     if (sync.viewport_pin) |pin| {
@@ -172,11 +178,11 @@ pub fn project(sync: *Sync, pane: *source_namespace.Pane, force: bool) !Projecti
         screen.scroll(.{ .pin = pin.* });
         defer screen.scroll(.{ .active = {} });
         {
-            const terminal_allocations = source_namespace.diagnostics.enterTerminalAllocations();
+            const terminal_allocations = enterTerminalAllocations_module();
             defer terminal_allocations.restore();
             try sync.projected_state.update(sync.gpa, &pane.terminal);
         }
-        _ = pane_mod.blit.blit(.{
+        _ = blit_module.blit(.{
             .buffer = &sync.projected,
             .area = sync.projected.area(),
             .terminal = &pane.terminal,
@@ -198,7 +204,7 @@ pub fn project(sync: *Sync, pane: *source_namespace.Pane, force: bool) !Projecti
     };
 }
 
-fn scrollState(value: anytype) source_namespace.schema.frame.Scroll {
+fn scrollState(value: anytype) ScrollType {
     return .{
         .total_rows = @intCast(@min(value.total, std.math.maxInt(u32))),
         .offset = @intCast(@min(value.offset, std.math.maxInt(u32))),
@@ -221,18 +227,18 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     if (!force_snapshot and pane.holdFrames(io)) {
         return null;
     }
-    const started = source_namespace.diagnostics.now(io);
+    const started = now_module(io);
     if (pane.render_pending) {
         try pane.render(false);
     }
     const projection = try sync.project(pane, force_snapshot);
     const source = projection.buffer;
-    var span_storage: [source_namespace.schema.frame.max_span_count]source_namespace.schema.frame.Span = undefined;
+    var span_storage: [max_span_count_module]SpanType = undefined;
     var snapshot = force_snapshot;
     const diff = if (snapshot)
-        pane_mod.damage.Diff{}
+        DiffType{}
     else
-        pane_mod.damage.collectSpans(.{
+        damage_module.collectSpans(.{
             .current = source.cells,
             .acknowledged = sync.acknowledged.cells,
             .cols = source.w,
@@ -254,14 +260,14 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     {
         sync.observeProjection(pane, projection);
 
-        if (comptime source_namespace.diagnostics.enabled) {
+        if (comptime enabled_module) {
             metrics.noop_frames += 1;
             metrics.damaged_rows += diff.damaged_rows;
             metrics.diff_scanned_cells += diff.scanned_cells;
             metrics.coalesced_spans += diff.coalesced_spans;
             metrics.bridged_cells += diff.bridged_cells;
             metrics.coalesced_bytes_saved += diff.bytes_saved;
-            metrics.encode.observe(source_namespace.diagnostics.elapsed(started, source_namespace.diagnostics.now(io)));
+            metrics.encode.observe(elapsed_module(started, now_module(io)));
         }
         return null;
     }
@@ -272,7 +278,7 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
 
     const frame_id = sync.next_frame_id;
     sync.next_frame_id += 1;
-    const payload = try source_namespace.schema.encodePaneFrame(buffer, .{
+    const payload = try encodePaneFrame_module(buffer, .{
         .pane_id = pane.id,
         .frame_id = frame_id,
         .base_frame_id = if (snapshot) 0 else sync.acknowledged_frame_id,
@@ -299,8 +305,8 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     sync.acknowledged_pointer_shape = pane.pointer_shape;
     sync.acknowledged_scroll = projection.scroll;
     sync.observeProjection(pane, projection);
-    sync.outstanding = .{ .frame_id = frame_id, .sent_ns = source_namespace.diagnostics.now(io) };
-    if (comptime source_namespace.diagnostics.enabled) {
+    sync.outstanding = .{ .frame_id = frame_id, .sent_ns = now_module(io) };
+    if (comptime enabled_module) {
         var cell_count: u64 = 0;
         for (span_storage[0..span_count]) |span| cell_count += span.cells.len;
         metrics.frames += 1;
@@ -320,12 +326,12 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
             metrics.bridged_cells += diff.bridged_cells;
             metrics.coalesced_bytes_saved += diff.bytes_saved;
         }
-        metrics.encode.observe(source_namespace.diagnostics.elapsed(started, source_namespace.diagnostics.now(io)));
+        metrics.encode.observe(elapsed_module(started, now_module(io)));
     }
     return payload;
 }
 
-fn observeProjection(sync: *Sync, pane: *const source_namespace.Pane, projection: Projection) void {
+fn observeProjection(sync: *Sync, pane: *const PaneType, projection: Projection) void {
     if (projection.buffer == &sync.projected) {
         @memset(sync.projected_damage, false);
     }

@@ -1,6 +1,8 @@
-const Context = @This();
 const PresentationIngress = @import("PresentationIngress.zig");
-const input = @import("../input/root.zig");
+const hints_support = @import("../input/hints_support.zig");
+const RegionType = @import("../workspace/Region.zig");
+const Context = @This();
+
 presentation_ingress: PresentationIngress = .{},
-status_mode: input.hints.Mode = .normal,
-geometry: @import("../workspace/root.zig").geometry.Region,
+status_mode: hints_support.Mode = .normal,
+geometry: RegionType,

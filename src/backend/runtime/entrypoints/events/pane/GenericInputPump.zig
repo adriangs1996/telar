@@ -1,9 +1,13 @@
 const GenericInputRuntimePort = @import("GenericInputRuntimePort.zig").Type;
-const Resources = @import("InputResources.zig");
-const source_namespace = @import("input.zig");
-const Write = @import("InputWrite.zig");
-const Completion = @import("InputCompletion.zig");
-const pane_mod = @import("../../../../pane/root.zig");
+const InputResources = @import("InputResources.zig");
+const PaneType = @import("../../../../pane/Pane.zig");
+const InputWrite = @import("InputWrite.zig");
+const enabled_module = @import("telar-core").enabled;
+const now_module = @import("telar-core").now;
+const InputCompletion = @import("InputCompletion.zig");
+const pane_mod = @import("../../../../pane/pane_namespace.zig");
+const elapsed_module = @import("telar-core").elapsed;
+
 /// Creates a statically dispatched input pump for one runtime context.
 ///
 /// ```zig
@@ -14,14 +18,14 @@ pub fn Type(comptime Context: type, comptime port: GenericInputRuntimePort(Conte
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: InputResources,
 
         /// Binds the pane repository and telemetry owned by one runtime.
         ///
         /// ```zig
         /// var pump = InputPump.init(&context, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: InputResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -31,13 +35,13 @@ pub fn Type(comptime Context: type, comptime port: GenericInputRuntimePort(Conte
         /// ```zig
         /// try pump.schedule(pane);
         /// ```
-        pub fn schedule(pump: *Self, pane: *source_namespace.Pane) !void {
+        pub fn schedule(pump: *Self, pane: *PaneType) !void {
             const bytes = pane.beginPtyInputWrite() orelse return;
-            const write: Write = .{
+            const write: InputWrite = .{
                 .io = pump.resources.io,
                 .pane = pane,
                 .bytes = bytes,
-                .started_ns = if (comptime source_namespace.diagnostics.enabled) source_namespace.diagnostics.now(pump.resources.io) else 0,
+                .started_ns = if (comptime enabled_module) now_module(pump.resources.io) else 0,
             };
 
             port.start(pump.context, write) catch |err| {
@@ -53,7 +57,7 @@ pub fn Type(comptime Context: type, comptime port: GenericInputRuntimePort(Conte
         /// ```zig
         /// try pump.complete(completion);
         /// ```
-        pub fn complete(pump: *Self, completion: Completion) !void {
+        pub fn complete(pump: *Self, completion: InputCompletion) !void {
             const pane = pump.resources.panes.resolve(completion.pane) orelse {
                 pump.resources.metrics.stale_pane_events += 1;
                 return;
@@ -63,9 +67,9 @@ pub fn Type(comptime Context: type, comptime port: GenericInputRuntimePort(Conte
 
             pane.completePtyInputWrite(result);
 
-            if (comptime source_namespace.diagnostics.enabled) {
+            if (comptime enabled_module) {
                 pump.resources.metrics.input_write.observe(
-                    source_namespace.diagnostics.elapsed(completion.started_ns, source_namespace.diagnostics.now(pump.resources.io)),
+                    elapsed_module(completion.started_ns, now_module(pump.resources.io)),
                 );
             }
 

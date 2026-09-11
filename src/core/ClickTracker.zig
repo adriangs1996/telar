@@ -1,3 +1,6 @@
+const std = @import("std");
+const PointType = @import("ui/Point.zig");
+const select = @import("select.zig");
 /// Turns a stream of presses into a granularity.
 ///
 /// Double and triple click are a *timing* fact, not a mouse fact: the terminal
@@ -5,17 +8,16 @@
 /// together, because two clicks far apart are two clicks no matter how quickly
 /// they arrived.
 const ClickTracker = @This();
-const std = @import("std");
-const source_namespace = @import("select.zig");
+
 /// The interval every desktop has used since the 1980s. Shorter feels
 /// broken to anyone who types slowly; longer turns two deliberate clicks
 /// into a double.
 interval_ns: u64 = 500 * std.time.ns_per_ms,
 last_ns: u64 = 0,
-last: source_namespace.Point = .{ .x = 0, .y = 0 },
+last: PointType = .{ .x = 0, .y = 0 },
 count: u8 = 0,
 
-pub fn press(t: *ClickTracker, at: source_namespace.Point, now_ns: u64) source_namespace.Granularity {
+pub fn press(t: *ClickTracker, at: PointType, now_ns: u64) select.Granularity {
     const near = at.y == t.last.y and (if (at.x > t.last.x) at.x - t.last.x else t.last.x - at.x) <= 1;
     const soon = t.count > 0 and now_ns -| t.last_ns <= t.interval_ns;
 

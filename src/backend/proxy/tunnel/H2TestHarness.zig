@@ -1,25 +1,27 @@
-const TestHarness = @This();
-const Capture = @import("H2Capture.zig");
-const middleware = @import("../middleware.zig");
-const metrics = @import("../metrics.zig");
-const exchange_mod = @import("exchange_support.zig");
+const H2Capture = @import("H2Capture.zig");
+const PipelineType = @import("../Pipeline.zig");
+const CountersType = @import("../Counters.zig");
+const ExchangeType = @import("Exchange.zig");
 const std = @import("std");
-const source_namespace = @import("h2.zig");
+const pane_module = @import("telar-core").pane;
 const identity = @import("../identity.zig");
 const ExpectedObservation = @import("ExpectedObservation.zig");
-capture: Capture = .{},
-pipeline: middleware.Pipeline = .{},
-counters: metrics.Counters = .{},
-exchange: exchange_mod.Exchange = undefined,
+const SnapshotType = @import("../Snapshot.zig");
+const TestHarness = @This();
+
+capture: H2Capture = .{},
+pipeline: PipelineType = .{},
+counters: CountersType = .{},
+exchange: ExchangeType = undefined,
 
 pub fn init(harness: *TestHarness) !void {
-    try harness.pipeline.add(.{ .context = &harness.capture, .observe = Capture.observe });
+    try harness.pipeline.add(.{ .context = &harness.capture, .observe = H2Capture.observe });
     harness.exchange = .{
         .io = std.testing.io,
         .pipeline = &harness.pipeline,
         .telemetry = &harness.counters,
         .credential = .{
-            .pane_id = try source_namespace.schema.id.pane(13),
+            .pane_id = try pane_module(13),
             .pane_generation = 17,
             .token = .{0x24} ** identity.token_bytes,
         },
@@ -38,7 +40,7 @@ pub fn expectObservations(harness: *const TestHarness, expected: []const Expecte
     }
 }
 
-pub fn snapshot(harness: *const TestHarness) metrics.Snapshot {
+pub fn snapshot(harness: *const TestHarness) SnapshotType {
     return harness.counters.snapshot(.{
         .connections = .{ .active = 0, .limit_drops = 0 },
         .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },

@@ -1,28 +1,36 @@
-const Registry = @This();
-const source_namespace = @import("root.zig");
+const model = @import("../config/model.zig");
 const Package = @import("Package.zig");
+const max_grants_module = @import("telar-core").max_grants;
+const GrantType = @import("telar-core").Grant;
 const LoadContext = @import("LoadContext.zig");
-const lua_config = @import("../config/root.zig");
+const PluginSpecType = @import("../config/PluginSpec.zig");
+const TrustStoreType = @import("telar-core").TrustStore;
+const plugins = @import("plugins.zig");
 const std = @import("std");
-const action_mod = @import("telar-client").input.action;
+const stableId_module = @import("telar-core").stableId;
+const PluginActionType = @import("telar-client").PluginAction;
 const Invocation = @import("Invocation.zig");
+const CallbackContextType = @import("telar-client").CallbackContext;
 const WorkerRequest = @import("WorkerRequest.zig");
+const CapabilityType = @import("telar-core").Capability;
 const BatchAuthorization = @import("BatchAuthorization.zig");
-packages: [source_namespace.max_packages]Package = undefined,
+const Registry = @This();
+
+packages: [model.max_plugins]Package = undefined,
 count: u8 = 0,
-grants: [source_namespace.plugin.max_grants]source_namespace.plugin.Grant = undefined,
+grants: [max_grants_module]GrantType = undefined,
 grant_count: u8 = 0,
 
 /// Loads enabled plugin packages without persisted capability grants.
 /// For example: `const registry = try Registry.load(context, specs);`.
-pub fn load(context: LoadContext, specs: []const lua_config.PluginSpec) !Registry {
-    const empty: source_namespace.plugin.TrustStore = .{};
+pub fn load(context: LoadContext, specs: []const PluginSpecType) !Registry {
+    const empty: TrustStoreType = .{};
     return loadWithTrust(context, specs, &empty);
 }
 
 /// Loads enabled plugin packages and their persisted capability grants.
 /// For example: `const registry = try Registry.loadWithTrust(context, specs, trust);`.
-pub fn loadWithTrust(context: LoadContext, specs: []const lua_config.PluginSpec, trust: *const source_namespace.plugin.TrustStore) !Registry {
+pub fn loadWithTrust(context: LoadContext, specs: []const PluginSpecType, trust: *const TrustStoreType) !Registry {
     var registry: Registry = .{};
     registry.grant_count = trust.count;
     for (trust.entries[0..trust.count], 0..) |entry, index|
@@ -31,15 +39,15 @@ pub fn loadWithTrust(context: LoadContext, specs: []const lua_config.PluginSpec,
         if (!spec.enabled) {
             continue;
         }
-        if (registry.count == source_namespace.max_packages) {
+        if (registry.count == model.max_plugins) {
             return error.TooManyPlugins;
         }
-        const package = try source_namespace.loadPackage(context, spec.path());
+        const package = try plugins.loadPackage(context, spec.path());
         for (registry.packages[0..registry.count]) |*existing| {
             if (std.mem.eql(u8, existing.manifest.id(), package.manifest.id())) {
                 return error.DuplicatePluginId;
             }
-            if (source_namespace.plugin.stableId(existing.manifest.id()) == source_namespace.plugin.stableId(package.manifest.id())) {
+            if (stableId_module(existing.manifest.id()) == stableId_module(package.manifest.id())) {
                 return error.PluginIdHashCollision;
             }
         }
@@ -49,13 +57,13 @@ pub fn loadWithTrust(context: LoadContext, specs: []const lua_config.PluginSpec,
     return registry;
 }
 
-pub fn resolve(registry: *const Registry, requested: action_mod.PluginAction) !Invocation {
+pub fn resolve(registry: *const Registry, requested: PluginActionType) !Invocation {
     for (registry.packages[0..registry.count], 0..) |*package, package_index| {
-        if (source_namespace.plugin.stableId(package.manifest.id()) != requested.plugin) {
+        if (stableId_module(package.manifest.id()) != requested.plugin) {
             continue;
         }
         for (package.manifest.actions[0..package.manifest.action_count], 0..) |*name, action_index| {
-            if (source_namespace.plugin.stableId(name.slice()) == requested.action) {
+            if (stableId_module(name.slice()) == requested.action) {
                 return .{
                     .package_index = @intCast(package_index),
                     .action_index = @intCast(action_index),
@@ -69,14 +77,14 @@ pub fn resolve(registry: *const Registry, requested: action_mod.PluginAction) !I
     return error.PluginNotConfigured;
 }
 
-pub fn validateConfiguredActions(registry: *const Registry, bindings: []const lua_config.ConfiguredBinding) !void {
+pub fn validateConfiguredActions(registry: *const Registry, bindings: []const model.ConfiguredBinding) !void {
     for (bindings) |binding| switch (binding.action) {
         .plugin => |requested| _ = try registry.resolve(requested),
         else => {},
     };
 }
 
-pub fn workerRequest(registry: *const Registry, invocation: Invocation, context: lua_config.CallbackContext) !WorkerRequest {
+pub fn workerRequest(registry: *const Registry, invocation: Invocation, context: CallbackContextType) !WorkerRequest {
     if (invocation.package_index >= registry.count) {
         return error.PluginNotConfigured;
     }
@@ -87,7 +95,7 @@ pub fn workerRequest(registry: *const Registry, invocation: Invocation, context:
     const action_name = package.manifest.actions[invocation.action_index].slice();
     var request: WorkerRequest = .{
         .package_index = invocation.package_index,
-        .plugin_id = source_namespace.plugin.stableId(package.manifest.id()),
+        .plugin_id = stableId_module(package.manifest.id()),
         .digest = package.digest,
         .package = package.*,
         .action_len = @intCast(action_name.len),
@@ -97,7 +105,7 @@ pub fn workerRequest(registry: *const Registry, invocation: Invocation, context:
     return request;
 }
 
-pub fn authorize(registry: *const Registry, package_index: u8, capability: source_namespace.plugin.Capability) !void {
+pub fn authorize(registry: *const Registry, package_index: u8, capability: CapabilityType) !void {
     if (package_index >= registry.count) {
         return error.PluginNotConfigured;
     }
@@ -121,13 +129,13 @@ pub fn authorizeBatch(registry: *const Registry, authorization: BatchAuthorizati
         return error.PluginNotConfigured;
     }
     const package = &registry.packages[authorization.package_index];
-    if (source_namespace.plugin.stableId(package.manifest.id()) != authorization.plugin_id or
+    if (stableId_module(package.manifest.id()) != authorization.plugin_id or
         !std.mem.eql(u8, &package.digest, &authorization.digest))
     {
         return error.StalePluginWorker;
     }
     for (authorization.batch.slice()) |effect| {
-        const capability: ?source_namespace.plugin.Capability = switch (effect) {
+        const capability: ?CapabilityType = switch (effect) {
             .split_pane, .close_pane, .new_workspace, .rename_workspace, .new_tab, .rename_tab, .close_tab, .move_tab, .detach => .runtime_control,
             .focus_pane,
             .navigate_pane,
@@ -156,9 +164,9 @@ pub fn authorizeBatch(registry: *const Registry, authorization: BatchAuthorizati
 
 /// Hashes every configured package path and readable file for reload detection.
 /// For example: `const fingerprint = registry.watchFingerprint(gpa, io);`.
-pub fn watchFingerprint(registry: *const Registry, gpa: std.mem.Allocator, io: source_namespace.Io) u64 {
+pub fn watchFingerprint(registry: *const Registry, gpa: std.mem.Allocator, io: std.Io) u64 {
     var hasher = std.hash.Wyhash.init(0x74656c61722d706c);
     for (registry.packages[0..registry.count]) |*package|
-        source_namespace.updatePackageFingerprint(gpa, io, .{ .hasher = &hasher, .root = package.root() });
+        plugins.updatePackageFingerprint(gpa, io, .{ .hasher = &hasher, .root = package.root() });
     return hasher.final();
 }

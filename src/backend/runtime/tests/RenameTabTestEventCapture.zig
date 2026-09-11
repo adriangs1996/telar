@@ -1,14 +1,15 @@
+const TabRenamedType = @import("../../workspace/TabRenamed.zig");
+const RenameTabEventPublisher = @import("../application/commands/RenameTabEventPublisher.zig");
 const EventCapture = @This();
-const workspace_mod = @import("../../workspace/root.zig");
-const rename_tab_commands = @import("../application/commands/rename_tab.zig");
-count: usize = 0,
-last: ?workspace_mod.TabRenamed = null,
 
-pub fn publisher(capture: *EventCapture) rename_tab_commands.EventPublisher {
+count: usize = 0,
+last: ?TabRenamedType = null,
+
+pub fn publisher(capture: *EventCapture) RenameTabEventPublisher {
     return .{ .context = capture, .publish = publish };
 }
 
-fn publish(context: *anyopaque, event: workspace_mod.TabRenamed) void {
+fn publish(context: *anyopaque, event: TabRenamedType) void {
     const capture: *EventCapture = @ptrCast(@alignCast(context));
     capture.count += 1;
     capture.last = event;

@@ -1,8 +1,9 @@
-const OutputObservation = @This();
 const vt = @import("ghostty-vt");
-const source_namespace = @import("terminal.zig");
+const ClockType = @import("Clock.zig");
+const OutputObservation = @This();
+
 /// The emulator that has already replayed `bytes`.
 terminal: *vt.Terminal,
 bytes: []const u8,
-clock: source_namespace.Clock,
+clock: ClockType,
 shell_foreground: ?bool,

@@ -1,0 +1,914 @@
+//! Bounded Kitty graphics pipeline for one pane.
+//!
+//! The interactive terminal ignores Kitty APCs. This pipeline consumes a
+//! copy of the same PTY output on a separate actor and owns the terminal whose
+//! only durable product is graphics storage. Feeding all output, not only APC
+//! payloads, keeps cursor-relative placements and scroll pins equivalent to
+//! the interactive terminal without sharing mutable emulator state.
+
+const png_test = @import("png_test.zig");
+const vt = @import("ghostty-vt");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const std = @import("std");
+const FileQueryControl = @import("FileQueryControl.zig");
+const FilterInput = @import("FilterInput.zig");
+const FilterStats = @import("FilterStats.zig");
+const max_placements_per_pane_module = @import("telar-core").max_placements_per_pane;
+const SelectedSharedFrame = @import("SelectedSharedFrame.zig");
+const SharedFrame = @import("SharedFrame.zig");
+const SharedFrameKey = @import("SharedFrameKey.zig");
+const FrameResource = @import("FrameResource.zig");
+const builtin = @import("builtin");
+const SharedFrameControl = @import("SharedFrameControl.zig");
+const PlacementSource = @import("PlacementSource.zig");
+const PlacementType = @import("telar-core").Placement;
+const TestOutput = @import("TestOutput.zig");
+const FormatType = @import("telar-core").Format;
+const Pipeline = @import("Pipeline.zig");
+const SharedFrameView = @import("SharedFrameView.zig");
+const FileQueryView = @import("FileQueryView.zig");
+const Stats = @import("Stats.zig");
+const Batch = @import("Batch.zig");
+const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
+const max_encoded_chunk_bytes_module = @import("telar-core").max_encoded_chunk_bytes;
+
+test {
+    _ = png_test;
+}
+
+pub const batch_bytes = 4 * 16 * 1024;
+pub const batch_events = 64;
+
+/// Raw pixels may cross the local child/runtime boundary through POSIX shared
+/// memory. The emulator's own path-based media stays disabled so it can never
+/// open an arbitrary file; complete file frames and file capability queries
+/// are answered by the pane, which validates the file first.
+pub const image_loading_limits: vt.kitty.graphics.LoadingImage.Limits = .{
+    .file = false,
+    .temporary_file = .disabled,
+    .shared_memory = true,
+};
+
+/// Where a complete frame's pixels live before the runtime copies them.
+pub const Medium = enum { shared, file };
+
+const atomic_shared_prefix = "\x1b[?2026h\x1b[H\x1b_G";
+const atomic_shared_suffix = "\x1b\\\x1b[?2026l";
+
+pub const Event = union(enum) {
+    output: struct { offset: u32, len: u32 },
+    resize: TerminalSizeType,
+};
+
+/// Removes `a=q,t=f` queries the sink answered from `bytes`, so the emulator
+/// never sees a file query it would refuse. Returns `bytes` untouched when
+/// nothing was answered, otherwise the remaining bytes in `scratch`.
+///
+/// ```zig
+/// const remaining = stripFileQueries(bytes, &pipeline.scratch, sink);
+/// ```
+pub fn stripFileQueries(bytes: []const u8, scratch: []u8, sink: anytype) []const u8 {
+    var kept: usize = 0;
+    var copied_until: usize = 0;
+    var search_from: usize = 0;
+    var stripped = false;
+    while (std.mem.indexOfPos(u8, bytes, search_from, "\x1b_G")) |start| {
+        const terminator = std.mem.indexOfPos(u8, bytes, start + 3, "\x1b\\") orelse break;
+        const end = terminator + 2;
+        search_from = end;
+        const command = bytes[start + 3 .. terminator];
+        const separator = std.mem.indexOfScalar(u8, command, ';') orelse continue;
+        const query = parseFileQueryControl(command[0..separator]) orelse continue;
+        if (separator + 1 == command.len) {
+            continue;
+        }
+        const handled = sink.observeFileQuery(.{
+            .bytes = bytes[start..end],
+            .encoded_path = command[separator + 1 ..],
+            .image_id = query.image_id,
+            .byte_len = query.byte_len,
+        });
+        if (!handled) {
+            continue;
+        }
+        const run = bytes[copied_until..start];
+        @memcpy(scratch[kept..][0..run.len], run);
+        kept += run.len;
+        copied_until = end;
+        stripped = true;
+    }
+    if (!stripped) {
+        return bytes;
+    }
+    const tail = bytes[copied_until..];
+    @memcpy(scratch[kept..][0..tail.len], tail);
+    return scratch[0 .. kept + tail.len];
+}
+
+fn parseFileQueryControl(control: []const u8) ?FileQueryControl {
+    var image_id: ?u32 = null;
+    var format: ?u8 = null;
+    var width: ?u32 = null;
+    var height: ?u32 = null;
+    var query = false;
+    var file = false;
+    var fields = std.mem.splitScalar(u8, control, ',');
+    while (fields.next()) |field| {
+        const equals = std.mem.indexOfScalar(u8, field, '=') orelse return null;
+        if (equals != 1 or equals + 1 == field.len) {
+            return null;
+        }
+        const value = field[equals + 1 ..];
+        switch (field[0]) {
+            'a' => {
+                if (query or !std.mem.eql(u8, value, "q")) {
+                    return null;
+                }
+                query = true;
+            },
+            't' => {
+                if (file or !std.mem.eql(u8, value, "f")) {
+                    return null;
+                }
+                file = true;
+            },
+            'i' => image_id = parseUniqueU32(image_id, value) orelse return null,
+            'f' => {
+                if (format != null) {
+                    return null;
+                }
+                const parsed = std.fmt.parseUnsigned(u8, value, 10) catch return null;
+                if (parsed != 24 and parsed != 32) {
+                    return null;
+                }
+                format = parsed;
+            },
+            's' => width = parseUniqueU32(width, value) orelse return null,
+            'v' => height = parseUniqueU32(height, value) orelse return null,
+            'q' => {},
+            else => return null,
+        }
+    }
+    if (!query or !file) {
+        return null;
+    }
+    const bpp: usize = if ((format orelse 32) == 24) 3 else 4;
+    const pixels = std.math.mul(
+        usize,
+        @as(usize, width orelse return null),
+        @as(usize, height orelse return null),
+    ) catch return null;
+    return .{
+        .image_id = image_id orelse return null,
+        .byte_len = std.math.mul(usize, pixels, bpp) catch return null,
+    };
+}
+
+pub fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability: anytype) FilterStats {
+    const bytes = input.bytes;
+    const storage_limit = input.storage_limit;
+
+    var emitted_until: usize = 0;
+    var search_from: usize = 0;
+    var filtered: FilterStats = .{};
+
+    while (findSharedFrame(bytes, search_from)) |first| {
+        var selected: [max_placements_per_pane_module]SelectedSharedFrame = undefined;
+        var selected_count: usize = 0;
+        var group_end = first.end;
+        var overflow = !recordSharedFrame(&selected, &selected_count, first);
+        while (sharedFrameAt(bytes, group_end)) |frame| {
+            if (!recordSharedFrame(&selected, &selected_count, frame)) {
+                overflow = true;
+            }
+            group_end = frame.end;
+        }
+
+        if (!overflow) {
+            for (selected[0..selected_count]) |*entry| {
+                var recent = entry.recent_count;
+                while (recent != 0) {
+                    recent -= 1;
+                    const frame = sharedFrameAt(bytes, entry.recent_starts[recent]) orelse
+                        unreachable;
+                    if (!availability.available(.{
+                        .encoded_name = bytes[frame.payload_start..frame.payload_end],
+                        .byte_len = frame.byte_len,
+                        .limit = storage_limit,
+                        .medium = frame.medium,
+                    })) {
+                        continue;
+                    }
+                    entry.start = frame.start;
+                    break;
+                }
+            }
+
+            observeNonEmpty(sink, bytes[emitted_until..first.start]);
+            var frame_start = first.start;
+            while (frame_start < group_end) {
+                const frame = sharedFrameAt(bytes, frame_start) orelse unreachable;
+                const chosen = selectedFrameStart(selected[0..selected_count], frame.key);
+                if (chosen == frame.start) {
+                    // A sink that loads the object itself skips the parser's
+                    // copy; otherwise the emulator parses the command as is.
+                    const direct = sink.observeSharedFrame(.{
+                        .bytes = bytes[frame.start..frame.end],
+                        .apc_start = frame.apc_start - frame.start,
+                        .apc_end = frame.apc_end - frame.start,
+                        .encoded_name = bytes[frame.payload_start..frame.payload_end],
+                        .image_id = frame.key.image_id,
+                        .placement_id = frame.key.placement_id,
+                        .format = frame.format,
+                        .width = frame.width,
+                        .height = frame.height,
+                        .byte_len = frame.byte_len,
+                        .medium = frame.medium,
+                    });
+                    if (direct) {
+                        filtered.direct +|= 1;
+                        filtered.file +|= @intFromBool(frame.medium == .file);
+                        filtered.forwarded +|= 1;
+                    } else if (frame.medium == .file) {
+                        // The emulator refuses file media; the pane keeps its
+                        // current image for this batch.
+                        filtered.unavailable +|= 1;
+                    } else {
+                        sink.observe(bytes[frame.start..frame.end]);
+                        filtered.forwarded +|= 1;
+                    }
+                } else if (chosen == null) {
+                    // No frame of this placement survived the availability
+                    // probe; the pane keeps its stale image this batch.
+                    filtered.unavailable +|= 1;
+                } else {
+                    filtered.discarded +|= 1;
+                }
+                frame_start = frame.end;
+            }
+            emitted_until = group_end;
+        }
+        search_from = group_end;
+    }
+
+    observeNonEmpty(sink, bytes[emitted_until..]);
+    return filtered;
+}
+
+fn observeNonEmpty(sink: anytype, bytes: []const u8) void {
+    if (bytes.len != 0) {
+        sink.observe(bytes);
+    }
+}
+
+fn recordSharedFrame(selected: []SelectedSharedFrame, selected_count: *usize, frame: SharedFrame) bool {
+    for (selected[0..selected_count.*]) |*entry| {
+        if (!std.meta.eql(entry.key, frame.key)) {
+            continue;
+        }
+        if (entry.recent_count == entry.recent_starts.len) {
+            std.mem.copyForwards(
+                usize,
+                entry.recent_starts[0 .. entry.recent_starts.len - 1],
+                entry.recent_starts[1..],
+            );
+            entry.recent_count -= 1;
+        }
+        entry.recent_starts[entry.recent_count] = frame.start;
+        entry.recent_count += 1;
+        return true;
+    }
+    if (selected_count.* == selected.len) {
+        return false;
+    }
+    selected[selected_count.*] = .{
+        .key = frame.key,
+        .recent_count = 1,
+    };
+    selected[selected_count.*].recent_starts[0] = frame.start;
+    selected_count.* += 1;
+    return true;
+}
+
+fn selectedFrameStart(selected: []const SelectedSharedFrame, key: SharedFrameKey) ?usize {
+    for (selected) |entry| if (std.meta.eql(entry.key, key)) return entry.start;
+    return null;
+}
+
+pub fn sharedFrameAvailable(resource: FrameResource) bool {
+    if (resource.byte_len > resource.limit) {
+        return false;
+    }
+    if (comptime builtin.os.tag == .windows or builtin.abi.isAndroid() or !builtin.link_libc) {
+        return false;
+    }
+
+    const Decoder = std.base64.standard.Decoder;
+    const name_len = Decoder.calcSizeForSlice(resource.encoded_name) catch return false;
+    if (name_len == 0 or name_len > std.fs.max_path_bytes) {
+        return false;
+    }
+    var name_buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
+    Decoder.decode(name_buffer[0..name_len], resource.encoded_name) catch return false;
+    if (std.mem.indexOfScalar(u8, name_buffer[0..name_len], 0) != null) {
+        return false;
+    }
+    name_buffer[name_len] = 0;
+    const name: [:0]const u8 = name_buffer[0..name_len :0];
+    const fd = std.c.shm_open(
+        name,
+        @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
+        @as(u16, 0),
+    );
+    if (std.posix.errno(fd) != .SUCCESS) {
+        return false;
+    }
+    _ = std.c.close(fd);
+    return true;
+}
+
+fn findSharedFrame(bytes: []const u8, from: usize) ?SharedFrame {
+    var search_from = from;
+    while (std.mem.indexOfPos(u8, bytes, search_from, atomic_shared_prefix)) |start| {
+        if (sharedFrameAt(bytes, start)) |frame| {
+            return frame;
+        }
+        search_from = start + atomic_shared_prefix.len;
+    }
+    return null;
+}
+
+fn sharedFrameAt(bytes: []const u8, start: usize) ?SharedFrame {
+    if (start > bytes.len or
+        !std.mem.startsWith(u8, bytes[start..], atomic_shared_prefix))
+    {
+        return null;
+    }
+    const command_start = start + atomic_shared_prefix.len;
+    const terminator = std.mem.indexOfPos(u8, bytes, command_start, "\x1b\\") orelse return null;
+    if (!std.mem.startsWith(u8, bytes[terminator..], atomic_shared_suffix)) {
+        return null;
+    }
+    const command = bytes[command_start..terminator];
+    const separator = std.mem.indexOfScalar(u8, command, ';') orelse return null;
+    const parsed = parseSharedFrameControl(command[0..separator]) orelse return null;
+    if (separator + 1 == command.len) {
+        return null;
+    }
+    return .{
+        .start = start,
+        .end = terminator + atomic_shared_suffix.len,
+        .apc_start = command_start - "\x1b_G".len,
+        .apc_end = terminator + "\x1b\\".len,
+        .payload_start = command_start + separator + 1,
+        .payload_end = terminator,
+        .key = parsed.key,
+        .byte_len = parsed.byte_len,
+        .format = parsed.format,
+        .width = parsed.width,
+        .height = parsed.height,
+        .medium = parsed.medium,
+    };
+}
+
+fn parseSharedFrameControl(control: []const u8) ?SharedFrameControl {
+    var image_id: ?u32 = null;
+    var placement_id: ?u32 = null;
+    var format: ?u8 = null;
+    var width: ?u32 = null;
+    var height: ?u32 = null;
+    var transmit = false;
+    var medium: ?Medium = null;
+    var cursor_static = false;
+    var quiet = false;
+    var fields = std.mem.splitScalar(u8, control, ',');
+    while (fields.next()) |field| {
+        const equals = std.mem.indexOfScalar(u8, field, '=') orelse return null;
+        if (equals != 1 or equals + 1 == field.len) {
+            return null;
+        }
+        const value = field[equals + 1 ..];
+        switch (field[0]) {
+            'a' => {
+                if (transmit or !std.mem.eql(u8, value, "T")) {
+                    return null;
+                }
+                transmit = true;
+            },
+            't' => {
+                if (medium != null) {
+                    return null;
+                }
+                medium = if (std.mem.eql(u8, value, "s")) .shared else if (std.mem.eql(u8, value, "f")) .file else return null;
+            },
+            'i' => image_id = parseUniqueU32(image_id, value) orelse return null,
+            'p' => placement_id = parseUniqueU32(placement_id, value) orelse return null,
+            'f' => {
+                if (format != null) {
+                    return null;
+                }
+                const parsed = std.fmt.parseUnsigned(u8, value, 10) catch return null;
+                if (parsed != 24 and parsed != 32) {
+                    return null;
+                }
+                format = parsed;
+            },
+            's' => width = parseUniqueU32(width, value) orelse return null,
+            'v' => height = parseUniqueU32(height, value) orelse return null,
+            'C' => {
+                if (cursor_static or !std.mem.eql(u8, value, "1")) {
+                    return null;
+                }
+                cursor_static = true;
+            },
+            'q' => {
+                if (quiet or !std.mem.eql(u8, value, "2")) {
+                    return null;
+                }
+
+                quiet = true;
+            },
+            // Chunked transmissions carry ordering state and are never folded.
+            // Any other key (offsets, sizes, crops, z) means the frame is
+            // not the plain full replacement this fold understands.
+            else => return null,
+        }
+    }
+    if (!transmit or !cursor_static or !quiet) {
+        return null;
+    }
+    const image = image_id orelse return null;
+    const placement = placement_id orelse return null;
+    const depth = format orelse return null;
+    const bpp: usize = if (depth == 24) 3 else 4;
+    const pixels = std.math.mul(
+        usize,
+        @as(usize, width orelse return null),
+        @as(usize, height orelse return null),
+    ) catch return null;
+    const byte_len = std.math.mul(usize, pixels, bpp) catch return null;
+    return .{
+        .key = .{ .image_id = image, .placement_id = placement },
+        .byte_len = byte_len,
+        .format = if (depth == 24) .rgb else .rgba,
+        .width = width.?,
+        .height = height.?,
+        .medium = medium orelse return null,
+    };
+}
+
+fn parseUniqueU32(current: ?u32, value: []const u8) ?u32 {
+    if (current != null) {
+        return null;
+    }
+
+    const parsed = std.fmt.parseUnsigned(u32, value, 10) catch return null;
+
+    return if (parsed == 0) null else parsed;
+}
+
+/// Stable identity for a child placement. Anonymous placements use Ghostty's
+/// internal namespace; explicit child IDs use the exterior namespace. Adding
+/// one reserves zero as the invalid value in Telar's wire vocabulary.
+///
+/// ```zig
+/// const virtual_id = placementVirtualId(key);
+/// ```
+pub fn placementVirtualId(key: vt.kitty.graphics.ImageStorage.PlacementKey) u64 {
+    const tag: u64 = switch (key.placement_id.tag) {
+        .internal => 0,
+        .external => 1,
+    };
+    return ((tag << 32) | key.placement_id.id) + 1;
+}
+
+/// Converts Ghostty's pinned placement into pane-relative coordinates.
+///
+/// Both the runtime sync path and the reduced terminal-browser example use
+/// this adapter. Keeping one implementation matters here: a second geometry
+/// conversion in the example could hide the production bug it is meant to
+/// isolate.
+///
+/// ```zig
+/// const placement = placementValue(terminal, source) orelse return;
+/// ```
+pub fn placementValue(terminal: *vt.Terminal, source_value: PlacementSource) ?PlacementType {
+    const pin = switch (source_value.placement.location) {
+        .pin => |value| value,
+        .virtual => return null,
+    };
+
+    if (pin.garbage) {
+        return null;
+    }
+
+    const pages = &terminal.screens.active.pages;
+    const screen_point = pages.pointFromPin(.screen, pin.*) orelse return null;
+    const viewport = pages.pointFromPin(.screen, pages.getTopLeft(.viewport)) orelse return null;
+    const source = source_value.placement.sourceRect(source_value.image);
+    return .{
+        .key = .{ .image_id = source_value.image.id, .generation = source_value.image.generation },
+        .virtual_id = placementVirtualId(source_value.key),
+        .placement_id = switch (source_value.key.placement_id.tag) {
+            .internal => 0,
+            .external => source_value.key.placement_id.id,
+        },
+        .x = @intCast(screen_point.screen.x),
+        .y = @as(i32, @intCast(screen_point.screen.y)) -
+            @as(i32, @intCast(viewport.screen.y)),
+        .source_x = source.x,
+        .source_y = source.y,
+        .source_width = source.width,
+        .source_height = source.height,
+        .columns = source_value.placement.columns,
+        .rows = source_value.placement.rows,
+        .offset_x = source_value.placement.x_offset,
+        .offset_y = source_value.placement.y_offset,
+        .z_index = source_value.placement.z,
+    };
+}
+
+pub fn vtResize(size: TerminalSizeType) vt.Terminal.Resize {
+    return .{
+        .cols = size.cols,
+        .rows = size.rows,
+        .cell_size_px = if (size.cell_width_px != 0 and size.cell_height_px != 0) .{
+            .width = size.cell_width_px,
+            .height = size.cell_height_px,
+        } else null,
+    };
+}
+
+test "file frames parse like shared ones and are never handed to the emulator" {
+    const frame = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=f,i=7,p=1,C=1,q=2;L3RtcC9m\x1b\\\x1b[?2026l";
+    var direct: TestOutput = .{ .direct = true };
+    try std.testing.expectEqual(
+        FilterStats{ .forwarded = 1, .direct = 1, .file = 1 },
+        filterAtomicSharedFrames(.{ .bytes = frame, .storage_limit = 8 }, &direct, TestAvailability.all),
+    );
+    try std.testing.expectEqual(Medium.file, direct.last_direct.?.medium);
+
+    var parser_only: TestOutput = .{};
+    try std.testing.expectEqual(
+        FilterStats{ .unavailable = 1 },
+        filterAtomicSharedFrames(.{ .bytes = frame, .storage_limit = 8 }, &parser_only, TestAvailability.all),
+    );
+    try std.testing.expectEqualStrings("", parser_only.slice());
+}
+
+test "answered file queries are removed from what the emulator parses" {
+    const query = "\x1b_Gi=300,a=q,t=f,f=32,s=1,v=1;L3RtcC9w\x1b\\";
+    const input = "head" ++ query ++ "tail";
+    var scratch: [256]u8 = undefined;
+
+    var answering: TestOutput = .{ .direct = true };
+    try std.testing.expectEqualStrings("headtail", stripFileQueries(input, &scratch, &answering));
+    try std.testing.expectEqual(@as(usize, 1), answering.queries);
+    try std.testing.expectEqual(@as(u32, 300), answering.last_query_id);
+    try std.testing.expectEqual(@as(usize, 4), answering.last_query_len);
+
+    var silent: TestOutput = .{};
+    try std.testing.expectEqualStrings(input, stripFileQueries(input, &scratch, &silent));
+    // Shared-memory queries stay with the emulator, which answers them.
+    const shm_query = "\x1b_Gi=299,a=q,t=s,f=32,s=1,v=1;L3B4LXE=\x1b\\";
+    try std.testing.expectEqualStrings(shm_query, stripFileQueries(shm_query, &scratch, &answering));
+    try std.testing.expectEqual(@as(usize, 1), answering.queries);
+}
+
+test "a sink that loads shared frames itself receives the parsed frame instead of bytes" {
+    const frame = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=2,v=1,t=s,i=7,p=3,C=1,q=2;L3B4LTE=\x1b\\\x1b[?2026l";
+    var output: TestOutput = .{ .direct = true };
+
+    try std.testing.expectEqual(
+        FilterStats{ .discarded = 0, .unavailable = 0, .forwarded = 1, .direct = 1 },
+        filterAtomicSharedFrames(.{ .bytes = "head" ++ frame ++ "tail", .storage_limit = 8 }, &output, TestAvailability.all),
+    );
+    try std.testing.expectEqualStrings("headtail", output.slice());
+    const view = output.last_direct.?;
+    try std.testing.expectEqualStrings(frame, view.bytes);
+    try std.testing.expectEqualStrings("\x1b[?2026h\x1b[H", view.bytes[0..view.apc_start]);
+    try std.testing.expectEqualStrings("\x1b[?2026l", view.bytes[view.apc_end..]);
+    try std.testing.expectEqualStrings("L3B4LTE=", view.encoded_name);
+    try std.testing.expectEqual(@as(u32, 7), view.image_id);
+    try std.testing.expectEqual(@as(u32, 3), view.placement_id);
+    try std.testing.expectEqual(FormatType.rgba, view.format);
+    try std.testing.expectEqual(@as(u32, 2), view.width);
+    try std.testing.expectEqual(@as(usize, 8), view.byte_len);
+}
+
+test "shared frames with crop or offset keys are left to the emulator parser" {
+    const cropped = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2,x=1;L3B4LTE=\x1b\\\x1b[?2026l";
+    var output: TestOutput = .{ .direct = true };
+
+    try std.testing.expectEqual(
+        FilterStats{},
+        filterAtomicSharedFrames(.{ .bytes = cropped, .storage_limit = 8 }, &output, TestAvailability.all),
+    );
+    try std.testing.expectEqualStrings(cropped, output.slice());
+}
+
+const TestAvailability = enum {
+    all,
+    first_only,
+    none,
+
+    pub fn available(availability: TestAvailability, resource: FrameResource) bool {
+        return switch (availability) {
+            .all => resource.byte_len <= resource.limit,
+            .first_only => resource.byte_len <= resource.limit and std.mem.eql(u8, resource.encoded_name, "L3B4LTE="),
+            .none => false,
+        };
+    }
+};
+
+test "atomic shared-memory frames are latest-wins per placement" {
+    const first = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTE=\x1b\\\x1b[?2026l";
+    const other = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=8,p=1,C=1,q=2;L3B4LTI=\x1b\\\x1b[?2026l";
+    const latest = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTM=\x1b\\\x1b[?2026l";
+    const input = "head" ++ first ++ other ++ latest ++ "tail";
+    var output: TestOutput = .{};
+
+    try std.testing.expectEqual(
+        FilterStats{ .discarded = 1, .unavailable = 0, .forwarded = 2 },
+        filterAtomicSharedFrames(.{ .bytes = input, .storage_limit = 4 }, &output, TestAvailability.all),
+    );
+    try std.testing.expectEqualStrings("head" ++ other ++ latest ++ "tail", output.slice());
+}
+
+test "shared frame folding falls back to the newest available resource" {
+    const first = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTE=\x1b\\\x1b[?2026l";
+    const latest = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTM=\x1b\\\x1b[?2026l";
+    var output: TestOutput = .{};
+
+    try std.testing.expectEqual(
+        FilterStats{ .discarded = 1, .unavailable = 0, .forwarded = 1 },
+        filterAtomicSharedFrames(.{
+            .bytes = "head" ++ first ++ latest ++ "tail",
+            .storage_limit = 4,
+        }, &output, TestAvailability.first_only),
+    );
+    try std.testing.expectEqualStrings("head" ++ first ++ "tail", output.slice());
+}
+
+test "unavailable shared frames cannot delete the current image" {
+    const frame = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=1,v=1,t=s,i=7,p=1,C=1,q=2;L3B4LTE=\x1b\\\x1b[?2026l";
+    var output: TestOutput = .{};
+
+    try std.testing.expectEqual(
+        FilterStats{ .discarded = 0, .unavailable = 1, .forwarded = 0 },
+        filterAtomicSharedFrames(.{
+            .bytes = "head" ++ frame ++ "tail",
+            .storage_limit = 4,
+        }, &output, TestAvailability.none),
+    );
+    try std.testing.expectEqualStrings("headtail", output.slice());
+}
+
+test "media terminal preserves cursor-relative KGP placement" {
+    const size: TerminalSizeType = .{
+        .cols = 40,
+        .rows = 8,
+        .cell_width_px = 10,
+        .cell_height_px = 20,
+    };
+    var pipeline: Pipeline = undefined;
+    try pipeline.init(.{
+        .io = std.testing.io,
+        .allocator = std.testing.allocator,
+        .size = size,
+        .storage_limit = 1024 * 1024,
+        .payload_limit = 64 * 1024,
+        .write_pty = null,
+    });
+    defer pipeline.deinit();
+
+    const limits = pipeline.terminal.screens.active.kitty_images.image_limits;
+    try std.testing.expect(limits.shared_memory);
+    try std.testing.expect(!limits.file);
+    try std.testing.expect(limits.temporary_file == .disabled);
+
+    const Feed = struct {
+        pipeline: *Pipeline,
+
+        pub fn observe(feed: *@This(), bytes: []const u8) void {
+            feed.pipeline.stream.nextSlice(bytes);
+        }
+
+        pub fn observeSharedFrame(_: *@This(), _: SharedFrameView) bool {
+            return false;
+        }
+
+        pub fn observeFileQuery(_: *@This(), _: FileQueryView) bool {
+            return false;
+        }
+    };
+    var feed: Feed = .{ .pipeline = &pipeline };
+    pipeline.queueOutput(
+        "abc" ++
+            "\x1b_Ga=T,f=32,s=1,v=1,t=d,i=7,p=3,c=2,r=1;AQID/w==\x1b\\" ++
+            "tail",
+    );
+    try std.testing.expect(pipeline.seal());
+    var stats: Stats = .{};
+    pipeline.processSealed(.{ .current_size = size, .stats = &stats }, &feed);
+    pipeline.finishSealed();
+
+    const storage = &pipeline.terminal.screens.active.kitty_images;
+    try std.testing.expectEqual(@as(usize, 1), storage.images.count());
+    try std.testing.expectEqual(@as(usize, 1), storage.placements.count());
+    try std.testing.expectEqualSlices(
+        u8,
+        &.{ 1, 2, 3, 255 },
+        storage.imageById(7).?.data.bytes().?,
+    );
+}
+
+test "media terminal loads KGP pixels from POSIX shared memory" {
+    if (comptime builtin.os.tag == .windows or builtin.abi.isAndroid()) {
+        return error.SkipZigTest;
+    }
+
+    const pixels = [_]u8{ 1, 2, 3, 255 };
+    var name_buffer: [128]u8 = undefined;
+    const name = try std.fmt.bufPrintZ(
+        &name_buffer,
+        "/telar-media-test-{d}",
+        .{std.c.getpid()},
+    );
+    defer _ = std.c.shm_unlink(name);
+
+    const fd = std.c.shm_open(
+        name,
+        @as(c_int, @bitCast(std.c.O{
+            .ACCMODE = .RDWR,
+            .CREAT = true,
+            .EXCL = true,
+        })),
+        @as(u16, 0o600),
+    );
+    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(fd));
+    defer _ = std.c.close(fd);
+    try std.testing.expectEqual(@as(c_int, 0), std.c.ftruncate(fd, pixels.len));
+
+    const map = try std.posix.mmap(
+        null,
+        pixels.len,
+        .{ .READ = true, .WRITE = true },
+        std.c.MAP{ .TYPE = .SHARED },
+        fd,
+        0,
+    );
+    @memcpy(map[0..pixels.len], &pixels);
+    std.posix.munmap(map);
+
+    const size: TerminalSizeType = .{
+        .cols = 40,
+        .rows = 8,
+        .cell_width_px = 10,
+        .cell_height_px = 20,
+    };
+    var pipeline: Pipeline = undefined;
+    try pipeline.init(.{
+        .io = std.testing.io,
+        .allocator = std.testing.allocator,
+        .size = size,
+        .storage_limit = 1024 * 1024,
+        .payload_limit = 64 * 1024,
+        .write_pty = null,
+    });
+    defer pipeline.deinit();
+
+    var encoded_name_buffer: [256]u8 = undefined;
+    const encoded_name = std.base64.standard.Encoder.encode(
+        encoded_name_buffer[0..std.base64.standard.Encoder.calcSize(name.len)],
+        name,
+    );
+    var command_buffer: [512]u8 = undefined;
+    const command = try std.fmt.bufPrint(
+        &command_buffer,
+        "\x1b_Ga=T,f=32,s=1,v=1,t=s,i=9,p=1,C=1,q=2;{s}\x1b\\",
+        .{encoded_name},
+    );
+    pipeline.stream.nextSlice(command);
+
+    const storage = &pipeline.terminal.screens.active.kitty_images;
+    try std.testing.expectEqual(@as(usize, 1), storage.images.count());
+    try std.testing.expectEqual(@as(usize, 1), storage.placements.count());
+    try std.testing.expectEqualSlices(
+        u8,
+        &pixels,
+        storage.imageById(9).?.data.bytes().?,
+    );
+}
+
+test "overflow replaces obsolete media and requests a reset" {
+    const size: TerminalSizeType = .{
+        .cols = 40,
+        .rows = 8,
+        .cell_width_px = 0,
+        .cell_height_px = 0,
+    };
+    var pipeline: Pipeline = undefined;
+    try pipeline.init(.{
+        .io = std.testing.io,
+        .allocator = std.testing.allocator,
+        .size = size,
+        .storage_limit = 1024 * 1024,
+        .payload_limit = 64 * 1024,
+        .write_pty = null,
+    });
+    defer pipeline.deinit();
+    const full: [batch_bytes]u8 = @splat('x');
+    pipeline.queueOutput(&full);
+    pipeline.queueOutput("latest");
+    try std.testing.expect(pipeline.seal());
+    try std.testing.expect(pipeline.dropped_events != 0);
+    try std.testing.expect(pipeline.batches[pipeline.worker.?].reset_before);
+    pipeline.finishSealed();
+}
+
+test "adjacent PTY reads use the byte bound instead of the event bound" {
+    var batch: Batch = .{};
+    const read: [1024]u8 = @splat('x');
+    for (0..batch_bytes / read.len) |_| try std.testing.expect(batch.pushOutput(&read));
+
+    try std.testing.expectEqual(batch_bytes, batch.len);
+    try std.testing.expectEqual(@as(usize, 1), batch.event_count);
+    try std.testing.expectEqual(@as(u32, batch_bytes), batch.events[0].output.len);
+    try std.testing.expect(!batch.pushOutput(&read));
+}
+
+test "output coalescing preserves resize order" {
+    var batch: Batch = .{};
+    try std.testing.expect(batch.pushOutput("ab"));
+    try std.testing.expect(batch.pushOutput("cd"));
+    try std.testing.expect(batch.pushResize(.{ .cols = 40, .rows = 12 }));
+    try std.testing.expect(batch.pushOutput("ef"));
+    try std.testing.expect(batch.pushOutput("gh"));
+
+    try std.testing.expectEqual(@as(usize, 3), batch.event_count);
+    try std.testing.expectEqual(@as(u32, 4), batch.events[0].output.len);
+    try std.testing.expectEqual(@as(u16, 40), batch.events[1].resize.cols);
+    try std.testing.expectEqual(@as(u32, 4), batch.events[2].output.len);
+}
+
+test "graphics terminal answers KGP queries and rejects unsupported payloads" {
+    const previous_log_level = std.testing.log_level;
+    std.testing.log_level = .err;
+    defer std.testing.log_level = previous_log_level;
+
+    const Capture = struct {
+        var bytes: [512]u8 = undefined;
+        var len: usize = 0;
+
+        fn reset() void {
+            len = 0;
+        }
+
+        fn writePty(_: *vt.TerminalStream.Handler, response: [:0]const u8) void {
+            if (len + response.len > bytes.len) {
+                @panic("KGP test response overflow");
+            }
+
+            @memcpy(bytes[len..][0..response.len], response);
+            len += response.len;
+        }
+    };
+
+    var terminal = try vt.Terminal.init(std.testing.io, std.testing.allocator, .{
+        .cols = 10,
+        .rows = 5,
+        .kitty_image_storage_limit = max_image_bytes_per_screen_module,
+        .kitty_image_loading_limits = .direct,
+    });
+    defer terminal.deinit(std.testing.allocator);
+
+    var handler = terminal.vtHandler();
+    handler.apc_handler.max_bytes.put(.kitty, max_encoded_chunk_bytes_module);
+    handler.effects.write_pty = Capture.writePty;
+    var stream = vt.TerminalStream.init(.{
+        .allocator = std.testing.allocator,
+        .handler = handler,
+    });
+    defer stream.deinit();
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\");
+    try std.testing.expectEqualStrings("\x1b_Gi=31;OK\x1b\\", Capture.bytes[0..Capture.len]);
+    try std.testing.expectEqual(@as(usize, 0), terminal.screens.active.kitty_images.images.count());
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Ga=t,f=32,o=z,s=1,v=1,t=d,i=7,m=1;eAFjZGL+\x1b\\");
+    stream.nextSlice("\x1b_Gm=0;DwABEwEG\x1b\\");
+    const image = terminal.screens.active.kitty_images.imageById(7).?;
+    try std.testing.expectEqualSlices(u8, &.{ 1, 2, 3, 255 }, image.data.bytes().?);
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Ga=q,f=32,o=z,s=1,v=1,t=d,i=8;eAFjZGIGAAANAAc=\x1b\\");
+    try std.testing.expect(std.mem.indexOf(u8, Capture.bytes[0..Capture.len], "EINVAL: invalid data") != null);
+    try std.testing.expect(terminal.screens.active.kitty_images.imageById(8) == null);
+
+    Capture.reset();
+    stream.nextSlice("\x1b_Ga=q,f=24,s=1,v=1,t=f,i=9;L3RtcC9pbWFnZQ==\x1b\\");
+    try std.testing.expect(std.mem.indexOf(u8, Capture.bytes[0..Capture.len], "EINVAL: unsupported medium") != null);
+}

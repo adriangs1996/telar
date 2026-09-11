@@ -1,17 +1,12 @@
 //! Application policy for delivering disposable host resources after one
 //! committed host update.
 
+const ModelType = @import("../../model/Model.zig");
+const HostCommitType = @import("../../model/HostCommit.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const SidebarConfiguration = @import("SidebarConfiguration.zig");
-
-pub const Effects = @import("HostResourceDeliveryEffects.zig");
-
-pub const DeliverHostResourcesHandler = @import("DeliverHostResourcesHandler.zig");
+const EffectCapture = @import("EffectCapture.zig");
+const DeliverHostResourcesHandler = @import("DeliverHostResourcesHandler.zig");
+const SidebarConfiguration = @import("SidebarConfiguration.zig");
 
 pub const Event = enum {
     graphics_fallbacks,
@@ -30,9 +25,7 @@ pub const Failure = enum {
     pane_geometry,
 };
 
-const EffectCapture = @import("EffectCapture.zig");
-
-fn resizeCommit(model: *client_model.Model) !client_model.HostCommit {
+fn resizeCommit(model: *ModelType) !HostCommitType {
     var capabilities = model.hostCapabilities();
     capabilities.window_width_px = 1000;
     capabilities.window_height_px = 600;
@@ -49,7 +42,7 @@ fn resizeCommit(model: *client_model.Model) !client_model.HostCommit {
 }
 
 test "DeliverHostResourcesHandler orders graphics capability resources" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const commit = (try model.observeHostCapability(.{ .images = .supported })).?;
     var capture: EffectCapture = .{ .model = &model, .commit = commit };
@@ -74,7 +67,7 @@ test "DeliverHostResourcesHandler orders graphics capability resources" {
 }
 
 test "DeliverHostResourcesHandler orders grid and cell-size resources" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const commit = try resizeCommit(&model);
     var capture: EffectCapture = .{ .model = &model, .commit = commit };
@@ -101,7 +94,7 @@ test "DeliverHostResourcesHandler orders grid and cell-size resources" {
 
 test "DeliverHostResourcesHandler selects grid and cell-size branches independently" {
     {
-        var model = client_model.Model.init(std.testing.allocator, true);
+        var model = ModelType.init(std.testing.allocator, true);
         defer model.deinit();
         const commit = (try model.reconcileHost(.{
             .capabilities = model.hostCapabilities(),
@@ -125,7 +118,7 @@ test "DeliverHostResourcesHandler selects grid and cell-size branches independen
     }
 
     {
-        var model = client_model.Model.init(std.testing.allocator, true);
+        var model = ModelType.init(std.testing.allocator, true);
         defer model.deinit();
         const commit = (try model.observeHostCapability(.{ .cell_pixels = .{
             .width = 10,
@@ -149,7 +142,7 @@ test "DeliverHostResourcesHandler selects grid and cell-size branches independen
 }
 
 test "DeliverHostResourcesHandler skips resources for nonvisual capability changes" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const commit = (try model.observeHostCapability(.{ .pointer_pixels = .supported })).?;
     var capture: EffectCapture = .{ .model = &model, .commit = commit };
@@ -164,7 +157,7 @@ test "DeliverHostResourcesHandler skips resources for nonvisual capability chang
 }
 
 test "DeliverHostResourcesHandler rejects empty and stale commits before effects" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const stale = (try model.observeHostCapability(.{ .images = .supported })).?;
     _ = (try model.observeHostCapability(.{ .pointer_pixels = .supported })).?;
@@ -203,7 +196,7 @@ test "DeliverHostResourcesHandler stops resize delivery at each failed effect" {
     };
 
     for (failures, expected, errors) |failure, events, expected_error| {
-        var model = client_model.Model.init(std.testing.allocator, true);
+        var model = ModelType.init(std.testing.allocator, true);
         defer model.deinit();
         const commit = try resizeCommit(&model);
         var capture: EffectCapture = .{
@@ -224,7 +217,7 @@ test "DeliverHostResourcesHandler stops resize delivery at each failed effect" {
 }
 
 test "DeliverHostResourcesHandler stops graphics delivery before invalidation" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const commit = (try model.observeHostCapability(.{ .images = .supported })).?;
     var capture: EffectCapture = .{

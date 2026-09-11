@@ -1,28 +1,25 @@
 //! Adapts runtime TLS interception state to the client application boundary.
 
-const core = @import("telar-core");
-const agents_application = @import("telar-client").application.agents;
-const client_model = @import("telar-client").model;
-const notifications = @import("telar-client").notifications;
-
 const Client = @import("../../Client.zig");
+const ProxyStatusType = @import("telar-core").ProxyStatus;
+const ProxyStatusCommitType = @import("telar-client").ProxyStatusCommit;
+const ApplyProxyStatusHandlerType = @import("telar-client").ApplyProxyStatusHandler;
+const DeliverProxyStatusHandlerType = @import("telar-client").DeliverProxyStatusHandler;
+const InputType = @import("telar-client").NotificationInput;
 const notification_flow = @import("../notifications/notifications.zig");
-const proxy_status = agents_application.proxy_status;
-const proxy_status_delivery = agents_application.proxy_status_delivery;
-const schema = core.schema;
 
 /// Commits one decoded proxy state and announces only semantic transitions.
 ///
 /// ```zig
 /// _ = try apply(client, message);
 /// ```
-pub fn apply(client: *Client, message: schema.ProxyStatus) !?client_model.ProxyStatusCommit {
+pub fn apply(client: *Client, message: ProxyStatusType) !?ProxyStatusCommitType {
     var use_case = handler(client);
 
     return use_case.execute(message);
 }
 
-fn handler(client: *Client) proxy_status.ApplyProxyStatusHandler {
+fn handler(client: *Client) ApplyProxyStatusHandlerType {
     return .{
         .model = &client.model,
         .delivery = .{
@@ -32,9 +29,9 @@ fn handler(client: *Client) proxy_status.ApplyProxyStatusHandler {
     };
 }
 
-fn deliverCommit(context: *anyopaque, commit: client_model.ProxyStatusCommit) !void {
+fn deliverCommit(context: *anyopaque, commit: ProxyStatusCommitType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: proxy_status_delivery.DeliverProxyStatusHandler = .{
+    var use_case: DeliverProxyStatusHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -45,7 +42,7 @@ fn deliverCommit(context: *anyopaque, commit: client_model.ProxyStatusCommit) !v
     try use_case.execute(commit);
 }
 
-fn publishNotification(context: *anyopaque, input: notifications.Input) !void {
+fn publishNotification(context: *anyopaque, input: InputType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try notification_flow.publishNow(client, input);

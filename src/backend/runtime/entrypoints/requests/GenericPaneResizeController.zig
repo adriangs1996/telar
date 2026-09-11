@@ -1,4 +1,6 @@
-const source_namespace = @import("pane_resize.zig");
+const RuntimeMetricsType = @import("../../observability/RuntimeMetrics.zig");
+const PaneResizeType = @import("telar-core").PaneResize;
+
 /// Builds a statically dispatched resize controller for the interactive path.
 ///
 /// ```zig
@@ -9,7 +11,7 @@ pub fn Type(comptime Executor: type) type {
     return struct {
         const Self = @This();
 
-        metrics: *source_namespace.RuntimeMetrics,
+        metrics: *RuntimeMetricsType,
         executor: Executor,
 
         /// Creates one controller bound to the requesting client and handler.
@@ -17,7 +19,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// var controller = ResizeController.init(&metrics, &handler);
         /// ```
-        pub fn init(metrics: *source_namespace.RuntimeMetrics, executor: Executor) Self {
+        pub fn init(metrics: *RuntimeMetricsType, executor: Executor) Self {
             return .{ .metrics = metrics, .executor = executor };
         }
 
@@ -27,7 +29,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// try controller.paneResize(request);
         /// ```
-        pub inline fn paneResize(controller: *Self, request: source_namespace.schema.PaneResize) !void {
+        pub inline fn paneResize(controller: *Self, request: PaneResizeType) !void {
             const result = try controller.executor.execute(.{
                 .pane_id = request.pane_id,
                 .size = request.size,

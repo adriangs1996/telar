@@ -1,5 +1,6 @@
-const WorkspaceListView = @This();
 const WorkspaceListIterator = @import("WorkspaceListIterator.zig");
+const WorkspaceListView = @This();
+
 revision: u64,
 entry_count: u16,
 encoded_entries: []const u8,

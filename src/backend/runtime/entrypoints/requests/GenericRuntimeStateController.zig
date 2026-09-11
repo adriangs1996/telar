@@ -1,4 +1,5 @@
-const schema = @import("telar-core").schema;
+const ClientIdentityType = @import("telar-core").ClientIdentity;
+
 /// Builds a statically dispatched runtime-state subscription controller.
 ///
 /// ```zig
@@ -26,7 +27,7 @@ pub fn Type(comptime Subscriber: type) type {
         /// ```zig
         /// try controller.requestRuntimeState(identity);
         /// ```
-        pub inline fn requestRuntimeState(controller: *Self, identity: schema.ClientIdentity) !void {
+        pub inline fn requestRuntimeState(controller: *Self, identity: ClientIdentityType) !void {
             try controller.subscriber.requestRuntimeState(identity);
         }
     };

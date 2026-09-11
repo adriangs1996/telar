@@ -1,3 +1,4 @@
+const PaneIdType = @import("telar-core").PaneId;
 const RequestCellSnapshot = @This();
-const source_namespace = @import("request_snapshot.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,

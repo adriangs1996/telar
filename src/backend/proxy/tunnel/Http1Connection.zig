@@ -1,19 +1,23 @@
+const std = @import("std");
+const TransformPipelineType = @import("../TransformPipeline.zig");
+const SessionType = @import("../Session.zig");
+const ExchangeType = @import("Exchange.zig");
+const ProducerType = @import("../capture/Producer.zig");
+const Observer = @import("../provider/Observer.zig");
+const HalfType = @import("../capture/Half.zig");
+const Http1Options = @import("Http1Options.zig");
+const http1 = @import("http1.zig");
+const StartOptionsType = @import("../capture/StartOptions.zig");
 const Connection = @This();
-const source_namespace = @import("http1.zig");
-const middleware = @import("../middleware.zig");
-const tls = @import("../tls.zig");
-const exchange_mod = @import("exchange_support.zig");
-const capture = @import("../capture/root.zig");
-const provider = @import("../provider/root.zig");
-const Options = @import("Http1Options.zig");
-io: source_namespace.Io,
-transforms: *const middleware.TransformPipeline,
-session: *tls.Session,
-exchange: *exchange_mod.Exchange,
-captures: ?*capture.Producer,
-request: provider.RequestObserver = .{},
-request_capture: ?*capture.Half = null,
-response_capture: ?*capture.Half = null,
+
+io: std.Io,
+transforms: *const TransformPipelineType,
+session: *SessionType,
+exchange: *ExchangeType,
+captures: ?*ProducerType,
+request: Observer = .{},
+request_capture: ?*HalfType = null,
+response_capture: ?*HalfType = null,
 
 /// Binds an intercepted TLS session to its exchange and immutable header
 /// transformation pipeline.
@@ -21,7 +25,7 @@ response_capture: ?*capture.Half = null,
 /// ```zig
 /// var connection = Connection.init(options);
 /// ```
-pub fn init(options: Options) Connection {
+pub fn init(options: Http1Options) Connection {
     return .{
         .io = options.io,
         .transforms = options.transforms,
@@ -40,7 +44,7 @@ pub fn init(options: Options) Connection {
 pub fn run(connection: *Connection) void {
     defer connection.request.deinit();
     defer connection.discardCaptures();
-    source_namespace.RelayConnection.run(connection);
+    http1.RelayConnection.run(connection);
 }
 
 fn discardCaptures(connection: *Connection) void {
@@ -58,8 +62,8 @@ fn discardCaptures(connection: *Connection) void {
 pub fn beginCapture(connection: *Connection) void {
     connection.discardCaptures();
     const producer = connection.captures orelse return;
-    const started_at_ms = source_namespace.Io.Timestamp.now(connection.io, .real).toMilliseconds();
-    const base: capture.StartOptions = .{
+    const started_at_ms = std.Io.Timestamp.now(connection.io, .real).toMilliseconds();
+    const base: StartOptionsType = .{
         .credential = connection.exchange.credential,
         .dialect = connection.exchange.dialect,
         .protocol = connection.exchange.protocol,

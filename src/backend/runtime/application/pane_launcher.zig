@@ -5,55 +5,32 @@
 //! matching rollback path.
 
 const std = @import("std");
-const core = @import("telar-core");
-const history = @import("../../history/root.zig");
-const pane_mod = @import("../../pane/root.zig");
-const pane_exit_coordinator = @import("../entrypoints/events/pane/exit.zig");
-const pane_output_pipeline = @import("../entrypoints/events/pane/output.zig");
-const proxy_mod = @import("../../proxy/root.zig");
-const pty = @import("../../pty/root.zig");
-
-pub const Io = std.Io;
-pub const Pane = pane_mod.Pane;
-pub const PaneStore = pane_mod.PaneStore;
-pub const schema = core.schema;
+const max_argument_count_module = @import("telar-core").max_argument_count;
+const command_support = @import("../../pty/command_support.zig");
+const PaneOverrides = @import("PaneOverrides.zig");
+const proxy_mod = @import("../../proxy/proxy_namespace.zig");
+const Pane = @import("../../pane/Pane.zig");
+const OutputCompletion = @import("../entrypoints/events/pane/OutputCompletion.zig");
+const mark_module = @import("telar-core").mark;
+const ExitCompletion = @import("../entrypoints/events/pane/ExitCompletion.zig");
+const pane_module = @import("telar-core").pane;
 
 comptime {
-    std.debug.assert(schema.max_argument_count <= pty.max_args);
+    std.debug.assert(max_argument_count_module <= command_support.max_args);
 }
-
-pub const PaneOutputEvent = pane_output_pipeline.Completion;
-
-pub const PaneExitEvent = pane_exit_coordinator.Completion;
-
-pub const LaunchRequest = @import("LaunchRequest.zig");
-
-pub const PaneIdentity = @import("PaneIdentity.zig");
-
-pub const PaneOverrides = @import("PaneOverrides.zig");
 
 comptime {
     std.debug.assert(PaneOverrides.count <= proxy_mod.max_pane_overrides);
 }
 
-const LaunchFailure = @import("LaunchFailure.zig");
-
-const CommandInitialization = @import("CommandInitialization.zig");
-
-pub const LaunchTestFault = @import("LaunchTestFault.zig");
-
-pub const PaneLauncher = @import("GenericPaneLauncher.zig").Type;
-
-const OwnedCommand = @import("OwnedCommand.zig");
-
-pub fn readPane(io: Io, pane: *Pane) PaneOutputEvent {
+pub fn readPane(io: std.Io, pane: *Pane) OutputCompletion {
     const len = pane.session.read(io, &pane.output_buffer) catch |err|
         return .{ .pane = pane.key(), .result = err };
-    core.echo_trace.mark(io, .pty_read);
+    mark_module(io, .pty_read);
     return .{ .pane = pane.key(), .result = @intCast(len) };
 }
 
-pub fn waitPane(pane: *Pane) PaneExitEvent {
+pub fn waitPane(pane: *Pane) ExitCompletion {
     return .{ .pane = pane.key(), .result = pane.session.wait() };
 }
 
@@ -61,7 +38,7 @@ test "pane overrides name the runtime socket and the pane's own identity" {
     var overrides: PaneOverrides = .{};
 
     const entries = overrides.build(.{
-        .key = .{ .id = try schema.id.pane(12), .generation = 3 },
+        .key = .{ .id = try pane_module(12), .generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(4) },
             .tab_id = @enumFromInt(9),

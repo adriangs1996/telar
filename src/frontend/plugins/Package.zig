@@ -1,8 +1,10 @@
-const Package = @This();
-const source_namespace = @import("root.zig");
+const PluginManifest = @import("telar-core").PluginManifest;
+const DigestType = @import("telar-core").Digest;
 const std = @import("std");
-manifest: source_namespace.plugin.Manifest,
-digest: source_namespace.plugin.Digest,
+const Package = @This();
+
+manifest: PluginManifest,
+digest: DigestType,
 root_bytes: [std.fs.max_path_bytes]u8 = undefined,
 root_len: u16,
 entry_bytes: [std.fs.max_path_bytes]u8 = undefined,

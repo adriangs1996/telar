@@ -1,10 +1,14 @@
 //! Allocation-free rendering for validated configured bar segments.
 
-const bars = @import("../bars/root.zig");
-const widget = @import("context_support.zig");
-const ui = @import("../ui/root.zig");
+const ContextType = @import("Context.zig");
+const RectType = @import("telar-core").Rect;
+const BarContentInput = @import("BarContentInput.zig");
+const StyleType = @import("telar-client").Style;
+const CoreStyle = @import("telar-core").Style;
+const ColorType = @import("telar-client").Color;
+const CoreColor = @import("telar-core").Color;
 
-pub fn render(context: *widget.Context, area: ui.Rect, input: Input) void {
+pub fn render(context: *ContextType, area: RectType, input: BarContentInput) void {
     if (area.isEmpty()) {
         return;
     }
@@ -29,9 +33,7 @@ pub fn render(context: *widget.Context, area: ui.Rect, input: Input) void {
     }
 }
 
-pub const Input = @import("BarContentInput.zig");
-
-fn resolveStyle(context: *const widget.Context, configured: bars.Style) ui.Style {
+fn resolveStyle(context: *const ContextType, configured: StyleType) CoreStyle {
     return .{
         .fg = if (configured.foreground) |color| resolveColor(context, color) else context.palette.subtext0,
         .bg = if (configured.background) |color| resolveColor(context, color) else context.palette.panel_bg,
@@ -45,7 +47,7 @@ fn resolveStyle(context: *const widget.Context, configured: bars.Style) ui.Style
     };
 }
 
-fn resolveColor(context: *const widget.Context, color: bars.Color) ui.Color {
+fn resolveColor(context: *const ContextType, color: ColorType) CoreColor {
     return switch (color) {
         .value => |value| value,
         .palette => |role| switch (role) {

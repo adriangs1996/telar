@@ -6,12 +6,13 @@
 //! worker can copy the same value snapshot across its bounded queue without
 //! exposing a tunnel, TLS session, or Zig pointer to the VM.
 
-const std = @import("std");
-const core = @import("telar-core");
-const dialect_mod = @import("provider/dialect.zig");
-const identity = @import("identity.zig");
+const types = @import("../agent/types.zig");
 
-pub const schema = core.schema;
+const EffectBatchType = @import("EffectBatch.zig");
+const TransformationType = @import("Transformation.zig");
+const HeadersType = @import("Headers.zig");
+const TransformPipelineType = @import("TransformPipeline.zig");
+const std = @import("std");
 
 pub const Phase = enum {
     request_started,
@@ -23,7 +24,7 @@ pub const Phase = enum {
 };
 
 pub const Protocol = enum { http11, h2, upgraded };
-pub const ApiDialect = dialect_mod.ApiDialect;
+pub const ApiDialect = types.ApiDialect;
 
 /// Recognizes the SSE media type while allowing parameters and ASCII case.
 ///
@@ -63,24 +64,24 @@ pub fn isIdentityContentEncoding(value: []const u8) bool {
 pub const Event = @import("MiddlewareEvent.zig");
 
 test "observable SSE headers require one event-stream type and identity bytes" {
-    var headers: Headers = .{};
+    var headers: HeadersType = .{};
     try headers.append(.{ .name = "content-type", .value = "Text/Event-Stream; charset=utf-8" });
     try std.testing.expect(hasObservableSseBody(&headers));
 
     try headers.append(.{ .name = "content-encoding", .value = "identity" });
     try std.testing.expect(hasObservableSseBody(&headers));
 
-    var encoded: Headers = .{};
+    var encoded: HeadersType = .{};
     try encoded.append(.{ .name = "content-type", .value = "text/event-stream" });
     try encoded.append(.{ .name = "content-encoding", .value = "gzip" });
     try std.testing.expect(!hasObservableSseBody(&encoded));
 
-    var duplicate: Headers = .{};
+    var duplicate: HeadersType = .{};
     try duplicate.append(.{ .name = "content-type", .value = "text/event-stream" });
     try duplicate.append(.{ .name = "content-type", .value = "text/event-stream" });
     try std.testing.expect(!hasObservableSseBody(&duplicate));
 
-    var missing: Headers = .{};
+    var missing: HeadersType = .{};
     try missing.append(.{ .name = "content-encoding", .value = "identity" });
     try std.testing.expect(!hasObservableSseBody(&missing));
 }
@@ -138,7 +139,7 @@ pub const Headers = @import("Headers.zig");
 /// ```zig
 /// const observable = hasObservableSseBody(&headers);
 /// ```
-pub fn hasObservableSseBody(headers: *const Headers) bool {
+pub fn hasObservableSseBody(headers: *const HeadersType) bool {
     var content_type_seen = false;
     var event_stream = false;
 
@@ -209,12 +210,12 @@ pub fn isSensitiveName(name: []const u8) bool {
 }
 
 test "header effect batches are atomic and preserve pseudo-header order" {
-    var headers: Headers = .{};
+    var headers: HeadersType = .{};
     try headers.append(.{ .name = ":method", .value = "POST" });
     try headers.append(.{ .name = ":path", .value = "/v1/messages" });
     try headers.append(.{ .name = "authorization", .value = "secret", .sensitive = true });
 
-    var effects: EffectBatch = .{};
+    var effects: EffectBatchType = .{};
     try effects.set(.{ .name = ":path", .value = "/v1/responses" });
     try effects.remove("authorization");
     try effects.set(.{ .name = "x-telar", .value = "enabled" });
@@ -231,15 +232,15 @@ test "header effect batches are atomic and preserve pseudo-header order" {
 
 test "invalid complete effect batch preserves the original headers" {
     const TransformerImpl = struct {
-        fn transform(_: *anyopaque, transformation: Transformation) TransformStatus {
+        fn transform(_: *anyopaque, transformation: TransformationType) TransformStatus {
             transformation.effects.set(.{ .name = ":new", .value = "invalid" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = TransformerImpl.transform });
-    var headers: Headers = .{};
+    var headers: HeadersType = .{};
     try headers.append(.{ .name = ":method", .value = "GET" });
     try std.testing.expect(!pipeline.apply(.{ .io = std.testing.io, .context = undefined, .headers = &headers }));
     try std.testing.expectEqual(@as(u16, 1), headers.len);
@@ -247,11 +248,11 @@ test "invalid complete effect batch preserves the original headers" {
 }
 
 test "known secret headers remain sensitive regardless of transformer flags" {
-    var headers: Headers = .{};
+    var headers: HeadersType = .{};
     try headers.append(.{ .name = "Authorization", .value = "Bearer secret" });
     try std.testing.expect(headers.fields[0].sensitive);
 
-    var effects: EffectBatch = .{};
+    var effects: EffectBatchType = .{};
     try effects.set(.{ .name = "authorization", .value = "Bearer replacement" });
     try headers.apply(effects.effects[0..effects.len]);
     try std.testing.expect(headers.fields[0].sensitive);

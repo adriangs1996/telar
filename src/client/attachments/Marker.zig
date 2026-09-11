@@ -1,7 +1,8 @@
-const Marker = @This();
-const source_namespace = @import("path_marker.zig");
+const path_marker = @import("path_marker.zig");
 const Position = @import("Position.zig");
-uuid: source_namespace.Uuid,
+const Marker = @This();
+
+uuid: path_marker.Uuid,
 /// First cell of the path, which is the first `/` of the word holding
 /// the file name so a word soft-wrapped before it is never included.
 start: Position,

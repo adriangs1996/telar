@@ -1,11 +1,12 @@
-const ScheduleCapture = @This();
-const proxy_mod = @import("../../proxy/root.zig");
+const ProxyType = @import("../../proxy/Proxy.zig");
 const ObservationScheduler = @import("ObservationScheduler.zig");
+const ScheduleCapture = @This();
+
 count: usize = 0,
-capability: ?*proxy_mod.Proxy = null,
+capability: ?*ProxyType = null,
 failure: ?anyerror = null,
 
-fn schedule(context: *anyopaque, capability: *proxy_mod.Proxy) !void {
+fn schedule(context: *anyopaque, capability: *ProxyType) !void {
     const capture: *ScheduleCapture = @ptrCast(@alignCast(context));
     capture.count += 1;
     capture.capability = capability;

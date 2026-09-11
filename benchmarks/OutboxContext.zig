@@ -1,15 +1,16 @@
-const OutboxContext = @This();
-const frontend = @import("telar-frontend");
+const OutboxType = @import("telar-client").Outbox;
 const std = @import("std");
-outbox: *frontend.client.Outbox,
+const OutboxContext = @This();
+
+outbox: *OutboxType,
 buffer: [4096]u8 = undefined,
 
-fn init(gpa: std.mem.Allocator) !OutboxContext {
-    const outbox = try gpa.create(frontend.client.Outbox);
+pub fn init(gpa: std.mem.Allocator) !OutboxContext {
+    const outbox = try gpa.create(OutboxType);
     outbox.* = .{};
     return .{ .outbox = outbox };
 }
 
-fn deinit(context: *OutboxContext, gpa: std.mem.Allocator) void {
+pub fn deinit(context: *OutboxContext, gpa: std.mem.Allocator) void {
     gpa.destroy(context.outbox);
 }

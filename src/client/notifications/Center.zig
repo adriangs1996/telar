@@ -1,9 +1,10 @@
-const Center = @This();
-const source_namespace = @import("root.zig");
-const Item = @import("Item.zig");
-const Input = @import("Input.zig");
+const notifications = @import("notifications.zig");
+const Item = @import("NotificationItem.zig");
+const Input = @import("NotificationInput.zig");
 const std = @import("std");
-items: [source_namespace.max_items]?Item = @splat(null),
+const Center = @This();
+
+items: [notifications.max_items]?Item = @splat(null),
 count: u8 = 0,
 next_id: u64 = 1,
 
@@ -13,7 +14,7 @@ next_id: u64 = 1,
 /// ```zig
 /// const id = center.push(now_ns, input);
 /// ```
-pub fn push(center: *Center, now_ns: u64, input: Input) source_namespace.Id {
+pub fn push(center: *Center, now_ns: u64, input: Input) notifications.Id {
     var item: Item = .{
         .id = .invalid,
         .level = input.level,
@@ -21,18 +22,18 @@ pub fn push(center: *Center, now_ns: u64, input: Input) source_namespace.Id {
         .title_len = 0,
         .message_len = 0,
         .transition_updated_ns = now_ns,
-        .expires_at_ns = now_ns +| source_namespace.transition_duration_ns +| input.duration_ns,
+        .expires_at_ns = now_ns +| notifications.transition_duration_ns +| input.duration_ns,
     };
-    item.title_len = @intCast(source_namespace.copyValidUtf8(&item.title_buffer, input.title));
-    item.message_len = @intCast(source_namespace.copyValidUtf8(&item.message_buffer, input.message));
+    item.title_len = @intCast(notifications.copyValidUtf8(&item.title_buffer, input.title));
+    item.message_len = @intCast(notifications.copyValidUtf8(&item.message_buffer, input.message));
 
     for (center.items[0..center.count]) |*slot| {
         const existing = if (slot.*) |*value| value else continue;
-        if (existing.phase == .exiting or !source_namespace.sameNotification(existing, &item)) {
+        if (existing.phase == .exiting or !notifications.sameNotification(existing, &item)) {
             continue;
         }
         existing.expires_at_ns = switch (existing.phase) {
-            .entering => now_ns +| source_namespace.transition_duration_ns +| input.duration_ns,
+            .entering => now_ns +| notifications.transition_duration_ns +| input.duration_ns,
             .visible => now_ns +| input.duration_ns,
             .exiting => unreachable,
         };
@@ -41,7 +42,7 @@ pub fn push(center: *Center, now_ns: u64, input: Input) source_namespace.Id {
 
     const id = center.takeId();
     item.id = id;
-    if (center.count == source_namespace.max_items) {
+    if (center.count == notifications.max_items) {
         center.count -= 1;
     }
     var index: usize = center.count;
@@ -132,7 +133,7 @@ pub fn advance(center: *Center, now_ns: u64) bool {
 /// ```zig
 /// const changed = center.dismiss(id, now_ns);
 /// ```
-pub fn dismiss(center: *Center, id: source_namespace.Id, now_ns: u64) bool {
+pub fn dismiss(center: *Center, id: notifications.Id, now_ns: u64) bool {
     const item = center.find(id) orelse return false;
     return item.beginExit(now_ns);
 }
@@ -142,7 +143,7 @@ pub fn dismiss(center: *Center, id: source_namespace.Id, now_ns: u64) bool {
 /// ```zig
 /// const target = center.activate(id, now_ns) orelse return;
 /// ```
-pub fn activate(center: *Center, id: source_namespace.Id, now_ns: u64) ?source_namespace.Target {
+pub fn activate(center: *Center, id: notifications.Id, now_ns: u64) ?notifications.Target {
     const item = center.find(id) orelse return null;
     const target = item.target;
     if (!item.beginExit(now_ns)) {
@@ -152,7 +153,7 @@ pub fn activate(center: *Center, id: source_namespace.Id, now_ns: u64) ?source_n
     return target;
 }
 
-pub fn find(center: *Center, id: source_namespace.Id) ?*Item {
+pub fn find(center: *Center, id: notifications.Id) ?*Item {
     for (center.items[0..center.count]) |*slot| {
         const item = if (slot.*) |*value| value else continue;
         if (item.id == id) {
@@ -171,11 +172,11 @@ fn removeAt(center: *Center, removed: usize) void {
     center.items[center.count] = null;
 }
 
-fn takeId(center: *Center) source_namespace.Id {
+fn takeId(center: *Center) notifications.Id {
     if (center.next_id == 0) {
         center.next_id = 1;
     }
-    const id: source_namespace.Id = @enumFromInt(center.next_id);
+    const id: notifications.Id = @enumFromInt(center.next_id);
     center.next_id +%= 1;
     return id;
 }

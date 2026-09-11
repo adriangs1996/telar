@@ -1,3 +1,4 @@
+const ClientKeyType = @import("../../../history/ClientKey.zig");
 const RuntimeStop = @This();
-const shutdown_mod = @import("../../lifecycle/root.zig").shutdown_authority;
-requester: shutdown_mod.ClientKey,
+
+requester: ClientKeyType,

@@ -1,4 +1,5 @@
+const WorkspaceRenamedType = @import("../../../workspace/WorkspaceRenamed.zig");
 const EventPublisher = @This();
-const workspace_mod = @import("../../../workspace/root.zig");
+
 context: *anyopaque,
-publish: *const fn (*anyopaque, workspace_mod.WorkspaceRenamed) void,
+publish: *const fn (*anyopaque, WorkspaceRenamedType) void,

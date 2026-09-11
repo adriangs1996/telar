@@ -1,6 +1,7 @@
-const Discovery = @This();
 const std = @import("std");
 const LaunchDefaults = @import("LaunchDefaults.zig");
+const Discovery = @This();
+
 pub const max_output_bytes = 3 * (std.fs.max_path_bytes + 1);
 
 storage: [3 * std.fs.max_path_bytes]u8 = undefined,

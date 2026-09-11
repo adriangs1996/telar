@@ -1,6 +1,7 @@
-const Row = @This();
 const vt = @import("ghostty-vt");
 const std = @import("std");
+const Row = @This();
+
 bytes: [1024]u8 = undefined,
 len: usize = 0,
 first: u21 = 0,

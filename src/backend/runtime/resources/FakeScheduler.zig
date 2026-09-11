@@ -1,5 +1,6 @@
-const FakeScheduler = @This();
 const FakeCapability = @import("FakeCapability.zig");
+const FakeScheduler = @This();
+
 scheduled: usize = 0,
 failure: ?anyerror = null,
 

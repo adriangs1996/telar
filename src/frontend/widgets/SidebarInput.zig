@@ -1,12 +1,15 @@
-const Input = @This();
-const ui = @import("../ui/root.zig");
-const source_namespace = @import("sidebar.zig");
+const RectType = @import("telar-core").Rect;
+const SnapshotType = @import("telar-client").AgentSnapshot;
 const State = @import("State.zig");
-area: ui.Rect,
-snapshot: *const source_namespace.Snapshot,
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const AgentKeyType = @import("telar-client").AgentKey;
+const Input = @This();
+
+area: RectType,
+snapshot: *const SnapshotType,
 state: *State,
-active_model: ?*const source_namespace.multiplexer.Model = null,
-focused_agent: ?source_namespace.AgentKey = null,
+active_model: ?*const MultiplexerModel = null,
+focused_agent: ?AgentKeyType = null,
 transparent: bool,
 rounded_focus: bool = false,
 animation_frame: u8 = 0,

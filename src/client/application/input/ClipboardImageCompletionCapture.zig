@@ -1,16 +1,17 @@
+const ModelType = @import("../../model/Model.zig");
+const clipboard_image = @import("clipboard_image.zig");
+const ClipboardImageCompletionEffects = @import("ClipboardImageCompletionEffects.zig");
 const CompletionCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("clipboard_image.zig");
-const CompletionEffects = @import("ClipboardImageCompletionEffects.zig");
-model: *const client_model.Model,
-events: [2]source_namespace.CompletionEvent = undefined,
+
+model: *const ModelType,
+events: [2]clipboard_image.CompletionEvent = undefined,
 event_count: usize = 0,
 observed_finished: bool = false,
 layout_changed: bool = false,
 fail_adopt: bool = false,
 fail_resize: bool = false,
 
-pub fn port(capture: *CompletionCapture) CompletionEffects {
+pub fn port(capture: *CompletionCapture) ClipboardImageCompletionEffects {
     return .{
         .context = capture,
         .adopt = adopt,

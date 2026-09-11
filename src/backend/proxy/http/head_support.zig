@@ -4,11 +4,15 @@
 //! `analyze` derives message and body-framing metadata without retaining slices
 //! into the input.
 
+const types = @import("types.zig");
+const HeadType = @import("Head.zig");
+const AnalyzeOptionsType = @import("AnalyzeOptions.zig");
+const SessionType = @import("../Session.zig");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
+const types_module = @import("../../agent/types.zig");
 const provider = @import("../provider/request_support.zig");
-const tls = @import("../tls.zig");
-const types = @import("types.zig");
+const FakeSessionType = @import("FakeSession.zig");
 
 pub const max_bytes = 32 * 1024;
 
@@ -29,7 +33,7 @@ pub const AnalyzeOptions = @import("AnalyzeOptions.zig");
 /// ```zig
 /// const head_len = read(session, .child, &buffer) orelse return;
 /// ```
-pub fn read(session: anytype, side: tls.Session.Side, buffer: []u8) ?usize {
+pub fn read(session: anytype, side: SessionType.Side, buffer: []u8) ?usize {
     var len: usize = 0;
     while (len < buffer.len) {
         const read_len = session.read(side, buffer[len..][0..1]) orelse return null;
@@ -59,7 +63,7 @@ pub fn read(session: anytype, side: tls.Session.Side, buffer: []u8) ?usize {
 ///     .dialect = .anthropic_messages,
 /// });
 /// ```
-pub fn analyze(bytes: []const u8, options: AnalyzeOptions) ?Head {
+pub fn analyze(bytes: []const u8, options: AnalyzeOptionsType) ?HeadType {
     const first_line_end = std.mem.indexOf(u8, bytes, "\r\n") orelse return null;
     const start_line = bytes[0..first_line_end];
     const status_code: u16 = if (options.is_response) parseStatus(start_line) orelse return null else 0;
@@ -129,7 +133,7 @@ fn onlyChunkedCoding(value: []const u8) bool {
     return coding.len != 0 and std.ascii.eqlIgnoreCase(coding, "chunked") and tokens.next() == null;
 }
 
-fn classifyRequest(start_line: []const u8, dialect: provider.ApiDialect) provider.RequestClass {
+fn classifyRequest(start_line: []const u8, dialect: types_module.ApiDialect) provider.RequestClass {
     const method_end = std.mem.indexOfScalar(u8, start_line, ' ') orelse return .auxiliary;
     const version_start = std.mem.lastIndexOfScalar(u8, start_line, ' ') orelse return .auxiliary;
     if (method_end == version_start) {
@@ -142,7 +146,7 @@ fn classifyRequest(start_line: []const u8, dialect: provider.ApiDialect) provide
     });
 }
 
-fn framingOf(bytes: []const u8, is_response: bool, bodyless: bool) ?Framing {
+fn framingOf(bytes: []const u8, is_response: bool, bodyless: bool) ?types.BodyPlan {
     if (bodyless) {
         return .none;
     }
@@ -255,7 +259,7 @@ fn parseStatus(line: []const u8) ?u16 {
     return if (status >= 100 and status <= 599) status else null;
 }
 
-fn analyzeRequest(bytes: []const u8, dialect: provider.ApiDialect) ?Head {
+fn analyzeRequest(bytes: []const u8, dialect: types_module.ApiDialect) ?HeadType {
     return analyze(bytes, .{
         .is_response = false,
         .response_to_head = false,
@@ -263,7 +267,7 @@ fn analyzeRequest(bytes: []const u8, dialect: provider.ApiDialect) ?Head {
     });
 }
 
-fn analyzeResponse(bytes: []const u8, response_to_head: bool) ?Head {
+fn analyzeResponse(bytes: []const u8, response_to_head: bool) ?HeadType {
     return analyze(bytes, .{
         .is_response = true,
         .response_to_head = response_to_head,
@@ -271,7 +275,7 @@ fn analyzeResponse(bytes: []const u8, response_to_head: bool) ?Head {
 }
 
 test "head reader stops before the first body byte" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     const input = "POST / HTTP/1.1\r\nContent-Length: 4\r\n\r\ndata";
     const expected_len = std.mem.indexOf(u8, input, "\r\n\r\n").? + 4;
     var fake: FakeSession = .{ .child_input = input };
@@ -285,7 +289,7 @@ test "head reader stops before the first body byte" {
 }
 
 test "head reader rejects EOF before the blank line" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     const input = "GET / HTTP/1.1\r\nHost: example.test\r\n";
     var fake: FakeSession = .{ .child_input = input };
     var buffer: [max_bytes]u8 = undefined;
@@ -295,7 +299,7 @@ test "head reader rejects EOF before the blank line" {
 }
 
 test "head reader rejects a head that fills its bound" {
-    const FakeSession = @import("test_support.zig").FakeSession;
+    const FakeSession = FakeSessionType;
     var input: [max_bytes]u8 = @splat('x');
     var fake: FakeSession = .{ .child_input = &input };
     var buffer: [max_bytes]u8 = undefined;
@@ -305,18 +309,18 @@ test "head reader rejects a head that fills its bound" {
 }
 
 test "analyze recognizes fixed and chunked body framing" {
-    try std.testing.expectEqualDeep(Framing{ .content_length = 42 }, analyze(
+    try std.testing.expectEqualDeep(types.BodyPlan{ .content_length = 42 }, analyze(
         "POST / HTTP/1.1\r\nContent-Length: 42\r\n\r\n",
         .{ .is_response = false, .response_to_head = false },
     ).?.framing);
-    try std.testing.expectEqual(Framing.chunked, analyze(
+    try std.testing.expectEqual(types.BodyPlan.chunked, analyze(
         "HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip, chunked\r\n\r\n",
         .{ .is_response = true, .response_to_head = false },
     ).?.framing);
 }
 
 test "analyze accepts repeated identical content lengths" {
-    try std.testing.expectEqualDeep(Framing{ .content_length = 4 }, analyze(
+    try std.testing.expectEqualDeep(types.BodyPlan{ .content_length = 4 }, analyze(
         "POST / HTTP/1.1\r\nContent-Length: 4, 4\r\nContent-Length: 4\r\n\r\n",
         .{ .is_response = false, .response_to_head = false },
     ).?.framing);
@@ -339,7 +343,7 @@ test "analyze rejects ambiguous body framing" {
 
 test "responses without an explicit length close the connection" {
     const parsed = analyzeResponse("HTTP/1.1 200 OK\r\n\r\n", false).?;
-    try std.testing.expectEqual(Framing.until_close, parsed.framing);
+    try std.testing.expectEqual(types.BodyPlan.until_close, parsed.framing);
     try std.testing.expect(parsed.message.closes);
 }
 
@@ -387,9 +391,9 @@ test "bodyless responses ignore declared framing" {
             "HTTP/1.1 {d} Status\r\nContent-Length: 42\r\n\r\n",
             .{status},
         );
-        try std.testing.expectEqual(Framing.none, analyzeResponse(bytes, false).?.framing);
+        try std.testing.expectEqual(types.BodyPlan.none, analyzeResponse(bytes, false).?.framing);
     }
-    try std.testing.expectEqual(Framing.none, analyzeResponse(
+    try std.testing.expectEqual(types.BodyPlan.none, analyzeResponse(
         "HTTP/1.1 200 OK\r\nContent-Length: 42\r\n\r\n",
         true,
     ).?.framing);
@@ -444,13 +448,13 @@ test "a HEAD request is identified without assigning response metadata" {
     ).?;
     try std.testing.expect(parsed.message.head_request);
     try std.testing.expectEqual(@as(u16, 0), parsed.message.status_code);
-    try std.testing.expectEqual(Framing.none, parsed.framing);
+    try std.testing.expectEqual(types.BodyPlan.none, parsed.framing);
 }
 
 test "framing reports whether a concurrent body relay is needed" {
-    try std.testing.expect(!Framing.hasBody(.none));
-    try std.testing.expect(!(Framing{ .content_length = 0 }).hasBody());
-    try std.testing.expect((Framing{ .content_length = 1 }).hasBody());
-    try std.testing.expect(Framing.hasBody(.chunked));
-    try std.testing.expect(Framing.hasBody(.until_close));
+    try std.testing.expect(!types.BodyPlan.hasBody(.none));
+    try std.testing.expect(!(types.BodyPlan{ .content_length = 0 }).hasBody());
+    try std.testing.expect((types.BodyPlan{ .content_length = 1 }).hasBody());
+    try std.testing.expect(types.BodyPlan.hasBody(.chunked));
+    try std.testing.expect(types.BodyPlan.hasBody(.until_close));
 }

@@ -1,9 +1,10 @@
+const ViewInteractionEffects = @import("ViewInteractionEffects.zig");
+const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
+const ViewInteractionOutcome = @import("ViewInteractionOutcome.zig");
+const view_interaction = @import("view_interaction.zig");
 const DispatchViewInteractionHandler = @This();
-const Effects = @import("ViewInteractionEffects.zig");
-const Command = @import("ViewInteractionCommand.zig");
-const Outcome = @import("ViewInteractionOutcome.zig");
-const source_namespace = @import("view_interaction.zig");
-effects: Effects,
+
+effects: ViewInteractionEffects,
 
 /// Applies the single semantic intent before ordered layout delivery, then
 /// returns only the routing decision needed by host input.
@@ -11,7 +12,7 @@ effects: Effects,
 /// ```zig
 /// const outcome = try handler.execute(command);
 /// ```
-pub fn execute(handler: *DispatchViewInteractionHandler, command: Command) !Outcome {
+pub fn execute(handler: *DispatchViewInteractionHandler, command: ViewInteractionCommand) !ViewInteractionOutcome {
     var layout_changed = command.layout_changed;
     switch (command.intent) {
         .none => {},
@@ -27,6 +28,6 @@ pub fn execute(handler: *DispatchViewInteractionHandler, command: Command) !Outc
     }
 
     return .{
-        .consume_pane_input = command.consumed or source_namespace.capturesPaneInput(command.intent),
+        .consume_pane_input = command.consumed or view_interaction.capturesPaneInput(command.intent),
     };
 }

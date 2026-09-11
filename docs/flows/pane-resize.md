@@ -87,19 +87,19 @@ rollback because the `pane_resize` protocol has no acknowledgement.
 
 ## Proof
 
-- `src/frontend/workspace/layout.zig` proves direction lookup, bounded ratios
+- `src/client/workspace/layout_support.zig` proves direction lookup, bounded ratios
   and minimum usable pane geometry.
-- `src/frontend/client/model.zig` proves semantic commit, no-op behavior,
+- `src/client/model/Model.zig` proves semantic commit, no-op behavior,
   fullscreen preservation and pane-version ownership.
-- `src/frontend/client/application/resize_pane.zig` proves
+- `src/client/application/panes/resize_pane.zig` proves
   commit-before-delivery ordering and the post-commit failure contract.
-- `src/frontend/client/application/pane_geometry_delivery.zig` proves exact
+- `src/client/application/panes/pane_geometry_delivery.zig` proves exact
   commit validation, active-tab selection, empty-client behavior,
   attached-visible filtering, effect order and partial delivery failure.
-- `src/frontend/client/pane_geometry.zig` implements placement invalidation and
+- `src/frontend/client/controllers/panes/pane_geometry.zig` implements placement invalidation and
   runtime `pane_resize` delivery ports.
-- `src/frontend/client/client_test.zig` proves exact resize messages, detached
+- `src/frontend/client/tests/` proves exact resize messages, detached
   pane filtering, presenter observation and directionless no-ops through a
   substituted runtime socket.
-- `src/backend/runtime/pane_resize_test.zig` proves lease checks and runtime
+- `src/backend/runtime/tests/pane_resize_test.zig` proves lease checks and runtime
   synchronization order.

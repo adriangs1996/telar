@@ -1,8 +1,9 @@
-const Game = @This();
 const Bounds = @import("Bounds.zig");
 const Ship = @import("Ship.zig");
 const Vec2 = @import("Vec2.zig");
 const Input = @import("Input.zig");
+const Game = @This();
+
 bounds: Bounds,
 ship: Ship,
 

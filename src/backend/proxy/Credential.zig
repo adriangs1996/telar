@@ -1,5 +1,7 @@
+const PaneIdType = @import("telar-core").PaneId;
+const identity = @import("identity.zig");
 const Credential = @This();
-const source_namespace = @import("identity.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 pane_generation: u64,
-token: [source_namespace.token_bytes]u8,
+token: [identity.token_bytes]u8,

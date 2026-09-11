@@ -1,7 +1,8 @@
-const Results = @This();
-const source_namespace = @import("goto_picker.zig");
+const goto_picker = @import("goto_picker.zig");
 const Match = @import("Match.zig");
-matches: [source_namespace.max_results]Match = undefined,
+const Results = @This();
+
+matches: [goto_picker.max_results]Match = undefined,
 len: u8 = 0,
 
 pub fn slice(results: *const Results) []const Match {

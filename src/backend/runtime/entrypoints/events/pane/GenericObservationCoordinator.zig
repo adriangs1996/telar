@@ -1,13 +1,17 @@
 const GenericObservationRuntimePort = @import("GenericObservationRuntimePort.zig").Type;
-const Resources = @import("ObservationResources.zig");
-const source_namespace = @import("observation.zig");
-const Work = @import("ObservationWork.zig");
-const Completion = @import("ObservationCompletion.zig");
-const agent_process = @import("../../../../process/root.zig");
+const ObservationResources = @import("ObservationResources.zig");
+const PaneType = @import("../../../../pane/Pane.zig");
+const ObservationWork = @import("ObservationWork.zig");
+const ObservationCompletion = @import("ObservationCompletion.zig");
+const ProbeType = @import("../../../../process/Probe.zig");
+const enabled_module = @import("telar-core").enabled;
 const ProcessReconciliation = @import("ProcessReconciliation.zig");
-const agent_identity = @import("../../../application/coordinators/root.zig").agent_identity;
-const history = @import("../../../../history/root.zig");
+const agent_identity = @import("../../../application/coordinators/agent_identity.zig");
+const StatsType = @import("../../../../history/Stats.zig");
 const ScreenReconciliation = @import("ScreenReconciliation.zig");
+const sound_module = @import("../../../../agent/sound.zig");
+const std = @import("std");
+
 /// Creates a statically dispatched observation coordinator.
 ///
 /// ```zig
@@ -18,14 +22,14 @@ pub fn Type(comptime Context: type, comptime port: GenericObservationRuntimePort
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: ObservationResources,
 
         /// Binds one runtime's pane, agent, and telemetry stores.
         ///
         /// ```zig
         /// var coordinator = ObservationCoordinator.init(&context, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: ObservationResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -35,9 +39,9 @@ pub fn Type(comptime Context: type, comptime port: GenericObservationRuntimePort
         /// ```zig
         /// try coordinator.schedule(pane);
         /// ```
-        pub fn schedule(coordinator: *Self, pane: *source_namespace.Pane) !void {
+        pub fn schedule(coordinator: *Self, pane: *PaneType) !void {
             const borrow = pane.beginHistoryObservation() orelse return;
-            const work: Work = .{
+            const work: ObservationWork = .{
                 .pane = pane,
                 .current_size = borrow.current_size,
                 .process_cache = borrow.process_cache,
@@ -56,7 +60,7 @@ pub fn Type(comptime Context: type, comptime port: GenericObservationRuntimePort
         /// ```zig
         /// try coordinator.handle(completion);
         /// ```
-        pub fn handle(coordinator: *Self, completion: Completion) !void {
+        pub fn handle(coordinator: *Self, completion: ObservationCompletion) !void {
             const pane = coordinator.resources.panes.resolve(completion.pane) orelse {
                 coordinator.resources.metrics.stale_pane_events += 1;
                 return;
@@ -86,8 +90,8 @@ pub fn Type(comptime Context: type, comptime port: GenericObservationRuntimePort
             port.pump_clients(coordinator.context);
         }
 
-        fn observeProcessMetrics(coordinator: *Self, probe: agent_process.Probe) void {
-            if (comptime !source_namespace.diagnostics.enabled) {
+        fn observeProcessMetrics(coordinator: *Self, probe: ProbeType) void {
+            if (comptime !enabled_module) {
                 return;
             }
 
@@ -126,8 +130,8 @@ pub fn Type(comptime Context: type, comptime port: GenericObservationRuntimePort
             }
         }
 
-        fn observeHistoryMetrics(coordinator: *Self, stats: history.observer.Stats) void {
-            if (comptime !source_namespace.diagnostics.enabled) {
+        fn observeHistoryMetrics(coordinator: *Self, stats: StatsType) void {
+            if (comptime !enabled_module) {
                 return;
             }
 
@@ -162,7 +166,7 @@ pub fn Type(comptime Context: type, comptime port: GenericObservationRuntimePort
                 return;
             }
 
-            const sound = source_namespace.soundForTransition(
+            const sound = sound_module.soundForTransition(
                 previous_status,
                 coordinator.resources.agents.projectedStatus(identity.key),
             ) orelse return;
@@ -174,7 +178,7 @@ pub fn Type(comptime Context: type, comptime port: GenericObservationRuntimePort
         }
 
         fn nowMs(coordinator: *const Self) i64 {
-            return source_namespace.Io.Timestamp.now(coordinator.resources.io, .real).toMilliseconds();
+            return std.Io.Timestamp.now(coordinator.resources.io, .real).toMilliseconds();
         }
     };
 }

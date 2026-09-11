@@ -1,6 +1,7 @@
+const id = @import("id.zig");
+const ImageType = @import("../Image.zig");
 const Image = @This();
-const source_namespace = @import("graphics.zig");
-const shared = @import("../graphics.zig");
-pane_id: source_namespace.PaneId,
+
+pane_id: id.PaneId,
 revision: u64,
-image: shared.Image,
+image: ImageType,

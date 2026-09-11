@@ -1,8 +1,10 @@
+const media = @import("media.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const Batch = @This();
-const source_namespace = @import("root.zig");
-bytes: [source_namespace.batch_bytes]u8 = undefined,
+
+bytes: [media.batch_bytes]u8 = undefined,
 len: usize = 0,
-events: [source_namespace.batch_events]source_namespace.Event = undefined,
+events: [media.batch_events]media.Event = undefined,
 event_count: usize = 0,
 reset_before: bool = false,
 
@@ -46,7 +48,7 @@ pub fn pushOutput(batch: *Batch, bytes: []const u8) bool {
     return true;
 }
 
-pub fn pushResize(batch: *Batch, size: source_namespace.schema.TerminalSize) bool {
+pub fn pushResize(batch: *Batch, size: TerminalSizeType) bool {
     if (batch.event_count == batch.events.len) {
         return false;
     }

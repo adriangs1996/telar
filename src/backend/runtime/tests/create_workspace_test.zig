@@ -1,22 +1,23 @@
 //! Vertical contract tests for the runtime create-workspace flow.
 
+const StateType = @import("../../workspace/State.zig");
+const RepositoryType = @import("../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const create_workspace_commands = @import("../application/commands/create_workspace.zig");
-const create_workspace_controller = @import("../entrypoints/requests/create_workspace.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-
-pub const schema = core.schema;
-
-const Effects = @import("CreateWorkspaceTestEffects.zig");
+const CreateWorkspaceTestEffects = @import("CreateWorkspaceTestEffects.zig");
+const pane_module = @import("telar-core").pane;
+const CreateWorkspaceHandlerType = @import("../application/commands/CreateWorkspaceHandler.zig");
+const ResponseQueueType = @import("../delivery/ResponseQueue.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const workspace_module = @import("telar-core").workspace;
+const tab_module = @import("telar-core").tab;
+const CreateWorkspaceController = @import("../entrypoints/requests/CreateWorkspaceController.zig");
 
 test "a committed workspace creation survives response queue backpressure" {
-    var state: workspace_mod.State = .{};
-    var workspaces = workspace_mod.Repository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
-    var effects: Effects = .{ .pane_id = try schema.id.pane(17) };
-    var handler: create_workspace_commands.CreateWorkspaceHandler = .{
+    var effects: CreateWorkspaceTestEffects = .{ .pane_id = try pane_module(17) };
+    var handler: CreateWorkspaceHandlerType = .{
         .workspaces = &workspaces,
         .authority = effects.authority(),
         .geometry = effects.geometry(),
@@ -24,10 +25,10 @@ test "a committed workspace creation survives response queue backpressure" {
         .attachment = effects.attachment(),
         .events = effects.publisher(),
     };
-    var responses: delivery_mod.ResponseQueue = .{};
-    const filler_location: schema.TabLocation = .{
-        .workspace = .{ .workspace = try schema.id.workspace(99) },
-        .tab_id = try schema.id.tab(99),
+    var responses: ResponseQueueType = .{};
+    const filler_location: TabLocationType = .{
+        .workspace = .{ .workspace = try workspace_module(99) },
+        .tab_id = try tab_module(99),
     };
 
     while (responses.len < responses.items.len) {
@@ -38,7 +39,7 @@ test "a committed workspace creation survives response queue backpressure" {
         } });
     }
 
-    var controller = create_workspace_controller.Controller.init(&responses, handler.executor());
+    var controller = CreateWorkspaceController.init(&responses, handler.executor());
     try std.testing.expectError(error.ResponseQueueFull, controller.createWorkspace(.{
         .request_id = @enumFromInt(31),
         .name = "backend",

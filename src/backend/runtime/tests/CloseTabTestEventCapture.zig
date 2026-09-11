@@ -1,14 +1,15 @@
+const TabRemovedType = @import("../../workspace/TabRemoved.zig");
+const CloseTabEventPublisher = @import("../application/commands/CloseTabEventPublisher.zig");
 const EventCapture = @This();
-const workspace_mod = @import("../../workspace/root.zig");
-const close_tab_commands = @import("../application/commands/close_tab.zig");
-count: usize = 0,
-last: ?workspace_mod.TabRemoved = null,
 
-pub fn publisher(capture: *EventCapture) close_tab_commands.EventPublisher {
+count: usize = 0,
+last: ?TabRemovedType = null,
+
+pub fn publisher(capture: *EventCapture) CloseTabEventPublisher {
     return .{ .context = capture, .publish = publish };
 }
 
-fn publish(context: *anyopaque, event: workspace_mod.TabRemoved) void {
+fn publish(context: *anyopaque, event: TabRemovedType) void {
     const capture: *EventCapture = @ptrCast(@alignCast(context));
     capture.count += 1;
     capture.last = event;

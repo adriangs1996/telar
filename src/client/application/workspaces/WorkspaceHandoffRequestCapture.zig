@@ -1,28 +1,32 @@
-const RequestCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("workspace_handoff.zig");
+const ModelType = @import("../../model/Model.zig");
+const workspace_handoff = @import("workspace_handoff.zig");
 const WorkspaceHandoff = @import("WorkspaceHandoff.zig");
-const workspace_handoff_admission = @import("workspace_handoff_admission.zig");
+const WorkspaceDepartureType = @import("../../model/WorkspaceDeparture.zig");
+const AdmitWorkspaceHandoffHandlerType = @import("AdmitWorkspaceHandoffHandler.zig");
 const HandoffRequestEffects = @import("HandoffRequestEffects.zig");
-const workspace_handoff_preparation = @import("workspace_handoff_preparation.zig");
-const workspace_attachment_retirement = @import("workspace_attachment_retirement.zig");
-const workspace_handoff_restoration = @import("workspace_handoff_restoration.zig");
+const PrepareWorkspaceHandoffHandlerType = @import("PrepareWorkspaceHandoffHandler.zig");
+const RetireWorkspaceAttachmentsHandlerType = @import("RetireWorkspaceAttachmentsHandler.zig");
+const RestoreWorkspaceHandoffHandlerType = @import("RestoreWorkspaceHandoffHandler.zig");
 const std = @import("std");
-const pane_paste = @import("../input/root.zig").pane_paste;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-model: *client_model.Model,
+const pane_paste = @import("../input/pane_paste.zig");
+const DeliveryType = @import("../panes/PaneFocusDelivery.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const RequestCapture = @This();
+
+model: *ModelType,
 blocked: bool = false,
 fail_prepare: bool = false,
 fail_detach: bool = false,
 fail_send: bool = false,
 fail_restore: bool = false,
-events: [7]source_namespace.RequestEvent = undefined,
+events: [7]workspace_handoff.RequestEvent = undefined,
 event_count: usize = 0,
 command: ?WorkspaceHandoff = null,
-departure: ?client_model.WorkspaceDeparture = null,
+departure: ?WorkspaceDepartureType = null,
 observed_commit: bool = false,
 
-pub fn admission(capture: *RequestCapture) workspace_handoff_admission.AdmitWorkspaceHandoffHandler {
+pub fn admission(capture: *RequestCapture) AdmitWorkspaceHandoffHandlerType {
     return .{
         .model = capture.model,
         .gate = .{ .context = capture, .pending = pending },
@@ -37,7 +41,7 @@ pub fn port(capture: *RequestCapture) HandoffRequestEffects {
     };
 }
 
-pub fn preparation(capture: *RequestCapture) workspace_handoff_preparation.PrepareWorkspaceHandoffHandler {
+pub fn preparation(capture: *RequestCapture) PrepareWorkspaceHandoffHandlerType {
     return .{
         .model = capture.model,
         .requests = .{
@@ -55,7 +59,7 @@ pub fn preparation(capture: *RequestCapture) workspace_handoff_preparation.Prepa
     };
 }
 
-pub fn retirement(capture: *RequestCapture) workspace_attachment_retirement.RetireWorkspaceAttachmentsHandler {
+pub fn retirement(capture: *RequestCapture) RetireWorkspaceAttachmentsHandlerType {
     return .{
         .model = capture.model,
         .paste_effects = .{ .context = capture, .deliver = deliverPaste },
@@ -70,7 +74,7 @@ pub fn retirement(capture: *RequestCapture) workspace_attachment_retirement.Reti
     };
 }
 
-pub fn restoration(capture: *RequestCapture) workspace_handoff_restoration.RestoreWorkspaceHandoffHandler {
+pub fn restoration(capture: *RequestCapture) RestoreWorkspaceHandoffHandlerType {
     return .{
         .effects = .{
             .context = capture,
@@ -89,7 +93,7 @@ fn pending(context: *anyopaque) bool {
     return capture.blocked;
 }
 
-fn record(capture: *RequestCapture, event: source_namespace.RequestEvent) void {
+fn record(capture: *RequestCapture, event: workspace_handoff.RequestEvent) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
@@ -110,13 +114,13 @@ fn deliverPaste(_: *anyopaque, _: pane_paste.Delivery) !bool {
     return true;
 }
 
-fn deliverFocus(_: *anyopaque, _: pane_focus_reporting.Delivery) !void {}
+fn deliverFocus(_: *anyopaque, _: DeliveryType) !void {}
 
-fn attachmentPending(_: *anyopaque, _: source_namespace.schema.PaneId) bool {
+fn attachmentPending(_: *anyopaque, _: PaneIdType) bool {
     return false;
 }
 
-fn detachPane(context: *anyopaque, _: source_namespace.schema.PaneId) !void {
+fn detachPane(context: *anyopaque, _: PaneIdType) !void {
     const capture: *RequestCapture = @ptrCast(@alignCast(context));
     capture.record(.detach);
     if (capture.fail_detach) {
@@ -124,9 +128,9 @@ fn detachPane(context: *anyopaque, _: source_namespace.schema.PaneId) !void {
     }
 }
 
-fn retireAttachment(_: *anyopaque, _: source_namespace.schema.PaneId) void {}
+fn retireAttachment(_: *anyopaque, _: PaneIdType) void {}
 
-fn hideGraphics(_: *anyopaque, _: source_namespace.schema.PaneId) !void {}
+fn hideGraphics(_: *anyopaque, _: PaneIdType) !void {}
 
 fn send(context: *anyopaque, command: WorkspaceHandoff) !void {
     const capture: *RequestCapture = @ptrCast(@alignCast(context));
@@ -137,7 +141,7 @@ fn send(context: *anyopaque, command: WorkspaceHandoff) !void {
     }
 }
 
-fn showPaneGraphics(context: *anyopaque, _: source_namespace.schema.PaneId) !void {
+fn showPaneGraphics(context: *anyopaque, _: PaneIdType) !void {
     const capture: *RequestCapture = @ptrCast(@alignCast(context));
     capture.record(.restore_graphics);
     if (capture.fail_restore) {
@@ -152,12 +156,12 @@ fn tabSnapshotPending(context: *anyopaque) bool {
     return false;
 }
 
-fn requestTabSnapshot(context: *anyopaque, _: source_namespace.schema.TabLocation) !void {
+fn requestTabSnapshot(context: *anyopaque, _: TabLocationType) !void {
     const capture: *RequestCapture = @ptrCast(@alignCast(context));
     capture.record(.restore_snapshot);
 }
 
-fn release(context: *anyopaque, departure: *const client_model.WorkspaceDeparture) void {
+fn release(context: *anyopaque, departure: *const WorkspaceDepartureType) void {
     const capture: *RequestCapture = @ptrCast(@alignCast(context));
     capture.record(.release);
     capture.departure = departure.*;

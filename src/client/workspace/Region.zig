@@ -1,7 +1,8 @@
-const Region = @This();
-const ui = @import("telar-core").ui;
+const RectType = @import("telar-core").Rect;
 const std = @import("std");
-area: ui.Rect,
+const Region = @This();
+
+area: RectType,
 revision: u64,
 
 /// Rejects input captured before a host-region change, including ABA.

@@ -1,7 +1,9 @@
-const AdvanceNotificationsHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const TimerEffects = @import("TimerEffects.zig");
-model: *client_model.Model,
+const NotificationChangeType = @import("../../model/NotificationChange.zig");
+const AdvanceNotificationsHandler = @This();
+
+model: *ModelType,
 effects: TimerEffects,
 
 /// Advances every transition before scheduling the next useful deadline.
@@ -9,7 +11,7 @@ effects: TimerEffects,
 /// ```zig
 /// _ = try handler.execute(now_ns);
 /// ```
-pub fn execute(handler: *AdvanceNotificationsHandler, now_ns: u64) !?client_model.NotificationChange {
+pub fn execute(handler: *AdvanceNotificationsHandler, now_ns: u64) !?NotificationChangeType {
     const change = handler.model.advanceNotifications(now_ns);
 
     try handler.effects.reschedule(handler.effects.context);

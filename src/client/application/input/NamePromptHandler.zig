@@ -1,9 +1,11 @@
-const NamePromptHandler = @This();
-const name_prompt = @import("../../root.zig").model.name_prompt;
+const NamePromptState = @import("../../model/NamePromptState.zig");
 const SubmitEffects = @import("SubmitEffects.zig");
-const source_namespace = @import("name_prompt.zig");
+const name_prompt = @import("../../model/name_prompt.zig");
+const name_prompt_ops = @import("name_prompt.zig");
 const std = @import("std");
-prompt: *name_prompt.State,
+const NamePromptHandler = @This();
+
+prompt: *NamePromptState,
 effects: SubmitEffects,
 
 /// Applies one editor command and closes the prompt only after its submit
@@ -12,7 +14,7 @@ effects: SubmitEffects,
 /// ```zig
 /// const outcome = try handler.execute(.submit);
 /// ```
-pub fn execute(handler: *NamePromptHandler, command: name_prompt.Command) !source_namespace.Outcome {
+pub fn execute(handler: *NamePromptHandler, command: name_prompt.Command) !name_prompt_ops.Outcome {
     return switch (handler.prompt.apply(command)) {
         .unchanged => .unchanged,
         .routing_changed => .routing_changed,

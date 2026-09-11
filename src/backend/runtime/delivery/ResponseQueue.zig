@@ -1,21 +1,25 @@
-const ResponseQueue = @This();
-const source_namespace = @import("response_queue.zig");
+const EntryType = @import("Entry.zig");
+const response_queue = @import("response_queue.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const PendingNotification = @import("PendingNotification.zig");
+const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
+const RequestIdType = @import("telar-core").RequestId;
+const NotificationShownType = @import("telar-core").NotificationShown;
 const std = @import("std");
-items: [source_namespace.capacity]source_namespace.PendingResponse = undefined,
+const ResponseQueue = @This();
+
+items: [response_queue.capacity]response_queue.PendingResponse = undefined,
 head: u8 = 0,
 len: u8 = 0,
 high_water: u8 = 0,
 dropped: u64 = 0,
-resync_workspace: ?source_namespace.schema.WorkspaceLocation = null,
-resync_previous_workspace: ?source_namespace.schema.WorkspaceId = null,
+resync_workspace: ?WorkspaceLocationType = null,
+resync_previous_workspace: ?WorkspaceIdType = null,
 
-pub const Entry = struct {
-    offset: u8,
-    response: *source_namespace.PendingResponse,
-};
+pub const Entry = @import("Entry.zig");
 
-pub fn push(queue: *ResponseQueue, response: source_namespace.PendingResponse) !void {
+pub fn push(queue: *ResponseQueue, response: response_queue.PendingResponse) !void {
     if (queue.len == queue.items.len) {
         return error.ResponseQueueFull;
     }
@@ -32,7 +36,7 @@ pub fn push(queue: *ResponseQueue, response: source_namespace.PendingResponse) !
 /// ```zig
 /// queue.pushOrDrop(response);
 /// ```
-pub fn pushOrDrop(queue: *ResponseQueue, response: source_namespace.PendingResponse) void {
+pub fn pushOrDrop(queue: *ResponseQueue, response: response_queue.PendingResponse) void {
     queue.push(response) catch {
         switch (response) {
             .history_result => |result| result.deinit(),
@@ -60,7 +64,7 @@ pub fn pushNotification(queue: *ResponseQueue, notification: PendingNotification
     return true;
 }
 
-pub fn pushAgentSound(queue: *ResponseQueue, sound: source_namespace.schema.AgentSoundNotification) bool {
+pub fn pushAgentSound(queue: *ResponseQueue, sound: AgentSoundNotificationType) bool {
     queue.push(.{ .agent_sound = sound }) catch {
         queue.dropped += 1;
         return false;
@@ -76,7 +80,7 @@ pub fn pushAgentSound(queue: *ResponseQueue, sound: source_namespace.schema.Agen
 /// const shown = try queue.reserveNotificationShown(request_id);
 /// shown.delivered_clients = delivered;
 /// ```
-pub fn reserveNotificationShown(queue: *ResponseQueue, request_id: source_namespace.schema.RequestId) !*source_namespace.schema.NotificationShown {
+pub fn reserveNotificationShown(queue: *ResponseQueue, request_id: RequestIdType) !*NotificationShownType {
     try queue.push(.{ .notification_shown = .{
         .request_id = request_id,
         .delivered_clients = 0,
@@ -86,7 +90,7 @@ pub fn reserveNotificationShown(queue: *ResponseQueue, request_id: source_namesp
     return &queue.items[index].notification_shown;
 }
 
-pub fn peek(queue: *ResponseQueue) ?*source_namespace.PendingResponse {
+pub fn peek(queue: *ResponseQueue) ?*response_queue.PendingResponse {
     if (queue.len == 0) {
         return null;
     }
@@ -94,7 +98,7 @@ pub fn peek(queue: *ResponseQueue) ?*source_namespace.PendingResponse {
     return &queue.items[queue.head];
 }
 
-pub fn peekManagement(queue: *ResponseQueue) ?Entry {
+pub fn peekManagement(queue: *ResponseQueue) ?EntryType {
     for (0..queue.len) |offset| {
         const index = (@as(usize, queue.head) + offset) % queue.items.len;
 
@@ -107,7 +111,7 @@ pub fn peekManagement(queue: *ResponseQueue) ?Entry {
     return null;
 }
 
-pub fn peekObservation(queue: *ResponseQueue) ?Entry {
+pub fn peekObservation(queue: *ResponseQueue) ?EntryType {
     for (0..queue.len) |offset| {
         const index = (@as(usize, queue.head) + offset) % queue.items.len;
 

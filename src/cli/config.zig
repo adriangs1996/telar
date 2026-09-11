@@ -1,13 +1,14 @@
 //! Configuration loading shared by CLI entrypoints and `telar config check`.
 
 const std = @import("std");
-const frontend = @import("telar-frontend");
-const parser = @import("parser.zig");
-
-const Io = std.Io;
-const File = Io.File;
-
-pub const Selection = @import("Selection.zig");
+const Selection = @import("Selection.zig");
+const GenerationType = @import("telar-frontend").Generation;
+const DiagnosticType = @import("telar-client").Diagnostic;
+const ConfigCheckOptionsType = @import("arguments/ConfigCheckOptions.zig");
+const defaultPath_module = @import("telar-frontend").defaultPath;
+const RegistryType = @import("telar-frontend").Registry;
+const validate = @import("telar-frontend").validate;
+const ResolvedSelection = @import("ResolvedSelection.zig");
 
 /// Loads one config generation or returns null when configuration is disabled
 /// or the implicit default file does not exist.
@@ -16,13 +17,13 @@ pub const Selection = @import("Selection.zig");
 /// const generation = try config.loadGeneration(process_init, .{}, &path_buffer);
 /// defer if (generation) |value| value.deinit();
 /// ```
-pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer: []u8) !?*frontend.config.Generation {
+pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer: []u8) !?*GenerationType {
     if (selection.disabled) {
         return null;
     }
 
     const selected = try resolveSelection(init.minimal.environ, selection, path_buffer);
-    Io.Dir.cwd().access(init.io, selected.path, .{}) catch |err| switch (err) {
+    std.Io.Dir.cwd().access(init.io, selected.path, .{}) catch |err| switch (err) {
         error.FileNotFound => {
             if (selected.explicit) {
                 return err;
@@ -32,8 +33,8 @@ pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer:
         },
         else => |other| return other,
     };
-    var diagnostic: frontend.config.Diagnostic = .{};
-    return frontend.config.Generation.loadFile(.{
+    var diagnostic: DiagnosticType = .{};
+    return GenerationType.loadFile(.{
         .gpa = init.gpa,
         .io = init.io,
         .diagnostic = &diagnostic,
@@ -53,14 +54,14 @@ pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer:
 /// ```zig
 /// try config.runCheck(process_init, options);
 /// ```
-pub fn runCheck(init: std.process.Init, options: parser.ConfigCheckOptions) !void {
+pub fn runCheck(init: std.process.Init, options: ConfigCheckOptionsType) !void {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = if (options.path) |value|
         std.mem.span(value)
     else
-        try frontend.config.defaultPath(init.minimal.environ, &path_buffer);
-    var diagnostic: frontend.config.Diagnostic = .{};
-    const generation = frontend.config.Generation.loadFile(.{
+        try defaultPath_module(init.minimal.environ, &path_buffer);
+    var diagnostic: DiagnosticType = .{};
+    const generation = GenerationType.loadFile(.{
         .gpa = init.gpa,
         .io = init.io,
         .diagnostic = &diagnostic,
@@ -74,20 +75,18 @@ pub fn runCheck(init: std.process.Init, options: parser.ConfigCheckOptions) !voi
     };
     defer generation.deinit();
 
-    const registry = try frontend.plugins.Registry.load(.{
+    const registry = try RegistryType.load(.{
         .gpa = init.gpa,
         .io = init.io,
         .config_dir = generation.configDir(),
     }, generation.pluginSlice());
     try registry.validateConfiguredActions(generation.snapshot.bindingSlice());
-    frontend.config.validateKeymap(generation.snapshot.prefix, generation.snapshot.bindingSlice()) catch |err| {
+    validate(generation.snapshot.prefix, generation.snapshot.bindingSlice()) catch |err| {
         std.debug.print("telar config: keybindings do not compile: {s}\n", .{@errorName(err)});
         return err;
     };
-    try File.stdout().writeStreamingAll(init.io, "telar config: OK\n");
+    try std.Io.File.stdout().writeStreamingAll(init.io, "telar config: OK\n");
 }
-
-const ResolvedSelection = @import("ResolvedSelection.zig");
 
 fn resolveSelection(environ: std.process.Environ, selection: Selection, path_buffer: []u8) !ResolvedSelection {
     if (selection.path) |value| {
@@ -95,7 +94,7 @@ fn resolveSelection(environ: std.process.Environ, selection: Selection, path_buf
     }
 
     return .{
-        .path = try frontend.config.defaultPath(environ, path_buffer),
+        .path = try defaultPath_module(environ, path_buffer),
         .explicit = selection.profile != null,
     };
 }

@@ -1,3 +1,5 @@
+const max_input_bytes_module = @import("telar-core").max_input_bytes;
+const std = @import("std");
 /// Bytes typed at a child that has not accepted them yet.
 ///
 /// Only the runtime thread mutates this queue; the input-writer actor merely
@@ -7,9 +9,8 @@
 /// mirrors terminal flow control. The alternative, pausing the client socket,
 /// froze every other pane's input behind one blocked PTY write.
 const PaneInputQueue = @This();
-const source_namespace = @import("root.zig");
-const std = @import("std");
-pub const capacity = 2 * source_namespace.schema.max_input_bytes;
+
+pub const capacity = 2 * max_input_bytes_module;
 
 bytes: [capacity]u8 = undefined,
 head: usize = 0,

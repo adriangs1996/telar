@@ -1,11 +1,12 @@
 const RouterLimits = @import("RouterLimits.zig");
 const GenericKeymap = @import("GenericKeymap.zig").Type;
 const GenericBinding = @import("GenericBinding.zig").Type;
-const key_lease = @import("key_lease.zig");
-const source_namespace = @import("keybind.zig");
-const Key = @import("key_support.zig").Key;
+const GenericTable = @import("GenericTable.zig").Type;
+const keybind = @import("keybind.zig");
+const Key = @import("Key.zig");
 const RepeatPolicy = @import("RepeatPolicy.zig");
 const std = @import("std");
+
 pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decoder: type) type {
     const term = Decoder;
     const max_bindings = limits.max_bindings;
@@ -20,7 +21,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
     const Map = GenericKeymap(Action, max_bindings, max_keys);
     const BindingType = GenericBinding(Action, max_keys);
     const LeaseOwner = enum { binding, application };
-    const Leases = key_lease.Table(LeaseOwner, source_namespace.max_physical_leases);
+    const Leases = GenericTable(LeaseOwner, keybind.max_physical_leases);
     return struct {
         pub const Feed = struct {
             bytes: []const u8,
@@ -49,8 +50,8 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
         output: [input_capacity + held_capacity]u8 = undefined,
         output_len: usize = 0,
         pasting: bool = false,
-        escape_timeout_ns: u64 = source_namespace.default_escape_timeout_ns,
-        sequence_timeout_ns: u64 = source_namespace.default_sequence_timeout_ns,
+        escape_timeout_ns: u64 = keybind.default_escape_timeout_ns,
+        sequence_timeout_ns: u64 = keybind.default_sequence_timeout_ns,
         leases: Leases = .{},
         repeating: ?RepeatingBinding = null,
 
@@ -111,7 +112,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
         pub fn prefixedKeyForAction(router: *const Self, action: Action) ?Key {
             const prefix = router.prefix orelse return null;
             for (router.map.bindings[0..router.map.len]) |*binding| {
-                if (binding.len != 2 or source_namespace.keyOrder(binding.keys[0], prefix) != .eq) {
+                if (binding.len != 2 or keybind.keyOrder(binding.keys[0], prefix) != .eq) {
                     continue;
                 }
                 if (std.meta.eql(binding.action, action)) {
@@ -131,7 +132,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
         /// Repeats retain the matched action, never re-enter sequence matching,
         /// and schedule no timers or catch-up work.
         /// For example: `const control = try router.feed(.{ .bytes = input, .now_ns = now }, handler);`.
-        pub fn feed(router: *Self, input: Feed, handler: anytype) !source_namespace.Control {
+        pub fn feed(router: *Self, input: Feed, handler: anytype) !keybind.Control {
             const bytes = input.bytes;
             const now_ns = input.now_ns;
             var offset: usize = 0;
@@ -166,7 +167,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             return since +| router.sequence_timeout_ns;
         }
 
-        pub fn expireInput(router: *Self, now_ns: u64, handler: anytype) !source_namespace.Control {
+        pub fn expireInput(router: *Self, now_ns: u64, handler: anytype) !keybind.Control {
             const deadline = router.inputDeadline() orelse return .continue_routing;
             if (now_ns < deadline) {
                 return .continue_routing;
@@ -190,7 +191,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             return .continue_routing;
         }
 
-        pub fn expireBinding(router: *Self, now_ns: u64, handler: anytype) !source_namespace.Control {
+        pub fn expireBinding(router: *Self, now_ns: u64, handler: anytype) !keybind.Control {
             const deadline = router.bindingDeadline() orelse return .continue_routing;
             if (now_ns < deadline) {
                 return .continue_routing;
@@ -200,7 +201,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             return .continue_routing;
         }
 
-        fn drain(router: *Self, input: Drain, handler: anytype) !source_namespace.Control {
+        fn drain(router: *Self, input: Drain, handler: anytype) !keybind.Control {
             while (router.input_start < router.input_end) {
                 const pending = router.input[router.input_start..router.input_end];
                 if (!input.force_escape and pending.len == 1 and pending[0] == 0x1b) {
@@ -320,7 +321,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
 
         /// Routes a decoded press, repeat or release using the same key ownership.
         /// Example: `_ = try router.routeEvent(.{ .key = key, .raw = "", .now_ns = now }, handler);`.
-        pub fn routeEvent(router: *Self, input: KeyInput, handler: anytype) !source_namespace.Control {
+        pub fn routeEvent(router: *Self, input: KeyInput, handler: anytype) !keybind.Control {
             if (input.key.phase == .press) {
                 router.repeating = null;
             }
@@ -367,7 +368,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             }
         }
 
-        fn handleKeyPress(router: *Self, input: KeyInput, handler: anytype) !source_namespace.Control {
+        fn handleKeyPress(router: *Self, input: KeyInput, handler: anytype) !keybind.Control {
             if (comptime @hasDecl(@TypeOf(handler.*), "capturesKeys")) {
                 if (handler.capturesKeys()) {
                     try router.replayBinding(handler);
@@ -439,7 +440,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             return .continue_routing;
         }
 
-        fn repeatBinding(router: *Self, input: KeyInput, handler: anytype) !source_namespace.Control {
+        fn repeatBinding(router: *Self, input: KeyInput, handler: anytype) !keybind.Control {
             if (comptime !@hasDecl(@TypeOf(handler.*), "repeatPolicy")) {
                 return .continue_routing;
             } else {
@@ -449,7 +450,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
                 }
 
                 const policy = handler.repeatPolicy(held.action);
-                if (source_namespace.keyOrder(held.key, input.key) != .eq or !std.meta.eql(policy, @as(?RepeatPolicy, held.policy))) {
+                if (keybind.keyOrder(held.key, input.key) != .eq or !std.meta.eql(policy, @as(?RepeatPolicy, held.policy))) {
                     router.repeating = null;
 
                     return .continue_routing;
@@ -510,7 +511,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
         };
 
         fn routeKey(router: *Self, key: Key, raw: []const u8) Routed {
-            if (router.prefix_pending and source_namespace.isPlainEscape(key)) {
+            if (router.prefix_pending and keybind.isPlainEscape(key)) {
                 router.resetMatch();
                 return .discard;
             }
@@ -576,7 +577,7 @@ pub fn Type(comptime Action: type, comptime limits: RouterLimits, comptime Decod
             router.depth = @intCast(next_depth);
             if (next_depth == 1) {
                 if (router.prefix) |prefix| {
-                    router.prefix_pending = source_namespace.keyOrder(key, prefix) == .eq;
+                    router.prefix_pending = keybind.keyOrder(key, prefix) == .eq;
                 }
             }
             return .pending;

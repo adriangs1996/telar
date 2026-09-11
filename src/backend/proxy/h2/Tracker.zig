@@ -1,12 +1,13 @@
-const Tracker = @This();
-const source_namespace = @import("streams.zig");
+const streams = @import("streams.zig");
 const Response = @import("Response.zig");
-responses: [source_namespace.max_tracked_streams]Response = @splat(.{
+const Tracker = @This();
+
+responses: [streams.max_tracked_streams]Response = @splat(.{
     .stream_id = 0,
     .status_code = 0,
     .sse_body = false,
 }),
-requests: [source_namespace.max_tracked_streams]u32 = @splat(0),
+requests: [streams.max_tracked_streams]u32 = @splat(0),
 
 pub fn startRequest(tracker: *Tracker, stream_id: u32) bool {
     if (stream_id == 0) {

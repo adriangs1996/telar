@@ -1,35 +1,20 @@
 //! State machine for asynchronous writes from a pane's bounded input queue.
 
+const GenericInputRuntimePort = @import("GenericInputRuntimePort.zig").Type;
+const InputCapture = @import("InputCapture.zig");
+const GenericInputPump = @import("GenericInputPump.zig").Type;
+const Pane = @import("../../../../pane/Pane.zig");
+const PaneStore = @import("../../../../pane/PaneStore.zig");
+const RuntimeMetrics = @import("../../../observability/RuntimeMetrics.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const pane_mod = @import("../../../../pane/root.zig");
-const telemetry_mod = @import("../../../observability/root.zig").telemetry;
+const enabled_module = @import("telar-core").enabled;
 
-pub const Io = std.Io;
-pub const diagnostics = core.diagnostics;
-pub const Pane = pane_mod.Pane;
-pub const PaneKey = pane_mod.PaneKey;
-pub const PaneStore = pane_mod.PaneStore;
-pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-
-pub const Completion = @import("InputCompletion.zig");
-
-pub const Write = @import("InputWrite.zig");
-
-pub const Resources = @import("InputResources.zig");
-
-pub const RuntimePort = @import("GenericInputRuntimePort.zig").Type;
-
-pub const Pump = @import("GenericInputPump.zig").Type;
-
-const Capture = @import("InputCapture.zig");
-
-const test_port: RuntimePort(Capture) = .{
-    .start = Capture.start,
-    .collect = Capture.collect,
+const test_port: GenericInputRuntimePort(InputCapture) = .{
+    .start = InputCapture.start,
+    .collect = InputCapture.collect,
 };
 
-const TestPump = Pump(Capture, test_port);
+const TestPump = GenericInputPump(InputCapture, test_port);
 
 fn initTestPane(pane: *Pane) void {
     pane.id = @enumFromInt(7);
@@ -40,7 +25,7 @@ fn initTestPane(pane: *Pane) void {
     pane.actor_count = 0;
 }
 
-fn testPump(capture: *Capture, panes: *PaneStore, metrics: *RuntimeMetrics) TestPump {
+fn testPump(capture: *InputCapture, panes: *PaneStore, metrics: *RuntimeMetrics) TestPump {
     return TestPump.init(capture, .{
         .io = std.testing.io,
         .panes = panes,
@@ -49,7 +34,7 @@ fn testPump(capture: *Capture, panes: *PaneStore, metrics: *RuntimeMetrics) Test
 }
 
 fn expectInputTiming(metrics: *const RuntimeMetrics, expected_debug_count: u64) !void {
-    const expected = if (comptime diagnostics.enabled) expected_debug_count else 0;
+    const expected = if (comptime enabled_module) expected_debug_count else 0;
     try std.testing.expectEqual(expected, metrics.input_write.count);
 }
 
@@ -59,7 +44,7 @@ test "schedule is single-flight and rolls async-start failure back" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{ .start_failure = error.WriterUnavailable };
+    var capture: InputCapture = .{ .start_failure = error.WriterUnavailable };
     var pump = testPump(&capture, &panes, &metrics);
 
     try pump.schedule(&pane);
@@ -89,7 +74,7 @@ test "successful completion consumes only its borrow and starts the backlog" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: InputCapture = .{};
     var pump = testPump(&capture, &panes, &metrics);
     try std.testing.expect(pane.queuePtyInput("first"));
     try pump.schedule(&pane);
@@ -118,7 +103,7 @@ test "failed completion clears the pump without starting another write" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: InputCapture = .{};
     var pump = testPump(&capture, &panes, &metrics);
     try std.testing.expect(pane.queuePtyInput("first"));
     try pump.schedule(&pane);
@@ -144,7 +129,7 @@ test "backlog start failure preserves bytes and skips collection" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: InputCapture = .{};
     var pump = testPump(&capture, &panes, &metrics);
     try std.testing.expect(pane.queuePtyInput("first"));
     try pump.schedule(&pane);
@@ -171,7 +156,7 @@ test "stale completion is counted without touching writer or lifecycle ports" {
     var panes: PaneStore = .{};
     try panes.insert(&pane);
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    var capture: Capture = .{};
+    var capture: InputCapture = .{};
     var pump = testPump(&capture, &panes, &metrics);
     try std.testing.expect(pane.queuePtyInput("still borrowed"));
     _ = pane.beginPtyInputWrite().?;

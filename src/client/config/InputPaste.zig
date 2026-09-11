@@ -1,6 +1,7 @@
+const effects = @import("effects.zig");
 const InputPaste = @This();
-const source_namespace = @import("effects.zig");
-bytes: [source_namespace.max_expression_paste_bytes]u8 = undefined,
+
+bytes: [effects.max_expression_paste_bytes]u8 = undefined,
 len: u16 = 0,
 
 pub fn slice(paste: *const InputPaste) []const u8 {

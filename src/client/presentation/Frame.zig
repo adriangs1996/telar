@@ -1,22 +1,18 @@
+const FramePane = @import("FramePane.zig");
+const headless = @import("headless.zig");
+const CellType = @import("telar-core").Cell;
+const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
+const VersionType = @import("../model/Version.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const GeometryType = @import("Geometry.zig");
 const Frame = @This();
-const source_namespace = @import("headless.zig");
-const core = @import("telar-core");
-const presentation = @import("root.zig");
-cells: [source_namespace.cell_capacity]core.ui.Cell = undefined,
-cell_count: usize = 0,
-panes: [source_namespace.schema.max_panes_per_tab]Pane = undefined,
-pane_count: usize = 0,
-version: @import("../model/root.zig").Version = .{},
-focused: ?source_namespace.schema.PaneId = null,
-geometry: presentation.Geometry = .{},
 
-pub const Pane = struct {
-    id: source_namespace.schema.PaneId,
-    start: usize,
-    len: usize,
-    cursor: source_namespace.schema.frame.Cursor,
-    mouse: source_namespace.schema.frame.Mouse,
-    input_modes: source_namespace.schema.frame.InputModes,
-    pointer_shape: source_namespace.schema.frame.PointerShape,
-    scroll: source_namespace.schema.frame.Scroll,
-};
+cells: [headless.cell_capacity]CellType = undefined,
+cell_count: usize = 0,
+panes: [max_panes_per_tab_module]FramePane = undefined,
+pane_count: usize = 0,
+version: VersionType = .{},
+focused: ?PaneIdType = null,
+geometry: GeometryType = .{},
+
+pub const Pane = @import("FramePane.zig");

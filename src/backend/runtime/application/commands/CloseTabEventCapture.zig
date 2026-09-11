@@ -1,18 +1,20 @@
+const ReaderType = @import("../../../workspace/Reader.zig");
+const TabRemovedType = @import("../../../workspace/TabRemoved.zig");
+const CloseTabEventPublisher = @import("CloseTabEventPublisher.zig");
 const EventCapture = @This();
-const workspace_mod = @import("../../../workspace/root.zig");
-const EventPublisher = @import("CloseTabEventPublisher.zig");
-reader: workspace_mod.Reader,
+
+reader: ReaderType,
 pane_close_count: *const usize,
 count: usize = 0,
-last: ?workspace_mod.TabRemoved = null,
+last: ?TabRemovedType = null,
 observed_committed_state: bool = false,
 observed_closed_panes: bool = false,
 
-pub fn publisher(capture: *EventCapture) EventPublisher {
+pub fn publisher(capture: *EventCapture) CloseTabEventPublisher {
     return .{ .context = capture, .publish = publish };
 }
 
-fn publish(context: *anyopaque, event: workspace_mod.TabRemoved) void {
+fn publish(context: *anyopaque, event: TabRemovedType) void {
     const capture: *EventCapture = @ptrCast(@alignCast(context));
     const workspace_exists = capture.reader.containsWorkspace(event.location.workspace);
 

@@ -1,9 +1,10 @@
-const HandleRequestFailureHandler = @This();
 const RecoveryEffects = @import("RecoveryEffects.zig");
 const NotificationEffects = @import("NotificationEffects.zig");
 const ReportingEffects = @import("ReportingEffects.zig");
 const Command = @import("Command.zig");
-const source_namespace = @import("request_failure.zig");
+const request_failure = @import("request_failure.zig");
+const HandleRequestFailureHandler = @This();
+
 recovery: RecoveryEffects,
 notifications: NotificationEffects,
 reporting: ReportingEffects,
@@ -14,7 +15,7 @@ reporting: ReportingEffects,
 /// ```zig
 /// const outcome = try handler.execute(command);
 /// ```
-pub fn execute(handler: *HandleRequestFailureHandler, command: Command) !source_namespace.Outcome {
+pub fn execute(handler: *HandleRequestFailureHandler, command: Command) !request_failure.Outcome {
     const outcome = handler.apply(command) catch |err| {
         handler.reporting.report(handler.reporting.context, command.message);
 
@@ -27,7 +28,7 @@ pub fn execute(handler: *HandleRequestFailureHandler, command: Command) !source_
     return outcome;
 }
 
-fn apply(handler: *HandleRequestFailureHandler, command: Command) !source_namespace.Outcome {
+fn apply(handler: *HandleRequestFailureHandler, command: Command) !request_failure.Outcome {
     switch (command.continuation) {
         .ignored => return .ignored,
         .workspace_snapshot, .tab_snapshot => return .fatal,
@@ -66,6 +67,6 @@ fn apply(handler: *HandleRequestFailureHandler, command: Command) !source_namesp
         => {},
     }
 
-    try handler.notifications.publish(handler.notifications.context, source_namespace.notification(command));
+    try handler.notifications.publish(handler.notifications.context, request_failure.notification(command));
     return .notified;
 }

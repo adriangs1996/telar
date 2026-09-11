@@ -1,4 +1,5 @@
+const PacerType = @import("telar-frontend").Pacer;
 const PacerContext = @This();
-const frontend = @import("telar-frontend");
-pacer: frontend.pace.Pacer = .{},
+
+pacer: PacerType = .{},
 now_ns: u64 = 0,

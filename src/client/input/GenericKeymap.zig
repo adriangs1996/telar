@@ -1,7 +1,8 @@
 const std = @import("std");
 const GenericBinding = @import("GenericBinding.zig").Type;
-const source_namespace = @import("keybind.zig");
-const Key = @import("key_support.zig").Key;
+const keybind = @import("keybind.zig");
+const Key = @import("Key.zig");
+
 pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_keys: usize) type {
     if (max_bindings == 0 or max_bindings > std.math.maxInt(u16)) {
         @compileError("max_bindings must fit in a non-zero u16");
@@ -40,7 +41,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
             while (index < map.len) : (index += 1) {
                 const previous = map.bindingAt(index - 1);
                 const current = map.bindingAt(index);
-                const shared = source_namespace.commonPrefix(previous.slice(), current.slice());
+                const shared = keybind.commonPrefix(previous.slice(), current.slice());
                 if (shared == previous.len or shared == current.len) {
                     if (previous.len == current.len) {
                         return error.DuplicateBinding;
@@ -63,7 +64,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
             var high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (source_namespace.keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .lt) {
+                if (keybind.keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .lt) {
                     low = middle + 1;
                 } else {
                     high = middle;
@@ -74,7 +75,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
             high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (source_namespace.keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .gt) {
+                if (keybind.keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .gt) {
                     high = middle;
                 } else {
                     low = middle + 1;
@@ -91,7 +92,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
         }
 
         fn orderLessThan(bindings: *const [max_bindings]BindingType, a: u16, b: u16) bool {
-            return source_namespace.sequenceOrder(bindings[a].slice(), bindings[b].slice()) == .lt;
+            return keybind.sequenceOrder(bindings[a].slice(), bindings[b].slice()) == .lt;
         }
     };
 }

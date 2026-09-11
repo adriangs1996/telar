@@ -1,5 +1,6 @@
-const SnapshotQuery = @This();
-const source_namespace = @import("client_layout_store.zig");
+const ClientIdentityType = @import("telar-core").ClientIdentity;
 const Sources = @import("Sources.zig");
-identity: source_namespace.schema.ClientIdentity,
+const SnapshotQuery = @This();
+
+identity: ClientIdentityType,
 sources: Sources,

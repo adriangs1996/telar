@@ -1,5 +1,6 @@
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const RenameWorkspace = @This();
-const source_namespace = @import("rename_workspace.zig");
-location: source_namespace.schema.WorkspaceLocation,
+
+location: WorkspaceLocationType,
 /// Borrowed only for the synchronous `execute` call.
 name: []const u8,

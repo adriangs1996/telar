@@ -1,7 +1,8 @@
-const HistoryStatsView = @This();
-const source_namespace = @import("history.zig");
+const id = @import("../id.zig");
 const HistoryStatsTopIterator = @import("HistoryStatsTopIterator.zig");
-request_id: source_namespace.RequestId,
+const HistoryStatsView = @This();
+
+request_id: id.RequestId,
 total: u64,
 unique: u64,
 top_count: u8,

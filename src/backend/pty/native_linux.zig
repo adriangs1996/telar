@@ -1,0 +1,9 @@
+pub const SWINSZ: c_int = 0x5414;
+pub const SCTTY: c_int = 0x540E;
+pub const FLUSH: c_int = 0x540B;
+pub const P_PID: c_int = 1;
+pub const WNOHANG: c_int = 0x00000001;
+pub const WSTOPPED: c_int = 0x00000002;
+pub const WCONTINUED: c_int = 0x00000008;
+pub const WEXITED: c_int = 0x00000004;
+pub const WNOWAIT: c_int = 0x01000000;

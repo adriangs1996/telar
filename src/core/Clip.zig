@@ -1,4 +1,5 @@
-const Clip = @This();
 const Rect = @import("Rect.zig");
+const Clip = @This();
+
 destination: Rect,
 source: Rect,

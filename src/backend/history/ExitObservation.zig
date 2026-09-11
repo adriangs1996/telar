@@ -1,4 +1,5 @@
+const ClockType = @import("Clock.zig");
 const ExitObservation = @This();
-const source_namespace = @import("terminal.zig");
-clock: source_namespace.Clock,
+
+clock: ClockType,
 exit_code: i32,

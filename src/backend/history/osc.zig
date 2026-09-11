@@ -1,28 +1,16 @@
 //! OSC 133 command-zone tracker for one PTY.
 
 const std = @import("std");
-const builtin = @import("builtin");
-const escape = @import("escape.zig");
+const OscTracker = @import("OscTracker.zig");
+const OscCollected = @import("OscCollected.zig");
 
 pub const max_command_bytes = 64 * 1024;
 pub const max_osc_bytes = 8 * 1024;
-
-pub const Clock = @import("Clock.zig");
 
 pub const Status = enum {
     completed,
     interrupted,
 };
-
-pub const Command = @import("Command.zig");
-
-pub const Observation = @import("Observation.zig");
-
-const SemanticObservation = @import("SemanticObservation.zig");
-
-const Completion = @import("OscCompletion.zig");
-
-pub const Tracker = @import("OscTracker.zig");
 
 pub fn parseExitCode(options: []const u8) ?i32 {
     const first = options[0 .. std.mem.indexOfScalar(u8, options, ';') orelse options.len];
@@ -56,11 +44,9 @@ pub fn percentDecode(input: []const u8, output: []u8) ?usize {
     return destination;
 }
 
-const Collected = @import("OscCollected.zig");
-
 test "tracks command lifecycle across chunk boundaries" {
-    var tracker = Tracker.init("/work");
-    var collected: Collected = .{};
+    var tracker = OscTracker.init("/work");
+    var collected: OscCollected = .{};
     tracker.feed(.{
         .bytes = "\x1b]133;A\x07$ \x1b]133;B\x07",
         .clock = .{ .real_ms = 100, .awake_ns = 1000 },
@@ -83,8 +69,8 @@ test "tracks command lifecycle across chunk boundaries" {
 }
 
 test "updates cwd from OSC 7 and reports interrupted commands" {
-    var tracker = Tracker.init("/old");
-    var collected: Collected = .{};
+    var tracker = OscTracker.init("/old");
+    var collected: OscCollected = .{};
     tracker.feed(.{
         .bytes = "\x1b]7;file://host/tmp/a%20b\x07\x1b]133;B\x07",
         .clock = .{ .real_ms = 20, .awake_ns = 100 },
@@ -103,8 +89,8 @@ test "updates cwd from OSC 7 and reports interrupted commands" {
 }
 
 test "an oversized OSC does not prevent later markers" {
-    var tracker = Tracker.init("/");
-    var collected: Collected = .{};
+    var tracker = OscTracker.init("/");
+    var collected: OscCollected = .{};
     var oversized: [max_osc_bytes + 64]u8 = @splat('x');
     tracker.feed(.{ .bytes = "\x1b]", .clock = .{ .real_ms = 0, .awake_ns = 0 } }, &collected);
     tracker.feed(.{ .bytes = &oversized, .clock = .{ .real_ms = 0, .awake_ns = 0 } }, &collected);

@@ -1,13 +1,17 @@
-const wire = @import("wire.zig");
+const EncoderType = @import("Encoder.zig");
+const DecoderType = @import("Decoder.zig");
 const id = @import("id.zig");
-const source_namespace = @import("codec.zig");
+const codec = @import("codec.zig");
+const TabLocationType = @import("TabLocation.zig");
 const types = @import("types.zig");
+const TerminalSizeType = @import("TerminalSize.zig");
 const std = @import("std");
+
 pub fn Type(comptime T: type) type {
     const allow_zero_request_id =
         @hasDecl(T, "wire_allow_zero_request_id") and T.wire_allow_zero_request_id;
     return struct {
-        pub fn encode(encoder: *wire.Encoder, message: T) !void {
+        pub fn encode(encoder: *EncoderType, message: T) !void {
             if (@hasDecl(T, "validateWire")) {
                 try message.validateWire();
             }
@@ -16,7 +20,7 @@ pub fn Type(comptime T: type) type {
             }
         }
 
-        pub fn decode(decoder: *wire.Decoder) !T {
+        pub fn decode(decoder: *DecoderType) !T {
             var message: T = undefined;
             inline for (@typeInfo(T).@"struct".fields) |field| {
                 @field(message, field.name) = try decodeField(field.type, decoder);
@@ -27,16 +31,16 @@ pub fn Type(comptime T: type) type {
             return message;
         }
 
-        fn encodeField(comptime F: type, encoder: *wire.Encoder, value: F) !void {
+        fn encodeField(comptime F: type, encoder: *EncoderType, value: F) !void {
             switch (F) {
                 id.RequestId => {
                     if (!allow_zero_request_id) {
-                        try source_namespace.validateRequestId(value);
+                        try codec.validateRequestId(value);
                     }
                     try encoder.writeInt(u64, id.raw(value));
                 },
                 id.PaneId => {
-                    try source_namespace.validatePaneId(value);
+                    try codec.validatePaneId(value);
                     try encoder.writeInt(u64, id.raw(value));
                 },
                 ?id.WorkspaceId => {
@@ -48,11 +52,11 @@ pub fn Type(comptime T: type) type {
                         try encoder.writeInt(u64, id.raw(workspace_id));
                     }
                 },
-                types.TabLocation => try source_namespace.encodeTabLocation(encoder, value),
-                types.WorkspaceLocation => try source_namespace.encodeWorkspaceLocation(encoder, value),
-                types.TerminalSize => {
+                TabLocationType => try codec.encodeTabLocation(encoder, value),
+                types.WorkspaceLocation => try codec.encodeWorkspaceLocation(encoder, value),
+                TerminalSizeType => {
                     try value.validate();
-                    try source_namespace.encodeSize(encoder, value);
+                    try codec.encodeSize(encoder, value);
                 },
                 bool => try encoder.writeByte(@intFromBool(value)),
                 u8 => try encoder.writeByte(value),
@@ -64,7 +68,7 @@ pub fn Type(comptime T: type) type {
             }
         }
 
-        fn decodeField(comptime F: type, decoder: *wire.Decoder) !F {
+        fn decodeField(comptime F: type, decoder: *DecoderType) !F {
             return switch (F) {
                 id.RequestId => if (allow_zero_request_id)
                     @enumFromInt(try decoder.readInt(u64))
@@ -75,13 +79,13 @@ pub fn Type(comptime T: type) type {
                     try id.workspace(try decoder.readInt(u64))
                 else
                     null,
-                types.TabLocation => try source_namespace.decodeTabLocation(decoder),
-                types.WorkspaceLocation => try source_namespace.decodeWorkspaceLocation(decoder),
-                types.TerminalSize => try source_namespace.decodeSize(decoder),
+                TabLocationType => try codec.decodeTabLocation(decoder),
+                types.WorkspaceLocation => try codec.decodeWorkspaceLocation(decoder),
+                TerminalSizeType => try codec.decodeSize(decoder),
                 bool => try decoder.readBool(),
                 u8 => try decoder.readByte(),
                 u16, u32, u64, i32, i64 => try decoder.readInt(F),
-                types.ExitKind => try source_namespace.decodeExitKind(try decoder.readByte()),
+                types.ExitKind => try codec.decodeExitKind(try decoder.readByte()),
                 types.TabMoveDirection => switch (try decoder.readByte()) {
                     0 => .previous,
                     1 => .next,
@@ -91,7 +95,7 @@ pub fn Type(comptime T: type) type {
                     return error.InvalidPaneTextSource,
                 types.PaneTextMode => std.enums.fromInt(types.PaneTextMode, try decoder.readByte()) orelse
                     return error.InvalidPaneTextMode,
-                types.ProxyScope => try source_namespace.decodeProxyScope(try decoder.readByte()),
+                types.ProxyScope => try codec.decodeProxyScope(try decoder.readByte()),
                 else => @compileError("underivable field type " ++ @typeName(F)),
             };
         }

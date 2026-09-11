@@ -1,16 +1,20 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const CreateTabExecutorType = @import("../../application/commands/CreateTabExecutor.zig");
+const CreateTabViewType = @import("telar-core").CreateTabView;
+const CreateTabFailure = @import("CreateTabFailure.zig");
+const PendingTabCreatedType = @import("../../delivery/PendingTabCreated.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const Controller = @This();
-const source_namespace = @import("create_tab.zig");
-const create_tab_commands = @import("../../application/commands/create_tab.zig");
-const Failure = @import("CreateTabFailure.zig");
-responses: *source_namespace.ResponseQueue,
-create_tab: create_tab_commands.CreateTabExecutor,
+
+responses: *ResponseQueueType,
+create_tab: CreateTabExecutorType,
 
 /// Creates one controller for the lifetime of a create-tab request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, create_tab: create_tab_commands.CreateTabExecutor) Controller {
+pub fn init(responses: *ResponseQueueType, create_tab: CreateTabExecutorType) Controller {
     return .{ .responses = responses, .create_tab = create_tab };
 }
 
@@ -20,14 +24,14 @@ pub fn init(responses: *source_namespace.ResponseQueue, create_tab: create_tab_c
 /// ```zig
 /// try controller.createTab(request);
 /// ```
-pub fn createTab(controller: *Controller, request: source_namespace.schema.CreateTabView) !void {
+pub fn createTab(controller: *Controller, request: CreateTabViewType) !void {
     const result = controller.create_tab.execute(.{
         .workspace = request.workspace,
         .label = request.label,
         .size = request.size,
         .launch = request.launch,
     }) catch |err| {
-        const failure: Failure = switch (err) {
+        const failure: CreateTabFailure = switch (err) {
             error.WorkspaceNotFound => .{ .code = .workspace_not_found, .message = "workspace not found" },
             error.TabLimitReached => .{ .code = .resource_limit, .message = "tab limit reached" },
             error.InvalidTabLabel => .{ .code = .invalid_request, .message = "invalid tab label" },
@@ -44,7 +48,7 @@ pub fn createTab(controller: *Controller, request: source_namespace.schema.Creat
     };
 
     const label = result.created.labelSlice();
-    var pending: source_namespace.PendingTabCreated = .{
+    var pending: PendingTabCreatedType = .{
         .request_id = request.request_id,
         .location = result.created.location,
         .position = result.created.position,
@@ -56,7 +60,7 @@ pub fn createTab(controller: *Controller, request: source_namespace.schema.Creat
     try controller.responses.push(.{ .tab_created = pending });
 }
 
-fn queueFailure(controller: *Controller, request_id: source_namespace.schema.RequestId, failure: Failure) !void {
+fn queueFailure(controller: *Controller, request_id: RequestIdType, failure: CreateTabFailure) !void {
     try controller.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,

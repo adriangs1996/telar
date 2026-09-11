@@ -1,6 +1,8 @@
+const request_support = @import("../provider/request_support.zig");
+const types = @import("types.zig");
 /// Owned metadata derived from one forwarded request head.
 const RequestHead = @This();
-const source_namespace = @import("types.zig");
-classification: source_namespace.RequestClass,
-body: source_namespace.BodyPlan,
-response_context: source_namespace.ResponseContext,
+
+classification: request_support.RequestClass,
+body: types.BodyPlan,
+response_context: types.ResponseContext,

@@ -1,5 +1,10 @@
+const GenericText = @import("GenericText.zig").Type;
+const Chunk = @import("Chunk.zig");
+const CommandFinished = @import("CommandFinished.zig");
+const Upstream = @import("Upstream.zig");
+const UpstreamClose = @import("UpstreamClose.zig");
+const Exchange = @import("Exchange.zig");
 const std = @import("std");
-const Io = std.Io;
 
 // The shared timeline event model.
 //
@@ -10,20 +15,8 @@ const Io = std.Io;
 
 pub const KB = 1 << 10;
 
-pub const Text = @import("GenericText.zig").Type;
-
-pub const CommandLine = Text(512);
-pub const Host = Text(256);
-
-pub const Chunk = @import("Chunk.zig");
-
-pub const CommandFinished = @import("CommandFinished.zig");
-
-pub const Upstream = @import("Upstream.zig");
-
-pub const Exchange = @import("Exchange.zig");
-
-pub const UpstreamClose = @import("UpstreamClose.zig");
+pub const CommandLine = GenericText(512);
+pub const Host = GenericText(256);
 
 pub const Event = union(enum) {
     /// Bytes the user typed, still unparsed.
@@ -44,4 +37,4 @@ pub const Event = union(enum) {
     child_gone,
 };
 
-pub const Queue = Io.Queue(Event);
+pub const Queue = std.Io.Queue(Event);

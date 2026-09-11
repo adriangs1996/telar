@@ -1,13 +1,11 @@
 //! Ownership of one bidirectional HTTP/2 relay.
 
+const GenericConnectionPort = @import("GenericConnectionPort.zig").Type;
+const GenericConnection = @import("GenericConnection.zig").Type;
+const Capture = @import("Capture.zig");
 const std = @import("std");
-const relay = @import("relay.zig");
 
 pub const Settings = @import("Settings.zig");
-
-pub const ConnectionPort = @import("GenericConnectionPort.zig").Type;
-
-pub const Connection = @import("GenericConnection.zig").Type;
 
 pub const Step = enum {
     response_decode_failure,
@@ -15,9 +13,7 @@ pub const Step = enum {
     settle,
 };
 
-const Capture = @import("Capture.zig");
-
-const test_port: ConnectionPort(Capture) = .{
+const test_port: GenericConnectionPort(Capture) = .{
     .io = Capture.io,
     .relay_request = Capture.relayRequest,
     .relay_response = Capture.relayResponse,
@@ -25,7 +21,7 @@ const test_port: ConnectionPort(Capture) = .{
     .settle = Capture.settle,
 };
 
-const TestConnection = Connection(Capture, test_port);
+const TestConnection = GenericConnection(Capture, test_port);
 
 test "response completion cancels the unfinished request relay before settlement" {
     var started_storage: [1]u8 = undefined;

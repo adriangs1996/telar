@@ -1,14 +1,13 @@
 //! Vertical and application tests for client-owned pane viewports.
 
+const GenericPaneViewportController = @import("../entrypoints/requests/GenericPaneViewportController.zig").Type;
+const SetPaneViewportHandlerType = @import("../application/commands/SetPaneViewportHandler.zig");
+const PaneFixture = @import("PaneFixture.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const pane_viewport_commands = @import("../application/commands/pane_viewport.zig");
-const pane_viewport_controller = @import("../entrypoints/requests/pane_viewport.zig");
-const test_support = @import("support.zig");
+const pane_module = @import("telar-core").pane;
 
-const schema = core.schema;
-const PaneFixture = test_support.PaneFixture;
-const ViewportController = pane_viewport_controller.Controller(*pane_viewport_commands.SetPaneViewportHandler);
+const ViewportController = GenericPaneViewportController(*SetPaneViewportHandlerType);
 
 fn fillScrollback(fixture: *PaneFixture) !void {
     _ = try fixture.pane.ingest(
@@ -37,7 +36,7 @@ test "viewport change crosses controller and handler and schedules one snapshot"
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     attachment.cells.snapshot_pending = false;
-    var handler: pane_viewport_commands.SetPaneViewportHandler = .{
+    var handler: SetPaneViewportHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var controller = ViewportController.init(&fixture.metrics, &handler);
@@ -57,7 +56,7 @@ test "SetPaneViewportHandler leaves an identical historical viewport unchanged" 
     defer fixture.deinit();
     try fillScrollback(&fixture);
 
-    var handler: pane_viewport_commands.SetPaneViewportHandler = .{
+    var handler: SetPaneViewportHandlerType = .{
         .attachments = &fixture.attachments,
     };
     const baseline_pin_count = fixture.pane.terminal.screens.active.pages.countTrackedPins();
@@ -84,7 +83,7 @@ test "SetPaneViewportHandler clamps beyond scrollback to bottom and releases its
     defer fixture.deinit();
     try fillScrollback(&fixture);
 
-    var handler: pane_viewport_commands.SetPaneViewportHandler = .{
+    var handler: SetPaneViewportHandlerType = .{
         .attachments = &fixture.attachments,
     };
     const baseline_pin_count = fixture.pane.terminal.screens.active.pages.countTrackedPins();
@@ -118,7 +117,7 @@ test "SetPaneViewportHandler leaves existing projection state unchanged for anot
     defer fixture.deinit();
     try fillScrollback(&fixture);
 
-    var handler: pane_viewport_commands.SetPaneViewportHandler = .{
+    var handler: SetPaneViewportHandlerType = .{
         .attachments = &fixture.attachments,
     };
     _ = try handler.execute(.{ .pane_id = fixture.pane.id, .offset = 0 });
@@ -127,7 +126,7 @@ test "SetPaneViewportHandler leaves existing projection state unchanged for anot
     attachment.cells.snapshot_pending = false;
 
     const result = try handler.execute(.{
-        .pane_id = try schema.id.pane(99),
+        .pane_id = try pane_module(99),
         .offset = 1,
     });
 

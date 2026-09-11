@@ -76,11 +76,11 @@ roll back the client preference.
 
 ## Proof
 
-- `src/frontend/client/model/root.zig` proves source-of-truth ownership, no-op
+- `src/client/model/Model.zig` proves source-of-truth ownership, no-op
   assignment and chrome-revision isolation.
-- `src/frontend/client/application/notifications/toggle_sidebar.zig` proves
+- `src/client/application/notifications/toggle_sidebar.zig` proves
   commit-before-effects ordering and post-commit failure behavior.
-- `src/frontend/client/application/notifications/sidebar_layout_delivery.zig` proves
+- `src/client/application/notifications/sidebar_layout_delivery.zig` proves
   exact commit validation, complete effect order, empty-workspace behavior and
   partial geometry failures.
 - `src/frontend/client/controllers/notifications/sidebar_projection.zig` wires the physical ports shared

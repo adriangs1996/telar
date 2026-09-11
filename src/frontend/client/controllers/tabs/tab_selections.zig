@@ -1,20 +1,16 @@
 //! Wires semantic tab selection to one client's disposable resources.
 
-const core = @import("telar-core");
-const tabs_application = @import("telar-client").application.tabs;
-const client_model = @import("telar-client").model;
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
-const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
-const pane_pastes = @import("../input/pane_pastes.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const tab_attachments = @import("tab_attachments.zig");
-
 const Client = @import("../../Client.zig");
-const schema = core.schema;
-const select_tab = tabs_application.select_tab;
-const tab_selection_delivery = tabs_application.tab_selection_delivery;
-
-pub const Target = select_tab.Target;
+const SelectTabHandlerType = @import("telar-client").SelectTabHandler;
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const TabSelectionType = @import("telar-client").TabSelection;
+const DeliverTabSelectionHandlerType = @import("telar-client").DeliverTabSelectionHandler;
+const pane_pastes = @import("../input/pane_pastes.zig");
+const pane_focus_reports = @import("../panes/pane_focus_reports.zig");
+const tab_attachments = @import("tab_attachments.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const active_pane_resources = @import("../panes/active_pane_resources.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 
 /// Wires tab selection to snapshot gating and attachment synchronization.
 ///
@@ -22,7 +18,7 @@ pub const Target = select_tab.Target;
 /// var use_case = selectionHandler(client);
 /// _ = try use_case.execute(.{ .target = .{ .position = 1 } });
 /// ```
-pub fn selectionHandler(client: *Client) select_tab.SelectTabHandler {
+pub fn selectionHandler(client: *Client) SelectTabHandlerType {
     return .{
         .model = &client.model,
         .snapshots = .{
@@ -41,9 +37,9 @@ fn tabSnapshotPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .tab_snapshot);
 }
 
-fn deliverSelection(context: *anyopaque, selection: client_model.TabSelection) !void {
+fn deliverSelection(context: *anyopaque, selection: TabSelectionType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: tab_selection_delivery.DeliverTabSelectionHandler = .{
+    var use_case: DeliverTabSelectionHandlerType = .{
         .model = &client.model,
         .paste_effects = pane_pastes.effects(client),
         .focus_effects = pane_focus_reports.effects(client),
@@ -59,7 +55,7 @@ fn deliverSelection(context: *anyopaque, selection: client_model.TabSelection) !
     try use_case.execute(selection);
 }
 
-fn setPaneGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try client.graphics_store.setPaneVisible(pane_id, visible);
@@ -71,7 +67,7 @@ fn synchronizeActiveResources(context: *anyopaque) !void {
     try active_pane_resources.synchronize(client);
 }
 
-fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
+fn requestTabSnapshot(context: *anyopaque, location: TabLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try request_lifecycle.requestTabSnapshot(client, location);

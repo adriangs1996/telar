@@ -1,8 +1,9 @@
+const std = @import("std");
 /// A command opened in its own transient tab. The tab closes when the
 /// command exits, like a popup that borrows tab machinery instead of
 /// floating chrome.
 const CommandTab = @This();
-const std = @import("std");
+
 pub const max_arguments = 8;
 pub const max_command_bytes = 224;
 pub const max_label_bytes = 32;

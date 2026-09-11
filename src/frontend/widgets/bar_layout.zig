@@ -1,14 +1,10 @@
 //! Collision-free geometry for the three bottom-bar positions.
 
+const BarLayoutRegions = @import("BarLayoutRegions.zig");
 const std = @import("std");
-const ui = @import("../ui/root.zig");
-
-pub const Widths = @import("Widths.zig");
-
-pub const Regions = @import("BarLayoutRegions.zig");
 
 test "bar regions preserve tabs and never overlap" {
-    const regions = Regions.calculate(.{ .w = 60, .h = 1 }, .{
+    const regions = BarLayoutRegions.calculate(.{ .w = 60, .h = 1 }, .{
         .desired = .{ 40, 40, 40 },
         .tabs_index = 1,
     });
@@ -20,7 +16,7 @@ test "bar regions preserve tabs and never overlap" {
 }
 
 test "short blocks keep their requested widths" {
-    const regions = Regions.calculate(.{ .w = 120, .h = 1 }, .{
+    const regions = BarLayoutRegions.calculate(.{ .w = 120, .h = 1 }, .{
         .desired = .{ 24, 0, 30 },
         .tabs_index = 2,
     });

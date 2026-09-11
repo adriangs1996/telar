@@ -1,8 +1,9 @@
-const DeliveryContext = @This();
 const Client = @import("../../Client.zig");
-const source_namespace = @import("config_reloads.zig");
+const AdoptionType = @import("../../resources/Adoption.zig");
+const DeliveryContext = @This();
+
 client: *Client,
-adoption: ?source_namespace.Adoption = null,
+adoption: ?AdoptionType = null,
 
 pub fn releaseOwned(context: *DeliveryContext) void {
     if (context.adoption) |adoption| {

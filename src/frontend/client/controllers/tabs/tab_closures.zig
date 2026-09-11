@@ -1,20 +1,26 @@
 //! Wires tab-close and tab-removal use cases to one client's protocol state.
 
-const std = @import("std");
-const core = @import("telar-core");
-const tabs_application = @import("telar-client").application.tabs;
-const client_model = @import("telar-client").model;
-const active_pane_resources = @import("../panes/active_pane_resources.zig");
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const tab_attachments = @import("tab_attachments.zig");
-const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
-
 const Client = @import("../../Client.zig");
-const close_tab = tabs_application.close_tab;
+const RequestCloseTabHandlerType = @import("telar-client").RequestCloseTabHandler;
+const RecoverCloseTabHandlerType = @import("telar-client").RecoverCloseTabHandler;
+const RequestTabSnapshotRecoveryHandlerType = @import("telar-client").RequestTabSnapshotRecoveryHandler;
+const TabClosedType = @import("telar-core").TabClosed;
+const RemovalTriggerType = @import("telar-client").RemovalTrigger;
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const std = @import("std");
+const ApplyTabRemovalHandlerType = @import("telar-client").ApplyTabRemovalHandler;
+const TabRemovalCommitType = @import("telar-client").TabRemovalCommit;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const TabRemovalDirectiveType = @import("telar-client").TabRemovalDirective;
+const DeliverTabRemovalHandlerType = @import("telar-client").DeliverTabRemovalHandler;
 const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-const schema = core.schema;
-const tab_removal_delivery = tabs_application.tab_removal_delivery;
-const tab_snapshot_recovery = tabs_application.tab_snapshot_recovery;
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const tab_attachments = @import("tab_attachments.zig");
+const TabCloseIntentType = @import("telar-client").TabCloseIntent;
+const active_pane_resources = @import("../panes/active_pane_resources.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
 pub const Outcome = enum {
     applied,
@@ -31,7 +37,7 @@ pub const Outcome = enum {
 ///     return;
 /// }
 /// ```
-pub fn requestHandler(client: *Client) close_tab.RequestCloseTabHandler {
+pub fn requestHandler(client: *Client) RequestCloseTabHandlerType {
     return .{
         .model = &client.model,
         .gate = .{
@@ -67,14 +73,14 @@ pub fn requestHandler(client: *Client) close_tab.RequestCloseTabHandler {
 /// var handler = recoveryHandler(client);
 /// _ = try handler.execute(location);
 /// ```
-pub fn recoveryHandler(client: *Client) close_tab.RecoverCloseTabHandler {
+pub fn recoveryHandler(client: *Client) RecoverCloseTabHandlerType {
     return .{
         .model = &client.model,
         .snapshots = snapshotRecovery(client),
     };
 }
 
-fn snapshotRecovery(client: *Client) tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler {
+fn snapshotRecovery(client: *Client) RequestTabSnapshotRecoveryHandlerType {
     return .{ .effects = .{
         .context = client,
         .pending = tabSnapshotPending,
@@ -87,8 +93,8 @@ fn snapshotRecovery(client: *Client) tab_snapshot_recovery.RequestTabSnapshotRec
 /// ```zig
 /// const outcome = try apply(client, closed);
 /// ```
-pub fn apply(client: *Client, closed: schema.TabClosed) !Outcome {
-    const trigger: close_tab.RemovalTrigger = if (closed.request_id == .none)
+pub fn apply(client: *Client, closed: TabClosedType) !Outcome {
+    const trigger: RemovalTriggerType = if (closed.request_id == .none)
         .lifecycle
     else requested: {
         const continuation = request_lifecycle.consume(client, closed.request_id) orelse
@@ -119,7 +125,7 @@ pub fn apply(client: *Client, closed: schema.TabClosed) !Outcome {
     };
 }
 
-fn removalHandler(client: *Client) close_tab.ApplyTabRemovalHandler {
+fn removalHandler(client: *Client) ApplyTabRemovalHandlerType {
     return .{
         .model = &client.model,
         .delivery = .{
@@ -129,9 +135,9 @@ fn removalHandler(client: *Client) close_tab.ApplyTabRemovalHandler {
     };
 }
 
-fn deliverRemoval(context: *anyopaque, commit: client_model.TabRemovalCommit, previous_workspace: ?schema.WorkspaceId) !close_tab.TabRemovalDirective {
+fn deliverRemoval(context: *anyopaque, commit: TabRemovalCommitType, previous_workspace: ?WorkspaceIdType) !TabRemovalDirectiveType {
     const client: *Client = @ptrCast(@alignCast(context));
-    var use_case: tab_removal_delivery.DeliverTabRemovalHandler = .{
+    var use_case: DeliverTabRemovalHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -166,18 +172,18 @@ fn availableDeliveryCapacity(context: *anyopaque) usize {
     return runtime_transport.availableCapacity(client);
 }
 
-fn attachmentPending(context: *anyopaque, pane_id: schema.PaneId) bool {
+fn attachmentPending(context: *anyopaque, pane_id: PaneIdType) bool {
     const client: *Client = @ptrCast(@alignCast(context));
 
     return request_lifecycle.hasPane(client, .attachment, pane_id);
 }
 
-fn detachForClose(context: *anyopaque, location: schema.TabLocation) !void {
+fn detachForClose(context: *anyopaque, location: TabLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     try tab_attachments.detach(client, location);
 }
 
-fn sendClose(context: *anyopaque, intent: close_tab.TabCloseIntent) !void {
+fn sendClose(context: *anyopaque, intent: TabCloseIntentType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     const request_id = try request_lifecycle.nextId(client);
 
@@ -193,18 +199,18 @@ fn sendClose(context: *anyopaque, intent: close_tab.TabCloseIntent) !void {
     });
 }
 
-fn retireTabRequests(context: *anyopaque, location: schema.TabLocation) void {
+fn retireTabRequests(context: *anyopaque, location: TabLocationType) void {
     const client: *Client = @ptrCast(@alignCast(context));
     request_lifecycle.ignoreTab(client, location.tab_id);
 }
 
-fn clearPaneGraphics(context: *anyopaque, pane_id: schema.PaneId) void {
+fn clearPaneGraphics(context: *anyopaque, pane_id: PaneIdType) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     client.graphics_store.clearPane(pane_id);
 }
 
-fn setPaneGraphicsVisible(context: *anyopaque, pane_id: schema.PaneId, visible: bool) !void {
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try client.graphics_store.setPaneVisible(pane_id, visible);
@@ -222,18 +228,18 @@ fn tabSnapshotPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .tab_snapshot);
 }
 
-fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
+fn requestTabSnapshot(context: *anyopaque, location: TabLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try request_lifecycle.requestTabSnapshot(client, location);
 }
 
-fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
+fn forgetWorkspace(context: *anyopaque, workspace: WorkspaceLocationType) void {
     const client: *Client = @ptrCast(@alignCast(context));
     client.navigation_history.forget(workspace);
 }
 
-fn requestWorkspace(context: *anyopaque, workspace: schema.WorkspaceId) !void {
+fn requestWorkspace(context: *anyopaque, workspace: WorkspaceIdType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
     _ = try workspace_handoffs.followWorkspace(client, workspace);
 }

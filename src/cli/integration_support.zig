@@ -4,10 +4,12 @@
 //! files; Pi gets a Telar extension in its global extension directory.
 
 const std = @import("std");
-const parser = @import("parser.zig");
+const IntegrationOptionsType = @import("arguments/IntegrationOptions.zig");
+const values = @import("arguments/values.zig");
+const Integration = @import("Integration.zig");
+const TempFile = @import("TempFile.zig");
+const HookSet = @import("HookSet.zig");
 
-pub const Io = std.Io;
-pub const File = Io.File;
 const max_settings_bytes = 4 * 1024 * 1024;
 const max_extension_bytes = 64 * 1024;
 
@@ -27,16 +29,12 @@ const pi_executable_placeholder = "\"__TELAR_EXECUTABLE__\"";
 /// executable is spawned at all, mirroring the Pi extension's early return.
 pub const pane_guard = "[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATION\" ] || exit 0; exec ";
 
-const Integration = @import("Integration.zig");
-
-pub const HookSet = @import("HookSet.zig");
-
 /// Runs one integration command and returns the process exit code.
 ///
 /// ```zig
 /// std.process.exit(try integration.run(process_init, options));
 /// ```
-pub fn run(init: std.process.Init, options: parser.IntegrationOptions) !u8 {
+pub fn run(init: std.process.Init, options: IntegrationOptionsType) !u8 {
     if (options.agent == .pi) {
         return runPi(init, options);
     }
@@ -53,11 +51,11 @@ pub fn run(init: std.process.Init, options: parser.IntegrationOptions) !u8 {
     const command = try renderHookCommand(&command_buffer, executable, integration.marker);
     const hook_set = hookSetFor(integration, command);
     var output_buffer: [4096]u8 = undefined;
-    var output = File.stdout().writerStreaming(init.io, &output_buffer);
+    var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
     defer writer.flush() catch {};
 
-    const source = Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(max_settings_bytes)) catch |err| switch (err) {
+    const source = std.Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(max_settings_bytes)) catch |err| switch (err) {
         error.FileNotFound => try init.gpa.dupe(u8, "{}"),
         else => return err,
     };
@@ -98,7 +96,7 @@ pub fn run(init: std.process.Init, options: parser.IntegrationOptions) !u8 {
     }
 }
 
-fn integrationFor(agent: parser.HookAgent) Integration {
+fn integrationFor(agent: values.HookAgent) Integration {
     return switch (agent) {
         .claude => .{
             .name = "claude",
@@ -125,7 +123,7 @@ fn integrationFor(agent: parser.HookAgent) Integration {
 
 /// Installs, removes or reports the Telar extension for Pi. `--settings`
 /// overrides the extension file path.
-fn runPi(init: std.process.Init, options: parser.IntegrationOptions) !u8 {
+fn runPi(init: std.process.Init, options: IntegrationOptionsType) !u8 {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = if (options.settings) |value|
         std.mem.span(value)
@@ -136,11 +134,11 @@ fn runPi(init: std.process.Init, options: parser.IntegrationOptions) !u8 {
     var rendered_buffer: [max_extension_bytes]u8 = undefined;
     const rendered = try renderPiExtension(&rendered_buffer, executable);
     var output_buffer: [4096]u8 = undefined;
-    var output = File.stdout().writerStreaming(init.io, &output_buffer);
+    var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
     defer writer.flush() catch {};
 
-    const existing: ?[]u8 = Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(max_extension_bytes)) catch |err| switch (err) {
+    const existing: ?[]u8 = std.Io.Dir.cwd().readFileAlloc(init.io, path, init.gpa, .limited(max_extension_bytes)) catch |err| switch (err) {
         error.FileNotFound => null,
         else => return err,
     };
@@ -181,7 +179,7 @@ fn runPi(init: std.process.Init, options: parser.IntegrationOptions) !u8 {
                 return 1;
             }
 
-            try Io.Dir.deleteFileAbsolute(init.io, path);
+            try std.Io.Dir.deleteFileAbsolute(init.io, path);
             try writer.print("telar integration: pi extension removed from {s}\n", .{path});
             return 0;
         },
@@ -202,7 +200,7 @@ fn piExtensionPath(environ: std.process.Environ, buffer: *[std.fs.max_path_bytes
 /// ```
 pub fn renderPiExtension(buffer: []u8, executable: []const u8) ![]const u8 {
     const placeholder = std.mem.indexOf(u8, pi_extension_template, pi_executable_placeholder) orelse return error.InvalidTemplate;
-    var writer: Io.Writer = .fixed(buffer);
+    var writer: std.Io.Writer = .fixed(buffer);
     try writer.print("{s}{f}{s}", .{
         pi_extension_template[0..placeholder],
         std.json.fmt(executable, .{}),
@@ -227,9 +225,9 @@ pub fn isTelarExtension(bytes: []const u8) bool {
 /// ```zig
 /// try installPiExtension(io, "/home/me/.pi/agent/extensions/telar.ts", source);
 /// ```
-pub fn installPiExtension(io: Io, path: []const u8, source: []const u8) !void {
+pub fn installPiExtension(io: std.Io, path: []const u8, source: []const u8) !void {
     if (std.fs.path.dirname(path)) |directory| {
-        try Io.Dir.cwd().createDirPath(io, directory);
+        try std.Io.Dir.cwd().createDirPath(io, directory);
     }
 
     var temp = try TempFile.begin(io, path);
@@ -434,9 +432,7 @@ fn ensureArray(arena: std.mem.Allocator, object: *std.json.ObjectMap, name: []co
     return object.getPtr(name).?;
 }
 
-const TempFile = @import("TempFile.zig");
-
-fn writeSettings(io: Io, path: []const u8, settings: std.json.Value) !void {
+fn writeSettings(io: std.Io, path: []const u8, settings: std.json.Value) !void {
     var temp = try TempFile.begin(io, path);
     var buffer: [16 * 1024]u8 = undefined;
     var file_writer = temp.file.writerStreaming(io, &buffer);
@@ -565,13 +561,13 @@ test "the Pi extension is installed atomically under a fresh directory" {
     try installPiExtension(io, path, source);
     try installPiExtension(io, path, source);
 
-    const written = try Io.Dir.cwd().readFileAlloc(io, path, std.testing.allocator, .limited(max_extension_bytes));
+    const written = try std.Io.Dir.cwd().readFileAlloc(io, path, std.testing.allocator, .limited(max_extension_bytes));
     defer std.testing.allocator.free(written);
     try std.testing.expectEqualStrings(source, written);
-    const stat = try Io.Dir.cwd().statFile(io, path, .{});
+    const stat = try std.Io.Dir.cwd().statFile(io, path, .{});
     try std.testing.expectEqual(@as(u32, 0o600), @as(u32, @intCast(stat.permissions.toMode() & 0o777)));
 
     var temp_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const temp_path = try std.fmt.bufPrint(&temp_path_buffer, "{s}.telar-tmp", .{path});
-    try std.testing.expectError(error.FileNotFound, Io.Dir.cwd().statFile(io, temp_path, .{}));
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, temp_path, .{}));
 }

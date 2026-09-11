@@ -1,35 +1,38 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_closure_delivery.zig");
-const core = @import("telar-core");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const RectType = @import("telar-core").Rect;
 const std = @import("std");
-model: *client_model.Model,
-active: source_namespace.schema.TabLocation,
-inactive: source_namespace.schema.TabLocation,
-first: source_namespace.schema.PaneId,
-second: source_namespace.schema.PaneId,
-inactive_pane: source_namespace.schema.PaneId,
-area: core.ui.Rect,
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TestingModel = @This();
+
+model: *ModelType,
+active: TabLocationType,
+inactive: TabLocationType,
+first: PaneIdType,
+second: PaneIdType,
+inactive_pane: PaneIdType,
+area: RectType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const active: source_namespace.schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const active: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const inactive: source_namespace.schema.TabLocation = .{
+    const inactive: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    const first: source_namespace.schema.PaneId = @enumFromInt(1);
-    const second: source_namespace.schema.PaneId = @enumFromInt(2);
-    const inactive_pane: source_namespace.schema.PaneId = @enumFromInt(3);
-    const area: core.ui.Rect = .{ .w = 40, .h = 10 };
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
+    const inactive_pane: PaneIdType = @enumFromInt(3);
+    const area: RectType = .{ .w = 40, .h = 10 };
     try model.workspace.bootstrap(.{ .pane_id = first, .location = active, .size = .{ .cols = 40, .rows = 10 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = active, .axis = .horizontal, .area = area });
     _ = try model.workspace.addCreated(.{

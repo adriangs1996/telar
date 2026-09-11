@@ -1,24 +1,26 @@
 //! Adapts committed host-resource commands to one concrete client.
 
-const core = @import("telar-core");
-const host_application = @import("telar-client").application.host;
-const client_model = @import("telar-client").model;
-const pane_geometry = @import("../panes/pane_geometry.zig");
-const pane_graphics = @import("../panes/pane_graphics.zig");
-const tab_snapshots = @import("../tabs/tab_snapshots.zig");
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-
 const Client = @import("../../Client.zig");
-const host_resource_delivery = host_application.host_resource_delivery;
-const schema = core.schema;
+const HostCommitType = @import("telar-client").HostCommit;
+const DeliverHostResourcesHandlerType = @import("telar-client").DeliverHostResourcesHandler;
+const HostResourceDeliveryEffects = @import("telar-client").HostResourceDeliveryEffects;
+const TerminalColorsType = @import("telar-core").TerminalColors;
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
+const HostAppearanceType = @import("telar-client").HostAppearance;
+const pane_graphics = @import("../panes/pane_graphics.zig");
+const SidebarConfigurationType = @import("telar-client").SidebarConfiguration;
+const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const pane_geometry = @import("../panes/pane_geometry.zig");
+const tab_snapshots = @import("../tabs/tab_snapshots.zig");
 
 /// Delivers every disposable resource implied by one current host commit.
 ///
 /// ```zig
 /// try deliver(client, commit);
 /// ```
-pub fn deliver(client: *Client, commit: client_model.HostCommit) !void {
-    var use_case: host_resource_delivery.DeliverHostResourcesHandler = .{
+pub fn deliver(client: *Client, commit: HostCommitType) !void {
+    var use_case: DeliverHostResourcesHandlerType = .{
         .model = &client.model,
         .effects = effects(client),
     };
@@ -26,7 +28,7 @@ pub fn deliver(client: *Client, commit: client_model.HostCommit) !void {
     try use_case.execute(commit);
 }
 
-fn effects(client: *Client) host_resource_delivery.Effects {
+fn effects(client: *Client) HostResourceDeliveryEffects {
     return .{
         .context = client,
         .sync_graphics_fallbacks = syncGraphicsFallbacks,
@@ -40,7 +42,7 @@ fn effects(client: *Client) host_resource_delivery.Effects {
     };
 }
 
-fn syncTerminalColors(raw_context: *anyopaque, colors: schema.TerminalColors) !void {
+fn syncTerminalColors(raw_context: *anyopaque, colors: TerminalColorsType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     if (client.startup.phase != .opening and client.startup.phase != .active) {
         return;
@@ -49,7 +51,7 @@ fn syncTerminalColors(raw_context: *anyopaque, colors: schema.TerminalColors) !v
     try runtime_transport.enqueue(client, .{ .configure_terminal_colors = colors });
 }
 
-fn applyAppearance(raw_context: *anyopaque, appearance: client_model.HostAppearance) !void {
+fn applyAppearance(raw_context: *anyopaque, appearance: HostAppearanceType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     if (client.options.theme_locked) {
         return;
@@ -69,7 +71,7 @@ fn syncGraphicsFallbacks(raw_context: *anyopaque) void {
     pane_graphics.syncFallbacks(client);
 }
 
-fn configureSidebar(raw_context: *anyopaque, configuration: host_resource_delivery.SidebarConfiguration) !void {
+fn configureSidebar(raw_context: *anyopaque, configuration: SidebarConfigurationType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try client.view.configureSidebar(
@@ -85,16 +87,16 @@ fn configureSidebar(raw_context: *anyopaque, configuration: host_resource_delive
 fn invalidateGraphicsPlacements(raw_context: *anyopaque) void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
-    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
+    kitty_delivery.invalidatePlacements(&client.graphics_store);
 }
 
-fn resizePresenter(raw_context: *anyopaque, size: schema.TerminalSize) !void {
+fn resizePresenter(raw_context: *anyopaque, size: TerminalSizeType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try client.presenter.resize(size.cols, size.rows);
 }
 
-fn resizeView(raw_context: *anyopaque, size: schema.TerminalSize) !void {
+fn resizeView(raw_context: *anyopaque, size: TerminalSizeType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     try client.view.resize(size.cols, size.rows);

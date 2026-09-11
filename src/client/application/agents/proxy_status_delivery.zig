@@ -1,16 +1,15 @@
 //! Application policy for delivering one committed TLS interception state.
 
+const ProxyStatusCommitType = @import("../../model/ProxyStatusCommit.zig");
+const InputType = @import("../../notifications/NotificationInput.zig");
 const std = @import("std");
-const notification_capability = @import("../../root.zig").notifications;
-const client_model = @import("../../root.zig").model;
+const notification_capability = @import("../../notifications/notifications.zig");
+const ModelType = @import("../../model/Model.zig");
+const ProxyStatusDeliveryCaptureType = @import("ProxyStatusDeliveryCaptureType.zig");
+const DeliverProxyStatusHandler = @import("DeliverProxyStatusHandler.zig");
+const VersionType = @import("../../model/Version.zig");
 
-pub const Effects = @import("ProxyStatusDeliveryEffects.zig");
-
-pub const DeliverProxyStatusHandler = @import("DeliverProxyStatusHandler.zig");
-
-const Capture = @import("ProxyStatusDeliveryCaptureType.zig");
-
-pub fn expectedNotification(commit: client_model.ProxyStatusCommit, input: notification_capability.Input) bool {
+pub fn expectedNotification(commit: ProxyStatusCommitType, input: InputType) bool {
     const trust_only = commit.previous == commit.active and commit.previous_scope == commit.scope;
     if (trust_only) {
         if (commit.system_trusted) {
@@ -43,15 +42,15 @@ pub fn expectedNotification(commit: client_model.ProxyStatusCommit, input: notif
         input.duration_ns == notification_capability.default_duration_ns;
 }
 
-fn deliveryHandler(model: *const client_model.Model, capture: *Capture) DeliverProxyStatusHandler {
+fn deliveryHandler(model: *const ModelType, capture: *ProxyStatusDeliveryCaptureType) DeliverProxyStatusHandler {
     return .{ .model = model, .effects = capture.effects() };
 }
 
 test "DeliverProxyStatusHandler publishes exact enabled and disabled notifications" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const enabled = model.reconcileProxyStatus(.{ .active = true, .scope = .exact, .system_trusted = false }).?;
-    var capture: Capture = .{ .model = &model, .expected = enabled };
+    var capture: ProxyStatusDeliveryCaptureType = .{ .model = &model, .expected = enabled };
     var use_case = deliveryHandler(&model, &capture);
 
     try use_case.execute(enabled);
@@ -71,10 +70,10 @@ test "DeliverProxyStatusHandler publishes exact enabled and disabled notificatio
 }
 
 test "DeliverProxyStatusHandler reports trust-only transitions" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const trusted = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = true }).?;
-    var capture: Capture = .{ .model = &model, .expected = trusted };
+    var capture: ProxyStatusDeliveryCaptureType = .{ .model = &model, .expected = trusted };
     var use_case = deliveryHandler(&model, &capture);
 
     try use_case.execute(trusted);
@@ -84,10 +83,10 @@ test "DeliverProxyStatusHandler reports trust-only transitions" {
 }
 
 test "DeliverProxyStatusHandler rejects stale transitions before publication" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const commit = model.reconcileProxyStatus(.{ .active = true, .scope = .wildcard, .system_trusted = false }).?;
-    var capture: Capture = .{ .model = &model, .expected = commit };
+    var capture: ProxyStatusDeliveryCaptureType = .{ .model = &model, .expected = commit };
     var use_case = deliveryHandler(&model, &capture);
 
     var altered = commit;
@@ -113,10 +112,10 @@ test "DeliverProxyStatusHandler rejects stale transitions before publication" {
 }
 
 test "DeliverProxyStatusHandler preserves the commit after publication failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const commit = model.reconcileProxyStatus(.{ .active = true, .scope = .exact, .system_trusted = false }).?;
-    var capture: Capture = .{
+    var capture: ProxyStatusDeliveryCaptureType = .{
         .model = &model,
         .expected = commit,
         .fail = true,
@@ -128,5 +127,5 @@ test "DeliverProxyStatusHandler preserves the commit after publication failure" 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expect(capture.notification_valid);
     try std.testing.expect(model.proxyTlsActive());
-    try std.testing.expectEqual(client_model.Version{ .proxy_status = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .proxy_status = 1 }, model.version());
 }

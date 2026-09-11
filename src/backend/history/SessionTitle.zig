@@ -1,31 +1,31 @@
-const SessionTitle = @This();
-const source_namespace = @import("model.zig");
+const DefinitionType = @import("Definition.zig");
+const model = @import("model.zig");
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
+const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
+const AgentTitleStateType = @import("telar-core").AgentTitleState;
 const std = @import("std");
-pub const Definition = struct {
-    id: source_namespace.SessionId,
-    title: []const u8,
-    source: source_namespace.schema.AgentTitleSource,
-    state: source_namespace.schema.AgentTitleState,
-};
+const SessionTitle = @This();
 
-id: source_namespace.SessionId,
-title: [source_namespace.schema.max_agent_session_title_bytes]u8 = undefined,
+pub const Definition = @import("Definition.zig");
+
+id: model.SessionId,
+title: [max_agent_session_title_bytes_module]u8 = undefined,
 title_len: u8 = 0,
-source: source_namespace.schema.AgentTitleSource,
-state: source_namespace.schema.AgentTitleState,
+source: AgentTitleSourceType,
+state: AgentTitleStateType,
 
 /// Validates and owns the fixed-size representation persisted by history.
 ///
 /// ```zig
 /// const title = try SessionTitle.init(.{ .id = id, .title = "Fix tests", .source = .generated, .state = .ready });
 /// ```
-pub fn init(definition: Definition) !SessionTitle {
+pub fn init(definition: DefinitionType) !SessionTitle {
     const id = definition.id;
     const title_value = definition.title;
     const source = definition.source;
     const state = definition.state;
 
-    if (title_value.len > source_namespace.schema.max_agent_session_title_bytes) {
+    if (title_value.len > max_agent_session_title_bytes_module) {
         return error.AgentTitleTooLong;
     }
     if (!std.unicode.utf8ValidateSlice(title_value)) {

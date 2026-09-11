@@ -1,54 +1,32 @@
 //! Application use cases for leaving, entering and recovering a workspace handoff.
 
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const ModelType = @import("../../model/Model.zig");
+const WorkspaceHandoffTestingModel = @import("WorkspaceHandoffTestingModel.zig");
+const SelectionCapture = @import("SelectionCapture.zig");
+const SelectWorkspaceHandler = @import("SelectWorkspaceHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const pane_paste = @import("../input/root.zig").pane_paste;
-const workspace_attachment_retirement = @import("workspace_attachment_retirement.zig");
-const workspace_handoff_admission = @import("workspace_handoff_admission.zig");
-const workspace_handoff_preparation = @import("workspace_handoff_preparation.zig");
-const workspace_handoff_restoration = @import("workspace_handoff_restoration.zig");
-
-pub const schema = core.schema;
+const WorkspaceHandoff = @import("WorkspaceHandoff.zig");
+const WorkspaceHandoffRequestCapture = @import("WorkspaceHandoffRequestCapture.zig");
+const RequestWorkspaceHandoffHandler = @import("RequestWorkspaceHandoffHandler.zig");
+const VersionType = @import("../../model/Version.zig");
+const ArrivalCapture = @import("ArrivalCapture.zig");
+const ConfirmWorkspaceHandoffHandler = @import("ConfirmWorkspaceHandoffHandler.zig");
+const WorkspaceArrivalType = @import("../../model/WorkspaceArrival.zig");
+const RecoveryCapture = @import("RecoveryCapture.zig");
+const RecoverWorkspaceHandoffHandler = @import("RecoverWorkspaceHandoffHandler.zig");
 
 pub const SelectionTarget = union(enum) {
     position: usize,
-    workspace: schema.WorkspaceId,
+    workspace: WorkspaceIdType,
 };
-
-pub const SelectionGate = @import("SelectionGate.zig");
-
-pub const SelectionEffects = @import("SelectionEffects.zig");
-
-pub const SelectWorkspaceHandler = @import("SelectWorkspaceHandler.zig");
-
-pub const WorkspaceHandoff = @import("WorkspaceHandoff.zig");
-
-pub const HandoffRequestEffects = @import("HandoffRequestEffects.zig");
-
-pub const RequestWorkspaceHandoffHandler = @import("RequestWorkspaceHandoffHandler.zig");
-
-pub const WorkspaceArrivalDelivery = @import("WorkspaceArrivalDelivery.zig");
-
-pub const ConfirmWorkspaceHandoffHandler = @import("ConfirmWorkspaceHandoffHandler.zig");
-
-pub const WorkspaceHandoffFailure = @import("WorkspaceHandoffFailure.zig");
 
 pub const WorkspaceRecovery = enum {
     retried,
     unrecoverable,
 };
 
-pub const WorkspaceRecoveryEffects = @import("WorkspaceRecoveryEffects.zig");
-
-pub const RecoverWorkspaceHandoffHandler = @import("RecoverWorkspaceHandoffHandler.zig");
-
-const TestingModel = @import("WorkspaceHandoffTestingModel.zig");
-
-const SelectionCapture = @import("SelectionCapture.zig");
-
-fn prepareWorkspaceSelection(model: *client_model.Model) !void {
+fn prepareWorkspaceSelection(model: *ModelType) !void {
     _ = try model.reconcileWorkspaceList(.{
         .revision = 1,
         .entries = &.{
@@ -59,7 +37,7 @@ fn prepareWorkspaceSelection(model: *client_model.Model) !void {
 }
 
 test "SelectWorkspaceHandler resolves listed positions and identities without mutation" {
-    var testing = try TestingModel.init(true);
+    var testing = try WorkspaceHandoffTestingModel.init(true);
     defer testing.deinit();
     try prepareWorkspaceSelection(testing.model);
     var capture: SelectionCapture = .{};
@@ -71,7 +49,7 @@ test "SelectWorkspaceHandler resolves listed positions and identities without mu
     const version = testing.model.version();
 
     try std.testing.expect(try handler.execute(.{ .position = 1 }));
-    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(2)), capture.requested.?);
+    try std.testing.expectEqual(@as(WorkspaceIdType, @enumFromInt(2)), capture.requested.?);
     try std.testing.expect(try handler.execute(.{ .workspace = @enumFromInt(2) }));
 
     try std.testing.expect(!try handler.execute(.{ .workspace = @enumFromInt(1) }));
@@ -85,7 +63,7 @@ test "SelectWorkspaceHandler resolves listed positions and identities without mu
 }
 
 test "SelectWorkspaceHandler propagates delivery failure without mutation" {
-    var testing = try TestingModel.init(true);
+    var testing = try WorkspaceHandoffTestingModel.init(true);
     defer testing.deinit();
     try prepareWorkspaceSelection(testing.model);
     var capture: SelectionCapture = .{ .fail = true };
@@ -102,12 +80,12 @@ test "SelectWorkspaceHandler propagates delivery failure without mutation" {
     );
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(2)), capture.requested.?);
+    try std.testing.expectEqual(@as(WorkspaceIdType, @enumFromInt(2)), capture.requested.?);
     try std.testing.expectEqualDeep(version, testing.model.version());
 }
 
 test "SelectWorkspaceHandler permits base workspace selection from a worktree" {
-    var testing = try TestingModel.init(false);
+    var testing = try WorkspaceHandoffTestingModel.init(false);
     defer testing.deinit();
     try testing.model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = .{ .worktree = @enumFromInt(1) },
@@ -125,7 +103,7 @@ test "SelectWorkspaceHandler permits base workspace selection from a worktree" {
     try std.testing.expect(try handler.execute(.{ .workspace = @enumFromInt(1) }));
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
-    try std.testing.expectEqual(@as(schema.WorkspaceId, @enumFromInt(1)), capture.requested.?);
+    try std.testing.expectEqual(@as(WorkspaceIdType, @enumFromInt(1)), capture.requested.?);
     try std.testing.expectEqualDeep(version, testing.model.version());
 }
 
@@ -139,8 +117,6 @@ pub const RequestEvent = enum {
     release,
 };
 
-const RequestCapture = @import("WorkspaceHandoffRequestCapture.zig");
-
 fn testingHandoff() WorkspaceHandoff {
     return .{
         .target = .{ .workspace = @enumFromInt(2) },
@@ -150,9 +126,9 @@ fn testingHandoff() WorkspaceHandoff {
 }
 
 test "RequestWorkspaceHandoffHandler orders effects before one departure commit" {
-    var testing = try TestingModel.init(true);
+    var testing = try WorkspaceHandoffTestingModel.init(true);
     defer testing.deinit();
-    var capture: RequestCapture = .{ .model = testing.model };
+    var capture: WorkspaceHandoffRequestCapture = .{ .model = testing.model };
     var handler: RequestWorkspaceHandoffHandler = .{
         .model = testing.model,
         .admission = capture.admission(),
@@ -173,9 +149,9 @@ test "RequestWorkspaceHandoffHandler orders effects before one departure commit"
 }
 
 test "RequestWorkspaceHandoffHandler rejects a blocked departure before preflight" {
-    var testing = try TestingModel.init(true);
+    var testing = try WorkspaceHandoffTestingModel.init(true);
     defer testing.deinit();
-    var capture: RequestCapture = .{ .model = testing.model, .blocked = true };
+    var capture: WorkspaceHandoffRequestCapture = .{ .model = testing.model, .blocked = true };
     var handler: RequestWorkspaceHandoffHandler = .{
         .model = testing.model,
         .admission = capture.admission(),
@@ -192,13 +168,13 @@ test "RequestWorkspaceHandoffHandler rejects a blocked departure before prefligh
 
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);
     try std.testing.expectEqualDeep(testing.location, testing.model.activeTabLocation().?);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "RequestWorkspaceHandoffHandler rejects a canonical follow from an active projection before preflight" {
-    var testing = try TestingModel.init(true);
+    var testing = try WorkspaceHandoffTestingModel.init(true);
     defer testing.deinit();
-    var capture: RequestCapture = .{ .model = testing.model };
+    var capture: WorkspaceHandoffRequestCapture = .{ .model = testing.model };
     var handler: RequestWorkspaceHandoffHandler = .{
         .model = testing.model,
         .admission = capture.admission(),
@@ -215,13 +191,13 @@ test "RequestWorkspaceHandoffHandler rejects a canonical follow from an active p
 
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);
     try std.testing.expectEqualDeep(testing.location, testing.model.activeTabLocation().?);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "RequestWorkspaceHandoffHandler rejects preflight without recovery" {
-    var testing = try TestingModel.init(true);
+    var testing = try WorkspaceHandoffTestingModel.init(true);
     defer testing.deinit();
-    var capture: RequestCapture = .{
+    var capture: WorkspaceHandoffRequestCapture = .{
         .model = testing.model,
         .fail_prepare = true,
     };
@@ -242,7 +218,7 @@ test "RequestWorkspaceHandoffHandler rejects preflight without recovery" {
     try std.testing.expectEqualSlices(RequestEvent, &.{.prepare}, capture.events[0..capture.event_count]);
     try std.testing.expectEqualDeep(testing.location, testing.model.activeTabLocation().?);
     try std.testing.expect(testing.model.workspace.findPane(testing.pane_id).?.attached);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "RequestWorkspaceHandoffHandler restores local detach and send failures" {
@@ -269,9 +245,9 @@ test "RequestWorkspaceHandoffHandler restores local detach and send failures" {
             .events = &[_]RequestEvent{ .prepare, .detach, .restore_graphics },
         },
     }) |scenario| {
-        var testing = try TestingModel.init(true);
+        var testing = try WorkspaceHandoffTestingModel.init(true);
         defer testing.deinit();
-        var capture: RequestCapture = .{
+        var capture: WorkspaceHandoffRequestCapture = .{
             .model = testing.model,
             .fail_detach = scenario.detach,
             .fail_send = scenario.send,
@@ -293,15 +269,13 @@ test "RequestWorkspaceHandoffHandler restores local detach and send failures" {
 
         try std.testing.expectEqualSlices(RequestEvent, scenario.events, capture.events[0..capture.event_count]);
         try std.testing.expectEqualDeep(testing.location, testing.model.activeTabLocation().?);
-        try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+        try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
     }
 }
 
-const ArrivalCapture = @import("ArrivalCapture.zig");
-
 test "ConfirmWorkspaceHandoffHandler commits before delivery and retains failures" {
     inline for (.{ false, true }) |fail| {
-        var testing = try TestingModel.init(true);
+        var testing = try WorkspaceHandoffTestingModel.init(true);
         defer testing.deinit();
         _ = testing.model.departWorkspace();
         const version_before = testing.model.version();
@@ -314,7 +288,7 @@ test "ConfirmWorkspaceHandoffHandler commits before delivery and retains failure
             .model = testing.model,
             .delivery = capture.port(),
         };
-        const arrival: client_model.WorkspaceArrival = .{
+        const arrival: WorkspaceArrivalType = .{
             .pane_id = @enumFromInt(9),
             .location = testing.location,
             .size = .{ .cols = 30, .rows = 8 },
@@ -339,7 +313,7 @@ test "ConfirmWorkspaceHandoffHandler commits before delivery and retains failure
 }
 
 test "ConfirmWorkspaceHandoffHandler rejects construction before delivery" {
-    var testing = try TestingModel.init(false);
+    var testing = try WorkspaceHandoffTestingModel.init(false);
     defer testing.deinit();
     var capture: ArrivalCapture = .{ .model = testing.model };
     var handler: ConfirmWorkspaceHandoffHandler = .{
@@ -355,13 +329,11 @@ test "ConfirmWorkspaceHandoffHandler rejects construction before delivery" {
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
     try std.testing.expect(testing.model.workspaceLocation() == null);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
-const RecoveryCapture = @import("RecoveryCapture.zig");
-
 test "RecoverWorkspaceHandoffHandler retries only a vanished remembered pane" {
-    const workspace: schema.WorkspaceId = @enumFromInt(7);
+    const workspace: WorkspaceIdType = @enumFromInt(7);
     var capture: RecoveryCapture = .{};
     var handler: RecoverWorkspaceHandoffHandler = .{ .effects = capture.port() };
 
@@ -385,7 +357,7 @@ test "RecoverWorkspaceHandoffHandler retries only a vanished remembered pane" {
 }
 
 test "RecoverWorkspaceHandoffHandler retains stale-bookmark removal after retry failure" {
-    const workspace: schema.WorkspaceId = @enumFromInt(7);
+    const workspace: WorkspaceIdType = @enumFromInt(7);
     var capture: RecoveryCapture = .{ .fail = true };
     var handler: RecoverWorkspaceHandoffHandler = .{ .effects = capture.port() };
 

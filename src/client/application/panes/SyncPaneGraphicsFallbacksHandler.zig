@@ -1,9 +1,11 @@
-const SyncPaneGraphicsFallbacksHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const FallbackEffects = @import("FallbackEffects.zig");
 const std = @import("std");
-const source_namespace = @import("pane_graphics.zig");
-model: *client_model.Model,
+const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
+const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
+const SyncPaneGraphicsFallbacksHandler = @This();
+
+model: *ModelType,
 effects: FallbackEffects,
 
 /// Reconciles every bounded pane fallback from committed host capability
@@ -26,5 +28,5 @@ pub fn execute(handler: *SyncPaneGraphicsFallbacksHandler) void {
         }
     }
 
-    std.debug.assert(inspected <= source_namespace.schema.max_tabs_per_workspace * source_namespace.schema.max_panes_per_tab);
+    std.debug.assert(inspected <= max_tabs_per_workspace_module * max_panes_per_tab_module);
 }

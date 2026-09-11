@@ -1,12 +1,14 @@
-const Capture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("workspace_handoff_preparation.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const workspace_handoff_preparation = @import("workspace_handoff_preparation.zig");
 const PrepareWorkspaceHandoffHandler = @import("PrepareWorkspaceHandoffHandler.zig");
-model: *client_model.Model,
-pending_pane: ?source_namespace.schema.PaneId,
+const Capture = @This();
+
+model: *ModelType,
+pending_pane: ?PaneIdType,
 available: usize,
 request_failure: ?anyerror = null,
-events: [5]source_namespace.Event = undefined,
+events: [5]workspace_handoff_preparation.Event = undefined,
 event_count: usize = 0,
 queries_observed_unchanged: bool = true,
 
@@ -43,7 +45,7 @@ fn availableDeliveries(context: *anyopaque) usize {
     return capture.available;
 }
 
-fn attachmentPending(context: *anyopaque, pane_id: source_namespace.schema.PaneId) bool {
+fn attachmentPending(context: *anyopaque, pane_id: PaneIdType) bool {
     const capture: *Capture = @ptrCast(@alignCast(context));
     capture.queries_observed_unchanged = capture.queries_observed_unchanged and
         capture.model.panePasteActive() and
@@ -54,11 +56,11 @@ fn attachmentPending(context: *anyopaque, pane_id: source_namespace.schema.PaneI
     return capture.pending_pane == pane_id;
 }
 
-fn append(capture: *Capture, event: source_namespace.Event) void {
+fn append(capture: *Capture, event: workspace_handoff_preparation.Event) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
 
-pub fn eventSlice(capture: *const Capture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const Capture) []const workspace_handoff_preparation.Event {
     return capture.events[0..capture.event_count];
 }

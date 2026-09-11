@@ -1,10 +1,11 @@
-const Label = @This();
-const source_namespace = @import("pane_labels.zig");
+const pane_labels = @import("pane_labels.zig");
 const std = @import("std");
+const Label = @This();
+
 offset: u16,
 width: u16,
 selected: bool,
-bytes: [source_namespace.max_text_bytes]u8 = undefined,
+bytes: [pane_labels.max_text_bytes]u8 = undefined,
 len: u8 = 0,
 
 pub fn text(label: *const Label) []const u8 {

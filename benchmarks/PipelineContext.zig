@@ -1,16 +1,17 @@
-const PipelineContext = @This();
-const frontend = @import("telar-frontend");
+const ScreenType = @import("telar-frontend").Screen;
 const std = @import("std");
 const Fixture = @import("Fixture.zig");
-const source_namespace = @import("main.zig");
-screen: frontend.term.Screen,
+const main = @import("main.zig");
+const PipelineContext = @This();
+
+screen: ScreenType,
 payloads: [2][]const u8,
 output: []u8,
 
-fn init(gpa: std.mem.Allocator, fixture: *Fixture, workload: source_namespace.Workload) !PipelineContext {
-    var screen = try frontend.term.Screen.init(gpa, source_namespace.cols, source_namespace.rows);
+pub fn init(gpa: std.mem.Allocator, fixture: *Fixture, workload: main.Workload) !PipelineContext {
+    var screen = try ScreenType.init(gpa, main.cols, main.rows);
     errdefer screen.deinit();
-    var writer = source_namespace.Io.Writer.fixed(fixture.terminal_output);
+    var writer = std.Io.Writer.fixed(fixture.terminal_output);
     _ = try screen.flush(&writer);
     return .{
         .screen = screen,
@@ -19,6 +20,6 @@ fn init(gpa: std.mem.Allocator, fixture: *Fixture, workload: source_namespace.Wo
     };
 }
 
-fn deinit(context: *PipelineContext) void {
+pub fn deinit(context: *PipelineContext) void {
     context.screen.deinit();
 }

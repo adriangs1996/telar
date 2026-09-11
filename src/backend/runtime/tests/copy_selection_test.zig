@@ -1,14 +1,14 @@
 //! Vertical tests for bounded terminal selection and clipboard delivery.
 
+const GenericCopySelectionController = @import("../entrypoints/requests/GenericCopySelectionController.zig").Type;
+const CopySelectionHandlerType = @import("../application/commands/CopySelectionHandler.zig");
+const Delivery = @import("../delivery/Delivery.zig");
+const PaneFixture = @import("PaneFixture.zig");
 const std = @import("std");
 const copy_selection_commands = @import("../application/commands/copy_selection.zig");
-const copy_selection_controller = @import("../entrypoints/requests/copy_selection.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const test_support = @import("support.zig");
+const selection = @import("../attachment/selection.zig");
 
-const Delivery = delivery_mod.Delivery;
-const PaneFixture = test_support.PaneFixture;
-const CopySelectionController = copy_selection_controller.Controller(*copy_selection_commands.CopySelectionHandler, *Delivery);
+const CopySelectionController = GenericCopySelectionController(*CopySelectionHandlerType, *Delivery);
 
 fn fillScrollback(fixture: *PaneFixture) !void {
     _ = try fixture.pane.ingest(
@@ -33,10 +33,10 @@ test "CopySelectionHandler reads inclusive absolute scrollback coordinates" {
     defer fixture.deinit();
     try fillScrollback(&fixture);
 
-    var handler: copy_selection_commands.CopySelectionHandler = .{
+    var handler: CopySelectionHandlerType = .{
         .attachments = &fixture.attachments,
     };
-    var scratch: [copy_selection_commands.scratch_bytes]u8 = undefined;
+    var scratch: [selection.scratch_bytes]u8 = undefined;
     const result = handler.execute(.{
         .pane_id = fixture.pane.id,
         .start_x = 1,
@@ -55,10 +55,10 @@ test "CopySelectionHandler preserves reverse linear selection semantics" {
     defer fixture.deinit();
     try fillScrollback(&fixture);
 
-    var handler: copy_selection_commands.CopySelectionHandler = .{
+    var handler: CopySelectionHandlerType = .{
         .attachments = &fixture.attachments,
     };
-    var scratch: [copy_selection_commands.scratch_bytes]u8 = undefined;
+    var scratch: [selection.scratch_bytes]u8 = undefined;
     const result = handler.execute(.{
         .pane_id = fixture.pane.id,
         .start_x = 2,
@@ -77,10 +77,10 @@ test "CopySelectionHandler normalizes linewise selection and clamps columns" {
     defer fixture.deinit();
     try fillScrollback(&fixture);
 
-    var handler: copy_selection_commands.CopySelectionHandler = .{
+    var handler: CopySelectionHandlerType = .{
         .attachments = &fixture.attachments,
     };
-    var scratch: [copy_selection_commands.scratch_bytes]u8 = undefined;
+    var scratch: [selection.scratch_bytes]u8 = undefined;
     const linewise = handler.execute(.{
         .pane_id = fixture.pane.id,
         .start_x = 19,
@@ -121,7 +121,7 @@ test "CopySelectionHandler reports bounded scratch exhaustion" {
     defer fixture.deinit();
     try fillScrollback(&fixture);
 
-    var handler: copy_selection_commands.CopySelectionHandler = .{
+    var handler: CopySelectionHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var scratch: [1]u8 = undefined;
@@ -146,7 +146,7 @@ test "copy selection crosses controller and handler before replacing clipboard d
     var delivery = try Delivery.init(std.testing.allocator);
     defer delivery.deinit(std.testing.allocator);
     try std.testing.expect(delivery.setClipboard(fixture.pane.id, "previous"));
-    var handler: copy_selection_commands.CopySelectionHandler = .{
+    var handler: CopySelectionHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var controller = CopySelectionController.init(&fixture.metrics, &handler, &delivery);

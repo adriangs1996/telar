@@ -1,7 +1,10 @@
+const std = @import("std");
+const PaneType = @import("../../pane/Pane.zig");
+const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
 const Preparation = @This();
-const source_namespace = @import("cell.zig");
-io: source_namespace.Io,
+
+io: std.Io,
 buffer: []u8,
-pane: *source_namespace.Pane,
+pane: *PaneType,
 force_snapshot: bool,
-metrics: *source_namespace.RuntimeMetrics,
+metrics: *RuntimeMetricsType,

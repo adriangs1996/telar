@@ -1,14 +1,15 @@
+const TabSnapshotRequest = @import("TabSnapshotRequest.zig");
+const TabSnapshotResult = @import("TabSnapshotResult.zig");
 const Executor = @This();
-const Request = @import("TabSnapshotRequest.zig");
-const Result = @import("TabSnapshotResult.zig");
+
 context: *anyopaque,
-execute_fn: *const fn (*anyopaque, Request) anyerror!Result,
+execute_fn: *const fn (*anyopaque, TabSnapshotRequest) anyerror!TabSnapshotResult,
 
 /// Executes the tab-snapshot query through its bound handler.
 ///
 /// ```zig
 /// const snapshot = try executor.execute(.{ .location = location });
 /// ```
-pub fn execute(executor: Executor, request: Request) !Result {
+pub fn execute(executor: Executor, request: TabSnapshotRequest) !TabSnapshotResult {
     return executor.execute_fn(executor.context, request);
 }

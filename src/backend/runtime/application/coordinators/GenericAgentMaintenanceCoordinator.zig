@@ -1,5 +1,6 @@
 const GenericAgentMaintenanceRuntimePort = @import("GenericAgentMaintenanceRuntimePort.zig").Type;
-const Resources = @import("AgentMaintenanceResources.zig");
+const AgentMaintenanceResources = @import("AgentMaintenanceResources.zig");
+
 /// Creates a statically dispatched agent-maintenance coordinator.
 ///
 /// ```zig
@@ -10,14 +11,14 @@ pub fn Type(comptime Context: type, comptime port: GenericAgentMaintenanceRuntim
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: AgentMaintenanceResources,
 
         /// Binds periodic maintenance to one runtime-owned agent tracker.
         ///
         /// ```zig
         /// var coordinator = AgentMaintenanceCoordinator.init(&context, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: AgentMaintenanceResources) Self {
             return .{ .context = context, .resources = resources };
         }
 

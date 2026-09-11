@@ -1,11 +1,12 @@
-const RequestWorkspaceCreationHandler = @This();
-const client_model = @import("../../root.zig").model;
-const WorkspaceOperationGate = @import("CreateWorkspaceWorkspaceOperationGate.zig");
+const ModelType = @import("../../model/Model.zig");
+const CreateWorkspaceOperationGate = @import("CreateWorkspaceOperationGate.zig");
 const CreationRequestEffects = @import("CreationRequestEffects.zig");
 const RequestWorkspaceCreation = @import("RequestWorkspaceCreation.zig");
-const source_namespace = @import("create_workspace.zig");
-model: *const client_model.Model,
-gate: WorkspaceOperationGate,
+const create_workspace = @import("create_workspace.zig");
+const RequestWorkspaceCreationHandler = @This();
+
+model: *const ModelType,
+gate: CreateWorkspaceOperationGate,
 effects: CreationRequestEffects,
 
 /// Sends one creation intent from the attached focused pane. A blocked or
@@ -19,7 +20,7 @@ pub fn execute(handler: *RequestWorkspaceCreationHandler, command: RequestWorksp
         return false;
     }
 
-    try source_namespace.validateName(command.name);
+    try create_workspace.validateName(command.name);
     const cwd_source = handler.model.planWorkspaceCreation() orelse return false;
     try handler.effects.send(handler.effects.context, .{
         .name = command.name,

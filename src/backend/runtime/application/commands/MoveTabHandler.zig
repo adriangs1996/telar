@@ -1,11 +1,13 @@
-const MoveTabHandler = @This();
-const source_namespace = @import("move_tab.zig");
-const EventPublisher = @import("MoveTabEventPublisher.zig");
+const Repository = @import("../../../workspace/Repository.zig");
+const MoveTabEventPublisher = @import("MoveTabEventPublisher.zig");
 const MoveTab = @import("MoveTab.zig");
-const workspace_mod = @import("../../../workspace/root.zig");
+const TabMoved = @import("../../../workspace/TabMoved.zig");
+const commands = @import("../../../workspace/commands.zig");
 const MoveTabExecutor = @import("MoveTabExecutor.zig");
-workspaces: *source_namespace.WorkspaceRepository,
-events: EventPublisher,
+const MoveTabHandler = @This();
+
+workspaces: *Repository,
+events: MoveTabEventPublisher,
 
 /// Commits a move through the workspace aggregate and then publishes its
 /// canonical position. Failed commands have no observable effects.
@@ -13,8 +15,8 @@ events: EventPublisher,
 /// ```zig
 /// const moved = try handler.execute(.{ .location = location, .direction = .previous });
 /// ```
-pub fn execute(handler: *MoveTabHandler, command: MoveTab) !source_namespace.MoveTabResult {
-    const moved = try workspace_mod.moveTab(
+pub fn execute(handler: *MoveTabHandler, command: MoveTab) !TabMoved {
+    const moved = try commands.moveTab(
         handler.workspaces,
         command.location,
         command.direction,
@@ -34,7 +36,7 @@ pub fn executor(handler: *MoveTabHandler) MoveTabExecutor {
     return .{ .context = handler, .execute_fn = executeErased };
 }
 
-fn executeErased(context: *anyopaque, command: MoveTab) !source_namespace.MoveTabResult {
+fn executeErased(context: *anyopaque, command: MoveTab) !TabMoved {
     const handler: *MoveTabHandler = @ptrCast(@alignCast(context));
     return handler.execute(command);
 }

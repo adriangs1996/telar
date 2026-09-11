@@ -1,6 +1,6 @@
-const Event = @import("screen_support.zig").Event;
-const source_namespace = @import("screen_support.zig");
+const screen_support = @import("screen_support.zig");
 const std = @import("std");
+
 /// Bytes in, events out, losing none.
 ///
 /// A terminal hands over arbitrary fragments: half an escape sequence, three
@@ -41,9 +41,9 @@ pub fn Type(comptime capacity: usize) type {
         }
 
         /// The next complete event, or null if more bytes are needed.
-        pub fn next(in: *Self) ?Event {
+        pub fn next(in: *Self) ?screen_support.Event {
             while (in.len > 0) {
-                const parsed = source_namespace.parse(in.pending[0..in.len]) orelse return null;
+                const parsed = screen_support.parse(in.pending[0..in.len]) orelse return null;
                 if (parsed.len == 0) {
                     // Needs more bytes - unless there is no more room for them,
                     // in which case the buffer holds something that will never

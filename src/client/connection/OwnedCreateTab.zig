@@ -1,14 +1,20 @@
+const RequestIdType = @import("telar-core").RequestId;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const LaunchType = @import("telar-core").Launch;
+const CreateTabType = @import("telar-core").CreateTab;
 const OwnedCreateTab = @This();
-const source_namespace = @import("outbox_support.zig");
+
 pub const max_owned_arguments = 8;
 const max_owned_argument_bytes = 224;
 
-request_id: source_namespace.schema.RequestId,
-workspace: source_namespace.schema.WorkspaceLocation,
-label: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+request_id: RequestIdType,
+workspace: WorkspaceLocationType,
+label: [max_tab_label_bytes_module]u8 = undefined,
 label_len: u8,
-size: source_namespace.schema.TerminalSize,
-launch: source_namespace.schema.Launch,
+size: TerminalSizeType,
+launch: LaunchType,
 /// NUL-free bytes of a bounded owned argv; zero count borrows
 /// `launch.arguments`, which is only safe for process-lifetime slices.
 argument_storage: [max_owned_argument_bytes]u8 = undefined,
@@ -35,7 +41,7 @@ pub fn ownArguments(value: *OwnedCreateTab, arguments: []const []const u8) bool 
     return true;
 }
 
-pub fn view(value: *const OwnedCreateTab, cwd: []const u8, scratch: *[max_owned_arguments][]const u8) source_namespace.schema.CreateTab {
+pub fn view(value: *const OwnedCreateTab, cwd: []const u8, scratch: *[max_owned_arguments][]const u8) CreateTabType {
     var launch = value.launch;
     launch.cwd = cwd;
     if (value.argument_count != 0) {

@@ -1,28 +1,20 @@
 //! Application policy for delivering disposable client resources after one
 //! committed tab creation.
 
+const PaneIdType = @import("telar-core").PaneId;
+const TabCreationDeliveryTestingModel = @import("TabCreationDeliveryTestingModel.zig");
+const TabCreationType = @import("../../model/TabCreation.zig");
+const TabCreationDeliveryEffectsCapture = @import("TabCreationDeliveryEffectsCapture.zig");
+const DeliverTabCreationHandler = @import("DeliverTabCreationHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../../root.zig").model;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const pane_paste = @import("../input/root.zig").pane_paste;
-const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
-
-pub const schema = core.schema;
-pub const tabs_mod = workspace_capability.tabs;
-
-pub const Effects = @import("TabCreationDeliveryEffects.zig");
-
-pub const DeliverTabCreationHandler = @import("DeliverTabCreationHandler.zig");
 
 pub const Event = union(enum) {
-    paste_finish: schema.PaneId,
-    focus_out: schema.PaneId,
-    attachment_pending: schema.PaneId,
-    detach: schema.PaneId,
-    retire_attachment: schema.PaneId,
-    hide_graphics: schema.PaneId,
+    paste_finish: PaneIdType,
+    focus_out: PaneIdType,
+    attachment_pending: PaneIdType,
+    detach: PaneIdType,
+    retire_attachment: PaneIdType,
+    hide_graphics: PaneIdType,
     synchronize_active_resources,
 };
 
@@ -34,11 +26,7 @@ pub const Failure = enum {
     active_resources,
 };
 
-const TestingModel = @import("TabCreationDeliveryTestingModel.zig");
-
-const EffectsCapture = @import("TabCreationDeliveryEffectsCapture.zig");
-
-fn captureFor(testing: *TestingModel, creation: client_model.TabCreation) EffectsCapture {
+fn captureFor(testing: *TabCreationDeliveryTestingModel, creation: TabCreationType) TabCreationDeliveryEffectsCapture {
     return .{
         .model = testing.model,
         .creation = creation,
@@ -47,7 +35,7 @@ fn captureFor(testing: *TestingModel, creation: client_model.TabCreation) Effect
     };
 }
 
-fn deliveryHandler(testing: *TestingModel, capture: *EffectsCapture) DeliverTabCreationHandler {
+fn deliveryHandler(testing: *TabCreationDeliveryTestingModel, capture: *TabCreationDeliveryEffectsCapture) DeliverTabCreationHandler {
     return .{
         .model = testing.model,
         .paste_effects = capture.pasteEffects(),
@@ -58,7 +46,7 @@ fn deliveryHandler(testing: *TestingModel, capture: *EffectsCapture) DeliverTabC
 }
 
 test "DeliverTabCreationHandler retires previous attachments before active resources" {
-    var testing = try TestingModel.init();
+    var testing = try TabCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const creation = try testing.create();
     var capture = captureFor(&testing, creation);
@@ -84,7 +72,7 @@ test "DeliverTabCreationHandler retires previous attachments before active resou
 }
 
 test "DeliverTabCreationHandler accepts an exact invalid-copy release" {
-    var testing = try TestingModel.init();
+    var testing = try TabCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const paste = testing.model.panePasteSession().?;
     try std.testing.expect(testing.model.finishPanePaste(paste));
@@ -103,7 +91,7 @@ test "DeliverTabCreationHandler accepts an exact invalid-copy release" {
 }
 
 test "DeliverTabCreationHandler rejects altered commits before effects" {
-    var testing = try TestingModel.init();
+    var testing = try TabCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const creation = try testing.create();
     var capture = captureFor(&testing, creation);
@@ -156,7 +144,7 @@ test "DeliverTabCreationHandler rejects altered commits before effects" {
 }
 
 test "DeliverTabCreationHandler catches active identity and layout ABA" {
-    var identity_testing = try TestingModel.init();
+    var identity_testing = try TabCreationDeliveryTestingModel.init();
     defer identity_testing.deinit();
     const identity_creation = try identity_testing.create();
     var identity_capture = captureFor(&identity_testing, identity_creation);
@@ -166,7 +154,7 @@ test "DeliverTabCreationHandler catches active identity and layout ABA" {
     try std.testing.expectError(error.StaleTabCreation, identity_handler.execute(identity_creation));
     try std.testing.expectEqual(@as(usize, 0), identity_capture.event_count);
 
-    var layout_testing = try TestingModel.init();
+    var layout_testing = try TabCreationDeliveryTestingModel.init();
     defer layout_testing.deinit();
     const layout_creation = try layout_testing.create();
     var layout_capture = captureFor(&layout_testing, layout_creation);
@@ -176,7 +164,7 @@ test "DeliverTabCreationHandler catches active identity and layout ABA" {
     try std.testing.expectError(error.StaleTabCreation, layout_handler.execute(layout_creation));
     try std.testing.expectEqual(@as(usize, 0), layout_capture.event_count);
 
-    var root_testing = try TestingModel.init();
+    var root_testing = try TabCreationDeliveryTestingModel.init();
     defer root_testing.deinit();
     const root_creation = try root_testing.create();
     var root_capture = captureFor(&root_testing, root_creation);
@@ -186,7 +174,7 @@ test "DeliverTabCreationHandler catches active identity and layout ABA" {
     try std.testing.expectError(error.StaleTabCreation, root_handler.execute(root_creation));
     try std.testing.expectEqual(@as(usize, 0), root_capture.event_count);
 
-    var pane_testing = try TestingModel.init();
+    var pane_testing = try TabCreationDeliveryTestingModel.init();
     defer pane_testing.deinit();
     var pane_creation = try pane_testing.create();
     var pane_capture = captureFor(&pane_testing, pane_creation);
@@ -200,7 +188,7 @@ test "DeliverTabCreationHandler catches active identity and layout ABA" {
 }
 
 test "DeliverTabCreationHandler stops after attachment failure without rolling back creation" {
-    var testing = try TestingModel.init();
+    var testing = try TabCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const creation = try testing.create();
     var capture = captureFor(&testing, creation);
@@ -222,7 +210,7 @@ test "DeliverTabCreationHandler stops after attachment failure without rolling b
 }
 
 test "DeliverTabCreationHandler preserves retired attachments after resource failure" {
-    var testing = try TestingModel.init();
+    var testing = try TabCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const creation = try testing.create();
     var capture = captureFor(&testing, creation);
@@ -243,7 +231,7 @@ test "DeliverTabCreationHandler preserves retired attachments after resource fai
 }
 
 test "DeliverTabCreationHandler keeps completed paste retirement after focus failure" {
-    var testing = try TestingModel.init();
+    var testing = try TabCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const creation = try testing.create();
     var capture = captureFor(&testing, creation);
@@ -262,7 +250,7 @@ test "DeliverTabCreationHandler keeps completed paste retirement after focus fai
 }
 
 test "DeliverTabCreationHandler stops after a failed paste boundary" {
-    var testing = try TestingModel.init();
+    var testing = try TabCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const creation = try testing.create();
     var capture = captureFor(&testing, creation);

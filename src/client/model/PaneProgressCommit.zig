@@ -1,5 +1,6 @@
+const PaneIdType = @import("telar-core").PaneId;
 const PaneProgressCommit = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 active: bool,
 pane_progress_revision: u64,

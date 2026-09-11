@@ -1,7 +1,10 @@
+const PaneIdType = @import("telar-core").PaneId;
+const RectType = @import("telar-core").Rect;
+const MouseType = @import("telar-core").Mouse;
 const PaneMousePlan = @This();
-const source_namespace = @import("multiplexer.zig");
-pane_id: source_namespace.schema.PaneId,
-content: source_namespace.ui.Rect,
-protocol: source_namespace.schema.frame.Mouse,
+
+pane_id: PaneIdType,
+content: RectType,
+protocol: MouseType,
 alternate_scroll: bool,
 at_bottom: bool,

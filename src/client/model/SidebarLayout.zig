@@ -1,5 +1,6 @@
+const sidebar_module = @import("../layout/sidebar.zig");
 const SidebarLayout = @This();
-const frontend_ui = @import("../layout/root.zig");
+
 visible: bool,
-width: u16 = frontend_ui.sidebar.default_width,
+width: u16 = sidebar_module.default_width,
 chrome_revision: u64,

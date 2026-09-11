@@ -1,11 +1,14 @@
-const PaneFocusCommand = @This();
 const ClientRoute = @import("ClientRoute.zig");
-const source_namespace = @import("focus.zig");
+const id = @import("../id.zig");
+const types = @import("../types.zig");
+const codec = @import("../codec.zig");
+const PaneFocusCommand = @This();
+
 requester: ClientRoute,
-request_id: source_namespace.RequestId,
-pane_id: source_namespace.PaneId,
+request_id: id.RequestId,
+pane_id: id.PaneId,
 pane_generation: u64,
-direction: source_namespace.PaneDirection,
+direction: types.PaneDirection,
 
 /// Requires the runtime route and exact pane generation sent to the UI.
 ///
@@ -14,8 +17,8 @@ direction: source_namespace.PaneDirection,
 /// ```
 pub fn validateWire(command: PaneFocusCommand) !void {
     try command.requester.validateWire();
-    try source_namespace.validateRequestId(command.request_id);
-    try source_namespace.validatePaneId(command.pane_id);
+    try codec.validateRequestId(command.request_id);
+    try codec.validatePaneId(command.pane_id);
     if (command.pane_generation == 0) {
         return error.InvalidPaneGeneration;
     }

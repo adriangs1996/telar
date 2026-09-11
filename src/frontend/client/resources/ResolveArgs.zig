@@ -1,7 +1,8 @@
-const ResolveArgs = @This();
 const std = @import("std");
-const source_namespace = @import("config_reload.zig");
+const config_reload = @import("config_reload.zig");
 const Checks = @import("Checks.zig");
+const ResolveArgs = @This();
+
 gpa: std.mem.Allocator,
-reload: source_namespace.ConfigReload,
+reload: config_reload.ConfigReload,
 checks: Checks,

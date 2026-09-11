@@ -1,15 +1,19 @@
 //! In-memory repository for workspace aggregates.
 
+const State = @import("State.zig");
+const Repository = @import("Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const state_mod = @import("state_support.zig");
-const workspace_mod = @import("workspace_support.zig");
-const git = @import("git_observation.zig");
 const ProbeSchedule = @import("ProbeSchedule.zig");
-
-pub const schema = core.schema;
-pub const State = state_mod.State;
-pub const Workspace = workspace_mod.Workspace;
+const ObservationType = @import("Observation.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const tab_module = @import("telar-core").tab;
+const raw_module = @import("telar-core").raw;
+const state_mod = @import("state_support.zig");
+const WorkspaceListEntryType = @import("telar-core").WorkspaceListEntry;
+const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
+const TabDescriptorType = @import("telar-core").TabDescriptor;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 
 test "Git probes reserve one workspace, reject stale results and recover after removal" {
     var state: State = .{};
@@ -25,7 +29,7 @@ test "Git probes reserve one workspace, reject stale results and recover after r
     try std.testing.expect(repository.reserveGitProbe(due) == null);
     repository.cancelGitProbe(probe.workspace);
     _ = repository.reserveGitProbe(due).?;
-    const observation: git.Observation = .{ .workspace = probe.workspace, .branch = "main", .dirty = true, .checked_at_ms = 5000 };
+    const observation: ObservationType = .{ .workspace = probe.workspace, .branch = "main", .dirty = true, .checked_at_ms = 5000 };
     try std.testing.expect(repository.completeGitProbe(observation));
     const revision = repository.reader().revision();
     try std.testing.expect(!repository.completeGitProbe(observation));
@@ -40,19 +44,7 @@ test "Git probes reserve one workspace, reject stale results and recover after r
     repository.cancelGitProbe(probe.workspace);
 }
 
-pub const Ensured = @import("Ensured.zig");
-
-pub const Insert = @import("Insert.zig");
-
-pub const DescriptorSnapshot = @import("DescriptorSnapshot.zig");
-
-pub const Proposal = @import("Proposal.zig");
-
-pub const Reader = @import("Reader.zig");
-
-pub const Repository = @import("Repository.zig");
-
-pub fn workspaceId(location: schema.WorkspaceLocation) ?schema.WorkspaceId {
+pub fn workspaceId(location: WorkspaceLocationType) ?WorkspaceIdType {
     return switch (location) {
         .workspace => |id| id,
         .worktree => null,
@@ -79,7 +71,7 @@ test "repository ensures stable path identity and owns aggregate storage" {
     try std.testing.expect(reader_value.locationByPath("/work/missing") == null);
 
     var unknown_tab = first.location;
-    unknown_tab.tab_id = try schema.id.tab(999);
+    unknown_tab.tab_id = try tab_module(999);
     try std.testing.expect(!reader_value.contains(unknown_tab));
     try std.testing.expectEqual(@as(usize, 2), reader_value.count());
 }
@@ -105,8 +97,8 @@ test "workspace proposals stay invisible and preserve identities on rollback" {
 
     const inserted = try repository.insert(.{ .path = "/work/reused" });
     const workspace_id = workspaceId(inserted.workspace).?;
-    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(workspace_id));
-    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(inserted.tab_id));
+    try std.testing.expectEqual(@as(u64, 1), raw_module(workspace_id));
+    try std.testing.expectEqual(@as(u64, 1), raw_module(inserted.tab_id));
 }
 
 test "committing a workspace proposal advances state exactly once" {
@@ -124,7 +116,7 @@ test "committing a workspace proposal advances state exactly once" {
     try std.testing.expect(repository.reader().contains(committed_location));
     try std.testing.expectEqual(@as(usize, 1), repository.reader().count());
     try std.testing.expect(repository.reader().revision() != initial_revision);
-    try std.testing.expectEqual(@as(u64, 2), schema.id.raw(try repository.nextTabId()));
+    try std.testing.expectEqual(@as(u64, 2), raw_module(try repository.nextTabId()));
 }
 
 test "repository permits distinct aggregates with the same path" {
@@ -179,13 +171,13 @@ test "reader creates bounded list and tab projections" {
     });
     const reader_value = repository.reader();
 
-    var entries: [state_mod.max_workspaces]schema.WorkspaceListEntry = undefined;
+    var entries: [state_mod.max_workspaces]WorkspaceListEntryType = undefined;
     const list = reader_value.listEntries(&entries);
     try std.testing.expectEqual(@as(usize, 1), list.len);
     try std.testing.expectEqualStrings("agents", list[0].name);
     try std.testing.expectEqualStrings("/work/project", list[0].path);
 
-    var descriptors: [workspace_mod.max_tabs_per_workspace]schema.TabDescriptor = undefined;
+    var descriptors: [max_tabs_per_workspace_module]TabDescriptorType = undefined;
     const snapshot = reader_value.descriptors(location.workspace, &descriptors).?;
     try std.testing.expectEqualStrings("agents", snapshot.name);
     try std.testing.expectEqual(@as(usize, 1), snapshot.tabs.len);
@@ -197,7 +189,7 @@ test "failed insertion preserves repository identities and revision" {
     var repository = Repository.init(&state, std.testing.allocator);
     defer repository.deinit();
     const initial_revision = repository.reader().revision();
-    const oversized_name: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    const oversized_name: [max_tab_label_bytes_module + 1]u8 = @splat('x');
 
     try std.testing.expectError(error.InvalidWorkspaceName, repository.insert(.{
         .path = "/work/rejected",
@@ -208,8 +200,8 @@ test "failed insertion preserves repository identities and revision" {
 
     const inserted = try repository.insert(.{ .path = "/work/accepted" });
     const workspace_id = workspaceId(inserted.workspace).?;
-    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(workspace_id));
-    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(inserted.tab_id));
+    try std.testing.expectEqual(@as(u64, 1), raw_module(workspace_id));
+    try std.testing.expectEqual(@as(u64, 1), raw_module(inserted.tab_id));
 }
 
 test "repository rejects aggregates beyond its fixed capacity" {
@@ -244,7 +236,7 @@ test "restored workspaces keep their identities and push the counters past them"
     });
     try repository.restoreTab(.{ .workspace = location.workspace, .tab_id = @enumFromInt(11) }, "logs");
 
-    try std.testing.expectEqual(@as(u64, 4), schema.id.raw(location.workspace.workspace));
+    try std.testing.expectEqual(@as(u64, 4), raw_module(location.workspace.workspace));
     try std.testing.expectEqualStrings("core", repository.reader().workspaceName(location.workspace).?);
     try std.testing.expectEqualStrings("editor", repository.reader().tabLabel(location).?);
     try std.testing.expectEqualStrings("logs", repository.reader().tabLabel(.{ .workspace = location.workspace, .tab_id = @enumFromInt(11) }).?);
@@ -259,6 +251,6 @@ test "restored workspaces keep their identities and push the counters past them"
     }));
 
     const fresh = try repository.ensure("/work/other");
-    try std.testing.expectEqual(@as(u64, 5), schema.id.raw(fresh.location.workspace.workspace));
-    try std.testing.expectEqual(@as(u64, 12), schema.id.raw(fresh.location.tab_id));
+    try std.testing.expectEqual(@as(u64, 5), raw_module(fresh.location.workspace.workspace));
+    try std.testing.expectEqual(@as(u64, 12), raw_module(fresh.location.tab_id));
 }

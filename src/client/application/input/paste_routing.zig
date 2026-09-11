@@ -1,5 +1,8 @@
 //! Application policy for assigning each streamed paste phase to one owner.
 
+const PasteRoutingAuthority = @import("PasteRoutingAuthority.zig");
+const PasteRoutingCapture = @import("PasteRoutingCapture.zig");
+const PasteRoutingHandler = @import("PasteRoutingHandler.zig");
 const std = @import("std");
 
 pub const Command = union(enum) {
@@ -8,8 +11,6 @@ pub const Command = union(enum) {
     content: []const u8,
     finish,
 };
-
-pub const Authority = @import("PasteRoutingAuthority.zig");
 
 pub const Owner = enum {
     prompt,
@@ -22,13 +23,7 @@ pub const Outcome = enum {
     pane_owned,
 };
 
-pub const Route = @import("Route.zig");
-
-pub const Effects = @import("PasteRoutingEffects.zig");
-
-pub const PasteRoutingHandler = @import("PasteRoutingHandler.zig");
-
-pub fn resolve(authority: Authority, command: Command) ?Owner {
+pub fn resolve(authority: PasteRoutingAuthority, command: Command) ?Owner {
     return switch (command) {
         .start => if (authority.attachment_modal_active)
             null
@@ -47,11 +42,9 @@ pub fn resolve(authority: Authority, command: Command) ?Owner {
     };
 }
 
-const Capture = @import("PasteRoutingCapture.zig");
-
 test "PasteRoutingHandler assigns paste start by modal prompt and copy authority" {
     const cases = [_]struct {
-        authority: Authority,
+        authority: PasteRoutingAuthority,
         outcome: Outcome,
     }{
         .{ .authority = .{ .attachment_modal_active = true, .prompt_active = true }, .outcome = .ignored },
@@ -61,7 +54,7 @@ test "PasteRoutingHandler assigns paste start by modal prompt and copy authority
     };
 
     for (cases) |case| {
-        var capture: Capture = .{};
+        var capture: PasteRoutingCapture = .{};
         var handler: PasteRoutingHandler = .{ .effects = capture.effects() };
 
         try std.testing.expectEqual(case.outcome, try handler.execute(case.authority, .start));
@@ -70,9 +63,9 @@ test "PasteRoutingHandler assigns paste start by modal prompt and copy authority
 }
 
 test "PasteRoutingHandler keeps later phases with their established owner" {
-    var capture: Capture = .{};
+    var capture: PasteRoutingCapture = .{};
     var handler: PasteRoutingHandler = .{ .effects = capture.effects() };
-    const competing: Authority = .{
+    const competing: PasteRoutingAuthority = .{
         .attachment_modal_active = true,
         .prompt_active = true,
         .prompt_pasting = true,
@@ -99,7 +92,7 @@ test "PasteRoutingHandler keeps later phases with their established owner" {
 }
 
 test "PasteRoutingHandler propagates the selected owner failure without fallback" {
-    var capture: Capture = .{ .fail = true };
+    var capture: PasteRoutingCapture = .{ .fail = true };
     var handler: PasteRoutingHandler = .{ .effects = capture.effects() };
 
     try std.testing.expectError(

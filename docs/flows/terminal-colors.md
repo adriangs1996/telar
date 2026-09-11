@@ -114,10 +114,10 @@ color query.
 - `presentation/screen.zig`: OSC 10/11 parsing, terminators and malformed RGB.
 - `client/tests/transport.zig`: ordered bootstrap, timeout fallback and replay
   only after pane activation.
-- `backend/pane/root.zig`: child query fragments, overrides, resets and deferred
+- `src/backend/pane/pane_namespace.zig`: child query fragments, overrides, resets and deferred
   latest-value updates during ingestion.
 - `backend/pane/blit.zig`: semantic defaults and explicit RGB cell backgrounds.
-- `backend/runtime/application/root.zig`: ownership, spectators, lease transfer,
+- `src/backend/runtime/application/application_namespace.zig`: ownership, spectators, lease transfer,
   disconnect retention and generation-safe lookup.
 - `core/schema_contract_test.zig`: wire fingerprint, truncation, optional colors
   and malformed presence flags.

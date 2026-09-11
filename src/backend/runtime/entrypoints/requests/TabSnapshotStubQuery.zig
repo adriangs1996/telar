@@ -1,15 +1,18 @@
+const TabSnapshotResult = @import("../../application/queries/TabSnapshotResult.zig");
+const TabSnapshotRequest = @import("../../application/queries/TabSnapshotRequest.zig");
+const TabSnapshotExecutor = @import("../../application/queries/TabSnapshotExecutor.zig");
 const StubQuery = @This();
-const tab_snapshot_query = @import("../../application/queries/tab_snapshot.zig");
-result: ?tab_snapshot_query.Result = null,
+
+result: ?TabSnapshotResult = null,
 failure: ?anyerror = null,
 call_count: usize = 0,
-last_request: ?tab_snapshot_query.Request = null,
+last_request: ?TabSnapshotRequest = null,
 
-pub fn executor(stub: *StubQuery) tab_snapshot_query.Executor {
+pub fn executor(stub: *StubQuery) TabSnapshotExecutor {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, request: tab_snapshot_query.Request) anyerror!tab_snapshot_query.Result {
+fn execute(context: *anyopaque, request: TabSnapshotRequest) anyerror!TabSnapshotResult {
     const stub: *StubQuery = @ptrCast(@alignCast(context));
     stub.call_count += 1;
     stub.last_request = request;

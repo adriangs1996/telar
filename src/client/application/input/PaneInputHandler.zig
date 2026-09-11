@@ -1,12 +1,21 @@
-const PaneInputHandler = @This();
-const client_model = @import("../../root.zig").model;
+const HistoryPasteType = @import("HistoryPaste.zig");
+const ModelType = @import("../../model/Model.zig");
 const PaneInputEffects = @import("PaneInputEffects.zig");
-const Command = @import("PaneInputCommand.zig");
-const Delivery = @import("Delivery.zig");
-const source_namespace = @import("pane_input.zig");
+const PaneInputCommand = @import("PaneInputCommand.zig");
+const Delivery = @import("PaneInputDelivery.zig");
+const Prepared = @import("Prepared.zig");
+const encoding_support = @import("../../input/encoding_support.zig");
+const types = @import("../../model/types.zig");
+const KeyType = @import("../../input/Key.zig");
+const pane_input = @import("pane_input.zig");
+const root = @import("../../input/input_namespace.zig");
+const max_history_command_bytes_module = @import("telar-core").max_history_command_bytes;
 const PasteMarkerCommand = @import("PasteMarkerCommand.zig");
-const set_pane_viewport = @import("../panes/root.zig").set_pane_viewport;
-model: *client_model.Model,
+const PaneInputPlanType = @import("../../model/PaneInputPlan.zig");
+const SetPaneViewportHandlerType = @import("../panes/SetPaneViewportHandler.zig");
+const PaneInputHandler = @This();
+
+model: *ModelType,
 effects: PaneInputEffects,
 
 /// Encodes semantic keys before any commit, restores live output for key
@@ -16,14 +25,14 @@ effects: PaneInputEffects,
 /// ```zig
 /// const delivery = try handler.execute(command) orelse return;
 /// ```
-pub fn execute(handler: *PaneInputHandler, command: Command) !?Delivery {
+pub fn execute(handler: *PaneInputHandler, command: PaneInputCommand) !?Delivery {
     const plan = handler.model.planPaneInput(command.target) orelse return null;
     var encoded: [32]u8 = undefined;
     const prepared: Prepared = switch (command.payload) {
         .bytes => |value| .{ .source = command.source, .bytes = value },
         .key => |value| .{
             .source = command.source,
-            .bytes = try source_namespace.host_input.encodeKey(&encoded, value, plan.input_modes),
+            .bytes = try encoding_support.encodeKey(&encoded, value, plan.input_modes),
             .restore_viewport = value.phase != .release,
             .empty_is_noop = true,
         },
@@ -42,17 +51,17 @@ pub fn execute(handler: *PaneInputHandler, command: Command) !?Delivery {
 /// ```zig
 /// _ = try handler.executeKeys(.{ .pane = pane_id }, keys);
 /// ```
-pub fn executeKeys(handler: *PaneInputHandler, target: client_model.PaneInputTarget, keys: []const source_namespace.keybind.Key) !?Delivery {
-    if (keys.len == 0 or keys.len > source_namespace.max_keys) {
+pub fn executeKeys(handler: *PaneInputHandler, target: types.PaneInputTarget, keys: []const KeyType) !?Delivery {
+    if (keys.len == 0 or keys.len > pane_input.max_keys) {
         return error.InvalidInputLength;
     }
 
     const plan = handler.model.planPaneInput(target) orelse return null;
-    var encoded: [source_namespace.max_bytes]u8 = undefined;
+    var encoded: [root.max_encoded_bytes]u8 = undefined;
     var len: usize = 0;
     for (keys) |key| {
         var key_bytes: [32]u8 = undefined;
-        const bytes = try source_namespace.host_input.encodeKey(&key_bytes, key, plan.input_modes);
+        const bytes = try encoding_support.encodeKey(&key_bytes, key, plan.input_modes);
         if (bytes.len > encoded.len - len) {
             return error.InvalidInputLength;
         }
@@ -70,15 +79,15 @@ pub fn executeKeys(handler: *PaneInputHandler, target: client_model.PaneInputTar
 /// ```zig
 /// const delivery = try handler.executePaste(.focused, "text");
 /// ```
-pub fn executePaste(handler: *PaneInputHandler, target: client_model.PaneInputTarget, text: []const u8) !?Delivery {
+pub fn executePaste(handler: *PaneInputHandler, target: types.PaneInputTarget, text: []const u8) !?Delivery {
     const plan = handler.model.planPaneInput(target) orelse return null;
     const framing_bytes: usize = if (plan.input_modes.bracketed_paste) 12 else 0;
-    if (text.len > source_namespace.max_bytes - framing_bytes) {
+    if (text.len > root.max_encoded_bytes - framing_bytes) {
         return error.InvalidInputLength;
     }
 
-    var encoded: [source_namespace.max_bytes]u8 = undefined;
-    const bytes = try source_namespace.host_input.encodePaste(&encoded, text, plan.input_modes);
+    var encoded: [root.max_encoded_bytes]u8 = undefined;
+    const bytes = try encoding_support.encodePaste(&encoded, text, plan.input_modes);
 
     return try handler.deliver(plan, .{
         .source = .paste,
@@ -86,20 +95,16 @@ pub fn executePaste(handler: *PaneInputHandler, target: client_model.PaneInputTa
     });
 }
 
-pub const HistoryPaste = struct {
-    target: client_model.PaneInputTarget,
-    text: []const u8,
-    run: bool,
-};
+pub const HistoryPaste = @import("HistoryPaste.zig");
 
 /// Frames a complete history command and puts execution after the paste boundary.
 /// The send port must atomically reserve the resulting bounded input batch.
 /// Example: `_ = try handler.executeHistoryPaste(.{ .target = .focused, .text = command, .run = false });`.
-pub fn executeHistoryPaste(handler: *PaneInputHandler, request: HistoryPaste) !?Delivery {
+pub fn executeHistoryPaste(handler: *PaneInputHandler, request: HistoryPasteType) !?Delivery {
     const plan = handler.model.planPaneInput(request.target) orelse return null;
-    try source_namespace.validateHistoryText(request.text, plan.input_modes.bracketed_paste);
-    var encoded: [source_namespace.schema.max_history_command_bytes + 13]u8 = undefined;
-    const paste = try source_namespace.host_input.encodePaste(&encoded, request.text, plan.input_modes);
+    try pane_input.validateHistoryText(request.text, plan.input_modes.bracketed_paste);
+    var encoded: [max_history_command_bytes_module + 13]u8 = undefined;
+    const paste = try encoding_support.encodePaste(&encoded, request.text, plan.input_modes);
     var len = paste.len;
     if (request.run) {
         encoded[len] = '\r';
@@ -129,15 +134,7 @@ pub fn executePasteMarker(handler: *PaneInputHandler, command: PasteMarkerComman
     });
 }
 
-const Prepared = struct {
-    source: source_namespace.Source,
-    bytes: []const u8,
-    restore_viewport: bool = true,
-    limit: usize = source_namespace.max_bytes,
-    empty_is_noop: bool = false,
-};
-
-fn deliver(handler: *PaneInputHandler, plan: client_model.PaneInputPlan, prepared: Prepared) !Delivery {
+fn deliver(handler: *PaneInputHandler, plan: PaneInputPlanType, prepared: Prepared) !Delivery {
     if (prepared.bytes.len == 0 or prepared.bytes.len > prepared.limit) {
         return error.InvalidInputLength;
     }
@@ -147,7 +144,7 @@ fn deliver(handler: *PaneInputHandler, plan: client_model.PaneInputPlan, prepare
     }
 
     if (prepared.source != .mouse and prepared.restore_viewport) {
-        var viewport: set_pane_viewport.SetPaneViewportHandler = .{
+        var viewport: SetPaneViewportHandlerType = .{
             .model = handler.model,
             .effects = handler.effects.viewport,
         };

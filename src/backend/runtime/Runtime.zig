@@ -1,15 +1,24 @@
+const ResourcesType = @import("resources/Resources.zig");
+const Loop = @import("Loop.zig");
+const ApplicationType = @import("application/Application.zig");
+const IngestTestGateType = @import("IngestTestGate.zig");
+const runtime_shutdown_mod = @import("lifecycle/shutdown_coordinator.zig");
+const InitializationType = @import("Initialization.zig");
+const InitialSourcesType = @import("InitialSources.zig");
+const SourcesType = @import("Sources.zig");
+const OptionsType = @import("Options.zig");
+const enter_module = @import("telar-core").enter;
+const runtime_event = @import("event.zig");
+const runtime_application = @import("application/application_namespace.zig");
+const instance = @import("instance.zig");
 /// Owns and composes the resources, event loop and application for one
 /// long-lived backend lifetime.
 const Runtime = @This();
-const source_namespace = @import("instance.zig");
-const runtime_shutdown_mod = @import("lifecycle/root.zig").shutdown_coordinator;
-const event_sources = @import("event_sources.zig");
-const runtime_event = @import("event.zig");
-const runtime_application = @import("application/root.zig");
-resources: source_namespace.Resources,
-loop: source_namespace.EventLoop,
-application: source_namespace.Application,
-ingest_gate: ?*source_namespace.IngestTestGate,
+
+resources: ResourcesType,
+loop: Loop,
+application: ApplicationType,
+ingest_gate: ?*IngestTestGateType,
 teardown_state: runtime_shutdown_mod.State,
 
 /// Acquires all runtime-owned resources. The caller must keep `runtime` at
@@ -20,11 +29,11 @@ teardown_state: runtime_shutdown_mod.State,
 /// try runtime.init(.{ .dependencies = dependencies, .options = options });
 /// defer runtime.deinit();
 /// ```
-pub fn init(runtime: *Runtime, initialization: source_namespace.Initialization) !void {
+pub fn init(runtime: *Runtime, initialization: InitializationType) !void {
     try runtime.start(initialization, false);
 }
 
-pub fn start(runtime: *Runtime, initialization: source_namespace.Initialization, comptime fail_after_actors: bool) !void {
+pub fn start(runtime: *Runtime, initialization: InitializationType, comptime fail_after_actors: bool) !void {
     runtime.ingest_gate = initialization.options.ingest_gate;
     runtime.teardown_state = .running;
 
@@ -45,8 +54,8 @@ pub fn start(runtime: *Runtime, initialization: source_namespace.Initialization,
 }
 
 fn scheduleInitialEvents(runtime: *Runtime) !void {
-    var initial_sources: event_sources.InitialSources = .{
-        .sources = event_sources.Sources.init(runtime.resources.io(), runtime.loop.selector()),
+    var initial_sources: InitialSourcesType = .{
+        .sources = SourcesType.init(runtime.resources.io(), runtime.loop.selector()),
         .listener = &runtime.resources.listener,
         .stop_signal = runtime.loop.stopCoordinator(),
         .history_service = runtime.resources.history.service(),
@@ -59,8 +68,8 @@ fn scheduleInitialEvents(runtime: *Runtime) !void {
     try initial_sources.schedule();
 }
 
-fn composeApplication(runtime: *Runtime, options: source_namespace.Options) !source_namespace.Application {
-    return source_namespace.Application.init(.{
+fn composeApplication(runtime: *Runtime, options: OptionsType) !ApplicationType {
+    return ApplicationType.init(.{
         .io = runtime.resources.io(),
         .gpa = runtime.resources.gpa,
         .heap = &runtime.resources.heap,
@@ -91,7 +100,7 @@ fn composeApplication(runtime: *Runtime, options: source_namespace.Options) !sou
 pub fn run(runtime: *Runtime) !void {
     while (true) {
         const event = try runtime.loop.next();
-        const path = source_namespace.diagnostics.enter(runtime_event.diagnosticsPath(event));
+        const path = enter_module(runtime_event.diagnosticsPath(event));
         defer path.restore();
 
         switch (event) {
@@ -120,6 +129,6 @@ pub fn run(runtime: *Runtime) !void {
 /// runtime.deinit();
 /// ```
 pub fn deinit(runtime: *Runtime) void {
-    var shutdown = source_namespace.runtimeShutdownCoordinator(runtime);
+    var shutdown = instance.runtimeShutdownCoordinator(runtime);
     shutdown.run();
 }

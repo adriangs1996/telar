@@ -1,11 +1,10 @@
 //! Allocation-free indices for bounded stores on latency-sensitive paths.
 
+const GenericSlotIndex = @import("GenericSlotIndex.zig").Type;
 const std = @import("std");
 
-pub const SlotIndex = @import("GenericSlotIndex.zig").Type;
-
 test "slot index preserves probe chains across removal and reuse" {
-    var index: SlotIndex(8) = .{};
+    var index: GenericSlotIndex(8) = .{};
     index.put(1, 0);
     index.put(9, 1);
     index.put(17, 2);

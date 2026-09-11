@@ -1,10 +1,12 @@
+const std = @import("std");
+const windows_ops = @import("windows.zig");
+const Size = @import("Size.zig");
 const Tty = @This();
-const source_namespace = @import("windows.zig");
-const Size = @import("types.zig").Size;
-input: source_namespace.HANDLE,
-output: source_namespace.HANDLE,
-original_input: source_namespace.DWORD,
-original_output: source_namespace.DWORD,
+
+input: std.os.windows.HANDLE,
+output: std.os.windows.HANDLE,
+original_input: std.os.windows.DWORD,
+original_output: std.os.windows.DWORD,
 
 /// Opens the console directly rather than using the standard handles.
 ///
@@ -12,17 +14,17 @@ original_output: source_namespace.DWORD,
 /// program was started from a script, and `CONIN$`/`CONOUT$` name the
 /// console itself whatever the standard handles were redirected to.
 pub fn open() !Tty {
-    const input = try source_namespace.openConsole("CONIN$", true);
-    errdefer source_namespace.windows.CloseHandle(input);
-    const output = try source_namespace.openConsole("CONOUT$", false);
-    errdefer source_namespace.windows.CloseHandle(output);
+    const input = try windows_ops.openConsole("CONIN$", true);
+    errdefer std.os.windows.CloseHandle(input);
+    const output = try windows_ops.openConsole("CONOUT$", false);
+    errdefer std.os.windows.CloseHandle(output);
 
-    var original_input: source_namespace.DWORD = 0;
-    var original_output: source_namespace.DWORD = 0;
-    if (source_namespace.GetConsoleMode(input, &original_input) == 0) {
+    var original_input: std.os.windows.DWORD = 0;
+    var original_output: std.os.windows.DWORD = 0;
+    if (windows_ops.GetConsoleMode(input, &original_input) == 0) {
         return error.NotATerminal;
     }
-    if (source_namespace.GetConsoleMode(output, &original_output) == 0) {
+    if (windows_ops.GetConsoleMode(output, &original_output) == 0) {
         return error.NotATerminal;
     }
 
@@ -30,24 +32,24 @@ pub fn open() !Tty {
     // program emits is printed literally, which is what makes a Windows
     // TUI look like it vomited its own source code.
     const out_mode = original_output |
-        source_namespace.ENABLE_PROCESSED_OUTPUT |
-        source_namespace.ENABLE_VIRTUAL_TERMINAL_PROCESSING |
+        windows_ops.ENABLE_PROCESSED_OUTPUT |
+        windows_ops.ENABLE_VIRTUAL_TERMINAL_PROCESSING |
         // Stops the console wrapping and scrolling when a write lands in
         // the last column, which would shift the whole frame up by a row.
-        source_namespace.DISABLE_NEWLINE_AUTO_RETURN;
+        windows_ops.DISABLE_NEWLINE_AUTO_RETURN;
 
     const in_mode = (original_input &
-        ~(source_namespace.ENABLE_LINE_INPUT | source_namespace.ENABLE_ECHO_INPUT | source_namespace.ENABLE_PROCESSED_INPUT)) |
-        source_namespace.ENABLE_WINDOW_INPUT |
+        ~(windows_ops.ENABLE_LINE_INPUT | windows_ops.ENABLE_ECHO_INPUT | windows_ops.ENABLE_PROCESSED_INPUT)) |
+        windows_ops.ENABLE_WINDOW_INPUT |
         // Delivers keys and mouse as the same escape sequences a Unix
         // terminal sends, so the input parser is shared rather than
         // reimplemented against console records.
-        source_namespace.ENABLE_VIRTUAL_TERMINAL_INPUT;
+        windows_ops.ENABLE_VIRTUAL_TERMINAL_INPUT;
 
-    if (source_namespace.SetConsoleMode(output, out_mode) == 0) {
+    if (windows_ops.SetConsoleMode(output, out_mode) == 0) {
         return error.NotATerminal;
     }
-    if (source_namespace.SetConsoleMode(input, in_mode) == 0) {
+    if (windows_ops.SetConsoleMode(input, in_mode) == 0) {
         return error.NotATerminal;
     }
 
@@ -60,15 +62,15 @@ pub fn open() !Tty {
 }
 
 pub fn deinit(t: *Tty) void {
-    _ = source_namespace.SetConsoleMode(t.input, t.original_input);
-    _ = source_namespace.SetConsoleMode(t.output, t.original_output);
-    source_namespace.windows.CloseHandle(t.input);
-    source_namespace.windows.CloseHandle(t.output);
+    _ = windows_ops.SetConsoleMode(t.input, t.original_input);
+    _ = windows_ops.SetConsoleMode(t.output, t.original_output);
+    std.os.windows.CloseHandle(t.input);
+    std.os.windows.CloseHandle(t.output);
 }
 
 pub fn size(t: *const Tty) Size {
-    var info: source_namespace.CONSOLE_SCREEN_BUFFER_INFO = undefined;
-    if (source_namespace.GetConsoleScreenBufferInfo(t.output, &info) == 0) {
+    var info: windows_ops.CONSOLE_SCREEN_BUFFER_INFO = undefined;
+    if (windows_ops.GetConsoleScreenBufferInfo(t.output, &info) == 0) {
         return .{ .cols = 80, .rows = 24 };
     }
     // `srWindow` and not `dwSize`: the buffer is usually taller than the
@@ -80,11 +82,11 @@ pub fn size(t: *const Tty) Size {
     };
 }
 
-pub fn writeHandle(t: *const Tty) source_namespace.File {
+pub fn writeHandle(t: *const Tty) std.Io.File {
     return .{ .handle = t.output, .flags = .{ .nonblocking = false } };
 }
 
-pub fn readHandle(t: *const Tty) source_namespace.File {
+pub fn readHandle(t: *const Tty) std.Io.File {
     return .{ .handle = t.input, .flags = .{ .nonblocking = false } };
 }
 
@@ -95,7 +97,7 @@ pub fn readHandle(t: *const Tty) source_namespace.File {
 /// const identity = try tty.identity();
 /// ```
 pub fn identity(t: *const Tty) !u64 {
-    const raw = if (source_namespace.GetConsoleWindow()) |window|
+    const raw = if (windows_ops.GetConsoleWindow()) |window|
         @intFromPtr(window)
     else
         @intFromPtr(t.output);

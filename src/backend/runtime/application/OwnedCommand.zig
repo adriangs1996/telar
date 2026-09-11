@@ -1,8 +1,9 @@
-const OwnedCommand = @This();
-const pty = @import("../../pty/root.zig");
+const CommandType = @import("../../pty/Command.zig");
 const std = @import("std");
 const CommandInitialization = @import("CommandInitialization.zig");
-command: pty.Command,
+const OwnedCommand = @This();
+
+command: CommandType,
 arguments: []const [:0]u8,
 cwd: [:0]u8,
 gpa: std.mem.Allocator,
@@ -30,7 +31,7 @@ pub fn init(initialization: CommandInitialization) !OwnedCommand {
     const cwd = try gpa.dupeZ(u8, cwd_path);
     errdefer gpa.free(cwd);
 
-    var command: pty.Command = .{
+    var command: CommandType = .{
         .file = arguments[0].ptr,
         .cwd = cwd.ptr,
         .environment = environment,

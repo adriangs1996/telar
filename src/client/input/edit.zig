@@ -17,17 +17,15 @@
 //! No terminal here and no allocator. A field is a string with two offsets in
 //! it, which is what lets every edge case be a two line test.
 
+const GenericField = @import("GenericField.zig").Type;
 const std = @import("std");
-const ui = @import("telar-core").ui;
-
-pub const Field = @import("GenericField.zig").Type;
+const measure_module = @import("telar-core").measure;
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-const F = Field(128);
+const F = GenericField(128);
 
 /// A base letter plus a combining acute: one cluster, two codepoints.
 const e_acute = "e\u{0301}";
@@ -41,39 +39,39 @@ test "typing and deleting move by cluster, not by byte" {
     var f: F = .init("");
     f.insert("caf");
     f.insert(e_acute);
-    try testing.expectEqualStrings("caf" ++ e_acute, f.text());
+    try std.testing.expectEqualStrings("caf" ++ e_acute, f.text());
 
     f.backspace();
-    try testing.expectEqualStrings("caf", f.text());
-    try testing.expectEqual(@as(usize, 3), f.head);
+    try std.testing.expectEqualStrings("caf", f.text());
+    try std.testing.expectEqual(@as(usize, 3), f.head);
 }
 
 test "an emoji cluster is one arrow press and one backspace" {
     var f: F = .init(astronaut);
-    try testing.expectEqual(astronaut.len, f.head);
+    try std.testing.expectEqual(astronaut.len, f.head);
 
     f.moveLeft(false);
-    try testing.expectEqual(@as(usize, 0), f.head);
+    try std.testing.expectEqual(@as(usize, 0), f.head);
     f.moveRight(false);
-    try testing.expectEqual(astronaut.len, f.head);
+    try std.testing.expectEqual(astronaut.len, f.head);
 
     f.backspace();
-    try testing.expectEqualStrings("", f.text());
+    try std.testing.expectEqualStrings("", f.text());
 }
 
 test "delete removes the cluster in front of the cursor" {
     var f: F = .init(e_acute ++ "x");
     f.home(false);
     f.delete();
-    try testing.expectEqualStrings("x", f.text());
+    try std.testing.expectEqualStrings("x", f.text());
 }
 
 test "inserting in the middle keeps the tail" {
     var f: F = .init("ab");
     f.moveLeft(false);
     f.insert("XY");
-    try testing.expectEqualStrings("aXYb", f.text());
-    try testing.expectEqual(@as(usize, 3), f.head);
+    try std.testing.expectEqualStrings("aXYb", f.text());
+    try std.testing.expectEqual(@as(usize, 3), f.head);
 }
 
 test "shift extends the selection and the anchor stays put" {
@@ -81,11 +79,11 @@ test "shift extends the selection and the anchor stays put" {
     f.home(false);
     f.moveRight(true);
     f.moveRight(true);
-    try testing.expectEqualStrings("ho", f.selected());
+    try std.testing.expectEqualStrings("ho", f.selected());
     // Shrinking from the side being dragged, which a normalised start/end pair
     // could not express.
     f.moveLeft(true);
-    try testing.expectEqualStrings("h", f.selected());
+    try std.testing.expectEqualStrings("h", f.selected());
 }
 
 test "an unshifted arrow collapses a selection to its edge" {
@@ -98,12 +96,12 @@ test "an unshifted arrow collapses a selection to its edge" {
     f.moveRight(true);
 
     f.moveLeft(false);
-    try testing.expect(!f.hasSelection());
-    try testing.expectEqual(@as(usize, 0), f.head);
+    try std.testing.expect(!f.hasSelection());
+    try std.testing.expectEqual(@as(usize, 0), f.head);
 
     f.selectAll();
     f.moveRight(false);
-    try testing.expectEqual(@as(usize, 4), f.head);
+    try std.testing.expectEqual(@as(usize, 4), f.head);
 }
 
 test "typing over a selection replaces it" {
@@ -111,43 +109,43 @@ test "typing over a selection replaces it" {
     f.home(false);
     for (0..4) |_| f.moveRight(true);
     f.insert("adios");
-    try testing.expectEqualStrings("adios mundo", f.text());
-    try testing.expect(!f.hasSelection());
+    try std.testing.expectEqualStrings("adios mundo", f.text());
+    try std.testing.expect(!f.hasSelection());
 }
 
 test "backspace on a selection deletes the selection, not a character" {
     var f: F = .init("hola");
     f.selectAll();
     f.backspace();
-    try testing.expectEqualStrings("", f.text());
+    try std.testing.expectEqualStrings("", f.text());
 }
 
 test "word movement matches what a shell prompt does" {
     var f: F = .init("git commit --amend");
     f.moveWordLeft(false);
-    try testing.expectEqualStrings("--amend", f.text()[f.head..]);
+    try std.testing.expectEqualStrings("--amend", f.text()[f.head..]);
     f.moveWordLeft(false);
-    try testing.expectEqualStrings("commit --amend", f.text()[f.head..]);
+    try std.testing.expectEqualStrings("commit --amend", f.text()[f.head..]);
 
     f.home(false);
     f.moveWordRight(false);
-    try testing.expectEqualStrings("git", f.text()[0..f.head]);
+    try std.testing.expectEqualStrings("git", f.text()[0..f.head]);
 }
 
 test "a paste is an insert, so it cannot behave differently from typing" {
     var f: F = .init("");
     f.insert("api key: ");
     f.insert("sk-abcdef");
-    try testing.expectEqualStrings("api key: sk-abcdef", f.text());
+    try std.testing.expectEqualStrings("api key: sk-abcdef", f.text());
 }
 
 test "input past the capacity is dropped whole, never split" {
     // Truncating mid cluster would store a fragment that renders as a
     // replacement character and cannot be deleted by one backspace.
-    var f: Field(8) = .init("");
+    var f: GenericField(8) = .init("");
     f.insert("1234567");
     f.insert(astronaut);
-    try testing.expectEqualStrings("1234567", f.text());
+    try std.testing.expectEqualStrings("1234567", f.text());
 }
 
 test "the view keeps the cursor on screen while typing past the edge" {
@@ -155,10 +153,10 @@ test "the view keeps the cursor on screen while typing past the edge" {
     for (0..40) |_| f.insert("x");
 
     const v = f.view(10);
-    try testing.expect(v.text.len <= 10);
-    try testing.expect(v.cursor <= 10);
-    try testing.expect(v.clipped_left);
-    try testing.expect(!v.clipped_right);
+    try std.testing.expect(v.text.len <= 10);
+    try std.testing.expect(v.cursor <= 10);
+    try std.testing.expect(v.clipped_left);
+    try std.testing.expect(!v.clipped_right);
 }
 
 test "the view does not jump around when the cursor stays put" {
@@ -171,7 +169,7 @@ test "the view does not jump around when the cursor stays put" {
 
     f.moveLeft(false);
     _ = f.view(10);
-    try testing.expectEqual(settled, f.scroll);
+    try std.testing.expectEqual(settled, f.scroll);
 }
 
 test "scrolling back left shows the start again" {
@@ -180,9 +178,9 @@ test "scrolling back left shows the start again" {
     _ = f.view(10);
     f.home(false);
     const v = f.view(10);
-    try testing.expectEqual(@as(u16, 0), v.cursor);
-    try testing.expect(!v.clipped_left);
-    try testing.expect(v.clipped_right);
+    try std.testing.expectEqual(@as(u16, 0), v.cursor);
+    try std.testing.expect(!v.clipped_left);
+    try std.testing.expect(v.clipped_right);
 }
 
 test "the view never cuts a wide cluster in half" {
@@ -195,9 +193,9 @@ test "the view never cuts a wide cluster in half" {
     while (width <= 12) : (width += 1) {
         f.home(false);
         const v = f.view(width);
-        try testing.expect(ui.measure(v.text) <= width);
+        try std.testing.expect(measure_module(v.text) <= width);
         // Every visible byte belongs to a whole cluster.
-        try testing.expectEqual(@as(usize, 0), v.text.len % astronaut.len);
+        try std.testing.expectEqual(@as(usize, 0), v.text.len % astronaut.len);
     }
 }
 
@@ -208,23 +206,23 @@ test "the selection reported to the drawer stays inside the window" {
 
     const v = f.view(10);
     const range = v.selection orelse return error.NoSelection;
-    try testing.expect(range[0] <= range[1]);
-    try testing.expect(range[1] <= 10);
+    try std.testing.expect(range[0] <= range[1]);
+    try std.testing.expect(range[1] <= 10);
 }
 
 test "cursor column is measured in columns, not bytes" {
     var f: F = .init(e_acute ++ e_acute);
     const v = f.view(20);
     // Six bytes, four codepoints, two clusters, two columns.
-    try testing.expectEqual(@as(u16, 2), v.cursor);
+    try std.testing.expectEqual(@as(u16, 2), v.cursor);
 }
 
 test "an empty field views cleanly" {
     var f: F = .init("");
     const v = f.view(10);
-    try testing.expectEqualStrings("", v.text);
-    try testing.expectEqual(@as(u16, 0), v.cursor);
-    try testing.expectEqual(@as(?[2]u16, null), v.selection);
+    try std.testing.expectEqualStrings("", v.text);
+    try std.testing.expectEqual(@as(u16, 0), v.cursor);
+    try std.testing.expectEqual(@as(?[2]u16, null), v.selection);
     // And a zero width one does not divide by anything.
     _ = f.view(0);
 }
@@ -233,13 +231,13 @@ test "movement at the edges does nothing rather than wrapping" {
     var f: F = .init("ab");
     f.home(false);
     f.moveLeft(false);
-    try testing.expectEqual(@as(usize, 0), f.head);
+    try std.testing.expectEqual(@as(usize, 0), f.head);
     f.backspace();
-    try testing.expectEqualStrings("ab", f.text());
+    try std.testing.expectEqualStrings("ab", f.text());
 
     f.end(false);
     f.moveRight(false);
-    try testing.expectEqual(@as(usize, 2), f.head);
+    try std.testing.expectEqual(@as(usize, 2), f.head);
     f.delete();
-    try testing.expectEqualStrings("ab", f.text());
+    try std.testing.expectEqualStrings("ab", f.text());
 }

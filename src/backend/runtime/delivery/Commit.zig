@@ -1,6 +1,8 @@
-const Commit = @This();
 const Prepared = @import("Prepared.zig");
-const source_namespace = @import("root.zig");
+const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
+const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
+const Commit = @This();
+
 prepared: Prepared,
-attachments: *source_namespace.AttachmentStore,
-metrics: *source_namespace.RuntimeMetrics,
+attachments: *AttachmentStoreType,
+metrics: *RuntimeMetricsType,

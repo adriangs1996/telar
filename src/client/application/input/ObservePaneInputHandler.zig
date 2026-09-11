@@ -1,10 +1,11 @@
-const ObservePaneInputHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const ObserveEffects = @import("ObserveEffects.zig");
-const source_namespace = @import("attachment_prompt.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const key_routing = @import("key_routing.zig");
-const attachments = @import("../../attachments/root.zig");
-model: *client_model.Model,
+const types = @import("../../attachments/types.zig");
+const ObservePaneInputHandler = @This();
+
+model: *ModelType,
 effects: ObserveEffects,
 
 /// Mirrors marker deletion and prompt submission only after the child
@@ -14,7 +15,7 @@ effects: ObserveEffects,
 /// ```zig
 /// const layout_changed = handler.execute(pane_id, command);
 /// ```
-pub fn execute(handler: *ObservePaneInputHandler, pane_id: source_namespace.schema.PaneId, command: key_routing.Command) bool {
+pub fn execute(handler: *ObservePaneInputHandler, pane_id: PaneIdType, command: key_routing.Command) bool {
     const key = switch (command) {
         .bytes => return false,
         .key => |value| value,
@@ -40,7 +41,7 @@ pub fn execute(handler: *ObservePaneInputHandler, pane_id: source_namespace.sche
             return handler.effects.remove_prompt(handler.effects.context, target) orelse false;
         },
         .backspace, .delete => {
-            const deletion: attachments.MarkerDeletion = if (key.code == .backspace) .backward else .forward;
+            const deletion: types.MarkerDeletion = if (key.code == .backspace) .backward else .forward;
             const id = handler.effects.marker_at_cursor(handler.effects.context, deletion);
             if (id == null) {
                 if (handler.effects.pending_marker_at_cursor(handler.effects.context, deletion)) {

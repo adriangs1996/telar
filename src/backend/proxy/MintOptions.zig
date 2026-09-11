@@ -1,8 +1,8 @@
-const MintOptions = @This();
-const source_namespace = @import("tls.zig");
 const std = @import("std");
-const ca = @import("ca.zig");
-io: source_namespace.Io,
+const AuthorityType = @import("Authority.zig");
+const MintOptions = @This();
+
+io: std.Io,
 gpa: std.mem.Allocator,
-authority: *const ca.Authority,
+authority: *const AuthorityType,
 host: []const u8,

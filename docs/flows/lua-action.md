@@ -122,18 +122,18 @@ authority.
 
 ## Proof
 
-- `src/frontend/client/model.zig` proves callback-context projection,
+- `src/client/model/Model.zig` proves callback-context projection,
   diagnostic validation, equality and revision behavior.
-- `src/frontend/client/application/client_diagnostic.zig` proves shared
+- `src/client/application/configuration/client_diagnostic.zig` proves shared
   diagnostic validation, fallback and clear semantics.
-- `src/frontend/client/application/lua_action.zig` proves invocation,
+- `src/client/application/input/lua_action.zig` proves invocation,
   validate-before-apply order, diagnostic order, sequential exit and failure
   classification.
-- `src/frontend/client/application/action_routing.zig` proves source
+- `src/client/application/input/action_routing.zig` proves source
   classification, router control, semantic-key reinjection and copy-mode paste
   suppression without VM knowledge.
-- `src/frontend/config/root.zig` proves immutable context, callback quotas,
+- `src/frontend/config/` proves immutable context, callback quotas,
   bounded result parsing and semantic input construction.
-- `src/frontend/client/client_test.zig` proves real VM evaluation, complete
+- `src/frontend/client/tests/` proves real VM evaluation, complete
   plugin prevalidation, semantic key and bracketed-paste delivery, copy-mode
   suppression and presenter observation of callback failures.

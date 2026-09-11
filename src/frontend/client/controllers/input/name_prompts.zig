@@ -1,30 +1,34 @@
 //! Adapts host-terminal input and client request ports to the name-prompt use
 //! case.
 
-const std = @import("std");
-const core = @import("telar-core");
-const presentation = @import("../../../presentation/root.zig");
-const input_application = @import("telar-client").application.input;
-const prompt_state = @import("telar-client").model.name_prompt;
-const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const connection_outbox = @import("telar-client").connection.outbox;
-const runtime_transport = @import("../../entrypoints/runtime_io.zig");
-const input_capability = @import("../../../input/root.zig");
-const agent_navigation = @import("../agents/agent_navigation.zig");
+const Client = @import("../../Client.zig");
+const TabIdType = @import("telar-core").TabId;
+const InputCopyModeDirection = @import("telar-client").InputCopyModeDirection;
+const ApplicationInputNamePromptOutcome = @import("telar-client").ApplicationInputNamePromptOutcome;
 const history_palettes = @import("history_palettes.zig");
+const ListSnapshot = @import("ListSnapshot.zig");
 const suggestions = @import("suggestions.zig");
-const goto_picker = @import("telar-client").model.goto_picker;
-const tab_renames = @import("../tabs/tab_renames.zig");
-const tab_selections = @import("../tabs/tab_selections.zig");
+const ResultsType = @import("telar-client").Results;
+const collect_module = @import("telar-client").collect;
+const std = @import("std");
+const SourcesType = @import("telar-client").Sources;
+const ModelGotoPickerItem = @import("telar-client").ModelGotoPickerItem;
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
+const tab_selections = @import("../tabs/tab_selections.zig");
+const agent_navigation = @import("../agents/agent_navigation.zig");
+const NamePromptHandlerType = @import("telar-client").NamePromptHandler;
+const OpenNamePromptHandlerType = @import("telar-client").OpenNamePromptHandler;
+const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const SubmissionType = @import("telar-client").Submission;
 const workspace_creations = @import("../workspaces/workspace_creations.zig");
 const workspace_renames = @import("../workspaces/workspace_renames.zig");
-
-const Client = @import("../../Client.zig");
-pub const name_prompt = input_application.name_prompt;
-const name_prompt_opening = input_application.name_prompt_opening;
-pub const schema = core.schema;
-const term = presentation.screen;
+const tab_renames = @import("../tabs/tab_renames.zig");
+const OwnedSearchType = @import("telar-client").OwnedSearch;
+const runtime_transport = @import("../../entrypoints/runtime_io.zig");
+const term = @import("../../../presentation/screen_support.zig");
+const ModelNamePromptCommand = @import("telar-client").ModelNamePromptCommand;
+const NamePromptState = @import("telar-client").NamePromptState;
+const EffectsCapture = @import("EffectsCapture.zig");
 
 /// Starts workspace creation only when the current client can plan the
 /// request.
@@ -65,7 +69,7 @@ pub fn beginActiveTabRename(client: *Client) bool {
 /// ```zig
 /// _ = beginTabRename(client, tab_id);
 /// ```
-pub fn beginTabRename(client: *Client, tab_id: schema.TabId) bool {
+pub fn beginTabRename(client: *Client, tab_id: TabIdType) bool {
     var use_case = openingHandler(client);
 
     return use_case.execute(.{ .rename_tab = tab_id });
@@ -83,7 +87,7 @@ pub fn beginTabRename(client: *Client, tab_id: schema.TabId) bool {
 /// ```zig
 /// _ = beginCopySearch(client, .forward);
 /// ```
-pub fn beginCopySearch(client: *Client, direction: input_capability.copy_mode.Direction) bool {
+pub fn beginCopySearch(client: *Client, direction: InputCopyModeDirection) bool {
     var use_case = openingHandler(client);
 
     return use_case.execute(.{ .copy_search = direction });
@@ -124,7 +128,7 @@ pub fn beginSuggestPalette(client: *Client) bool {
     return use_case.execute(.suggest_palette);
 }
 
-pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
+pub fn handleInput(client: *Client, bytes: []const u8) !ApplicationInputNamePromptOutcome {
     var use_case = handler(client);
 
     const before = listSnapshot(client);
@@ -145,8 +149,6 @@ pub fn handleInput(client: *Client, bytes: []const u8) !name_prompt.Outcome {
     }
     return outcome;
 }
-
-const ListSnapshot = @import("ListSnapshot.zig");
 
 fn listSnapshot(client: *Client) ListSnapshot {
     const prompt = client.model.name_prompt.currentConst() orelse return .{};
@@ -177,8 +179,8 @@ fn finishListSubmission(client: *Client, before: ListSnapshot) !void {
         }),
         .suggest => try suggestions.pasteSuggestion(client),
         .goto => {
-            var results: goto_picker.Results = .{};
-            goto_picker.collect(pickerSources(client), before.textSlice(), &results);
+            var results: ResultsType = .{};
+            collect_module(pickerSources(client), before.textSlice(), &results);
             if (results.len == 0) {
                 return;
             }
@@ -232,8 +234,8 @@ fn clampPickerSelection(client: *Client) void {
 
     const count: u16 = switch (prompt.target()) {
         .goto => blk: {
-            var results: goto_picker.Results = .{};
-            goto_picker.collect(pickerSources(client), prompt.field.text(), &results);
+            var results: ResultsType = .{};
+            collect_module(pickerSources(client), prompt.field.text(), &results);
             break :blk results.len;
         },
         .history => client.model.history_palette.len,
@@ -243,7 +245,7 @@ fn clampPickerSelection(client: *Client) void {
     client.model.name_prompt.constrainSelection(count);
 }
 
-fn pickerSources(client: *Client) goto_picker.Sources {
+fn pickerSources(client: *Client) SourcesType {
     return .{
         .agents = client.model.agentSnapshot(),
         .workspaces = client.model.workspaceListSnapshot(),
@@ -251,7 +253,7 @@ fn pickerSources(client: *Client) goto_picker.Sources {
     };
 }
 
-fn navigatePickerItem(client: *Client, item: goto_picker.Item) !void {
+fn navigatePickerItem(client: *Client, item: ModelGotoPickerItem) !void {
     switch (item) {
         .workspace => |workspace| _ = try workspace_handoffs.selectWorkspace(client, .{ .workspace = workspace }),
         .tab => |tab_id| {
@@ -262,7 +264,7 @@ fn navigatePickerItem(client: *Client, item: goto_picker.Item) !void {
     }
 }
 
-fn handler(client: *Client) name_prompt.NamePromptHandler {
+fn handler(client: *Client) NamePromptHandlerType {
     return .{
         .prompt = &client.model.name_prompt,
         .effects = .{
@@ -272,7 +274,7 @@ fn handler(client: *Client) name_prompt.NamePromptHandler {
     };
 }
 
-fn openingHandler(client: *Client) name_prompt_opening.OpenNamePromptHandler {
+fn openingHandler(client: *Client) OpenNamePromptHandlerType {
     return .{
         .model = &client.model,
         .workspace_creation = .{
@@ -288,7 +290,7 @@ fn workspaceCreationPending(context: *anyopaque) bool {
     return request_lifecycle.busy(client);
 }
 
-fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
+fn submit(context: *anyopaque, submission: SubmissionType) !bool {
     const client: *Client = @ptrCast(@alignCast(context));
 
     return switch (submission.target) {
@@ -342,7 +344,7 @@ fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
         .copy_search => blk: {
             const pane_id = client.model.copyModeTarget() orelse break :blk true;
             const request_id = try request_lifecycle.nextId(client);
-            var owned: connection_outbox.OwnedSearch = .{
+            var owned: OwnedSearchType = .{
                 .request_id = request_id,
                 .pane_id = pane_id,
                 .needle_len = @intCast(submission.name.len),
@@ -354,8 +356,8 @@ fn submit(context: *anyopaque, submission: prompt_state.Submission) !bool {
     };
 }
 
-fn dispatchInput(use_case: *name_prompt.NamePromptHandler, bytes: []const u8) !name_prompt.Outcome {
-    var outcome: name_prompt.Outcome = .unchanged;
+fn dispatchInput(use_case: *NamePromptHandlerType, bytes: []const u8) !ApplicationInputNamePromptOutcome {
+    var outcome: ApplicationInputNamePromptOutcome = .unchanged;
     var offset: usize = 0;
     while (offset < bytes.len) {
         const parsed = term.parse(bytes[offset..]) orelse {
@@ -370,7 +372,7 @@ fn dispatchInput(use_case: *name_prompt.NamePromptHandler, bytes: []const u8) !n
         }
 
         offset += parsed.len;
-        const command: ?prompt_state.Command = switch (parsed.event) {
+        const command: ?ModelNamePromptCommand = switch (parsed.event) {
             .paste_start => .paste_start,
             .paste_end => .paste_end,
             .key => |key| switch (key.code) {
@@ -411,7 +413,7 @@ fn dispatchInput(use_case: *name_prompt.NamePromptHandler, bytes: []const u8) !n
     return outcome;
 }
 
-fn merge(current: name_prompt.Outcome, next: name_prompt.Outcome) name_prompt.Outcome {
+fn merge(current: ApplicationInputNamePromptOutcome, next: ApplicationInputNamePromptOutcome) ApplicationInputNamePromptOutcome {
     if (next == .unchanged) {
         return current;
     }
@@ -422,13 +424,11 @@ fn merge(current: name_prompt.Outcome, next: name_prompt.Outcome) name_prompt.Ou
     return next;
 }
 
-const EffectsCapture = @import("EffectsCapture.zig");
-
 test "input adapter drops an incomplete zero-length tail without spinning" {
-    var prompt: prompt_state.State = .{};
+    var prompt: NamePromptState = .{};
     prompt.begin(.{ .rename_tab = .{ .tab_id = @enumFromInt(3), .label = "logs" } });
     var capture: EffectsCapture = .{};
-    var use_case: name_prompt.NamePromptHandler = .{
+    var use_case: NamePromptHandlerType = .{
         .prompt = &prompt,
         .effects = capture.port(),
     };
@@ -440,10 +440,10 @@ test "input adapter drops an incomplete zero-length tail without spinning" {
 }
 
 test "input adapter preserves pasted newlines as bounded text" {
-    var prompt: prompt_state.State = .{};
+    var prompt: NamePromptState = .{};
     prompt.begin(.create_workspace);
     var capture: EffectsCapture = .{};
-    var use_case: name_prompt.NamePromptHandler = .{
+    var use_case: NamePromptHandlerType = .{
         .prompt = &prompt,
         .effects = capture.port(),
     };
@@ -454,10 +454,10 @@ test "input adapter preserves pasted newlines as bounded text" {
 }
 
 test "blocked submission remains active and escape cancels it" {
-    var prompt: prompt_state.State = .{};
+    var prompt: NamePromptState = .{};
     prompt.begin(.{ .rename_tab = .{ .tab_id = @enumFromInt(3), .label = "logs" } });
     var capture: EffectsCapture = .{ .accept = false };
-    var use_case: name_prompt.NamePromptHandler = .{
+    var use_case: NamePromptHandlerType = .{
         .prompt = &prompt,
         .effects = capture.port(),
     };

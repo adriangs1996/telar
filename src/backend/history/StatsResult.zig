@@ -1,10 +1,11 @@
-/// Owned aggregate result for one stats query.
-const StatsResult = @This();
-const source_namespace = @import("model.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const QueryOrigin = @import("QueryOrigin.zig");
 const StatsTop = @import("StatsTop.zig");
 const std = @import("std");
-request_id: source_namespace.schema.RequestId,
+/// Owned aggregate result for one stats query.
+const StatsResult = @This();
+
+request_id: RequestIdType,
 origin: QueryOrigin,
 total: u64,
 unique: u64,

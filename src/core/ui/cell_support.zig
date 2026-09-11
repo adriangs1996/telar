@@ -6,6 +6,7 @@
 //! any of those could do without.
 
 const std = @import("std");
+const Style = @import("Style.zig");
 
 pub const Color = union(enum) {
     default,
@@ -21,15 +22,9 @@ pub const Color = union(enum) {
     }
 };
 
-pub const Style = @import("Style.zig");
-
-pub const Cell = @import("Cell.zig");
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-const testing = std.testing;
 
 test "the diff distinguishes attributes that used to be invisible to it" {
     // Before the flags were packed, `Style` carried bold/dim/reverse and
@@ -40,8 +35,8 @@ test "the diff distinguishes attributes that used to be invisible to it" {
     inline for (.{ "italic", "blink", "strikethrough", "overline", "invisible" }) |name| {
         var flags: Style.Flags = .{};
         @field(flags, name) = true;
-        try testing.expect(!plain.eql(.{ .flags = flags }));
+        try std.testing.expect(!plain.eql(.{ .flags = flags }));
     }
-    try testing.expect(!plain.eql(.{ .flags = .{ .underline = .dotted } }));
-    try testing.expect(!plain.eql(.{ .underline_color = .{ .rgb = .{ 255, 0, 0 } } }));
+    try std.testing.expect(!plain.eql(.{ .flags = .{ .underline = .dotted } }));
+    try std.testing.expect(!plain.eql(.{ .underline_color = .{ .rgb = .{ 255, 0, 0 } } }));
 }

@@ -1,30 +1,31 @@
-const ResizeWatcher = @This();
-const source_namespace = @import("posix.zig");
-const Tty = @import("PosixTty.zig");
 const std = @import("std");
-read_end: source_namespace.File,
+const PosixTty = @import("PosixTty.zig");
+const posix_ops = @import("posix.zig");
+const ResizeWatcher = @This();
 
-pub fn init(_: *Tty) !ResizeWatcher {
-    if (std.c.pipe(&source_namespace.wake) != 0) {
+read_end: std.Io.File,
+
+pub fn init(_: *PosixTty) !ResizeWatcher {
+    if (std.c.pipe(&posix_ops.wake) != 0) {
         return error.PipeFailed;
     }
     var action: std.posix.Sigaction = .{
-        .handler = .{ .handler = source_namespace.onWinch },
+        .handler = .{ .handler = posix_ops.onWinch },
         .mask = std.posix.sigemptyset(),
         // Without RESTART every blocking read in the program returns EINTR
         // on every resize, and each caller has to remember to retry.
         .flags = std.posix.SA.RESTART,
     };
     std.posix.sigaction(.WINCH, &action, null);
-    return .{ .read_end = .{ .handle = source_namespace.wake[0], .flags = .{ .nonblocking = false } } };
+    return .{ .read_end = .{ .handle = posix_ops.wake[0], .flags = .{ .nonblocking = false } } };
 }
 
 pub fn deinit(w: *ResizeWatcher) void {
     // Disarmed before the descriptors close, so a signal arriving during
     // shutdown cannot write into a number that has already been recycled
     // by whatever opened next.
-    const write_end = source_namespace.wake[1];
-    source_namespace.wake[1] = -1;
+    const write_end = posix_ops.wake[1];
+    posix_ops.wake[1] = -1;
     _ = std.c.close(write_end);
     _ = std.c.close(w.read_end.handle);
 }
@@ -36,7 +37,7 @@ pub fn deinit(w: *ResizeWatcher) void {
 /// a raw syscall is not one. An actor blocked in libc's `read` never
 /// notices it was cancelled, so the group waits for it forever and the
 /// process hangs with the terminal still in raw mode.
-pub fn wait(w: *ResizeWatcher, io: source_namespace.Io) source_namespace.Io.Cancelable!void {
+pub fn wait(w: *ResizeWatcher, io: std.Io) std.Io.Cancelable!void {
     var drain: [64]u8 = undefined;
     _ = w.read_end.readStreaming(io, &.{&drain}) catch |err| switch (err) {
         error.Canceled => |e| return e,

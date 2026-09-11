@@ -1,18 +1,17 @@
 //! Application policy for keyboard copy mode and captured mouse selections.
 
+const PointType = @import("telar-core").Point;
+const CopyModePointerEffectsCapture = @import("CopyModePointerEffectsCapture.zig");
+const CopyModePointerHandler = @import("CopyModePointerHandler.zig");
 const std = @import("std");
-const Mouse = @import("../../input/root.zig").Mouse;
-const core = @import("telar-core");
-const copy_mode = @import("../../input/root.zig").copy_mode;
-
-pub const Command = @import("CopyModePointerCommand.zig");
+const PointerMotionType = @import("../../input/PointerMotion.zig");
 
 pub const Authority = union(enum) {
     unowned,
     target_missing,
     selection: struct {
         dragging: bool,
-        position: ?core.ui.Point,
+        position: ?PointType,
     },
     owned: struct {
         pointer_inside: bool,
@@ -25,10 +24,6 @@ pub const Outcome = enum {
     moved,
     exited,
 };
-
-pub const Effects = @import("CopyModePointerEffects.zig");
-
-pub const CopyModePointerHandler = @import("CopyModePointerHandler.zig");
 
 pub const Event = enum {
     leave,
@@ -43,20 +38,18 @@ pub const Failure = enum {
     vertical,
 };
 
-const EffectsCapture = @import("CopyModePointerEffectsCapture.zig");
-
 test "mouse selection consumes unrelated buttons and clips through resolved pane coordinates" {
-    var capture: EffectsCapture = .{};
+    var capture: CopyModePointerEffectsCapture = .{};
     var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
     const authority: Authority = .{ .selection = .{ .dragging = true, .position = .{ .x = 0, .y = 9 } } };
     try std.testing.expectEqual(Outcome.consumed, try handler.execute(.{ .kind = .release, .left_button = false }, authority));
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);
     try std.testing.expectEqual(Outcome.moved, try handler.execute(.{ .kind = .release }, authority));
-    try std.testing.expectEqualDeep(copy_mode.PointerMotion{ .position = .{ .x = 0, .y = 9 }, .release = true }, capture.motion.?);
+    try std.testing.expectEqualDeep(PointerMotionType{ .position = .{ .x = 0, .y = 9 }, .release = true }, capture.motion.?);
 }
 
 test "missing selection geometry cancels before releasing its physical gesture" {
-    var capture: EffectsCapture = .{};
+    var capture: CopyModePointerEffectsCapture = .{};
     var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
     const authority: Authority = .{ .selection = .{ .dragging = true, .position = null } };
     try std.testing.expectEqual(Outcome.consumed, try handler.execute(.{ .kind = .drag }, authority));
@@ -66,7 +59,7 @@ test "missing selection geometry cancels before releasing its physical gesture" 
 }
 
 test "copy-mode pointer leaves unowned input for later routing" {
-    var capture: EffectsCapture = .{};
+    var capture: CopyModePointerEffectsCapture = .{};
     var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
 
     try std.testing.expectEqual(
@@ -77,7 +70,7 @@ test "copy-mode pointer leaves unowned input for later routing" {
 }
 
 test "copy-mode pointer consumes non-wheel and outside-wheel input" {
-    var capture: EffectsCapture = .{};
+    var capture: CopyModePointerEffectsCapture = .{};
     var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
 
     try std.testing.expectEqual(
@@ -92,7 +85,7 @@ test "copy-mode pointer consumes non-wheel and outside-wheel input" {
 }
 
 test "copy-mode pointer moves three rows for each inside wheel direction" {
-    var capture: EffectsCapture = .{};
+    var capture: CopyModePointerEffectsCapture = .{};
     var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
     const authority: Authority = .{ .owned = .{ .pointer_inside = true } };
 
@@ -108,7 +101,7 @@ test "copy-mode pointer moves three rows for each inside wheel direction" {
 }
 
 test "copy-mode pointer exits a missing target and propagates selected failures" {
-    var capture: EffectsCapture = .{};
+    var capture: CopyModePointerEffectsCapture = .{};
     var handler: CopyModePointerHandler = .{ .effects = capture.effects() };
     const missing: Authority = .target_missing;
 

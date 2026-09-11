@@ -1,6 +1,7 @@
 const GenericConnectionPort = @import("GenericConnectionPort.zig").Type;
 const Settings = @import("Settings.zig");
-const relay = @import("relay.zig");
+const StatsType = @import("Stats.zig");
+
 /// Creates the lifecycle owner for one intercepted HTTP/2 connection.
 ///
 /// ```zig
@@ -37,7 +38,7 @@ pub fn Type(comptime Context: type, comptime port: GenericConnectionPort(Context
             port.settle(context);
         }
 
-        fn relayRequest(context: *Context, settings: *Settings) relay.Stats {
+        fn relayRequest(context: *Context, settings: *Settings) StatsType {
             return port.relay_request(context, settings);
         }
     };

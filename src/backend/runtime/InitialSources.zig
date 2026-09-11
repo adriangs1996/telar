@@ -1,20 +1,21 @@
+const Sources = @import("Sources.zig");
+const LocalListenerType = @import("../transport/LocalListener.zig");
+const StopSignalCoordinator = @import("lifecycle/StopSignalCoordinator.zig");
+const ServiceType = @import("../history/Service.zig");
+const EngineService = @import("../engine/Service.zig");
+const ProxyRuntime = @import("resources/ProxyRuntime.zig");
+const PluginsService = @import("../plugins/Service.zig");
+const enabled_module = @import("telar-core").enabled;
 /// Owns the dependencies required to arm every initial runtime event source.
 const InitialSources = @This();
-const Sources = @import("Sources.zig");
-const transport = @import("../transport/root.zig");
-const stop_signal_mod = @import("lifecycle/root.zig").stop_signal;
-const history = @import("../history/root.zig");
-const engine = @import("../engine/root.zig");
-const proxy_resource = @import("resources/proxy.zig");
-const plugins = @import("../plugins/root.zig");
-const source_namespace = @import("event_sources.zig");
+
 sources: Sources,
-listener: *transport.local.LocalListener,
-stop_signal: *stop_signal_mod.Coordinator,
-history_service: *history.Service,
-engine_service: ?*engine.Service = null,
-proxy_runtime: *proxy_resource.Runtime,
-plugin_service: *plugins.Service,
+listener: *LocalListenerType,
+stop_signal: *StopSignalCoordinator,
+history_service: *ServiceType,
+engine_service: ?*EngineService = null,
+proxy_runtime: *ProxyRuntime,
+plugin_service: *PluginsService,
 telemetry_available: bool,
 
 /// Arms every source that may produce the runtime's first event.
@@ -35,7 +36,7 @@ pub fn schedule(initial_sources: *InitialSources) !void {
     try initial_sources.sources.waitForAgentMaintenance();
     try initial_sources.sources.waitForSystemMetrics();
 
-    if (comptime source_namespace.diagnostics.enabled) {
+    if (comptime enabled_module) {
         if (initial_sources.telemetry_available) {
             try initial_sources.sources.waitForTelemetry();
         }

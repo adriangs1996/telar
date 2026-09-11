@@ -1,7 +1,8 @@
 const GenericCredentialPort = @import("GenericCredentialPort.zig").Type;
-const source_namespace = @import("connect_authentication.zig");
+const connect_authentication = @import("connect_authentication.zig");
 const identity = @import("identity.zig");
 const std = @import("std");
+
 /// Creates the CONNECT authentication command for one credential store.
 ///
 /// ```zig
@@ -19,15 +20,15 @@ pub fn Type(comptime Context: type, comptime credentials: GenericCredentialPort(
         /// ```zig
         /// const decision = Authenticate.execute(&context, request_head);
         /// ```
-        pub fn execute(context: *Context, head: []const u8) source_namespace.Decision {
-            var credential = identity.parseProxyAuthorization(head) orelse return source_namespace.rejectInvalidAuthorization();
+        pub fn execute(context: *Context, head: []const u8) connect_authentication.Decision {
+            var credential = identity.parseProxyAuthorization(head) orelse return connect_authentication.rejectInvalidAuthorization();
             defer std.crypto.secureZero(u8, &credential.token);
 
             if (!credentials.contains(context, &credential)) {
-                return source_namespace.rejectUnknownCredential();
+                return connect_authentication.rejectUnknownCredential();
             }
 
-            const target = source_namespace.parseTarget(head) orelse return source_namespace.rejectInvalidTarget();
+            const target = connect_authentication.parseTarget(head) orelse return connect_authentication.rejectInvalidTarget();
             return .{ .authenticated = .{
                 .credential = credential,
                 .target = target,

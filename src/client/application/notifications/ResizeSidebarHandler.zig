@@ -1,8 +1,10 @@
-const ResizeSidebarHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const SidebarEffects = @import("SidebarEffects.zig");
-const source_namespace = @import("toggle_sidebar.zig");
-model: *client_model.Model,
+const toggle_sidebar = @import("toggle_sidebar.zig");
+const SidebarLayoutType = @import("../../model/SidebarLayout.zig");
+const ResizeSidebarHandler = @This();
+
+model: *ModelType,
 effects: SidebarEffects,
 
 /// Commits one exact or stepped width before synchronizing geometry.
@@ -10,7 +12,7 @@ effects: SidebarEffects,
 /// ```zig
 /// _ = try handler.execute(.{ .exact = 73 });
 /// ```
-pub fn execute(handler: *ResizeSidebarHandler, resize: source_namespace.Resize) !?client_model.SidebarLayout {
+pub fn execute(handler: *ResizeSidebarHandler, resize: toggle_sidebar.Resize) !?SidebarLayoutType {
     const change = switch (resize) {
         .exact => |width| handler.model.setSidebarWidth(width),
         .direction => |direction| handler.model.stepSidebarWidth(direction),

@@ -1,21 +1,16 @@
 //! Application policy for delivering one classified clipboard image result.
 
+const ClipboardImageDeliveryCapture = @import("ClipboardImageDeliveryCapture.zig");
+const DeliverClipboardImageCompletionHandler = @import("DeliverClipboardImageCompletionHandler.zig");
 const std = @import("std");
-const notification_capability = @import("../../root.zig").notifications;
-const clipboard_image = @import("clipboard_image.zig");
+const notification_capability = @import("../../notifications/notifications.zig");
 
-pub const Effects = @import("ClipboardImageDeliveryEffects.zig");
-
-pub const DeliverClipboardImageCompletionHandler = @import("DeliverClipboardImageCompletionHandler.zig");
-
-const Capture = @import("ClipboardImageDeliveryCapture.zig");
-
-fn deliveryHandler(capture: *Capture) DeliverClipboardImageCompletionHandler {
+fn deliveryHandler(capture: *ClipboardImageDeliveryCapture) DeliverClipboardImageCompletionHandler {
     return .{ .effects = capture.effects() };
 }
 
 test "DeliverClipboardImageCompletionHandler keeps successful and obsolete outcomes quiet" {
-    var capture: Capture = .{};
+    var capture: ClipboardImageDeliveryCapture = .{};
     var handler = deliveryHandler(&capture);
 
     try handler.execute(.applied);
@@ -27,7 +22,7 @@ test "DeliverClipboardImageCompletionHandler keeps successful and obsolete outco
 }
 
 test "DeliverClipboardImageCompletionHandler maps classified failures to notifications" {
-    var capture: Capture = .{};
+    var capture: ClipboardImageDeliveryCapture = .{};
     var handler = deliveryHandler(&capture);
 
     try handler.execute(.too_large);
@@ -52,7 +47,7 @@ test "DeliverClipboardImageCompletionHandler maps classified failures to notific
 }
 
 test "DeliverClipboardImageCompletionHandler propagates notification failure" {
-    var capture: Capture = .{ .fail = true };
+    var capture: ClipboardImageDeliveryCapture = .{ .fail = true };
     var handler = deliveryHandler(&capture);
 
     try std.testing.expectError(error.NotificationPublicationFailed, handler.execute(.too_large));

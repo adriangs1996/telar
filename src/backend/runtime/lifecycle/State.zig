@@ -1,8 +1,9 @@
-const State = @This();
-const source_namespace = @import("shutdown_authority.zig");
+const ClientKeyType = @import("../../history/ClientKey.zig");
 const StopRequested = @import("StopRequested.zig");
+const State = @This();
+
 requested: bool = false,
-initiator: ?source_namespace.ClientKey = null,
+initiator: ?ClientKeyType = null,
 
 /// Commits the first shutdown request and returns the event that may be
 /// published after the state transition. Later requests are idempotent.
@@ -12,7 +13,7 @@ initiator: ?source_namespace.ClientKey = null,
 ///     publish(event);
 /// }
 /// ```
-pub fn request(state: *State, initiator: source_namespace.ClientKey) ?StopRequested {
+pub fn request(state: *State, initiator: ClientKeyType) ?StopRequested {
     if (state.requested) {
         return null;
     }

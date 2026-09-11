@@ -1,35 +1,29 @@
-const Query = @This();
-const source_namespace = @import("model.zig");
+const QueryInput = @import("QueryInput.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const QueryOrigin = @import("QueryOrigin.zig");
+const max_history_query_bytes = @import("telar-core").max_history_query_bytes;
+const HistoryScope = @import("telar-core").HistoryScope;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const PaneIdType = @import("telar-core").PaneId;
+const HistoryAuthorFilterType = @import("telar-core").HistoryAuthorFilter;
+const HistoryMatchType = @import("telar-core").HistoryMatch;
 const std = @import("std");
-pub const Input = struct {
-    request_id: source_namespace.schema.RequestId,
-    origin: QueryOrigin,
-    text: []const u8 = "",
-    scope: source_namespace.Scope = .global,
-    scope_value: []const u8 = "",
-    pane_id: source_namespace.schema.PaneId = .invalid,
-    failed_only: bool = false,
-    author: source_namespace.schema.HistoryAuthorFilter = .all,
-    match: source_namespace.schema.HistoryMatch = .fts,
-    distinct: bool = false,
-    limit: u16 = 20,
-    offset: u32 = 0,
-    snapshot_id: u64 = 0,
-    entry_id: u64 = 0,
-};
+const max_history_results = @import("telar-core").max_history_results;
+const Query = @This();
 
-request_id: source_namespace.schema.RequestId,
+pub const Input = @import("QueryInput.zig");
+
+request_id: RequestIdType,
 origin: QueryOrigin,
-text: [source_namespace.max_query_bytes]u8 = undefined,
+text: [max_history_query_bytes]u8 = undefined,
 text_len: u16 = 0,
-scope: source_namespace.Scope = .global,
-scope_text: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+scope: HistoryScope = .global,
+scope_text: [max_cwd_bytes_module]u8 = undefined,
 scope_text_len: u16 = 0,
-pane_id: source_namespace.schema.PaneId = .invalid,
+pane_id: PaneIdType = .invalid,
 failed_only: bool = false,
-author: source_namespace.schema.HistoryAuthorFilter = .all,
-match: source_namespace.schema.HistoryMatch = .fts,
+author: HistoryAuthorFilterType = .all,
+match: HistoryMatchType = .fts,
 distinct: bool = false,
 limit: u16 = 20,
 offset: u32 = 0,
@@ -46,20 +40,20 @@ entry_id: u64 = 0,
 ///     .text = "git",
 /// });
 /// ```
-pub fn init(input: Input) !Query {
+pub fn init(input: QueryInput) !Query {
     if (input.snapshot_id > std.math.maxInt(i64) or input.entry_id > std.math.maxInt(i64)) {
         return error.InvalidHistoryId;
     }
 
-    if (input.text.len > source_namespace.max_query_bytes) {
+    if (input.text.len > max_history_query_bytes) {
         return error.QueryTooLong;
     }
 
-    if (input.scope_value.len > source_namespace.schema.max_cwd_bytes) {
+    if (input.scope_value.len > max_cwd_bytes_module) {
         return error.ScopeTooLong;
     }
 
-    if (input.limit == 0 or input.limit > source_namespace.max_results) {
+    if (input.limit == 0 or input.limit > max_history_results) {
         return error.InvalidLimit;
     }
 

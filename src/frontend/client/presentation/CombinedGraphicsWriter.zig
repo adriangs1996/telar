@@ -1,17 +1,26 @@
+const KittyGraphicsWriterType = @import("../../graphics/KittyGraphicsWriter.zig");
+const KittySidebarRendererType = @import("../../graphics/KittySidebarRenderer.zig");
+const IconsRenderer = @import("../../graphics/IconsRenderer.zig");
+const ToastRenderer = @import("../../graphics/ToastRenderer.zig");
+const ModalRenderer = @import("../../graphics/ModalRenderer.zig");
+const PillRenderer = @import("../../graphics/PillRenderer.zig");
+const delivery_module = @import("../../attachments/delivery.zig");
+const Metrics = @import("../resources/Metrics.zig");
+const std = @import("std");
+const enabled_module = @import("telar-core").enabled;
 const CombinedGraphicsWriter = @This();
-const source_namespace = @import("Presenter.zig");
-const attachments_module = @import("../../attachments/root.zig");
-panes: source_namespace.kitty.KittyGraphicsWriter,
-sidebar: *source_namespace.kitty.KittySidebarRenderer,
-icons: *source_namespace.icon_graphics.Renderer,
-toasts: *source_namespace.toast_graphics.Renderer,
-modal: *source_namespace.modal_graphics.Renderer,
-pill: *source_namespace.pill_graphics.Renderer,
-attachments: *attachments_module.Store,
-allow_toast_transmission: bool,
-metrics: *source_namespace.ClientMetrics,
 
-pub fn writeOpaque(context: *anyopaque, writer: *source_namespace.Io.Writer) source_namespace.Io.Writer.Error!usize {
+panes: KittyGraphicsWriterType,
+sidebar: *KittySidebarRendererType,
+icons: *IconsRenderer,
+toasts: *ToastRenderer,
+modal: *ModalRenderer,
+pill: *PillRenderer,
+attachments: *delivery_module.Store,
+allow_toast_transmission: bool,
+metrics: *Metrics,
+
+pub fn writeOpaque(context: *anyopaque, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     const self: *CombinedGraphicsWriter = @ptrCast(@alignCast(context));
     var pane_bytes: usize = 0;
     var toast_bytes: usize = 0;
@@ -24,8 +33,8 @@ pub fn writeOpaque(context: *anyopaque, writer: *source_namespace.Io.Writer) sou
     // KGP continuation chunks do not identify their image. Whichever
     // renderer opened a transfer owns the graphics stream until it closes;
     // a pane, toast, or icon atlas can never interleave another transfer.
-    if (@import("../../attachments/root.zig").delivery.transferInProgress(self.attachments)) {
-        attachment_bytes = try @import("../../attachments/root.zig").delivery.write(self.attachments, writer);
+    if (delivery_module.transferInProgress(self.attachments)) {
+        attachment_bytes = try delivery_module.write(self.attachments, writer);
     } else if (self.pill.transferInProgress()) {
         pill_bytes = try self.pill.write(writer);
     } else if (self.modal.transferInProgress()) {
@@ -42,7 +51,7 @@ pub fn writeOpaque(context: *anyopaque, writer: *source_namespace.Io.Writer) sou
         if (pane_bytes == 0 and self.panes.store.delivery.partial == null) {
             modal_bytes = try self.modal.write(writer);
             if (modal_bytes == 0) {
-                attachment_bytes = try @import("../../attachments/root.zig").delivery.write(self.attachments, writer);
+                attachment_bytes = try delivery_module.write(self.attachments, writer);
                 if (attachment_bytes == 0) {
                     toast_bytes = try self.toasts.write(writer, self.allow_toast_transmission);
                     if (toast_bytes == 0) {
@@ -58,7 +67,7 @@ pub fn writeOpaque(context: *anyopaque, writer: *source_namespace.Io.Writer) sou
             }
         }
     }
-    if (comptime source_namespace.diagnostics.enabled) {
+    if (comptime enabled_module) {
         self.metrics.pane_graphics_flushed_bytes += pane_bytes;
         self.metrics.toast_graphics_flushed_bytes += toast_bytes;
         self.metrics.sidebar_graphics_flushed_bytes += sidebar_bytes;

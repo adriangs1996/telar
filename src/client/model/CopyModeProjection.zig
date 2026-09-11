@@ -1,4 +1,6 @@
+const PaneIdType = @import("telar-core").PaneId;
+const ViewType = @import("../input/CopyModeView.zig");
 const CopyModeProjection = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
-view: source_namespace.copy_mode.View,
+
+pane_id: PaneIdType,
+view: ViewType,

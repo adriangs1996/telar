@@ -1,10 +1,12 @@
-const DeliverPaneGeometryHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("PaneGeometryDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneGeometryDeliveryEffects = @import("PaneGeometryDeliveryEffects.zig");
+const PaneGeometryChangeType = @import("../../model/PaneGeometryChange.zig");
 const std = @import("std");
 const OfferPaneGeometryHandler = @import("OfferPaneGeometryHandler.zig");
-model: *client_model.Model,
-effects: Effects,
+const DeliverPaneGeometryHandler = @This();
+
+model: *ModelType,
+effects: PaneGeometryDeliveryEffects,
 
 /// Validates one committed geometry change before invalidating placements
 /// and offering its visible attached pane sizes, then requests attachments
@@ -13,7 +15,7 @@ effects: Effects,
 /// ```zig
 /// const count = try handler.execute(change);
 /// ```
-pub fn execute(handler: *DeliverPaneGeometryHandler, change: client_model.PaneGeometryChange) !usize {
+pub fn execute(handler: *DeliverPaneGeometryHandler, change: PaneGeometryChangeType) !usize {
     const active = handler.model.workspace.active() orelse return error.StalePaneGeometry;
     if (!std.meta.eql(active.location, change.location) or
         active.model.layout.focused() != change.focused or

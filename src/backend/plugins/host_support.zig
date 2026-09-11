@@ -1,18 +1,25 @@
 //! Sandboxed Lua host executed by the internal `tap-worker` subcommand.
 
 const std = @import("std");
-const core = @import("telar-core");
-const lua_runtime = @import("telar-lua");
-const lua = @import("lua-api").c;
-const effects = @import("effects.zig");
+const Host = @import("Host.zig");
 const protocol = @import("protocol.zig");
+const effects = @import("effects.zig");
+const lua_api = @import("lua-api");
+const ExchangeType = @import("Exchange.zig");
+const LuaTable = @import("LuaTable.zig");
+const raw_module = @import("telar-core").raw;
+const HalfType = @import("Half.zig");
+const BatchType = @import("Batch.zig");
+const pane_module = @import("telar-core").pane;
+const default_notification_duration_ms_module = @import("telar-core").default_notification_duration_ms;
+const AgentReportStateType = @import("telar-core").AgentReportState;
+const NotificationLevelType = @import("telar-core").NotificationLevel;
+const looksLikeSecret_module = @import("telar-core").looksLikeSecret;
+const types = @import("../agent/types.zig");
 
-pub const Io = std.Io;
 const max_frame_bytes = 128 * 1024 * 1024;
 pub const max_entry_bytes = 1024 * 1024;
 const max_json_bytes = 1024 * 1024;
-
-const Host = @import("Host.zig");
 
 /// Runs one long-lived worker until its framed stdin closes.
 ///
@@ -23,9 +30,9 @@ pub fn run(init_process: std.process.Init, entry_path: []const u8) !void {
     var host = try Host.init(init_process, entry_path);
     defer host.deinit();
     var stdin_buffer: [16 * 1024]u8 = undefined;
-    var input = Io.File.stdin().readerStreaming(init_process.io, &stdin_buffer);
+    var input = std.Io.File.stdin().readerStreaming(init_process.io, &stdin_buffer);
     var stdout_buffer: [16 * 1024]u8 = undefined;
-    var output = Io.File.stdout().writerStreaming(init_process.io, &stdout_buffer);
+    var output = std.Io.File.stdout().writerStreaming(init_process.io, &stdout_buffer);
 
     while (true) {
         var prefix: [protocol.prefix_bytes]u8 = undefined;
@@ -60,11 +67,11 @@ pub fn run(init_process: std.process.Init, entry_path: []const u8) !void {
     }
 }
 
-pub fn pushExchange(state: *lua.lua_State, exchange: protocol.Exchange) void {
-    lua.lua_createtable(state, 0, 14);
+pub fn pushExchange(state: *lua_api.c.lua_State, exchange: ExchangeType) void {
+    lua_api.c.lua_createtable(state, 0, 14);
     const destination = LuaTable.init(state, -1);
     destination.setInteger("id", exchange.id);
-    destination.setInteger("pane", core.schema.id.raw(exchange.pane));
+    destination.setInteger("pane", raw_module(exchange.pane));
     destination.setInteger("pane_generation", exchange.pane_generation);
     destination.setString("host", exchange.host);
     destination.setString("protocol", @tagName(exchange.protocol));
@@ -78,21 +85,21 @@ pub fn pushExchange(state: *lua.lua_State, exchange: protocol.Exchange) void {
     destination.setInteger("started_at_ms", exchange.started_at_ms);
     destination.setInteger("finished_at_ms", if (exchange.response) |half| half.finished_at_ms else exchange.request.?.finished_at_ms);
     pushHalf(state, exchange.request);
-    lua.lua_setfield(state, -2, "request");
+    lua_api.c.lua_setfield(state, -2, "request");
     pushHalf(state, exchange.response);
-    lua.lua_setfield(state, -2, "response");
+    lua_api.c.lua_setfield(state, -2, "response");
     freezeTable(state);
 }
 
-fn pushHalf(state: *lua.lua_State, optional: ?protocol.Half) void {
+fn pushHalf(state: *lua_api.c.lua_State, optional: ?HalfType) void {
     const half = optional orelse {
-        lua.lua_pushnil(state);
+        lua_api.c.lua_pushnil(state);
         return;
     };
-    lua.lua_createtable(state, 0, 6);
+    lua_api.c.lua_createtable(state, 0, 6);
     const destination = LuaTable.init(state, -1);
     pushHead(state, half.head);
-    lua.lua_setfield(state, -2, "head");
+    lua_api.c.lua_setfield(state, -2, "head");
     destination.setString("body", half.body);
     destination.setBoolean("body_truncated", half.body_truncated);
     destination.setString("body_encoding", half.encoding);
@@ -100,11 +107,11 @@ fn pushHalf(state: *lua.lua_State, optional: ?protocol.Half) void {
     freezeTable(state);
 }
 
-fn pushHead(state: *lua.lua_State, raw: []const u8) void {
-    lua.lua_createtable(state, 0, 2);
+fn pushHead(state: *lua_api.c.lua_State, raw: []const u8) void {
+    lua_api.c.lua_createtable(state, 0, 2);
     const destination = LuaTable.init(state, -1);
     destination.setString("raw", raw);
-    lua.lua_createtable(state, 0, 0);
+    lua_api.c.lua_createtable(state, 0, 0);
     var index: c_int = 1;
     var lines = std.mem.splitSequence(u8, raw, "\r\n");
     while (lines.next()) |line| {
@@ -115,40 +122,40 @@ fn pushHead(state: *lua.lua_State, raw: []const u8) void {
         const colon = separator orelse continue;
         const name = std.mem.trim(u8, line[0..colon], " \t");
         const value = std.mem.trim(u8, line[colon + 1 ..], " \t");
-        lua.lua_createtable(state, 0, 2);
+        lua_api.c.lua_createtable(state, 0, 2);
         const field = LuaTable.init(state, -1);
         field.setString("name", name);
         field.setString("value", value);
         freezeTable(state);
-        lua.lua_seti(state, -2, index);
+        lua_api.c.lua_seti(state, -2, index);
         index += 1;
     }
     freezeTable(state);
-    lua.lua_setfield(state, -2, "fields");
+    lua_api.c.lua_setfield(state, -2, "fields");
     freezeTable(state);
 }
 
-pub fn parseEffects(state: *lua.lua_State, index: c_int) !effects.Batch {
-    if (lua.lua_type(state, index) == lua.LUA_TNIL) {
+pub fn parseEffects(state: *lua_api.c.lua_State, index: c_int) !BatchType {
+    if (lua_api.c.lua_type(state, index) == lua_api.c.LUA_TNIL) {
         return .{};
     }
-    if (lua.lua_type(state, index) != lua.LUA_TTABLE) {
+    if (lua_api.c.lua_type(state, index) != lua_api.c.LUA_TTABLE) {
         return error.InvalidEffectBatch;
     }
-    const absolute = lua.lua_absindex(state, index);
-    const count = lua.lua_rawlen(state, absolute);
+    const absolute = lua_api.c.lua_absindex(state, index);
+    const count = lua_api.c.lua_rawlen(state, absolute);
     if (count > effects.max_effects) {
         return error.TooManyEffects;
     }
-    var batch: effects.Batch = .{ .len = @intCast(count) };
+    var batch: BatchType = .{ .len = @intCast(count) };
 
     for (0..count) |effect_index| {
-        _ = lua.lua_geti(state, absolute, @intCast(effect_index + 1));
+        _ = lua_api.c.lua_geti(state, absolute, @intCast(effect_index + 1));
         defer pop(state, 1);
-        if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+        if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
             return error.InvalidEffect;
         }
-        const effect_table = lua.lua_absindex(state, -1);
+        const effect_table = lua_api.c.lua_absindex(state, -1);
         const effect = LuaTable.init(state, effect_table);
         const kind = try effect.string("__telar_kind", true);
         batch.items[effect_index] = if (std.mem.eql(u8, kind, "record_command"))
@@ -165,14 +172,14 @@ pub fn parseEffects(state: *lua.lua_State, index: c_int) !effects.Batch {
             } }
         else if (std.mem.eql(u8, kind, "agent_evidence"))
             .{ .agent_evidence = .{
-                .pane = core.schema.id.pane(@intCast(try effect.integer("pane", 0))) catch return error.InvalidEffect,
+                .pane = pane_module(@intCast(try effect.integer("pane", 0))) catch return error.InvalidEffect,
                 .state = try agentState(try effect.string("state", true)),
                 .confidence = try confidence(try effect.string("confidence", true)),
             } }
         else if (std.mem.eql(u8, kind, "notification"))
             .{ .notification = .{
                 .level = try notificationLevel(try effect.string("level", false)),
-                .duration_ms = @intCast(try effect.integer("duration_ms", core.schema.default_notification_duration_ms)),
+                .duration_ms = @intCast(try effect.integer("duration_ms", default_notification_duration_ms_module)),
                 .title = try effect.string("title", true),
                 .message = try effect.string("message", false),
             } }
@@ -182,9 +189,7 @@ pub fn parseEffects(state: *lua.lua_State, index: c_int) !effects.Batch {
     return batch;
 }
 
-const LuaTable = @import("LuaTable.zig");
-
-fn agentState(value: []const u8) !core.schema.AgentReportState {
+fn agentState(value: []const u8) !AgentReportStateType {
     if (std.mem.eql(u8, value, "working")) {
         return .working;
     }
@@ -207,7 +212,7 @@ fn confidence(value: []const u8) !effects.Confidence {
     return error.InvalidEffect;
 }
 
-fn notificationLevel(value: []const u8) !core.schema.NotificationLevel {
+fn notificationLevel(value: []const u8) !NotificationLevelType {
     if (value.len == 0 or std.mem.eql(u8, value, "info")) {
         return .info;
     }
@@ -223,23 +228,23 @@ fn notificationLevel(value: []const u8) !core.schema.NotificationLevel {
     return error.InvalidEffect;
 }
 
-pub fn requireLocal(state_optional: ?*lua.lua_State) callconv(.c) c_int {
+pub fn requireLocal(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
     const state = state_optional.?;
     const host = hostFromUpvalue(state) orelse return raise(state, "missing require context");
     const name = luaString(state, 1) orelse return raise(state, "require expects a module name");
     if (std.mem.eql(u8, name, "telar")) {
-        _ = lua.lua_getglobal(state, "telar");
+        _ = lua_api.c.lua_getglobal(state, "telar");
         return 1;
     }
     if (!validModuleName(name)) {
         return raise(state, "invalid local module name");
     }
 
-    _ = lua.lua_rawgeti(state, lua.LUA_REGISTRYINDEX, host.module_cache_ref);
-    _ = lua.lua_pushlstring(state, name.ptr, name.len);
-    _ = lua.lua_rawget(state, -2);
-    if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
-        lua.lua_remove(state, -2);
+    _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, host.module_cache_ref);
+    _ = lua_api.c.lua_pushlstring(state, name.ptr, name.len);
+    _ = lua_api.c.lua_rawget(state, -2);
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        lua_api.c.lua_remove(state, -2);
         return 1;
     }
     pop(state, 1);
@@ -261,39 +266,39 @@ pub fn requireLocal(state_optional: ?*lua.lua_State) callconv(.c) c_int {
     var candidate: [std.fs.max_path_bytes]u8 = undefined;
     const joined = std.fmt.bufPrint(&candidate, "{s}/{s}", .{ host.package_root, relative[0..cursor] }) catch return raise(state, "module path too long");
     var resolved_storage: [std.fs.max_path_bytes]u8 = undefined;
-    const resolved_len = Io.Dir.cwd().realPathFile(host.io, joined, &resolved_storage) catch return raise(state, "cannot resolve local module");
+    const resolved_len = std.Io.Dir.cwd().realPathFile(host.io, joined, &resolved_storage) catch return raise(state, "cannot resolve local module");
     const resolved = resolved_storage[0..resolved_len];
     if (!pathInside(host.package_root, resolved) or resolved_len == resolved_storage.len) {
         return raise(state, "module escapes package");
     }
     resolved_storage[resolved_len] = 0;
     const path_z: [*:0]const u8 = @ptrCast(resolved_storage[0..resolved_len :0]);
-    if (lua.luaL_loadfilex(state, path_z, "t") != lua.LUA_OK) {
-        return lua.lua_error(state);
+    if (lua_api.c.luaL_loadfilex(state, path_z, "t") != lua_api.c.LUA_OK) {
+        return lua_api.c.lua_error(state);
     }
-    if (lua.lua_pcallk(state, 0, 1, 0, 0, null) != lua.LUA_OK) {
-        return lua.lua_error(state);
+    if (lua_api.c.lua_pcallk(state, 0, 1, 0, 0, null) != lua_api.c.LUA_OK) {
+        return lua_api.c.lua_error(state);
     }
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
         pop(state, 1);
-        lua.lua_pushboolean(state, 1);
+        lua_api.c.lua_pushboolean(state, 1);
     }
-    _ = lua.lua_pushlstring(state, name.ptr, name.len);
-    lua.lua_pushvalue(state, -2);
-    lua.lua_rawset(state, -4);
-    lua.lua_remove(state, -2);
+    _ = lua_api.c.lua_pushlstring(state, name.ptr, name.len);
+    lua_api.c.lua_pushvalue(state, -2);
+    lua_api.c.lua_rawset(state, -4);
+    lua_api.c.lua_remove(state, -2);
     return 1;
 }
 
-pub fn redactSecrets(state_optional: ?*lua.lua_State) callconv(.c) c_int {
+pub fn redactSecrets(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
     const state = state_optional.?;
     const input = luaString(state, 1) orelse return raise(state, "redact.secrets expects a string");
-    const output = if (core.history_filter.looksLikeSecret(input)) "[REDACTED]" else input;
-    _ = lua.lua_pushlstring(state, output.ptr, output.len);
+    const output = if (looksLikeSecret_module(input)) "[REDACTED]" else input;
+    _ = lua_api.c.lua_pushlstring(state, output.ptr, output.len);
     return 1;
 }
 
-pub fn decodeJson(state_optional: ?*lua.lua_State) callconv(.c) c_int {
+pub fn decodeJson(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
     const state = state_optional.?;
     const input = luaString(state, 1) orelse return raise(state, "json.decode expects a string");
     if (input.len > max_json_bytes) {
@@ -305,74 +310,74 @@ pub fn decodeJson(state_optional: ?*lua.lua_State) callconv(.c) c_int {
     return 1;
 }
 
-fn pushJson(state: *lua.lua_State, value: std.json.Value, depth: u8) !void {
+fn pushJson(state: *lua_api.c.lua_State, value: std.json.Value, depth: u8) !void {
     if (depth == 64) {
         return error.JsonDepth;
     }
     switch (value) {
-        .null => lua.lua_pushnil(state),
-        .bool => |boolean| lua.lua_pushboolean(state, @intFromBool(boolean)),
-        .integer => |integer| lua.lua_pushinteger(state, integer),
-        .float => |float| lua.lua_pushnumber(state, float),
+        .null => lua_api.c.lua_pushnil(state),
+        .bool => |boolean| lua_api.c.lua_pushboolean(state, @intFromBool(boolean)),
+        .integer => |integer| lua_api.c.lua_pushinteger(state, integer),
+        .float => |float| lua_api.c.lua_pushnumber(state, float),
         .number_string => |number| {
             const parsed = std.fmt.parseFloat(f64, number) catch return error.InvalidJson;
-            lua.lua_pushnumber(state, parsed);
+            lua_api.c.lua_pushnumber(state, parsed);
         },
-        .string => |string| _ = lua.lua_pushlstring(state, string.ptr, string.len),
+        .string => |string| _ = lua_api.c.lua_pushlstring(state, string.ptr, string.len),
         .array => |array| {
-            lua.lua_createtable(state, @intCast(array.items.len), 0);
+            lua_api.c.lua_createtable(state, @intCast(array.items.len), 0);
             for (array.items, 1..) |item, index| {
                 try pushJson(state, item, depth + 1);
-                lua.lua_seti(state, -2, @intCast(index));
+                lua_api.c.lua_seti(state, -2, @intCast(index));
             }
         },
         .object => |object| {
-            lua.lua_createtable(state, 0, @intCast(object.count()));
+            lua_api.c.lua_createtable(state, 0, @intCast(object.count()));
             var iterator = object.iterator();
             while (iterator.next()) |entry| {
-                _ = lua.lua_pushlstring(state, entry.key_ptr.ptr, entry.key_ptr.len);
+                _ = lua_api.c.lua_pushlstring(state, entry.key_ptr.ptr, entry.key_ptr.len);
                 try pushJson(state, entry.value_ptr.*, depth + 1);
-                lua.lua_settable(state, -3);
+                lua_api.c.lua_settable(state, -3);
             }
         },
     }
 }
 
-fn freezeTable(state: *lua.lua_State) void {
-    lua.lua_createtable(state, 0, 0);
-    lua.lua_createtable(state, 0, 3);
-    lua.lua_pushvalue(state, -3);
-    lua.lua_setfield(state, -2, "__index");
-    lua.lua_pushcclosure(state, readonlyNewIndex, 0);
-    lua.lua_setfield(state, -2, "__newindex");
-    lua.lua_pushboolean(state, 0);
-    lua.lua_setfield(state, -2, "__metatable");
-    _ = lua.lua_setmetatable(state, -2);
-    lua.lua_remove(state, -2);
+fn freezeTable(state: *lua_api.c.lua_State) void {
+    lua_api.c.lua_createtable(state, 0, 0);
+    lua_api.c.lua_createtable(state, 0, 3);
+    lua_api.c.lua_pushvalue(state, -3);
+    lua_api.c.lua_setfield(state, -2, "__index");
+    lua_api.c.lua_pushcclosure(state, readonlyNewIndex, 0);
+    lua_api.c.lua_setfield(state, -2, "__newindex");
+    lua_api.c.lua_pushboolean(state, 0);
+    lua_api.c.lua_setfield(state, -2, "__metatable");
+    _ = lua_api.c.lua_setmetatable(state, -2);
+    lua_api.c.lua_remove(state, -2);
 }
 
-fn readonlyNewIndex(state_optional: ?*lua.lua_State) callconv(.c) c_int {
+fn readonlyNewIndex(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
     return raise(state_optional.?, "exchange is immutable");
 }
 
-pub fn luaString(state: *lua.lua_State, index: c_int) ?[]const u8 {
+pub fn luaString(state: *lua_api.c.lua_State, index: c_int) ?[]const u8 {
     var len: usize = 0;
-    const value = lua.lua_tolstring(state, index, &len) orelse return null;
+    const value = lua_api.c.lua_tolstring(state, index, &len) orelse return null;
     return value[0..len];
 }
 
-fn hostFromUpvalue(state: *lua.lua_State) ?*Host {
-    const pointer = lua.lua_touserdata(state, lua.lua_upvalueindex(1)) orelse return null;
+fn hostFromUpvalue(state: *lua_api.c.lua_State) ?*Host {
+    const pointer = lua_api.c.lua_touserdata(state, lua_api.c.lua_upvalueindex(1)) orelse return null;
     return @ptrCast(@alignCast(pointer));
 }
 
-fn raise(state: *lua.lua_State, message: [*:0]const u8) c_int {
-    _ = lua.lua_pushstring(state, message);
-    return lua.lua_error(state);
+fn raise(state: *lua_api.c.lua_State, message: [*:0]const u8) c_int {
+    _ = lua_api.c.lua_pushstring(state, message);
+    return lua_api.c.lua_error(state);
 }
 
-pub fn pop(state: *lua.lua_State, count: c_int) void {
-    lua.lua_settop(state, -count - 1);
+pub fn pop(state: *lua_api.c.lua_State, count: c_int) void {
+    lua_api.c.lua_settop(state, -count - 1);
 }
 
 fn validModuleName(name: []const u8) bool {
@@ -458,7 +463,7 @@ test "shipped agent command tap maps non-stream shell commands and rejects unusa
     try std.testing.expectEqual(@as(u8, 0), undecoded.len);
 }
 
-fn testExchange(dialect: @import("../proxy/root.zig").ApiDialect, body: []const u8) protocol.Exchange {
+fn testExchange(dialect: types.ApiDialect, body: []const u8) ExchangeType {
     return .{
         .id = 1,
         .generation = 1,

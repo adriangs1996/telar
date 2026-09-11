@@ -1,9 +1,9 @@
 //! Per-pane proxy credentials carried in standard proxy URL userinfo.
 
+const CredentialType = @import("Credential.zig");
 const std = @import("std");
-const core = @import("telar-core");
-
-pub const schema = core.schema;
+const raw_module = @import("telar-core").raw;
+const pane_module = @import("telar-core").pane;
 
 pub const token_bytes = 16;
 pub const Credential = @import("Credential.zig");
@@ -26,9 +26,9 @@ pub fn randomToken(io: std.Io) [token_bytes]u8 {
 /// ```zig
 /// const url = try formatUrl(&buffer, 45100, &credential);
 /// ```
-pub fn formatUrl(buffer: []u8, port: u16, credential: *const Credential) ![]const u8 {
+pub fn formatUrl(buffer: []u8, port: u16, credential: *const CredentialType) ![]const u8 {
     return std.fmt.bufPrint(buffer, "http://telar:{d}.{d}.{x}@127.0.0.1:{d}", .{
-        schema.id.raw(credential.pane_id),
+        raw_module(credential.pane_id),
         credential.pane_generation,
         credential.token,
         port,
@@ -42,8 +42,8 @@ pub fn formatUrl(buffer: []u8, port: u16, credential: *const Credential) ![]cons
 /// var credential = parseProxyAuthorization(head) orelse return error.Unauthorized;
 /// defer std.crypto.secureZero(u8, &credential.token);
 /// ```
-pub fn parseProxyAuthorization(head: []const u8) ?Credential {
-    var credential: ?Credential = null;
+pub fn parseProxyAuthorization(head: []const u8) ?CredentialType {
+    var credential: ?CredentialType = null;
     defer {
         if (credential) |*value| {
             std.crypto.secureZero(u8, &value.token);
@@ -87,7 +87,7 @@ pub fn parseProxyAuthorization(head: []const u8) ?Credential {
     return credential;
 }
 
-fn parseUserInfo(value: []const u8) ?Credential {
+fn parseUserInfo(value: []const u8) ?CredentialType {
     if (!std.mem.startsWith(u8, value, "telar:")) {
         return null;
     }
@@ -105,7 +105,7 @@ fn parseUserInfo(value: []const u8) ?Credential {
     defer std.crypto.secureZero(u8, &token);
     _ = std.fmt.hexToBytes(&token, token_text) catch return null;
     return .{
-        .pane_id = schema.id.pane(pane_raw) catch return null,
+        .pane_id = pane_module(pane_raw) catch return null,
         .pane_generation = generation,
         .token = token,
     };
@@ -119,7 +119,7 @@ test "proxy basic authentication round trips pane identity" {
     const head = try std.fmt.bufPrint(&head_buf, "CONNECT api.openai.com:443 HTTP/1.1\r\nProxy-Authorization: Basic {s}\r\n\r\n", .{basic});
     var parsed = parseProxyAuthorization(head).?;
     defer std.crypto.secureZero(u8, &parsed.token);
-    try std.testing.expectEqual(@as(u64, 7), schema.id.raw(parsed.pane_id));
+    try std.testing.expectEqual(@as(u64, 7), raw_module(parsed.pane_id));
     try std.testing.expectEqual(@as(u64, 12), parsed.pane_generation);
     try std.testing.expectEqualSlices(u8, &[_]u8{
         0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,

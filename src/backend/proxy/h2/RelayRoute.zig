@@ -1,8 +1,9 @@
+const SessionType = @import("../Session.zig");
+const relay = @import("relay.zig");
+const types = @import("../../agent/types.zig");
 const Route = @This();
-const tls = @import("../tls.zig");
-const source_namespace = @import("relay.zig");
-const provider = @import("../provider/request_support.zig");
-from: tls.Session.Side,
-to: tls.Session.Side,
-direction: source_namespace.Direction,
-dialect: provider.ApiDialect,
+
+from: SessionType.Side,
+to: SessionType.Side,
+direction: relay.Direction,
+dialect: types.ApiDialect,

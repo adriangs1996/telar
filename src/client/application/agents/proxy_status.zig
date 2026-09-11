@@ -1,19 +1,15 @@
 //! Application use case for reconciling runtime TLS interception state.
 
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const ProxyStatusDelivery = @import("ProxyStatusDelivery.zig");
-
-pub const ApplyProxyStatusHandler = @import("ApplyProxyStatusHandler.zig");
-
-const DeliveryCapture = @import("ProxyStatusDeliveryCapture.zig");
+const ProxyStatusDeliveryCapture = @import("ProxyStatusDeliveryCapture.zig");
+const ApplyProxyStatusHandler = @import("ApplyProxyStatusHandler.zig");
+const VersionType = @import("../../model/Version.zig");
 
 test "ApplyProxyStatusHandler commits before delivering each changed state" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: DeliveryCapture = .{ .model = &model };
+    var capture: ProxyStatusDeliveryCapture = .{ .model = &model };
     var handler: ApplyProxyStatusHandler = .{
         .model = &model,
         .delivery = capture.port(),
@@ -35,13 +31,13 @@ test "ApplyProxyStatusHandler commits before delivering each changed state" {
     try std.testing.expect(!disabled.active);
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 2), capture.calls);
-    try std.testing.expectEqual(client_model.Version{ .proxy_status = 2 }, model.version());
+    try std.testing.expectEqual(VersionType{ .proxy_status = 2 }, model.version());
 }
 
 test "ApplyProxyStatusHandler preserves a commit after delivery failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: DeliveryCapture = .{ .model = &model, .fail = true };
+    var capture: ProxyStatusDeliveryCapture = .{ .model = &model, .fail = true };
     var handler: ApplyProxyStatusHandler = .{
         .model = &model,
         .delivery = capture.port(),
@@ -51,5 +47,5 @@ test "ApplyProxyStatusHandler preserves a commit after delivery failure" {
 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expect(model.proxyTlsActive());
-    try std.testing.expectEqual(client_model.Version{ .proxy_status = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .proxy_status = 1 }, model.version());
 }

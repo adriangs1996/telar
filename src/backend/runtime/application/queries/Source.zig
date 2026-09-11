@@ -1,5 +1,6 @@
+const TabLocationType = @import("telar-core").TabLocation;
 const Source = @This();
-const source_namespace = @import("tab_snapshot.zig");
+
 context: *anyopaque,
-contains_tab: *const fn (*anyopaque, source_namespace.schema.TabLocation) bool,
-running_panes: *const fn (*anyopaque, source_namespace.schema.TabLocation) u16,
+contains_tab: *const fn (*anyopaque, TabLocationType) bool,
+running_panes: *const fn (*anyopaque, TabLocationType) u16,

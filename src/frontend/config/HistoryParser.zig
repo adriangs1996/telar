@@ -1,17 +1,20 @@
-const Parser = @This();
-const lua = @import("lua-api").c;
-const config_model = @import("model.zig");
+const lua_api = @import("lua-api");
+const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
 const value = @import("lua_value.zig");
 const std = @import("std");
-const source_namespace = @import("history.zig");
-state: *lua.lua_State,
-runtime: *config_model.RuntimeSnapshot,
-diagnostic: *config_model.Diagnostic,
+const config_model = @import("model.zig");
+const history = @import("history.zig");
+const Parser = @This();
+
+state: *lua_api.c.lua_State,
+runtime: *RuntimeSnapshotType,
+diagnostic: *DiagnosticType,
 
 pub fn parseOutput(parser: *Parser, absolute: c_int) !void {
-    _ = lua.lua_getfield(parser.state, absolute, "output");
+    _ = lua_api.c.lua_getfield(parser.state, absolute, "output");
     defer value.pop(parser.state, 1);
-    if (lua.lua_type(parser.state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
 
@@ -33,9 +36,9 @@ pub fn parseOutput(parser: *Parser, absolute: c_int) !void {
 }
 
 pub fn parsePath(parser: *Parser, absolute: c_int) !void {
-    _ = lua.lua_getfield(parser.state, absolute, "path");
+    _ = lua_api.c.lua_getfield(parser.state, absolute, "path");
     defer value.pop(parser.state, 1);
-    if (lua.lua_type(parser.state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
 
@@ -53,36 +56,36 @@ pub fn parsePath(parser: *Parser, absolute: c_int) !void {
 }
 
 pub fn parseSecretsFilter(parser: *Parser, absolute: c_int) !void {
-    _ = lua.lua_getfield(parser.state, absolute, "secrets_filter");
+    _ = lua_api.c.lua_getfield(parser.state, absolute, "secrets_filter");
     defer value.pop(parser.state, 1);
-    if (lua.lua_type(parser.state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
-    if (lua.lua_type(parser.state, -1) != lua.LUA_TBOOLEAN) {
+    if (lua_api.c.lua_type(parser.state, -1) != lua_api.c.LUA_TBOOLEAN) {
         parser.diagnostic.set("config.runtime.history.secrets_filter must be a boolean", .{});
         return error.InvalidConfig;
     }
 
-    parser.runtime.history_filters.secrets = lua.lua_toboolean(parser.state, -1) != 0;
+    parser.runtime.history_filters.secrets = lua_api.c.lua_toboolean(parser.state, -1) != 0;
 }
 
-pub fn parsePatterns(parser: *Parser, absolute: c_int, kind: source_namespace.PatternKind) !void {
+pub fn parsePatterns(parser: *Parser, absolute: c_int, kind: history.PatternKind) !void {
     const name: [:0]const u8 = switch (kind) {
         .commands => "command_filters",
         .cwds => "cwd_filters",
     };
-    _ = lua.lua_getfield(parser.state, absolute, name.ptr);
+    _ = lua_api.c.lua_getfield(parser.state, absolute, name.ptr);
     defer value.pop(parser.state, 1);
-    if (lua.lua_type(parser.state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
-    if (lua.lua_type(parser.state, -1) != lua.LUA_TTABLE) {
+    if (lua_api.c.lua_type(parser.state, -1) != lua_api.c.LUA_TTABLE) {
         parser.diagnostic.set("config.runtime.history.{s} must be an array of strings", .{name});
         return error.InvalidConfig;
     }
 
-    const table = lua.lua_absindex(parser.state, -1);
-    const count = lua.lua_rawlen(parser.state, table);
+    const table = lua_api.c.lua_absindex(parser.state, -1);
+    const count = lua_api.c.lua_rawlen(parser.state, table);
     try value.ensureArrayOnly(parser.state, .{
         .index = table,
         .count = count,
@@ -96,7 +99,7 @@ pub fn parsePatterns(parser: *Parser, absolute: c_int, kind: source_namespace.Pa
         .cwds => &parser.runtime.history_filters.cwds,
     };
     for (1..count + 1) |item| {
-        _ = lua.lua_rawgeti(parser.state, table, @intCast(item));
+        _ = lua_api.c.lua_rawgeti(parser.state, table, @intCast(item));
         defer value.pop(parser.state, 1);
         const pattern = value.string(parser.state, -1) orelse {
             parser.diagnostic.set("config.runtime.history.{s}[{d}] must be a string", .{ name, item });

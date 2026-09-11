@@ -1,4 +1,5 @@
+const TabLocationType = @import("telar-core").TabLocation;
 const Ensured = @This();
-const source_namespace = @import("repository_support.zig");
-location: source_namespace.schema.TabLocation,
+
+location: TabLocationType,
 created: bool,

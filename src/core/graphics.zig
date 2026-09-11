@@ -3,7 +3,11 @@
 //! This module deliberately contains no parser, allocator, PTY, or terminal
 //! writer. It is the wire vocabulary between the owners of those resources.
 
+const Rect = @import("Rect.zig");
+const Clip = @import("Clip.zig");
 const std = @import("std");
+const Image = @import("Image.zig");
+const Placement = @import("Placement.zig");
 
 pub const max_images_per_pane: usize = 64;
 pub const max_placements_per_pane: usize = 256;
@@ -23,8 +27,6 @@ pub const max_chunks_per_image: usize = 4096;
 /// bytes, so the wire and both processes agree on that bound.
 pub const max_shm_name_bytes: usize = 31;
 
-pub const ShmName = @import("ShmName.zig");
-
 pub const Format = enum(u8) {
     rgb = 24,
     rgba = 32,
@@ -36,16 +38,6 @@ pub const Format = enum(u8) {
         };
     }
 };
-
-pub const ImageKey = @import("ImageKey.zig");
-
-pub const Image = @import("Image.zig");
-
-pub const Placement = @import("Placement.zig");
-
-pub const Rect = @import("Rect.zig");
-
-pub const Clip = @import("Clip.zig");
 
 /// Clips a scaled placement in pixel coordinates while preserving the source
 /// rectangle. Integer division rounds inward, so no source pixel can escape

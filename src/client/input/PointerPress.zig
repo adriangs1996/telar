@@ -1,5 +1,7 @@
+const PaneIdType = @import("telar-core").PaneId;
+const PointType = @import("telar-core").Point;
 const PointerPress = @This();
-const source_namespace = @import("copy_mode.zig");
-pane_id: source_namespace.schema.PaneId,
-position: source_namespace.ui.Point,
+
+pane_id: PaneIdType,
+position: PointType,
 now_ns: u64,

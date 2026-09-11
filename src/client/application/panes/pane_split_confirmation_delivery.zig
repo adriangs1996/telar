@@ -1,29 +1,23 @@
 //! Application policy for delivering client resources after one committed pane
 //! split confirmation.
 
+const PaneIdType = @import("telar-core").PaneId;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const PaneSplitConfirmationDeliveryEffectsCapture = @import("PaneSplitConfirmationDeliveryEffectsCapture.zig");
+const DeliverPaneSplitConfirmationHandler = @import("DeliverPaneSplitConfirmationHandler.zig");
+const PaneSplitConfirmationDeliveryTestingModel = @import("PaneSplitConfirmationDeliveryTestingModel.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../../root.zig").model;
-const pane_geometry_delivery = @import("pane_geometry_delivery.zig");
-
-pub const schema = core.schema;
-pub const tabs_mod = workspace_capability.tabs;
-
-pub const Effects = @import("PaneSplitConfirmationDeliveryEffects.zig");
-
-pub const DeliverPaneSplitConfirmationHandler = @import("DeliverPaneSplitConfirmationHandler.zig");
 
 pub const Event = union(enum) {
-    resize: schema.PaneId,
+    resize: PaneIdType,
     synchronize_active_resources,
-    detach: schema.PaneId,
+    detach: PaneIdType,
     graphics_visibility: struct {
-        pane_id: schema.PaneId,
+        pane_id: PaneIdType,
         visible: bool,
     },
     workspace_snapshot_pending,
-    request_workspace_snapshot: schema.WorkspaceLocation,
+    request_workspace_snapshot: WorkspaceLocationType,
 };
 
 pub const Failure = enum {
@@ -35,11 +29,7 @@ pub const Failure = enum {
     workspace_snapshot,
 };
 
-const TestingModel = @import("PaneSplitConfirmationDeliveryTestingModel.zig");
-
-const EffectsCapture = @import("PaneSplitConfirmationDeliveryEffectsCapture.zig");
-
-fn deliveryHandler(capture: *EffectsCapture) DeliverPaneSplitConfirmationHandler {
+fn deliveryHandler(capture: *PaneSplitConfirmationDeliveryEffectsCapture) DeliverPaneSplitConfirmationHandler {
     return .{
         .model = capture.model,
         .geometry_effects = capture.geometryEffects(),
@@ -48,10 +38,10 @@ fn deliveryHandler(capture: *EffectsCapture) DeliverPaneSplitConfirmationHandler
 }
 
 test "DeliverPaneSplitConfirmationHandler offers active geometry before resources" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.activeCommit();
-    var capture: EffectsCapture = .{ .model = testing.model, .commit = commit };
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{ .model = testing.model, .commit = commit };
     var handler = deliveryHandler(&capture);
 
     try handler.execute(commit);
@@ -65,10 +55,10 @@ test "DeliverPaneSplitConfirmationHandler offers active geometry before resource
 }
 
 test "DeliverPaneSplitConfirmationHandler detaches and hides an inactive pane" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.inactiveCommit();
-    var capture: EffectsCapture = .{ .model = testing.model, .commit = commit };
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{ .model = testing.model, .commit = commit };
     var handler = deliveryHandler(&capture);
 
     try handler.execute(commit);
@@ -81,10 +71,10 @@ test "DeliverPaneSplitConfirmationHandler detaches and hides an inactive pane" {
 }
 
 test "DeliverPaneSplitConfirmationHandler detaches stale pane before canonical recovery" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.staleCommit();
-    var capture: EffectsCapture = .{ .model = testing.model, .commit = commit };
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{ .model = testing.model, .commit = commit };
     var handler = deliveryHandler(&capture);
 
     try handler.execute(commit);
@@ -98,10 +88,10 @@ test "DeliverPaneSplitConfirmationHandler detaches stale pane before canonical r
 }
 
 test "DeliverPaneSplitConfirmationHandler coalesces stale workspace recovery" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.staleCommit();
-    var capture: EffectsCapture = .{
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .snapshot_pending = true,
@@ -117,10 +107,10 @@ test "DeliverPaneSplitConfirmationHandler coalesces stale workspace recovery" {
 }
 
 test "DeliverPaneSplitConfirmationHandler skips recovery for another workspace" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.foreignWorkspaceCommit();
-    var capture: EffectsCapture = .{ .model = testing.model, .commit = commit };
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{ .model = testing.model, .commit = commit };
     var handler = deliveryHandler(&capture);
 
     try handler.execute(commit);
@@ -129,10 +119,10 @@ test "DeliverPaneSplitConfirmationHandler skips recovery for another workspace" 
 }
 
 test "DeliverPaneSplitConfirmationHandler rejects stale topology layout and attachment state" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.activeCommit();
-    var capture: EffectsCapture = .{ .model = testing.model, .commit = commit };
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{ .model = testing.model, .commit = commit };
     var handler = deliveryHandler(&capture);
 
     testing.model.workspace_revision +%= 1;
@@ -164,10 +154,10 @@ test "DeliverPaneSplitConfirmationHandler rejects stale topology layout and atta
 }
 
 test "DeliverPaneSplitConfirmationHandler stops active delivery after geometry failure" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.activeCommit();
-    var capture: EffectsCapture = .{
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .failure = .resize,
@@ -181,10 +171,10 @@ test "DeliverPaneSplitConfirmationHandler stops active delivery after geometry f
 }
 
 test "DeliverPaneSplitConfirmationHandler propagates active resource failure after geometry" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.activeCommit();
-    var capture: EffectsCapture = .{
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .failure = .active_resources,
@@ -201,10 +191,10 @@ test "DeliverPaneSplitConfirmationHandler propagates active resource failure aft
 }
 
 test "DeliverPaneSplitConfirmationHandler stops inactive delivery after detach failure" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.inactiveCommit();
-    var capture: EffectsCapture = .{
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .failure = .detach,
@@ -217,10 +207,10 @@ test "DeliverPaneSplitConfirmationHandler stops inactive delivery after detach f
 }
 
 test "DeliverPaneSplitConfirmationHandler preserves detach after graphics failure" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.inactiveCommit();
-    var capture: EffectsCapture = .{
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .failure = .graphics_visibility,
@@ -236,10 +226,10 @@ test "DeliverPaneSplitConfirmationHandler preserves detach after graphics failur
 }
 
 test "DeliverPaneSplitConfirmationHandler preserves detach after recovery failure" {
-    var testing = try TestingModel.init();
+    var testing = try PaneSplitConfirmationDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.staleCommit();
-    var capture: EffectsCapture = .{
+    var capture: PaneSplitConfirmationDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .failure = .workspace_snapshot,

@@ -1,12 +1,14 @@
-const PrepareWorkspaceHandoffHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const RequestCapacity = @import("RequestCapacity.zig");
 const DeliveryCapacity = @import("DeliveryCapacity.zig");
-const tab_attachment_retirement = @import("../tabs/root.zig").tab_attachment_retirement;
-model: *client_model.Model,
+const PendingAttachmentsType = @import("../tabs/PendingAttachments.zig");
+const tab_attachment_retirement = @import("../tabs/tab_attachment_retirement.zig");
+const PrepareWorkspaceHandoffHandler = @This();
+
+model: *ModelType,
 requests: RequestCapacity,
 deliveries: DeliveryCapacity,
-pending_attachments: tab_attachment_retirement.PendingAttachments,
+pending_attachments: PendingAttachmentsType,
 
 /// Reserves one open request, its recovery identity and every outbound
 /// delivery required to retire the current workspace without effects.

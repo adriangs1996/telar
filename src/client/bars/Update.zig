@@ -1,6 +1,7 @@
-const Update = @This();
-const source_namespace = @import("model.zig");
+const model = @import("model.zig");
 const Content = @import("Content.zig");
+const Update = @This();
+
 generation: u64,
-position: source_namespace.Position,
+position: model.Position,
 content: Content,

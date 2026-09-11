@@ -1,20 +1,13 @@
 //! Composition of the interactive Telar client process.
 
 const std = @import("std");
-const core = @import("telar-core");
-const backend = @import("telar-backend");
-const frontend = @import("telar-frontend");
-const config = @import("config.zig");
-const parser = @import("parser.zig");
-const plugin = @import("plugin.zig");
+const RunOptions = @import("arguments/RunOptions.zig");
+const ForwardType = @import("Forward.zig");
 const remote = @import("remote.zig");
-const runtime_connection = @import("runtime_connection.zig");
-const TestEnvironment = @import("test_environment.zig").TestEnvironment;
-
-pub const Io = std.Io;
-pub const RunOptions = parser.RunOptions;
-const RuntimeConnector = runtime_connection.RuntimeConnector;
-pub const max_args = backend.pty.max_args;
+const RuntimeConnector = @import("RuntimeConnector.zig");
+const ClientLaunch = @import("ClientLaunch.zig");
+const ClientRunRun = @import("telar-frontend").ClientRun;
+const TestEnvironment = @import("TestEnvironment.zig");
 
 /// Connects to the selected runtime, prepares the local client configuration
 /// and transfers its owned resources into the frontend client lifecycle.
@@ -23,7 +16,7 @@ pub const max_args = backend.pty.max_args;
 /// const exit_code = try client.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: RunOptions) !u8 {
-    var forward: ?remote.Forward = null;
+    var forward: ?ForwardType = null;
     defer if (forward) |*owned| owned.stop(init.io);
     if (options.remote) |destination| {
         forward = try remote.establish(init, std.mem.span(destination));
@@ -41,7 +34,7 @@ pub fn run(init: std.process.Init, options: RunOptions) !u8 {
         });
     defer connection.deinit(init.io);
 
-    var launch: Launch = undefined;
+    var launch: ClientLaunch = undefined;
     try launch.prepare(.{
         .process = init,
         .options = &options,
@@ -52,12 +45,8 @@ pub fn run(init: std.process.Init, options: RunOptions) !u8 {
 
     const frontend_options = launch.frontendOptions();
     launch.transferResources();
-    return frontend.client.run(init, &connection, frontend_options);
+    return ClientRunRun(init, &connection, frontend_options);
 }
-
-const Preparation = @import("ClientPreparation.zig");
-
-const Launch = @import("ClientLaunch.zig");
 
 pub fn supportsHostSharedMemory(environ: std.process.Environ) bool {
     if (environ.getPosix("SSH_CONNECTION") != null) {
@@ -73,10 +62,10 @@ pub fn configuredEditor(environ: std.process.Environ) []const u8 {
 }
 
 test "remote launch uses remote home and shell rather than client paths" {
-    var environment = try TestEnvironment.init(&.{.{ "SHELL", "/opt/homebrew/bin/local-shell" }});
+    var environment = try TestEnvironment.init(&.{.{ .name = "SHELL", .value = "/opt/homebrew/bin/local-shell" }});
     defer environment.deinit();
     const options = try RunOptions.parse(&.{ "--remote", "box" }, .{ .block = environment.block });
-    var launch: Launch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
+    var launch: ClientLaunch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
     try launch.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
 
     try std.testing.expectEqualStrings("/home/remote-user", launch.cwd_buffer[0..launch.cwd_len]);
@@ -86,7 +75,7 @@ test "remote launch uses remote home and shell rather than client paths" {
 
 test "remote launch preserves explicit commands while keeping the remote home" {
     const options = try RunOptions.parse(&.{ "--remote", "box", "/bin/bash", "-l" }, .empty);
-    var launch: Launch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
+    var launch: ClientLaunch = .{ .process = undefined, .options = &options, .endpoint = "/forward.sock" };
     try launch.prepareChild(.{ .cwd = "/home/remote-user", .shell = "/bin/remote-shell" });
 
     try std.testing.expectEqualStrings("/home/remote-user", launch.cwd_buffer[0..launch.cwd_len]);
@@ -96,7 +85,7 @@ test "remote launch preserves explicit commands while keeping the remote home" {
 }
 
 test "local Ghostty clients may use host shared memory" {
-    var environment = try TestEnvironment.init(&.{.{ "TERM_PROGRAM", "Ghostty" }});
+    var environment = try TestEnvironment.init(&.{.{ .name = "TERM_PROGRAM", .value = "Ghostty" }});
     defer environment.deinit();
 
     try std.testing.expect(supportsHostSharedMemory(.{ .block = environment.block }));
@@ -104,8 +93,8 @@ test "local Ghostty clients may use host shared memory" {
 
 test "SSH clients never use host shared memory" {
     var environment = try TestEnvironment.init(&.{
-        .{ "TERM_PROGRAM", "ghostty" },
-        .{ "SSH_CONNECTION", "host 22 host 22" },
+        .{ .name = "TERM_PROGRAM", .value = "ghostty" },
+        .{ .name = "SSH_CONNECTION", .value = "host 22 host 22" },
     });
     defer environment.deinit();
 
@@ -113,7 +102,7 @@ test "SSH clients never use host shared memory" {
 }
 
 test "other terminals do not use Ghostty shared memory" {
-    var environment = try TestEnvironment.init(&.{.{ "TERM_PROGRAM", "iTerm.app" }});
+    var environment = try TestEnvironment.init(&.{.{ .name = "TERM_PROGRAM", .value = "iTerm.app" }});
     defer environment.deinit();
 
     try std.testing.expect(!supportsHostSharedMemory(.{ .block = environment.block }));
@@ -121,7 +110,7 @@ test "other terminals do not use Ghostty shared memory" {
 }
 
 test "the client snapshots EDITOR without inventing a fallback" {
-    var environment = try TestEnvironment.init(&.{.{ "EDITOR", "/usr/bin/nvim" }});
+    var environment = try TestEnvironment.init(&.{.{ .name = "EDITOR", .value = "/usr/bin/nvim" }});
     defer environment.deinit();
 
     try std.testing.expectEqualStrings(

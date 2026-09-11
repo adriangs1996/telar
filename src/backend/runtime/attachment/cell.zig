@@ -1,23 +1,11 @@
 //! Per-client projection and acknowledgement of one pane's cell state.
 
+const PaneFixtureType = @import("../tests/PaneFixture.zig");
 const std = @import("std");
-const vt = @import("ghostty-vt");
-const core = @import("telar-core");
-const pane_mod = @import("../../pane/root.zig");
-const telemetry = @import("../observability/root.zig").telemetry;
-
-pub const Io = std.Io;
-pub const schema = core.schema;
-pub const diagnostics = core.diagnostics;
-pub const Pane = pane_mod.Pane;
-pub const RuntimeMetrics = telemetry.RuntimeMetrics;
-
-pub const Preparation = @import("Preparation.zig");
-
-pub const Sync = @import("CellSync.zig");
+const CellSync = @import("CellSync.zig");
 
 test "viewport pin allocation failure restores the shared screen and sync state" {
-    const PaneFixture = @import("../tests/support.zig").PaneFixture;
+    const PaneFixture = PaneFixtureType;
 
     var fixture: PaneFixture = .{};
     try fixture.init();
@@ -28,14 +16,14 @@ test "viewport pin allocation failure restores the shared screen and sync state"
     );
     try fixture.pane.render(false);
 
-    var held_syncs: [64]Sync = undefined;
+    var held_syncs: [64]CellSync = undefined;
     var held_count: usize = 0;
     defer for (held_syncs[0..held_count]) |*sync| sync.deinit(fixture.pane);
 
     fixture.failNextPaneAllocation();
     var failure_observed = false;
     for (&held_syncs) |*sync| {
-        sync.* = try Sync.init(std.testing.allocator, fixture.pane);
+        sync.* = try CellSync.init(std.testing.allocator, fixture.pane);
         sync.snapshot_pending = false;
 
         const changed = sync.setViewport(fixture.pane, 0) catch |err| {

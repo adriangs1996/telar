@@ -1,15 +1,16 @@
+const vt = @import("ghostty-vt");
+const TerminalTracker = @import("TerminalTracker.zig");
+const TerminalCollected = @import("TerminalCollected.zig");
+const ClockType = @import("Clock.zig");
+const std = @import("std");
 /// The observer replays output into the emulator before the tracker sees it.
 const TypeAheadFixture = @This();
-const vt = @import("ghostty-vt");
-const Tracker = @import("TerminalTracker.zig");
-const Collected = @import("TerminalCollected.zig");
-const source_namespace = @import("terminal.zig");
-const std = @import("std");
+
 terminal: vt.Terminal,
 stream: vt.TerminalStream,
-tracker: Tracker,
-collected: Collected = .{},
-clock: source_namespace.Clock = .{ .real_ms = 1, .awake_ns = 1 },
+tracker: TerminalTracker,
+collected: TerminalCollected = .{},
+clock: ClockType = .{ .real_ms = 1, .awake_ns = 1 },
 
 // Recorded from zsh with powerlevel10k on an 80 column pty, reduced to the
 // bytes that move the cursor or paint text. The shell finds the kernel
@@ -28,7 +29,7 @@ pub fn init(fixture: *TypeAheadFixture, gpa: std.mem.Allocator) !void {
     errdefer fixture.terminal.deinit(gpa);
     fixture.stream = fixture.terminal.vtStream();
     errdefer fixture.stream.deinit();
-    fixture.tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &fixture.terminal });
+    fixture.tracker = try TerminalTracker.init(gpa, .{ .cwd = "/work", .terminal = &fixture.terminal });
     fixture.collected = .{};
     fixture.clock = .{ .real_ms = 1, .awake_ns = 1 };
 }

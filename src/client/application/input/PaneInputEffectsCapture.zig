@@ -1,16 +1,19 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_input.zig");
+const ModelType = @import("../../model/Model.zig");
+const pane_input = @import("pane_input.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const PaneInputEffects = @import("PaneInputEffects.zig");
+const PaneViewportChangeType = @import("../../model/PaneViewportChange.zig");
 const PaneInputEffect = @import("PaneInputEffect.zig");
-model: *const client_model.Model,
-events: [2]source_namespace.EffectEvent = undefined,
+const EffectsCapture = @This();
+
+model: *const ModelType,
+events: [2]pane_input.EffectEvent = undefined,
 event_count: usize = 0,
 viewport_calls: usize = 0,
 input_calls: usize = 0,
 viewport_observed_commit: bool = false,
 input_observed_bottom: bool = false,
-pane_id: ?source_namespace.schema.PaneId = null,
+pane_id: ?PaneIdType = null,
 input: [64]u8 = undefined,
 input_len: usize = 0,
 fail_viewport: bool = false,
@@ -27,12 +30,12 @@ pub fn port(capture: *EffectsCapture) PaneInputEffects {
     };
 }
 
-fn record(capture: *EffectsCapture, event: source_namespace.EffectEvent) void {
+fn record(capture: *EffectsCapture, event: pane_input.EffectEvent) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
 
-fn syncViewport(context: *anyopaque, change: client_model.PaneViewportChange) !void {
+fn syncViewport(context: *anyopaque, change: PaneViewportChangeType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     const pane = capture.model.workspace.activeConst().?.model.findConst(change.pane_id).?;
     capture.record(.viewport);

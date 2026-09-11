@@ -1,9 +1,12 @@
-const SessionStarted = @This();
-const source_namespace = @import("model.zig");
+const model = @import("model.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
 const std = @import("std");
-id: source_namespace.SessionId,
-pane_id: source_namespace.schema.PaneId,
-location: source_namespace.schema.TabLocation,
+const SessionStarted = @This();
+
+id: model.SessionId,
+pane_id: PaneIdType,
+location: TabLocationType,
 started_at_ms: i64,
 workspace_path: []u8,
 shell: []u8,

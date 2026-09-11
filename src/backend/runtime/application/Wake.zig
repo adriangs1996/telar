@@ -1,6 +1,7 @@
+const ClientKeyType = @import("../../history/ClientKey.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const Wake = @This();
-const history = @import("../../history/root.zig");
-const source_namespace = @import("pane_search.zig");
-client: history.model.ClientKey,
-request_id: source_namespace.schema.RequestId,
+
+client: ClientKeyType,
+request_id: RequestIdType,
 result: anyerror!void = {},

@@ -1,5 +1,6 @@
-const State = @This();
 const std = @import("std");
+const State = @This();
+
 pending: bool = false,
 
 /// Reports whether a generator actor still owns the global description

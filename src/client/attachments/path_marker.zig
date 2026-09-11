@@ -7,11 +7,15 @@
 //! hardware cursor is hidden by default in favour of one inverse-video cell.
 //! This module reads those conventions back from a committed pane frame.
 
+const BufferType = @import("telar-core").Buffer;
+const Marker = @import("Marker.zig");
+const Scan = @import("Scan.zig");
 const std = @import("std");
-const core = @import("telar-core");
-
-pub const schema = core.schema;
-pub const ui = core.ui;
+const Screen = @import("Screen.zig");
+const Position = @import("Position.zig");
+const Span = @import("Span.zig");
+const Head = @import("Head.zig");
+const CellType = @import("telar-core").Cell;
 
 pub const prefix = "pi-clipboard-";
 pub const uuid_len: usize = 36;
@@ -21,18 +25,12 @@ const extensions = [_][]const u8{ "png", "jpg", "webp", "gif" };
 
 pub const Uuid = [uuid_len]u8;
 
-pub const Position = @import("Position.zig");
-
-pub const Marker = @import("Marker.zig");
-
-pub const Screen = @import("Screen.zig");
-
 /// Finds the marker carrying `uuid` anywhere on the screen.
 ///
 /// ```zig
 /// const marker = path_marker.find(buffer, uuid) orelse return;
 /// ```
-pub fn find(buffer: *const ui.Buffer, uuid: Uuid) ?Marker {
+pub fn find(buffer: *const BufferType, uuid: Uuid) ?Marker {
     var scan = Scan.start(buffer) orelse return null;
     while (scan.position()) |at| : (scan.step()) {
         const head = parseHead(buffer, at) orelse continue;
@@ -52,7 +50,7 @@ pub fn find(buffer: *const ui.Buffer, uuid: Uuid) ?Marker {
 /// var found: [4]Marker = undefined;
 /// const count = path_marker.collect(buffer, &found);
 /// ```
-pub fn collect(buffer: *const ui.Buffer, out: []Marker) usize {
+pub fn collect(buffer: *const BufferType, out: []Marker) usize {
     var count: usize = 0;
     var scan = Scan.start(buffer) orelse return 0;
     while (scan.position()) |at| : (scan.step()) {
@@ -118,7 +116,7 @@ pub fn cursorOnRow(screen: Screen, y: u16) ?u16 {
 /// ```zig
 /// const steps = path_marker.stepsOnRow(buffer, marker.end.y, .{ .from = marker.end.x, .to = cursor_x }) orelse return;
 /// ```
-pub fn stepsOnRow(buffer: *const ui.Buffer, y: u16, span: Span) ?u8 {
+pub fn stepsOnRow(buffer: *const BufferType, y: u16, span: Span) ?u8 {
     if (span.from > span.to or span.to > buffer.w or y >= buffer.h) {
         return null;
     }
@@ -135,13 +133,7 @@ pub fn stepsOnRow(buffer: *const ui.Buffer, y: u16, span: Span) ?u8 {
     return @intCast(steps);
 }
 
-pub const Span = @import("Span.zig");
-
-const Head = @import("Head.zig");
-
-const Scan = @import("Scan.zig");
-
-fn parseHead(buffer: *const ui.Buffer, start: Position) ?Head {
+fn parseHead(buffer: *const BufferType, start: Position) ?Head {
     var scan = Scan.at(buffer, start) orelse return null;
     for (prefix) |byte| {
         if (!scan.expect(byte)) {
@@ -199,7 +191,7 @@ fn matchExtension(scan: Scan) ?Position {
     return null;
 }
 
-fn extend(buffer: *const ui.Buffer, head: Head) Marker {
+fn extend(buffer: *const BufferType, head: Head) Marker {
     const start = pathStart(buffer, head.start);
 
     return .{
@@ -213,7 +205,7 @@ fn extend(buffer: *const ui.Buffer, head: Head) Marker {
 /// Walks back over the word holding the file name, following force-wrapped
 /// rows, and returns its first `/`. A word broken by Pi's grapheme wrapping
 /// fills the row up to the reserved cursor column.
-fn pathStart(buffer: *const ui.Buffer, marker: Position) Position {
+fn pathStart(buffer: *const BufferType, marker: Position) Position {
     var x = marker.x;
     var y = marker.y;
     var slash: ?Position = null;
@@ -246,14 +238,14 @@ fn pathStart(buffer: *const ui.Buffer, marker: Position) Position {
     return slash orelse marker;
 }
 
-fn rowForceWrapped(buffer: *const ui.Buffer, y: u16) bool {
+fn rowForceWrapped(buffer: *const BufferType, y: u16) bool {
     const last_content = cellAt(buffer, buffer.w - 2, y);
     const reserved = cellAt(buffer, buffer.w - 1, y);
 
     return !isBlank(last_content) and isBlank(reserved);
 }
 
-fn countCells(buffer: *const ui.Buffer, start: Position, end: Position) ?u8 {
+fn countCells(buffer: *const BufferType, start: Position, end: Position) ?u8 {
     var scan = Scan.at(buffer, start) orelse return null;
     var cells: u16 = 0;
     while (true) {
@@ -270,7 +262,7 @@ fn countCells(buffer: *const ui.Buffer, start: Position, end: Position) ?u8 {
     }
 }
 
-fn isolatedInverse(buffer: *const ui.Buffer, at: Position) bool {
+fn isolatedInverse(buffer: *const BufferType, at: Position) bool {
     if (at.x >= buffer.w or at.y >= buffer.h) {
         return false;
     }
@@ -294,15 +286,15 @@ fn knownExtension(extension: []const u8) bool {
     return false;
 }
 
-pub fn cellAt(buffer: *const ui.Buffer, x: u16, y: u16) *const ui.Cell {
+pub fn cellAt(buffer: *const BufferType, x: u16, y: u16) *const CellType {
     return &buffer.cells[@as(usize, y) * buffer.w + x];
 }
 
-pub fn isSingle(cell: *const ui.Cell) bool {
+pub fn isSingle(cell: *const CellType) bool {
     return cell.width == 1 and cell.len == 1;
 }
 
-fn isBlank(cell: *const ui.Cell) bool {
+fn isBlank(cell: *const CellType) bool {
     return cell.len == 0 or (cell.len == 1 and cell.bytes[0] == ' ');
 }
 
@@ -310,14 +302,12 @@ fn isBlank(cell: *const ui.Cell) bool {
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-
 const test_uuid = "3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b";
 const test_path = "/var/folders/8x/abc/T/pi-clipboard-" ++ test_uuid ++ ".png";
 
 /// Lays `text` out like Pi's editor: rows of `width - 1` cells, broken at
 /// any grapheme once the row is full.
-fn writeWrapped(buffer: *ui.Buffer, origin: Position, text: []const u8) Position {
+fn writeWrapped(buffer: *BufferType, origin: Position, text: []const u8) Position {
     var x = origin.x;
     var y = origin.y;
     for (text) |byte| {
@@ -333,31 +323,31 @@ fn writeWrapped(buffer: *ui.Buffer, origin: Position, text: []const u8) Position
 }
 
 test "a pasted path on one row is one marker with its full extent" {
-    var buffer = try ui.Buffer.init(testing.allocator, 120, 2);
+    var buffer = try BufferType.init(std.testing.allocator, 120, 2);
     defer buffer.deinit();
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "see " ++ test_path ++ " now", .style = .{} });
 
     const marker = find(&buffer, test_uuid.*).?;
 
-    try testing.expectEqual(Position{ .x = 4, .y = 0 }, marker.start);
-    try testing.expectEqual(Position{ .x = 4 + test_path.len, .y = 0 }, marker.end);
-    try testing.expectEqual(@as(?u8, test_path.len), marker.cells);
+    try std.testing.expectEqual(Position{ .x = 4, .y = 0 }, marker.start);
+    try std.testing.expectEqual(Position{ .x = 4 + test_path.len, .y = 0 }, marker.end);
+    try std.testing.expectEqual(@as(?u8, test_path.len), marker.cells);
 }
 
 test "a path broken over force-wrapped rows keeps one identity and extent" {
-    var buffer = try ui.Buffer.init(testing.allocator, 40, 4);
+    var buffer = try BufferType.init(std.testing.allocator, 40, 4);
     defer buffer.deinit();
     const end = writeWrapped(&buffer, .{ .x = 0, .y = 0 }, "look at " ++ test_path);
 
     const marker = find(&buffer, test_uuid.*).?;
 
-    try testing.expectEqual(Position{ .x = 8, .y = 0 }, marker.start);
-    try testing.expectEqual(end, marker.end);
-    try testing.expectEqual(@as(?u8, test_path.len), marker.cells);
+    try std.testing.expectEqual(Position{ .x = 8, .y = 0 }, marker.start);
+    try std.testing.expectEqual(end, marker.end);
+    try std.testing.expectEqual(@as(?u8, test_path.len), marker.cells);
 }
 
 test "a word soft-wrapped before the path is not part of its extent" {
-    var buffer = try ui.Buffer.init(testing.allocator, 40, 4);
+    var buffer = try BufferType.init(std.testing.allocator, 40, 4);
     defer buffer.deinit();
     // "image" fills the last content column of row 0 exactly, then the path
     // starts on row 1 like Pi lays out a wrap opportunity.
@@ -367,25 +357,25 @@ test "a word soft-wrapped before the path is not part of its extent" {
 
     const marker = find(&buffer, test_uuid.*).?;
 
-    try testing.expectEqual(Position{ .x = 0, .y = 1 }, marker.start);
-    try testing.expectEqual(end, marker.end);
-    try testing.expectEqual(@as(?u8, test_path.len), marker.cells);
+    try std.testing.expectEqual(Position{ .x = 0, .y = 1 }, marker.start);
+    try std.testing.expectEqual(end, marker.end);
+    try std.testing.expectEqual(@as(?u8, test_path.len), marker.cells);
 }
 
 test "a file name glued to following text is no longer a marker" {
-    var buffer = try ui.Buffer.init(testing.allocator, 120, 1);
+    var buffer = try BufferType.init(std.testing.allocator, 120, 1);
     defer buffer.deinit();
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = test_path ++ "x", .style = .{} });
 
-    try testing.expect(find(&buffer, test_uuid.*) == null);
+    try std.testing.expect(find(&buffer, test_uuid.*) == null);
 
     buffer.clear(.{});
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = test_path ++ ",", .style = .{} });
-    try testing.expect(find(&buffer, test_uuid.*) != null);
+    try std.testing.expect(find(&buffer, test_uuid.*) != null);
 }
 
 test "markers collect in screen order and keep the newest when full" {
-    var buffer = try ui.Buffer.init(testing.allocator, 80, 3);
+    var buffer = try BufferType.init(std.testing.allocator, 80, 3);
     defer buffer.deinit();
     const uuids = [_]*const [uuid_len]u8{
         "11111111-1111-4111-8111-111111111111",
@@ -399,35 +389,35 @@ test "markers collect in screen order and keep the newest when full" {
     var found: [2]Marker = undefined;
     const count = collect(&buffer, &found);
 
-    try testing.expectEqual(@as(usize, 2), count);
-    try testing.expectEqualStrings(uuids[1], &found[0].uuid);
-    try testing.expectEqualStrings(uuids[2], &found[1].uuid);
+    try std.testing.expectEqual(@as(usize, 2), count);
+    try std.testing.expectEqualStrings(uuids[1], &found[0].uuid);
+    try std.testing.expectEqualStrings(uuids[2], &found[1].uuid);
 }
 
 test "the cursor is the hardware cursor or Pi's isolated inverse cell" {
-    var buffer = try ui.Buffer.init(testing.allocator, 20, 2);
+    var buffer = try BufferType.init(std.testing.allocator, 20, 2);
     defer buffer.deinit();
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "abc", .style = .{} });
     buffer.setCell(.{ .x = 3, .y = 0 }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "sel", .style = .{ .flags = .{ .inverse = true } } });
 
     const hidden: Screen = .{ .buffer = &buffer, .cursor = .{ .visible = false, .x = 0, .y = 0 } };
-    try testing.expect(cursorAt(hidden, .{ .x = 3, .y = 0 }));
-    try testing.expect(!cursorAt(hidden, .{ .x = 1, .y = 1 }));
-    try testing.expectEqual(@as(?u16, 3), cursorOnRow(hidden, 0));
-    try testing.expect(cursorOnRow(hidden, 1) == null);
+    try std.testing.expect(cursorAt(hidden, .{ .x = 3, .y = 0 }));
+    try std.testing.expect(!cursorAt(hidden, .{ .x = 1, .y = 1 }));
+    try std.testing.expectEqual(@as(?u16, 3), cursorOnRow(hidden, 0));
+    try std.testing.expect(cursorOnRow(hidden, 1) == null);
 
     const shown: Screen = .{ .buffer = &buffer, .cursor = .{ .visible = true, .x = 1, .y = 0 } };
-    try testing.expect(cursorAt(shown, .{ .x = 1, .y = 0 }));
-    try testing.expect(!cursorAt(shown, .{ .x = 3, .y = 0 }));
-    try testing.expectEqual(@as(?u16, 1), cursorOnRow(shown, 0));
+    try std.testing.expect(cursorAt(shown, .{ .x = 1, .y = 0 }));
+    try std.testing.expect(!cursorAt(shown, .{ .x = 3, .y = 0 }));
+    try std.testing.expectEqual(@as(?u16, 1), cursorOnRow(shown, 0));
 }
 
 test "row steps count graphemes rather than cells" {
-    var buffer = try ui.Buffer.init(testing.allocator, 20, 1);
+    var buffer = try BufferType.init(std.testing.allocator, 20, 1);
     defer buffer.deinit();
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "a日b", .style = .{} });
 
-    try testing.expectEqual(@as(?u8, 3), stepsOnRow(&buffer, 0, .{ .from = 0, .to = 4 }));
-    try testing.expect(stepsOnRow(&buffer, 0, .{ .from = 4, .to = 0 }) == null);
+    try std.testing.expectEqual(@as(?u8, 3), stepsOnRow(&buffer, 0, .{ .from = 0, .to = 4 }));
+    try std.testing.expect(stepsOnRow(&buffer, 0, .{ .from = 4, .to = 0 }) == null);
 }

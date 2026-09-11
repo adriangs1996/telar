@@ -1,7 +1,10 @@
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const layout = @import("../workspace/layout_support.zig");
+const RectType = @import("telar-core").Rect;
 const Split = @This();
-const source_namespace = @import("requests.zig");
-const layout = @import("../workspace/root.zig").layout;
-target_pane: source_namespace.schema.PaneId,
-location: source_namespace.schema.TabLocation,
+
+target_pane: PaneIdType,
+location: TabLocationType,
 axis: layout.Axis,
-area: source_namespace.ui.Rect,
+area: RectType,

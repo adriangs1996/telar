@@ -1,5 +1,7 @@
 const std = @import("std");
-const ui = @import("telar-core").ui;
+const GraphemeIteratorType = @import("telar-core").GraphemeIterator;
+const measure_module = @import("telar-core").measure;
+
 /// A fixed capacity field.
 ///
 /// Fixed because the alternative is allocating on the keystroke path, and a
@@ -216,7 +218,7 @@ pub fn Type(comptime capacity: usize) type {
             if (at == 0) {
                 return null;
             }
-            var it: ui.GraphemeIterator = .{ .bytes = f.text() };
+            var it: GraphemeIteratorType = .{ .bytes = f.text() };
             var previous: usize = 0;
             while (it.next()) |_| {
                 if (it.index >= at) {
@@ -231,7 +233,7 @@ pub fn Type(comptime capacity: usize) type {
             if (at >= f.len) {
                 return null;
             }
-            var it: ui.GraphemeIterator = .{ .bytes = f.bytes[at..f.len] };
+            var it: GraphemeIteratorType = .{ .bytes = f.bytes[at..f.len] };
             const cluster = it.next() orelse return null;
             return at + cluster.bytes.len;
         }
@@ -270,7 +272,7 @@ pub fn Type(comptime capacity: usize) type {
             }
             // Or on the right: scroll until it fits, by clusters so the left
             // edge never lands inside one.
-            while (ui.measure(f.bytes[f.scroll..f.head]) >= width) {
+            while (measure_module(f.bytes[f.scroll..f.head]) >= width) {
                 const next = f.clusterAfter(f.scroll) orelse break;
                 f.scroll = next;
             }
@@ -279,7 +281,7 @@ pub fn Type(comptime capacity: usize) type {
             var used: u16 = 0;
             while (end_at < f.len) {
                 const next = f.clusterAfter(end_at) orelse break;
-                const cluster_width = ui.measure(f.bytes[end_at..next]);
+                const cluster_width = measure_module(f.bytes[end_at..next]);
                 if (used + cluster_width > width) {
                     break;
                 }
@@ -292,10 +294,10 @@ pub fn Type(comptime capacity: usize) type {
             const to = @max(f.head, f.anchor);
             return .{
                 .text = visible,
-                .cursor = ui.measure(f.bytes[f.scroll..f.head]),
+                .cursor = measure_module(f.bytes[f.scroll..f.head]),
                 .selection = if (f.hasSelection()) .{
-                    ui.measure(f.bytes[f.scroll..@max(from, f.scroll)]),
-                    ui.measure(f.bytes[f.scroll..@min(@max(to, f.scroll), end_at)]),
+                    measure_module(f.bytes[f.scroll..@max(from, f.scroll)]),
+                    measure_module(f.bytes[f.scroll..@min(@max(to, f.scroll), end_at)]),
                 } else null,
                 .clipped_left = f.scroll > 0,
                 .clipped_right = end_at < f.len,
@@ -308,7 +310,7 @@ pub fn Type(comptime capacity: usize) type {
             var start = at;
             while (start > 0) {
                 const previous = f.clusterBefore(start) orelse break;
-                if (ui.measure(f.bytes[previous..at]) > width -| 1) {
+                if (measure_module(f.bytes[previous..at]) > width -| 1) {
                     break;
                 }
                 start = previous;

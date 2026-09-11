@@ -1,21 +1,17 @@
 //! Application admission policy for starting one workspace handoff.
 
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const client_model = @import("../../root.zig").model;
+const GateCapture = @import("GateCapture.zig");
+const AdmitWorkspaceHandoffHandler = @import("AdmitWorkspaceHandoffHandler.zig");
 
 pub const Authority = enum {
     requested_departure,
     canonical_follow,
 };
 
-pub const Gate = @import("Gate.zig");
-
-pub const AdmitWorkspaceHandoffHandler = @import("AdmitWorkspaceHandoffHandler.zig");
-
-const GateCapture = @import("GateCapture.zig");
-
 test "requested workspace departure requires an idle request lifecycle" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var capture: GateCapture = .{ .blocked = true };
     const handler: AdmitWorkspaceHandoffHandler = .{
@@ -35,7 +31,7 @@ test "requested workspace departure requires an idle request lifecycle" {
 }
 
 test "canonical workspace follow ignores stale requests only from an empty projection" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var capture: GateCapture = .{ .blocked = true };
     const handler: AdmitWorkspaceHandoffHandler = .{

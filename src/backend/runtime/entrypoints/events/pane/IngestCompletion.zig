@@ -1,4 +1,6 @@
+const PaneKeyType = @import("../../../../pane/PaneKey.zig");
+const PaneIngestStats = @import("../../../../pane/PaneIngestStats.zig");
 const Completion = @This();
-const source_namespace = @import("ingest.zig");
-pane: source_namespace.PaneKey,
-result: anyerror!source_namespace.Stats,
+
+pane: PaneKeyType,
+result: anyerror!PaneIngestStats,

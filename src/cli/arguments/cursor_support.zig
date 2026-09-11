@@ -1,8 +1,7 @@
 //! Sequential borrowed argv access; each grammar chooses its own errors.
 
+const Cursor = @import("Cursor.zig");
 const std = @import("std");
-
-pub const Cursor = @import("Cursor.zig");
 
 test "cursor consumes option-shaped values once and preserves missing-value errors" {
     var cursor: Cursor = .{ .remaining = &.{ "--socket", "--literal-value" } };

@@ -1,32 +1,17 @@
 //! Application use case for changing one client's active tab.
 
-const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const Target = client_model.TabSelectionTarget;
-
-pub const SelectTab = @import("SelectTab.zig");
-
-pub const SnapshotGate = @import("SnapshotGate.zig");
-
-pub const SelectionEffects = @import("SelectionEffects.zig");
-
-pub const SelectTabHandler = @import("SelectTabHandler.zig");
-
+const SelectTabTestingModel = @import("SelectTabTestingModel.zig");
 const SnapshotGateCapture = @import("SnapshotGateCapture.zig");
-
-const EffectsCapture = @import("SelectTabEffectsCapture.zig");
-
-const TestingModel = @import("SelectTabTestingModel.zig");
+const SelectTabEffectsCapture = @import("SelectTabEffectsCapture.zig");
+const SelectTabHandler = @import("SelectTabHandler.zig");
+const std = @import("std");
+const VersionType = @import("../../model/Version.zig");
 
 test "SelectTabHandler commits a resolved target before synchronizing resources" {
-    var testing = try TestingModel.init();
+    var testing = try SelectTabTestingModel.init();
     defer testing.deinit();
     var snapshots: SnapshotGateCapture = .{};
-    var effects: EffectsCapture = .{ .model = testing.model, .expected = testing.second };
+    var effects: SelectTabEffectsCapture = .{ .model = testing.model, .expected = testing.second };
     var handler: SelectTabHandler = .{
         .model = testing.model,
         .snapshots = snapshots.port(),
@@ -55,10 +40,10 @@ test "SelectTabHandler commits a resolved target before synchronizing resources"
 }
 
 test "SelectTabHandler suppresses blocked and ineffective selections" {
-    var testing = try TestingModel.init();
+    var testing = try SelectTabTestingModel.init();
     defer testing.deinit();
     var snapshots: SnapshotGateCapture = .{ .blocked = true };
-    var effects: EffectsCapture = .{ .model = testing.model, .expected = testing.second };
+    var effects: SelectTabEffectsCapture = .{ .model = testing.model, .expected = testing.second };
     var handler: SelectTabHandler = .{
         .model = testing.model,
         .snapshots = snapshots.port(),
@@ -73,19 +58,19 @@ test "SelectTabHandler suppresses blocked and ineffective selections" {
     try std.testing.expect((try handler.execute(.{ .target = .{ .offset = 2 } })) == null);
     try std.testing.expect((try handler.execute(.{ .target = .{ .tab_id = @enumFromInt(9) } })) == null);
     try std.testing.expectEqual(@as(usize, 0), effects.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 
     testing.model.workspace.deinit();
     try std.testing.expect((try handler.execute(.{ .target = .{ .position = 0 } })) == null);
     try std.testing.expectEqual(@as(usize, 0), effects.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "SelectTabHandler preserves a committed selection after effect failure" {
-    var testing = try TestingModel.init();
+    var testing = try SelectTabTestingModel.init();
     defer testing.deinit();
     var snapshots: SnapshotGateCapture = .{};
-    var effects: EffectsCapture = .{
+    var effects: SelectTabEffectsCapture = .{
         .model = testing.model,
         .expected = testing.second,
         .fail = true,

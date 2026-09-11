@@ -1,79 +1,99 @@
-const Pane = @This();
-const source_namespace = @import("root.zig");
-const std = @import("std");
-const history = @import("../history/root.zig");
-const core = @import("telar-core");
-const PaneKey = @import("PaneKey.zig");
-const pty = @import("../pty/root.zig");
+const CreationResourcesType = @import("CreationResources.zig");
+const CreationRequestType = @import("CreationRequest.zig");
+const AgentCommandType = @import("AgentCommand.zig");
+const CaptureContextType = @import("CaptureContext.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const pane_namespace = @import("pane_namespace.zig");
+const SessionType = @import("../pty/Session.zig");
 const vt = @import("ghostty-vt");
-const media_mod = @import("../media/root.zig");
+const PipelineType = @import("../media/Pipeline.zig");
 const PtyResponseQueue = @import("PtyResponseQueue.zig");
+const GraphicsLimitsType = @import("../media/GraphicsLimits.zig");
+const PaneMediaAllocatorType = @import("../media/PaneMediaAllocator.zig");
+const std = @import("std");
 const PaneInputQueue = @import("PaneInputQueue.zig");
-const agent_process = @import("../process/root.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const BufferType = @import("telar-core").Buffer;
+const CursorType = @import("telar-core").Cursor;
+const MouseType = @import("telar-core").Mouse;
+const InputModesType = @import("telar-core").InputModes;
+const PointerShapeType = @import("telar-core").PointerShape;
+const State = @import("../media/State.zig");
+const exit_module = @import("../pty/exit.zig");
+const ServiceType = @import("../history/Service.zig");
+const ObserverType = @import("../history/Observer.zig");
+const CacheType = @import("../process/Cache.zig");
+const PaneProgressStateType = @import("telar-core").PaneProgressState;
+const model = @import("../history/model.zig");
+const SequenceType = @import("../history/Sequence.zig");
 const CwdState = @import("CwdState.zig");
 const TitleState = @import("TitleState.zig");
 const LaunchRecord = @import("LaunchRecord.zig");
+const TableType = @import("telar-core").Table;
+const TerminalColorsType = @import("telar-core").TerminalColors;
+const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
+const MouseTrackingType = @import("telar-core").MouseTracking;
 const TextRequest = @import("TextRequest.zig");
 const TextDump = @import("TextDump.zig");
+const SearchMatchType = @import("telar-core").SearchMatch;
 const SearchResult = @import("SearchResult.zig");
-const TextSearch = @import("text_search.zig").Cursor;
+const PaneCursor = @import("Cursor.zig");
+const PaneKey = @import("PaneKey.zig");
+const CellType = @import("telar-core").Cell;
+const now_module = @import("telar-core").now;
+const enterTerminalAllocations_module = @import("telar-core").enterTerminalAllocations;
+const elapsed_module = @import("telar-core").elapsed;
 const MediaProcessingBorrow = @import("MediaProcessingBorrow.zig");
+const StatsType = @import("../media/Stats.zig");
+const ProcessorType = @import("../media/Processor.zig");
+const ObserverInputObservation = @import("../history/ObserverInputObservation.zig");
+const ObserverOutputObservation = @import("../history/ObserverOutputObservation.zig");
 const HistoryObservationBorrow = @import("HistoryObservationBorrow.zig");
 const HistoryObservationCompletion = @import("HistoryObservationCompletion.zig");
+const agent_process = @import("../process/process.zig");
+const AgentProviderType = @import("telar-core").AgentProvider;
+const HistoryStats = @import("../history/Stats.zig");
+const cwd_module = @import("../process/cwd.zig");
 const blit = @import("blit.zig");
-pub const CreationResources = struct {
-    io: source_namespace.Io,
-    gpa: std.mem.Allocator,
-    history_service: *history.Service,
-    graphics_budget: *source_namespace.GraphicsBudget,
-    /// Runtime-owned, immutable after startup; shared with observation
-    /// workers.
-    manifests: *const core.agent_manifest.Table = &core.agent_manifest.builtin_table,
-};
+pub const Pane = @This();
 
-pub const CreationRequest = struct {
-    identity: PaneKey,
-    location: source_namespace.schema.TabLocation,
-    command: *const pty.Command,
-    launch_cwd: []const u8,
-    workspace_path: []const u8,
-    size: source_namespace.schema.TerminalSize,
-    graphics_limits: source_namespace.GraphicsLimits,
-    terminal_colors: source_namespace.schema.TerminalColors = .{},
-};
+pub const CreationResources = @import("CreationResources.zig");
 
-id: source_namespace.schema.PaneId,
+pub const CreationRequest = @import("CreationRequest.zig");
+
+id: PaneIdType,
 generation: u64,
-location: source_namespace.schema.TabLocation,
-launch_state: source_namespace.LaunchState = .starting,
-session: pty.Session,
+location: TabLocationType,
+launch_state: pane_namespace.LaunchState = .starting,
+session: SessionType,
 terminal: vt.Terminal,
 stream: vt.TerminalStream,
-media: media_mod.Pipeline,
+media: PipelineType,
 pty_responses: PtyResponseQueue = .{},
-graphics_limits: source_namespace.GraphicsLimits,
+graphics_limits: GraphicsLimitsType,
 graphics_storage_limit: usize,
-media_allocator: source_namespace.PaneMediaAllocator,
-pty_write_mutex: source_namespace.Io.Mutex = .init,
+media_allocator: PaneMediaAllocatorType,
+pty_write_mutex: std.Io.Mutex = .init,
 response_pending: bool = false,
 input_queue: PaneInputQueue = .{},
 input_write_pending: bool = false,
 input_write_len: usize = 0,
-size: source_namespace.schema.TerminalSize,
+size: TerminalSizeType,
 render_state: vt.RenderState = .empty,
-screen: core.ui.Buffer,
+screen: BufferType,
 damaged_rows: []bool,
-output_buffer: [source_namespace.output_chunk_size]u8 = undefined,
-cursor: source_namespace.schema.frame.Cursor = .{},
-mouse: source_namespace.schema.frame.Mouse = .{},
-input_modes: source_namespace.schema.frame.InputModes = .{},
-pointer_shape: source_namespace.schema.frame.PointerShape = .default,
+output_buffer: [pane_namespace.output_chunk_size]u8 = undefined,
+cursor: CursorType = .{},
+mouse: MouseType = .{},
+input_modes: InputModesType = .{},
+pointer_shape: PointerShapeType = .default,
 foreground_override: ?vt.color.RGB = null,
 background_override: ?vt.color.RGB = null,
 semantic_colors_dirty: bool = false,
 graphics_revision: u64 = 0,
 graphics_present: bool = false,
-media_ingestion: media_mod.Ingestion = .{},
+media_ingestion: State = .{},
 dirty: bool = true,
 render_pending: bool = true,
 cell_revision: u64 = 1,
@@ -84,17 +104,17 @@ actor_count: u8 = 0,
 output_done: bool = false,
 wait_pending: bool = false,
 close_requested: bool = false,
-exit: ?pty.Exit = null,
-history_service: *history.Service,
-history_observer: history.observer.Observer,
-agent_process_cache: agent_process.Cache = .{},
+exit: ?exit_module.Exit = null,
+history_service: *ServiceType,
+history_observer: ObserverType,
+agent_process_cache: CacheType = .{},
 foreground_revision: u64 = 1,
-progress_state: source_namespace.schema.PaneProgressState = .remove,
+progress_state: PaneProgressStateType = .remove,
 progress_percent: ?u8 = null,
 progress_revision: u64 = 1,
-history_session_id: history.SessionId,
+history_session_id: model.SessionId,
 started_at_ms: i64,
-history_sequence: history.Sequence = .{},
+history_sequence: SequenceType = .{},
 /// Command submissions injected through the control API or a session
 /// restore that have not completed yet. Written by the runtime thread,
 /// consumed by the observation actor when the next command finishes.
@@ -106,13 +126,13 @@ workspace_path: []u8,
 cwd: CwdState,
 title: TitleState = .{},
 launch_record: LaunchRecord = .{},
-manifests: *const core.agent_manifest.Table,
-pending_size: ?source_namespace.schema.TerminalSize = null,
-pending_terminal_colors: ?source_namespace.schema.TerminalColors = null,
+manifests: *const TableType,
+pending_size: ?TerminalSizeType = null,
+pending_terminal_colors: ?TerminalColorsType = null,
 /// When the child's synchronized-output block started holding frames
 /// back, null while no hold is active. See `holdFrames`.
 sync_hold_started_ns: ?u64 = null,
-io: source_namespace.Io,
+io: std.Io,
 gpa: std.mem.Allocator,
 
 /// Allocates and initializes one pane, spawning the child only after every
@@ -121,7 +141,7 @@ gpa: std.mem.Allocator,
 /// ```zig
 /// const pane = try Pane.create(resources, request);
 /// ```
-pub fn create(resources: CreationResources, request: CreationRequest) !*Pane {
+pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*Pane {
     const io = resources.io;
     const gpa = resources.gpa;
     const history_service = resources.history_service;
@@ -173,7 +193,7 @@ pub fn create(resources: CreationResources, request: CreationRequest) !*Pane {
     pane.terminal = try .init(io, gpa, .{
         .cols = size.cols,
         .rows = size.rows,
-        .max_scrollback_bytes = source_namespace.default_scrollback_bytes,
+        .max_scrollback_bytes = pane_namespace.default_scrollback_bytes,
         .kitty_image_storage_limit = 0,
         .kitty_image_loading_limits = .direct,
     });
@@ -182,9 +202,9 @@ pub fn create(resources: CreationResources, request: CreationRequest) !*Pane {
     errdefer pane.render_state.deinit(gpa);
     var handler = pane.terminal.vtHandler();
     handler.apc_handler.enable(.kitty, false);
-    handler.effects.write_pty = Pane.writePty;
-    handler.effects.size = Pane.reportSize;
-    handler.effects.progress_report = Pane.reportProgress;
+    handler.effects.write_pty = writePty;
+    handler.effects.size = reportSize;
+    handler.effects.progress_report = reportProgress;
     pane.stream = vt.TerminalStream.init(.{
         .allocator = gpa,
         .handler = handler,
@@ -202,9 +222,9 @@ pub fn create(resources: CreationResources, request: CreationRequest) !*Pane {
         .io = io,
         .allocator = pane.media_allocator.allocator(),
         .size = size,
-        .storage_limit = @min(core.graphics.max_image_bytes_per_screen, graphics_limits.pane_bytes / 2),
+        .storage_limit = @min(max_image_bytes_per_screen_module, graphics_limits.pane_bytes / 2),
         .payload_limit = graphics_limits.payload_bytes,
-        .write_pty = Pane.writeMediaPty,
+        .write_pty = writeMediaPty,
     });
     errdefer pane.media.deinit();
     try pane.history_observer.init(.{
@@ -236,7 +256,7 @@ pub fn create(resources: CreationResources, request: CreationRequest) !*Pane {
         .cell_width_px = size.cell_width_px,
         .cell_height_px = size.cell_height_px,
     });
-    pane.started_at_ms = source_namespace.Io.Timestamp.now(io, .real).toMilliseconds();
+    pane.started_at_ms = std.Io.Timestamp.now(io, .real).toMilliseconds();
     return pane;
 }
 
@@ -273,9 +293,9 @@ pub fn requestClose(pane: *Pane) bool {
     return true;
 }
 
-pub fn mouseState(pane: *const Pane) source_namespace.schema.frame.Mouse {
+pub fn mouseState(pane: *const Pane) MouseType {
     const modes = &pane.terminal.modes;
-    const tracking: source_namespace.schema.frame.MouseTracking = if (modes.get(.mouse_event_any))
+    const tracking: MouseTrackingType = if (modes.get(.mouse_event_any))
         .any
     else if (modes.get(.mouse_event_button))
         .button
@@ -343,9 +363,9 @@ pub fn dumpText(pane: *const Pane, request: TextRequest, storage: []u8) TextDump
 /// var matches: [schema.max_search_matches]schema.SearchMatch = undefined;
 /// const result = pane.searchText("error", &matches);
 /// ```
-pub fn searchText(pane: *const Pane, needle: []const u8, storage: []source_namespace.schema.SearchMatch) SearchResult {
+pub fn searchText(pane: *const Pane, needle: []const u8, storage: []SearchMatchType) SearchResult {
     std.debug.assert(!pane.ingest_pending);
-    var cursor = TextSearch.init(needle);
+    var cursor = PaneCursor.init(needle);
     while (!(cursor.advance(pane) catch unreachable)) {}
     const count = @min(storage.len, cursor.count);
     @memcpy(storage[0..count], cursor.matches[0..count]);
@@ -372,7 +392,7 @@ pub fn vtScrollbackBytes(pane: *const Pane) usize {
 }
 
 pub fn vtScreenBytes(pane: *const Pane) usize {
-    return pane.screen.cells.len * @sizeOf(core.ui.Cell);
+    return pane.screen.cells.len * @sizeOf(CellType);
 }
 
 pub fn actorStarted(pane: *Pane) void {
@@ -414,7 +434,7 @@ pub fn cancelExitWait(pane: *Pane) void {
     pane.actorFinished();
 }
 
-pub fn completeExitWait(pane: *Pane, exit: pty.Exit) void {
+pub fn completeExitWait(pane: *Pane, exit: exit_module.Exit) void {
     std.debug.assert(pane.wait_pending);
 
     pane.wait_pending = false;
@@ -422,13 +442,13 @@ pub fn completeExitWait(pane: *Pane, exit: pty.Exit) void {
     pane.actorFinished();
 }
 
-pub fn pointerShape(pane: *const Pane) source_namespace.schema.frame.PointerShape {
+pub fn pointerShape(pane: *const Pane) PointerShapeType {
     return switch (pane.terminal.mouse_shape) {
-        inline else => |shape| @field(source_namespace.schema.frame.PointerShape, @tagName(shape)),
+        inline else => |shape| @field(PointerShapeType, @tagName(shape)),
     };
 }
 
-pub fn inputModeState(pane: *const Pane) source_namespace.schema.frame.InputModes {
+pub fn inputModeState(pane: *const Pane) InputModesType {
     const modes = &pane.terminal.modes;
     return .{
         .cursor_keys = modes.get(.cursor_keys),
@@ -501,11 +521,11 @@ pub fn canInlineOutput(pane: *const Pane, bytes: []const u8) bool {
     return true;
 }
 
-pub fn ingest(pane: *Pane, io: source_namespace.Io, bytes: []const u8) !u64 {
+pub fn ingest(pane: *Pane, io: std.Io, bytes: []const u8) !u64 {
     pane.search_revision +%= 1;
-    const started = source_namespace.diagnostics.now(io);
+    const started = now_module(io);
     {
-        const terminal_allocations = source_namespace.diagnostics.enterTerminalAllocations();
+        const terminal_allocations = enterTerminalAllocations_module();
         defer terminal_allocations.restore();
         pane.stream.nextSlice(bytes);
     }
@@ -524,7 +544,7 @@ pub fn ingest(pane: *Pane, io: source_namespace.Io, bytes: []const u8) !u64 {
     }
     pane.render_pending = true;
     pane.dirty = true;
-    return source_namespace.diagnostics.elapsed(started, source_namespace.diagnostics.now(io));
+    return elapsed_module(started, now_module(io));
 }
 
 pub fn queueMediaOutput(pane: *Pane, bytes: []const u8) void {
@@ -578,12 +598,12 @@ pub fn refreshGraphicsProjection(pane: *Pane) void {
 
 /// Processes a sealed media batch through explicit resource borrows.
 /// Example: `pane.processMedia(size, &stats);`.
-pub fn processMedia(pane: *Pane, current_size: source_namespace.schema.TerminalSize, stats: *media_mod.Stats) void {
+pub fn processMedia(pane: *Pane, current_size: TerminalSizeType, stats: *StatsType) void {
     var processor = pane.mediaProcessor();
     processor.processMedia(current_size, stats);
 }
 
-fn mediaProcessor(pane: *Pane) media_mod.Processor {
+fn mediaProcessor(pane: *Pane) ProcessorType {
     return .{
         .state = &pane.media_ingestion,
         .media = &pane.media,
@@ -612,12 +632,12 @@ pub fn noteSharedTransport(pane: *Pane, shared: bool) void {
 
 /// Freezes available image generations for shared-memory clients.
 /// Example: `pane.prepareSharedTransfers(&stats);`.
-pub fn prepareSharedTransfers(pane: *Pane, stats: *media_mod.Stats) void {
+pub fn prepareSharedTransfers(pane: *Pane, stats: *StatsType) void {
     var processor = pane.mediaProcessor();
     processor.prepareSharedTransfers(stats);
 }
 
-pub fn queueHistoryInput(pane: *Pane, observation: history.observer.InputObservation) void {
+pub fn queueHistoryInput(pane: *Pane, observation: ObserverInputObservation) void {
     pane.history_observer.queueInput(observation);
 }
 
@@ -653,7 +673,7 @@ pub fn beginPtyOutputRead(pane: *Pane) bool {
 /// ```zig
 /// pane.completePtyOutputRead(.data);
 /// ```
-pub fn completePtyOutputRead(pane: *Pane, result: source_namespace.PtyOutputReadResult) void {
+pub fn completePtyOutputRead(pane: *Pane, result: pane_namespace.PtyOutputReadResult) void {
     std.debug.assert(pane.output_pending);
     std.debug.assert(!pane.ingest_pending);
 
@@ -749,7 +769,7 @@ pub fn beginPtyResponseWrite(pane: *Pane) ?[]const u8 {
 /// ```zig
 /// pane.completePtyResponseWrite(.succeeded);
 /// ```
-pub fn completePtyResponseWrite(pane: *Pane, result: source_namespace.PtyWriteResult) void {
+pub fn completePtyResponseWrite(pane: *Pane, result: pane_namespace.PtyWriteResult) void {
     std.debug.assert(pane.response_pending);
 
     pane.response_pending = false;
@@ -798,7 +818,7 @@ pub fn beginPtyInputWrite(pane: *Pane) ?[]const u8 {
 /// ```zig
 /// pane.completePtyInputWrite(.succeeded);
 /// ```
-pub fn completePtyInputWrite(pane: *Pane, result: source_namespace.PtyWriteResult) void {
+pub fn completePtyInputWrite(pane: *Pane, result: pane_namespace.PtyWriteResult) void {
     std.debug.assert(pane.input_write_pending);
     std.debug.assert(pane.input_write_len != 0);
 
@@ -828,7 +848,7 @@ pub fn cancelPtyInputWrite(pane: *Pane) void {
     pane.actorFinished();
 }
 
-pub fn queueHistoryOutput(pane: *Pane, observation: history.observer.OutputObservation) void {
+pub fn queueHistoryOutput(pane: *Pane, observation: ObserverOutputObservation) void {
     pane.history_observer.queueOutput(observation);
 }
 
@@ -856,7 +876,7 @@ pub fn beginHistoryObservation(pane: *Pane) ?HistoryObservationBorrow {
 /// ```zig
 /// const transition = pane.completeHistoryObservation(probe.cache);
 /// ```
-pub fn completeHistoryObservation(pane: *Pane, process_cache: agent_process.Cache) HistoryObservationCompletion {
+pub fn completeHistoryObservation(pane: *Pane, process_cache: CacheType) HistoryObservationCompletion {
     pane.actorFinished();
     pane.history_observer.finishSealed();
 
@@ -895,10 +915,10 @@ pub fn cancelHistoryObservation(pane: *Pane) void {
 /// ```zig
 /// pane.processHistoryObservation(.{ .size = size, .provider = provider }, &stats);
 /// ```
-pub fn processHistoryObservation(pane: *Pane, context: struct { size: source_namespace.schema.TerminalSize, provider: source_namespace.schema.AgentProvider }, stats: *history.observer.Stats) void {
+pub fn processHistoryObservation(pane: *Pane, context: struct { size: TerminalSizeType, provider: AgentProviderType }, stats: *HistoryStats) void {
     var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const cwd = agent_process.cwd(pane.session.processId(), &cwd_buffer);
-    var capture_context: CaptureContext = .{ .pane = pane, .observation_stats = stats };
+    const cwd = cwd_module.read(pane.session.processId(), &cwd_buffer);
+    var capture_context: CaptureContextType = .{ .pane = pane, .observation_stats = stats };
     pane.history_observer.processSealed(.{
         .cwd = cwd,
         .current_size = context.size,
@@ -942,7 +962,7 @@ pub fn writePty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) voi
 pub fn reportProgress(handler: *vt.TerminalStream.Handler, report: vt.osc.Command.ProgressReport) void {
     const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
     const pane: *Pane = @fieldParentPtr("stream", stream);
-    const state: source_namespace.schema.PaneProgressState = switch (report.state) {
+    const state: PaneProgressStateType = switch (report.state) {
         .remove => .remove,
         .set => .set,
         .@"error" => .@"error",
@@ -968,7 +988,7 @@ pub fn expireProgress(pane: *Pane, shell_foreground: bool) void {
     pane.applyProgress(.remove, null);
 }
 
-fn applyProgress(pane: *Pane, state: source_namespace.schema.PaneProgressState, percent: ?u8) void {
+fn applyProgress(pane: *Pane, state: PaneProgressStateType, percent: ?u8) void {
     if (pane.progress_state == state and pane.progress_percent == percent) {
         return;
     }
@@ -986,7 +1006,7 @@ pub fn writeMediaPty(handler: *vt.TerminalStream.Handler, response: [:0]const u8
         return;
     }
     const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
-    const media: *media_mod.Pipeline = @fieldParentPtr("stream", stream);
+    const media: *PipelineType = @fieldParentPtr("stream", stream);
     const pane: *Pane = @fieldParentPtr("media", media);
     _ = pane.pty_responses.push(response);
 }
@@ -1005,18 +1025,11 @@ pub fn reportSize(handler: *vt.TerminalStream.Handler) ?vt.size_report.Size {
     };
 }
 
-pub const AgentCommand = struct {
-    command: history.Command,
-    provider: []const u8,
-    tool_call_id: []const u8,
-    origin: source_namespace.schema.HistoryOrigin,
-    phase: source_namespace.schema.AgentCommandPhase = .finished,
-    redact: bool = true,
-};
+pub const AgentCommand = @import("AgentCommand.zig");
 
 /// Captures runtime-owned metadata without borrowing the observation worker's VT.
 /// Call only on the runtime thread. Example: `_ = pane.recordAgentCommand(report);`.
-pub fn recordAgentCommand(pane: *Pane, report: AgentCommand) bool {
+pub fn recordAgentCommand(pane: *Pane, report: AgentCommandType) bool {
     const sequence = pane.history_sequence.reserve() orelse return false;
 
     return pane.history_service.recordAgentCommand(pane.io, .{
@@ -1038,50 +1051,7 @@ pub fn recordAgentCommand(pane: *Pane, report: AgentCommand) bool {
     });
 }
 
-pub const CaptureContext = struct {
-    pane: *Pane,
-    observation_stats: ?*history.observer.Stats = null,
-
-    pub fn emit(context: *CaptureContext, command: history.Command) void {
-        const pane = context.pane;
-        if (!pane.history_session_started) {
-            return;
-        }
-        const sequence = pane.history_sequence.reserve() orelse {
-            if (context.observation_stats) |stats| {
-                stats.dropped += 1;
-            }
-
-            return;
-        };
-        var author: core.schema.HistoryAuthor = .human;
-        if (pane.injected_submissions.load(.monotonic) > 0) {
-            _ = pane.injected_submissions.fetchSub(1, .monotonic);
-            author = .agent;
-        }
-
-        const submitted = pane.history_service.recordCommand(pane.io, .{
-            .context = .{
-                .author = author,
-                .session_id = pane.history_session_id,
-                .pane_id = pane.id,
-                .location = pane.location,
-                .sequence = sequence,
-                .workspace_path = pane.workspace_path,
-                .cols = pane.history_observer.terminal.cols,
-                .rows = pane.history_observer.terminal.rows,
-            },
-            .command = command,
-        });
-        if (context.observation_stats) |stats| {
-            if (submitted) {
-                stats.captured += 1;
-            } else {
-                stats.dropped += 1;
-            }
-        }
-    }
-};
+pub const CaptureContext = @import("CaptureContext.zig");
 
 /// Marks the next completed command as submitted by automation. Called
 /// when control-API text or a restored resume command carries Enter.
@@ -1097,24 +1067,24 @@ pub fn finishHistory(pane: *Pane) void {
     if (pane.history_session_finished) {
         return;
     }
-    var capture_context: CaptureContext = .{ .pane = pane };
+    var capture_context: CaptureContextType = .{ .pane = pane };
     if (pane.history_observer.enabled) {
-        pane.history_observer.tracker.interrupt(source_namespace.historyClock(pane.io), &capture_context);
+        pane.history_observer.tracker.interrupt(pane_namespace.historyClock(pane.io), &capture_context);
     }
     if (pane.history_session_started) {
         _ = pane.history_service.finishSession(pane.io, .{
             .id = pane.history_session_id,
-            .finished_at_ms = source_namespace.Io.Timestamp.now(pane.io, .real).toMilliseconds(),
+            .finished_at_ms = std.Io.Timestamp.now(pane.io, .real).toMilliseconds(),
         });
     }
     pane.history_session_finished = true;
 }
 
-pub fn queueExitedHistory(pane: *Pane, exit: pty.Exit) void {
+pub fn queueExitedHistory(pane: *Pane, exit: exit_module.Exit) void {
     if (pane.history_exit_queued) {
         return;
     }
-    pane.history_observer.queueShellExit(source_namespace.historyClock(pane.io), exit.code());
+    pane.history_observer.queueShellExit(pane_namespace.historyClock(pane.io), exit.code());
     pane.history_exit_queued = true;
 }
 
@@ -1141,7 +1111,7 @@ pub fn readyToDestroy(pane: *const Pane) bool {
 /// Replaces host defaults without changing child overrides or cell styles.
 /// An ingest actor never shares mutable VT state with this operation.
 /// Example: `pane.setTerminalColors(.{ .background = .{ 16, 16, 16 } });`.
-pub fn setTerminalColors(pane: *Pane, colors: source_namespace.schema.TerminalColors) void {
+pub fn setTerminalColors(pane: *Pane, colors: TerminalColorsType) void {
     pane.pending_terminal_colors = colors;
     if (!pane.ingest_pending) {
         pane.applyTerminalColors();
@@ -1172,12 +1142,12 @@ fn terminalRgb(color: ?[3]u8) ?vt.color.RGB {
     return .{ .r = rgb[0], .g = rgb[1], .b = rgb[2] };
 }
 
-pub fn resize(pane: *Pane, size: source_namespace.schema.TerminalSize) !void {
+pub fn resize(pane: *Pane, size: TerminalSizeType) !void {
     try pane.requestResize(size);
     try pane.applyPendingResize();
 }
 
-pub fn requestResize(pane: *Pane, size: source_namespace.schema.TerminalSize) !void {
+pub fn requestResize(pane: *Pane, size: TerminalSizeType) !void {
     if (std.meta.eql(pane.pending_size orelse pane.size, size)) {
         return;
     }
@@ -1194,7 +1164,7 @@ pub fn applyPendingResize(pane: *Pane) !void {
     const size = pane.pending_size orelse return;
     pane.search_revision +%= 1;
     {
-        const terminal_allocations = source_namespace.diagnostics.enterTerminalAllocations();
+        const terminal_allocations = enterTerminalAllocations_module();
         defer terminal_allocations.restore();
         try pane.stream.handler.resize(.{
             .cols = size.cols,
@@ -1206,7 +1176,7 @@ pub fn applyPendingResize(pane: *Pane) !void {
         });
     }
     pane.observeGraphicsDamage();
-    try source_namespace.resizeScreenStorage(.{
+    try pane_namespace.resizeScreenStorage(.{
         .gpa = pane.gpa,
         .screen = &pane.screen,
         .damaged_rows = &pane.damaged_rows,
@@ -1235,22 +1205,22 @@ pub fn applyPendingResize(pane: *Pane) !void {
 ///     return;
 /// }
 /// ```
-pub fn holdFrames(pane: *Pane, io: source_namespace.Io) bool {
+pub fn holdFrames(pane: *Pane, io: std.Io) bool {
     if (!pane.terminal.modes.get(.synchronized_output)) {
         pane.sync_hold_started_ns = null;
         return false;
     }
-    const now_ns: u64 = @intCast(@max(source_namespace.Io.Timestamp.now(io, .awake).nanoseconds, 0));
+    const now_ns: u64 = @intCast(@max(std.Io.Timestamp.now(io, .awake).nanoseconds, 0));
     const started = pane.sync_hold_started_ns orelse {
         pane.sync_hold_started_ns = now_ns;
         return true;
     };
-    return now_ns -| started < source_namespace.max_sync_hold_ns;
+    return now_ns -| started < pane_namespace.max_sync_hold_ns;
 }
 
 pub fn render(pane: *Pane, force: bool) !void {
     {
-        const terminal_allocations = source_namespace.diagnostics.enterTerminalAllocations();
+        const terminal_allocations = enterTerminalAllocations_module();
         defer terminal_allocations.restore();
         try pane.render_state.update(pane.gpa, &pane.terminal);
     }

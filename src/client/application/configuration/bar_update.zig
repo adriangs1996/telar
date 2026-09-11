@@ -1,45 +1,43 @@
 //! Application policy for one configured bar-source result.
 
+const ContentType = @import("../../bars/Content.zig");
+const Failure = @import("Failure.zig");
+const BarUpdateCommitType = @import("../../model/BarUpdateCommit.zig");
+const ConfigurationType = @import("../../bars/Configuration.zig");
 const std = @import("std");
-const bars = @import("../../bars/root.zig");
-const lua_config = @import("../../config/root.zig");
-const client_diagnostic = @import("client_diagnostic.zig");
-const client_model = @import("../../root.zig").model;
-
-pub const Failure = @import("Failure.zig");
+const ModelType = @import("../../model/Model.zig");
+const ApplyBarUpdateHandler = @import("ApplyBarUpdateHandler.zig");
+const DiagnosticType = @import("../../config/Diagnostic.zig");
+const VersionType = @import("../../model/Version.zig");
 
 pub const Result = union(enum) {
-    content: bars.Content,
+    content: ContentType,
     failed: Failure,
 };
 
-pub const Command = @import("BarUpdateCommand.zig");
-
 pub const Outcome = union(enum) {
-    updated: client_model.BarUpdateCommit,
+    updated: BarUpdateCommitType,
     unchanged,
     stale,
     failed: anyerror,
 };
 
-pub const ApplyBarUpdateHandler = @import("ApplyBarUpdateHandler.zig");
-
-fn contentWith(text: []const u8) bars.Content {
-    var content: bars.Content = .{};
+fn contentWith(text: []const u8) ContentType {
+    var content: ContentType = .{};
     content.append(.{ .text = text }) catch unreachable;
 
     return content;
 }
 
 test "ApplyBarUpdateHandler folds equal content and rejects stale results quietly" {
-    const configuration: bars.Configuration = .{
+    const configuration: ConfigurationType = .{
         .bottom = .{
             .{ .dynamic = .{ .callback = .{ .generation = 2, .id = 0 }, .interval_ns = std.time.ns_per_s } },
             .empty,
             .tabs,
         },
     };
-    var model = client_model.Model.initWithState(std.testing.allocator, .{
+    var model = ModelType.initWithState(std.testing.allocator, .{
         .pane_gaps = true,
         .configuration_generation = 2,
         .bars = configuration.presentation(),
@@ -67,21 +65,21 @@ test "ApplyBarUpdateHandler folds equal content and rejects stale results quietl
 }
 
 test "ApplyBarUpdateHandler publishes bounded failures without replacing content" {
-    const configuration: bars.Configuration = .{
+    const configuration: ConfigurationType = .{
         .bottom = .{
             .{ .dynamic = .{ .callback = .{ .generation = 2, .id = 0 }, .interval_ns = std.time.ns_per_s } },
             .empty,
             .tabs,
         },
     };
-    var model = client_model.Model.initWithState(std.testing.allocator, .{
+    var model = ModelType.initWithState(std.testing.allocator, .{
         .pane_gaps = true,
         .configuration_generation = 2,
         .bars = configuration.presentation(),
     });
     defer model.deinit();
     var handler: ApplyBarUpdateHandler = .{ .model = &model };
-    var diagnostic: lua_config.Diagnostic = .{};
+    var diagnostic: DiagnosticType = .{};
     diagnostic.set("clock callback failed", .{});
 
     try std.testing.expect((try handler.execute(.{
@@ -105,5 +103,5 @@ test "ApplyBarUpdateHandler publishes bounded failures without replacing content
 
     try std.testing.expect(outcome == .failed);
     try std.testing.expectEqualStrings("clock callback failed", model.diagnostic().?);
-    try std.testing.expectEqual(client_model.Version{ .diagnostic = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
 }

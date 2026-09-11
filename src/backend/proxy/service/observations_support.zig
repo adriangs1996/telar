@@ -1,17 +1,10 @@
 //! Observation pipeline and bounded delivery channel owned as one component.
 
 const std = @import("std");
-const identity = @import("../identity.zig");
-const middleware = @import("../middleware.zig");
-const observation_queue = @import("../observation_queue.zig");
-
-pub const Io = std.Io;
-
-pub const Liveness = @import("Liveness.zig");
-
-pub const Observations = @import("Observations.zig");
-
 const LivenessCapture = @import("LivenessCapture.zig");
+const identity = @import("../identity.zig");
+const Observations = @import("Observations.zig");
+const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 
 test "published observations traverse the owned channel exactly once" {
     const io = std.testing.io;
@@ -24,7 +17,7 @@ test "published observations traverse the owned channel exactly once" {
     var observations: Observations = undefined;
     try observations.init(.{ .context = &capture, .is_live = LivenessCapture.contains });
     defer observations.close(io);
-    var expected: middleware.Event = .{
+    var expected: MiddlewareEvent = .{
         .credential = capture.credential,
         .dialect = .anthropic_messages,
         .phase = .request_started,

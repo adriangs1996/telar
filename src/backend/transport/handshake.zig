@@ -1,10 +1,16 @@
 //! Server half of the exact-schema handshake.
 
-const core = @import("telar-core");
-const schema = core.handshake;
+const std = @import("std");
+const ServerResponseType = @import("telar-core").ServerResponse;
+const schema_id_module = @import("telar-core").schema_id;
+const SchemaIdType = @import("telar-core").SchemaId;
+const max_message_size_module = @import("telar-core").max_message_size;
+const decodeClientHello_module = @import("telar-core").decodeClientHello;
+const negotiate_module = @import("telar-core").negotiate;
+const encodeServerResponse_module = @import("telar-core").encodeServerResponse;
 
-pub fn perform(io: @import("std").Io, connection: anytype) !schema.ServerResponse {
-    return performSchema(io, connection, schema.schema_id);
+pub fn perform(io: std.Io, connection: anytype) !ServerResponseType {
+    return performSchema(io, connection, schema_id_module);
 }
 
 /// Negotiates an explicit schema identifier, primarily for compatibility tests.
@@ -12,14 +18,14 @@ pub fn perform(io: @import("std").Io, connection: anytype) !schema.ServerRespons
 /// ```zig
 /// const response = try performSchema(io, &connection, supported);
 /// ```
-pub fn performSchema(io: @import("std").Io, connection: anytype, supported: schema.SchemaId) !schema.ServerResponse {
-    var request_buffer: [schema.max_message_size]u8 = undefined;
+pub fn performSchema(io: std.Io, connection: anytype, supported: SchemaIdType) !ServerResponseType {
+    var request_buffer: [max_message_size_module]u8 = undefined;
     const request = try connection.receive(io, &request_buffer);
-    const hello = try schema.decodeClientHello(request);
-    const response = schema.negotiate(hello.schema, supported);
+    const hello = try decodeClientHello_module(request);
+    const response = negotiate_module(hello.schema, supported);
 
-    var response_buffer: [schema.max_message_size]u8 = undefined;
-    const encoded = try schema.encodeServerResponse(&response_buffer, response);
+    var response_buffer: [max_message_size_module]u8 = undefined;
+    const encoded = try encodeServerResponse_module(&response_buffer, response);
     try connection.send(io, encoded);
     return response;
 }

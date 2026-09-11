@@ -1,5 +1,6 @@
+const RectType = @import("telar-core").Rect;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const ListInput = @This();
-const ui = @import("../ui/root.zig");
-const source_namespace = @import("top_bar.zig");
-area: ui.Rect,
-active_id: ?source_namespace.schema.WorkspaceId,
+
+area: RectType,
+active_id: ?WorkspaceIdType,

@@ -1,5 +1,6 @@
+const ImageType = @import("telar-core").Image;
 const Transmission = @This();
-const source_namespace = @import("kitty_codec.zig");
+
 external_id: u32,
-image: source_namespace.graphics.Image,
+image: ImageType,
 pixels: []const u8,

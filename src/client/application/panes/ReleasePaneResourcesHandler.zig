@@ -1,10 +1,11 @@
-const ReleasePaneResourcesHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("PaneResourceReleaseEffects.zig");
-const source_namespace = @import("pane_resource_release.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneResourceReleaseEffects = @import("PaneResourceReleaseEffects.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const ReleasedResources = @import("ReleasedResources.zig");
-model: *client_model.Model,
-effects: Effects,
+const ReleasePaneResourcesHandler = @This();
+
+model: *ModelType,
+effects: PaneResourceReleaseEffects,
 
 /// Releases exact model-owned authorities before clearing physical pane
 /// graphics. Repeated or unknown identities still clear stale graphics.
@@ -12,7 +13,7 @@ effects: Effects,
 /// ```zig
 /// const released = handler.execute(pane_id);
 /// ```
-pub fn execute(handler: *ReleasePaneResourcesHandler, pane_id: source_namespace.schema.PaneId) ReleasedResources {
+pub fn execute(handler: *ReleasePaneResourcesHandler, pane_id: PaneIdType) ReleasedResources {
     const released: ReleasedResources = .{
         .copy_mode = handler.model.releaseCopyMode(pane_id),
         .pane_paste = handler.model.releasePanePaste(pane_id),

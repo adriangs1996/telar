@@ -1,18 +1,10 @@
 //! Application policy for detaching every tab owned by one client.
 
-const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const Effects = @import("ClientDetachmentEffects.zig");
-
-pub const DetachClientHandler = @import("DetachClientHandler.zig");
-
-const Capture = @import("Capture.zig");
-
 const TestingModel = @import("TestingModel.zig");
+const Capture = @import("Capture.zig");
+const DetachClientHandler = @import("DetachClientHandler.zig");
+const std = @import("std");
+const TabLocationType = @import("telar-core").TabLocation;
 
 test "DetachClientHandler delivers every captured tab in stable order" {
     var testing = try TestingModel.init(3);
@@ -26,7 +18,7 @@ test "DetachClientHandler delivers every captured tab in stable order" {
 
     try handler.execute();
 
-    try std.testing.expectEqualSlices(schema.TabLocation, &testing.locations, capture.slice());
+    try std.testing.expectEqualSlices(TabLocationType, &testing.locations, capture.slice());
     try std.testing.expectEqualDeep(version, testing.model.version());
 }
 
@@ -55,5 +47,5 @@ test "DetachClientHandler stops after the first failed tab retirement" {
 
     try std.testing.expectError(error.DetachmentFailed, handler.execute());
 
-    try std.testing.expectEqualSlices(schema.TabLocation, testing.locations[0..2], capture.slice());
+    try std.testing.expectEqualSlices(TabLocationType, testing.locations[0..2], capture.slice());
 }

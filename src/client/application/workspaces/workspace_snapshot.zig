@@ -1,23 +1,16 @@
 //! Application use case for applying one canonical workspace snapshot.
 
+const WorkspaceSnapshotTestingModel = @import("WorkspaceSnapshotTestingModel.zig");
+const WorkspaceSnapshotEffectsCapture = @import("WorkspaceSnapshotEffectsCapture.zig");
+const ApplyWorkspaceSnapshotHandler = @import("ApplyWorkspaceSnapshotHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const Effects = @import("WorkspaceSnapshotEffects.zig");
-
-pub const ApplyWorkspaceSnapshotHandler = @import("ApplyWorkspaceSnapshotHandler.zig");
-
-const EffectsCapture = @import("WorkspaceSnapshotEffectsCapture.zig");
-
-const TestingModel = @import("WorkspaceSnapshotTestingModel.zig");
+const WorkspaceSnapshotInput = @import("../../workspace/WorkspaceSnapshotInput.zig");
+const VersionType = @import("../../model/Version.zig");
 
 test "ApplyWorkspaceSnapshotHandler commits before delivering client resources" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceSnapshotTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: WorkspaceSnapshotEffectsCapture = .{ .model = testing.model };
     var handler: ApplyWorkspaceSnapshotHandler = .{
         .model = testing.model,
         .effects = capture.port(),
@@ -33,9 +26,9 @@ test "ApplyWorkspaceSnapshotHandler commits before delivering client resources" 
 }
 
 test "ApplyWorkspaceSnapshotHandler still runs resource effects for a canonical no-op" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceSnapshotTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: WorkspaceSnapshotEffectsCapture = .{ .model = testing.model };
     var handler: ApplyWorkspaceSnapshotHandler = .{
         .model = testing.model,
         .effects = capture.port(),
@@ -54,14 +47,14 @@ test "ApplyWorkspaceSnapshotHandler still runs resource effects for a canonical 
 }
 
 test "ApplyWorkspaceSnapshotHandler rejects model failures before effects" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceSnapshotTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: WorkspaceSnapshotEffectsCapture = .{ .model = testing.model };
     var handler: ApplyWorkspaceSnapshotHandler = .{
         .model = testing.model,
         .effects = capture.port(),
     };
-    const snapshot: client_model.WorkspaceSnapshot = .{
+    const snapshot: WorkspaceSnapshotInput = .{
         .workspace = .{ .workspace = @enumFromInt(9) },
         .name = "wrong",
         .tabs = &.{
@@ -73,13 +66,13 @@ test "ApplyWorkspaceSnapshotHandler rejects model failures before effects" {
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
     try std.testing.expectEqual(@as(usize, 2), testing.model.workspace.count);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "ApplyWorkspaceSnapshotHandler preserves a committed snapshot after effect failure" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceSnapshotTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model, .fail = true };
+    var capture: WorkspaceSnapshotEffectsCapture = .{ .model = testing.model, .fail = true };
     var handler: ApplyWorkspaceSnapshotHandler = .{
         .model = testing.model,
         .effects = capture.port(),

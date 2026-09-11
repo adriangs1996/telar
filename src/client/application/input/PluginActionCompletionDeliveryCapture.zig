@@ -1,15 +1,16 @@
+const plugin_action = @import("plugin_action.zig");
+const PluginActionCompletionDelivery = @import("PluginActionCompletionDelivery.zig");
 const CompletionDeliveryCapture = @This();
-const source_namespace = @import("plugin_action.zig");
-const CompletionDelivery = @import("PluginActionCompletionDelivery.zig");
+
 calls: usize = 0,
-outcome: ?source_namespace.CompletionOutcome = null,
+outcome: ?plugin_action.CompletionOutcome = null,
 fail: bool = false,
 
-pub fn port(capture: *CompletionDeliveryCapture) CompletionDelivery {
+pub fn port(capture: *CompletionDeliveryCapture) PluginActionCompletionDelivery {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(raw_context: *anyopaque, outcome: source_namespace.CompletionOutcome) !source_namespace.CompletionDirective {
+fn deliver(raw_context: *anyopaque, outcome: plugin_action.CompletionOutcome) !plugin_action.CompletionDirective {
     const capture: *CompletionDeliveryCapture = @ptrCast(@alignCast(raw_context));
     capture.calls += 1;
     capture.outcome = outcome;

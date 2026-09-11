@@ -1,17 +1,17 @@
+const SamplerType = @import("../observability/Sampler.zig");
 const MetricsCapture = @This();
 
-const metrics = @import("../observability/system_metrics.zig");
 reads: usize = 0,
 jobs: usize = 0,
 pumps: usize = 0,
 
 pub fn rearm(_: *MetricsCapture) !void {}
 
-fn sample(capture: *MetricsCapture, _: *metrics.Sampler) void {
+fn sample(capture: *MetricsCapture, _: *SamplerType) void {
     capture.reads += 1;
 }
 
-pub fn schedule(capture: *MetricsCapture, _: metrics.Sampler) !void {
+pub fn schedule(capture: *MetricsCapture, _: SamplerType) !void {
     capture.jobs += 1;
 }
 

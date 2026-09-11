@@ -1,4 +1,5 @@
+const PaneIdType = @import("telar-core").PaneId;
 const PaneGeneration = @This();
-const source_namespace = @import("credential_registry.zig");
-id: source_namespace.schema.PaneId,
+
+id: PaneIdType,
 generation: u64,

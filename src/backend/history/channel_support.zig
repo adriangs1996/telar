@@ -1,22 +1,20 @@
 //! Bounded ownership transfer between history producers and the worker.
 
 const std = @import("std");
-const metrics_mod = @import("metrics.zig");
-const model = @import("model.zig");
+const Channel = @import("Channel.zig");
+const CountersType = @import("Counters.zig");
+const SessionFinishedType = @import("SessionFinished.zig");
+const PrunedType = @import("Pruned.zig");
 
 pub const request_capacity = 64;
 pub const response_capacity = 4;
-
-pub const Submission = @import("Submission.zig");
-
-pub const Channel = @import("Channel.zig");
 
 test "accepted requests transfer to the worker and release their queue depth" {
     const io = std.testing.io;
     var channel = try Channel.init(std.testing.allocator);
     defer channel.deinit(io);
-    var metrics: metrics_mod.Counters = .{};
-    const finished: model.SessionFinished = .{ .id = @splat(1), .finished_at_ms = 42 };
+    var metrics: CountersType = .{};
+    const finished: SessionFinishedType = .{ .id = @splat(1), .finished_at_ms = 42 };
 
     try std.testing.expect(channel.submit(.{
         .io = io,
@@ -34,7 +32,7 @@ test "a full request queue refuses work without exceeding its bound" {
     const io = std.testing.io;
     var channel = try Channel.init(std.testing.allocator);
     defer channel.deinit(io);
-    var metrics: metrics_mod.Counters = .{};
+    var metrics: CountersType = .{};
 
     for (0..request_capacity) |index| {
         try std.testing.expect(channel.submit(.{
@@ -61,7 +59,7 @@ test "responses cross the channel without changing their correlation" {
     const io = std.testing.io;
     var channel = try Channel.init(std.testing.allocator);
     defer channel.deinit(io);
-    const expected: model.Pruned = .{
+    const expected: PrunedType = .{
         .request_id = @enumFromInt(7),
         .origin = .{ .client = .{ .id = 3, .generation = 4 }, .close_after_reply = false },
         .removed = 9,

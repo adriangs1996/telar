@@ -1,5 +1,6 @@
+const TabLocationType = @import("telar-core").TabLocation;
 /// Committed position of a tab after a move request.
 const TabMoved = @This();
-const source_namespace = @import("events.zig");
-location: source_namespace.schema.TabLocation,
+
+location: TabLocationType,
 position: u16,

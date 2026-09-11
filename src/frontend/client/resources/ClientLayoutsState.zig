@@ -1,5 +1,6 @@
-const State = @This();
 const Version = @import("Version.zig");
+const State = @This();
+
 snapshot_received: bool = false,
 last_sent: ?Version = null,
 

@@ -1,29 +1,27 @@
 //! Vertical contract tests for the runtime workspace rename flow.
 
+const StateType = @import("../../workspace/State.zig");
+const RepositoryType = @import("../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const rename_workspace_commands = @import("../application/commands/rename_workspace.zig");
-const rename_workspace_controller = @import("../entrypoints/requests/rename_workspace.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-
-const schema = core.schema;
-
-const EventCapture = @import("RenameWorkspaceTestEventCapture.zig");
+const RenameWorkspaceTestEventCapture = @import("RenameWorkspaceTestEventCapture.zig");
+const RenameWorkspaceHandlerType = @import("../application/commands/RenameWorkspaceHandler.zig");
+const ResponseQueueType = @import("../delivery/ResponseQueue.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const RenameWorkspaceController = @import("../entrypoints/requests/RenameWorkspaceController.zig");
 
 test "a committed workspace rename survives response queue backpressure" {
-    var state: workspace_mod.State = .{};
-    var workspaces = workspace_mod.Repository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location.workspace;
     const revision = workspaces.reader().revision();
-    var events: EventCapture = .{};
-    var handler: rename_workspace_commands.RenameWorkspaceHandler = .{
+    var events: RenameWorkspaceTestEventCapture = .{};
+    var handler: RenameWorkspaceHandlerType = .{
         .workspaces = &workspaces,
         .events = events.publisher(),
     };
-    var responses: delivery_mod.ResponseQueue = .{};
-    const tab_location: schema.TabLocation = .{
+    var responses: ResponseQueueType = .{};
+    const tab_location: TabLocationType = .{
         .workspace = location,
         .tab_id = workspaces.reader().defaultTab(location).?,
     };
@@ -37,7 +35,7 @@ test "a committed workspace rename survives response queue backpressure" {
     }
 
     var requested_name = [_]u8{ 'b', 'a', 'c', 'k', 'e', 'n', 'd' };
-    var controller = rename_workspace_controller.Controller.init(&responses, handler.executor());
+    var controller = RenameWorkspaceController.init(&responses, handler.executor());
     try std.testing.expectError(error.ResponseQueueFull, controller.renameWorkspace(.{
         .request_id = @enumFromInt(31),
         .workspace = location,

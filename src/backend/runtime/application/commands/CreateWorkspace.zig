@@ -1,7 +1,9 @@
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const LaunchViewType = @import("telar-core").LaunchView;
 const CreateWorkspace = @This();
-const source_namespace = @import("create_workspace.zig");
+
 /// Borrowed only for the synchronous `execute` call.
 name: []const u8,
-size: source_namespace.schema.TerminalSize,
+size: TerminalSizeType,
 /// Every slice in this view is borrowed only for `execute`.
-launch: source_namespace.schema.LaunchView,
+launch: LaunchViewType,

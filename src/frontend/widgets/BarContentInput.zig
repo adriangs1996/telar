@@ -1,4 +1,6 @@
+const ContentType = @import("telar-client").Content;
+const AlignmentType = @import("telar-client").Alignment;
 const Input = @This();
-const bars = @import("../bars/root.zig");
-content: *const bars.Content,
-alignment: bars.Alignment,
+
+content: *const ContentType,
+alignment: AlignmentType,

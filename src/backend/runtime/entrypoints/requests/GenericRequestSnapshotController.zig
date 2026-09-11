@@ -1,4 +1,6 @@
-const source_namespace = @import("request_snapshot.zig");
+const RuntimeMetricsType = @import("../../observability/RuntimeMetrics.zig");
+const RequestSnapshotType = @import("telar-core").RequestSnapshot;
+
 /// Builds a statically dispatched snapshot controller for the cell delivery
 /// path.
 ///
@@ -10,7 +12,7 @@ pub fn Type(comptime Executor: type) type {
     return struct {
         const Self = @This();
 
-        metrics: *source_namespace.RuntimeMetrics,
+        metrics: *RuntimeMetricsType,
         executor: Executor,
 
         /// Creates one controller bound to the requesting client and handler.
@@ -18,7 +20,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// var controller = SnapshotController.init(&metrics, &handler);
         /// ```
-        pub fn init(metrics: *source_namespace.RuntimeMetrics, executor: Executor) Self {
+        pub fn init(metrics: *RuntimeMetricsType, executor: Executor) Self {
             return .{ .metrics = metrics, .executor = executor };
         }
 
@@ -29,7 +31,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// try controller.requestSnapshot(request);
         /// ```
-        pub inline fn requestSnapshot(controller: *Self, request: source_namespace.schema.RequestSnapshot) !void {
+        pub inline fn requestSnapshot(controller: *Self, request: RequestSnapshotType) !void {
             _ = request.known_frame_id;
             const result = try controller.executor.execute(.{ .pane_id = request.pane_id });
 

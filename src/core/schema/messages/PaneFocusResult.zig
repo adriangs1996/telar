@@ -1,8 +1,11 @@
+const id = @import("../id.zig");
+const types = @import("../types.zig");
+const codec = @import("../codec.zig");
 const PaneFocusResult = @This();
-const source_namespace = @import("focus.zig");
-request_id: source_namespace.RequestId,
-outcome: source_namespace.PaneFocusOutcome,
-focused_pane_id: source_namespace.PaneId,
+
+request_id: id.RequestId,
+outcome: types.PaneFocusOutcome,
+focused_pane_id: id.PaneId,
 
 /// Requires a focused pane identity only when the UI changed focus.
 ///
@@ -10,8 +13,8 @@ focused_pane_id: source_namespace.PaneId,
 /// try result.validateWire();
 /// ```
 pub fn validateWire(result: PaneFocusResult) !void {
-    try source_namespace.validateRequestId(result.request_id);
+    try codec.validateRequestId(result.request_id);
     if (result.outcome == .focused) {
-        try source_namespace.validatePaneId(result.focused_pane_id);
+        try codec.validatePaneId(result.focused_pane_id);
     }
 }

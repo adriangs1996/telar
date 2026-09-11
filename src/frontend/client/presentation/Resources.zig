@@ -1,6 +1,8 @@
+const StateType = @import("State.zig");
+const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
+const std = @import("std");
 const Resources = @This();
-const client_view = @import("view.zig");
-const source_namespace = @import("Presenter.zig");
-view: *client_view.State,
-graphics_store: *source_namespace.kitty.Store,
-writer: *source_namespace.Io.Writer,
+
+view: *StateType,
+graphics_store: *kitty_delivery.Store,
+writer: *std.Io.Writer,

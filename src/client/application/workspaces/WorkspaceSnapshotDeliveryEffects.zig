@@ -1,9 +1,12 @@
+const TabIdType = @import("telar-core").TabId;
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
 const Effects = @This();
-const source_namespace = @import("workspace_snapshot_delivery.zig");
+
 context: *anyopaque,
-ignore_tab_requests: *const fn (*anyopaque, source_namespace.schema.TabId) void,
-clear_pane_graphics: *const fn (*anyopaque, source_namespace.schema.PaneId) void,
-set_pane_graphics_visible: *const fn (*anyopaque, source_namespace.schema.PaneId, bool) anyerror!void,
+ignore_tab_requests: *const fn (*anyopaque, TabIdType) void,
+clear_pane_graphics: *const fn (*anyopaque, PaneIdType) void,
+set_pane_graphics_visible: *const fn (*anyopaque, PaneIdType, bool) anyerror!void,
 synchronize_active_resources: *const fn (*anyopaque) anyerror!void,
 tab_snapshot_pending: *const fn (*anyopaque) bool,
-request_tab_snapshot: *const fn (*anyopaque, source_namespace.schema.TabLocation) anyerror!void,
+request_tab_snapshot: *const fn (*anyopaque, TabLocationType) anyerror!void,

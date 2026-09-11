@@ -1,10 +1,11 @@
-const MessageRoute = @This();
-const tls = @import("../tls.zig");
-const provider = @import("../provider/request_support.zig");
+const SessionType = @import("../Session.zig");
+const types = @import("../../agent/types.zig");
 const HeadSink = @import("HeadSink.zig");
-from: tls.Session.Side,
-to: tls.Session.Side,
+const MessageRoute = @This();
+
+from: SessionType.Side,
+to: SessionType.Side,
 is_response: bool,
 response_to_head: bool,
-dialect: provider.ApiDialect = .unknown,
+dialect: types.ApiDialect = .unknown,
 capture: ?HeadSink = null,

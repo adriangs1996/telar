@@ -1,18 +1,21 @@
+const ModelType = @import("../../model/Model.zig");
+const SidebarLayoutType = @import("../../model/SidebarLayout.zig");
+const sidebar_layout_delivery = @import("sidebar_layout_delivery.zig");
+const MultiplexerModel = @import("../../workspace/MultiplexerModel.zig");
+const SidebarLayoutDeliveryEffects = @import("SidebarLayoutDeliveryEffects.zig");
 const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("sidebar_layout_delivery.zig");
-const Effects = @import("SidebarLayoutDeliveryEffects.zig");
-model: *const client_model.Model,
-expected: client_model.SidebarLayout,
-events: [3]source_namespace.Event = undefined,
+
+model: *const ModelType,
+expected: SidebarLayoutType,
+events: [3]sidebar_layout_delivery.Event = undefined,
 event_count: usize = 0,
 projected_visible: ?bool = null,
 projected_width: ?u16 = null,
-offered_model: ?*source_namespace.multiplexer.Model = null,
+offered_model: ?*MultiplexerModel = null,
 observed_commit: bool = true,
 fail_geometry: bool = false,
 
-pub fn effects(capture: *EffectsCapture) Effects {
+pub fn effects(capture: *EffectsCapture) SidebarLayoutDeliveryEffects {
     return .{
         .context = capture,
         .project_view = projectView,
@@ -33,7 +36,7 @@ fn invalidateGraphicsPlacements(context: *anyopaque) void {
     capture.record(.invalidate_graphics);
 }
 
-fn offerPaneGeometry(context: *anyopaque, model: *source_namespace.multiplexer.Model) !void {
+fn offerPaneGeometry(context: *anyopaque, model: *MultiplexerModel) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.record(.pane_geometry);
     capture.offered_model = model;
@@ -43,7 +46,7 @@ fn offerPaneGeometry(context: *anyopaque, model: *source_namespace.multiplexer.M
     }
 }
 
-fn record(capture: *EffectsCapture, event: source_namespace.Event) void {
+fn record(capture: *EffectsCapture, event: sidebar_layout_delivery.Event) void {
     capture.observed_commit = capture.observed_commit and
         capture.model.sidebarVisible() == capture.expected.visible and
         capture.model.sidebarWidth() == capture.expected.width and

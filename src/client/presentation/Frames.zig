@@ -1,9 +1,11 @@
-const Frames = @This();
 const Fixture = @import("Fixture.zig");
-const source_namespace = @import("headless_tests.zig");
-const client = @import("../root.zig");
-pub fn apply(fixture: *Fixture, frame: source_namespace.schema.frame.FrameView) !client.model.PaneFrameOutcome {
-    var handler: source_namespace.app.panes.pane_frame.ApplyPaneFrameHandler = .{
+const FrameViewType = @import("telar-core").FrameView;
+const types = @import("../model/types.zig");
+const ApplyPaneFrameHandlerType = @import("../application/panes/ApplyPaneFrameHandler.zig");
+const Frames = @This();
+
+pub fn apply(fixture: *Fixture, frame: FrameViewType) !types.PaneFrameOutcome {
+    var handler: ApplyPaneFrameHandlerType = .{
         .model = &fixture.model,
         .effects = .{ .context = fixture, .recover = Fixture.recover, .deliver = Fixture.frameResources },
     };

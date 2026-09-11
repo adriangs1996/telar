@@ -1,20 +1,26 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("workspace_snapshot_delivery.zig");
-const Effects = @import("WorkspaceSnapshotDeliveryEffects.zig");
-const pane_geometry_delivery = @import("../panes/root.zig").pane_geometry_delivery;
+const ModelType = @import("../../model/Model.zig");
+const WorkspaceReconciliationType = @import("../../model/WorkspaceReconciliation.zig");
+const workspace_snapshot_delivery = @import("workspace_snapshot_delivery.zig");
+const PaneResizeType = @import("telar-core").PaneResize;
+const WorkspaceSnapshotDeliveryEffects = @import("WorkspaceSnapshotDeliveryEffects.zig");
+const OfferEffectsType = @import("../panes/OfferEffects.zig");
+const TabIdType = @import("telar-core").TabId;
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
 const std = @import("std");
-model: *client_model.Model,
-reconciliation: *const client_model.WorkspaceReconciliation,
-events: [10]source_namespace.Event = undefined,
+const EffectsCapture = @This();
+
+model: *ModelType,
+reconciliation: *const WorkspaceReconciliationType,
+events: [10]workspace_snapshot_delivery.Event = undefined,
 event_count: usize = 0,
 pending_snapshot: bool = false,
-delivered_resize: ?source_namespace.schema.PaneResize = null,
+delivered_resize: ?PaneResizeType = null,
 committed_state_observed: bool = true,
 resources_released_before_graphics: bool = true,
-failure: source_namespace.Failure = .none,
+failure: workspace_snapshot_delivery.Failure = .none,
 
-pub fn effects(capture: *EffectsCapture) Effects {
+pub fn effects(capture: *EffectsCapture) WorkspaceSnapshotDeliveryEffects {
     return .{
         .context = capture,
         .ignore_tab_requests = ignoreTabRequests,
@@ -26,26 +32,26 @@ pub fn effects(capture: *EffectsCapture) Effects {
     };
 }
 
-pub fn geometryEffects(capture: *EffectsCapture) pane_geometry_delivery.OfferEffects {
+pub fn geometryEffects(capture: *EffectsCapture) OfferEffectsType {
     return .{
         .context = capture,
         .deliver_resize = deliverResize,
     };
 }
 
-fn ignoreTabRequests(raw_context: *anyopaque, tab_id: source_namespace.schema.TabId) void {
+fn ignoreTabRequests(raw_context: *anyopaque, tab_id: TabIdType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .ignore_tab = tab_id });
 }
 
-fn clearPaneGraphics(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId) void {
+fn clearPaneGraphics(raw_context: *anyopaque, pane_id: PaneIdType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .clear_graphics = pane_id });
     capture.resources_released_before_graphics = capture.resources_released_before_graphics and
         !capture.model.panePasteActive() and capture.model.reportedPaneFocus() == null;
 }
 
-fn setPaneGraphicsVisible(raw_context: *anyopaque, pane_id: source_namespace.schema.PaneId, visible: bool) !void {
+fn setPaneGraphicsVisible(raw_context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .set_graphics_visible = .{
         .pane_id = pane_id,
@@ -71,7 +77,7 @@ fn tabSnapshotPending(raw_context: *anyopaque) bool {
     return capture.pending_snapshot;
 }
 
-fn requestTabSnapshot(raw_context: *anyopaque, location: source_namespace.schema.TabLocation) !void {
+fn requestTabSnapshot(raw_context: *anyopaque, location: TabLocationType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .request_tab_snapshot = location });
     if (capture.failure == .tab_snapshot) {
@@ -79,7 +85,7 @@ fn requestTabSnapshot(raw_context: *anyopaque, location: source_namespace.schema
     }
 }
 
-fn deliverResize(raw_context: *anyopaque, resize: source_namespace.schema.PaneResize) !void {
+fn deliverResize(raw_context: *anyopaque, resize: PaneResizeType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     capture.append(.{ .resize = resize.pane_id });
     capture.delivered_resize = resize;
@@ -88,7 +94,7 @@ fn deliverResize(raw_context: *anyopaque, resize: source_namespace.schema.PaneRe
     }
 }
 
-fn append(capture: *EffectsCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectsCapture, event: workspace_snapshot_delivery.Event) void {
     capture.observeCommit();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -110,6 +116,6 @@ fn observeCommit(capture: *EffectsCapture) void {
         version.panes == capture.reconciliation.panes_revision;
 }
 
-pub fn eventSlice(capture: *const EffectsCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectsCapture) []const workspace_snapshot_delivery.Event {
     return capture.events[0..capture.event_count];
 }

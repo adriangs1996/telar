@@ -1,5 +1,6 @@
-const Registration = @This();
-const schema = @import("telar-core").schema;
+const RequestIdType = @import("telar-core").RequestId;
 const client_requests = @import("requests.zig");
-request_id: schema.RequestId,
+const Registration = @This();
+
+request_id: RequestIdType,
 continuation: client_requests.Continuation,

@@ -1,9 +1,10 @@
-const OpenNamePromptHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const WorkspaceCreationGate = @import("WorkspaceCreationGate.zig");
-const source_namespace = @import("name_prompt_opening.zig");
-const name_prompt = @import("../../root.zig").model.name_prompt;
-model: *client_model.Model,
+const name_prompt_opening = @import("name_prompt_opening.zig");
+const name_prompt = @import("../../model/name_prompt.zig");
+const OpenNamePromptHandler = @This();
+
+model: *ModelType,
 workspace_creation: WorkspaceCreationGate,
 
 /// Opens one prompt only when input is unowned and its canonical target
@@ -13,7 +14,7 @@ workspace_creation: WorkspaceCreationGate,
 /// ```zig
 /// if (!handler.execute(.rename_active_tab)) return;
 /// ```
-pub fn execute(handler: *OpenNamePromptHandler, intent: source_namespace.Intent) bool {
+pub fn execute(handler: *OpenNamePromptHandler, intent: name_prompt_opening.Intent) bool {
     if (handler.model.panePasteActive()) {
         return false;
     }
@@ -49,11 +50,11 @@ pub fn execute(handler: *OpenNamePromptHandler, intent: source_namespace.Intent)
         },
         .rename_active_tab => rename: {
             const active = handler.model.workspace.activeConst() orelse return false;
-            break :rename source_namespace.renameTab(active.location.tab_id, active.labelSlice());
+            break :rename name_prompt_opening.renameTab(active.location.tab_id, active.labelSlice());
         },
         .rename_tab => |tab_id| rename: {
             const tab = handler.model.workspace.find(tab_id) orelse return false;
-            break :rename source_namespace.renameTab(tab_id, tab.labelSlice());
+            break :rename name_prompt_opening.renameTab(tab_id, tab.labelSlice());
         },
         .goto_picker => .goto_picker,
         .history_palette => .history_palette,

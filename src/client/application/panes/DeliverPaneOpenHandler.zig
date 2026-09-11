@@ -1,8 +1,9 @@
-const DeliverPaneOpenHandler = @This();
-const Effects = @import("PaneOpenDeliveryEffects.zig");
+const PaneOpenDeliveryEffects = @import("PaneOpenDeliveryEffects.zig");
 const Command = @import("Command.zig");
-const source_namespace = @import("pane_open_delivery.zig");
-effects: Effects,
+const pane_open_delivery = @import("pane_open_delivery.zig");
+const DeliverPaneOpenHandler = @This();
+
+effects: PaneOpenDeliveryEffects,
 
 /// Routes one already-correlated confirmation to its exact application
 /// flow. Retired work has no effects.
@@ -10,7 +11,7 @@ effects: Effects,
 /// ```zig
 /// const outcome = try handler.execute(command);
 /// ```
-pub fn execute(handler: *DeliverPaneOpenHandler, command: Command) !source_namespace.Outcome {
+pub fn execute(handler: *DeliverPaneOpenHandler, command: Command) !pane_open_delivery.Outcome {
     return switch (command.continuation) {
         .initial_open => delivery: {
             try handler.effects.arrive_workspace(handler.effects.context, command.opened);

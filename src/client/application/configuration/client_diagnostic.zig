@@ -1,42 +1,40 @@
 //! Application policy for the shared bounded client diagnostic banner.
 
+const DiagnosticType = @import("../../config/Diagnostic.zig");
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const lua_config = @import("../../config/root.zig");
-const client_model = @import("../../root.zig").model;
-
-pub const Replacement = @import("Replacement.zig");
+const ClientDiagnosticHandler = @import("ClientDiagnosticHandler.zig");
+const VersionType = @import("../../model/Version.zig");
 
 /// Formats one bounded diagnostic value without mutating client state.
 ///
 /// ```zig
 /// const diagnostic = formatted("plugin failed: {s}", .{@errorName(err)});
 /// ```
-pub fn formatted(comptime format: []const u8, args: anytype) lua_config.Diagnostic {
-    var diagnostic: lua_config.Diagnostic = .{};
+pub fn formatted(comptime format: []const u8, args: anytype) DiagnosticType {
+    var diagnostic: DiagnosticType = .{};
     diagnostic.set(format, args);
 
     return diagnostic;
 }
 
-pub const ClientDiagnosticHandler = @import("ClientDiagnosticHandler.zig");
-
-fn invalidDiagnostic() lua_config.Diagnostic {
-    var diagnostic: lua_config.Diagnostic = .{};
+fn invalidDiagnostic() DiagnosticType {
+    var diagnostic: DiagnosticType = .{};
     diagnostic.buffer[0] = 0xff;
     diagnostic.len = 1;
 
     return diagnostic;
 }
 
-fn oversizedDiagnostic() lua_config.Diagnostic {
-    var diagnostic: lua_config.Diagnostic = .{};
+fn oversizedDiagnostic() DiagnosticType {
+    var diagnostic: DiagnosticType = .{};
     diagnostic.len = diagnostic.buffer.len + 1;
 
     return diagnostic;
 }
 
 test "ClientDiagnosticHandler commits valid text once" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var handler: ClientDiagnosticHandler = .{ .model = &model };
     const diagnostic = formatted("plugin failed: {s}", .{"denied"});
@@ -45,11 +43,11 @@ test "ClientDiagnosticHandler commits valid text once" {
     try std.testing.expect(try handler.replace(.{ .diagnostic = diagnostic }) == .unchanged);
 
     try std.testing.expectEqualStrings("plugin failed: denied", model.diagnostic().?);
-    try std.testing.expectEqual(client_model.Version{ .diagnostic = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
 }
 
 test "ClientDiagnosticHandler replaces an oversized value with an explicit fallback" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var handler: ClientDiagnosticHandler = .{ .model = &model };
 
@@ -59,11 +57,11 @@ test "ClientDiagnosticHandler replaces an oversized value with an explicit fallb
     }) == .changed);
 
     try std.testing.expectEqualStrings("configuration failed", model.diagnostic().?);
-    try std.testing.expectEqual(client_model.Version{ .diagnostic = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
 }
 
 test "ClientDiagnosticHandler preserves state when primary and fallback are malformed" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var handler: ClientDiagnosticHandler = .{ .model = &model };
     _ = try handler.replace(.{ .diagnostic = formatted("preserved", .{}) });
@@ -79,7 +77,7 @@ test "ClientDiagnosticHandler preserves state when primary and fallback are malf
 }
 
 test "ClientDiagnosticHandler clears visible text once" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var handler: ClientDiagnosticHandler = .{ .model = &model };
     _ = try handler.replace(.{ .diagnostic = formatted("resolved", .{}) });
@@ -88,5 +86,5 @@ test "ClientDiagnosticHandler clears visible text once" {
     try std.testing.expect(handler.clear() == .unchanged);
 
     try std.testing.expect(model.diagnostic() == null);
-    try std.testing.expectEqual(client_model.Version{ .diagnostic = 2 }, model.version());
+    try std.testing.expectEqual(VersionType{ .diagnostic = 2 }, model.version());
 }

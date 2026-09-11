@@ -1,17 +1,22 @@
-const PendingNotification = @This();
-const source_namespace = @import("response_queue.zig");
+const NotificationLevelType = @import("telar-core").NotificationLevel;
+const NotificationTargetType = @import("telar-core").NotificationTarget;
+const max_notification_title_bytes_module = @import("telar-core").max_notification_title_bytes;
+const max_notification_message_bytes_module = @import("telar-core").max_notification_message_bytes;
+const NotificationType = @import("telar-core").Notification;
 const std = @import("std");
-level: source_namespace.schema.NotificationLevel,
+const PendingNotification = @This();
+
+level: NotificationLevelType,
 duration_ms: u32,
-target: source_namespace.schema.NotificationTarget,
-title_bytes: [source_namespace.schema.max_notification_title_bytes]u8 = undefined,
+target: NotificationTargetType,
+title_bytes: [max_notification_title_bytes_module]u8 = undefined,
 title_len: u8,
-message_bytes: [source_namespace.schema.max_notification_message_bytes]u8 = undefined,
+message_bytes: [max_notification_message_bytes_module]u8 = undefined,
 message_len: u8,
 
-pub fn init(notification: source_namespace.schema.Notification) PendingNotification {
-    std.debug.assert(notification.title.len <= source_namespace.schema.max_notification_title_bytes);
-    std.debug.assert(notification.message.len <= source_namespace.schema.max_notification_message_bytes);
+pub fn init(notification: NotificationType) PendingNotification {
+    std.debug.assert(notification.title.len <= max_notification_title_bytes_module);
+    std.debug.assert(notification.message.len <= max_notification_message_bytes_module);
     var pending: PendingNotification = .{
         .level = notification.level,
         .duration_ms = notification.duration_ms,
@@ -24,7 +29,7 @@ pub fn init(notification: source_namespace.schema.Notification) PendingNotificat
     return pending;
 }
 
-pub fn view(notification: *const PendingNotification) source_namespace.schema.Notification {
+pub fn view(notification: *const PendingNotification) NotificationType {
     return .{
         .level = notification.level,
         .duration_ms = notification.duration_ms,

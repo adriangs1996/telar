@@ -1,9 +1,11 @@
-const Entry = @This();
-const buffer = @import("buffer_support.zig");
+const KeyType = @import("Key.zig");
+const HalfType = @import("Half.zig");
 const Exchange = @import("Exchange.zig");
-key: buffer.Key,
-request: ?*buffer.Half = null,
-response: ?*buffer.Half = null,
+const Entry = @This();
+
+key: KeyType,
+request: ?*HalfType = null,
+response: ?*HalfType = null,
 expires_at_ms: i64,
 
 pub fn exchange(entry: Entry) Exchange {

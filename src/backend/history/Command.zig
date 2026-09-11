@@ -1,11 +1,12 @@
+const osc = @import("osc.zig");
 const Command = @This();
-const source_namespace = @import("osc.zig");
+
 bytes: []const u8,
 cwd: []const u8,
 started_at_ms: i64,
 duration_ns: i64,
 exit_code: ?i32,
-status: source_namespace.Status,
+status: osc.Status,
 truncated: bool,
 /// Bounded raw output tail observed while the command ran; empty unless
 /// output capture is enabled.

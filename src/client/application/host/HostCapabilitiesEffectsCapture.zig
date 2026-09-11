@@ -1,17 +1,19 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("HostCapabilitiesEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const HostCapabilitiesEffects = @import("HostCapabilitiesEffects.zig");
+const HostCommitType = @import("../../model/HostCommit.zig");
 const std = @import("std");
-model: *const client_model.Model,
+const EffectsCapture = @This();
+
+model: *const ModelType,
 calls: usize = 0,
 observed_commit: bool = false,
 fail: bool = false,
 
-pub fn port(capture: *EffectsCapture) Effects {
+pub fn port(capture: *EffectsCapture) HostCapabilitiesEffects {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(raw_context: *anyopaque, commit: client_model.HostCommit) !void {
+fn deliver(raw_context: *anyopaque, commit: HostCommitType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(raw_context));
     const capabilities = commit.capabilities.?;
     capture.calls += 1;

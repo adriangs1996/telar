@@ -1,9 +1,10 @@
 const GenericResponseRuntimePort = @import("GenericResponseRuntimePort.zig").Type;
-const Resources = @import("ResponseResources.zig");
-const source_namespace = @import("response.zig");
-const Write = @import("ResponseWrite.zig");
-const Completion = @import("ResponseCompletion.zig");
-const pane_mod = @import("../../../../pane/root.zig");
+const ResponseResources = @import("ResponseResources.zig");
+const PaneType = @import("../../../../pane/Pane.zig");
+const ResponseWrite = @import("ResponseWrite.zig");
+const ResponseCompletion = @import("ResponseCompletion.zig");
+const pane_mod = @import("../../../../pane/pane_namespace.zig");
+
 /// Creates a statically dispatched PTY response pump.
 ///
 /// ```zig
@@ -14,14 +15,14 @@ pub fn Type(comptime Context: type, comptime port: GenericResponseRuntimePort(Co
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: ResponseResources,
 
         /// Binds the pane repository and runtime telemetry.
         ///
         /// ```zig
         /// var pump = ResponsePump.init(&context, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: ResponseResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -31,9 +32,9 @@ pub fn Type(comptime Context: type, comptime port: GenericResponseRuntimePort(Co
         /// ```zig
         /// try pump.schedule(pane);
         /// ```
-        pub fn schedule(pump: *Self, pane: *source_namespace.Pane) !void {
+        pub fn schedule(pump: *Self, pane: *PaneType) !void {
             const bytes = pane.beginPtyResponseWrite() orelse return;
-            const write: Write = .{
+            const write: ResponseWrite = .{
                 .io = pump.resources.io,
                 .pane = pane,
                 .bytes = bytes,
@@ -52,7 +53,7 @@ pub fn Type(comptime Context: type, comptime port: GenericResponseRuntimePort(Co
         /// ```zig
         /// try pump.complete(completion);
         /// ```
-        pub fn complete(pump: *Self, completion: Completion) !void {
+        pub fn complete(pump: *Self, completion: ResponseCompletion) !void {
             const pane = pump.resources.panes.resolve(completion.pane) orelse {
                 pump.resources.metrics.stale_pane_events += 1;
                 return;

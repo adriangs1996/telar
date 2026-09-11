@@ -1,14 +1,44 @@
+const PaneRefType = @import("PaneRef.zig");
+const TextType = @import("Text.zig");
+const ReadOptionsType = @import("ReadOptions.zig");
+const TextInputType = @import("TextInput.zig");
+const AgentReportType = @import("AgentReport.zig");
+const WorkspaceCreationType = @import("WorkspaceCreation.zig");
+const std = @import("std");
+const SocketChannelType = @import("telar-core").SocketChannel;
+const RuntimeConnectorType = @import("RuntimeConnector.zig");
+const max_frame_size_module = @import("telar-core").max_frame_size;
+const RequestIdType = @import("telar-core").RequestId;
+const Snapshot = @import("Snapshot.zig");
+const encodeQueryAgents_module = @import("telar-core").encodeQueryAgents;
+const decodeServer_module = @import("telar-core").decodeServer;
+const control = @import("control.zig");
+const ControlAgent = @import("ControlAgent.zig");
+const encodeReadPane_module = @import("telar-core").encodeReadPane;
+const pane_module = @import("telar-core").pane;
+const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
+const encodeSendPaneText_module = @import("telar-core").encodeSendPaneText;
+const PaneDirectionType = @import("telar-core").PaneDirection;
+const PaneFocusResultType = @import("telar-core").PaneFocusResult;
+const encodeRequestPaneFocus_module = @import("telar-core").encodeRequestPaneFocus;
+const max_agent_session_reference_bytes_module = @import("telar-core").max_agent_session_reference_bytes;
+const encodeReportAgentSession_module = @import("telar-core").encodeReportAgentSession;
+const max_agent_session_file_bytes_module = @import("telar-core").max_agent_session_file_bytes;
+const encodeReportAgent_module = @import("telar-core").encodeReportAgent;
+const AgentCommandReport = @import("AgentCommandReport.zig");
+const max_history_command_bytes_module = @import("telar-core").max_history_command_bytes;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const encodeReportAgentCommand_module = @import("telar-core").encodeReportAgentCommand;
+const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
+const encodeReportAgentTitle_module = @import("telar-core").encodeReportAgentTitle;
+const encodeCreateWorkspace_module = @import("telar-core").encodeCreateWorkspace;
+const raw_module = @import("telar-core").raw;
 /// One connected control session with its owned receive buffer.
 const Session = @This();
-const source_namespace = @import("control.zig");
-const std = @import("std");
-const core = @import("telar-core");
-const Snapshot = @import("Snapshot.zig");
-const Agent = @import("ControlAgent.zig");
-const AgentCommandReport = @import("AgentCommandReport.zig");
-io: source_namespace.Io,
+
+io: std.Io,
 gpa: std.mem.Allocator,
-connection: core.transport.SocketChannel,
+connection: SocketChannelType,
 receive_buffer: []u8,
 next_request: u64 = 1,
 
@@ -20,8 +50,8 @@ next_request: u64 = 1,
 /// defer session.close();
 /// ```
 pub fn open(init: std.process.Init, socket: ?[*:0]const u8) !Session {
-    const connector = try source_namespace.RuntimeConnector.init(init, socket);
-    return Session.adopt(init, try connector.connectOrStart(.{}));
+    const connector = try RuntimeConnectorType.init(init, socket);
+    return adopt(init, try connector.connectOrStart(.{}));
 }
 
 /// Connects to a runtime that is already listening and never starts one.
@@ -34,14 +64,14 @@ pub fn open(init: std.process.Init, socket: ?[*:0]const u8) !Session {
 /// defer session.close();
 /// ```
 pub fn attach(init: std.process.Init, socket: ?[*:0]const u8) !Session {
-    const connector = try source_namespace.RuntimeConnector.init(init, socket);
-    return Session.adopt(init, try connector.connect());
+    const connector = try RuntimeConnectorType.init(init, socket);
+    return adopt(init, try connector.connect());
 }
 
-fn adopt(init: std.process.Init, connection: core.transport.SocketChannel) !Session {
+fn adopt(init: std.process.Init, connection: SocketChannelType) !Session {
     var owned = connection;
     errdefer owned.deinit(init.io);
-    const receive_buffer = try init.gpa.alloc(u8, core.transport.max_frame_size);
+    const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
 
     return .{
         .io = init.io,
@@ -56,8 +86,8 @@ pub fn close(session: *Session) void {
     session.gpa.free(session.receive_buffer);
 }
 
-fn requestId(session: *Session) source_namespace.schema.RequestId {
-    const request_id: source_namespace.schema.RequestId = @enumFromInt(session.next_request);
+fn requestId(session: *Session) RequestIdType {
+    const request_id: RequestIdType = @enumFromInt(session.next_request);
     session.next_request += 1;
     return request_id;
 }
@@ -70,14 +100,14 @@ fn requestId(session: *Session) source_namespace.schema.RequestId {
 /// ```
 pub fn fetchAgents(session: *Session, snapshot: *Snapshot) !void {
     var send_buffer: [16]u8 = undefined;
-    try session.connection.send(session.io, try source_namespace.schema.encodeQueryAgents(&send_buffer, .{
+    try session.connection.send(session.io, try encodeQueryAgents_module(&send_buffer, .{
         .request_id = session.requestId(),
     }));
 
-    const response = try source_namespace.schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
     const view = switch (response) {
         .agent_snapshot => |view| view,
-        .request_failed => |failure| return source_namespace.failureError(failure),
+        .request_failed => |failure| return control.failureError(failure),
         else => return error.UnexpectedRuntimeResponse,
     };
 
@@ -89,31 +119,18 @@ pub fn fetchAgents(session: *Session, snapshot: *Snapshot) !void {
             break;
         }
 
-        snapshot.entries[snapshot.count] = Agent.fromEntry(entry);
+        snapshot.entries[snapshot.count] = ControlAgent.fromEntry(entry);
         snapshot.count += 1;
     }
 }
 
-pub const PaneRef = struct {
-    pane_id: u64,
-    pane_generation: u64,
-};
+pub const PaneRef = @import("PaneRef.zig");
 
-pub const Text = struct {
-    pane_id: u64,
-    truncated: bool,
-    text: []const u8,
-};
+pub const Text = @import("Text.zig");
 
-pub const ReadOptions = struct {
-    rows: u16,
-    source: source_namespace.schema.PaneTextSource,
-};
+pub const ReadOptions = @import("ReadOptions.zig");
 
-pub const TextInput = struct {
-    mode: source_namespace.schema.PaneTextMode,
-    text: []const u8,
-};
+pub const TextInput = @import("TextInput.zig");
 
 /// Reads bounded plain text from one exact pane generation. The returned
 /// slice borrows the session's receive buffer until the next request.
@@ -121,20 +138,20 @@ pub const TextInput = struct {
 /// ```zig
 /// const text = try session.readPane(pane, .{ .rows = 40, .source = .recent });
 /// ```
-pub fn readPane(session: *Session, pane: PaneRef, options: ReadOptions) !Text {
+pub fn readPane(session: *Session, pane: PaneRefType, options: ReadOptionsType) !TextType {
     var send_buffer: [64]u8 = undefined;
-    try session.connection.send(session.io, try source_namespace.schema.encodeReadPane(&send_buffer, .{
+    try session.connection.send(session.io, try encodeReadPane_module(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try source_namespace.schema.id.pane(pane.pane_id),
+        .pane_id = try pane_module(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .rows = options.rows,
         .source = options.source,
     }));
 
-    const response = try source_namespace.schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
     return switch (response) {
         .pane_text => |text| .{ .pane_id = pane.pane_id, .truncated = text.truncated, .text = text.text },
-        .request_failed => |failure| source_namespace.failureError(failure),
+        .request_failed => |failure| control.failureError(failure),
         else => error.UnexpectedRuntimeResponse,
     };
 }
@@ -144,20 +161,20 @@ pub fn readPane(session: *Session, pane: PaneRef, options: ReadOptions) !Text {
 /// ```zig
 /// try session.sendText(pane, .{ .mode = .prompt, .text = "run the tests" });
 /// ```
-pub fn sendText(session: *Session, pane: PaneRef, input: TextInput) !void {
-    var send_buffer: [source_namespace.schema.max_pane_text_input_bytes + 64]u8 = undefined;
-    try session.connection.send(session.io, try source_namespace.schema.encodeSendPaneText(&send_buffer, .{
+pub fn sendText(session: *Session, pane: PaneRefType, input: TextInputType) !void {
+    var send_buffer: [max_pane_text_input_bytes_module + 64]u8 = undefined;
+    try session.connection.send(session.io, try encodeSendPaneText_module(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try source_namespace.schema.id.pane(pane.pane_id),
+        .pane_id = try pane_module(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .mode = input.mode,
         .text = input.text,
     }));
 
-    const response = try source_namespace.schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
         .request_completed => {},
-        .request_failed => |failure| return source_namespace.failureError(failure),
+        .request_failed => |failure| return control.failureError(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
@@ -167,19 +184,19 @@ pub fn sendText(session: *Session, pane: PaneRef, input: TextInput) !void {
 /// ```zig
 /// const result = try session.focusPane(pane, .left);
 /// ```
-pub fn focusPane(session: *Session, pane: PaneRef, direction: source_namespace.schema.PaneDirection) !source_namespace.schema.PaneFocusResult {
+pub fn focusPane(session: *Session, pane: PaneRefType, direction: PaneDirectionType) !PaneFocusResultType {
     var send_buffer: [64]u8 = undefined;
-    try session.connection.send(session.io, try source_namespace.schema.encodeRequestPaneFocus(&send_buffer, .{
+    try session.connection.send(session.io, try encodeRequestPaneFocus_module(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try source_namespace.schema.id.pane(pane.pane_id),
+        .pane_id = try pane_module(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .direction = direction,
     }));
 
-    const response = try source_namespace.schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
     return switch (response) {
         .pane_focus_result => |result| result,
-        .request_failed => |failure| source_namespace.failureError(failure),
+        .request_failed => |failure| control.failureError(failure),
         else => error.UnexpectedRuntimeResponse,
     };
 }
@@ -189,40 +206,35 @@ pub fn focusPane(session: *Session, pane: PaneRef, direction: source_namespace.s
 /// ```zig
 /// try session.reportSession(pane, "0192...");
 /// ```
-pub fn reportSession(session: *Session, pane: PaneRef, reference: []const u8) !void {
-    var send_buffer: [source_namespace.schema.max_agent_session_reference_bytes + 64]u8 = undefined;
-    try session.connection.send(session.io, try source_namespace.schema.encodeReportAgentSession(&send_buffer, .{
+pub fn reportSession(session: *Session, pane: PaneRefType, reference: []const u8) !void {
+    var send_buffer: [max_agent_session_reference_bytes_module + 64]u8 = undefined;
+    try session.connection.send(session.io, try encodeReportAgentSession_module(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try source_namespace.schema.id.pane(pane.pane_id),
+        .pane_id = try pane_module(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .session = reference,
     }));
 
-    const response = try source_namespace.schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
         .request_completed => {},
-        .request_failed => |failure| return source_namespace.failureError(failure),
+        .request_failed => |failure| return control.failureError(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
 
-pub const AgentReport = struct {
-    state: source_namespace.schema.AgentReportState,
-    session: []const u8 = "",
-    session_file: []const u8 = "",
-    session_file_kind: source_namespace.schema.AgentSessionFileKind = .claude_transcript,
-};
+pub const AgentReport = @import("AgentReport.zig");
 
 /// Sends one official lifecycle report for the pane's agent.
 ///
 /// ```zig
 /// try session.reportAgent(pane, .{ .state = .working });
 /// ```
-pub fn reportAgent(session: *Session, pane: PaneRef, report: AgentReport) !void {
-    var send_buffer: [source_namespace.schema.max_agent_session_reference_bytes + source_namespace.schema.max_agent_session_file_bytes + 64]u8 = undefined;
-    try session.connection.send(session.io, try source_namespace.schema.encodeReportAgent(&send_buffer, .{
+pub fn reportAgent(session: *Session, pane: PaneRefType, report: AgentReportType) !void {
+    var send_buffer: [max_agent_session_reference_bytes_module + max_agent_session_file_bytes_module + 64]u8 = undefined;
+    try session.connection.send(session.io, try encodeReportAgent_module(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try source_namespace.schema.id.pane(pane.pane_id),
+        .pane_id = try pane_module(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .state = report.state,
         .session = report.session,
@@ -230,10 +242,10 @@ pub fn reportAgent(session: *Session, pane: PaneRef, report: AgentReport) !void 
         .session_file_kind = report.session_file_kind,
     }));
 
-    const response = try source_namespace.schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
         .request_completed => {},
-        .request_failed => |failure| return source_namespace.failureError(failure),
+        .request_failed => |failure| return control.failureError(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
@@ -243,11 +255,11 @@ pub fn reportAgent(session: *Session, pane: PaneRef, report: AgentReport) !void 
 /// ```zig
 /// try session.reportAgentCommand(pane, command);
 /// ```
-pub fn reportAgentCommand(session: *Session, pane: PaneRef, command: AgentCommandReport) !void {
-    var send_buffer: [source_namespace.schema.max_history_command_bytes + source_namespace.schema.max_cwd_bytes + 1024]u8 = undefined;
-    try session.connection.send(session.io, try source_namespace.schema.encodeReportAgentCommand(&send_buffer, .{
+pub fn reportAgentCommand(session: *Session, pane: PaneRefType, command: AgentCommandReport) !void {
+    var send_buffer: [max_history_command_bytes_module + max_cwd_bytes_module + 1024]u8 = undefined;
+    try session.connection.send(session.io, try encodeReportAgentCommand_module(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try source_namespace.schema.id.pane(pane.pane_id),
+        .pane_id = try pane_module(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .phase = command.phase,
         .provider = command.provider,
@@ -258,10 +270,10 @@ pub fn reportAgentCommand(session: *Session, pane: PaneRef, command: AgentComman
         .exit_code = command.exit_code,
     }));
 
-    const response = try source_namespace.schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
         .request_completed => {},
-        .request_failed => |failure| return source_namespace.failureError(failure),
+        .request_failed => |failure| return control.failureError(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
@@ -271,28 +283,24 @@ pub fn reportAgentCommand(session: *Session, pane: PaneRef, command: AgentComman
 /// ```zig
 /// try session.reportAgentTitle(pane, "Fix proxy");
 /// ```
-pub fn reportAgentTitle(session: *Session, pane: PaneRef, title: []const u8) !void {
-    var send_buffer: [source_namespace.schema.max_agent_session_title_bytes + 64]u8 = undefined;
-    try session.connection.send(session.io, try source_namespace.schema.encodeReportAgentTitle(&send_buffer, .{
+pub fn reportAgentTitle(session: *Session, pane: PaneRefType, title: []const u8) !void {
+    var send_buffer: [max_agent_session_title_bytes_module + 64]u8 = undefined;
+    try session.connection.send(session.io, try encodeReportAgentTitle_module(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try source_namespace.schema.id.pane(pane.pane_id),
+        .pane_id = try pane_module(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .title = title,
     }));
 
-    const response = try source_namespace.schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
         .request_completed => {},
-        .request_failed => |failure| return source_namespace.failureError(failure),
+        .request_failed => |failure| return control.failureError(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
 
-pub const WorkspaceCreation = struct {
-    name: []const u8,
-    cwd: []const u8,
-    arguments: []const []const u8,
-};
+pub const WorkspaceCreation = @import("WorkspaceCreation.zig");
 
 /// Creates a named workspace rooted at an explicit path and returns the
 /// runtime workspace id. The size only shapes the root pane until a UI
@@ -301,25 +309,25 @@ pub const WorkspaceCreation = struct {
 /// ```zig
 /// const id = try session.createWorkspace(.{ .name = "fix", .cwd = "/src/fix", .arguments = &.{"/bin/sh"} });
 /// ```
-pub fn createWorkspace(session: *Session, request: WorkspaceCreation) !u64 {
+pub fn createWorkspace(session: *Session, request: WorkspaceCreationType) !u64 {
     var send_buffer: [8192]u8 = undefined;
-    try session.connection.send(session.io, try source_namespace.schema.encodeCreateWorkspace(&send_buffer, .{
+    try session.connection.send(session.io, try encodeCreateWorkspace_module(&send_buffer, .{
         .request_id = session.requestId(),
         .size = .{ .cols = 80, .rows = 24 },
         .name = request.name,
         .launch = .{ .cwd = request.cwd, .arguments = request.arguments },
     }));
 
-    const response = try source_namespace.schema.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
-        .pane_opened => |opened| return source_namespace.schema.id.raw(opened.location.workspace.workspace),
-        .request_failed => |failure| return source_namespace.failureError(failure),
+        .pane_opened => |opened| return raw_module(opened.location.workspace.workspace),
+        .request_failed => |failure| return control.failureError(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
 }
 
 pub fn nowMs(session: *const Session) i64 {
-    return source_namespace.Io.Timestamp.now(session.io, .real).toMilliseconds();
+    return std.Io.Timestamp.now(session.io, .real).toMilliseconds();
 }
 
 pub fn sleepMs(session: *const Session, milliseconds: u32) void {

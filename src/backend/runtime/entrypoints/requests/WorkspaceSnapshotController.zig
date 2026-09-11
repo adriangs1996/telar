@@ -1,15 +1,17 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const WorkspaceSnapshotExecutor = @import("../../application/queries/WorkspaceSnapshotExecutor.zig");
+const RequestWorkspaceSnapshotType = @import("telar-core").RequestWorkspaceSnapshot;
 const Controller = @This();
-const source_namespace = @import("workspace_snapshot.zig");
-const workspace_snapshot_query = @import("../../application/queries/workspace_snapshot.zig");
-responses: *source_namespace.ResponseQueue,
-query: workspace_snapshot_query.Executor,
+
+responses: *ResponseQueueType,
+query: WorkspaceSnapshotExecutor,
 
 /// Creates a controller scoped to one workspace-snapshot request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, query: workspace_snapshot_query.Executor) Controller {
+pub fn init(responses: *ResponseQueueType, query: WorkspaceSnapshotExecutor) Controller {
     return .{ .responses = responses, .query = query };
 }
 
@@ -19,7 +21,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, query: workspace_snapsho
 /// ```zig
 /// try controller.requestWorkspaceSnapshot(request);
 /// ```
-pub fn requestWorkspaceSnapshot(controller: *Controller, request: source_namespace.schema.RequestWorkspaceSnapshot) !void {
+pub fn requestWorkspaceSnapshot(controller: *Controller, request: RequestWorkspaceSnapshotType) !void {
     const snapshot = controller.query.execute(.{ .location = request.workspace }) catch |err| {
         if (err == error.WorkspaceNotFound) {
             try controller.responses.push(.{ .request_failed = .{

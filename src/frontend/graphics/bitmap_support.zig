@@ -5,20 +5,17 @@
 //! one square of destination pixels; this is how embedded artwork reaches
 //! the size of a terminal cell.
 
-const std = @import("std");
-
-pub const Point = @import("BitmapPoint.zig");
-
-pub const Bitmap = @import("Bitmap.zig");
-
+const Bitmap = @import("Bitmap.zig");
+const BitmapPoint = @import("BitmapPoint.zig");
 const Axis = @import("Axis.zig");
+const std = @import("std");
 
 const one: u64 = 1 << 16;
 
 /// The straight-alpha color of destination pixel `point` when the bitmap's
 /// square is scaled to `size` pixels a side.
 /// For example: `const rgba = bitmap.sample(source, .{ .x = 3, .y = 4 }, 20);`.
-pub fn sample(source: Bitmap, point: Point, size: u32) [4]u8 {
+pub fn sample(source: Bitmap, point: BitmapPoint, size: u32) [4]u8 {
     const x = axis(point.x, size, source.side);
     const y = axis(point.y, size, source.side);
     const weights = [4]u64{

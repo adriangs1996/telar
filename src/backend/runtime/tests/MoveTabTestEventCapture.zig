@@ -1,14 +1,15 @@
+const TabMovedType = @import("../../workspace/TabMoved.zig");
+const MoveTabEventPublisher = @import("../application/commands/MoveTabEventPublisher.zig");
 const EventCapture = @This();
-const workspace_mod = @import("../../workspace/root.zig");
-const move_tab_commands = @import("../application/commands/move_tab.zig");
-count: usize = 0,
-last: ?workspace_mod.TabMoved = null,
 
-pub fn publisher(capture: *EventCapture) move_tab_commands.EventPublisher {
+count: usize = 0,
+last: ?TabMovedType = null,
+
+pub fn publisher(capture: *EventCapture) MoveTabEventPublisher {
     return .{ .context = capture, .publish = publish };
 }
 
-fn publish(context: *anyopaque, event: workspace_mod.TabMoved) void {
+fn publish(context: *anyopaque, event: TabMovedType) void {
     const capture: *EventCapture = @ptrCast(@alignCast(context));
     capture.count += 1;
     capture.last = event;

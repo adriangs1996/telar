@@ -1,7 +1,9 @@
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const Probe = @This();
-const source_namespace = @import("git_observation.zig");
-workspace: source_namespace.schema.WorkspaceId,
-path: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+
+workspace: WorkspaceIdType,
+path: [max_cwd_bytes_module]u8 = undefined,
 path_len: u16,
 
 /// Borrows the path owned by this asynchronous request.

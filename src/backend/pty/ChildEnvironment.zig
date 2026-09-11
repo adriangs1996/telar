@@ -1,20 +1,16 @@
+const ConfigurationType = @import("Configuration.zig");
+const std = @import("std");
 /// The immutable environment presented by Telar's terminal to every child.
 /// It is built before pane launches enter the interactive path and borrowed
 /// by `Command` while the child is spawned.
 const ChildEnvironment = @This();
-const std = @import("std");
+
 block: std.process.Environ.PosixBlock,
 gpa: std.mem.Allocator,
 
-pub const Override = struct {
-    name: []const u8,
-    value: []const u8,
-};
+pub const Override = @import("Override.zig");
 
-pub const Configuration = struct {
-    telar_term_program: []const u8,
-    overrides: []const Override,
-};
+pub const Configuration = @import("Configuration.zig");
 
 /// Creates a child environment with Telar's terminal compatibility
 /// profile and explicit identity.
@@ -33,7 +29,7 @@ pub fn init(gpa: std.mem.Allocator, inherited: std.process.Environ, telar_term_p
 /// ```zig
 /// var environment = try ChildEnvironment.initWithOverrides(gpa, inherited, .{ .telar_term_program = "telar", .overrides = overrides });
 /// ```
-pub fn initWithOverrides(gpa: std.mem.Allocator, inherited: std.process.Environ, configuration: Configuration) !ChildEnvironment {
+pub fn initWithOverrides(gpa: std.mem.Allocator, inherited: std.process.Environ, configuration: ConfigurationType) !ChildEnvironment {
     var map = try inherited.createMap(gpa);
     defer map.deinit();
 

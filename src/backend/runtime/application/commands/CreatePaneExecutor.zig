@@ -1,14 +1,15 @@
-const CreatePaneExecutor = @This();
 const CreatePane = @import("CreatePane.zig");
-const source_namespace = @import("create_pane.zig");
+const PaneLaunched = @import("../../../pane/PaneLaunched.zig");
+const CreatePaneExecutor = @This();
+
 context: *anyopaque,
-execute_fn: *const fn (*anyopaque, CreatePane) anyerror!source_namespace.CreatePaneResult,
+execute_fn: *const fn (*anyopaque, CreatePane) anyerror!PaneLaunched,
 
 /// Executes pane creation through the bound application handler.
 ///
 /// ```zig
 /// const launched = try executor.execute(command);
 /// ```
-pub fn execute(executor: CreatePaneExecutor, command: CreatePane) !source_namespace.CreatePaneResult {
+pub fn execute(executor: CreatePaneExecutor, command: CreatePane) !PaneLaunched {
     return executor.execute_fn(executor.context, command);
 }

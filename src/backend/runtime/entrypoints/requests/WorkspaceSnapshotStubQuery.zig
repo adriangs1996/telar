@@ -1,15 +1,18 @@
+const WorkspaceSnapshotResult = @import("../../application/queries/WorkspaceSnapshotResult.zig");
+const WorkspaceSnapshotRequest = @import("../../application/queries/WorkspaceSnapshotRequest.zig");
+const WorkspaceSnapshotExecutor = @import("../../application/queries/WorkspaceSnapshotExecutor.zig");
 const StubQuery = @This();
-const workspace_snapshot_query = @import("../../application/queries/workspace_snapshot.zig");
-result: ?workspace_snapshot_query.Result = null,
+
+result: ?WorkspaceSnapshotResult = null,
 failure: ?anyerror = null,
 call_count: usize = 0,
-last_request: ?workspace_snapshot_query.Request = null,
+last_request: ?WorkspaceSnapshotRequest = null,
 
-pub fn executor(stub: *StubQuery) workspace_snapshot_query.Executor {
+pub fn executor(stub: *StubQuery) WorkspaceSnapshotExecutor {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, request: workspace_snapshot_query.Request) anyerror!workspace_snapshot_query.Result {
+fn execute(context: *anyopaque, request: WorkspaceSnapshotRequest) anyerror!WorkspaceSnapshotResult {
     const stub: *StubQuery = @ptrCast(@alignCast(context));
     stub.call_count += 1;
     stub.last_request = request;

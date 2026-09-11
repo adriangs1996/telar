@@ -1,5 +1,6 @@
+const types = @import("types.zig");
 const Item = @This();
-const source_namespace = @import("types.zig");
-id: source_namespace.Id,
+
+id: types.Id,
 width: u32,
 height: u32,

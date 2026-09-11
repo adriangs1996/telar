@@ -1,6 +1,7 @@
-const Reservation = @This();
 const Quota = @import("Quota.zig");
 const std = @import("std");
+const Reservation = @This();
+
 quota: *Quota,
 bytes: usize,
 

@@ -1,4 +1,6 @@
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const LaunchViewType = @import("telar-core").LaunchView;
 const PrepareLaunch = @This();
-const source_namespace = @import("create_tab.zig");
-workspace: source_namespace.schema.WorkspaceLocation,
-launch: source_namespace.schema.LaunchView,
+
+workspace: WorkspaceLocationType,
+launch: LaunchViewType,

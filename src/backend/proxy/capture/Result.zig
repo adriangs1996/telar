@@ -1,5 +1,6 @@
-const Result = @This();
 const std = @import("std");
+const Result = @This();
+
 bytes: []u8,
 decoded: bool,
 truncated: bool,

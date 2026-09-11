@@ -1,4 +1,6 @@
+const RectType = @import("telar-core").Rect;
+const StyleType = @import("telar-core").Style;
 const Placement = @This();
-const ui = @import("../ui/root.zig");
-rect: ui.Rect,
-style: ui.Style,
+
+rect: RectType,
+style: StyleType,

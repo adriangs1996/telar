@@ -1,16 +1,10 @@
 //! Application policy for delivering client resources after one committed
 //! runtime pane frame.
 
+const PaneFrameDeliveryTestingModel = @import("PaneFrameDeliveryTestingModel.zig");
+const PaneFrameDeliveryEffectsCapture = @import("PaneFrameDeliveryEffectsCapture.zig");
+const DeliverPaneFrameHandler = @import("DeliverPaneFrameHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-pub const ui = core.ui;
-
-pub const Effects = @import("PaneFrameDeliveryEffects.zig");
-
-pub const DeliverPaneFrameHandler = @import("DeliverPaneFrameHandler.zig");
 
 pub const Event = enum {
     read_graphics_visibility,
@@ -24,15 +18,11 @@ pub const Failure = enum {
     active_resources,
 };
 
-const TestingModel = @import("PaneFrameDeliveryTestingModel.zig");
-
-const EffectsCapture = @import("PaneFrameDeliveryEffectsCapture.zig");
-
 test "DeliverPaneFrameHandler orders changed visibility before active resources" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.applyFrame(.{ .total_rows = 2, .offset = 0 });
-    var capture: EffectsCapture = .{
+    var capture: PaneFrameDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .current_visibility = false,
@@ -56,10 +46,10 @@ test "DeliverPaneFrameHandler orders changed visibility before active resources"
 }
 
 test "DeliverPaneFrameHandler preserves matching graphics visibility" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.applyFrame(.{ .total_rows = 2, .offset = 0 });
-    var capture: EffectsCapture = .{
+    var capture: PaneFrameDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .current_visibility = true,
@@ -79,10 +69,10 @@ test "DeliverPaneFrameHandler preserves matching graphics visibility" {
 }
 
 test "DeliverPaneFrameHandler rejects stale topology and frame revisions" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.applyFrame(.{ .total_rows = 2, .offset = 0 });
-    var capture: EffectsCapture = .{
+    var capture: PaneFrameDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .current_visibility = true,
@@ -115,10 +105,10 @@ test "DeliverPaneFrameHandler rejects stale topology and frame revisions" {
 }
 
 test "DeliverPaneFrameHandler rejects stale pane state" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.applyFrame(.{ .total_rows = 2, .offset = 0 });
-    var capture: EffectsCapture = .{
+    var capture: PaneFrameDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .current_visibility = true,
@@ -144,10 +134,10 @@ test "DeliverPaneFrameHandler rejects stale pane state" {
 }
 
 test "DeliverPaneFrameHandler stops after graphics visibility failure" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.applyFrame(.{ .total_rows = 2, .offset = 0 });
-    var capture: EffectsCapture = .{
+    var capture: PaneFrameDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .current_visibility = false,
@@ -168,10 +158,10 @@ test "DeliverPaneFrameHandler stops after graphics visibility failure" {
 }
 
 test "DeliverPaneFrameHandler propagates active resource failure after visibility" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameDeliveryTestingModel.init();
     defer testing.deinit();
     const commit = try testing.applyFrame(.{ .total_rows = 2, .offset = 0 });
-    var capture: EffectsCapture = .{
+    var capture: PaneFrameDeliveryEffectsCapture = .{
         .model = testing.model,
         .commit = commit,
         .current_visibility = true,

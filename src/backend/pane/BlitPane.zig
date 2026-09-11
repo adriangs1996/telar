@@ -1,18 +1,18 @@
+const vt = @import("ghostty-vt");
+const std = @import("std");
 /// A pane, driven by writing to it the way an agent would.
 ///
 /// No pty and no process: the emulator takes bytes, so a test can produce any
 /// screen state a real agent could by writing the same escape sequences.
 const Pane = @This();
-const vt = @import("ghostty-vt");
-const std = @import("std");
-const source_namespace = @import("blit.zig");
+
 term: vt.Terminal,
 state: vt.RenderState,
 gpa: std.mem.Allocator,
 
 pub fn init(gpa: std.mem.Allocator, cols: u16, rows: u16) !Pane {
     return .{
-        .term = try vt.Terminal.init(source_namespace.testing.io, gpa, .{ .cols = cols, .rows = rows }),
+        .term = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = cols, .rows = rows }),
         .state = .empty,
         .gpa = gpa,
     };

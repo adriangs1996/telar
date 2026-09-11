@@ -1,30 +1,22 @@
 //! Runtime tap actor set: one bounded sequential worker per trusted plugin.
 
+const ServiceSpec = @import("ServiceSpec.zig");
+const CapabilityType = @import("telar-core").Capability;
+const Exchange = @import("../proxy/capture/Exchange.zig");
+const CapabilitySetType = @import("telar-core").CapabilitySet;
+const Service = @import("Service.zig");
+const ResultType = @import("Result.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const effects = @import("effects.zig");
-const protocol = @import("protocol.zig");
-const proxy = @import("../proxy/root.zig");
-const session_mod = @import("session_support.zig");
+const stableId_module = @import("telar-core").stableId;
+const Worker = @import("Worker.zig");
+const Frame = @import("Frame.zig");
 
-pub const Io = std.Io;
-pub const Session = session_mod.Session;
 pub const max_workers = 16;
 pub const queue_depth = 64;
 pub const restart_limit = 5;
 pub const restart_window_ms = 10 * 60 * 1000;
 
-pub const Spec = @import("ServiceSpec.zig");
-
-pub const Package = @import("Package.zig");
-
-const Frame = @import("Frame.zig");
-
-const Worker = @import("Worker.zig");
-
-pub const Service = @import("Service.zig");
-
-pub fn requireCapability(spec: *const Spec, capability: core.plugin.Capability) !void {
+pub fn requireCapability(spec: *const ServiceSpec, capability: CapabilityType) !void {
     if (!spec.declared.contains(capability)) {
         return error.CapabilityNotDeclared;
     }
@@ -33,9 +25,7 @@ pub fn requireCapability(spec: *const Spec, capability: core.plugin.Capability) 
     }
 }
 
-pub const InitOptions = @import("InitOptions.zig");
-
-pub fn capturedBytes(captured: *const proxy.CaptureExchange) usize {
+pub fn capturedBytes(captured: *const Exchange) usize {
     var total: usize = 0;
     inline for (.{ captured.request, captured.response }) |optional| {
         if (optional) |half| {
@@ -46,13 +36,13 @@ pub fn capturedBytes(captured: *const proxy.CaptureExchange) usize {
 }
 
 test "effect authorization checks exact identity, declaration and grant" {
-    var declared = core.plugin.CapabilitySet.initEmpty();
+    var declared = CapabilitySetType.initEmpty();
     declared.insert(.proxy_tap);
     declared.insert(.history_write);
-    var granted = core.plugin.CapabilitySet.initEmpty();
+    var granted = CapabilitySetType.initEmpty();
     granted.insert(.proxy_tap);
     const digest = [_]u8{0x5a} ** 32;
-    const spec = try Spec.init(0, 7, .{
+    const spec = try ServiceSpec.init(0, 7, .{
         .id = "tap.test",
         .entry = "/tmp/main.lua",
         .digest = digest,
@@ -63,10 +53,10 @@ test "effect authorization checks exact identity, declaration and grant" {
     service.worker_count = 1;
     service.workers[0].spec = spec;
     var storage: [1]u8 = .{0};
-    var result: effects.Result = .{
+    var result: ResultType = .{
         .gpa = std.testing.allocator,
         .package_index = 0,
-        .plugin_id = core.plugin.stableId("tap.test"),
+        .plugin_id = stableId_module("tap.test"),
         .digest = digest,
         .generation = 7,
         .event_id = 1,
@@ -98,8 +88,8 @@ test "effect authorization checks exact identity, declaration and grant" {
 
 test "worker queue drops the oldest frame when full" {
     const io = std.testing.io;
-    var result_storage: [1]*effects.Result = undefined;
-    var results: Io.Queue(*effects.Result) = .init(&result_storage);
+    var result_storage: [1]*ResultType = undefined;
+    var results: std.Io.Queue(*ResultType) = .init(&result_storage);
     var worker: Worker = undefined;
     worker.init(.{ .gpa = std.testing.allocator, .spec = undefined, .results = &results });
     defer worker.stop(io);
@@ -122,8 +112,8 @@ test "worker queue drops the oldest frame when full" {
 
 test "five restarts in one window disable a worker" {
     var worker: Worker = undefined;
-    var result_storage: [1]*effects.Result = undefined;
-    var results: Io.Queue(*effects.Result) = .init(&result_storage);
+    var result_storage: [1]*ResultType = undefined;
+    var results: std.Io.Queue(*ResultType) = .init(&result_storage);
     worker.init(.{ .gpa = std.testing.allocator, .spec = undefined, .results = &results });
 
     for (0..restart_limit) |_| worker.recordRestart(std.testing.io);

@@ -1,8 +1,10 @@
+const ModelType = @import("../../model/Model.zig");
+const PaneViewportDeliveryEffects = @import("PaneViewportDeliveryEffects.zig");
+const PaneViewportChangeType = @import("../../model/PaneViewportChange.zig");
 const DeliverPaneViewportHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("PaneViewportDeliveryEffects.zig");
-model: *const client_model.Model,
-effects: Effects,
+
+model: *const ModelType,
+effects: PaneViewportDeliveryEffects,
 
 /// Validates one exact viewport commit before synchronizing graphics and
 /// then the runtime attachment.
@@ -10,7 +12,7 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(change);
 /// ```
-pub fn execute(handler: *const DeliverPaneViewportHandler, change: client_model.PaneViewportChange) !void {
+pub fn execute(handler: *const DeliverPaneViewportHandler, change: PaneViewportChangeType) !void {
     const active = handler.model.workspace.activeConst() orelse return error.StalePaneViewport;
     const pane = active.model.findConst(change.pane_id) orelse return error.StalePaneViewport;
     if (!pane.attached or

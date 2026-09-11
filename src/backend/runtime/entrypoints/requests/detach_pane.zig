@@ -1,21 +1,14 @@
 //! Request-scoped controller for the detach-pane protocol message.
 
-const std = @import("std");
-const core = @import("telar-core");
-const detach_pane_commands = @import("../../application/commands/detach_pane.zig");
-
-pub const schema = core.schema;
-
-pub const StaleMessages = @import("StaleMessages.zig");
-
-pub const Controller = @import("DetachPaneController.zig");
-
+const pane_module = @import("telar-core").pane;
 const Capture = @import("Capture.zig");
+const DetachPaneController = @import("DetachPaneController.zig");
+const std = @import("std");
 
 test "Controller maps detach-pane requests without a success response" {
-    const pane_id = try schema.id.pane(7);
+    const pane_id = try pane_module(7);
     var capture: Capture = .{ .result = .detached };
-    var controller = Controller.init(capture.executor(), capture.staleMessages());
+    var controller = DetachPaneController.init(capture.executor(), capture.staleMessages());
 
     try controller.detachPane(.{ .pane_id = pane_id });
 
@@ -26,9 +19,9 @@ test "Controller maps detach-pane requests without a success response" {
 
 test "Controller records one stale message for a missing attachment" {
     var capture: Capture = .{ .result = .not_attached };
-    var controller = Controller.init(capture.executor(), capture.staleMessages());
+    var controller = DetachPaneController.init(capture.executor(), capture.staleMessages());
 
-    try controller.detachPane(.{ .pane_id = try schema.id.pane(7) });
+    try controller.detachPane(.{ .pane_id = try pane_module(7) });
 
     try std.testing.expectEqual(@as(usize, 1), capture.command_count);
     try std.testing.expectEqual(@as(usize, 1), capture.stale_count);
@@ -39,10 +32,10 @@ test "Controller propagates unexpected detach failures without recording stale i
         .result = .detached,
         .failure = error.AttachmentStateConflict,
     };
-    var controller = Controller.init(capture.executor(), capture.staleMessages());
+    var controller = DetachPaneController.init(capture.executor(), capture.staleMessages());
 
     try std.testing.expectError(error.AttachmentStateConflict, controller.detachPane(.{
-        .pane_id = try schema.id.pane(7),
+        .pane_id = try pane_module(7),
     }));
 
     try std.testing.expectEqual(@as(usize, 1), capture.command_count);

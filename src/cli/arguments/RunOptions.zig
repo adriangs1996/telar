@@ -1,12 +1,17 @@
-const RunOptions = @This();
-const source_namespace = @import("run.zig");
-const frontend = @import("telar-frontend");
+const CommandType = @import("telar-backend").Command;
+const ThemeType = @import("telar-frontend").Theme;
+const default_theme_module = @import("telar-frontend").default_theme;
+const SidebarRenderingType = @import("telar-frontend").SidebarRendering;
 const std = @import("std");
-command: source_namespace.pty.Command,
+const fromName_module = @import("telar-frontend").fromName;
+const run = @import("run.zig");
+const RunOptions = @This();
+
+command: CommandType,
 command_set: bool = false,
-theme: frontend.theme.Theme = frontend.theme.default_theme,
+theme: ThemeType = default_theme_module,
 theme_set: bool = false,
-sidebar_rendering: frontend.kitty.SidebarRendering = .automatic,
+sidebar_rendering: SidebarRenderingType = .automatic,
 sidebar_renderer_set: bool = false,
 config: ?[*:0]const u8 = null,
 no_config: bool = false,
@@ -38,7 +43,7 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
                 return error.MissingThemeName;
             }
 
-            options.theme = frontend.theme.fromName(std.mem.span(args[command_start + 1])) orelse
+            options.theme = fromName_module(std.mem.span(args[command_start + 1])) orelse
                 return error.UnknownTheme;
             theme_set = true;
             options.theme_set = true;
@@ -50,7 +55,7 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
                 return error.DuplicateThemeOption;
             }
 
-            options.theme = frontend.theme.fromName(arg["--theme=".len..]) orelse
+            options.theme = fromName_module(arg["--theme=".len..]) orelse
                 return error.UnknownTheme;
             theme_set = true;
             options.theme_set = true;
@@ -65,7 +70,7 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
                 return error.MissingSidebarRenderer;
             }
 
-            options.sidebar_rendering = try frontend.kitty.SidebarRendering.parse(
+            options.sidebar_rendering = try SidebarRenderingType.parse(
                 std.mem.span(args[command_start + 1]),
             );
             sidebar_renderer_set = true;
@@ -78,7 +83,7 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
                 return error.DuplicateSidebarRendererOption;
             }
 
-            options.sidebar_rendering = try frontend.kitty.SidebarRendering.parse(
+            options.sidebar_rendering = try SidebarRenderingType.parse(
                 arg["--sidebar-renderer=".len..],
             );
             sidebar_renderer_set = true;
@@ -183,9 +188,9 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
             return error.MissingCommand;
         }
 
-        options.command = try source_namespace.defaultShell(environ);
+        options.command = try run.defaultShell(environ);
     } else {
-        options.command = try source_namespace.pty.Command.fromArgv(args[command_start..]);
+        options.command = try CommandType.fromArgv(args[command_start..]);
         options.command_set = true;
     }
 

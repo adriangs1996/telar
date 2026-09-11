@@ -1,8 +1,9 @@
+const effects = @import("effects.zig");
 const Batch = @This();
-const source_namespace = @import("effects.zig");
-items: [source_namespace.max_effects]source_namespace.Effect = undefined,
+
+items: [effects.max_effects]effects.Effect = undefined,
 len: u8 = 0,
 
-pub fn slice(batch: *const Batch) []const source_namespace.Effect {
+pub fn slice(batch: *const Batch) []const effects.Effect {
     return batch.items[0..batch.len];
 }

@@ -1,23 +1,23 @@
 //! Composition of the long-lived runtime process selected by `telar server`.
 
 const std = @import("std");
+const ServerOptions = @import("arguments/ServerOptions.zig");
+const RuntimeConnector = @import("RuntimeConnector.zig");
+const ServerLaunch = @import("ServerLaunch.zig");
+const RuntimeType = @import("telar-backend").Runtime;
+const TrustStoreType = @import("telar-core").TrustStore;
+const PackageType = @import("telar-frontend").Package;
+const CapabilitySetType = @import("telar-core").CapabilitySet;
+const stableId_module = @import("telar-core").stableId;
+const encodeRuntimeStop_module = @import("telar-core").encodeRuntimeStop;
+const decodeServer_module = @import("telar-core").decodeServer;
+const ProxyAuthorityNames = @import("ProxyAuthorityNames.zig");
+const HistoryPath = @import("HistoryPath.zig");
+const TestEnvironment = @import("TestEnvironment.zig");
+
 const native = @cImport({
     @cInclude("sys/stat.h");
 });
-const core = @import("telar-core");
-const backend = @import("telar-backend");
-const frontend = @import("telar-frontend");
-const config = @import("config.zig");
-const parser = @import("parser.zig");
-const runtime_connection = @import("runtime_connection.zig");
-const plugin_cli = @import("plugin.zig");
-const proxy_cli = @import("proxy.zig");
-const TestEnvironment = @import("test_environment.zig").TestEnvironment;
-
-pub const Io = std.Io;
-pub const File = Io.File;
-pub const RuntimeConnector = runtime_connection.RuntimeConnector;
-pub const ServerOptions = parser.ServerOptions;
 
 /// Executes the selected server action. A running action prepares persistent
 /// paths, initializes one public Runtime with production dependencies and owns
@@ -35,7 +35,7 @@ pub fn run(init: std.process.Init, options: ServerOptions) !void {
         return printEndpoint(init, &connector);
     }
 
-    var launch: Launch = undefined;
+    var launch: ServerLaunch = undefined;
     try launch.prepare(.{
         .process = init,
         .options = options,
@@ -47,16 +47,12 @@ pub fn run(init: std.process.Init, options: ServerOptions) !void {
         return launch.launchDaemon();
     }
 
-    var runtime: backend.runtime.Runtime = undefined;
+    var runtime: RuntimeType = undefined;
     try runtime.init(launch.runtimeInitialization());
     defer runtime.deinit();
 
     try runtime.run();
 }
-
-const Preparation = @import("ServerPreparation.zig");
-
-const HistoryPath = @import("HistoryPath.zig");
 
 /// Ensures the runtime is running and prints its socket path on one line.
 /// `telar --remote` runs this over SSH to discover the remote endpoint.
@@ -69,12 +65,10 @@ fn printEndpoint(init: std.process.Init, connector: *const RuntimeConnector) !vo
     try std.Io.File.stdout().writeStreamingAll(init.io, line);
 }
 
-const Launch = @import("ServerLaunch.zig");
-
-pub fn grantedCapabilities(trust: *const core.plugin.TrustStore, package: *const frontend.plugins.Package) core.plugin.CapabilitySet {
-    var granted = core.plugin.CapabilitySet.initEmpty();
+pub fn grantedCapabilities(trust: *const TrustStoreType, package: *const PackageType) CapabilitySetType {
+    var granted = CapabilitySetType.initEmpty();
     for (trust.entries[0..trust.count]) |entry| {
-        if (entry.grant.plugin_hash != core.plugin.stableId(package.manifest.id())) {
+        if (entry.grant.plugin_hash != stableId_module(package.manifest.id())) {
             continue;
         }
         if (!std.mem.eql(u8, &entry.grant.digest, &package.digest)) {
@@ -88,7 +82,7 @@ pub fn grantedCapabilities(trust: *const core.plugin.TrustStore, package: *const
 fn stop(init: std.process.Init, connector: *const RuntimeConnector) !void {
     var connection = connector.connect() catch |err| switch (err) {
         error.FileNotFound, error.ConnectionRefused => {
-            try File.stdout().writeStreamingAll(init.io, "telar runtime is not running\n");
+            try std.Io.File.stdout().writeStreamingAll(init.io, "telar runtime is not running\n");
             return;
         },
         else => |other| return other,
@@ -96,11 +90,11 @@ fn stop(init: std.process.Init, connector: *const RuntimeConnector) !void {
     defer connection.deinit(init.io);
 
     var send_buffer: [1]u8 = undefined;
-    try connection.send(init.io, try core.schema.encodeRuntimeStop(&send_buffer));
+    try connection.send(init.io, try encodeRuntimeStop_module(&send_buffer));
 
     var receive_buffer: [2048]u8 = undefined;
-    switch (try core.schema.decodeServer(try connection.receive(init.io, &receive_buffer))) {
-        .runtime_stopping => try File.stdout().writeStreamingAll(init.io, "telar runtime is stopping\n"),
+    switch (try decodeServer_module(try connection.receive(init.io, &receive_buffer))) {
+        .runtime_stopping => try std.Io.File.stdout().writeStreamingAll(init.io, "telar runtime is stopping\n"),
         .request_failed => |failure| {
             std.debug.print("telar runtime: {s}\n", .{failure.message});
             return error.RuntimeRequestFailed;
@@ -117,10 +111,10 @@ fn stop(init: std.process.Init, connector: *const RuntimeConnector) !void {
 /// ```zig
 /// const kept = try setSessionAside(io, "/home/me/.local/share/telar/session.ckpt");
 /// ```
-pub fn setSessionAside(io: Io, path: []const u8) !bool {
+pub fn setSessionAside(io: std.Io, path: []const u8) !bool {
     var previous_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const previous = try std.fmt.bufPrint(&previous_buffer, "{s}.previous", .{path});
-    Io.Dir.renameAbsolute(path, previous, io) catch |err| switch (err) {
+    std.Io.Dir.renameAbsolute(path, previous, io) catch |err| switch (err) {
         error.FileNotFound => return false,
         else => return err,
     };
@@ -151,8 +145,6 @@ pub fn resolveProxyDirectory(environ: std.process.Environ, buffer: []u8) ![]cons
     return std.fmt.bufPrint(buffer, "{s}/.local/share/telar/proxy", .{home});
 }
 
-const ProxyAuthorityNames = @import("ProxyAuthorityNames.zig");
-
 pub fn proxyAuthorityNames(system_trusted: bool) ProxyAuthorityNames {
     if (system_trusted) {
         return .{ .key = "ca-system-key.pem", .certificate = "ca-system-cert.pem" };
@@ -161,10 +153,10 @@ pub fn proxyAuthorityNames(system_trusted: bool) ProxyAuthorityNames {
     return .{ .key = "ca-key.pem", .certificate = "ca-cert.pem" };
 }
 
-pub fn prepareProxyDirectory(io: Io, directory: []const u8) !void {
-    const permissions = File.Permissions.fromMode(0o700);
-    _ = try Io.Dir.cwd().createDirPathStatus(io, directory, permissions);
-    const stat = try Io.Dir.cwd().statFile(io, directory, .{ .follow_symlinks = false });
+pub fn prepareProxyDirectory(io: std.Io, directory: []const u8) !void {
+    const permissions = std.Io.File.Permissions.fromMode(0o700);
+    _ = try std.Io.Dir.cwd().createDirPathStatus(io, directory, permissions);
+    const stat = try std.Io.Dir.cwd().statFile(io, directory, .{ .follow_symlinks = false });
     if (stat.kind != .directory) {
         return error.InvalidProxyDirectory;
     }
@@ -177,7 +169,7 @@ pub fn prepareProxyDirectory(io: Io, directory: []const u8) !void {
     }
 
     try checkDirectoryOwner(native_stat.st_uid, std.c.getuid());
-    try Io.Dir.cwd().setFilePermissions(io, directory, permissions, .{ .follow_symlinks = false });
+    try std.Io.Dir.cwd().setFilePermissions(io, directory, permissions, .{ .follow_symlinks = false });
 }
 
 pub fn resolveHistoryPath(environ: std.process.Environ, buffer: []u8) !HistoryPath {
@@ -213,20 +205,20 @@ pub fn resolveHistoryPath(environ: std.process.Environ, buffer: []u8) !HistoryPa
     };
 }
 
-pub fn prepareHistoryDatabase(io: Io, history_path: HistoryPath) !void {
+pub fn prepareHistoryDatabase(io: std.Io, history_path: HistoryPath) !void {
     if (history_path.managed_directory) |directory| {
-        const permissions = File.Permissions.fromMode(0o700);
-        _ = try Io.Dir.cwd().createDirPathStatus(io, directory, permissions);
-        try Io.Dir.cwd().setFilePermissions(io, directory, permissions, .{ .follow_symlinks = false });
+        const permissions = std.Io.File.Permissions.fromMode(0o700);
+        _ = try std.Io.Dir.cwd().createDirPathStatus(io, directory, permissions);
+        try std.Io.Dir.cwd().setFilePermissions(io, directory, permissions, .{ .follow_symlinks = false });
     }
 
-    const file = try Io.Dir.createFileAbsolute(io, history_path.path, .{
+    const file = try std.Io.Dir.createFileAbsolute(io, history_path.path, .{
         .read = true,
         .truncate = false,
-        .permissions = File.Permissions.fromMode(0o600),
+        .permissions = std.Io.File.Permissions.fromMode(0o600),
     });
     file.close(io);
-    try Io.Dir.cwd().setFilePermissions(io, history_path.path, File.Permissions.fromMode(0o600), .{ .follow_symlinks = false });
+    try std.Io.Dir.cwd().setFilePermissions(io, history_path.path, std.Io.File.Permissions.fromMode(0o600), .{ .follow_symlinks = false });
 }
 
 fn checkDirectoryOwner(owner: std.c.uid_t, current_user: std.c.uid_t) error{WrongOwner}!void {
@@ -242,8 +234,8 @@ fn temporaryDirectory(temp: *std.testing.TmpDir, buffer: []u8) ![]const u8 {
 
 test "explicit history storage overrides XDG data storage" {
     var environment = try TestEnvironment.init(&.{
-        .{ "TELAR_HISTORY", "/var/lib/telar/history.db" },
-        .{ "XDG_DATA_HOME", "/data" },
+        .{ .name = "TELAR_HISTORY", .value = "/var/lib/telar/history.db" },
+        .{ .name = "XDG_DATA_HOME", .value = "/data" },
     });
     defer environment.deinit();
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -256,8 +248,8 @@ test "explicit history storage overrides XDG data storage" {
 
 test "history and proxy storage prefer XDG data home" {
     var environment = try TestEnvironment.init(&.{
-        .{ "XDG_DATA_HOME", "/data" },
-        .{ "HOME", "/home/adrian" },
+        .{ .name = "XDG_DATA_HOME", .value = "/data" },
+        .{ .name = "HOME", .value = "/home/adrian" },
     });
     defer environment.deinit();
     const environ: std.process.Environ = .{ .block = environment.block };
@@ -309,9 +301,9 @@ test "runtime storage creates private history and proxy paths" {
     });
     try prepareProxyDirectory(std.testing.io, proxy_directory);
 
-    const history_directory_stat = try Io.Dir.cwd().statFile(std.testing.io, history_directory, .{ .follow_symlinks = false });
-    const history_stat = try Io.Dir.cwd().statFile(std.testing.io, history_path, .{ .follow_symlinks = false });
-    const proxy_stat = try Io.Dir.cwd().statFile(std.testing.io, proxy_directory, .{ .follow_symlinks = false });
+    const history_directory_stat = try std.Io.Dir.cwd().statFile(std.testing.io, history_directory, .{ .follow_symlinks = false });
+    const history_stat = try std.Io.Dir.cwd().statFile(std.testing.io, history_path, .{ .follow_symlinks = false });
+    const proxy_stat = try std.Io.Dir.cwd().statFile(std.testing.io, proxy_directory, .{ .follow_symlinks = false });
     try std.testing.expectEqual(@as(u32, 0o700), history_directory_stat.permissions.toMode() & 0o777);
     try std.testing.expectEqual(@as(u32, 0o600), history_stat.permissions.toMode() & 0o777);
     try std.testing.expectEqual(@as(u32, 0o700), proxy_stat.permissions.toMode() & 0o777);
@@ -330,8 +322,8 @@ test "a fresh start sets the previous session aside once" {
 
     try std.testing.expect(try setSessionAside(std.testing.io, path));
 
-    try std.testing.expectError(error.FileNotFound, Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false }));
-    const moved = try Io.Dir.cwd().readFileAlloc(std.testing.io, previous, std.testing.allocator, .limited(64));
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false }));
+    const moved = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, previous, std.testing.allocator, .limited(64));
     defer std.testing.allocator.free(moved);
     try std.testing.expectEqualStrings("session", moved);
     try std.testing.expect(!try setSessionAside(std.testing.io, path));

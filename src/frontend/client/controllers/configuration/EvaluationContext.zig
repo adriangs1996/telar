@@ -1,5 +1,6 @@
-const EvaluationContext = @This();
 const Client = @import("../../Client.zig");
-const lua_config = @import("../../../config/root.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
+const EvaluationContext = @This();
+
 client: *Client,
-diagnostic: lua_config.Diagnostic = .{},
+diagnostic: DiagnosticType = .{},

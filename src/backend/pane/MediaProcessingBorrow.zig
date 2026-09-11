@@ -1,3 +1,4 @@
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const MediaProcessingBorrow = @This();
-const source_namespace = @import("root.zig");
-current_size: source_namespace.schema.TerminalSize,
+
+current_size: TerminalSizeType,

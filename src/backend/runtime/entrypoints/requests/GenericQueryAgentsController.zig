@@ -1,4 +1,5 @@
-const schema = @import("telar-core").schema;
+const QueryAgentsType = @import("telar-core").QueryAgents;
+
 /// Builds a statically dispatched agent-query controller.
 ///
 /// ```zig
@@ -26,7 +27,7 @@ pub fn Type(comptime Subscriber: type) type {
         /// ```zig
         /// controller.queryAgents(request);
         /// ```
-        pub inline fn queryAgents(controller: *Self, request: schema.QueryAgents) void {
+        pub inline fn queryAgents(controller: *Self, request: QueryAgentsType) void {
             _ = request;
             controller.subscriber.requestAgentSnapshot();
         }

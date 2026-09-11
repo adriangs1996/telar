@@ -1,7 +1,8 @@
 const GenericProxyCaptureRuntimePort = @import("GenericProxyCaptureRuntimePort.zig").Type;
-const Resources = @import("ProxyCaptureResources.zig");
-const proxy_mod = @import("../../../proxy/root.zig");
-const pane_mod = @import("../../../pane/root.zig");
+const ProxyCaptureResources = @import("ProxyCaptureResources.zig");
+const Half = @import("../../../proxy/capture/Half.zig");
+const PaneKeyType = @import("../../../pane/PaneKey.zig");
+
 /// Binds capture delivery policy to one concrete runtime application.
 ///
 /// ```zig
@@ -12,14 +13,14 @@ pub fn Type(comptime Context: type, comptime port: GenericProxyCaptureRuntimePor
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: ProxyCaptureResources,
 
         /// Creates an adapter that borrows runtime-owned pane and proxy stores.
         ///
         /// ```zig
         /// const adapter = CaptureAdapter.init(application, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: ProxyCaptureResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -28,12 +29,12 @@ pub fn Type(comptime Context: type, comptime port: GenericProxyCaptureRuntimePor
         /// ```zig
         /// try adapter.handle(result);
         /// ```
-        pub fn handle(adapter: *Self, result: anyerror!*proxy_mod.CaptureHalf) !void {
+        pub fn handle(adapter: *Self, result: anyerror!*Half) !void {
             const half = result catch return;
             errdefer half.deinit();
             try port.rearm_receive(adapter.context);
 
-            const key: pane_mod.PaneKey = .{ .id = half.pane.id, .generation = half.pane.generation };
+            const key: PaneKeyType = .{ .id = half.pane.id, .generation = half.pane.generation };
             if (adapter.resources.panes.resolve(key) == null) {
                 half.deinit();
                 return;

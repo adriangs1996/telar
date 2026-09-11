@@ -1,21 +1,15 @@
 //! Application policy for releasing a departed workspace and activating its
 //! committed replacement.
 
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const ModelType = @import("../../model/Model.zig");
+const WorkspaceActivationType = @import("../../model/WorkspaceActivation.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-
-pub const schema = core.schema;
-
-pub const ReleaseEffects = @import("ReleaseEffects.zig");
-
-pub const ActivationEffects = @import("ActivationEffects.zig");
-
-pub const ReleaseWorkspaceResourcesHandler = @import("ReleaseWorkspaceResourcesHandler.zig");
-
-pub const ActivateWorkspaceHandler = @import("ActivateWorkspaceHandler.zig");
+const ReleaseCapture = @import("ReleaseCapture.zig");
+const ReleaseWorkspaceResourcesHandler = @import("ReleaseWorkspaceResourcesHandler.zig");
+const ActivationCapture = @import("ActivationCapture.zig");
+const ActivateWorkspaceHandler = @import("ActivateWorkspaceHandler.zig");
 
 pub const Event = enum {
     remember_bookmark,
@@ -34,17 +28,13 @@ pub const Failure = enum {
     request_tab_snapshot,
 };
 
-const ReleaseCapture = @import("ReleaseCapture.zig");
-
-const ActivationCapture = @import("ActivationCapture.zig");
-
-const testing_location: schema.TabLocation = .{
+const testing_location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(1) },
     .tab_id = @enumFromInt(1),
 };
-const testing_pane_id: schema.PaneId = @enumFromInt(1);
+const testing_pane_id: PaneIdType = @enumFromInt(1);
 
-fn prepareActivation(model: *client_model.Model) !client_model.WorkspaceActivation {
+fn prepareActivation(model: *ModelType) !WorkspaceActivationType {
     return model.arriveWorkspace(.{
         .pane_id = testing_pane_id,
         .location = testing_location,
@@ -53,7 +43,7 @@ fn prepareActivation(model: *client_model.Model) !client_model.WorkspaceActivati
 }
 
 test "ReleaseWorkspaceResourcesHandler remembers before releasing pane resources" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     try model.workspace.bootstrap(.{ .pane_id = testing_pane_id, .location = testing_location, .size = .{ .cols = 20, .rows = 5 } });
     _ = model.beginPanePaste().?;
@@ -79,7 +69,7 @@ test "ReleaseWorkspaceResourcesHandler remembers before releasing pane resources
 }
 
 test "ActivateWorkspaceHandler orders resources and exact snapshot requests" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const activation = try prepareActivation(&model);
     var capture: ActivationCapture = .{
@@ -105,7 +95,7 @@ test "ActivateWorkspaceHandler orders resources and exact snapshot requests" {
 }
 
 test "ActivateWorkspaceHandler rejects stale activation before effects" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const activation = try prepareActivation(&model);
     var capture: ActivationCapture = .{
@@ -175,7 +165,7 @@ test "ActivateWorkspaceHandler stops after each failed effect" {
     };
 
     for (failures, expected, errors) |failure, events, expected_error| {
-        var model = client_model.Model.init(std.testing.allocator, true);
+        var model = ModelType.init(std.testing.allocator, true);
         defer model.deinit();
         const activation = try prepareActivation(&model);
         var capture: ActivationCapture = .{

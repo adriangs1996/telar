@@ -1,13 +1,9 @@
 //! Application command for changing one client's pane viewport.
 
+const AttachmentStore = @import("../../attachment/AttachmentStore.zig");
+const SetPaneViewportHandler = @import("SetPaneViewportHandler.zig");
+const pane_module = @import("telar-core").pane;
 const std = @import("std");
-const core = @import("telar-core");
-const attachment_mod = @import("../../attachment/root.zig");
-
-pub const schema = core.schema;
-pub const AttachmentStore = attachment_mod.AttachmentStore;
-
-pub const SetPaneViewport = @import("SetPaneViewport.zig");
 
 pub const SetPaneViewportResult = enum {
     changed,
@@ -15,14 +11,12 @@ pub const SetPaneViewportResult = enum {
     pane_not_attached,
 };
 
-pub const SetPaneViewportHandler = @import("SetPaneViewportHandler.zig");
-
 test "SetPaneViewportHandler rejects a pane outside the client attachments" {
     var attachments: AttachmentStore = .{};
     var handler: SetPaneViewportHandler = .{ .attachments = &attachments };
 
     const result = try handler.execute(.{
-        .pane_id = try schema.id.pane(7),
+        .pane_id = try pane_module(7),
         .offset = 0,
     });
 

@@ -1,21 +1,11 @@
 //! Projection from host mouse events to a focused pane's SGR protocol.
 
+const MouseTrackingType = @import("telar-core").MouseTracking;
+const Mouse = @import("Mouse.zig");
+const SgrInput = @import("SgrInput.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const Mouse = @import("key_support.zig").Mouse;
 
-const schema = core.schema;
-pub const ui = core.ui;
-
-pub const PixelPoint = @import("PixelPoint.zig");
-
-pub const CellSize = @import("CellSize.zig");
-
-pub const PixelProjection = @import("PixelProjection.zig");
-
-pub const SgrInput = @import("SgrInput.zig");
-
-pub fn tracked(tracking: schema.frame.MouseTracking, kind: Mouse.Kind) bool {
+pub fn tracked(tracking: MouseTrackingType, kind: Mouse.Kind) bool {
     return switch (tracking) {
         .none => false,
         .x10 => kind == .press,

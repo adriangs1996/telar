@@ -1,6 +1,7 @@
+const id = @import("../id.zig");
 const GraphicsCredit = @This();
-const source_namespace = @import("graphics.zig");
-pane_id: source_namespace.PaneId,
+
+pane_id: id.PaneId,
 bytes: u64,
 
 pub fn validateWire(message: GraphicsCredit) !void {

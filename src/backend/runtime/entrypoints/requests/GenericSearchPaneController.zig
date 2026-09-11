@@ -1,4 +1,6 @@
-const source_namespace = @import("search_pane.zig");
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const SearchPaneType = @import("telar-core").SearchPane;
+
 /// Builds a statically dispatched controller around one executor.
 ///
 /// ```zig
@@ -8,10 +10,10 @@ pub fn Type(comptime Executor: type) type {
     return struct {
         const Self = @This();
 
-        responses: *source_namespace.ResponseQueue,
+        responses: *ResponseQueueType,
         executor: Executor,
 
-        pub fn init(responses: *source_namespace.ResponseQueue, executor: Executor) Self {
+        pub fn init(responses: *ResponseQueueType, executor: Executor) Self {
             return .{ .responses = responses, .executor = executor };
         }
 
@@ -20,7 +22,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// try controller.searchPane(request);
         /// ```
-        pub fn searchPane(controller: *Self, request: source_namespace.schema.SearchPane) !void {
+        pub fn searchPane(controller: *Self, request: SearchPaneType) !void {
             switch (controller.executor.execute(.{ .pane_id = request.pane_id, .needle = request.needle })) {
                 .found => |matches| try controller.responses.push(.{ .pane_matches = .{
                     .request_id = request.request_id,

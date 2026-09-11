@@ -1,27 +1,31 @@
-const Processor = @This();
 const State = @import("State.zig");
-const media_mod = @import("root.zig");
-const allocation = @import("allocator.zig");
-const source_namespace = @import("ingestion.zig");
-const Responses = @import("Responses.zig");
-const vt = @import("ghostty-vt");
-const core = @import("telar-core");
-const shared_transfer = @import("shared_transfer.zig");
+const PipelineType = @import("Pipeline.zig");
+const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
+const GraphicsLimitsType = @import("GraphicsLimits.zig");
 const std = @import("std");
-state: *State,
-media: *media_mod.Pipeline,
-media_allocator: *allocation.PaneMediaAllocator,
-graphics_limits: allocation.GraphicsLimits,
-graphics_storage_limit: usize,
-io: source_namespace.Io,
-responses: Responses,
-const GraphicsIngest = struct {
-    io: source_namespace.Io,
-    previous_loading_id: ?u32,
-    completed_commands: usize,
-};
+const Responses = @import("Responses.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const StatsType = @import("Stats.zig");
+const SharedFrameViewType = @import("SharedFrameView.zig");
+const FileQueryViewType = @import("FileQueryView.zig");
+const LiveImages = @import("LiveImages.zig");
+const ImageKeyType = @import("telar-core").ImageKey;
+const FormatType = @import("telar-core").Format;
+const ImageType = @import("telar-core").Image;
+const shared_transfer = @import("shared_transfer.zig");
+const PreparedTransferType = @import("PreparedTransfer.zig");
+const GraphicsIngest = @import("GraphicsIngest.zig");
+const Processor = @This();
 
-pub fn processMedia(processor: *Processor, current_size: source_namespace.schema.TerminalSize, stats: *media_mod.Stats) void {
+state: *State,
+media: *PipelineType,
+media_allocator: *PaneMediaAllocatorType,
+graphics_limits: GraphicsLimitsType,
+graphics_storage_limit: usize,
+io: std.Io,
+responses: Responses,
+
+pub fn processMedia(processor: *Processor, current_size: TerminalSizeType, stats: *StatsType) void {
     if (processor.media.sealedRequiresReset()) {
         processor.state.kitty_framing = .{};
         processor.state.kitty_loading_chunks = 0;
@@ -36,11 +40,11 @@ pub fn processMedia(processor: *Processor, current_size: source_namespace.schema
             sink.processor.ingestMediaOutput(bytes);
         }
 
-        pub fn observeSharedFrame(sink: *@This(), frame: media_mod.SharedFrameView) bool {
+        pub fn observeSharedFrame(sink: *@This(), frame: SharedFrameViewType) bool {
             return sink.processor.ingestSharedFrame(frame);
         }
 
-        pub fn observeFileQuery(sink: *@This(), query: media_mod.FileQueryView) bool {
+        pub fn observeFileQuery(sink: *@This(), query: FileQueryViewType) bool {
             return sink.processor.answerFileQuery(query);
         }
     };
@@ -53,19 +57,6 @@ pub fn processMedia(processor: *Processor, current_size: source_namespace.schema
     processor.state.transfer_preparation.process(&processor.media.terminal.screens.active.kitty_images, processor.media_allocator);
 }
 
-const LiveImages = struct {
-    storage: *const vt.kitty.graphics.ImageStorage,
-
-    pub fn holds(alive: LiveImages, image_key: core.graphics.ImageKey) bool {
-        const image = alive.storage.imageById(image_key.image_id) orelse return false;
-        return image.generation == image_key.generation;
-    }
-
-    pub fn holdsImage(alive: LiveImages, image_id: u32) bool {
-        return alive.storage.imageById(image_id) != null;
-    }
-};
-
 /// Freezes every generation the emulator holds that no local client has
 /// been offered yet, on the media actor with the pixels still hot. A
 /// frame that cannot be frozen here is left to the runtime thread's
@@ -74,23 +65,23 @@ const LiveImages = struct {
 /// ```zig
 /// processor.prepareSharedTransfers(&stats);
 /// ```
-pub fn prepareSharedTransfers(processor: *Processor, stats: *media_mod.Stats) void {
+pub fn prepareSharedTransfers(processor: *Processor, stats: *StatsType) void {
     const storage = &processor.media.terminal.screens.active.kitty_images;
     processor.state.prepared_transfers.retain(LiveImages{ .storage = storage }, processor.media_allocator);
     var images = storage.images.iterator();
     while (images.next()) |entry| {
         const image = entry.value_ptr;
         const pixels = processor.media_allocator.imagePixels(image.data.bytes()) orelse continue;
-        const image_key: core.graphics.ImageKey = .{ .image_id = image.id, .generation = image.generation };
+        const image_key: ImageKeyType = .{ .image_id = image.id, .generation = image.generation };
         if (processor.state.prepared_transfers.covers(image_key)) {
             continue;
         }
-        const format: core.graphics.Format = switch (image.format) {
+        const format: FormatType = switch (image.format) {
             .rgb => .rgb,
             .rgba => .rgba,
             else => continue,
         };
-        const metadata: core.graphics.Image = .{
+        const metadata: ImageType = .{
             .key = image_key,
             .format = format,
             .width = image.width,
@@ -105,7 +96,7 @@ pub fn prepareSharedTransfers(processor: *Processor, stats: *media_mod.Stats) vo
             processor.media_allocator.releaseManual(pixels.len);
             continue;
         };
-        const transfer: shared_transfer.PreparedTransfer = .{
+        const transfer: PreparedTransferType = .{
             .metadata = metadata,
             .name = name,
             .reserved_len = pixels.len,
@@ -130,7 +121,7 @@ pub fn prepareSharedTransfers(processor: *Processor, stats: *media_mod.Stats) vo
 /// ```zig
 /// if (!processor.ingestSharedFrame(frame)) processor.ingestMediaOutput(frame.bytes);
 /// ```
-fn ingestSharedFrame(processor: *Processor, frame: media_mod.SharedFrameView) bool {
+fn ingestSharedFrame(processor: *Processor, frame: SharedFrameViewType) bool {
     if (comptime !shared_transfer.shared_memory_supported) {
         return false;
     }
@@ -139,7 +130,7 @@ fn ingestSharedFrame(processor: *Processor, frame: media_mod.SharedFrameView) bo
     }
     // The emulator stamps the generation on store; validate everything
     // else now with a placeholder that passes the identity check.
-    const metadata: core.graphics.Image = .{
+    const metadata: ImageType = .{
         .key = .{ .image_id = frame.image_id, .generation = 1 },
         .format = frame.format,
         .width = frame.width,
@@ -209,7 +200,7 @@ fn ingestSharedFrame(processor: *Processor, frame: media_mod.SharedFrameView) bo
     const generation = images.imageById(frame.image_id).?.generation;
     var parked = metadata;
     parked.key.generation = generation;
-    const transfer: shared_transfer.PreparedTransfer = .{
+    const transfer: PreparedTransferType = .{
         .metadata = parked,
         .name = name,
         // The mapping's reservation belongs to emulator storage; the
@@ -231,7 +222,7 @@ fn ingestSharedFrame(processor: *Processor, frame: media_mod.SharedFrameView) bo
 /// ```zig
 /// _ = processor.answerFileQuery(query);
 /// ```
-fn answerFileQuery(processor: *Processor, query: media_mod.FileQueryView) bool {
+fn answerFileQuery(processor: *Processor, query: FileQueryViewType) bool {
     var reply: [64]u8 = undefined;
     const accepted = query.byte_len <= processor.graphics_storage_limit and
         shared_transfer.validateChildFile(query.encoded_path, query.byte_len);

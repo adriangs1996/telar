@@ -1,20 +1,24 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_closure_delivery.zig");
-const core = @import("telar-core");
-const Effects = @import("PaneClosureDeliveryEffects.zig");
-const pane_geometry_delivery = @import("pane_geometry_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const types = @import("../../model/types.zig");
+const pane_closure_delivery = @import("pane_closure_delivery.zig");
+const RectType = @import("telar-core").Rect;
+const PaneResizeType = @import("telar-core").PaneResize;
+const PaneClosureDeliveryEffects = @import("PaneClosureDeliveryEffects.zig");
+const OfferEffectsType = @import("OfferEffects.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-model: *client_model.Model,
-exit: client_model.PaneExit,
-events: [8]source_namespace.Event = undefined,
+const EffectsCapture = @This();
+
+model: *ModelType,
+exit: types.PaneExit,
+events: [8]pane_closure_delivery.Event = undefined,
 event_count: usize = 0,
 committed_state_observed: bool = true,
-geometry_area: core.ui.Rect = .{ .w = 40, .h = 10 },
-delivered_resize: ?source_namespace.schema.PaneResize = null,
-failure: source_namespace.Failure = .none,
+geometry_area: RectType = .{ .w = 40, .h = 10 },
+delivered_resize: ?PaneResizeType = null,
+failure: pane_closure_delivery.Failure = .none,
 
-pub fn effects(capture: *EffectsCapture) Effects {
+pub fn effects(capture: *EffectsCapture) PaneClosureDeliveryEffects {
     return .{
         .context = capture,
         .ignore_attachment = ignoreAttachment,
@@ -26,24 +30,24 @@ pub fn effects(capture: *EffectsCapture) Effects {
     };
 }
 
-pub fn geometryEffects(capture: *EffectsCapture) pane_geometry_delivery.OfferEffects {
+pub fn geometryEffects(capture: *EffectsCapture) OfferEffectsType {
     return .{
         .context = capture,
         .deliver_resize = deliverResize,
     };
 }
 
-fn ignoreAttachment(context: *anyopaque, pane_id: source_namespace.schema.PaneId) void {
+fn ignoreAttachment(context: *anyopaque, pane_id: PaneIdType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .ignore_attachment = pane_id });
 }
 
-fn completeClose(context: *anyopaque, pane_id: source_namespace.schema.PaneId) void {
+fn completeClose(context: *anyopaque, pane_id: PaneIdType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .complete_close = pane_id });
 }
 
-fn clearPaneGraphics(context: *anyopaque, pane_id: source_namespace.schema.PaneId) void {
+fn clearPaneGraphics(context: *anyopaque, pane_id: PaneIdType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .clear_graphics = pane_id });
 }
@@ -61,14 +65,14 @@ fn synchronizeActiveResources(context: *anyopaque) !void {
     }
 }
 
-fn activeGeometryArea(context: *anyopaque) core.ui.Rect {
+fn activeGeometryArea(context: *anyopaque) RectType {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.active_geometry_area);
 
     return capture.geometry_area;
 }
 
-fn deliverResize(context: *anyopaque, resize: source_namespace.schema.PaneResize) !void {
+fn deliverResize(context: *anyopaque, resize: PaneResizeType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .resize = resize.pane_id });
     capture.delivered_resize = resize;
@@ -77,7 +81,7 @@ fn deliverResize(context: *anyopaque, resize: source_namespace.schema.PaneResize
     }
 }
 
-fn append(capture: *EffectsCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectsCapture, event: pane_closure_delivery.Event) void {
     capture.committed_state_observed = capture.committed_state_observed and capture.observesCommit();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -109,6 +113,6 @@ fn observesCommit(capture: *const EffectsCapture) bool {
     };
 }
 
-pub fn eventSlice(capture: *const EffectsCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectsCapture) []const pane_closure_delivery.Event {
     return capture.events[0..capture.event_count];
 }

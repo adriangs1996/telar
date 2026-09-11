@@ -123,19 +123,19 @@ fallback, so a failed timer changes no capability state.
 
 ## Proof
 
-- `src/frontend/client/model.zig` proves independent probes, selective expiry,
+- `src/client/model/Model.zig` proves independent probes, selective expiry,
   pixel precedence, atomic geometry and validation before mutation.
-- `src/frontend/client/application/host_capabilities.zig` proves
+- `src/client/application/host/host_capabilities.zig` proves
   commit-before-delivery ordering, no-op suppression and retained commits after
   a delivery failure.
-- `src/frontend/client/application/host_resource_delivery.zig` proves graphics,
+- `src/client/application/host/host_resource_delivery.zig` proves graphics,
   grid, cell-size and geometry branch ordering plus partial-failure behavior.
-- `src/frontend/client/application/pane_graphics.zig` proves capability-owned
+- `src/client/application/panes/pane_graphics.zig` proves capability-owned
   fallback decisions, bounded traversal and repeated-value suppression.
-- `src/frontend/client/host_capabilities.zig` owns terminal reply translation
+- `src/frontend/client/controllers/host/host_capabilities.zig` owns terminal reply translation
   and probe expiry.
-- `src/frontend/client/host_resources.zig` implements the physical host effect
+- `src/frontend/client/controllers/host/host_resources.zig` implements the physical host effect
   ports shared with resize delivery.
-- `src/frontend/client/client_test.zig` proves fallback reconciliation,
+- `src/frontend/client/tests/` proves fallback reconciliation,
   presenter-owned scheduling, timeout idempotence and retained state after a
   real resource failure.

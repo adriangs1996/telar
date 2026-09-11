@@ -1,8 +1,8 @@
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 
 const ToggleAgentModeHandler = @This();
 
-model: *client_model.Model,
+model: *ModelType,
 
 pub fn execute(self: *ToggleAgentModeHandler) void {
     self.model.toggleAgentMode();

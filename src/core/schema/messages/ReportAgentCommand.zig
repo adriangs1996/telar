@@ -1,12 +1,14 @@
+const id = @import("../id.zig");
+const agent = @import("agent.zig");
 /// One shell command observed by an official agent hook. Start and finish
 /// reports share a tool-call identifier so persistence can close the row
 /// idempotently.
 const ReportAgentCommand = @This();
-const source_namespace = @import("agent.zig");
-request_id: source_namespace.RequestId,
-pane_id: source_namespace.PaneId,
+
+request_id: id.RequestId,
+pane_id: id.PaneId,
 pane_generation: u64,
-phase: source_namespace.AgentCommandPhase,
+phase: agent.AgentCommandPhase,
 provider: []const u8,
 tool_call_id: []const u8 = "",
 command: []const u8,

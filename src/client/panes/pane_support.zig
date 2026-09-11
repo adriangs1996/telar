@@ -1,16 +1,10 @@
 //! One client-owned projection of a runtime pane. No presentation resources.
 
 const std = @import("std");
-const core = @import("telar-core");
-const damage = @import("damage.zig");
-const frames = @import("frame.zig");
-pub const schema = core.schema;
-pub const ui = core.ui;
+const Pane = @import("Pane.zig");
+const tests = @import("tests.zig");
+
 const max_cwd_name_bytes = 48;
-
-pub const Spec = @import("Spec.zig");
-
-pub const Pane = @import("Pane.zig");
 
 pub fn displayCwdName(path: []const u8) []const u8 {
     if (path.len == 0) {
@@ -88,5 +82,5 @@ test "pane cwd names use a bounded basename" {
 }
 
 test {
-    _ = @import("tests.zig");
+    _ = tests;
 }

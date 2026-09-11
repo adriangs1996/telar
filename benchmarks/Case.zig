@@ -1,5 +1,6 @@
-const Case = @This();
 const std = @import("std");
+const Case = @This();
+
 name: []const u8,
 work_per_op: u64,
 work_unit: []const u8,

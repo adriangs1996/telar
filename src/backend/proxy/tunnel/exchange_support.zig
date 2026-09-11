@@ -1,21 +1,16 @@
 //! Per-CONNECT identity and observation state shared by protocol adapters.
 
-const std = @import("std");
-const core = @import("telar-core");
-const identity = @import("../identity.zig");
-const metrics = @import("../metrics.zig");
+const request_support = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
-const provider = @import("../provider/root.zig");
-
-pub const Io = std.Io;
-const schema = core.schema;
-pub const net = Io.net;
-
-pub const Status = @import("Status.zig");
-
-pub const TransformTarget = @import("TransformTarget.zig");
-
-pub const Exchange = @import("Exchange.zig");
+const PipelineType = @import("../Pipeline.zig");
+const CountersType = @import("../Counters.zig");
+const Exchange = @import("Exchange.zig");
+const CredentialType = @import("../Credential.zig");
+const pane_module = @import("telar-core").pane;
+const identity = @import("../identity.zig");
+const std = @import("std");
+const ExchangeCapture = @import("ExchangeCapture.zig");
+const types = @import("../../agent/types.zig");
 
 /// Maps provider request classification to the lifecycle phase shared by
 /// HTTP/1.1 and HTTP/2 adapters.
@@ -23,18 +18,16 @@ pub const Exchange = @import("Exchange.zig");
 /// ```zig
 /// const phase = requestPhase(.inference);
 /// ```
-pub fn requestPhase(classification: provider.RequestClass) middleware.Phase {
+pub fn requestPhase(classification: request_support.RequestClass) middleware.Phase {
     return switch (classification) {
         .inference => .request_started,
         .auxiliary => .auxiliary_request_started,
     };
 }
 
-const Capture = @import("ExchangeCapture.zig");
-
-fn testExchange(pipeline: *const middleware.Pipeline, counters: *metrics.Counters) !Exchange {
-    const credential: identity.Credential = .{
-        .pane_id = try schema.id.pane(7),
+fn testExchange(pipeline: *const PipelineType, counters: *CountersType) !Exchange {
+    const credential: CredentialType = .{
+        .pane_id = try pane_module(7),
         .pane_generation = 11,
         .token = .{0x42} ** identity.token_bytes,
     };
@@ -51,10 +44,10 @@ fn testExchange(pipeline: *const middleware.Pipeline, counters: *metrics.Counter
 }
 
 test "published status carries authenticated exchange identity" {
-    var capture: Capture = .{};
-    var counters: metrics.Counters = .{};
-    var pipeline: middleware.Pipeline = .{};
-    try pipeline.add(.{ .context = &capture, .observe = Capture.observe });
+    var capture: ExchangeCapture = .{};
+    var counters: CountersType = .{};
+    var pipeline: PipelineType = .{};
+    try pipeline.add(.{ .context = &capture, .observe = ExchangeCapture.observe });
     var exchange = try testExchange(&pipeline, &counters);
 
     exchange.publishStatus(.{
@@ -66,7 +59,7 @@ test "published status carries authenticated exchange identity" {
     try std.testing.expectEqual(@as(usize, 1), capture.len);
     const event = capture.events[0];
     try std.testing.expect(std.meta.eql(exchange.credential, event.credential));
-    try std.testing.expectEqual(provider.ApiDialect.anthropic_messages, event.dialect);
+    try std.testing.expectEqual(types.ApiDialect.anthropic_messages, event.dialect);
     try std.testing.expectEqual(middleware.Phase.response_finished, event.phase);
     try std.testing.expectEqual(middleware.Protocol.h2, event.protocol);
     try std.testing.expectEqual(@as(u64, 17), event.connection_id);
@@ -75,10 +68,10 @@ test "published status carries authenticated exchange identity" {
 }
 
 test "only lifecycle evidence for Claude increments Claude counters" {
-    var capture: Capture = .{};
-    var counters: metrics.Counters = .{};
-    var pipeline: middleware.Pipeline = .{};
-    try pipeline.add(.{ .context = &capture, .observe = Capture.observe });
+    var capture: ExchangeCapture = .{};
+    var counters: CountersType = .{};
+    var pipeline: PipelineType = .{};
+    try pipeline.add(.{ .context = &capture, .observe = ExchangeCapture.observe });
     var exchange = try testExchange(&pipeline, &counters);
 
     inline for (.{

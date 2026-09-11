@@ -1,10 +1,12 @@
-const DeliverActivePaneResourcesHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("ActivePaneResourceDeliveryEffects.zig");
-const source_namespace = @import("active_pane_resource_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const ActivePaneResourceDeliveryEffects = @import("ActivePaneResourceDeliveryEffects.zig");
+const PaneFocusType = @import("../../model/PaneFocus.zig");
+const RectType = @import("telar-core").Rect;
 const std = @import("std");
-model: *client_model.Model,
-effects: Effects,
+const DeliverActivePaneResourcesHandler = @This();
+
+model: *ModelType,
+effects: ActivePaneResourceDeliveryEffects,
 
 /// Acknowledges a focused `done` agent, then reconciles only the focused
 /// attachment shelf and re-offers geometry when its visibility changes
@@ -44,7 +46,7 @@ pub fn synchronize(handler: *DeliverActivePaneResourcesHandler) !void {
 /// ```zig
 /// try handler.deliverFocus(focus, area);
 /// ```
-pub fn deliverFocus(handler: *DeliverActivePaneResourcesHandler, focus: client_model.PaneFocus, area: source_namespace.ui.Rect) !void {
+pub fn deliverFocus(handler: *DeliverActivePaneResourcesHandler, focus: PaneFocusType, area: RectType) !void {
     try handler.validateFocus(focus);
     try handler.synchronize();
     if (!focus.geometry_changed) {
@@ -56,7 +58,7 @@ pub fn deliverFocus(handler: *DeliverActivePaneResourcesHandler, focus: client_m
     try handler.effects.request_visible_attachments(handler.effects.context, area);
 }
 
-fn validateFocus(handler: *const DeliverActivePaneResourcesHandler, focus: client_model.PaneFocus) !void {
+fn validateFocus(handler: *const DeliverActivePaneResourcesHandler, focus: PaneFocusType) !void {
     const active = handler.model.workspace.activeConst() orelse return error.StalePaneFocus;
     if (!std.meta.eql(active.location, focus.location) or
         active.model.layout.focused() != focus.focused or

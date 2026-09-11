@@ -1,4 +1,5 @@
+const Range = @import("Range.zig");
 const SelectionQuery = @This();
-const source_namespace = @import("root.zig");
-range: source_namespace.SelectionRange,
+
+range: Range,
 scratch: []u8,

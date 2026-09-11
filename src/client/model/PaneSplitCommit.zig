@@ -1,10 +1,14 @@
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const RectType = @import("telar-core").Rect;
+const types = @import("types.zig");
 const PaneSplitCommit = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
-location: source_namespace.schema.TabLocation,
-area: source_namespace.ui.Rect,
-disposition: source_namespace.PaneSplitDisposition,
-change: source_namespace.Change,
+
+pane_id: PaneIdType,
+location: TabLocationType,
+area: RectType,
+disposition: types.PaneSplitDisposition,
+change: types.Change,
 layout_revision: u64,
 workspace_revision: u64,
 tabs_revision: u64,

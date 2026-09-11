@@ -1,10 +1,12 @@
+const EventType = @import("Event.zig");
+const escape_ops = @import("escape.zig");
+const std = @import("std");
 /// Classifies keyboard bytes going *to* a child: submits, cancels, and
 /// bracketed paste. Bracketed paste identifies paste; newlines inside a paste
 /// are content, never a submit - the invariant that timing heuristics must
 /// not decide what a paste is.
 const InputScanner = @This();
-const source_namespace = @import("escape.zig");
-const std = @import("std");
+
 state: State = .ground,
 parameter: u16 = 0,
 has_parameter: bool = false,
@@ -19,14 +21,14 @@ typed_exact: bool = true,
 pub const max_typed_bytes = 255;
 
 const State = enum { ground, escape, csi, paste, paste_escape, paste_csi };
-pub const Event = struct { submitted: bool = false, cancelled: bool = false };
+pub const Event = @import("Event.zig");
 
 pub fn reset(scanner: *InputScanner) void {
     scanner.* = .{};
 }
 
-pub fn feed(scanner: *InputScanner, bytes: []const u8) Event {
-    var event: Event = .{};
+pub fn feed(scanner: *InputScanner, bytes: []const u8) EventType {
+    var event: EventType = .{};
     for (bytes) |byte| scanner.feedByte(byte, &event);
     return event;
 }
@@ -43,10 +45,10 @@ pub fn typedText(scanner: *const InputScanner) ?[]const u8 {
     return scanner.typed[0..scanner.typed_len];
 }
 
-fn feedByte(scanner: *InputScanner, byte: u8, event: *Event) void {
+fn feedByte(scanner: *InputScanner, byte: u8, event: *EventType) void {
     switch (scanner.state) {
         .ground => switch (byte) {
-            source_namespace.esc => {
+            escape_ops.esc => {
                 scanner.state = .escape;
                 scanner.typed_exact = false;
             },
@@ -67,7 +69,7 @@ fn feedByte(scanner: *InputScanner, byte: u8, event: *Event) void {
         },
         .csi => scanner.csiByte(byte, false),
         .paste => {
-            if (byte == source_namespace.esc) {
+            if (byte == escape_ops.esc) {
                 scanner.state = .paste_escape;
             }
         },

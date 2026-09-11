@@ -1,7 +1,9 @@
-const ToggleSidebarHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const SidebarEffects = @import("SidebarEffects.zig");
-model: *client_model.Model,
+const SidebarLayoutType = @import("../../model/SidebarLayout.zig");
+const ToggleSidebarHandler = @This();
+
+model: *ModelType,
 effects: SidebarEffects,
 
 /// Commits the sidebar preference before synchronizing its disposable
@@ -10,7 +12,7 @@ effects: SidebarEffects,
 /// ```zig
 /// const change = try handler.execute();
 /// ```
-pub fn execute(handler: *ToggleSidebarHandler) !client_model.SidebarLayout {
+pub fn execute(handler: *ToggleSidebarHandler) !SidebarLayoutType {
     const change = handler.model.toggleSidebar();
 
     try handler.effects.apply(handler.effects.context, change);

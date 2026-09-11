@@ -1,5 +1,6 @@
-const RelayConfiguration = @This();
-const provider = @import("../provider/request_support.zig");
+const types = @import("../../agent/types.zig");
 const Transform = @import("Transform.zig");
-dialect: provider.ApiDialect,
+const RelayConfiguration = @This();
+
+dialect: types.ApiDialect,
 transformation: ?Transform = null,

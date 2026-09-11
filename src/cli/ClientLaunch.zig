@@ -1,30 +1,40 @@
-const Launch = @This();
 const std = @import("std");
-const source_namespace = @import("client.zig");
-const frontend = @import("telar-frontend");
-const core = @import("telar-core");
-const Preparation = @import("ClientPreparation.zig");
+const RunOptionsType = @import("arguments/RunOptions.zig");
+const max_args_module = @import("telar-backend").max_args;
+const GenerationType = @import("telar-frontend").Generation;
+const RegistryType = @import("telar-frontend").Registry;
+const TrustStoreType = @import("telar-core").TrustStore;
+const ClientPreparation = @import("ClientPreparation.zig");
 const config = @import("config.zig");
-const remote = @import("remote.zig");
+const defaultPath_module = @import("telar-frontend").defaultPath;
+const LaunchDefaultsType = @import("LaunchDefaults.zig");
 const plugin = @import("plugin.zig");
+const trustWatchFingerprint_module = @import("telar-frontend").trustWatchFingerprint;
+const OptionsType = @import("telar-frontend").Options;
+const default_prefix_module = @import("telar-client").default_prefix;
+const client = @import("client.zig");
+const default_escape_timeout_ns_module = @import("telar-client").default_escape_timeout_ns;
+const default_sequence_timeout_ns_module = @import("telar-client").default_sequence_timeout_ns;
+const Launch = @This();
+
 process: std.process.Init,
-options: *const source_namespace.RunOptions,
+options: *const RunOptionsType,
 endpoint: []const u8,
-argument_storage: [source_namespace.max_args][]const u8 = undefined,
+argument_storage: [max_args_module][]const u8 = undefined,
 argument_count: usize = 0,
 cwd_buffer: [std.fs.max_path_bytes]u8 = undefined,
 cwd_len: usize = 0,
 config_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
 trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
-generation: ?*frontend.config.Generation = null,
+generation: ?*GenerationType = null,
 config_path: ?[]const u8 = null,
 config_mtime_ns: i128 = 0,
-plugin_registry: ?*frontend.plugins.Registry = null,
-trust_store: ?*core.plugin.TrustStore = null,
+plugin_registry: ?*RegistryType = null,
+trust_store: ?*TrustStoreType = null,
 trust_path: ?[]const u8 = null,
 owns_resources: bool = true,
 
-fn prepare(launch: *Launch, preparation: Preparation) !void {
+pub fn prepare(launch: *Launch, preparation: ClientPreparation) !void {
     launch.* = .{
         .process = preparation.process,
         .options = preparation.options,
@@ -42,7 +52,7 @@ fn prepare(launch: *Launch, preparation: Preparation) !void {
         if (preparation.options.config) |value|
             std.mem.span(value)
         else
-            try frontend.config.defaultPath(preparation.process.minimal.environ, &launch.config_path_buffer)
+            try defaultPath_module(preparation.process.minimal.environ, &launch.config_path_buffer)
     else
         null;
     launch.config_mtime_ns = if (launch.config_path) |path|
@@ -55,7 +65,7 @@ fn prepare(launch: *Launch, preparation: Preparation) !void {
     }
 }
 
-pub fn prepareChild(launch: *Launch, defaults: ?remote.LaunchDefaults) !void {
+pub fn prepareChild(launch: *Launch, defaults: ?LaunchDefaultsType) !void {
     if (defaults) |remote_launch| {
         if (remote_launch.cwd.len > launch.cwd_buffer.len) {
             return error.NameTooLong;
@@ -69,7 +79,7 @@ pub fn prepareChild(launch: *Launch, defaults: ?remote.LaunchDefaults) !void {
             return;
         }
     } else {
-        launch.cwd_len = try source_namespace.Io.Dir.cwd().realPathFile(launch.process.io, ".", &launch.cwd_buffer);
+        launch.cwd_len = try std.Io.Dir.cwd().realPathFile(launch.process.io, ".", &launch.cwd_buffer);
     }
 
     while (launch.options.command.argv[launch.argument_count]) |argument| : (launch.argument_count += 1) {
@@ -77,13 +87,13 @@ pub fn prepareChild(launch: *Launch, defaults: ?remote.LaunchDefaults) !void {
     }
 }
 
-fn preparePlugins(launch: *Launch, generation: *frontend.config.Generation) !void {
+fn preparePlugins(launch: *Launch, generation: *GenerationType) !void {
     const resolved_trust_path = try plugin.trustPath(launch.process.minimal.environ, &launch.trust_path_buffer);
     const loaded_trust = try plugin.loadTrustStore(launch.process, resolved_trust_path);
-    launch.trust_store = try launch.process.gpa.create(core.plugin.TrustStore);
+    launch.trust_store = try launch.process.gpa.create(TrustStoreType);
     launch.trust_store.?.* = loaded_trust;
 
-    const registry_value = try frontend.plugins.Registry.loadWithTrust(
+    const registry_value = try RegistryType.loadWithTrust(
         .{
             .gpa = launch.process.gpa,
             .io = launch.process.io,
@@ -93,21 +103,21 @@ fn preparePlugins(launch: *Launch, generation: *frontend.config.Generation) !voi
         launch.trust_store.?,
     );
     try registry_value.validateConfiguredActions(generation.snapshot.bindingSlice());
-    launch.plugin_registry = try launch.process.gpa.create(frontend.plugins.Registry);
+    launch.plugin_registry = try launch.process.gpa.create(RegistryType);
     launch.plugin_registry.?.* = registry_value;
     launch.config_mtime_ns ^= @as(i128, launch.plugin_registry.?.watchFingerprint(launch.process.gpa, launch.process.io));
-    launch.config_mtime_ns ^= @as(i128, frontend.client.trustWatchFingerprint(launch.process.io, resolved_trust_path));
+    launch.config_mtime_ns ^= @as(i128, trustWatchFingerprint_module(launch.process.io, resolved_trust_path));
     launch.trust_path = resolved_trust_path;
 }
 
-fn frontendOptions(launch: *const Launch) frontend.client.Options {
+pub fn frontendOptions(launch: *const Launch) OptionsType {
     const snapshot = if (launch.generation) |generation| &generation.snapshot else null;
     const options = launch.options;
     return .{
         .arguments = launch.argument_storage[0..launch.argument_count],
         .cwd = launch.cwd_buffer[0..launch.cwd_len],
         .endpoint = launch.endpoint,
-        .prefix = if (snapshot) |value| value.prefix else frontend.keybind.default_prefix,
+        .prefix = if (snapshot) |value| value.prefix else default_prefix_module,
         .bindings = if (snapshot) |value| value.bindingSlice() else &.{},
         .theme = if (options.theme_set)
             options.theme
@@ -127,15 +137,15 @@ fn frontendOptions(launch: *const Launch) frontend.client.Options {
         .sound = if (snapshot) |value| value.sound else .{},
         .bars = if (snapshot) |value| value.bars.presentation() else .{},
         .host_shared_memory = launch.options.remote == null and
-            source_namespace.supportsHostSharedMemory(launch.process.minimal.environ),
+            client.supportsHostSharedMemory(launch.process.minimal.environ),
         .input_escape_timeout_ns = if (snapshot) |value|
             value.input_escape_timeout_ns
         else
-            frontend.keybind.default_escape_timeout_ns,
+            default_escape_timeout_ns_module,
         .input_sequence_timeout_ns = if (snapshot) |value|
             value.input_sequence_timeout_ns
         else
-            frontend.keybind.default_sequence_timeout_ns,
+            default_sequence_timeout_ns_module,
         .lua_generation = launch.generation,
         .config_path = launch.config_path,
         .config_mtime_ns = launch.config_mtime_ns,
@@ -145,15 +155,15 @@ fn frontendOptions(launch: *const Launch) frontend.client.Options {
         .trust_store = launch.trust_store,
         .trust_path = launch.trust_path,
         .profile = if (options.profile) |value| std.mem.span(value) else null,
-        .editor = source_namespace.configuredEditor(launch.process.minimal.environ),
+        .editor = client.configuredEditor(launch.process.minimal.environ),
     };
 }
 
-fn transferResources(launch: *Launch) void {
+pub fn transferResources(launch: *Launch) void {
     launch.owns_resources = false;
 }
 
-fn deinit(launch: *Launch) void {
+pub fn deinit(launch: *Launch) void {
     if (!launch.owns_resources) {
         return;
     }

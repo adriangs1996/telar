@@ -1,11 +1,16 @@
-const DeliverWorkspaceCreationHandler = @This();
-const client_model = @import("../../root.zig").model;
-const workspace_transition_delivery = @import("workspace_transition_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const ReleaseEffectsType = @import("ReleaseEffects.zig");
+const ActivationEffectsType = @import("ActivationEffects.zig");
+const WorkspaceReplacementType = @import("../../model/WorkspaceReplacement.zig");
+const ActivateWorkspaceHandlerType = @import("ActivateWorkspaceHandler.zig");
+const ReleaseWorkspaceResourcesHandlerType = @import("ReleaseWorkspaceResourcesHandler.zig");
 const std = @import("std");
-const source_namespace = @import("workspace_creation_delivery.zig");
-model: *client_model.Model,
-release_effects: workspace_transition_delivery.ReleaseEffects,
-activation_effects: workspace_transition_delivery.ActivationEffects,
+const workspace_creation_delivery = @import("workspace_creation_delivery.zig");
+const DeliverWorkspaceCreationHandler = @This();
+
+model: *ModelType,
+release_effects: ReleaseEffectsType,
+activation_effects: ActivationEffectsType,
 
 /// Validates an exact replacement before releasing its departed resources
 /// and activating the runtime-created root.
@@ -13,15 +18,15 @@ activation_effects: workspace_transition_delivery.ActivationEffects,
 /// ```zig
 /// try handler.execute(&replacement);
 /// ```
-pub fn execute(handler: *DeliverWorkspaceCreationHandler, replacement: *const client_model.WorkspaceReplacement) !void {
-    var activate: workspace_transition_delivery.ActivateWorkspaceHandler = .{
+pub fn execute(handler: *DeliverWorkspaceCreationHandler, replacement: *const WorkspaceReplacementType) !void {
+    var activate: ActivateWorkspaceHandlerType = .{
         .model = handler.model,
         .effects = handler.activation_effects,
     };
     try activate.validate(replacement.activation);
     try handler.validateDeparture(replacement);
 
-    var release: workspace_transition_delivery.ReleaseWorkspaceResourcesHandler = .{
+    var release: ReleaseWorkspaceResourcesHandlerType = .{
         .model = handler.model,
         .effects = handler.release_effects,
     };
@@ -30,7 +35,7 @@ pub fn execute(handler: *DeliverWorkspaceCreationHandler, replacement: *const cl
     try activate.execute(replacement.activation);
 }
 
-fn validateDeparture(handler: *const DeliverWorkspaceCreationHandler, replacement: *const client_model.WorkspaceReplacement) !void {
+fn validateDeparture(handler: *const DeliverWorkspaceCreationHandler, replacement: *const WorkspaceReplacementType) !void {
     const panes = replacement.departure.panes.slice();
     const source = replacement.departure.source orelse {
         if (replacement.departure.bookmark != null or panes.len != 0) {
@@ -45,7 +50,7 @@ fn validateDeparture(handler: *const DeliverWorkspaceCreationHandler, replacemen
     if (replacement.departure.bookmark) |bookmark| {
         if (!std.meta.eql(bookmark.location.workspace, source) or
             bookmark.tab_layout.focused() != bookmark.pane_id or
-            !source_namespace.containsPane(panes, bookmark.pane_id))
+            !workspace_creation_delivery.containsPane(panes, bookmark.pane_id))
         {
             return error.StaleWorkspaceCreation;
         }

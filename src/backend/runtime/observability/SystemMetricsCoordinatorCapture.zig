@@ -1,11 +1,12 @@
+const SamplerType = @import("Sampler.zig");
 const Capture = @This();
-const system_metrics = @import("system_metrics.zig");
+
 rearms: usize = 0,
 jobs: usize = 0,
 pumps: usize = 0,
 fail_rearm: bool = false,
 fail_schedule: bool = false,
-owned: system_metrics.Sampler = .{},
+owned: SamplerType = .{},
 
 pub fn rearm(capture: *Capture) !void {
     capture.rearms += 1;
@@ -14,7 +15,7 @@ pub fn rearm(capture: *Capture) !void {
     }
 }
 
-pub fn schedule(capture: *Capture, sampler: system_metrics.Sampler) !void {
+pub fn schedule(capture: *Capture, sampler: SamplerType) !void {
     if (capture.fail_schedule) {
         return error.SchedulerUnavailable;
     }

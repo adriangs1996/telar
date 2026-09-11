@@ -1,3 +1,4 @@
+const ClientKeyType = @import("../../history/ClientKey.zig");
 const StopRequested = @This();
-const source_namespace = @import("shutdown_authority.zig");
-initiator: source_namespace.ClientKey,
+
+initiator: ClientKeyType,

@@ -1,11 +1,12 @@
 //! Private local certificate authority used only by Telar child processes.
 
+const ResourcesType = @import("Resources.zig");
+const AuthorityFilesType = @import("AuthorityFiles.zig");
+const PairType = @import("Pair.zig");
+const AuthorityType = @import("Authority.zig");
 const std = @import("std");
 const tlsz = @import("tls");
-
-pub const Io = std.Io;
-const File = Io.File;
-pub const x509 = tlsz.x509;
+const SecureWrite = @import("SecureWrite.zig");
 
 pub const Error = error{
     KeygenFailed,
@@ -27,17 +28,15 @@ pub const Resources = @import("Resources.zig");
 
 pub const AuthorityFiles = @import("AuthorityFiles.zig");
 
-const SecureWrite = @import("SecureWrite.zig");
-
 pub const Pair = @import("Pair.zig");
 
 pub const Authority = @import("Authority.zig");
 
-pub fn generate(io: Io, validity_seconds: i64) Error!Pair {
-    const now = Io.Clock.real.now(io).toSeconds();
-    var pair: Pair = .{ .key_pair = x509.KeyPair.generate(io) };
+pub fn generate(io: std.Io, validity_seconds: i64) Error!PairType {
+    const now = std.Io.Clock.real.now(io).toSeconds();
+    var pair: PairType = .{ .key_pair = tlsz.x509.KeyPair.generate(io) };
     defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
-    const cert = x509.create(
+    const cert = tlsz.x509.create(
         &pair.cert_buf,
         .{
             .common_name = ca_common_name,
@@ -53,17 +52,17 @@ pub fn generate(io: Io, validity_seconds: i64) Error!Pair {
     return pair;
 }
 
-pub fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
+pub fn load(resources: ResourcesType, files: AuthorityFilesType) Error!PairType {
     const io = resources.io;
     const gpa = resources.allocator;
 
-    const key_pem = Io.Dir.cwd().readFileAlloc(io, files.key, gpa, .limited(max_pem_len)) catch
+    const key_pem = std.Io.Dir.cwd().readFileAlloc(io, files.key, gpa, .limited(max_pem_len)) catch
         return error.ReadFailed;
     defer {
         std.crypto.secureZero(u8, key_pem);
         gpa.free(key_pem);
     }
-    const cert_pem = Io.Dir.cwd().readFileAlloc(io, files.certificate, gpa, .limited(max_pem_len)) catch
+    const cert_pem = std.Io.Dir.cwd().readFileAlloc(io, files.certificate, gpa, .limited(max_pem_len)) catch
         return error.ReadFailed;
     defer gpa.free(cert_pem);
 
@@ -76,19 +75,19 @@ pub fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
         parsed.key.ecdsa[0..Ecdsa.SecretKey.encoded_length].*,
     ) catch return error.ReadFailed;
     defer std.crypto.secureZero(u8, std.mem.asBytes(&secret));
-    var pair: Pair = .{
-        .key_pair = x509.KeyPair.fromSecretKey(secret) catch return error.ReadFailed,
+    var pair: PairType = .{
+        .key_pair = tlsz.x509.KeyPair.fromSecretKey(secret) catch return error.ReadFailed,
     };
     defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
-    const der = x509.decodePem(&pair.cert_buf, cert_pem) catch return error.ReadFailed;
+    const der = tlsz.x509.decodePem(&pair.cert_buf, cert_pem) catch return error.ReadFailed;
     pair.cert_len = der.len;
     const parsed_cert = (std.crypto.Certificate{
         .buffer = pair.certDer(),
         .index = 0,
     }).parse() catch return error.ReadFailed;
-    parsed_cert.verify(parsed_cert, Io.Clock.real.now(io).toSeconds()) catch
+    parsed_cert.verify(parsed_cert, std.Io.Clock.real.now(io).toSeconds()) catch
         return error.ReadFailed;
-    const authority: Authority = .{ .pair = pair };
+    const authority: AuthorityType = .{ .pair = pair };
     var probe = authority.mint(io, "validation.telar.invalid") catch
         return error.ReadFailed;
     defer std.crypto.secureZero(u8, std.mem.asBytes(&probe));
@@ -96,12 +95,12 @@ pub fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
         .buffer = probe.certDer(),
         .index = 0,
     }).parse() catch return error.ReadFailed;
-    parsed_probe.verify(parsed_cert, Io.Clock.real.now(io).toSeconds()) catch
+    parsed_probe.verify(parsed_cert, std.Io.Clock.real.now(io).toSeconds()) catch
         return error.ReadFailed;
     return pair;
 }
 
-pub fn persist(io: Io, pair: *const Pair, files: AuthorityFiles) Error!void {
+pub fn persist(io: std.Io, pair: *const PairType, files: AuthorityFilesType) Error!void {
     var buffer: [max_pem_len]u8 = undefined;
     defer std.crypto.secureZero(u8, &buffer);
     // Create both destinations with 0600 from their first inode. Exclusive
@@ -111,7 +110,7 @@ pub fn persist(io: Io, pair: *const Pair, files: AuthorityFiles) Error!void {
         return error.IncompleteAuthority;
 }
 
-pub fn writeSecure(io: Io, write: SecureWrite) Error!void {
+pub fn writeSecure(io: std.Io, write: SecureWrite) Error!void {
     const path = write.path;
 
     if (!std.fs.path.isAbsolute(path)) {
@@ -124,35 +123,35 @@ pub fn writeSecure(io: Io, write: SecureWrite) Error!void {
             "{s}.tmp-{x}",
             .{ path, randomSerial(io) },
         ) catch return error.WriteFailed;
-        const file = Io.Dir.createFileAbsolute(io, temp_path, .{
+        const file = std.Io.Dir.createFileAbsolute(io, temp_path, .{
             .read = true,
             .truncate = false,
             .exclusive = true,
-            .permissions = File.Permissions.fromMode(0o600),
+            .permissions = std.Io.File.Permissions.fromMode(0o600),
         }) catch |err| switch (err) {
             error.PathAlreadyExists => continue,
             else => return error.WriteFailed,
         };
         file.writeStreamingAll(io, write.bytes) catch {
             file.close(io);
-            Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
+            std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
             return error.WriteFailed;
         };
         file.sync(io) catch {
             file.close(io);
-            Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
+            std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
             return error.WriteFailed;
         };
         file.close(io);
-        const cwd = Io.Dir.cwd();
+        const cwd = std.Io.Dir.cwd();
         if (write.exclusive) {
-            Io.Dir.renamePreserve(cwd, temp_path, cwd, path, io) catch {
-                Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
+            std.Io.Dir.renamePreserve(cwd, temp_path, cwd, path, io) catch {
+                std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
                 return error.WriteFailed;
             };
         } else {
-            Io.Dir.renameAbsolute(temp_path, path, io) catch {
-                Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
+            std.Io.Dir.renameAbsolute(temp_path, path, io) catch {
+                std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
                 return error.WriteFailed;
             };
         }
@@ -161,44 +160,44 @@ pub fn writeSecure(io: Io, write: SecureWrite) Error!void {
     return error.WriteFailed;
 }
 
-pub fn pathExists(io: Io, path: []const u8) !bool {
-    Io.Dir.accessAbsolute(io, path, .{}) catch |err| switch (err) {
+pub fn pathExists(io: std.Io, path: []const u8) !bool {
+    std.Io.Dir.accessAbsolute(io, path, .{}) catch |err| switch (err) {
         error.FileNotFound => return false,
         else => |other| return other,
     };
     return true;
 }
 
-pub fn validateStoredFile(io: Io, path: []const u8) Error!void {
-    const stat = Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch
+pub fn validateStoredFile(io: std.Io, path: []const u8) Error!void {
+    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch
         return error.ReadFailed;
     if (stat.kind != .file or stat.permissions.toMode() & 0o077 != 0) {
         return error.ReadFailed;
     }
 }
 
-pub fn readSystemRoots(io: Io, gpa: std.mem.Allocator) ![]u8 {
+pub fn readSystemRoots(io: std.Io, gpa: std.mem.Allocator) ![]u8 {
     for ([_][]const u8{
         "/etc/ssl/cert.pem",
         "/etc/ssl/certs/ca-certificates.crt",
         "/etc/pki/tls/certs/ca-bundle.crt",
         "/etc/ssl/ca-bundle.pem",
-    }) |path| return Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(4 * 1024 * 1024)) catch continue;
+    }) |path| return std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(4 * 1024 * 1024)) catch continue;
     return error.FileNotFound;
 }
 
-pub fn randomSerial(io: Io) u64 {
+pub fn randomSerial(io: std.Io) u64 {
     const source: std.Random.IoSource = .{ .io = io };
     return source.interface().int(u64) >> 1;
 }
 
 test "minted leaves verify against the local authority" {
     const io = std.testing.io;
-    const authority: Authority = .{ .pair = try generate(io, ca_seconds) };
+    const authority: AuthorityType = .{ .pair = try generate(io, ca_seconds) };
     const leaf = try authority.mint(io, "api.anthropic.com");
     const parsed_leaf = try (std.crypto.Certificate{ .buffer = leaf.certDer(), .index = 0 }).parse();
     const parsed_ca = try (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse();
-    try parsed_leaf.verify(parsed_ca, Io.Clock.real.now(io).toSeconds());
+    try parsed_leaf.verify(parsed_ca, std.Io.Clock.real.now(io).toSeconds());
     try parsed_leaf.verifyHostName("api.anthropic.com");
 }
 
@@ -217,22 +216,22 @@ test "authority files and derived bundle are owner-only" {
     const cert_path = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory});
     const bundle_path = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory});
 
-    const resources: Resources = .{ .io = io, .allocator = gpa };
-    const files: AuthorityFiles = .{ .key = key_path, .certificate = cert_path };
-    var authority = try Authority.loadOrCreate(resources, files);
+    const resources: ResourcesType = .{ .io = io, .allocator = gpa };
+    const files: AuthorityFilesType = .{ .key = key_path, .certificate = cert_path };
+    var authority = try AuthorityType.loadOrCreate(resources, files);
     try authority.writeBundle(resources, bundle_path);
-    _ = try Authority.loadOrCreate(resources, files);
+    _ = try AuthorityType.loadOrCreate(resources, files);
     for ([_][]const u8{ key_path, cert_path, bundle_path }) |path| {
-        const stat = try Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
-        try std.testing.expectEqual(File.Kind.file, stat.kind);
+        const stat = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
+        try std.testing.expectEqual(std.Io.File.Kind.file, stat.kind);
         try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
     }
 }
 
 test "system authorities have a bounded 30-day lifetime" {
     const io = std.testing.io;
-    const authority: Authority = .{ .pair = try generate(io, system_ca_seconds) };
+    const authority: AuthorityType = .{ .pair = try generate(io, system_ca_seconds) };
     try std.testing.expect(try authority.hasSystemLifetime());
-    try std.testing.expect(!(try (Authority{ .pair = try generate(io, ca_seconds) }).hasSystemLifetime()));
+    try std.testing.expect(!(try (AuthorityType{ .pair = try generate(io, ca_seconds) }).hasSystemLifetime()));
     try std.testing.expectEqual(@as(usize, 40), authority.fingerprint().len);
 }

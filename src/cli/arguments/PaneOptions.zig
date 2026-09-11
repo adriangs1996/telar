@@ -1,17 +1,21 @@
-const PaneOptions = @This();
-const source_namespace = @import("pane.zig");
-const core = @import("telar-core");
+const pane = @import("pane.zig");
+const values = @import("values.zig");
+const PaneTextSourceType = @import("telar-core").PaneTextSource;
+const PaneDirectionType = @import("telar-core").PaneDirection;
 const std = @import("std");
-const Cursor = @import("cursor_support.zig").Cursor;
-action: source_namespace.PaneAction,
-target: source_namespace.Target,
+const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
+const Cursor = @import("Cursor.zig");
+const PaneOptions = @This();
+
+action: pane.PaneAction,
+target: values.Target,
 text: ?[*:0]const u8 = null,
 enter: bool = false,
 lines: u16 = 40,
-source: core.schema.PaneTextSource = .recent,
+source: PaneTextSourceType = .recent,
 json: bool = false,
 socket: ?[*:0]const u8 = null,
-direction: ?core.schema.PaneDirection = null,
+direction: ?PaneDirectionType = null,
 
 pub fn parse(args: []const [*:0]const u8) !PaneOptions {
     if (args.len == 0) {
@@ -19,7 +23,7 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
     }
 
     const action_text = std.mem.span(args[0]);
-    const action: source_namespace.PaneAction = if (std.mem.eql(u8, action_text, "read"))
+    const action: pane.PaneAction = if (std.mem.eql(u8, action_text, "read"))
         .read
     else if (std.mem.eql(u8, action_text, "send-keys"))
         .send_keys
@@ -31,7 +35,7 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
         return error.MissingPaneTarget;
     }
 
-    var options: PaneOptions = .{ .action = action, .target = source_namespace.Target.parse(args[1]) };
+    var options: PaneOptions = .{ .action = action, .target = values.Target.parse(args[1]) };
     if (options.target == .name) {
         return error.InvalidPaneId;
     }
@@ -46,7 +50,7 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
         }
 
         options.text = args[2];
-        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > core.schema.max_pane_text_input_bytes) {
+        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > max_pane_text_input_bytes_module) {
             return error.InvalidSendText;
         }
 
@@ -70,14 +74,14 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
             }
             const value = try cursor.require(error.MissingLineCount);
 
-            options.lines = try source_namespace.parseLineCount(std.mem.span(value));
+            options.lines = try values.parseLineCount(std.mem.span(value));
         } else if (std.mem.eql(u8, arg, "--source")) {
             if (action != .read) {
                 return error.UnknownPaneOption;
             }
             const value = try cursor.require(error.MissingTextSource);
 
-            options.source = try source_namespace.parseTextSource(std.mem.span(value));
+            options.source = try values.parseTextSource(std.mem.span(value));
         } else if (std.mem.eql(u8, arg, "--socket")) {
             const value = try cursor.require(error.MissingSocketPath);
             if (options.socket != null) {
@@ -91,7 +95,7 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
             }
 
             const value = try cursor.require(error.UnknownPaneOption);
-            options.direction = source_namespace.parsePaneDirection(std.mem.span(value)) orelse return error.InvalidPaneDirection;
+            options.direction = pane.parsePaneDirection(std.mem.span(value)) orelse return error.InvalidPaneDirection;
         } else {
             return error.UnknownPaneOption;
         }

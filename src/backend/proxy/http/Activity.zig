@@ -1,5 +1,6 @@
-const Activity = @This();
 const Fragment = @import("Fragment.zig");
+const Activity = @This();
+
 bytes: usize = 0,
 calls: usize = 0,
 payload: [64]u8 = undefined,

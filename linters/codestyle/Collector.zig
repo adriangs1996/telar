@@ -1,8 +1,9 @@
-const Collector = @This();
 const std = @import("std");
-const source_namespace = @import("paths.zig");
+const paths = @import("paths.zig");
+const Collector = @This();
+
 allocator: std.mem.Allocator,
-io: source_namespace.Io,
+io: std.Io,
 files: std.ArrayList([]u8) = .empty,
 
 pub fn deinit(self: *Collector) void {
@@ -14,7 +15,7 @@ pub fn deinit(self: *Collector) void {
 }
 
 pub fn addRoot(self: *Collector, path: []const u8) !void {
-    const stat = try source_namespace.Io.Dir.cwd().statFile(self.io, path, .{ .follow_symlinks = false });
+    const stat = try std.Io.Dir.cwd().statFile(self.io, path, .{ .follow_symlinks = false });
 
     switch (stat.kind) {
         .directory => try self.addDirectory(path),
@@ -28,14 +29,14 @@ pub fn addRoot(self: *Collector, path: []const u8) !void {
 }
 
 fn addDirectory(self: *Collector, path: []const u8) !void {
-    var directory = try source_namespace.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true });
+    var directory = try std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true });
     defer directory.close(self.io);
 
     var walker = try directory.walk(self.allocator);
     defer walker.deinit();
 
     while (try walker.next(self.io)) |entry| {
-        if (entry.kind == .directory and source_namespace.shouldSkipDirectory(entry.basename)) {
+        if (entry.kind == .directory and paths.shouldSkipDirectory(entry.basename)) {
             walker.leave(self.io);
             continue;
         }

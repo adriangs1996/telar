@@ -1,4 +1,5 @@
+const PaneIdType = @import("telar-core").PaneId;
 const Effects = @This();
-const source_namespace = @import("workspace_handoff_restoration.zig");
+
 context: *anyopaque,
-show_pane_graphics: *const fn (*anyopaque, source_namespace.schema.PaneId) anyerror!void,
+show_pane_graphics: *const fn (*anyopaque, PaneIdType) anyerror!void,

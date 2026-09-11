@@ -1,10 +1,12 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("select_tab.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const SelectionEffects = @import("SelectionEffects.zig");
+const TabSelectionType = @import("../../model/TabSelection.zig");
 const std = @import("std");
-model: *client_model.Model,
-expected: source_namespace.schema.TabLocation,
+const EffectsCapture = @This();
+
+model: *ModelType,
+expected: TabLocationType,
 calls: usize = 0,
 observed_commit: bool = false,
 fail: bool = false,
@@ -13,7 +15,7 @@ pub fn port(capture: *EffectsCapture) SelectionEffects {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(context: *anyopaque, selection: client_model.TabSelection) !void {
+fn deliver(context: *anyopaque, selection: TabSelectionType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     const previous = capture.model.workspace.find(selection.previous.tab_id);
     const selected = capture.model.workspace.find(selection.selected.tab_id);

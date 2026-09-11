@@ -1,5 +1,6 @@
+const AgentSound = @import("telar-core").AgentSound;
 const Config = @This();
-const source_namespace = @import("types.zig");
+
 enabled: bool = true,
 ready: bool = true,
 needs_input: bool = true,
@@ -11,7 +12,7 @@ needs_input: bool = true,
 ///     _ = playback.request(.ready);
 /// }
 /// ```
-pub fn allows(configuration: Config, kind: source_namespace.Kind) bool {
+pub fn allows(configuration: Config, kind: AgentSound) bool {
     if (!configuration.enabled) {
         return false;
     }

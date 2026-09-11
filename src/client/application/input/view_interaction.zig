@@ -1,37 +1,31 @@
 //! Application policy for dispatching one semantic view interaction.
 
+const AgentKeyType = @import("../../agents/AgentKey.zig");
+const TabIdType = @import("telar-core").TabId;
+const PaneIdType = @import("telar-core").PaneId;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const notification_capability = @import("../../notifications/notifications.zig");
+const types = @import("../../attachments/types.zig");
+const ViewInteractionCapture = @import("ViewInteractionCapture.zig");
+const DispatchViewInteractionHandler = @import("DispatchViewInteractionHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../../root.zig").agents;
-const attachments = @import("../../attachments/root.zig");
-const notification_capability = @import("../../root.zig").notifications;
-
-const schema = core.schema;
+const ViewInteractionOutcome = @import("ViewInteractionOutcome.zig");
+const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
 
 pub const Intent = union(enum) {
     none,
     toggle_sidebar,
     resize_sidebar: u16,
     toggle_workspace_list,
-    focus_agent: agents.AgentKey,
-    select_tab: schema.TabId,
-    focus_pane: schema.PaneId,
-    rename_tab: schema.TabId,
-    select_workspace: schema.WorkspaceId,
+    focus_agent: AgentKeyType,
+    select_tab: TabIdType,
+    focus_pane: PaneIdType,
+    rename_tab: TabIdType,
+    select_workspace: WorkspaceIdType,
     notification_activate: notification_capability.Id,
     notification_dismiss: notification_capability.Id,
-    attachment_dismiss: attachments.Id,
+    attachment_dismiss: types.Id,
 };
-
-pub const Command = @import("ViewInteractionCommand.zig");
-
-pub const Outcome = @import("ViewInteractionOutcome.zig");
-
-pub const IntentOutcome = @import("IntentOutcome.zig");
-
-pub const Effects = @import("ViewInteractionEffects.zig");
-
-pub const DispatchViewInteractionHandler = @import("DispatchViewInteractionHandler.zig");
 
 pub fn capturesPaneInput(intent: Intent) bool {
     return switch (intent) {
@@ -52,14 +46,12 @@ pub const Failure = enum {
     pane_geometry,
 };
 
-const Capture = @import("ViewInteractionCapture.zig");
-
 test "DispatchViewInteractionHandler orders intent invalidation and pane geometry" {
-    const key: agents.AgentKey = .{
+    const key: AgentKeyType = .{
         .pane_id = @enumFromInt(3),
         .pane_generation = 7,
     };
-    var capture: Capture = .{};
+    var capture: ViewInteractionCapture = .{};
     var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
 
     const outcome = try handler.execute(.{
@@ -67,7 +59,7 @@ test "DispatchViewInteractionHandler orders intent invalidation and pane geometr
         .layout_changed = true,
     });
 
-    try std.testing.expectEqualDeep(Outcome{
+    try std.testing.expectEqualDeep(ViewInteractionOutcome{
         .consume_pane_input = true,
     }, outcome);
     try std.testing.expectEqual(@as(usize, 3), capture.count);
@@ -77,9 +69,9 @@ test "DispatchViewInteractionHandler orders intent invalidation and pane geometr
 }
 
 test "attachment dismissal can discover its layout change while applying the intent" {
-    var capture: Capture = .{};
+    var capture: ViewInteractionCapture = .{};
     var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
-    const id: attachments.Id = @enumFromInt(4);
+    const id: types.Id = @enumFromInt(4);
 
     _ = try handler.execute(.{ .intent = .{ .attachment_dismiss = id } });
 
@@ -90,9 +82,9 @@ test "attachment dismissal can discover its layout change while applying the int
 }
 
 test "DispatchViewInteractionHandler preserves completed stages across failures" {
-    var capture: Capture = .{ .failure = .intent };
+    var capture: ViewInteractionCapture = .{ .failure = .intent };
     var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
-    const command: Command = .{
+    const command: ViewInteractionCommand = .{
         .intent = .{ .rename_tab = @enumFromInt(4) },
         .layout_changed = true,
     };
@@ -109,7 +101,7 @@ test "DispatchViewInteractionHandler preserves completed stages across failures"
 }
 
 test "DispatchViewInteractionHandler delivers layout without a semantic intent" {
-    var capture: Capture = .{};
+    var capture: ViewInteractionCapture = .{};
     var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
 
     const outcome = try handler.execute(.{ .layout_changed = true, .consumed = true });
@@ -122,7 +114,7 @@ test "DispatchViewInteractionHandler delivers layout without a semantic intent" 
 
 test "DispatchViewInteractionHandler owns pane-input capture policy" {
     const cases = [_]struct {
-        command: Command,
+        command: ViewInteractionCommand,
         consume: bool,
     }{
         .{ .command = .{}, .consume = false },
@@ -137,7 +129,7 @@ test "DispatchViewInteractionHandler owns pane-input capture policy" {
     };
 
     for (cases) |case| {
-        var capture: Capture = .{};
+        var capture: ViewInteractionCapture = .{};
         var handler: DispatchViewInteractionHandler = .{ .effects = capture.effects() };
 
         const outcome = try handler.execute(case.command);

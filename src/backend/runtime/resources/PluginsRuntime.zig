@@ -1,14 +1,10 @@
+const PluginsRuntimeInitOptions = @import("PluginsRuntimeInitOptions.zig");
+const ServiceType = @import("../../plugins/Service.zig");
 const Runtime = @This();
-const plugins = @import("../../plugins/root.zig");
-const source_namespace = @import("plugins.zig");
-const std = @import("std");
-service_value: plugins.Service,
 
-pub const InitOptions = struct {
-    io: source_namespace.Io,
-    gpa: std.mem.Allocator,
-    specs: []const plugins.Spec,
-};
+service_value: ServiceType,
+
+pub const InitOptions = @import("PluginsRuntimeInitOptions.zig");
 
 /// Starts every configured tap worker actor at one stable address.
 ///
@@ -16,7 +12,7 @@ pub const InitOptions = struct {
 /// var runtime: Runtime = undefined;
 /// try runtime.init(.{ .io = io, .gpa = gpa, .specs = specs });
 /// ```
-pub fn init(runtime: *Runtime, options: InitOptions) !void {
+pub fn init(runtime: *Runtime, options: PluginsRuntimeInitOptions) !void {
     try runtime.service_value.init(.{ .io = options.io, .gpa = options.gpa, .specs = options.specs });
 }
 
@@ -25,7 +21,7 @@ pub fn init(runtime: *Runtime, options: InitOptions) !void {
 /// ```zig
 /// const service = runtime.service();
 /// ```
-pub fn service(runtime: *Runtime) *plugins.Service {
+pub fn service(runtime: *Runtime) *ServiceType {
     return &runtime.service_value;
 }
 

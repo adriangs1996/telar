@@ -1,15 +1,16 @@
-const ReportAgentCommandHandler = @This();
-const pane_mod = @import("../../../pane/root.zig");
+const PaneStoreType = @import("../../../pane/PaneStore.zig");
 const ReportAgentCommand = @import("ReportAgentCommand.zig");
-const source_namespace = @import("report_agent_command.zig");
-panes: *pane_mod.PaneStore,
+const report_agent_command = @import("report_agent_command.zig");
+const ReportAgentCommandHandler = @This();
+
+panes: *PaneStoreType,
 
 /// Queues one start or finish report against the exact live pane.
 ///
 /// ```zig
 /// const outcome = handler.execute(report);
 /// ```
-pub fn execute(handler: *ReportAgentCommandHandler, report: ReportAgentCommand) source_namespace.Outcome {
+pub fn execute(handler: *ReportAgentCommandHandler, report: ReportAgentCommand) report_agent_command.Outcome {
     const pane = handler.panes.resolve(report.pane) orelse return .pane_not_found;
     if (pane.exit != null) {
         return .pane_not_found;

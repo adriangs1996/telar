@@ -1,19 +1,23 @@
+const Repository = @import("Repository.zig");
+const WorkspaceType = @import("Workspace.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const std = @import("std");
+const raw_module = @import("telar-core").raw;
+const repository_support = @import("repository_support.zig");
+const state_mod = @import("state_support.zig");
 /// Repository-owned aggregate candidate that remains invisible until commit.
 const Proposal = @This();
-const Repository = @import("Repository.zig");
-const source_namespace = @import("repository_support.zig");
-const std = @import("std");
-const state_mod = @import("state_support.zig");
+
 repository: *Repository,
-workspace: ?source_namespace.Workspace,
-proposed_location: source_namespace.schema.TabLocation,
+workspace: ?WorkspaceType,
+proposed_location: TabLocationType,
 
 /// Returns the stable identity reserved by this proposal.
 ///
 /// ```zig
 /// const location = proposal.location();
 /// ```
-pub fn location(proposal: *const Proposal) source_namespace.schema.TabLocation {
+pub fn location(proposal: *const Proposal) TabLocationType {
     std.debug.assert(proposal.workspace != null);
     return proposal.proposed_location;
 }
@@ -42,11 +46,11 @@ pub fn name(proposal: *const Proposal) []const u8 {
 /// ```zig
 /// const location = proposal.commit();
 /// ```
-pub fn commit(proposal: *Proposal) source_namespace.schema.TabLocation {
+pub fn commit(proposal: *Proposal) TabLocationType {
     const repository = proposal.repository;
     std.debug.assert(proposal.workspace != null);
-    std.debug.assert(source_namespace.schema.id.raw(source_namespace.workspaceId(proposal.proposed_location.workspace).?) == repository.state.next_workspace_id);
-    std.debug.assert(source_namespace.schema.id.raw(proposal.proposed_location.tab_id) == repository.state.next_tab_id);
+    std.debug.assert(raw_module(repository_support.workspaceId(proposal.proposed_location.workspace).?) == repository.state.next_workspace_id);
+    std.debug.assert(raw_module(proposal.proposed_location.tab_id) == repository.state.next_tab_id);
     std.debug.assert(repository.state.count < repository.state.items.len);
 
     for (&repository.state.items) |*slot| {

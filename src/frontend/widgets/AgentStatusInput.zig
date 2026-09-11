@@ -1,7 +1,9 @@
+const RectType = @import("telar-core").Rect;
+const AgentStatusType = @import("telar-core").AgentStatus;
+const ColorType = @import("telar-core").Color;
 const AgentStatusInput = @This();
-const ui = @import("../ui/root.zig");
-const source_namespace = @import("sidebar.zig");
-area: ui.Rect,
-status: source_namespace.schema.AgentStatus,
+
+area: RectType,
+status: AgentStatusType,
 animation_frame: u8,
-background: ui.Color,
+background: ColorType,

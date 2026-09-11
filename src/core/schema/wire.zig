@@ -1,10 +1,8 @@
 //! Bounds-checked little-endian wire helpers.
 
+const Encoder = @import("Encoder.zig");
+const Decoder = @import("Decoder.zig");
 const std = @import("std");
-
-pub const Encoder = @import("Encoder.zig");
-
-pub const Decoder = @import("Decoder.zig");
 
 test "integers and sized byte strings round trip" {
     var buffer: [32]u8 = undefined;

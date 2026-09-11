@@ -1,29 +1,20 @@
 //! Application command for moving a tab inside its workspace aggregate.
 
+const StateType = @import("../../../workspace/State.zig");
+const RepositoryType = @import("../../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_mod = @import("../../../workspace/root.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const MoveTabEventCapture = @import("MoveTabEventCapture.zig");
+const MoveTabHandler = @import("MoveTabHandler.zig");
+const tab_module = @import("telar-core").tab;
+const workspace_module = @import("telar-core").workspace;
 
-pub const schema = core.schema;
-pub const WorkspaceRepository = workspace_mod.Repository;
-
-pub const MoveTab = @import("MoveTab.zig");
-
-pub const MoveTabResult = workspace_mod.TabMoved;
-
-pub const EventPublisher = @import("MoveTabEventPublisher.zig");
-
-pub const MoveTabExecutor = @import("MoveTabExecutor.zig");
-
-pub const MoveTabHandler = @import("MoveTabHandler.zig");
-
-const EventCapture = @import("MoveTabEventCapture.zig");
-
-fn testingRepository(state: *workspace_mod.State) WorkspaceRepository {
-    return WorkspaceRepository.init(state, std.testing.allocator);
+fn testingRepository(state: *StateType) RepositoryType {
+    return RepositoryType.init(state, std.testing.allocator);
 }
 
-fn appendTestingTab(workspaces: *WorkspaceRepository, workspace: schema.WorkspaceLocation) !schema.TabLocation {
+fn appendTestingTab(workspaces: *RepositoryType, workspace: WorkspaceLocationType) !TabLocationType {
     const aggregate = workspaces.find(workspace) orelse return error.WorkspaceNotFound;
     const tab_id = try workspaces.nextTabId();
     const created = try aggregate.createTab(tab_id, "logs");
@@ -32,13 +23,13 @@ fn appendTestingTab(workspaces: *WorkspaceRepository, workspace: schema.Workspac
 }
 
 test "MoveTabHandler commits before publishing the canonical position" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const initial = (try workspaces.ensure("/work/project")).location;
     const moved_location = try appendTestingTab(&workspaces, initial.workspace);
     const revision = workspaces.reader().revision();
-    var capture: EventCapture = .{ .reader = workspaces.reader() };
+    var capture: MoveTabEventCapture = .{ .reader = workspaces.reader() };
     var handler: MoveTabHandler = .{
         .workspaces = &workspaces,
         .events = capture.publisher(),
@@ -59,11 +50,11 @@ test "MoveTabHandler commits before publishing the canonical position" {
 }
 
 test "MoveTabHandler publishes a successful move at either edge" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
-    var capture: EventCapture = .{ .reader = workspaces.reader() };
+    var capture: MoveTabEventCapture = .{ .reader = workspaces.reader() };
     var handler: MoveTabHandler = .{
         .workspaces = &workspaces,
         .events = capture.publisher(),
@@ -79,19 +70,19 @@ test "MoveTabHandler publishes a successful move at either edge" {
 }
 
 test "MoveTabHandler rejects missing workspaces and tabs without publishing" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
-    var capture: EventCapture = .{ .reader = workspaces.reader() };
+    var capture: MoveTabEventCapture = .{ .reader = workspaces.reader() };
     var handler: MoveTabHandler = .{
         .workspaces = &workspaces,
         .events = capture.publisher(),
     };
     var missing_tab = location;
-    missing_tab.tab_id = try schema.id.tab(999);
-    const missing_workspace: schema.TabLocation = .{
-        .workspace = .{ .workspace = try schema.id.workspace(999) },
+    missing_tab.tab_id = try tab_module(999);
+    const missing_workspace: TabLocationType = .{
+        .workspace = .{ .workspace = try workspace_module(999) },
         .tab_id = location.tab_id,
     };
 

@@ -1,5 +1,6 @@
-const HostUpdate = @This();
 const HostCapabilities = @import("HostCapabilities.zig");
-const source_namespace = @import("types.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const HostUpdate = @This();
+
 capabilities: HostCapabilities,
-size: source_namespace.schema.TerminalSize,
+size: TerminalSizeType,

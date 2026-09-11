@@ -1,13 +1,13 @@
-const ResultWriter = @This();
-const source_namespace = @import("main.zig");
+const std = @import("std");
 const Config = @import("Config.zig");
 const Case = @import("Case.zig");
 const Measurement = @import("Measurement.zig");
-const std = @import("std");
-writer: *source_namespace.Io.Writer,
+const ResultWriter = @This();
+
+writer: *std.Io.Writer,
 config: Config,
 
-fn write(self: ResultWriter, case: Case, result: Measurement) !void {
+pub fn write(self: ResultWriter, case: Case, result: Measurement) !void {
     const rate = if (result.median_ns == 0)
         0
     else

@@ -1,6 +1,7 @@
-const OpenPaneExecutor = @This();
 const OpenPane = @import("OpenPane.zig");
 const OpenPaneResult = @import("OpenPaneResult.zig");
+const OpenPaneExecutor = @This();
+
 context: *anyopaque,
 execute_fn: *const fn (*anyopaque, OpenPane) anyerror!OpenPaneResult,
 

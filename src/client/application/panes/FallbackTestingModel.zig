@@ -1,30 +1,33 @@
-const FallbackTestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_graphics.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-model: *client_model.Model,
-first: source_namespace.schema.PaneId,
-second: source_namespace.schema.PaneId,
-third: source_namespace.schema.PaneId,
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const FallbackTestingModel = @This();
+
+model: *ModelType,
+first: PaneIdType,
+second: PaneIdType,
+third: PaneIdType,
 
 pub fn init() !FallbackTestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first_location: source_namespace.schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first_location: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second_location: source_namespace.schema.TabLocation = .{
+    const second_location: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    const first: source_namespace.schema.PaneId = @enumFromInt(1);
-    const second: source_namespace.schema.PaneId = @enumFromInt(2);
-    const third: source_namespace.schema.PaneId = @enumFromInt(3);
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
+    const third: PaneIdType = @enumFromInt(3);
     try model.workspace.bootstrap(.{ .pane_id = first, .location = first_location, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = first_location, .axis = .horizontal, .area = .{ .w = 20, .h = 5 } });
     _ = try model.workspace.addCreated(.{

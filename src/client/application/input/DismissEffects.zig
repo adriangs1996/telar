@@ -1,7 +1,8 @@
-const DismissEffects = @This();
-const attachments = @import("../../attachments/root.zig");
+const types = @import("../../attachments/types.zig");
 const RemovalCommand = @import("RemovalCommand.zig");
+const DismissEffects = @This();
+
 context: *anyopaque,
-plan: *const fn (*anyopaque, attachments.Id) ?RemovalCommand,
+plan: *const fn (*anyopaque, types.Id) ?RemovalCommand,
 deliver: *const fn (*anyopaque, RemovalCommand) anyerror!void,
-remove: *const fn (*anyopaque, attachments.Id) ?bool,
+remove: *const fn (*anyopaque, types.Id) ?bool,

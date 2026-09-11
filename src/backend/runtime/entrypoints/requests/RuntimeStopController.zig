@@ -1,14 +1,15 @@
+const RuntimeStopExecutorType = @import("../../application/commands/RuntimeStopExecutor.zig");
+const ClientKeyType = @import("../../../history/ClientKey.zig");
 const Controller = @This();
-const runtime_stop_commands = @import("../../application/commands/runtime_stop.zig");
-const shutdown_mod = @import("../../lifecycle/root.zig").shutdown_authority;
-runtime_stop: runtime_stop_commands.RuntimeStopExecutor,
+
+runtime_stop: RuntimeStopExecutorType,
 
 /// Creates a controller around the runtime-stop application command.
 ///
 /// ```zig
 /// var controller = Controller.init(handler.executor());
 /// ```
-pub fn init(runtime_stop: runtime_stop_commands.RuntimeStopExecutor) Controller {
+pub fn init(runtime_stop: RuntimeStopExecutorType) Controller {
     return .{ .runtime_stop = runtime_stop };
 }
 
@@ -19,6 +20,6 @@ pub fn init(runtime_stop: runtime_stop_commands.RuntimeStopExecutor) Controller 
 /// ```zig
 /// controller.runtimeStop(client);
 /// ```
-pub fn runtimeStop(controller: *Controller, client: shutdown_mod.ClientKey) void {
+pub fn runtimeStop(controller: *Controller, client: ClientKeyType) void {
     _ = controller.runtime_stop.execute(.{ .requester = client });
 }

@@ -125,12 +125,12 @@ propagate without transport classifying their original message.
 
 ## Proof
 
-- `src/frontend/client/runtime_transport.zig` checks partial-allocation cleanup
+- `src/client/connection/runtime_transport.zig` checks partial-allocation cleanup
   and the exact three-frame bootstrap order over a real socketpair.
-- `src/frontend/client/outbox.zig` proves one send claim, completion on success
+- `src/client/connection/outbox_support.zig` proves one send claim, completion on success
   and failure, copied payload ownership, folding rules and saturation bounds.
 - `runtime reads own one token and do not rearm after shutdown` in
-  `src/frontend/client/client_test.zig` crosses the real framed socket and
+  `src/frontend/client/tests/` crosses the real framed socket and
   proves rearming, terminal shutdown and error cleanup.
 - `host input reads pause at outbox capacity and resume with one token` proves
   that a real send completion recovers TTY capacity without duplicate reads.

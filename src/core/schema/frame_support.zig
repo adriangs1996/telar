@@ -1,23 +1,31 @@
 //! Pane screen snapshots and patches for Telar's current protocol.
 
-const std = @import("std");
-const ui = @import("../ui/root.zig");
-const transport = @import("../transport/root.zig");
-const wire = @import("wire.zig");
+const CellType = @import("../ui/Cell.zig");
+const transport = @import("../transport/transport.zig");
+const EncoderType = @import("Encoder.zig");
+const Frame = @import("Frame.zig");
 const id = @import("id.zig");
+const std = @import("std");
+const DecoderType = @import("Decoder.zig");
+const FrameView = @import("FrameView.zig");
+const Mouse = @import("Mouse.zig");
+const InputModes = @import("InputModes.zig");
+const Scroll = @import("Scroll.zig");
+const Header = @import("Header.zig");
+const StyleType = @import("../ui/Style.zig");
+const cell_support = @import("../ui/cell_support.zig");
+const Span = @import("Span.zig");
 
 pub const max_span_count = 4096;
 pub const cell_header_size = 1;
 pub const max_style_size = 14;
-pub const max_cell_size = cell_header_size + max_style_size + ui.Cell.max_bytes;
+pub const max_cell_size = cell_header_size + max_style_size + CellType.max_bytes;
 pub const body_header_size = 55;
 pub const span_header_size = 12;
 pub const max_body_size = transport.max_frame_size - 1;
 pub const max_cell_count: u32 = @intCast(
     (max_body_size - body_header_size - span_header_size) / max_cell_size,
 );
-
-pub const Cursor = @import("Cursor.zig");
 
 /// Canonical OSC 22 shapes. Wire values are independent of the VT's enum ABI.
 pub const PointerShape = enum(u8) {
@@ -65,27 +73,7 @@ pub const MouseTracking = enum(u8) {
     any = 4,
 };
 
-pub const Mouse = @import("Mouse.zig");
-
-pub const InputModes = @import("InputModes.zig");
-
-pub const Scroll = @import("Scroll.zig");
-
-pub const Span = @import("Span.zig");
-
-pub const Frame = @import("Frame.zig");
-
-pub const FrameView = @import("FrameView.zig");
-
-const Header = @import("Header.zig");
-
-pub const SpanView = @import("SpanView.zig");
-
-pub const SpanIterator = @import("SpanIterator.zig");
-
-pub const CellIterator = @import("CellIterator.zig");
-
-pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
+pub fn encodeBody(encoder: *EncoderType, frame: Frame) !void {
     try validateFrameStructure(frame);
     const body_start = encoder.index;
     try encoder.writeInt(u64, id.raw(frame.pane_id));
@@ -132,7 +120,7 @@ pub fn encodeBody(encoder: *wire.Encoder, frame: Frame) !void {
     }
 }
 
-pub fn decodeBody(decoder: *wire.Decoder) !FrameView {
+pub fn decodeBody(decoder: *DecoderType) !FrameView {
     const body_start = decoder.index;
     const pane_id = try id.pane(try decoder.readInt(u64));
     const frame_id = try decoder.readInt(u64);
@@ -306,8 +294,8 @@ fn gridCellCount(cols: u16, rows: u16) !u32 {
     return count;
 }
 
-fn validateCell(cell: ui.Cell) !void {
-    if (cell.len > ui.Cell.max_bytes) {
+fn validateCell(cell: CellType) !void {
+    if (cell.len > CellType.max_bytes) {
         return error.InvalidCell;
     }
     switch (cell.width) {
@@ -322,8 +310,8 @@ const length_mask: u8 = 0x1f;
 const width_shift = 5;
 const style_changed_bit: u8 = 0x80;
 
-fn encodeCells(encoder: *wire.Encoder, cells: []const ui.Cell, body_start: usize) !void {
-    var previous_style: ?ui.Style = null;
+fn encodeCells(encoder: *EncoderType, cells: []const CellType, body_start: usize) !void {
+    var previous_style: ?StyleType = null;
     for (cells) |cell| {
         try validateCell(cell);
         const style_changed = previous_style == null or
@@ -349,7 +337,7 @@ fn encodeCells(encoder: *wire.Encoder, cells: []const ui.Cell, body_start: usize
 
 /// Exact wire size of a cell run, excluding its span header.
 /// `previous_style` models a run appended to an existing span.
-pub fn encodedCellsSize(cells: []const ui.Cell, previous_style: ?ui.Style) usize {
+pub fn encodedCellsSize(cells: []const CellType, previous_style: ?StyleType) usize {
     var size: usize = 0;
     var style = previous_style;
     for (cells) |cell| {
@@ -359,20 +347,20 @@ pub fn encodedCellsSize(cells: []const ui.Cell, previous_style: ?ui.Style) usize
     return size;
 }
 
-pub fn encodedCellSize(cell: ui.Cell, previous_style: ?ui.Style) usize {
+pub fn encodedCellSize(cell: CellType, previous_style: ?StyleType) usize {
     const style_changed = previous_style == null or !previous_style.?.eql(cell.style);
     return cell_header_size + cell.len +
         if (style_changed) encodedStyleSize(cell.style) else 0;
 }
 
-fn encodeStyle(encoder: *wire.Encoder, style: ui.Style) !void {
+fn encodeStyle(encoder: *EncoderType, style: StyleType) !void {
     try encoder.writeInt(u16, @bitCast(style.flags));
     try encodeColor(encoder, style.fg);
     try encodeColor(encoder, style.bg);
     try encodeColor(encoder, style.underline_color);
 }
 
-pub fn decodeCell(decoder: *wire.Decoder, previous_style: *?ui.Style) !ui.Cell {
+pub fn decodeCell(decoder: *DecoderType, previous_style: *?StyleType) !CellType {
     const header = try decoder.readByte();
     const length = header & length_mask;
     const width = (header >> width_shift) & 0x3;
@@ -384,12 +372,12 @@ pub fn decodeCell(decoder: *wire.Decoder, previous_style: *?ui.Style) !ui.Cell {
         try decodeStyle(decoder)
     else
         previous_style.*.?;
-    if (length > ui.Cell.max_bytes) {
+    if (length > CellType.max_bytes) {
         return error.InvalidCell;
     }
     const text = try decoder.readBytes(length);
 
-    var cell: ui.Cell = .{
+    var cell: CellType = .{
         .len = length,
         .width = width,
         .style = style,
@@ -400,7 +388,7 @@ pub fn decodeCell(decoder: *wire.Decoder, previous_style: *?ui.Style) !ui.Cell {
     return cell;
 }
 
-fn decodeStyle(decoder: *wire.Decoder) !ui.Style {
+fn decodeStyle(decoder: *DecoderType) !StyleType {
     const flags_bits = try decoder.readInt(u16);
     try validateFlags(flags_bits);
     return .{
@@ -411,12 +399,12 @@ fn decodeStyle(decoder: *wire.Decoder) !ui.Style {
     };
 }
 
-fn encodedStyleSize(style: ui.Style) usize {
+fn encodedStyleSize(style: StyleType) usize {
     return @sizeOf(u16) + encodedColorSize(style.fg) +
         encodedColorSize(style.bg) + encodedColorSize(style.underline_color);
 }
 
-fn encodedColorSize(color: ui.Color) usize {
+fn encodedColorSize(color: cell_support.Color) usize {
     return switch (color) {
         .default => 1,
         .indexed => 2,
@@ -428,12 +416,12 @@ fn validateFlags(bits: u16) !void {
     if (bits & 0xf800 != 0) {
         return error.InvalidStyle;
     }
-    if ((bits >> 8) & 0x7 > @intFromEnum(ui.Style.Underline.dashed)) {
+    if ((bits >> 8) & 0x7 > @intFromEnum(StyleType.Underline.dashed)) {
         return error.InvalidStyle;
     }
 }
 
-fn encodeColor(encoder: *wire.Encoder, color: ui.Color) !void {
+fn encodeColor(encoder: *EncoderType, color: cell_support.Color) !void {
     switch (color) {
         .default => try encoder.writeByte(0),
         .indexed => |index| {
@@ -447,7 +435,7 @@ fn encodeColor(encoder: *wire.Encoder, color: ui.Color) !void {
     }
 }
 
-fn decodeColor(decoder: *wire.Decoder) !ui.Color {
+fn decodeColor(decoder: *DecoderType) !cell_support.Color {
     const tag = try decoder.readByte();
     return switch (tag) {
         0 => .default,
@@ -458,10 +446,10 @@ fn decodeColor(decoder: *wire.Decoder) !ui.Color {
 }
 
 test "full snapshots preserve cells, styles and cursor" {
-    const cells = [_]ui.Cell{
+    const cells = [_]CellType{
         .{},
         .{
-            .bytes = [_]u8{'x'} ++ [_]u8{0} ** (ui.Cell.max_bytes - 1),
+            .bytes = [_]u8{'x'} ++ [_]u8{0} ** (CellType.max_bytes - 1),
             .len = 1,
             .width = 1,
             .style = .{
@@ -484,9 +472,9 @@ test "full snapshots preserve cells, styles and cursor" {
     };
 
     var buffer: [256]u8 = undefined;
-    var encoder = wire.Encoder.init(&buffer);
+    var encoder = EncoderType.init(&buffer);
     try encodeBody(&encoder, frame);
-    var decoder = wire.Decoder.init(encoder.finish());
+    var decoder = DecoderType.init(encoder.finish());
     const decoded = try decodeBody(&decoder);
     try decoder.ensureEnd();
 
@@ -503,10 +491,10 @@ test "full snapshots preserve cells, styles and cursor" {
 }
 
 test "a style run pays two bytes per ordinary cell" {
-    const cells = [_]ui.Cell{ .{}, .{}, .{} };
+    const cells = [_]CellType{ .{}, .{}, .{} };
     const spans = [_]Span{.{ .start = 0, .cells = &cells }};
     var buffer: [128]u8 = undefined;
-    var encoder = wire.Encoder.init(&buffer);
+    var encoder = EncoderType.init(&buffer);
     try encodeBody(&encoder, .{
         .pane_id = @enumFromInt(1),
         .frame_id = 1,
@@ -527,16 +515,16 @@ test "a style run pays two bytes per ordinary cell" {
 }
 
 test "cell run size accounts for inherited style" {
-    const cells = [_]ui.Cell{ .{}, .{}, .{} };
+    const cells = [_]CellType{ .{}, .{}, .{} };
     try std.testing.expectEqual(@as(usize, 11), encodedCellsSize(&cells, null));
     try std.testing.expectEqual(@as(usize, 6), encodedCellsSize(&cells, .{}));
 }
 
 test "the first cell of every span must define its style" {
-    const cells = [_]ui.Cell{.{}};
+    const cells = [_]CellType{.{}};
     const spans = [_]Span{.{ .start = 0, .cells = &cells }};
     var buffer: [128]u8 = undefined;
-    var encoder = wire.Encoder.init(&buffer);
+    var encoder = EncoderType.init(&buffer);
     try encodeBody(&encoder, .{
         .pane_id = @enumFromInt(1),
         .frame_id = 1,
@@ -548,7 +536,7 @@ test "the first cell of every span must define its style" {
     });
 
     buffer[body_header_size + span_header_size] &= ~style_changed_bit;
-    var decoder = wire.Decoder.init(encoder.finish());
+    var decoder = DecoderType.init(encoder.finish());
     // Cell content is validated when the consumer iterates, not at decode.
     const decoded = try decodeBody(&decoder);
     var span_iterator = decoded.spans();
@@ -557,13 +545,13 @@ test "the first cell of every span must define its style" {
 }
 
 test "patch spans must be ordered and inside the screen" {
-    const cell = [_]ui.Cell{.{}};
+    const cell = [_]CellType{.{}};
     const overlapping = [_]Span{
         .{ .start = 1, .cells = &cell },
         .{ .start = 1, .cells = &cell },
     };
     var buffer: [256]u8 = undefined;
-    var encoder = wire.Encoder.init(&buffer);
+    var encoder = EncoderType.init(&buffer);
     try std.testing.expectError(error.InvalidSpan, encodeBody(&encoder, .{
         .pane_id = @enumFromInt(1),
         .frame_id = 2,
@@ -576,10 +564,10 @@ test "patch spans must be ordered and inside the screen" {
 }
 
 test "a snapshot must contain the complete grid" {
-    const cell = [_]ui.Cell{.{}};
+    const cell = [_]CellType{.{}};
     const spans = [_]Span{.{ .start = 0, .cells = &cell }};
     var buffer: [256]u8 = undefined;
-    var encoder = wire.Encoder.init(&buffer);
+    var encoder = EncoderType.init(&buffer);
     try std.testing.expectError(error.InvalidSnapshot, encodeBody(&encoder, .{
         .pane_id = @enumFromInt(1),
         .frame_id = 1,
@@ -601,10 +589,10 @@ test "the maximum screen is bounded by one transport frame" {
 }
 
 test "scroll metadata cannot point beyond retained history" {
-    const cells = [_]ui.Cell{.{}} ** 2;
+    const cells = [_]CellType{.{}} ** 2;
     const spans = [_]Span{.{ .start = 0, .cells = &cells }};
     var buffer: [256]u8 = undefined;
-    var encoder = wire.Encoder.init(&buffer);
+    var encoder = EncoderType.init(&buffer);
     try std.testing.expectError(error.InvalidScroll, encodeBody(&encoder, .{
         .pane_id = @enumFromInt(1),
         .frame_id = 1,

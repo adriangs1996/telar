@@ -1,4 +1,5 @@
 const GenericPort = @import("GenericPort.zig").Type;
+
 /// Owns one started worker and its state until `deinit`.
 ///
 /// ```zig

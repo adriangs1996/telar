@@ -1,6 +1,7 @@
+const id = @import("../id.zig");
 const FrameAck = @This();
-const source_namespace = @import("pane.zig");
-pane_id: source_namespace.PaneId,
+
+pane_id: id.PaneId,
 frame_id: u64,
 
 pub fn validateWire(message: FrameAck) !void {

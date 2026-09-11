@@ -1,13 +1,14 @@
-const RequestCloseTabHandler = @This();
-const client_model = @import("../../root.zig").model;
-const TabOperationGate = @import("CloseTabTabOperationGate.zig");
-const tab_close_preparation = @import("tab_close_preparation.zig");
-const tab_snapshot_recovery = @import("tab_snapshot_recovery.zig");
+const ModelType = @import("../../model/Model.zig");
+const CloseTabOperationGate = @import("CloseTabOperationGate.zig");
+const PrepareTabCloseHandlerType = @import("PrepareTabCloseHandler.zig");
+const RequestTabSnapshotRecoveryHandlerType = @import("RequestTabSnapshotRecoveryHandler.zig");
 const CloseRequestEffects = @import("CloseRequestEffects.zig");
-model: *const client_model.Model,
-gate: TabOperationGate,
-preparation: tab_close_preparation.PrepareTabCloseHandler,
-snapshots: tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler,
+const RequestCloseTabHandler = @This();
+
+model: *const ModelType,
+gate: CloseTabOperationGate,
+preparation: PrepareTabCloseHandlerType,
+snapshots: RequestTabSnapshotRecoveryHandlerType,
 effects: CloseRequestEffects,
 
 /// Verifies delivery capacity, detaches the active tab and sends one close

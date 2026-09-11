@@ -1,16 +1,19 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const MoveTabExecutorType = @import("../../application/commands/MoveTabExecutor.zig");
+const MoveTabType = @import("telar-core").MoveTab;
+const RequestIdType = @import("telar-core").RequestId;
+const MoveTabFailure = @import("MoveTabFailure.zig");
 const Controller = @This();
-const source_namespace = @import("move_tab.zig");
-const move_tab_commands = @import("../../application/commands/move_tab.zig");
-const Failure = @import("MoveTabFailure.zig");
-responses: *source_namespace.ResponseQueue,
-move_tab: move_tab_commands.MoveTabExecutor,
+
+responses: *ResponseQueueType,
+move_tab: MoveTabExecutorType,
 
 /// Creates a controller scoped to one runtime request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, move_tab: move_tab_commands.MoveTabExecutor) Controller {
+pub fn init(responses: *ResponseQueueType, move_tab: MoveTabExecutorType) Controller {
     return .{ .responses = responses, .move_tab = move_tab };
 }
 
@@ -20,7 +23,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, move_tab: move_tab_comma
 /// ```zig
 /// try controller.moveTab(request);
 /// ```
-pub fn moveTab(controller: *Controller, request: source_namespace.schema.MoveTab) !void {
+pub fn moveTab(controller: *Controller, request: MoveTabType) !void {
     const moved = controller.move_tab.execute(.{
         .location = request.location,
         .direction = request.direction,
@@ -47,7 +50,7 @@ pub fn moveTab(controller: *Controller, request: source_namespace.schema.MoveTab
     } });
 }
 
-fn queueFailure(controller: *Controller, request_id: source_namespace.schema.RequestId, failure: Failure) !void {
+fn queueFailure(controller: *Controller, request_id: RequestIdType, failure: MoveTabFailure) !void {
     try controller.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,

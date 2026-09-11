@@ -1,8 +1,10 @@
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const max_git_branch_bytes_module = @import("telar-core").max_git_branch_bytes;
 const Completion = @This();
-const source_namespace = @import("git_probe.zig");
-workspace: source_namespace.schema.WorkspaceId,
+
+workspace: WorkspaceIdType,
 present: bool = false,
-branch: [source_namespace.schema.max_git_branch_bytes]u8 = undefined,
+branch: [max_git_branch_bytes_module]u8 = undefined,
 branch_len: u8 = 0,
 dirty: bool = false,
 

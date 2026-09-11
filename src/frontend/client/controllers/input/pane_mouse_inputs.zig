@@ -1,25 +1,21 @@
 //! Wires pane mouse policy to viewport and pane-input effects.
 
-const std = @import("std");
-const core = @import("telar-core");
-const input_capability = @import("../../../input/root.zig");
-const workspace_capability = @import("../../../workspace/root.zig");
-const input_application = @import("telar-client").application.input;
-const pane_inputs = @import("pane_inputs.zig");
-const copy_modes = @import("copy_modes.zig");
-const clock = @import("telar-client").resources.clock;
-const pane_viewports = @import("../panes/pane_viewports.zig");
-
 const Client = @import("../../Client.zig");
-const mouse_protocol = input_capability.mouse_protocol;
-pub const multiplexer = workspace_capability.multiplexer;
-const pane_mouse = input_application.pane_mouse;
-pub const ui = core.ui;
-
-pub const Command = pane_mouse.Command;
-pub const Outcome = pane_mouse.Outcome;
-
-const Context = @import("PaneMouseInputsContext.zig");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const ApplicationInputPaneMouseCommand = @import("telar-client").ApplicationInputPaneMouseCommand;
+const ApplicationInputPaneMouseOutcome = @import("telar-client").ApplicationInputPaneMouseOutcome;
+const PaneMouseInputsContext = @import("PaneMouseInputsContext.zig");
+const PaneMouseHandlerType = @import("telar-client").PaneMouseHandler;
+const ResolvedType = @import("telar-client").Resolved;
+const EffectType = @import("telar-client").Effect;
+const copy_modes = @import("copy_modes.zig");
+const monotonic_module = @import("telar-client").monotonic;
+const pane_viewports = @import("../panes/pane_viewports.zig");
+const std = @import("std");
+const pane_inputs = @import("pane_inputs.zig");
+const ReportEffectType = @import("telar-client").ReportEffect;
+const PixelProjectionType = @import("telar-client").PixelProjection;
+const encodeSgr_module = @import("telar-client").encodeSgr;
 
 /// Resolves a pointer event or focused scroll without exposing pane storage
 /// or child mouse modes to the caller.
@@ -27,13 +23,13 @@ const Context = @import("PaneMouseInputsContext.zig");
 /// ```zig
 /// _ = try apply(client, model, command);
 /// ```
-pub fn apply(client: *Client, model: *multiplexer.Model, command: Command) !Outcome {
-    var context: Context = .{
+pub fn apply(client: *Client, model: *MultiplexerModel, command: ApplicationInputPaneMouseCommand) !ApplicationInputPaneMouseOutcome {
+    var context: PaneMouseInputsContext = .{
         .client = client,
         .model = model,
         .area = client.geometry().area,
     };
-    var use_case: pane_mouse.PaneMouseHandler = .{
+    var use_case: PaneMouseHandlerType = .{
         .plans = .{
             .context = &context,
             .resolve = resolve,
@@ -47,8 +43,8 @@ pub fn apply(client: *Client, model: *multiplexer.Model, command: Command) !Outc
     return use_case.execute(command);
 }
 
-fn resolve(raw_context: *anyopaque, command: Command) ?pane_mouse.Resolved {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+fn resolve(raw_context: *anyopaque, command: ApplicationInputPaneMouseCommand) ?ResolvedType {
+    const context: *PaneMouseInputsContext = @ptrCast(@alignCast(raw_context));
 
     return switch (command) {
         .pointer => |pointer| .{
@@ -77,8 +73,8 @@ fn resolve(raw_context: *anyopaque, command: Command) ?pane_mouse.Resolved {
     };
 }
 
-fn applyEffect(raw_context: *anyopaque, effect: pane_mouse.Effect) !void {
-    const context: *Context = @ptrCast(@alignCast(raw_context));
+fn applyEffect(raw_context: *anyopaque, effect: EffectType) !void {
+    const context: *PaneMouseInputsContext = @ptrCast(@alignCast(raw_context));
 
     switch (effect) {
         .selection => |selection| {
@@ -88,7 +84,7 @@ fn applyEffect(raw_context: *anyopaque, effect: pane_mouse.Effect) !void {
                     .x = selection.command.event.x - selection.plan.content.x,
                     .y = selection.command.event.y - selection.plan.content.y,
                 },
-                .now_ns = clock.monotonic(context.client.io),
+                .now_ns = monotonic_module(context.client.io),
             });
         },
         .viewport => |scroll| {
@@ -123,7 +119,7 @@ fn applyEffect(raw_context: *anyopaque, effect: pane_mouse.Effect) !void {
     }
 }
 
-fn encodeReport(buffer: []u8, report: pane_mouse.ReportEffect) ![]const u8 {
+fn encodeReport(buffer: []u8, report: ReportEffectType) ![]const u8 {
     const command = report.command;
     const plan = report.plan;
     const exact_x: ?u32 = if (plan.protocol.pixels and command.exterior_pixels) exact: {
@@ -137,12 +133,12 @@ fn encodeReport(buffer: []u8, report: pane_mouse.ReportEffect) ![]const u8 {
         break :exact command.event.raw_y - origin;
     } else null;
 
-    const pixels: ?mouse_protocol.PixelProjection = if (plan.protocol.pixels) .{
+    const pixels: ?PixelProjectionType = if (plan.protocol.pixels) .{
         .cell = .{ .width = command.cell_width_px, .height = command.cell_height_px },
         .exact = if (exact_x != null and exact_y != null) .{ .x = exact_x.?, .y = exact_y.? } else null,
     } else null;
 
-    return mouse_protocol.encodeSgr(buffer, .{
+    return encodeSgr_module(buffer, .{
         .event = command.event,
         .pane_position = .{
             .x = command.event.x - plan.content.x,
@@ -154,7 +150,7 @@ fn encodeReport(buffer: []u8, report: pane_mouse.ReportEffect) ![]const u8 {
 
 test "pane mouse reports preserve exact host pixels relative to pane content" {
     var buffer: [64]u8 = undefined;
-    const report: pane_mouse.ReportEffect = .{
+    const report: ReportEffectType = .{
         .plan = .{
             .pane_id = @enumFromInt(1),
             .content = .{ .x = 2, .y = 3, .w = 10, .h = 5 },
@@ -181,7 +177,7 @@ test "pane mouse reports preserve exact host pixels relative to pane content" {
 
 test "pane mouse pixel reports use cell centers without exact host pixels" {
     var buffer: [64]u8 = undefined;
-    const report: pane_mouse.ReportEffect = .{
+    const report: ReportEffectType = .{
         .plan = .{
             .pane_id = @enumFromInt(1),
             .content = .{ .x = 2, .y = 3, .w = 10, .h = 5 },

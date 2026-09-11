@@ -1,6 +1,9 @@
+const id = @import("../id.zig");
+const types = @import("../types.zig");
+const TabDescriptorType = @import("../TabDescriptor.zig");
 const WorkspaceSnapshot = @This();
-const source_namespace = @import("workspace.zig");
-request_id: source_namespace.RequestId,
-workspace: source_namespace.WorkspaceLocation,
+
+request_id: id.RequestId,
+workspace: types.WorkspaceLocation,
 name: []const u8,
-tabs: []const source_namespace.TabDescriptor,
+tabs: []const TabDescriptorType,

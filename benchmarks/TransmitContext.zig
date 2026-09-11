@@ -1,31 +1,35 @@
+const std = @import("std");
+const StoreType = @import("telar-frontend").Store;
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const PaneIdType = @import("telar-core").PaneId;
+const main = @import("main.zig");
+const ImageType = @import("telar-core").Image;
+const KittyGraphicsWriterType = @import("telar-frontend").KittyGraphicsWriter;
 /// A full inline delivery of one browser-frame-sized image: the media path's
 /// unit of throughput. One op is every writer pass an unbounded budget needs
 /// until the store goes idle, so the zlib variant includes its deflate.
 const TransmitContext = @This();
-const std = @import("std");
-const frontend = @import("telar-frontend");
-const source_namespace = @import("main.zig");
-const core = @import("telar-core");
+
 const width = 480;
 const height = 360;
 const raw_len = width * height * 4;
 
 gpa: std.mem.Allocator,
-store: frontend.kitty.Store,
-model: frontend.multiplexer.Model,
+store: StoreType,
+model: MultiplexerModel,
 output: []u8,
 
-fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
-    var store = frontend.kitty.Store.init(gpa);
+pub fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
+    var store = StoreType.init(gpa);
     errdefer store.deinit();
     store.delivery.host_zlib = zlib;
-    var model = frontend.multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     errdefer model.deinit();
-    const pane_id: source_namespace.schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.addRoot(.{
         .pane_id = pane_id,
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
-        .size = .{ .cols = source_namespace.cols, .rows = source_namespace.rows },
+        .size = .{ .cols = main.cols, .rows = main.rows },
     });
 
     // Browser-frame shape: flat fills, a gradient, and a text-like band
@@ -51,7 +55,7 @@ fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
             pixels[index + 3] = 255;
         }
     }
-    const metadata: core.graphics.Image = .{
+    const metadata: ImageType = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = width,
@@ -81,13 +85,13 @@ fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
     return .{ .gpa = gpa, .store = store, .model = model, .output = output };
 }
 
-fn deinit(context: *TransmitContext) void {
+pub fn deinit(context: *TransmitContext) void {
     context.gpa.free(context.output);
     context.model.deinit();
     context.store.deinit();
 }
 
-fn deliver(context: *TransmitContext) !u64 {
+pub fn deliver(context: *TransmitContext) !u64 {
     var images = context.store.images.iterator();
     while (images.next()) |entry| {
         entry.value_ptr.delivery.transmitted = false;
@@ -102,10 +106,10 @@ fn deliver(context: *TransmitContext) !u64 {
     context.store.damage = true;
     var written: u64 = 0;
     while (context.store.damage) {
-        var output = source_namespace.Io.Writer.fixed(context.output);
-        var graphics_writer: frontend.kitty.KittyGraphicsWriter = .{
+        var output = std.Io.Writer.fixed(context.output);
+        var graphics_writer: KittyGraphicsWriterType = .{
             .store = &context.store,
-            .layout_snapshot = context.model.layoutSnapshot(.{ .w = source_namespace.cols, .h = source_namespace.rows }),
+            .layout_snapshot = context.model.layoutSnapshot(.{ .w = main.cols, .h = main.rows }),
             .cell_width = 10,
             .cell_height = 20,
             .budget = std.math.maxInt(usize),

@@ -1,19 +1,22 @@
+const ReaderType = @import("../../../workspace/Reader.zig");
+const TabMovedType = @import("../../../workspace/TabMoved.zig");
+const MoveTabEventPublisher = @import("MoveTabEventPublisher.zig");
+const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
+const TabDescriptorType = @import("telar-core").TabDescriptor;
 const EventCapture = @This();
-const workspace_mod = @import("../../../workspace/root.zig");
-const EventPublisher = @import("MoveTabEventPublisher.zig");
-const source_namespace = @import("move_tab.zig");
-reader: workspace_mod.Reader,
+
+reader: ReaderType,
 count: usize = 0,
-last: ?workspace_mod.TabMoved = null,
+last: ?TabMovedType = null,
 observed_committed_position: bool = false,
 
-pub fn publisher(capture: *EventCapture) EventPublisher {
+pub fn publisher(capture: *EventCapture) MoveTabEventPublisher {
     return .{ .context = capture, .publish = publish };
 }
 
-fn publish(context: *anyopaque, event: workspace_mod.TabMoved) void {
+fn publish(context: *anyopaque, event: TabMovedType) void {
     const capture: *EventCapture = @ptrCast(@alignCast(context));
-    var storage: [workspace_mod.max_tabs_per_workspace]source_namespace.schema.TabDescriptor = undefined;
+    var storage: [max_tabs_per_workspace_module]TabDescriptorType = undefined;
     const snapshot = capture.reader.descriptors(event.location.workspace, &storage) orelse return;
 
     capture.count += 1;

@@ -1,10 +1,12 @@
-const HeadTransform = @This();
 const MessageRoute = @import("MessageRoute.zig");
-const middleware = @import("../middleware.zig");
+const TransformPipelineType = @import("../TransformPipeline.zig");
 const std = @import("std");
+const TransformContextType = @import("../TransformContext.zig");
 const HeadSink = @import("HeadSink.zig");
+const HeadTransform = @This();
+
 route: MessageRoute,
-pipeline: *const middleware.TransformPipeline,
+pipeline: *const TransformPipelineType,
 io: std.Io,
-context: middleware.TransformContext,
+context: TransformContextType,
 capture: ?HeadSink = null,

@@ -39,8 +39,8 @@ subprocess is only consulted for cleanliness.
 
 ## Proof
 
-- `src/backend/runtime/application/git_status.zig` proves HEAD parsing.
-- `src/backend/workspace/workspace.zig` proves bounded storage and change
+- `src/backend/runtime/application/GenericGitStatusObserver.zig` proves HEAD parsing.
+- `src/backend/workspace/workspace_support.zig` proves bounded storage and change
   detection.
 - `src/core/schema_contract_test.zig` pins the extended workspace list bytes.
 

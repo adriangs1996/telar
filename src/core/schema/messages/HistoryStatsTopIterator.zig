@@ -1,8 +1,9 @@
-const HistoryStatsTopIterator = @This();
-const wire = @import("../wire.zig");
+const DecoderType = @import("../Decoder.zig");
 const HistoryStatsTop = @import("HistoryStatsTop.zig");
 const types = @import("../types.zig");
-decoder: wire.Decoder,
+const HistoryStatsTopIterator = @This();
+
+decoder: DecoderType,
 remaining: u8,
 
 pub fn next(iterator: *HistoryStatsTopIterator) !?HistoryStatsTop {

@@ -1,5 +1,6 @@
-const ConfigCheckOptions = @This();
 const std = @import("std");
+const ConfigCheckOptions = @This();
+
 path: ?[*:0]const u8 = null,
 profile: ?[*:0]const u8 = null,
 

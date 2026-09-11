@@ -1,6 +1,7 @@
+const model = @import("model.zig");
 const PluginSpec = @This();
-const source_namespace = @import("model.zig");
-path_bytes: [source_namespace.max_plugin_path_bytes]u8 = undefined,
+
+path_bytes: [model.max_plugin_path_bytes]u8 = undefined,
 path_len: u16,
 enabled: bool = true,
 

@@ -1,5 +1,5 @@
-const AuthorityCommand = @This();
 const std = @import("std");
-const source_namespace = @import("proxy.zig");
+const AuthorityCommand = @This();
+
 init: std.process.Init,
-writer: *source_namespace.Io.Writer,
+writer: *std.Io.Writer,

@@ -1,14 +1,16 @@
+const TabSnapshotRecoveryEffects = @import("TabSnapshotRecoveryEffects.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const tab_snapshot_recovery = @import("tab_snapshot_recovery.zig");
 const RequestTabSnapshotRecoveryHandler = @This();
-const Effects = @import("TabSnapshotRecoveryEffects.zig");
-const source_namespace = @import("tab_snapshot_recovery.zig");
-effects: Effects,
+
+effects: TabSnapshotRecoveryEffects,
 
 /// Coalesces an existing canonical repair or requests it exactly once.
 ///
 /// ```zig
 /// const outcome = try handler.execute(location);
 /// ```
-pub fn execute(handler: *RequestTabSnapshotRecoveryHandler, location: source_namespace.schema.TabLocation) !source_namespace.Outcome {
+pub fn execute(handler: *RequestTabSnapshotRecoveryHandler, location: TabLocationType) !tab_snapshot_recovery.Outcome {
     if (handler.effects.pending(handler.effects.context)) {
         return .coalesced;
     }

@@ -1,17 +1,19 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
+const PaneViewportChangeType = @import("../../model/PaneViewportChange.zig");
 const PaneViewportEffects = @import("PaneViewportEffects.zig");
-model: *const client_model.Model,
+const EffectsCapture = @This();
+
+model: *const ModelType,
 calls: usize = 0,
 observed_commit: bool = false,
-change: ?client_model.PaneViewportChange = null,
+change: ?PaneViewportChangeType = null,
 fail: bool = false,
 
 pub fn port(capture: *EffectsCapture) PaneViewportEffects {
     return .{ .context = capture, .sync = sync };
 }
 
-fn sync(context: *anyopaque, change: client_model.PaneViewportChange) !void {
+fn sync(context: *anyopaque, change: PaneViewportChangeType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     const pane = capture.model.workspace.activeConst().?.model.findConst(change.pane_id).?;
     capture.calls += 1;

@@ -1,15 +1,18 @@
-const Sample = @This();
-const source_namespace = @import("telemetry.zig");
+const std = @import("std");
 const RuntimeMetrics = @import("RuntimeMetrics.zig");
 const ClientSample = @import("ClientSample.zig");
-const history = @import("../../history/root.zig");
+const PaneStoreType = @import("../../pane/PaneStore.zig");
+const ServiceType = @import("../../history/Service.zig");
 const ProxySample = @import("ProxySample.zig");
-io: source_namespace.Io,
+const HeapType = @import("telar-core").Heap;
+const Sample = @This();
+
+io: std.Io,
 metrics: *const RuntimeMetrics,
 clients: ClientSample = .{},
 workspace_count: usize = 0,
 tab_count: usize = 0,
-panes: *const source_namespace.PaneStore,
-history_service: *const history.Service,
+panes: *const PaneStoreType,
+history_service: *const ServiceType,
 proxy: ProxySample = .{},
-heap: *const source_namespace.diagnostics.Heap,
+heap: *const HeapType,

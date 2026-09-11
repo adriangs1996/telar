@@ -1,8 +1,10 @@
-const TabReconciliation = @This();
-const source_namespace = @import("types.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const RectType = @import("telar-core").Rect;
 const RemovedPanes = @import("RemovedPanes.zig");
-location: source_namespace.schema.TabLocation,
-area: source_namespace.ui.Rect,
+const TabReconciliation = @This();
+
+location: TabLocationType,
+area: RectType,
 removed_panes: RemovedPanes = .{},
 active: bool,
 panes_changed: bool,

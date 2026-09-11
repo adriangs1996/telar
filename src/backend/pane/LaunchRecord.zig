@@ -1,9 +1,10 @@
+const LaunchViewType = @import("telar-core").LaunchView;
+const std = @import("std");
 /// Bounded copy of the command a pane was launched with, kept so a session
 /// checkpoint can relaunch it. Panes whose command does not fit, or which
 /// replaced their environment, are not restorable and record nothing.
 const LaunchRecord = @This();
-const source_namespace = @import("root.zig");
-const std = @import("std");
+
 pub const max_bytes = 1024;
 pub const max_arguments = 32;
 
@@ -17,7 +18,7 @@ count: u16 = 0,
 /// var record: LaunchRecord = .{};
 /// record.capture(launch);
 /// ```
-pub fn capture(record: *LaunchRecord, launch: source_namespace.schema.LaunchView) void {
+pub fn capture(record: *LaunchRecord, launch: LaunchViewType) void {
     record.* = .{};
     if (launch.environment_mode != .inherit_runtime or launch.argument_count == 0 or launch.argument_count > max_arguments) {
         return;

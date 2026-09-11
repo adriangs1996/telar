@@ -1,13 +1,14 @@
-const Capture = @This();
-const source_namespace = @import("worker_lifecycle.zig");
+const worker_lifecycle = @import("worker_lifecycle.zig");
 const std = @import("std");
-steps: [4]source_namespace.Step = undefined,
+const Capture = @This();
+
+steps: [4]worker_lifecycle.Step = undefined,
 len: usize = 0,
 start_fails: bool = false,
 closed: bool = false,
 joined: bool = false,
 
-pub fn record(capture: *Capture, step: source_namespace.Step) void {
+pub fn record(capture: *Capture, step: worker_lifecycle.Step) void {
     std.debug.assert(capture.len < capture.steps.len);
     capture.steps[capture.len] = step;
     capture.len += 1;

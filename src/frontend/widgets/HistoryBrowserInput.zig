@@ -1,6 +1,7 @@
-const Input = @This();
 const picker = @import("goto_picker.zig");
 const Entry = @import("Entry.zig");
+const Input = @This();
+
 field: *picker.Field,
 entries: []const Entry,
 selection: u16,

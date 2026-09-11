@@ -1,4 +1,5 @@
+const RectType = @import("telar-core").Rect;
 const Placement = @This();
-const core = @import("telar-core");
-area: core.ui.Rect,
+
+area: RectType,
 slot: u8,

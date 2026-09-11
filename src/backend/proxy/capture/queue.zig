@@ -1,26 +1,16 @@
 //! Bounded pointer-transfer queue for captured exchange halves.
 
-const std = @import("std");
-const buffer = @import("buffer_support.zig");
+const CredentialType = @import("../Credential.zig");
 const identity = @import("../identity.zig");
-
-pub const Io = std.Io;
+const QuotaType = @import("Quota.zig");
+const HalfType = @import("Half.zig");
+const std = @import("std");
+const GateState = @import("GateState.zig");
+const Channel = @import("Channel.zig");
 
 pub const capacity = 256;
 
-pub const CredentialGate = @import("CredentialGate.zig");
-
-pub const Metrics = @import("QueueMetrics.zig");
-
-const Envelope = @import("Envelope.zig");
-
-pub const Publication = @import("QueuePublication.zig");
-
-pub const Channel = @import("Channel.zig");
-
-const GateState = @import("GateState.zig");
-
-fn testCredential(generation: u64) identity.Credential {
+fn testCredential(generation: u64) CredentialType {
     return .{
         .pane_id = @enumFromInt(7),
         .pane_generation = generation,
@@ -28,8 +18,8 @@ fn testCredential(generation: u64) identity.Credential {
     };
 }
 
-fn testHalf(quota: *buffer.Quota, credential: identity.Credential, stream_id: u32) *buffer.Half {
-    return buffer.Half.create(.{
+fn testHalf(quota: *QuotaType, credential: CredentialType, stream_id: u32) *HalfType {
+    return HalfType.create(.{
         .gpa = std.testing.allocator,
         .quota = quota,
         .config = .{
@@ -52,7 +42,7 @@ test "queue saturation drops and frees the rejected half" {
     var gate_state: GateState = .{};
     var channel: Channel = undefined;
     channel.init(.{ .context = &gate_state, .is_live = GateState.accepts });
-    var quota = buffer.Quota.init(capacity + 1);
+    var quota = QuotaType.init(capacity + 1);
     const credential = testCredential(1);
 
     for (0..capacity) |index| {
@@ -78,7 +68,7 @@ test "delivery rejects a credential revoked after publication" {
     var channel: Channel = undefined;
     channel.init(.{ .context = &gate_state, .is_live = GateState.accepts });
     defer channel.close(std.testing.io);
-    var quota = buffer.Quota.init(2);
+    var quota = QuotaType.init(2);
     const credential = testCredential(1);
     try std.testing.expect(channel.publish(std.testing.io, .{
         .credential = credential,

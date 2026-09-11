@@ -1,12 +1,14 @@
-const State = @This();
+const SupportType = @import("telar-client").Support;
 const std = @import("std");
-const source_namespace = @import("host_negotiation.zig");
-const deadline_timer = @import("telar-client").resources.deadline_timer;
-zlib_support: @import("telar-client").environment.Support = .unknown,
+const host_negotiation = @import("host_negotiation.zig");
+const SchedulerType = @import("telar-client").Scheduler;
+const State = @This();
+
+zlib_support: SupportType = .unknown,
 deadline_ns: ?u64 = null,
-received: std.EnumSet(source_namespace.Color) = .initEmpty(),
+received: std.EnumSet(host_negotiation.Color) = .initEmpty(),
 initial_settled: bool = false,
-timer: deadline_timer.Scheduler = .{},
+timer: SchedulerType = .{},
 
 /// Example: `if (state.begin(now_ns)) try writer.writeAll(color_query);`.
 pub fn begin(state: *State, now_ns: u64) bool {
@@ -14,13 +16,13 @@ pub fn begin(state: *State, now_ns: u64) bool {
         return false;
     }
 
-    state.deadline_ns = now_ns +| source_namespace.timeout_ns;
+    state.deadline_ns = now_ns +| host_negotiation.timeout_ns;
     state.received = .initEmpty();
     return true;
 }
 
 /// Example: `if (!state.accept(.foreground, now_ns)) return;`.
-pub fn accept(state: *State, color: source_namespace.Color, now_ns: u64) bool {
+pub fn accept(state: *State, color: host_negotiation.Color, now_ns: u64) bool {
     const deadline = state.deadline_ns orelse return false;
     if (now_ns >= deadline or state.received.contains(color)) {
         return false;

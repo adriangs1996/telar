@@ -1,16 +1,20 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const RenameTabExecutorType = @import("../../application/commands/RenameTabExecutor.zig");
+const RenameTabType = @import("telar-core").RenameTab;
+const PendingTabRenamedType = @import("../../delivery/PendingTabRenamed.zig");
+const RequestIdType = @import("telar-core").RequestId;
+const RenameTabFailure = @import("RenameTabFailure.zig");
 const Controller = @This();
-const source_namespace = @import("rename_tab.zig");
-const rename_tab_commands = @import("../../application/commands/rename_tab.zig");
-const Failure = @import("RenameTabFailure.zig");
-responses: *source_namespace.ResponseQueue,
-rename_tab: rename_tab_commands.RenameTabExecutor,
+
+responses: *ResponseQueueType,
+rename_tab: RenameTabExecutorType,
 
 /// Creates one controller for the lifetime of a runtime request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, rename_tab: rename_tab_commands.RenameTabExecutor) Controller {
+pub fn init(responses: *ResponseQueueType, rename_tab: RenameTabExecutorType) Controller {
     return .{ .responses = responses, .rename_tab = rename_tab };
 }
 
@@ -20,7 +24,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, rename_tab: rename_tab_c
 /// ```zig
 /// try controller.renameTab(request);
 /// ```
-pub fn renameTab(controller: *Controller, request: source_namespace.schema.RenameTab) !void {
+pub fn renameTab(controller: *Controller, request: RenameTabType) !void {
     const renamed = controller.rename_tab.execute(.{
         .location = request.location,
         .label = request.label,
@@ -41,7 +45,7 @@ pub fn renameTab(controller: *Controller, request: source_namespace.schema.Renam
     };
 
     const label = renamed.labelSlice();
-    var pending: source_namespace.PendingTabRenamed = .{
+    var pending: PendingTabRenamedType = .{
         .request_id = request.request_id,
         .location = renamed.location,
         .label = undefined,
@@ -51,7 +55,7 @@ pub fn renameTab(controller: *Controller, request: source_namespace.schema.Renam
     try controller.responses.push(.{ .tab_renamed = pending });
 }
 
-fn queueFailure(controller: *Controller, request_id: source_namespace.schema.RequestId, failure: Failure) !void {
+fn queueFailure(controller: *Controller, request_id: RequestIdType, failure: RenameTabFailure) !void {
     try controller.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,

@@ -1,17 +1,15 @@
 //! Pane labels drawn inside the fullscreen border, in layout display order.
 
+const BufferType = @import("telar-core").Buffer;
+const Input = @import("Input.zig");
+const Result = @import("Result.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const theme = @import("../ui/root.zig").theme;
-pub const ui = core.ui;
-pub const schema = core.schema;
-const pane_labels = @import("../presentation/root.zig").pane_labels;
-
-pub const Input = @import("Input.zig");
-
-pub const Result = @import("Result.zig");
-
+const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
 const Label = @import("Label.zig");
+const RectType = @import("telar-core").Rect;
+const StyleType = @import("telar-core").Style;
+const theme = @import("../ui/theme_support.zig");
+const GraphemeIteratorType = @import("telar-core").GraphemeIterator;
 
 /// Shrinks labels before hiding panes. The active label stays visible and
 /// earlier labels join it while they fit. Reports the occupied border width
@@ -21,16 +19,16 @@ const Label = @import("Label.zig");
 /// ```zig
 /// const used = fullscreen_tabs.draw(buffer, input);
 /// ```
-pub fn draw(buffer: *ui.Buffer, input: Input) Result {
+pub fn draw(buffer: *BufferType, input: Input) Result {
     if (input.area.w == 0 or input.area.h == 0 or input.names.len == 0) {
         return .{};
     }
 
-    std.debug.assert(input.names.len <= schema.max_panes_per_tab);
+    std.debug.assert(input.names.len <= max_panes_per_tab_module);
     std.debug.assert(input.focused < input.names.len);
     var result: Result = .{ .plan = .{ .area = input.area } };
     var plan_usable = true;
-    var labels: [schema.max_panes_per_tab]Label = undefined;
+    var labels: [max_panes_per_tab_module]Label = undefined;
     var total: u16 = @intCast(input.names.len - 1);
 
     for (input.names, 0..) |name, index| {
@@ -73,8 +71,8 @@ pub fn draw(buffer: *ui.Buffer, input: Input) Result {
         }
 
         const width = @min(label.width, input.area.w - used);
-        const rect: ui.Rect = .{ .x = input.area.x + used, .y = input.area.y, .w = width, .h = 1 };
-        const style: ui.Style = if (index == input.focused)
+        const rect: RectType = .{ .x = input.area.x + used, .y = input.area.y, .w = width, .h = 1 };
+        const style: StyleType = if (index == input.focused)
             .{ .fg = input.palette.surface_dim, .bg = input.palette.accent }
         else
             .{ .fg = input.palette.subtext0 };
@@ -100,7 +98,7 @@ pub fn draw(buffer: *ui.Buffer, input: Input) Result {
 }
 
 test "fullscreen tabs label every pane and highlight only the focused pane" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 40, 1);
+    var buffer = try BufferType.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     buffer.fill(buffer.area(), .{ .glyph = "─", .style = .{} });
     const palette = &theme.default_theme.palette;
@@ -112,7 +110,7 @@ test "fullscreen tabs label every pane and highlight only the focused pane" {
     });
 
     const expected = " 1 nvim ─ 2 claude ─ 3 shell ";
-    var clusters: ui.GraphemeIterator = .{ .bytes = expected };
+    var clusters: GraphemeIteratorType = .{ .bytes = expected };
     var x: u16 = 0;
     while (clusters.next()) |cluster| : (x += cluster.width) {
         try std.testing.expectEqualStrings(cluster.bytes, buffer.at(x, 0).?.text());
@@ -127,14 +125,14 @@ test "fullscreen tabs label every pane and highlight only the focused pane" {
 }
 
 test "fullscreen tabs keep focus visible at every width within fixed pane bounds" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 82, 3);
+    var buffer = try BufferType.init(std.testing.allocator, 82, 3);
     defer buffer.deinit();
     const palette = &theme.default_theme.palette;
-    const names = [_][]const u8{"long-foreground-process-name"} ** schema.max_panes_per_tab;
+    const names = [_][]const u8{"long-foreground-process-name"} ** max_panes_per_tab_module;
     for (0..names.len) |focused| {
         for (0..79) |width| {
             buffer.fill(buffer.area(), .{ .glyph = ".", .style = .{} });
-            const area: ui.Rect = .{ .x = 2, .y = 1, .w = @intCast(width), .h = 1 };
+            const area: RectType = .{ .x = 2, .y = 1, .w = @intCast(width), .h = 1 };
             const used = draw(&buffer, .{ .area = area, .names = &names, .focused = focused, .palette = palette });
             try std.testing.expect(used.width <= width);
             var selected_cells: usize = 0;
@@ -157,13 +155,13 @@ test "fullscreen tabs keep focus visible at every width within fixed pane bounds
 }
 
 test "fullscreen label plans retain bounded truncated Unicode text" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 84, 3);
+    var buffer = try BufferType.init(std.testing.allocator, 84, 3);
     defer buffer.deinit();
     const names: []const []const u8 = &.{ "long-process-name", "界界界界界", "e\u{301}ditor-long" };
     for (0..names.len) |focused| {
         for (0..80) |width| {
             buffer.clear(.{});
-            const area: ui.Rect = .{ .x = 2, .y = 1, .w = @intCast(width), .h = 1 };
+            const area: RectType = .{ .x = 2, .y = 1, .w = @intCast(width), .h = 1 };
             const result = draw(&buffer, .{
                 .area = area,
                 .names = names,
@@ -184,7 +182,7 @@ test "fullscreen label plans retain bounded truncated Unicode text" {
 }
 
 test "fullscreen tabs truncate Unicode names at grapheme boundaries" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 17, 1);
+    var buffer = try BufferType.init(std.testing.allocator, 17, 1);
     defer buffer.deinit();
     _ = draw(&buffer, .{
         .area = buffer.area(),

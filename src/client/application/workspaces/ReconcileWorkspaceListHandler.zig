@@ -1,17 +1,18 @@
+const ModelType = @import("../../model/Model.zig");
+const SnapshotInputType = @import("../../workspace/SnapshotInput.zig");
+const workspace_list_snapshot = @import("workspace_list_snapshot.zig");
 const ReconcileWorkspaceListHandler = @This();
-const client_model = @import("../../root.zig").model;
-const workspace_list = @import("../../workspace/root.zig").workspace_list;
-const source_namespace = @import("workspace_list_snapshot.zig");
-model: *client_model.Model,
+
+model: *ModelType,
 
 /// Classifies one decoded domain snapshot without deciding presentation.
 ///
 /// ```zig
 /// const outcome = try handler.execute(snapshot);
 /// ```
-pub fn execute(handler: *ReconcileWorkspaceListHandler, snapshot: workspace_list.SnapshotInput) !source_namespace.Outcome {
+pub fn execute(handler: *ReconcileWorkspaceListHandler, snapshot: SnapshotInputType) !workspace_list_snapshot.Outcome {
     const commit = handler.model.reconcileWorkspaceList(snapshot) catch |err| {
-        const rejection = source_namespace.classifyRejection(err) orelse return err;
+        const rejection = workspace_list_snapshot.classifyRejection(err) orelse return err;
 
         return .{ .rejected = rejection };
     };

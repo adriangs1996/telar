@@ -1,4 +1,5 @@
-const source_namespace = @import("plugin_effects.zig");
+const NotificationType = @import("telar-core").Notification;
+
 /// Defines runtime operations supplied by application composition.
 ///
 /// ```zig
@@ -8,7 +9,7 @@ pub fn Type(comptime Context: type) type {
     return struct {
         rearm_receive: *const fn (*Context) anyerror!void,
         now_ms: *const fn (*Context) i64,
-        publish_notification: *const fn (*Context, source_namespace.schema.Notification) u8,
+        publish_notification: *const fn (*Context, NotificationType) u8,
         pump_clients: *const fn (*Context) void,
     };
 }

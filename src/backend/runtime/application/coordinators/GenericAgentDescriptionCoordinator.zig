@@ -1,7 +1,9 @@
 const GenericAgentDescriptionRuntimePort = @import("GenericAgentDescriptionRuntimePort.zig").Type;
-const Resources = @import("AgentDescriptionResources.zig");
-const source_namespace = @import("agent_description.zig");
+const AgentDescriptionResources = @import("AgentDescriptionResources.zig");
+const agent_description = @import("agent_description.zig");
 const std = @import("std");
+const ResultType = @import("../../../agent/Result.zig");
+
 /// Creates a statically dispatched agent-description coordinator.
 ///
 /// ```zig
@@ -12,7 +14,7 @@ pub fn Type(comptime Context: type, comptime port: GenericAgentDescriptionRuntim
         const Self = @This();
 
         context: *Context,
-        resources: Resources,
+        resources: AgentDescriptionResources,
 
         /// Binds one runtime's agent tracker, generator configuration, and
         /// single-flight actor state.
@@ -20,7 +22,7 @@ pub fn Type(comptime Context: type, comptime port: GenericAgentDescriptionRuntim
         /// ```zig
         /// var coordinator = AgentDescriptionCoordinator.init(&context, resources);
         /// ```
-        pub fn init(context: *Context, resources: Resources) Self {
+        pub fn init(context: *Context, resources: AgentDescriptionResources) Self {
             return .{ .context = context, .resources = resources };
         }
 
@@ -31,7 +33,7 @@ pub fn Type(comptime Context: type, comptime port: GenericAgentDescriptionRuntim
         /// ```zig
         /// _ = coordinator.schedule();
         /// ```
-        pub fn schedule(coordinator: *Self) source_namespace.ScheduleResult {
+        pub fn schedule(coordinator: *Self) agent_description.ScheduleResult {
             const command = coordinator.resources.command orelse return .no_work;
             if (coordinator.resources.state.isPending()) {
                 return .no_work;
@@ -60,14 +62,14 @@ pub fn Type(comptime Context: type, comptime port: GenericAgentDescriptionRuntim
         /// ```zig
         /// coordinator.handle(result);
         /// ```
-        pub fn handle(coordinator: *Self, result: source_namespace.description.Result) void {
+        pub fn handle(coordinator: *Self, result: ResultType) void {
             coordinator.resources.state.complete();
             _ = coordinator.commit(result);
             _ = coordinator.schedule();
             port.pump_clients(coordinator.context);
         }
 
-        fn commit(coordinator: *Self, result: source_namespace.description.Result) bool {
+        fn commit(coordinator: *Self, result: ResultType) bool {
             const finished = coordinator.resources.agents.finishDescription(&result) orelse return false;
             port.persist(coordinator.context, finished);
             return true;

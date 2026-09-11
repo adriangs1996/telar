@@ -1,8 +1,10 @@
-const ConfirmTabCreationHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const ConfirmationDelivery = @import("ConfirmationDelivery.zig");
-const source_namespace = @import("create_tab.zig");
-model: *client_model.Model,
+const NewTab = @import("../../model/NewTab.zig");
+const TabCreationType = @import("../../model/TabCreation.zig");
+const ConfirmTabCreationHandler = @This();
+
+model: *ModelType,
 delivery: ConfirmationDelivery,
 
 /// Commits the canonical tab before delegating its exact result.
@@ -11,7 +13,7 @@ delivery: ConfirmationDelivery,
 /// ```zig
 /// const creation = try handler.execute(command);
 /// ```
-pub fn execute(handler: *ConfirmTabCreationHandler, command: source_namespace.ConfirmTabCreation) !client_model.TabCreation {
+pub fn execute(handler: *ConfirmTabCreationHandler, command: NewTab) !TabCreationType {
     const creation = try handler.model.createTab(command);
     try handler.delivery.deliver(handler.delivery.context, creation);
 

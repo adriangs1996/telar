@@ -1,18 +1,19 @@
+const std = @import("std");
+const transport = @import("transport.zig");
 /// Owns a connected raw socket. A channel supports one concurrent reader and
 /// one concurrent writer. It must not be copied after ownership is handed to
 /// another component.
 const SocketChannel = @This();
-const source_namespace = @import("root.zig");
-const std = @import("std");
-stream: source_namespace.Io.net.Stream,
+
+stream: std.Io.net.Stream,
 active: std.atomic.Value(bool) = .init(true),
 /// Owner-provided read-ahead storage; empty keeps reads unbuffered, which
 /// is what a handshake on a not-yet-retained channel needs.
 read_buffer: []u8 = &.{},
 /// The persistent reader over `read_buffer`, bound on first buffered read.
-reader: ?source_namespace.Io.net.Stream.Reader = null,
+reader: ?std.Io.net.Stream.Reader = null,
 
-pub fn init(stream: source_namespace.Io.net.Stream) SocketChannel {
+pub fn init(stream: std.Io.net.Stream) SocketChannel {
     return .{ .stream = stream };
 }
 
@@ -28,25 +29,25 @@ pub fn bindReadBuffer(channel: *SocketChannel, buffer: []u8) void {
     channel.reader = null;
 }
 
-pub fn send(channel: *SocketChannel, io: source_namespace.Io, payload: []const u8) source_namespace.WriteFrameError!void {
+pub fn send(channel: *SocketChannel, io: std.Io, payload: []const u8) transport.WriteFrameError!void {
     if (!channel.isActive()) {
         return error.ConnectionClosed;
     }
     var stream_writer = channel.stream.writer(io, &.{});
-    try source_namespace.writeFrame(&stream_writer.interface, payload);
+    try transport.writeFrame(&stream_writer.interface, payload);
 }
 
-pub fn receive(channel: *SocketChannel, io: source_namespace.Io, buffer: []u8) source_namespace.ReadFrameError![]u8 {
+pub fn receive(channel: *SocketChannel, io: std.Io, buffer: []u8) transport.ReadFrameError![]u8 {
     if (!channel.isActive()) {
         return error.ConnectionClosed;
     }
-    return source_namespace.readFrame(channel.boundReader(io), buffer);
+    return transport.readFrame(channel.boundReader(io), buffer);
 }
 
 /// Returns the reader over `read_buffer`, creating it on first use. An
 /// unbound channel reads exactly one frame per call, so binding later
 /// loses nothing.
-fn boundReader(channel: *SocketChannel, io: source_namespace.Io) *source_namespace.Io.Reader {
+fn boundReader(channel: *SocketChannel, io: std.Io) *std.Io.Reader {
     if (channel.reader) |*reader| {
         return &reader.interface;
     }
@@ -61,14 +62,14 @@ pub fn isActive(channel: *const SocketChannel) bool {
 
 /// Interrupts pending reads and writes without releasing the descriptor.
 /// The owner can wait for its I/O actors before calling `deinit`.
-pub fn shutdown(channel: *SocketChannel, io: source_namespace.Io) void {
+pub fn shutdown(channel: *SocketChannel, io: std.Io) void {
     if (!channel.isActive()) {
         return;
     }
     channel.stream.shutdown(io, .both) catch {};
 }
 
-pub fn deinit(channel: *SocketChannel, io: source_namespace.Io) void {
+pub fn deinit(channel: *SocketChannel, io: std.Io) void {
     if (!channel.active.swap(false, .acq_rel)) {
         return;
     }

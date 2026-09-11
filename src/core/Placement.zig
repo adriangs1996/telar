@@ -1,10 +1,11 @@
-/// A placement relative to a pane's cell grid. Source values are pixels in the
-/// decoded image; offsets are pixels inside the anchor cell.
-const Placement = @This();
 const ImageKey = @import("ImageKey.zig");
 const Image = @import("Image.zig");
 const Rect = @import("Rect.zig");
 const std = @import("std");
+/// A placement relative to a pane's cell grid. Source values are pixels in the
+/// decoded image; offsets are pixels inside the anchor cell.
+const Placement = @This();
+
 key: ImageKey,
 /// Runtime-unique within the pane. The child-facing placement ID remains
 /// separate because anonymous placements all have child ID zero.

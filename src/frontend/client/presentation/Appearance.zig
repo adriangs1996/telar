@@ -1,5 +1,6 @@
+const ThemeType = @import("../../ui/Theme.zig");
+const ClientTheme = @import("telar-client").Theme;
 const Appearance = @This();
-const theme_mod = @import("../../ui/root.zig").theme;
-const ui = @import("../../ui/root.zig");
-theme: theme_mod.Theme,
-icons: ui.icons.Theme = .unicode,
+
+theme: ThemeType,
+icons: ClientTheme = .unicode,

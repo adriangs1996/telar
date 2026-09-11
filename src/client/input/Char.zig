@@ -1,5 +1,6 @@
-const Char = @This();
 const std = @import("std");
+const Char = @This();
+
 bytes: [4]u8 = @splat(0),
 len: u8 = 0,
 

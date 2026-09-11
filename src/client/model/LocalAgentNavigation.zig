@@ -1,4 +1,6 @@
+const PaneIdType = @import("telar-core").PaneId;
+const TabIdType = @import("telar-core").TabId;
 const LocalAgentNavigation = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
-select_tab: ?source_namespace.schema.TabId,
+
+pane_id: PaneIdType,
+select_tab: ?TabIdType,

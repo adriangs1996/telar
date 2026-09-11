@@ -1,8 +1,9 @@
+const GenerationType = @import("../../config/Generation.zig");
+const RegistryType = @import("../../plugins/Registry.zig");
+const TrustStoreType = @import("telar-core").TrustStore;
 const Loaded = @This();
-const lua_config = @import("../../config/root.zig");
-const plugin_broker = @import("../../plugins/root.zig");
-const core = @import("telar-core");
-generation: *lua_config.Generation,
-registry: *plugin_broker.Registry,
-trust_store: *core.plugin.TrustStore,
+
+generation: *GenerationType,
+registry: *RegistryType,
+trust_store: *TrustStoreType,
 mtime_ns: i128,

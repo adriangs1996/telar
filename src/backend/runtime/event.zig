@@ -1,51 +1,55 @@
 //! Events delivered to the runtime loop and their execution-budget class.
 
+const SocketChannelType = @import("telar-core").SocketChannel;
+const ClientMessage = @import("ClientMessage.zig");
+const ClientSent = @import("ClientSent.zig");
+const model = @import("../history/model.zig");
+const InputCompletion = @import("entrypoints/events/pane/InputCompletion.zig");
+const ResponseCompletion = @import("entrypoints/events/pane/ResponseCompletion.zig");
+const OutputCompletion = @import("entrypoints/events/pane/OutputCompletion.zig");
+const IngestCompletion = @import("entrypoints/events/pane/IngestCompletion.zig");
+const ObservationCompletion = @import("entrypoints/events/pane/ObservationCompletion.zig");
+const MediaCompletion = @import("entrypoints/events/pane/MediaCompletion.zig");
+const ExitCompletion = @import("entrypoints/events/pane/ExitCompletion.zig");
+const WakeType = @import("application/Wake.zig");
+const ObservationType = @import("../proxy/Observation.zig");
+const Half = @import("../proxy/capture/Half.zig");
+const ResultType = @import("../plugins/Result.zig");
+const AgentResult = @import("../agent/Result.zig");
+const ResponseType = @import("../engine/Response.zig");
+const SystemMetricsSample = @import("observability/SystemMetricsSample.zig");
+const CompletionType = @import("resources/Completion.zig");
+const AgentCompletion = @import("../agent/Completion.zig");
+const PathType = @import("telar-core").Path;
 const std = @import("std");
-const core = @import("telar-core");
-const agent = @import("../agent/root.zig");
-const history = @import("../history/root.zig");
-const engine = @import("../engine/root.zig");
-const proxy = @import("../proxy/root.zig");
-const plugins = @import("../plugins/root.zig");
-const client_session = @import("client/root.zig").session;
-const pane_events = @import("entrypoints/events/pane/root.zig");
-const pane_launcher = @import("application/pane_launcher.zig");
-const git_status = @import("application/git_status.zig");
-const session_name = @import("application/session_name.zig");
-
-const diagnostics = core.diagnostics;
-
-pub const ClientMessage = @import("ClientMessage.zig");
-
-pub const ClientSent = @import("ClientSent.zig");
 
 pub const Event = union(enum) {
-    accepted: anyerror!core.transport.SocketChannel,
+    accepted: anyerror!SocketChannelType,
     handshaken: anyerror!void,
     client_message: ClientMessage,
     client_sent: ClientSent,
-    history_response: anyerror!history.Response,
-    pane_input_written: pane_events.input.Completion,
-    pane_response_written: pane_events.response.Completion,
-    pane_output: pane_launcher.PaneOutputEvent,
-    pane_ingested: pane_events.ingest.Completion,
-    pane_observed: pane_events.observation.Completion,
-    pane_media: pane_events.media.Completion,
-    pane_exit: pane_launcher.PaneExitEvent,
-    pane_search: @import("application/pane_search.zig").Wake,
+    history_response: anyerror!model.Response,
+    pane_input_written: InputCompletion,
+    pane_response_written: ResponseCompletion,
+    pane_output: OutputCompletion,
+    pane_ingested: IngestCompletion,
+    pane_observed: ObservationCompletion,
+    pane_media: MediaCompletion,
+    pane_exit: ExitCompletion,
+    pane_search: WakeType,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
-    proxy_event: anyerror!proxy.Observation,
-    proxy_capture: anyerror!*proxy.CaptureHalf,
-    plugin_effects: anyerror!*plugins.EffectResult,
+    proxy_event: anyerror!ObservationType,
+    proxy_capture: anyerror!*Half,
+    plugin_effects: anyerror!*ResultType,
     agent_tick: anyerror!void,
-    agent_description: agent.description.Result,
-    engine_response: anyerror!engine.Response,
+    agent_description: AgentResult,
+    engine_response: anyerror!ResponseType,
     metrics_tick: anyerror!void,
-    metrics_sampled: @import("observability/system_metrics.zig").Sample,
+    metrics_sampled: SystemMetricsSample,
     checkpoint_written: anyerror!void,
-    git_status: git_status.Completion,
-    session_name: session_name.Completion,
+    git_status: CompletionType,
+    session_name: AgentCompletion,
     stopped: anyerror!void,
 };
 
@@ -55,11 +59,11 @@ pub const Event = union(enum) {
 /// const path = diagnosticsPath(event);
 /// diagnostics.record(path, elapsed_ns);
 /// ```
-pub fn diagnosticsPath(event: Event) diagnostics.Path {
+pub fn diagnosticsPath(event: Event) PathType {
     return diagnosticsPathForTag(std.meta.activeTag(event));
 }
 
-fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) diagnostics.Path {
+fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) PathType {
     return switch (tag) {
         .pane_output,
         .pane_ingested,
@@ -105,12 +109,12 @@ test "interactive events use the interactive budget" {
     };
 
     for (tags) |tag| {
-        try std.testing.expectEqual(diagnostics.Path.interactive, diagnosticsPathForTag(tag));
+        try std.testing.expectEqual(PathType.interactive, diagnosticsPathForTag(tag));
     }
 }
 
 test "media events use the media budget" {
-    try std.testing.expectEqual(diagnostics.Path.media, diagnosticsPathForTag(.pane_media));
+    try std.testing.expectEqual(PathType.media, diagnosticsPathForTag(.pane_media));
 }
 
 test "observation events use the observation budget" {
@@ -130,7 +134,7 @@ test "observation events use the observation budget" {
     };
 
     for (tags) |tag| {
-        try std.testing.expectEqual(diagnostics.Path.observation, diagnosticsPathForTag(tag));
+        try std.testing.expectEqual(PathType.observation, diagnosticsPathForTag(tag));
     }
 }
 
@@ -143,6 +147,6 @@ test "lifecycle events stay outside latency-budgeted paths" {
     };
 
     for (tags) |tag| {
-        try std.testing.expectEqual(diagnostics.Path.other, diagnosticsPathForTag(tag));
+        try std.testing.expectEqual(PathType.other, diagnosticsPathForTag(tag));
     }
 }

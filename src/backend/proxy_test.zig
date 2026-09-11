@@ -1,7 +1,8 @@
 //! Package-level test root for the runtime proxy capability.
 
-const proxy = @import("proxy/root.zig");
+const std = @import("std");
+const proxy = @import("proxy/proxy_namespace.zig");
 
 test {
-    @import("std").testing.refAllDecls(proxy);
+    std.testing.refAllDecls(proxy);
 }

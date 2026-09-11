@@ -1,13 +1,15 @@
+const PromptType = @import("telar-client").Prompt;
+const SnapshotType = @import("telar-client").AgentSnapshot;
+const WorkspaceListSnapshot = @import("telar-client").WorkspaceListSnapshot;
+const TabsModel = @import("telar-client").TabsModel;
+const HistoryPaletteState = @import("telar-client").HistoryPaletteState;
+const SuggestionState = @import("telar-client").SuggestionState;
 const PickerSources = @This();
-const name_prompt = @import("telar-client").model.name_prompt;
-const agents_module = @import("telar-client").agents;
-const source_namespace = @import("view.zig");
-const history_palette_state = @import("telar-client").model.history_palette;
-const suggestion_state = @import("telar-client").model.suggestion;
-prompt: *name_prompt.Prompt,
-agents: *const agents_module.Snapshot,
-workspaces: *const source_namespace.workspace_list.Snapshot,
-tabs: ?*const source_namespace.tabs_mod.Model,
-history: *const history_palette_state.State,
-suggestion: *const suggestion_state.State,
+
+prompt: *PromptType,
+agents: *const SnapshotType,
+workspaces: *const WorkspaceListSnapshot,
+tabs: ?*const TabsModel,
+history: *const HistoryPaletteState,
+suggestion: *const SuggestionState,
 graphical_frame: bool,

@@ -1,6 +1,7 @@
+const types = @import("../types.zig");
 const RequestRuntimeState = @This();
-const source_namespace = @import("runtime.zig");
-client_identity: source_namespace.ClientIdentity,
+
+client_identity: types.ClientIdentity,
 
 /// Rejects identities that cannot own retained runtime state.
 ///

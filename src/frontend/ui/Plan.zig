@@ -1,7 +1,8 @@
-const Plan = @This();
-const source_namespace = @import("icons.zig");
+const icons = @import("icons.zig");
 const Mark = @import("Mark.zig");
-marks: [source_namespace.max_marks]Mark = undefined,
+const Plan = @This();
+
+marks: [icons.max_marks]Mark = undefined,
 len: u8 = 0,
 
 pub fn reset(plan: *Plan) void {

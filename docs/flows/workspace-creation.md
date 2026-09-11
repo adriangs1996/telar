@@ -144,29 +144,29 @@ runtime failure as a notification. A malformed successful response is rejected
 before replacement. A response arriving after an already-empty departure can
 still install the confirmed root, which keeps recovery deterministic.
 
-- `src/frontend/client/application/create_workspace.zig` proves request
+- `src/client/application/workspaces/create_workspace.zig` proves request
   gating, validation, no provisional mutation, response validation,
   commit-before-delivery and post-commit failure behavior.
-- `src/frontend/client/application/pane_open_delivery.zig` proves
+- `src/client/application/panes/pane_open_delivery.zig` proves
   successful-open routing, retired work and delivery failure propagation.
-- `src/frontend/client/application/workspace_arrival_planning.zig` proves
+- `src/client/application/workspaces/workspace_arrival_planning.zig` proves
   exact bookmark matching and shared arrival construction.
-- `src/frontend/client/application/workspace_creation_delivery.zig` proves
+- `src/client/application/workspaces/workspace_creation_delivery.zig` proves
   exact replacement validation, release-before-activation order, empty-source
   recovery and partial failure semantics.
-- `src/frontend/client/application/workspace_transition_delivery.zig` proves
+- `src/client/application/workspaces/workspace_transition_delivery.zig` proves
   release order, exact activation validation, snapshot order and partial
   failures.
-- `src/frontend/client/model.zig` and `src/frontend/workspace/tabs.zig` prove
+- `src/client/model/Model.zig` and `src/client/workspace/tabs.zig` prove
   bounded departure capture, atomic construction, exact versioning, rejection
   without mutation and recovery from an empty source.
-- `src/frontend/client/outbox.zig` proves queued creation owns its name and cwd.
-- `src/frontend/client/name_prompt.zig` and
-  `src/frontend/client/application/name_prompt.zig` prove prompt ownership and
+- `src/client/connection/outbox_support.zig` proves queued creation owns its name and cwd.
+- `src/client/model/name_prompt.zig` and
+  `src/client/application/input/name_prompt.zig` prove prompt ownership and
   accepted-submit ordering.
-- `src/frontend/client/client_test.zig` proves the protocol request, single
+- `src/frontend/client/tests/` proves the protocol request, single
   replacement commit, presenter boundary, exact snapshot messages, navigation
   restoration, absence of stale detach/focus output and failure preservation.
-- `src/backend/runtime/commands/create_workspace.zig` and
-  `src/backend/runtime/controllers/create_workspace.zig` prove transaction
+- `src/backend/runtime/application/commands/create_workspace.zig` and
+  `src/backend/runtime/entrypoints/requests/create_workspace.zig` prove transaction
   ordering, rollback categories, post-commit preservation and wire mapping.

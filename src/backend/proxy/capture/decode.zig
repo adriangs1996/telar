@@ -1,14 +1,14 @@
 //! Bounded content decoding for completed captures.
 
 const std = @import("std");
+const Options = @import("Options.zig");
+const Result = @import("Result.zig");
+const DecodeInput = @import("DecodeInput.zig");
+const CollectOptions = @import("CollectOptions.zig");
 
 const c = @cImport({
     @cInclude("brotli/decode.h");
 });
-
-pub const Options = @import("Options.zig");
-
-pub const Result = @import("Result.zig");
 
 /// Applies at most two content codings in reverse order under one output cap.
 ///
@@ -95,8 +95,6 @@ pub fn raw(gpa: std.mem.Allocator, input: []const u8, max_bytes: usize) !Result 
     };
 }
 
-const DecodeInput = @import("DecodeInput.zig");
-
 fn decodeOne(gpa: std.mem.Allocator, input: DecodeInput) !Result {
     if (std.ascii.eqlIgnoreCase(input.coding, "gzip")) {
         return decodeFlate(gpa, input, .gzip);
@@ -160,8 +158,6 @@ fn decodeBrotli(gpa: std.mem.Allocator, input: DecodeInput) !Result {
         .truncated = truncated or output_len > input.max_bytes,
     };
 }
-
-const CollectOptions = @import("CollectOptions.zig");
 
 fn collect(gpa: std.mem.Allocator, reader: *std.Io.Reader, options: CollectOptions) !Result {
     const logical_capacity = try cappedCapacity(options.max_bytes);

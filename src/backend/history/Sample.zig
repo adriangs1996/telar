@@ -1,9 +1,11 @@
+const vt = @import("ghostty-vt");
+const TableType = @import("telar-core").Table;
+const SignalType = @import("telar-core").Signal;
+const std = @import("std");
 /// Plain text of the active screen, captured bottom-up so the rows nearest
 /// the prompt are complete whenever the screen exceeds the capacity.
 const Sample = @This();
-const vt = @import("ghostty-vt");
-const source_namespace = @import("agent_detection.zig");
-const std = @import("std");
+
 pub const capacity = 16 * 1024;
 
 bytes: [capacity]u8 = undefined,
@@ -47,7 +49,7 @@ pub fn text(sample: *const Sample) []const u8 {
 /// ```zig
 /// const signal = sample.signal(&core.agent_manifest.builtin_table);
 /// ```
-pub fn signal(sample: *const Sample, table: *const source_namespace.Table) ?source_namespace.Signal {
+pub fn signal(sample: *const Sample, table: *const TableType) ?SignalType {
     return table.detect(sample.text());
 }
 

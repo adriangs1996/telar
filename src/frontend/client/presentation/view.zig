@@ -1,68 +1,69 @@
 //! Visible structure and interaction state of one telar client.
 
+const SnapshotType = @import("telar-client").AgentSnapshot;
+const HistoryPaletteState = @import("telar-client").HistoryPaletteState;
+const SuggestionState = @import("telar-client").SuggestionState;
+const CenterType = @import("telar-client").Center;
+const WorkspaceListSnapshot = @import("telar-client").WorkspaceListSnapshot;
+const PlanType = @import("../../presentation/Plan.zig");
+const State = @import("telar-client").State;
+const PromptType = @import("telar-client").Prompt;
+const tab_rename_module = @import("../../widgets/tab_rename.zig");
+const ContextType = @import("../../widgets/Context.zig");
+const RectType = @import("telar-core").Rect;
+const PickerSources = @import("PickerSources.zig");
+const GotoPickerOutput = @import("../../widgets/GotoPickerOutput.zig");
+const ResultsType = @import("telar-client").Results;
+const SourcesType = @import("telar-client").Sources;
+const collect_module = @import("telar-client").collect;
+const goto_picker_module = @import("../../widgets/goto_picker.zig");
+const RowType = @import("../../widgets/Row.zig");
+const max_label_bytes_module = @import("telar-client").max_label_bytes;
+const describe_module = @import("telar-client").describe;
+const max_history_results = @import("telar-core").max_history_results;
+const EntryType = @import("../../widgets/Entry.zig");
+const history_browser_module = @import("../../widgets/history_browser.zig");
+const context_support = @import("../../widgets/context_support.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const bars = @import("../../bars/root.zig");
-const agents = @import("telar-client").agents;
-const attachments = @import("../../attachments/root.zig");
-const notifications = @import("telar-client").notifications;
-const presentation = @import("../../presentation/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const input_application = @import("telar-client").application.input;
-const client_model = @import("telar-client").model;
-const name_prompt = @import("telar-client").model.name_prompt;
-const goto_picker_model = @import("telar-client").model.goto_picker;
-const history_palette_state = @import("telar-client").model.history_palette;
-const suggestion_state = @import("telar-client").model.suggestion;
-const diff = presentation.diff;
-pub const pointer = presentation.pointer;
-const icon_graphics = @import("../../graphics/root.zig").icons;
-const kitty = @import("../../graphics/root.zig").kitty;
-const modal_graphics = @import("../../graphics/root.zig").modal;
-const pill_graphics = @import("../../graphics/root.zig").pill;
-pub const multiplexer = workspace_capability.multiplexer;
-pub const tabs_mod = workspace_capability.tabs;
-pub const workspace_list = workspace_capability.workspace_list;
-pub const term = presentation.screen;
-const theme_mod = @import("../../ui/root.zig").theme;
-const toast_graphics = @import("../../graphics/root.zig").toast;
-const ui = @import("../../ui/root.zig");
-const widgets = @import("../../widgets/root.zig");
+const RenderStats = @import("RenderStats.zig");
+const ScreenType = @import("../../presentation/Screen.zig");
+const BufferType = @import("telar-core").Buffer;
+const PatchSinkType = @import("../../presentation/PatchSink.zig");
+const diff = @import("../../presentation/diff.zig");
+const CompositorType = @import("../../workspace/Compositor.zig");
+const TestingComposition = @import("TestingComposition.zig");
+const LayoutRegions = @import("../../widgets/LayoutRegions.zig");
+const default_width = @import("telar-client").default_width;
+const StateType = @import("State.zig");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const PointerShape = @import("telar-core").PointerShape;
+const TabLocationType = @import("telar-core").TabLocation;
+const IntentType = @import("telar-client").Intent;
+const PaneIdType = @import("telar-core").PaneId;
+const term = @import("../../presentation/screen_support.zig");
+const RenderInput = @import("RenderInput.zig");
+const AgentInputType = @import("telar-client").AgentInput;
+const TargetType = @import("telar-client").AttachmentTarget;
+const CaptureType = @import("telar-client").Capture;
+const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
+const theme_mod = @import("../../ui/theme_support.zig");
+const ColorType = @import("telar-core").Color;
+const kitty_codec = @import("../../graphics/kitty_codec.zig");
+const toast_module = @import("../../widgets/toast.zig");
+const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
+const TabsModel = @import("telar-client").TabsModel;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const EntryInputType = @import("telar-client").EntryInput;
 
-pub const schema = core.schema;
-pub const empty_agent_snapshot: agents.Snapshot = .{};
-pub const empty_history_palette: history_palette_state.State = .{};
-pub const empty_suggestion: suggestion_state.State = .{};
-pub const empty_notifications: notifications.Center = .{};
-pub const empty_workspace_list: workspace_list.Snapshot = .{};
-pub const empty_pane_labels: presentation.pane_labels.Plan = .{};
-pub const default_bars_state: bars.State = .{};
-const view_interaction = input_application.view_interaction;
+pub const empty_agent_snapshot: SnapshotType = .{};
+pub const empty_history_palette: HistoryPaletteState = .{};
+pub const empty_suggestion: SuggestionState = .{};
+pub const empty_notifications: CenterType = .{};
+pub const empty_workspace_list: WorkspaceListSnapshot = .{};
+pub const empty_pane_labels: PlanType = .{};
+pub const default_bars_state: State = .{};
 
-pub const sidebar_width = widgets.layout.sidebar_width;
-pub const minimum_sidebar_width = widgets.layout.minimum_sidebar_width;
-pub const minimum_workbench_width = widgets.layout.minimum_workbench_width;
-pub const Regions = widgets.layout.Regions;
-pub const Action = widgets.Action;
-
-pub const Hits = widgets.Hits;
-
-pub const Dimensions = @import("Dimensions.zig");
-
-pub const Appearance = @import("Appearance.zig");
-
-pub const InteractionIntent = view_interaction.Intent;
-pub const Interaction = view_interaction.Command;
-
-pub const RenderStats = @import("RenderStats.zig");
-
-pub const RenderInput = @import("RenderInput.zig");
-
-const GraphicsPlan = @import("GraphicsPlan.zig");
-
-pub const State = @import("State.zig");
-
-pub fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
+pub fn promptKind(prompt: ?*const PromptType) tab_rename_module.Kind {
     const current = prompt orelse return .rename_tab;
 
     return switch (current.target()) {
@@ -76,7 +77,7 @@ pub fn promptKind(prompt: ?*const name_prompt.Prompt) widgets.tab_rename.Kind {
     };
 }
 
-pub fn pickerPrompt(prompt: ?*name_prompt.Prompt) ?*name_prompt.Prompt {
+pub fn pickerPrompt(prompt: ?*PromptType) ?*PromptType {
     const current = prompt orelse return null;
     return switch (current.target()) {
         .goto, .history, .suggest => current,
@@ -84,7 +85,7 @@ pub fn pickerPrompt(prompt: ?*name_prompt.Prompt) ?*name_prompt.Prompt {
     };
 }
 
-pub fn promptField(prompt: ?*name_prompt.Prompt) ?*widgets.tab_rename.Field {
+pub fn promptField(prompt: ?*PromptType) ?*tab_rename_module.Field {
     const current = prompt orelse return null;
     return switch (current.target()) {
         .goto, .history, .suggest => null,
@@ -92,13 +93,11 @@ pub fn promptField(prompt: ?*name_prompt.Prompt) ?*widgets.tab_rename.Field {
     };
 }
 
-const PickerSources = @import("PickerSources.zig");
-
 /// Computes the deterministic result set and renders the visible window with
 /// the clamped selection highlighted, scrolled so the selection stays visible.
-pub fn renderGotoPicker(context: *widgets.Context, application: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
-    var results: goto_picker_model.Results = .{};
-    const match_sources: goto_picker_model.Sources = .{
+pub fn renderGotoPicker(context: *ContextType, application: RectType, sources: PickerSources) GotoPickerOutput {
+    var results: ResultsType = .{};
+    const match_sources: SourcesType = .{
         .agents = sources.agents,
         .workspaces = sources.workspaces,
         .tabs = sources.tabs,
@@ -110,26 +109,26 @@ pub fn renderGotoPicker(context: *widgets.Context, application: ui.Rect, sources
         return renderHistoryPalette(context, application, sources);
     }
 
-    goto_picker_model.collect(match_sources, sources.prompt.field.text(), &results);
+    collect_module(match_sources, sources.prompt.field.text(), &results);
 
     const total: u16 = results.len;
     const selected: u16 = if (total == 0) 0 else @min(sources.prompt.selection(), total - 1);
-    const window: u16 = @min(@as(u16, widgets.goto_picker.max_rows), total);
+    const window: u16 = @min(@as(u16, goto_picker_module.max_rows), total);
     const start: u16 = if (selected + 1 > window) selected + 1 - window else 0;
 
-    var rows: [widgets.goto_picker.max_rows]widgets.goto_picker.Row = undefined;
+    var rows: [goto_picker_module.max_rows]RowType = undefined;
     for (0..window) |offset| {
         const index = start + offset;
-        var label: [goto_picker_model.max_label_bytes]u8 = undefined;
-        const text = goto_picker_model.describe(match_sources, results.slice()[index].item, &label);
-        var row: widgets.goto_picker.Row = .{ .selected = index == selected };
-        const len = @min(text.len, widgets.goto_picker.max_row_bytes);
+        var label: [max_label_bytes_module]u8 = undefined;
+        const text = describe_module(match_sources, results.slice()[index].item, &label);
+        var row: RowType = .{ .selected = index == selected };
+        const len = @min(text.len, goto_picker_module.max_row_bytes);
         @memcpy(row.text[0..len], text[0..len]);
         row.len = @intCast(len);
         rows[offset] = row;
     }
 
-    return widgets.goto_picker.render(context, application, .{
+    return goto_picker_module.render(context, application, .{
         .title = "goto",
         .field = &sources.prompt.field,
         .rows = rows[0..window],
@@ -139,9 +138,9 @@ pub fn renderGotoPicker(context: *widgets.Context, application: ui.Rect, sources
 }
 
 /// Projects owned history into the specialized compact browser.
-fn renderHistoryPalette(context: *widgets.Context, application: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
+fn renderHistoryPalette(context: *ContextType, application: RectType, sources: PickerSources) GotoPickerOutput {
     const entries = sources.history.slice();
-    var rows: [history_palette_state.max_entries]widgets.history_browser.Entry = undefined;
+    var rows: [max_history_results]EntryType = undefined;
     for (entries, 0..) |*entry, index| {
         rows[index] = .{
             .command = sources.history.commandAt(@intCast(index)) orelse entry.commandSlice(),
@@ -156,7 +155,7 @@ fn renderHistoryPalette(context: *widgets.Context, application: ui.Rect, sources
         };
     }
 
-    return widgets.history_browser.render(context, application, .{
+    return history_browser_module.render(context, application, .{
         .field = &sources.prompt.field,
         .entries = rows[0..entries.len],
         .selection = sources.prompt.selection(),
@@ -179,7 +178,7 @@ fn renderHistoryPalette(context: *widgets.Context, application: ui.Rect, sources
 /// Renders the suggestion palette through the same list modal: one row
 /// holding the suggested command, the waiting state or the failure, and a
 /// footer that says what Enter does next.
-fn renderSuggestPalette(context: *widgets.Context, application: ui.Rect, sources: PickerSources) widgets.goto_picker.Output {
+fn renderSuggestPalette(context: *ContextType, application: RectType, sources: PickerSources) GotoPickerOutput {
     const state = sources.suggestion;
     const text: []const u8 = switch (state.phase) {
         .idle => "",
@@ -199,18 +198,18 @@ fn renderSuggestPalette(context: *widgets.Context, application: ui.Rect, sources
         .failed => "enter: ask again",
     };
 
-    var rows: [1]widgets.goto_picker.Row = undefined;
+    var rows: [1]RowType = undefined;
     var total: u16 = 0;
     if (text.len != 0) {
-        var row: widgets.goto_picker.Row = .{ .selected = state.phase == .ready };
-        const len = @min(text.len, widgets.goto_picker.max_row_bytes);
+        var row: RowType = .{ .selected = state.phase == .ready };
+        const len = @min(text.len, goto_picker_module.max_row_bytes);
         @memcpy(row.text[0..len], text[0..len]);
         row.len = @intCast(len);
         rows[0] = row;
         total = 1;
     }
 
-    return widgets.goto_picker.render(context, application, .{
+    return goto_picker_module.render(context, application, .{
         .title = "suggest",
         .field = &sources.prompt.field,
         .rows = rows[0..total],
@@ -220,7 +219,7 @@ fn renderSuggestPalette(context: *widgets.Context, application: ui.Rect, sources
     });
 }
 
-pub fn optionalActionEql(a: ?Action, b: ?Action) bool {
+pub fn optionalActionEql(a: ?context_support.Action, b: ?context_support.Action) bool {
     if (a == null or b == null) {
         return a == null and b == null;
     }
@@ -231,13 +230,13 @@ pub fn addStats(a: RenderStats, b: RenderStats) RenderStats {
     return .{ .scanned = a.scanned + b.scanned, .damaged = a.damaged + b.damaged };
 }
 
-pub fn syncRegion(screen: *term.Screen, source: *const ui.Buffer, area: ui.Rect) !RenderStats {
+pub fn syncRegion(screen: *ScreenType, source: *const BufferType, area: RectType) !RenderStats {
     var stats: RenderStats = .{};
     var y = area.y;
     while (y < area.y + area.h) : (y += 1) {
         const row_start = @as(usize, y) * source.w;
         const source_row = source.cells[row_start..][0..source.w];
-        var sink: term.PatchSink = .{
+        var sink: PatchSinkType = .{
             .screen = screen,
             .source_row = source_row,
             .base = row_start,
@@ -253,9 +252,7 @@ pub fn syncRegion(screen: *term.Screen, source: *const ui.Buffer, area: ui.Rect)
     return stats;
 }
 
-const TestingComposition = @import("TestingComposition.zig");
-
-fn testingCompose(compositor: *multiplexer.Compositor, composition: TestingComposition) !void {
+fn testingCompose(compositor: *CompositorType, composition: TestingComposition) !void {
     const rendered = try compositor.render(.{
         .model = composition.model,
         .screen = composition.screen,
@@ -269,72 +266,72 @@ fn testingCompose(compositor: *multiplexer.Compositor, composition: TestingCompo
 }
 
 test "visible regions reserve top bottom sidebar and workbench" {
-    const regions = Regions.calculate(120, 40, .{ .visible = true, .preferred_width = sidebar_width });
-    try std.testing.expectEqual(ui.Rect{ .x = 42, .w = 78, .h = 1 }, regions.top);
-    try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
-    try std.testing.expectEqual(ui.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
-    try std.testing.expectEqual(ui.Rect{ .x = 42, .y = 39, .w = 78, .h = 1 }, regions.bottom);
+    const regions = LayoutRegions.calculate(120, 40, .{ .visible = true, .preferred_width = default_width });
+    try std.testing.expectEqual(RectType{ .x = 42, .w = 78, .h = 1 }, regions.top);
+    try std.testing.expectEqual(RectType{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
+    try std.testing.expectEqual(RectType{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
+    try std.testing.expectEqual(RectType{ .x = 42, .y = 39, .w = 78, .h = 1 }, regions.bottom);
 }
 
 test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
-    var state = try State.init(std.testing.allocator, 80, 24);
+    var state = try StateType.init(std.testing.allocator, 80, 24);
     defer state.deinit();
 
-    var model = multiplexer.Model.init(std.testing.allocator);
+    var model = MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
-    const area: ui.Rect = .{ .w = 1, .h = 1 };
+    const area: RectType = .{ .w = 1, .h = 1 };
     state.pointer_position = .{ .x = 0, .y = 0 };
     state.hits.add(area, .toggle_sidebar);
-    try std.testing.expectEqual(pointer.Shape.pointer, state.mousePointerShape(.{ .model = &model }));
-    try std.testing.expectEqual(pointer.Shape.default, state.mousePointerShape(.{ .model = &model, .copy_mode_active = true }));
+    try std.testing.expectEqual(PointerShape.pointer, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(PointerShape.default, state.mousePointerShape(.{ .model = &model, .copy_mode_active = true }));
 
     state.hits.clear();
     state.hits.add(area, .{ .focus_pane = @enumFromInt(7) });
-    try std.testing.expectEqual(pointer.Shape.default, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(PointerShape.default, state.mousePointerShape(.{ .model = &model }));
 
     state.hits.clear();
     state.hits.add(area, .resize_sidebar);
-    try std.testing.expectEqual(pointer.Shape.ew_resize, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(PointerShape.ew_resize, state.mousePointerShape(.{ .model = &model }));
 
     state.pointer_position = null;
     state.sidebar_resize_active = true;
-    try std.testing.expectEqual(pointer.Shape.ew_resize, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(PointerShape.ew_resize, state.mousePointerShape(.{ .model = &model }));
 }
 
 test "narrow clients hide the sidebar without forgetting user intent" {
-    const regions = Regions.calculate(61, 20, .{ .visible = true, .preferred_width = sidebar_width });
+    const regions = LayoutRegions.calculate(61, 20, .{ .visible = true, .preferred_width = default_width });
     try std.testing.expect(regions.sidebar.isEmpty());
     try std.testing.expectEqual(@as(u16, 61), regions.workbench.w);
 }
 
 test "sidebar toggle changes only the disposable client layout" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 100, 30);
+    var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    try std.testing.expectEqual(@as(u16, sidebar_width), state.regions.sidebar.w);
-    try std.testing.expectEqual(ui.Rect{ .x = 42, .w = 58, .h = 1 }, state.regions.top);
-    try std.testing.expectEqual(ui.Rect{ .x = 42, .y = 29, .w = 58, .h = 1 }, state.regions.bottom);
+    try std.testing.expectEqual(@as(u16, default_width), state.regions.sidebar.w);
+    try std.testing.expectEqual(RectType{ .x = 42, .w = 58, .h = 1 }, state.regions.top);
+    try std.testing.expectEqual(RectType{ .x = 42, .y = 29, .w = 58, .h = 1 }, state.regions.bottom);
 
     state.toggleSidebar();
 
     try std.testing.expectEqual(@as(u16, 0), state.regions.sidebar.w);
     try std.testing.expectEqual(@as(u16, 100), state.regions.workbench.w);
-    try std.testing.expectEqual(ui.Rect{ .w = 100, .h = 1 }, state.regions.top);
-    try std.testing.expectEqual(ui.Rect{ .x = 0, .y = 29, .w = 100, .h = 1 }, state.regions.bottom);
+    try std.testing.expectEqual(RectType{ .w = 100, .h = 1 }, state.regions.top);
+    try std.testing.expectEqual(RectType{ .x = 0, .y = 29, .w = 100, .h = 1 }, state.regions.bottom);
 }
 
 test "sidebar separator drag reports exact preferred widths" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 120, 30);
+    var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 58, .rows = 27 } });
-    var screen = try term.Screen.init(gpa, 120, 30);
+    var screen = try ScreenType.init(gpa, 120, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{ .model = &model, .force = true });
 
@@ -349,28 +346,28 @@ test "sidebar separator drag reports exact preferred widths" {
 
     const dragged = state.handleMouse(.{ .x = 72, .y = 5, .kind = .drag });
     try std.testing.expect(dragged.consumed);
-    try std.testing.expectEqualDeep(InteractionIntent{ .resize_sidebar = 73 }, dragged.intent);
+    try std.testing.expectEqualDeep(IntentType{ .resize_sidebar = 73 }, dragged.intent);
     try std.testing.expect(!dragged.layout_changed);
     try std.testing.expect(state.sidebar_resize_active);
 
     const released = state.handleMouse(.{ .x = 70, .y = 5, .kind = .release });
     try std.testing.expect(released.consumed);
-    try std.testing.expectEqualDeep(InteractionIntent{ .resize_sidebar = 71 }, released.intent);
+    try std.testing.expectEqualDeep(IntentType{ .resize_sidebar = 71 }, released.intent);
     try std.testing.expect(!released.layout_changed);
     try std.testing.expect(!state.sidebar_resize_active);
 }
 
 test "empty production sidebar has no task controls" {
-    var state = try State.init(std.testing.allocator, 100, 30);
+    var state = try StateType.init(std.testing.allocator, 100, 30);
     defer state.deinit();
-    var model = multiplexer.Model.init(std.testing.allocator);
+    var model = MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
-    var screen = try term.Screen.init(std.testing.allocator, 100, 30);
+    var screen = try ScreenType.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{ .model = &model, .force = true });
 
@@ -380,22 +377,22 @@ test "empty production sidebar has no task controls" {
 
 test "workbench clicks return focus intent without mutating pane layout" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 80, 24);
+    var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: schema.PaneId = @enumFromInt(1);
-    const second: schema.PaneId = @enumFromInt(2);
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
     try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 50, .rows = 22 } });
     try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = state.workbench() });
     try std.testing.expect(model.focusPane(first));
-    var screen = try term.Screen.init(gpa, 80, 24);
+    var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
-    var compositor = multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -422,7 +419,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     click.kind = .press;
     const interaction = state.handleMouse(click);
 
-    try std.testing.expectEqualDeep(InteractionIntent{ .focus_pane = second }, interaction.intent);
+    try std.testing.expectEqualDeep(IntentType{ .focus_pane = second }, interaction.intent);
     try std.testing.expect(!interaction.layout_changed);
     try std.testing.expectEqual(first, model.layout.focused().?);
     try std.testing.expectEqual(revision, model.layout.currentRevision());
@@ -433,10 +430,10 @@ test "workbench clicks return focus intent without mutating pane layout" {
     model.find(second).?.pointer_shape = .text;
     const input: RenderInput = .{ .model = &model, .compositor = &compositor };
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(pointer.Shape.text, screen.mouse_pointer);
+    try std.testing.expectEqual(PointerShape.text, screen.mouse_pointer);
     try std.testing.expectEqual(first, model.layout.focused().?);
 
-    inline for (std.meta.tags(pointer.Shape)) |shape| {
+    inline for (std.meta.tags(PointerShape)) |shape| {
         model.find(second).?.pointer_shape = shape;
         const stats = try state.render(&screen, input);
         try std.testing.expectEqual(@as(usize, 0), stats.scanned);
@@ -445,65 +442,65 @@ test "workbench clicks return focus intent without mutating pane layout" {
 
     model.find(second).?.pointer_shape = .text;
     _ = try state.render(&screen, .{ .model = &model, .copy_mode_active = true });
-    try std.testing.expectEqual(pointer.Shape.default, screen.mouse_pointer);
-    var prompt: name_prompt.Prompt = .{ .mode = .create_workspace, .field = .{} };
+    try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
+    var prompt: PromptType = .{ .mode = .create_workspace, .field = .{} };
     _ = try state.render(&screen, .{ .model = &model, .prompt = &prompt });
-    try std.testing.expectEqual(pointer.Shape.default, screen.mouse_pointer);
+    try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(pointer.Shape.text, screen.mouse_pointer);
+    try std.testing.expectEqual(PointerShape.text, screen.mouse_pointer);
 
     const before_border = state.interactionVersion();
     _ = state.handleMouse(.{ .x = second_view.outer.x, .y = point.y, .kind = .move });
     try std.testing.expectEqual(before_border + 1, state.interactionVersion());
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(pointer.Shape.default, screen.mouse_pointer);
+    try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
     _ = state.handleMouse(point);
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(pointer.Shape.text, screen.mouse_pointer);
+    try std.testing.expectEqual(PointerShape.text, screen.mouse_pointer);
 
     const before_move = state.interactionVersion();
     _ = state.handleMouse(.{ .x = point.x + 1, .y = point.y, .kind = .move });
     try std.testing.expectEqual(before_move, state.interactionVersion());
     state.sidebar_resize_active = true;
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(pointer.Shape.ew_resize, screen.mouse_pointer);
+    try std.testing.expectEqual(PointerShape.ew_resize, screen.mouse_pointer);
     state.sidebar_resize_active = false;
     model.find(second).?.attached = false;
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(pointer.Shape.default, screen.mouse_pointer);
+    try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
 
     try std.testing.expect(model.removePane(second));
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(pointer.Shape.default, screen.mouse_pointer);
+    try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
     _ = try state.render(&screen, .{ .model = &model, .force = true });
-    try std.testing.expectEqual(pointer.Shape.crosshair, screen.mouse_pointer);
+    try std.testing.expectEqual(PointerShape.crosshair, screen.mouse_pointer);
 }
 
 test "sidebar agent snapshots version changed hover only once" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 100, 30);
+    var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 34, .rows = 27 } });
     try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = state.workbench() });
     try std.testing.expect(model.toggleFullscreen());
-    const agent_entries = [_]agents.AgentInput{.{
+    const agent_entries = [_]AgentInputType{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 },
         .location = location,
         .pane_index = 1,
         .provider = .codex,
         .status = .blocked,
     }};
-    var snapshot: agents.Snapshot = .{};
+    var snapshot: SnapshotType = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var screen = try term.Screen.init(gpa, 100, 30);
+    var screen = try ScreenType.init(gpa, 100, 30);
     defer screen.deinit();
-    var compositor = multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -525,43 +522,43 @@ test "sidebar agent snapshots version changed hover only once" {
     try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
     const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
     const interaction = state.handleMouse(click);
-    try std.testing.expectEqualDeep(InteractionIntent{ .focus_agent = agent_entries[0].key }, interaction.intent);
+    try std.testing.expectEqualDeep(IntentType{ .focus_agent = agent_entries[0].key }, interaction.intent);
     try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(2)), model.layout.focused().?);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(2)), model.layout.focused().?);
 }
 
 test "focused agent image preview reserves space below its pane and opens a modal layer" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 100, 30);
+    var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first_pane: schema.PaneId = @enumFromInt(1);
-    const target_pane: schema.PaneId = @enumFromInt(2);
+    const first_pane: PaneIdType = @enumFromInt(1);
+    const target_pane: PaneIdType = @enumFromInt(2);
     try model.addRoot(.{ .pane_id = first_pane, .location = location, .size = .{
         .cols = state.workbench().w,
         .rows = state.workbench().h,
     } });
     try model.split(.{ .existing_pane = first_pane, .new_pane = target_pane, .location = location, .axis = .horizontal, .area = state.workbench() });
-    const agent_entries = [_]agents.AgentInput{.{
+    const agent_entries = [_]AgentInputType{.{
         .key = .{ .pane_id = target_pane, .pane_generation = 4 },
         .location = location,
         .pane_index = 2,
         .provider = .codex,
         .status = .ready,
     }};
-    var snapshot: agents.Snapshot = .{};
+    var snapshot: SnapshotType = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    const target: attachments.Target = .{
+    const target: TargetType = .{
         .pane_id = agent_entries[0].key.pane_id,
         .pane_generation = agent_entries[0].key.pane_generation,
     };
     try std.testing.expect(!state.syncAttachmentTarget(target));
-    const capture = try gpa.create(attachments.Capture);
+    const capture = try gpa.create(CaptureType);
     capture.* = .{
         .request = .{ .target = target, .sequence = 1 },
         .png = try gpa.dupe(u8, "png"),
@@ -571,9 +568,9 @@ test "focused agent image preview reserves space below its pane and opens a moda
     try std.testing.expect(try state.adoptAttachment(capture));
     try std.testing.expectEqual(@as(u16, 28), state.workbench().h);
 
-    var screen = try term.Screen.init(gpa, 100, 30);
+    var screen = try ScreenType.init(gpa, 100, 30);
     defer screen.deinit();
-    var compositor = multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -591,7 +588,7 @@ test "focused agent image preview reserves space below its pane and opens a moda
     const projected = compositor.layoutSnapshot();
     const first_view = projected.find(first_pane).?;
     const target_view = projected.find(target_pane).?;
-    try std.testing.expectEqual(widgets.attachment_preview.shelf_height, shelf.h);
+    try std.testing.expectEqual(attachment_preview_module.shelf_height, shelf.h);
     try std.testing.expectEqual(target_view.outer.x, shelf.x);
     try std.testing.expectEqual(target_view.outer.w, shelf.w);
     try std.testing.expectEqual(target_view.outer.y + target_view.outer.h, shelf.y);
@@ -627,13 +624,13 @@ test "focused agent image preview reserves space below its pane and opens a moda
         .compositor = &compositor,
         .agents = &snapshot,
     });
-    try std.testing.expectEqual(ui.Rect{ .x = 10, .y = 3, .w = 80, .h = 24 }, state.graphics_plan.modal_area);
+    try std.testing.expectEqual(RectType{ .x = 10, .y = 3, .w = 80, .h = 24 }, state.graphics_plan.modal_area);
     try std.testing.expect(!sidebar_before_modal.eqlPublic(screen.back.at(20, 4).?));
 
     model.find(first_pane).?.pointer_shape = .crosshair;
     _ = state.handleMouse(.{ .x = first_view.content.x, .y = first_view.content.y, .kind = .move });
     _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor });
-    try std.testing.expectEqual(pointer.Shape.pointer, screen.mouse_pointer);
+    try std.testing.expectEqual(PointerShape.pointer, screen.mouse_pointer);
 
     const modal_scroll = state.handleMouse(.{
         .x = state.regions.workbench.x,
@@ -653,33 +650,33 @@ test "focused agent image preview reserves space below its pane and opens a moda
 
 test "sidebar highlight follows pane focus and the rendered workspace" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 100, 30);
+    var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    const first_location: schema.TabLocation = .{
+    const first_location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const second_location: schema.TabLocation = .{
+    const second_location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(1),
     };
-    const first_pane: schema.PaneId = @enumFromInt(1);
-    const second_pane: schema.PaneId = @enumFromInt(2);
-    const shell_pane: schema.PaneId = @enumFromInt(3);
-    const workspace_pane: schema.PaneId = @enumFromInt(4);
+    const first_pane: PaneIdType = @enumFromInt(1);
+    const second_pane: PaneIdType = @enumFromInt(2);
+    const shell_pane: PaneIdType = @enumFromInt(3);
+    const workspace_pane: PaneIdType = @enumFromInt(4);
 
-    var first_model = multiplexer.Model.init(gpa);
+    var first_model = MultiplexerModel.init(gpa);
     defer first_model.deinit();
     try first_model.addRoot(.{ .pane_id = first_pane, .location = first_location, .size = .{ .cols = 34, .rows = 27 } });
     try first_model.split(.{ .existing_pane = first_pane, .new_pane = second_pane, .location = first_location, .axis = .horizontal, .area = state.workbench() });
     try first_model.split(.{ .existing_pane = second_pane, .new_pane = shell_pane, .location = first_location, .axis = .vertical, .area = state.workbench() });
     try std.testing.expect(first_model.focusPane(first_pane));
 
-    var second_model = multiplexer.Model.init(gpa);
+    var second_model = MultiplexerModel.init(gpa);
     defer second_model.deinit();
     try second_model.addRoot(.{ .pane_id = workspace_pane, .location = second_location, .size = .{ .cols = 38, .rows = 27 } });
 
-    const agent_entries = [_]agents.AgentInput{
+    const agent_entries = [_]AgentInputType{
         .{
             .key = .{ .pane_id = first_pane, .pane_generation = 1 },
             .location = first_location,
@@ -702,9 +699,9 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
             .status = .ready,
         },
     };
-    var snapshot: agents.Snapshot = .{};
+    var snapshot: SnapshotType = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var screen = try term.Screen.init(gpa, 100, 30);
+    var screen = try ScreenType.init(gpa, 100, 30);
     defer screen.deinit();
     const palette = state.palette();
 
@@ -732,58 +729,58 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
 }
 
 test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
-    var state = try State.init(std.testing.allocator, 100, 30);
+    var state = try StateType.init(std.testing.allocator, 100, 30);
     defer state.deinit();
     try state.configureSidebar(.kitty_hybrid, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var model = multiplexer.Model.init(std.testing.allocator);
+    var model = MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 30, .rows = 20 } });
-    const agent_entries = [_]agents.AgentInput{.{
+    const agent_entries = [_]AgentInputType{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 4 },
         .location = location,
         .pane_index = 1,
         .provider = .claude,
         .status = .ready,
     }};
-    var snapshot: agents.Snapshot = .{};
+    var snapshot: SnapshotType = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var screen = try term.Screen.init(std.testing.allocator, 100, 30);
+    var screen = try ScreenType.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot, .force = true });
     _ = try state.prepareGraphics(&empty_notifications, true);
     try std.testing.expect(state.kittySidebar().focused_card != null);
     try std.testing.expectEqualDeep(
-        Action{ .sidebar_focus_agent = agent_entries[0].key },
+        context_support.Action{ .sidebar_focus_agent = agent_entries[0].key },
         state.hits.at(4, 4).?,
     );
     const interaction_revision = state.interactionVersion();
     const interaction = state.handleMouse(.{ .x = 4, .y = 4, .kind = .press });
     try std.testing.expectEqual(interaction_revision + 1, state.interactionVersion());
-    try std.testing.expectEqualDeep(InteractionIntent{ .focus_agent = agent_entries[0].key }, interaction.intent);
-    try std.testing.expectEqual(@as(schema.PaneId, @enumFromInt(1)), model.layout.focused().?);
+    try std.testing.expectEqualDeep(IntentType{ .focus_agent = agent_entries[0].key }, interaction.intent);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(1)), model.layout.focused().?);
     try std.testing.expect(state.kittySidebar().damaged());
 }
 
 test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
-    var state = try State.initWithAppearance(
+    var state = try StateType.initWithAppearance(
         std.testing.allocator,
         .{ .width = 100, .height = 30 },
         .{ .theme = theme_mod.default_theme, .icons = .nerd_font },
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var model = multiplexer.Model.init(std.testing.allocator);
+    var model = MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 28 } });
-    var screen = try term.Screen.init(std.testing.allocator, 100, 30);
+    var screen = try ScreenType.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
 
     _ = try state.render(&screen, .{ .model = &model, .force = true });
@@ -804,21 +801,21 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
 }
 
 test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
-    var state = try State.initWithAppearance(
+    var state = try StateType.initWithAppearance(
         std.testing.allocator,
         .{ .width = 100, .height = 30 },
         .{ .theme = theme_mod.default_theme, .icons = .nerd_font },
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .{ .support = .unsupported, .cell_width = 10, .cell_height = 20 });
-    var model = multiplexer.Model.init(std.testing.allocator);
+    var model = MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 28 } });
-    var screen = try term.Screen.init(std.testing.allocator, 100, 30);
+    var screen = try ScreenType.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
 
     _ = try state.render(&screen, .{ .model = &model, .force = true });
@@ -837,24 +834,24 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
 
 test "fullscreen labels keep small-font text across focus changes and fall back on geometry changes" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 100, 24);
+    var state = try StateType.init(gpa, 100, 24);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: schema.PaneId = @enumFromInt(1);
-    const second: schema.PaneId = @enumFromInt(2);
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
     const area = state.workbench();
     try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 6 } });
     try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .vertical, .area = area });
     try std.testing.expect(model.toggleFullscreen());
-    var screen = try term.Screen.init(gpa, 100, 24);
+    var screen = try ScreenType.init(gpa, 100, 24);
     defer screen.deinit();
-    var compositor = multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = area });
     _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
@@ -877,7 +874,7 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
         for (0..label.width) |offset| {
             const cell = screen.back.at(original.area.x + label.offset + @as(u16, @intCast(offset)), original.area.y).?;
             try std.testing.expectEqualStrings(" ", cell.text());
-            try std.testing.expectEqual(ui.Color.default, cell.style.bg);
+            try std.testing.expectEqual(ColorType.default, cell.style.bg);
         }
     }
 
@@ -921,12 +918,12 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
 
 test "cell rendering leaves toast rasterization to the media pass" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 120, 30);
+    var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -934,11 +931,11 @@ test "cell rendering leaves toast rasterization to the media pass" {
         .cols = state.workbench().w,
         .rows = state.workbench().h,
     } });
-    var center: notifications.Center = .{};
+    var center: CenterType = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
-    var screen = try term.Screen.init(gpa, 120, 30);
+    var screen = try ScreenType.init(gpa, 120, 30);
     defer screen.deinit();
-    var compositor = multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -961,25 +958,25 @@ test "cell rendering leaves toast rasterization to the media pass" {
     // another cell composition to make progress.
     _ = try state.prepareGraphics(&center, true);
     try std.testing.expect(
-        state.kittyToasts().retainedBytes() > kitty.transmission_budget_per_frame,
+        state.kittyToasts().retainedBytes() > kitty_codec.transmission_budget_per_frame,
     );
     try std.testing.expect(state.kittyToasts().transmissionPending());
 }
 
 test "client chrome uses Vesper by default" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 80, 24);
+    var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 50, .rows = 22 } });
-    var screen = try term.Screen.init(gpa, 80, 24);
+    var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
-    var compositor = multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -1001,11 +998,11 @@ test "client chrome uses Vesper by default" {
 
 test "configuration diagnostics stay inside the bottom bar" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 80, 24);
+    var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    var screen = try term.Screen.init(gpa, 80, 24);
+    var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
 
     _ = try state.render(&screen, .{
@@ -1034,18 +1031,18 @@ test "configuration diagnostics stay inside the bottom bar" {
 
 test "terminal theme leaves client chrome backgrounds to the host terminal" {
     const gpa = std.testing.allocator;
-    var state = try State.initWithTheme(gpa, .{ .width = 80, .height = 24 }, theme_mod.builtin(.terminal));
+    var state = try StateType.initWithTheme(gpa, .{ .width = 80, .height = 24 }, theme_mod.builtin(.terminal));
     defer state.deinit();
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 50, .rows = 22 } });
-    var screen = try term.Screen.init(gpa, 80, 24);
+    var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
-    var compositor = multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -1059,21 +1056,21 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
         .force = true,
     });
 
-    try std.testing.expectEqualDeep(ui.Color.default, screen.back.cells[0].style.bg);
+    try std.testing.expectEqualDeep(ColorType.default, screen.back.cells[0].style.bg);
     // The sidebar column stays on the host terminal's background.
     try std.testing.expectEqualDeep(
-        ui.Color.default,
+        ColorType.default,
         screen.back.cells[@as(usize, 23) * 80].style.bg,
     );
 }
 
 test "clickable toast restores pane cells after its exit animation" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 120, 30);
+    var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(7),
     };
@@ -1081,8 +1078,8 @@ test "clickable toast restores pane cells after its exit animation" {
         .cols = state.workbench().w,
         .rows = state.workbench().h,
     } });
-    const overlay = widgets.toast.overlayArea(state.workbench());
-    var center: notifications.Center = .{};
+    const overlay = toast_module.overlayArea(state.workbench());
+    var center: CenterType = .{};
     const notification_id = center.push(100, .{
         .level = .success,
         .title = "Ready",
@@ -1098,9 +1095,9 @@ test "clickable toast restores pane cells after its exit animation" {
         .{ .x = click_x - state.workbench().x, .y = click_y - state.workbench().y },
         .{ .text = "u" },
     );
-    var screen = try term.Screen.init(gpa, 120, 30);
+    var screen = try ScreenType.init(gpa, 120, 30);
     defer screen.deinit();
-    var compositor = multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -1119,12 +1116,12 @@ test "clickable toast restores pane cells after its exit animation" {
         .kind = .press,
     });
     try std.testing.expectEqualDeep(
-        InteractionIntent{ .notification_activate = notification_id },
+        IntentType{ .notification_activate = notification_id },
         interaction.intent,
     );
     const target = center.activate(notification_id, 200).?;
     try std.testing.expectEqual(location.tab_id, target.select_tab);
-    try std.testing.expect(center.advance(200 + notifications.transition_duration_ns));
+    try std.testing.expect(center.advance(200 + transition_duration_ns_module));
     try std.testing.expect(!center.hasItems());
     _ = try state.render(&screen, .{
         .model = &model,
@@ -1137,7 +1134,7 @@ test "clickable toast restores pane cells after its exit animation" {
 }
 
 test "changing themes invalidates client chrome" {
-    var state = try State.init(std.testing.allocator, 80, 24);
+    var state = try StateType.init(std.testing.allocator, 80, 24);
     defer state.deinit();
     state.dirty = false;
     state.hovered = .active_workspace;
@@ -1151,11 +1148,11 @@ test "changing themes invalidates client chrome" {
 
 test "tab bar renders ordered labels and clicks carry runtime ids" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 80, 24);
+    var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var tabs = tabs_mod.Model.init(gpa);
+    var tabs = TabsModel.init(gpa);
     defer tabs.deinit();
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
     try tabs.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(4),
@@ -1166,10 +1163,10 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 50, .rows = 22 });
-    var screen = try term.Screen.init(gpa, 80, 24);
+    var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
     const model = &tabs.active().?.model;
-    var compositor = multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = model,
@@ -1188,12 +1185,12 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     const click = term.Event.Mouse{ .x = 65, .y = 23, .kind = .press };
     const interaction = state.handleMouse(click);
     try std.testing.expectEqualDeep(
-        InteractionIntent{ .select_tab = @enumFromInt(4) },
+        IntentType{ .select_tab = @enumFromInt(4) },
         interaction.intent,
     );
     try std.testing.expect(state.hits.at(71, 23) == null);
     try std.testing.expectEqualDeep(
-        InteractionIntent{ .select_tab = @enumFromInt(9) },
+        IntentType{ .select_tab = @enumFromInt(9) },
         state.handleMouse(.{ .x = 72, .y = 23, .kind = .press }).intent,
     );
 
@@ -1206,19 +1203,19 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         .button = 2,
     });
     try std.testing.expectEqualDeep(
-        InteractionIntent{ .rename_tab = @enumFromInt(4) },
+        IntentType{ .rename_tab = @enumFromInt(4) },
         rename.intent,
     );
 }
 
 test "tab bar marks the tab whose pane is fullscreen" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 100, 30);
+    var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var tabs = tabs_mod.Model.init(gpa);
+    var tabs = TabsModel.init(gpa);
     defer tabs.deinit();
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const logs: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(9) };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const logs: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(9) };
     try tabs.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(4),
@@ -1233,9 +1230,9 @@ test "tab bar marks the tab whose pane is fullscreen" {
     const model = &tabs.active().?.model;
     try model.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(3), .location = logs, .axis = .horizontal, .area = state.workbench() });
     try std.testing.expect(model.toggleFullscreen());
-    var screen = try term.Screen.init(gpa, 100, 30);
+    var screen = try ScreenType.init(gpa, 100, 30);
     defer screen.deinit();
-    var compositor = multiplexer.Compositor.init(gpa);
+    var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = model,
@@ -1256,7 +1253,7 @@ test "tab bar marks the tab whose pane is fullscreen" {
     try std.testing.expectEqualStrings("\u{26f6}", screen.back.cells[bottom_row + 98].text());
     try std.testing.expect(state.hits.at(89, 29) == null);
     try std.testing.expectEqualDeep(
-        InteractionIntent{ .select_tab = @enumFromInt(9) },
+        IntentType{ .select_tab = @enumFromInt(9) },
         state.handleMouse(.{ .x = 98, .y = 29, .kind = .press }).intent,
     );
 
@@ -1269,17 +1266,17 @@ test "tab bar marks the tab whose pane is fullscreen" {
 
 test "the top bar lists open workspaces and clicking one requests a switch" {
     const gpa = std.testing.allocator;
-    var state = try State.init(gpa, 100, 30);
+    var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = multiplexer.Model.init(gpa);
+    var model = MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
-    var workspaces: workspace_list.Snapshot = .{};
-    const entries = [_]workspace_list.EntryInput{
+    var workspaces: WorkspaceListSnapshot = .{};
+    const entries = [_]EntryInputType{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
     };
@@ -1287,7 +1284,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .revision = 1,
         .entries = &entries,
     }));
-    var screen = try term.Screen.init(gpa, 100, 30);
+    var screen = try ScreenType.init(gpa, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{
         .model = &model,
@@ -1323,7 +1320,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .kind = .press,
     });
     try std.testing.expectEqualDeep(
-        InteractionIntent{ .select_workspace = @enumFromInt(2) },
+        IntentType{ .select_workspace = @enumFromInt(2) },
         interaction.intent,
     );
 

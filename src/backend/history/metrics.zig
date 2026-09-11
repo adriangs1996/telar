@@ -1,10 +1,7 @@
 //! Lock-free counters for the asynchronous history path.
 
+const Counters = @import("Counters.zig");
 const std = @import("std");
-
-pub const Snapshot = @import("Snapshot.zig");
-
-pub const Counters = @import("Counters.zig");
 
 test "queue counters preserve depth high-water and drop semantics" {
     var counters: Counters = .{};

@@ -1,33 +1,35 @@
-const Half = @This();
 const std = @import("std");
 const Reservation = @import("Reservation.zig");
 const Pane = @import("Pane.zig");
+const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
 const Key = @import("Key.zig");
-const source_namespace = @import("buffer_support.zig");
+const buffer_support = @import("buffer_support.zig");
 const Buffer = @import("Buffer.zig");
 const HalfOptions = @import("HalfOptions.zig");
+const Half = @This();
+
 gpa: std.mem.Allocator,
 reservation: Reservation,
 pane: Pane,
-dialect: middleware.ApiDialect,
+dialect: types.ApiDialect,
 protocol: middleware.Protocol,
 key: Key,
-side: source_namespace.Side,
+side: buffer_support.Side,
 head: Buffer,
 body: Buffer,
-host_storage: [source_namespace.max_host_bytes]u8 = undefined,
+host_storage: [buffer_support.max_host_bytes]u8 = undefined,
 host_len: u16 = 0,
-method_storage: [source_namespace.max_method_bytes]u8 = undefined,
+method_storage: [buffer_support.max_method_bytes]u8 = undefined,
 method_len: u8 = 0,
-target_storage: [source_namespace.max_target_bytes]u8 = undefined,
+target_storage: [buffer_support.max_target_bytes]u8 = undefined,
 target_len: u16 = 0,
-encoding_storage: [source_namespace.max_encoding_bytes]u8 = undefined,
+encoding_storage: [buffer_support.max_encoding_bytes]u8 = undefined,
 encoding_len: u8 = 0,
 status_code: u16 = 0,
 started_at_ms: i64,
 finished_at_ms: i64 = 0,
-outcome: source_namespace.Outcome = .failed,
+outcome: buffer_support.Outcome = .failed,
 captured_bytes: usize = 0,
 body_decoded: bool = false,
 
@@ -39,7 +41,7 @@ pub fn create(options: HalfOptions) ?*Half {
     const reservation_bytes = @max(@as(usize, 1), options.config.max_exchange_bytes / 2);
     var reservation = options.quota.reserve(reservation_bytes) orelse return null;
 
-    if (options.host.len > source_namespace.max_host_bytes) {
+    if (options.host.len > buffer_support.max_host_bytes) {
         reservation.release();
         return null;
     }
@@ -126,7 +128,7 @@ pub fn setEncoding(half: *Half, value: []const u8) void {
     half.encoding_len = @intCast(value.len);
 }
 
-pub fn append(half: *Half, part: source_namespace.Part, input: []const u8) bool {
+pub fn append(half: *Half, part: buffer_support.Part, input: []const u8) bool {
     const selected = switch (part) {
         .request_head => if (half.side == .request) &half.head else return false,
         .request_body => if (half.side == .request) &half.body else return false,
@@ -149,7 +151,7 @@ pub fn append(half: *Half, part: source_namespace.Part, input: []const u8) bool 
     return accepted == input.len and !selected.truncated;
 }
 
-pub fn finish(half: *Half, outcome: source_namespace.Outcome, finished_at_ms: i64) void {
+pub fn finish(half: *Half, outcome: buffer_support.Outcome, finished_at_ms: i64) void {
     half.outcome = outcome;
     half.finished_at_ms = finished_at_ms;
 }

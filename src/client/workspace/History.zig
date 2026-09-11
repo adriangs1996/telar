@@ -1,8 +1,10 @@
-const History = @This();
-const source_namespace = @import("navigation.zig");
+const max_workspace_list_entries_module = @import("telar-core").max_workspace_list_entries;
 const Bookmark = @import("Bookmark.zig");
 const std = @import("std");
-entries: [source_namespace.schema.max_workspace_list_entries]?Bookmark = @splat(null),
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const History = @This();
+
+entries: [max_workspace_list_entries_module]?Bookmark = @splat(null),
 
 pub fn remember(history: *History, bookmark: Bookmark) void {
     var free: ?*?Bookmark = null;
@@ -21,7 +23,7 @@ pub fn remember(history: *History, bookmark: Bookmark) void {
     }
 }
 
-pub fn find(history: *const History, workspace: source_namespace.schema.WorkspaceLocation) ?Bookmark {
+pub fn find(history: *const History, workspace: WorkspaceLocationType) ?Bookmark {
     for (history.entries) |slot| {
         const entry = slot orelse continue;
         if (std.meta.eql(entry.location.workspace, workspace)) {
@@ -31,7 +33,7 @@ pub fn find(history: *const History, workspace: source_namespace.schema.Workspac
     return null;
 }
 
-pub fn forget(history: *History, workspace: source_namespace.schema.WorkspaceLocation) void {
+pub fn forget(history: *History, workspace: WorkspaceLocationType) void {
     for (&history.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (std.meta.eql(entry.location.workspace, workspace)) {

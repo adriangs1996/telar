@@ -73,14 +73,14 @@ needed.
 
 ## Proof
 
-- `src/frontend/client/model.zig` proves active-only frame advancement and
+- `src/client/model/Model.zig` proves active-only frame advancement and
   isolated versioning.
-- `src/frontend/client/application/sidebar_animation.zig` proves inactive
+- `src/client/application/notifications/sidebar_animation.zig` proves inactive
   no-ops, synchronization without mutation, commit-before-rearm ordering and
   retained commits after effect failure.
-- `src/frontend/client/sidebar_animations.zig` owns the single pending timer
+- `src/frontend/client/controllers/notifications/sidebar_animations.zig` owns the single pending timer
   and releases it before handling completion.
-- `src/frontend/client/presenter.zig` observes the dedicated revision and
+- `src/frontend/client/presentation/Presenter.zig` observes the dedicated revision and
   supplies the model frame to the view.
-- `src/frontend/client/client_test.zig` proves a real scheduled tick mutates
+- `src/frontend/client/tests/` proves a real scheduled tick mutates
   the model without requesting presentation before `presentation_lifecycle.observe`.

@@ -1,17 +1,19 @@
-const Capture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("config_reload_delivery.zig");
-const notification_capability = @import("../../root.zig").notifications;
-const Effects = @import("ConfigReloadDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const config_reload_delivery = @import("config_reload_delivery.zig");
+const InputType = @import("../../notifications/NotificationInput.zig");
+const ConfigReloadDeliveryEffects = @import("ConfigReloadDeliveryEffects.zig");
+const ConfigurationCommitType = @import("../../model/ConfigurationCommit.zig");
 const std = @import("std");
-model: *const client_model.Model,
-events: [3]source_namespace.Event = undefined,
-event_count: usize = 0,
-notification: ?notification_capability.Input = null,
-diagnostic_observed: bool = false,
-failure: source_namespace.Failure = .none,
+const Capture = @This();
 
-pub fn effects(capture: *Capture) Effects {
+model: *const ModelType,
+events: [3]config_reload_delivery.Event = undefined,
+event_count: usize = 0,
+notification: ?InputType = null,
+diagnostic_observed: bool = false,
+failure: config_reload_delivery.Failure = .none,
+
+pub fn effects(capture: *Capture) ConfigReloadDeliveryEffects {
     return .{
         .context = capture,
         .apply_adoption = applyAdoption,
@@ -20,7 +22,7 @@ pub fn effects(capture: *Capture) Effects {
     };
 }
 
-fn applyAdoption(raw_context: *anyopaque) !client_model.ConfigurationCommit {
+fn applyAdoption(raw_context: *anyopaque) !ConfigurationCommitType {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     capture.record(.apply_adoption);
 
@@ -28,10 +30,10 @@ fn applyAdoption(raw_context: *anyopaque) !client_model.ConfigurationCommit {
         return error.ConfigurationAdoptionFailed;
     }
 
-    return source_namespace.testingCommit();
+    return config_reload_delivery.testingCommit();
 }
 
-fn publishNotification(raw_context: *anyopaque, input: notification_capability.Input) !void {
+fn publishNotification(raw_context: *anyopaque, input: InputType) !void {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     capture.record(.publish_notification);
     capture.notification = input;
@@ -54,11 +56,11 @@ fn rearm(raw_context: *anyopaque) !void {
     }
 }
 
-fn record(capture: *Capture, event: source_namespace.Event) void {
+fn record(capture: *Capture, event: config_reload_delivery.Event) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
 
-pub fn eventSlice(capture: *const Capture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const Capture) []const config_reload_delivery.Event {
     return capture.events[0..capture.event_count];
 }

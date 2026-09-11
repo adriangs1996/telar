@@ -1,12 +1,13 @@
-const TestTranscodeSetup = @This();
-const provider = @import("../provider/request_support.zig");
-const source_namespace = @import("relay.zig");
-const tls = @import("../tls.zig");
+const types = @import("../../agent/types.zig");
+const relay = @import("relay.zig");
+const SessionType = @import("../Session.zig");
 const PeerSettings = @import("PeerSettings.zig");
-const middleware = @import("../middleware.zig");
-dialect: provider.ApiDialect,
-direction: source_namespace.Direction,
-to: tls.Session.Side,
+const TransformPipelineType = @import("../TransformPipeline.zig");
+const TestTranscodeSetup = @This();
+
+dialect: types.ApiDialect,
+direction: relay.Direction,
+to: SessionType.Side,
 source_settings: *PeerSettings,
 target_settings: *PeerSettings,
-pipeline: *const middleware.TransformPipeline,
+pipeline: *const TransformPipelineType,

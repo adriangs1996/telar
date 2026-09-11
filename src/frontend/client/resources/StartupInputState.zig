@@ -1,6 +1,7 @@
-const State = @This();
 const std = @import("std");
-const term = @import("../../presentation/root.zig").screen;
+const term = @import("../../presentation/screen_support.zig");
+const State = @This();
+
 pub const capacity = 8192;
 held: [capacity]u8 = undefined,
 held_len: usize = 0,

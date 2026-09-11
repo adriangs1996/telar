@@ -1,27 +1,14 @@
 //! Shell-independent command capture from the PTY's rendered terminal state.
 
 const std = @import("std");
-const builtin = @import("builtin");
 const vt = @import("ghostty-vt");
-const escape = @import("escape.zig");
+const InputScanner = @import("InputScanner.zig");
+const TerminalTracker = @import("TerminalTracker.zig");
+const TerminalCollected = @import("TerminalCollected.zig");
 const osc = @import("osc.zig");
-
-pub const max_command_bytes = osc.max_command_bytes;
-pub const Clock = osc.Clock;
-pub const Status = osc.Status;
-pub const Command = osc.Command;
-
-pub const InputObservation = @import("TerminalInputObservation.zig");
-
-pub const OutputObservation = @import("TerminalOutputObservation.zig");
-
-pub const ExitObservation = @import("ExitObservation.zig");
-
-const Completion = @import("TerminalCompletion.zig");
+const TypeAheadFixture = @import("TypeAheadFixture.zig");
 
 pub const max_output_tail_bytes = 64 * 1024;
-
-pub const Tracker = @import("TerminalTracker.zig");
 
 pub fn validPrefixLength(bytes: []const u8, limit: usize) usize {
     if (bytes.len <= limit) {
@@ -58,8 +45,6 @@ pub fn hashCells(cells: []const vt.Cell) u64 {
     return hash;
 }
 
-pub const InputScanner = escape.InputScanner;
-
 test "bracketed paste newlines do not submit" {
     var scanner: InputScanner = .{};
     try std.testing.expect(!scanner.feed("\x1b[200~echo one\necho two").submitted);
@@ -84,8 +69,6 @@ test "UTF-8 truncation stops on a codepoint boundary" {
     try std.testing.expectEqual(@as(usize, 4), validPrefixLength(bytes, 5));
 }
 
-const Collected = @import("TerminalCollected.zig");
-
 test "captures the rendered line even when the edit cursor is not at its end" {
     const gpa = std.testing.allocator;
     var terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 40, .rows = 8 });
@@ -94,9 +77,9 @@ test "captures the rendered line even when the edit cursor is not at its end" {
     defer stream.deinit();
     stream.nextSlice("$ ");
 
-    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
+    var tracker = try TerminalTracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
     defer tracker.deinit(&terminal);
-    var collected: Collected = .{};
+    var collected: TerminalCollected = .{};
     _ = tracker.observeInput(.{
         .terminal = &terminal,
         .bytes = "edited with arrows\r",
@@ -127,9 +110,9 @@ test "excludes an unchanged right prompt from the submitted command" {
     defer stream.deinit();
     stream.nextSlice("$ \x1b[30GSTATUS\x1b[3G");
 
-    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
+    var tracker = try TerminalTracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
     defer tracker.deinit(&terminal);
-    var collected: Collected = .{};
+    var collected: TerminalCollected = .{};
     _ = tracker.observeInput(.{
         .terminal = &terminal,
         .bytes = "echo ok\r",
@@ -162,9 +145,9 @@ test "a captured command is bounded in bytes while resident" {
     defer stream.deinit();
     stream.nextSlice("$ ");
 
-    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
+    var tracker = try TerminalTracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
     defer tracker.deinit(&terminal);
-    var collected: Collected = .{};
+    var collected: TerminalCollected = .{};
     _ = tracker.observeInput(.{
         .terminal = &terminal,
         .bytes = "huge\r",
@@ -174,10 +157,10 @@ test "a captured command is bounded in bytes while resident" {
 
     // The echoed "command" is a paste far past the storable bound.
     const chunk = "x" ** 1024;
-    for (0..(max_command_bytes / 1024) + 32) |_| stream.nextSlice(chunk);
+    for (0..(osc.max_command_bytes / 1024) + 32) |_| stream.nextSlice(chunk);
     stream.nextSlice("\r\n");
     try std.testing.expect(try tracker.captureSubmitted(&terminal));
-    try std.testing.expect(tracker.command.?.len <= max_command_bytes);
+    try std.testing.expect(tracker.command.?.len <= osc.max_command_bytes);
     try std.testing.expect(tracker.command_truncated);
 }
 
@@ -189,9 +172,9 @@ test "Kitty graphics commands do not enter shell history" {
     defer stream.deinit();
     stream.nextSlice("$ ");
 
-    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
+    var tracker = try TerminalTracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
     defer tracker.deinit(&terminal);
-    var collected: Collected = .{};
+    var collected: TerminalCollected = .{};
     _ = tracker.observeInput(.{
         .terminal = &terminal,
         .bytes = "echo safe\r",
@@ -212,7 +195,7 @@ test "output capture keeps a bounded tail favoring the newest bytes" {
     const gpa = std.testing.allocator;
     var terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 20, .rows = 5 });
     defer terminal.deinit(gpa);
-    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal, .capture_output = true });
+    var tracker = try TerminalTracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal, .capture_output = true });
     defer tracker.deinit(&terminal);
 
     tracker.phase = .running;
@@ -235,7 +218,7 @@ test "output capture stays disabled without the opt-in" {
     const gpa = std.testing.allocator;
     var terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 20, .rows = 5 });
     defer terminal.deinit(gpa);
-    var tracker = try Tracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
+    var tracker = try TerminalTracker.init(gpa, .{ .cwd = "/work", .terminal = &terminal });
     defer tracker.deinit(&terminal);
 
     tracker.phase = .running;
@@ -243,8 +226,6 @@ test "output capture stays disabled without the opt-in" {
     try std.testing.expect(tracker.output_tail == null);
     try std.testing.expectEqual(@as(u64, 0), tracker.output_observed);
 }
-
-const TypeAheadFixture = @import("TypeAheadFixture.zig");
 
 test "type-ahead echoed by the kernel is re-anchored at the line editor's re-echo" {
     const gpa = std.testing.allocator;
@@ -348,5 +329,5 @@ test "an erased anchor row without a repainted prompt captures nothing" {
     fixture.typed("\r");
     fixture.stream.nextSlice("\r\n");
     try std.testing.expect(!try fixture.tracker.captureSubmitted(&fixture.terminal));
-    try std.testing.expectEqual(Tracker.Phase.idle, fixture.tracker.phase);
+    try std.testing.expectEqual(TerminalTracker.Phase.idle, fixture.tracker.phase);
 }

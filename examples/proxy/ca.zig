@@ -1,8 +1,9 @@
 const std = @import("std");
-pub const Io = std.Io;
-
+const Pair = @import("Pair.zig");
 const tlsz = @import("tls");
-pub const x509 = tlsz.x509;
+const Resources = @import("Resources.zig");
+const AuthorityFiles = @import("AuthorityFiles.zig");
+const Authority = @import("Authority.zig");
 
 // The local certificate authority.
 //
@@ -37,21 +38,13 @@ pub const backdate_seconds: i64 = 3600;
 pub const max_cert_len = 1024;
 pub const max_pem_len = 2 * max_cert_len;
 
-pub const Resources = @import("Resources.zig");
-
-pub const AuthorityFiles = @import("AuthorityFiles.zig");
-
-pub const Pair = @import("Pair.zig");
-
-pub const Authority = @import("Authority.zig");
-
 pub const ca_common_name = "herdr local CA";
 
-pub fn generate(io: Io) Error!Pair {
-    const now = Io.Clock.real.now(io).toSeconds();
+pub fn generate(io: std.Io) Error!Pair {
+    const now = std.Io.Clock.real.now(io).toSeconds();
 
-    var pair: Pair = .{ .key_pair = x509.KeyPair.generate(io) };
-    const written = x509.create(
+    var pair: Pair = .{ .key_pair = tlsz.x509.KeyPair.generate(io) };
+    const written = tlsz.x509.create(
         &pair.cert_buf,
         .{
             .common_name = ca_common_name,
@@ -72,7 +65,7 @@ pub fn generate(io: Io) Error!Pair {
 pub fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
     const io = resources.io;
     const gpa = resources.allocator;
-    const cwd: Io.Dir = .cwd();
+    const cwd: std.Io.Dir = .cwd();
 
     const key_pem = cwd.readFileAlloc(io, files.key, gpa, .limited(max_pem_len)) catch return error.ReadFailed;
     defer gpa.free(key_pem);
@@ -90,15 +83,15 @@ pub fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
     ) catch return error.ReadFailed;
 
     var pair: Pair = .{
-        .key_pair = x509.KeyPair.fromSecretKey(secret) catch return error.ReadFailed,
+        .key_pair = tlsz.x509.KeyPair.fromSecretKey(secret) catch return error.ReadFailed,
     };
-    const der = x509.decodePem(&pair.cert_buf, cert_pem) catch return error.ReadFailed;
+    const der = tlsz.x509.decodePem(&pair.cert_buf, cert_pem) catch return error.ReadFailed;
     pair.cert_len = der.len;
     return pair;
 }
 
-pub fn persist(io: Io, pair: Pair, files: AuthorityFiles) Error!void {
-    const cwd: Io.Dir = .cwd();
+pub fn persist(io: std.Io, pair: Pair, files: AuthorityFiles) Error!void {
+    const cwd: std.Io.Dir = .cwd();
 
     var buf: [max_pem_len]u8 = undefined;
     const cert_pem = try pair.certPem(&buf);
@@ -121,14 +114,14 @@ pub fn persist(io: Io, pair: Pair, files: AuthorityFiles) Error!void {
 ///
 /// Not `std.crypto.Certificate.Bundle`: that parses them into its own in-memory
 /// form, and what a child process needs is a file it can be pointed at.
-pub fn readSystemRoots(io: Io, gpa: std.mem.Allocator) ![]u8 {
+pub fn readSystemRoots(io: std.Io, gpa: std.mem.Allocator) ![]u8 {
     const candidates = [_][]const u8{
         "/etc/ssl/cert.pem", // macOS, Alpine, OpenBSD
         "/etc/ssl/certs/ca-certificates.crt", // Debian, Ubuntu, Gentoo
         "/etc/pki/tls/certs/ca-bundle.crt", // Fedora, RHEL
         "/etc/ssl/ca-bundle.pem", // openSUSE
     };
-    const cwd: Io.Dir = .cwd();
+    const cwd: std.Io.Dir = .cwd();
     for (candidates) |path| {
         return cwd.readFileAlloc(io, path, gpa, .limited(4 * 1024 * 1024)) catch continue;
     }
@@ -136,7 +129,7 @@ pub fn readSystemRoots(io: Io, gpa: std.mem.Allocator) ![]u8 {
 }
 
 /// A serial only has to be unpredictable enough not to repeat.
-pub fn randomSerial(io: Io) u64 {
+pub fn randomSerial(io: std.Io) u64 {
     const source: std.Random.IoSource = .{ .io = io };
     // The high bit is cleared so the DER integer stays comfortably positive
     // even before the encoder's own leading-zero rule.
@@ -147,10 +140,8 @@ pub fn randomSerial(io: Io) u64 {
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-
 test "a minted leaf verifies against the authority that signed it" {
-    const io = testing.io;
+    const io = std.testing.io;
     const authority: Authority = .{ .pair = try generate(io) };
     const leaf = try authority.mint(io, "api.anthropic.com");
 
@@ -161,27 +152,27 @@ test "a minted leaf verifies against the authority that signed it" {
     const parsed_leaf = try leaf_cert.parse();
     const parsed_ca = try ca_cert.parse();
 
-    try parsed_leaf.verify(parsed_ca, Io.Clock.real.now(io).toSeconds());
+    try parsed_leaf.verify(parsed_ca, std.Io.Clock.real.now(io).toSeconds());
     try parsed_leaf.verifyHostName("api.anthropic.com");
-    try testing.expectError(
+    try std.testing.expectError(
         error.CertificateHostMismatch,
         parsed_leaf.verifyHostName("evil.example"),
     );
 }
 
 test "serials differ between leaves" {
-    const io = testing.io;
+    const io = std.testing.io;
     const authority: Authority = .{ .pair = try generate(io) };
     const a = try authority.mint(io, "one.example");
     const b = try authority.mint(io, "two.example");
-    try testing.expect(!std.mem.eql(u8, a.certDer(), b.certDer()));
+    try std.testing.expect(!std.mem.eql(u8, a.certDer(), b.certDer()));
 }
 
 test "the pem a leaf produces is what the tls stack expects" {
     // `CertKeyPair.fromSlice` is what consumes these, so it is the parser that
     // has to agree - not this file's idea of what PEM looks like.
-    const io = testing.io;
-    const gpa = testing.allocator;
+    const io = std.testing.io;
+    const gpa = std.testing.allocator;
 
     const authority: Authority = .{ .pair = try generate(io) };
     const leaf = try authority.mint(io, "localhost");
@@ -203,6 +194,6 @@ test "the pem a leaf produces is what the tls stack expects" {
 
     // Leaf first, then the issuer, so a client that pinned only the root can
     // still build a chain.
-    try testing.expectEqual(@as(usize, 2), auth.bundle.map.size);
-    try testing.expectEqual(.ecdsa_secp256r1_sha256, auth.key.signature_scheme);
+    try std.testing.expectEqual(@as(usize, 2), auth.bundle.map.size);
+    try std.testing.expectEqual(.ecdsa_secp256r1_sha256, auth.key.signature_scheme);
 }

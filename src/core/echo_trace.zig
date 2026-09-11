@@ -1,6 +1,8 @@
 //! Opt-in fixed-capacity traces. The process bootstrap owns the recorder.
-const std = @import("std");
+
 const root = @import("root");
+const std = @import("std");
+const Recorder = @import("Recorder.zig");
 
 pub const enabled = @hasDecl(root, "telar_echo_trace") and root.telar_echo_trace;
 pub const cpu_enabled = enabled and @hasDecl(root, "telar_echo_trace_cpu") and root.telar_echo_trace_cpu;
@@ -33,8 +35,6 @@ pub const Tag = enum {
     host_flush_start,
     host_flush_done,
 };
-
-pub const Recorder = @import("Recorder.zig");
 
 /// Compiles away without `-Decho-trace`; records no contents, pane or request IDs.
 /// Example: `echo_trace.mark(io, .pty_read);`.

@@ -1,37 +1,13 @@
 //! Clipboard platform adapter; no preview store or terminal rendering.
 
-const std = @import("std");
-const core = @import("telar-core");
-const Io = std.Io;
-const schema = core.schema;
-const ui = core.ui;
-const path_marker = @import("telar-client").attachments.path_marker;
 const builtin = @import("builtin");
-const types = @import("telar-client").attachments.types;
-const max_items = types.max_items;
-const max_source_bytes = types.max_source_bytes;
-const max_png_bytes = types.max_png_bytes;
-const max_pixels = types.max_pixels;
-const max_retained_bytes = types.max_retained_bytes;
-const max_marker_navigation_steps = types.max_marker_navigation_steps;
-const max_removal_keys = types.max_removal_keys;
-const deletion_watch_frames = types.deletion_watch_frames;
-const Target = types.Target;
-const CaptureRequest = types.CaptureRequest;
-const MarkerPolicy = types.MarkerPolicy;
-const MarkerIdentity = types.MarkerIdentity;
-const Capture = types.Capture;
-const CaptureResources = types.CaptureResources;
-const Id = types.Id;
-const Item = types.Item;
-const Snapshot = types.Snapshot;
-const MarkerScreen = types.MarkerScreen;
-const MarkerDeletion = types.MarkerDeletion;
-const MarkerRemoval = types.MarkerRemoval;
-const DeletionProbe = types.DeletionProbe;
-const PendingDeletion = types.PendingDeletion;
-const PlanItem = types.PlanItem;
-const Plan = types.Plan;
+const std = @import("std");
+const CaptureRequest = @import("telar-client").CaptureRequest;
+const Capture = @import("telar-client").Capture;
+const ClipboardImage = @import("ClipboardImage.zig");
+const max_source_bytes = @import("telar-client").max_source_bytes;
+const max_png_bytes = @import("telar-client").max_png_bytes;
+const max_pixels = @import("telar-client").max_pixels;
 
 pub fn platformSupported() bool {
     return builtin.os.tag == .macos;
@@ -55,8 +31,6 @@ pub fn captureClipboard(gpa: std.mem.Allocator, request: CaptureRequest, orphan:
     orphan.* = capture;
     return capture;
 }
-
-const ClipboardImage = @import("ClipboardImage.zig");
 
 fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
     if (comptime builtin.os.tag != .macos) {

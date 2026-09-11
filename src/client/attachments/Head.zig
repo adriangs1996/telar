@@ -1,6 +1,7 @@
-const Head = @This();
-const source_namespace = @import("path_marker.zig");
+const path_marker = @import("path_marker.zig");
 const Position = @import("Position.zig");
-uuid: source_namespace.Uuid,
+const Head = @This();
+
+uuid: path_marker.Uuid,
 start: Position,
 end: Position,

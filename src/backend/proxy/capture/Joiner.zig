@@ -1,10 +1,12 @@
-const Joiner = @This();
-const source_namespace = @import("table.zig");
+const table = @import("table.zig");
 const Entry = @import("Entry.zig");
-const buffer = @import("buffer_support.zig");
+const HalfType = @import("Half.zig");
 const Exchange = @import("Exchange.zig");
+const KeyType = @import("Key.zig");
 const std = @import("std");
-slots: [source_namespace.capacity]?Entry = .{null} ** source_namespace.capacity,
+const Joiner = @This();
+
+slots: [table.capacity]?Entry = .{null} ** table.capacity,
 timeout_ms: u32,
 
 /// Creates an empty fixed-capacity join table.
@@ -36,9 +38,9 @@ pub fn deinit(joiner: *Joiner) void {
 /// ```zig
 /// const result = joiner.push(now_ms, half);
 /// ```
-pub fn push(joiner: *Joiner, now_ms: i64, half: *buffer.Half) source_namespace.PushResult {
+pub fn push(joiner: *Joiner, now_ms: i64, half: *HalfType) table.PushResult {
     const index = joiner.find(half.key) orelse joiner.empty() orelse {
-        return .{ .partial = source_namespace.sideExchange(half) };
+        return .{ .partial = table.sideExchange(half) };
     };
     var entry = joiner.slots[index] orelse Entry{
         .key = half.key,
@@ -50,7 +52,7 @@ pub fn push(joiner: *Joiner, now_ms: i64, half: *buffer.Half) source_namespace.P
         .response => entry.response != null,
     };
     if (duplicate) {
-        return .{ .partial = source_namespace.sideExchange(half) };
+        return .{ .partial = table.sideExchange(half) };
     }
 
     switch (half.side) {
@@ -86,7 +88,7 @@ pub fn expire(joiner: *Joiner, now_ms: i64) ?Exchange {
     return null;
 }
 
-fn find(joiner: *const Joiner, key: buffer.Key) ?usize {
+fn find(joiner: *const Joiner, key: KeyType) ?usize {
     for (joiner.slots, 0..) |slot, index| {
         const entry = slot orelse continue;
         if (std.meta.eql(entry.key, key)) {

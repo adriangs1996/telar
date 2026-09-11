@@ -1,16 +1,20 @@
-const Producer = @This();
 const std = @import("std");
-const source_namespace = @import("root.zig");
-const buffer = @import("buffer_support.zig");
+const ConfigType = @import("Config.zig");
+const QuotaType = @import("Quota.zig");
+const ChannelType = @import("Channel.zig");
 const InitOptions = @import("InitOptions.zig");
 const StartOptions = @import("StartOptions.zig");
-const Publication = @import("CapturePublication.zig");
+const HalfType = @import("Half.zig");
+const CapturePublication = @import("CapturePublication.zig");
 const decode_mod = @import("decode.zig");
-const Metrics = @import("CaptureMetrics.zig");
+const buffer = @import("buffer_support.zig");
+const CaptureMetrics = @import("CaptureMetrics.zig");
+const Producer = @This();
+
 gpa: std.mem.Allocator,
-config: source_namespace.Config,
-quota: buffer.Quota,
-channel: source_namespace.Channel = undefined,
+config: ConfigType,
+quota: QuotaType,
+channel: ChannelType = undefined,
 started: std.atomic.Value(u64) = .init(0),
 truncated: std.atomic.Value(u64) = .init(0),
 skipped_quota: std.atomic.Value(u64) = .init(0),
@@ -36,8 +40,8 @@ pub fn init(producer: *Producer, gpa: std.mem.Allocator, options: InitOptions) !
 /// ```zig
 /// const half = producer.start(options) orelse return;
 /// ```
-pub fn start(producer: *Producer, options: StartOptions) ?*source_namespace.Half {
-    const half = source_namespace.Half.create(.{
+pub fn start(producer: *Producer, options: StartOptions) ?*HalfType {
+    const half = HalfType.create(.{
         .gpa = producer.gpa,
         .quota = &producer.quota,
         .config = producer.config,
@@ -68,7 +72,7 @@ pub fn start(producer: *Producer, options: StartOptions) ?*source_namespace.Half
 /// ```zig
 /// producer.publish(io, .{ .credential = credential, .half = half });
 /// ```
-pub fn publish(producer: *Producer, io: source_namespace.Io, publication: Publication) void {
+pub fn publish(producer: *Producer, io: std.Io, publication: CapturePublication) void {
     if (publication.half.head.truncated or publication.half.body.truncated) {
         _ = producer.truncated.fetchAdd(1, .monotonic);
     }
@@ -84,7 +88,7 @@ pub fn publish(producer: *Producer, io: source_namespace.Io, publication: Public
 /// ```zig
 /// const half = try producer.receive(io);
 /// ```
-pub fn receive(producer: *Producer, io: source_namespace.Io) anyerror!*source_namespace.Half {
+pub fn receive(producer: *Producer, io: std.Io) anyerror!*HalfType {
     return producer.channel.receive(io);
 }
 
@@ -93,7 +97,7 @@ pub fn receive(producer: *Producer, io: source_namespace.Io) anyerror!*source_na
 /// ```zig
 /// producer.close(io);
 /// ```
-pub fn close(producer: *Producer, io: source_namespace.Io) void {
+pub fn close(producer: *Producer, io: std.Io) void {
     producer.channel.close(io);
 }
 
@@ -111,7 +115,7 @@ pub fn recordDecodeFailure(producer: *Producer) void {
 /// ```zig
 /// producer.decodeBody(half);
 /// ```
-pub fn decodeBody(producer: *Producer, half: *source_namespace.Half) void {
+pub fn decodeBody(producer: *Producer, half: *HalfType) void {
     if (half.encoding().len == 0 or std.ascii.eqlIgnoreCase(half.encoding(), "identity")) {
         half.body_decoded = true;
         return;
@@ -140,7 +144,7 @@ pub fn decodeBody(producer: *Producer, half: *source_namespace.Half) void {
     const was_truncated = half.body.truncated;
     half.captured_bytes -= half.body.len;
     half.body.reset();
-    const part: source_namespace.Part = if (half.side == .request) .request_body else .response_body;
+    const part: buffer.Part = if (half.side == .request) .request_body else .response_body;
     _ = half.append(part, result.bytes);
     half.body.truncated = half.body.truncated or result.truncated or was_truncated;
     half.body_decoded = result.decoded;
@@ -154,7 +158,7 @@ pub fn decodeBody(producer: *Producer, half: *source_namespace.Half) void {
 /// ```zig
 /// const snapshot = producer.metrics();
 /// ```
-pub fn metrics(producer: *const Producer) Metrics {
+pub fn metrics(producer: *const Producer) CaptureMetrics {
     const queue_metrics = producer.channel.metrics();
 
     return .{

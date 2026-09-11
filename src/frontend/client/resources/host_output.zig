@@ -1,18 +1,14 @@
 //! Single-flight host output. The worker borrows only sealed bytes and a writer.
+
 const std = @import("std");
-const presenter = @import("../presentation/Presenter.zig");
-pub const Io = std.Io;
-
-pub const FastWrite = @import("FastWrite.zig");
-
-pub const Output = @import("Output.zig");
-
 const PrefixWriter = @import("PrefixWriter.zig");
+const Output = @import("Output.zig");
+const TokenType = @import("telar-client").Token;
 
 test "a nonblocking prefix and the output actor transmit each byte exactly once" {
     for ([_]usize{ 0, 2, 5 }) |limit| {
         var bytes: [64]u8 = undefined;
-        var target: Io.Writer = .fixed(&bytes);
+        var target: std.Io.Writer = .fixed(&bytes);
         var prefix: PrefixWriter = .{ .writer = &target, .limit = limit };
         var output = try Output.init(std.testing.allocator, &target);
         defer output.deinit();
@@ -33,7 +29,7 @@ test "a nonblocking prefix and the output actor transmit each byte exactly once"
 
 test "sealed bytes stay immutable while sideband output accumulates" {
     var bytes: [64]u8 = undefined;
-    var target: Io.Writer = .fixed(&bytes);
+    var target: std.Io.Writer = .fixed(&bytes);
     var output = try Output.init(std.testing.allocator, &target);
     defer output.deinit();
     try output.writer.writeAll("first");
@@ -50,7 +46,7 @@ test "sealed bytes stay immutable while sideband output accumulates" {
 
 test "a completed write releases its exact completion token" {
     var bytes: [64]u8 = undefined;
-    var target: Io.Writer = .fixed(&bytes);
+    var target: std.Io.Writer = .fixed(&bytes);
     var output = try Output.init(std.testing.allocator, &target);
     defer output.deinit();
     try output.writer.writeAll("frame");
@@ -59,7 +55,7 @@ test "a completed write releases its exact completion token" {
     try std.testing.expectEqual(@as(usize, 0), target.end);
     try Output.write(work);
     const delivered = (try output.complete({})).?;
-    try std.testing.expectEqual(@as(presenter.Token, @enumFromInt(42)), delivered);
+    try std.testing.expectEqual(@as(TokenType, @enumFromInt(42)), delivered);
     try std.testing.expect(output.delivery == null);
     try std.testing.expectError(error.HostFrameTooLarge, output.prepareFrame(1_000_000));
 }

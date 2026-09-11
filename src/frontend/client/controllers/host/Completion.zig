@@ -1,5 +1,6 @@
+const ClipboardCaptureIdType = @import("telar-client").ClipboardCaptureId;
+const CaptureType = @import("telar-client").Capture;
 const Completion = @This();
-const client_model = @import("telar-client").model;
-const attachments = @import("../../../attachments/root.zig");
-execution_id: client_model.ClipboardCaptureId,
-result: anyerror!*attachments.Capture,
+
+execution_id: ClipboardCaptureIdType,
+result: anyerror!*CaptureType,

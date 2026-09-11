@@ -1,29 +1,16 @@
+const std = @import("std");
+const tlsz = @import("tls");
+const End = @import("End.zig");
 /// Heap allocated because TLS connections borrow the adjacent reader/writer
 /// buffers and must never move after initialization.
 const Session = @This();
-const source_namespace = @import("tls.zig");
-const std = @import("std");
-const tlsz = @import("tls");
-io: source_namespace.Io,
+
+io: std.Io,
 gpa: std.mem.Allocator,
 random: std.Random.IoSource,
 auth: tlsz.config.CertKeyPair,
 child: End,
 origin: End,
-
-const End = struct {
-    stream: source_namespace.net.Stream,
-    input_buffer: [tlsz.input_buffer_len]u8 = undefined,
-    output_buffer: [tlsz.output_buffer_len]u8 = undefined,
-    reader: source_namespace.net.Stream.Reader = undefined,
-    writer: source_namespace.net.Stream.Writer = undefined,
-    connection: tlsz.Connection = undefined,
-
-    pub fn wire(endpoint: *End, io: source_namespace.Io) void {
-        endpoint.reader = endpoint.stream.reader(io, &endpoint.input_buffer);
-        endpoint.writer = endpoint.stream.writer(io, &endpoint.output_buffer);
-    }
-};
 
 pub const Side = enum { child, origin };
 pub const Protocol = enum { http11, h2 };

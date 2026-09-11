@@ -1,19 +1,21 @@
-const CreatePaneHandler = @This();
-const workspace_mod = @import("../../../workspace/root.zig");
+const ReaderType = @import("../../../workspace/Reader.zig");
 const TabPanes = @import("TabPanes.zig");
-const LaunchAuthority = @import("CreatePaneLaunchAuthority.zig");
-const PaneLauncher = @import("CreatePanePaneLauncher.zig");
-const PaneAttachment = @import("CreatePanePaneAttachment.zig");
-const EventPublisher = @import("CreatePaneEventPublisher.zig");
+const CreatePaneLaunchAuthority = @import("CreatePaneLaunchAuthority.zig");
+const CreatePaneLauncher = @import("CreatePaneLauncher.zig");
+const CreatePaneAttachment = @import("CreatePaneAttachment.zig");
+const CreatePaneEventPublisher = @import("CreatePaneEventPublisher.zig");
 const CreatePane = @import("CreatePane.zig");
-const source_namespace = @import("create_pane.zig");
+const PaneLaunched = @import("../../../pane/PaneLaunched.zig");
+const create_pane = @import("create_pane.zig");
 const CreatePaneExecutor = @import("CreatePaneExecutor.zig");
-workspaces: workspace_mod.Reader,
+const CreatePaneHandler = @This();
+
+workspaces: ReaderType,
 panes: TabPanes,
-authority: LaunchAuthority,
-launcher: PaneLauncher,
-attachment: PaneAttachment,
-events: EventPublisher,
+authority: CreatePaneLaunchAuthority,
+launcher: CreatePaneLauncher,
+attachment: CreatePaneAttachment,
+events: CreatePaneEventPublisher,
 
 /// Validates the live tab, resolves client launch authority, commits the
 /// pane through `PaneLauncher`, then publishes and attaches it. Once launch
@@ -22,7 +24,7 @@ events: EventPublisher,
 /// ```zig
 /// const launched = try handler.execute(command);
 /// ```
-pub fn execute(handler: *CreatePaneHandler, command: CreatePane) !source_namespace.CreatePaneResult {
+pub fn execute(handler: *CreatePaneHandler, command: CreatePane) !PaneLaunched {
     if (!handler.workspaces.contains(command.location)) {
         return error.TabNotFound;
     }
@@ -42,7 +44,7 @@ pub fn execute(handler: *CreatePaneHandler, command: CreatePane) !source_namespa
         .launch = command.launch,
         .launch_cwd = launch_cwd,
         .workspace_path = workspace_path,
-    }) catch |err| return source_namespace.mapLaunchError(err);
+    }) catch |err| return create_pane.mapLaunchError(err);
 
     handler.events.publish(handler.events.context, launched);
     try handler.attachment.attach(handler.attachment.context, launched);
@@ -58,7 +60,7 @@ pub fn executor(handler: *CreatePaneHandler) CreatePaneExecutor {
     return .{ .context = handler, .execute_fn = executeErased };
 }
 
-fn executeErased(context: *anyopaque, command: CreatePane) !source_namespace.CreatePaneResult {
+fn executeErased(context: *anyopaque, command: CreatePane) !PaneLaunched {
     const handler: *CreatePaneHandler = @ptrCast(@alignCast(context));
     return handler.execute(command);
 }

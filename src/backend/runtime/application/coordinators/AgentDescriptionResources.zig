@@ -1,7 +1,8 @@
-const Resources = @This();
-const agent_mod = @import("../../../agent/root.zig");
+const TrackerType = @import("../../../agent/Tracker.zig");
 const State = @import("State.zig");
-const source_namespace = @import("agent_description.zig");
-agents: *agent_mod.Tracker,
+const CommandType = @import("../../../agent/Command.zig");
+const Resources = @This();
+
+agents: *TrackerType,
 state: *State,
-command: ?source_namespace.description.Command,
+command: ?CommandType,

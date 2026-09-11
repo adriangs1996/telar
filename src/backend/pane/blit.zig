@@ -1,8 +1,17 @@
+const Operation = @import("Operation.zig");
+const Stats = @import("Stats.zig");
+const ColorSource = @import("ColorSource.zig");
 const std = @import("std");
+const RowTarget = @import("RowTarget.zig");
+const RangeType = @import("telar-core").Range;
 const vt = @import("ghostty-vt");
-const core = @import("telar-core");
-pub const ui = core.ui;
-pub const sel = core.select;
+const RowProjection = @import("RowProjection.zig");
+const CellType = @import("telar-core").Cell;
+const StyleType = @import("telar-core").Style;
+const ColorType = @import("telar-core").Color;
+const BufferType = @import("telar-core").Buffer;
+const RectType = @import("telar-core").Rect;
+const BlitPane = @import("BlitPane.zig");
 
 // Copying an emulated screen into our cell grid.
 //
@@ -27,18 +36,6 @@ pub const sel = core.select;
 //     because they belong to this pane and must not leak into another one.
 //   - A wide character owns two columns and the emulator marks the second one
 //     `spacer_tail`. Emitting anything there prints half a glyph twice.
-
-pub const Options = @import("Options.zig");
-
-pub const Operation = @import("Operation.zig");
-
-pub const Stats = @import("Stats.zig");
-
-const ColorSource = @import("ColorSource.zig");
-
-const RowTarget = @import("RowTarget.zig");
-
-const RowProjection = @import("RowProjection.zig");
 
 /// Copies the viewport of `state` into `area` of `b`.
 ///
@@ -125,7 +122,7 @@ pub fn blit(operation: Operation) Stats {
     return stats;
 }
 
-fn highlightRow(target: RowTarget, range: sel.Range) void {
+fn highlightRow(target: RowTarget, range: RangeType) void {
     const b = target.buffer;
     const area = target.area;
     const y = target.y;
@@ -157,7 +154,7 @@ fn highlightRow(target: RowTarget, range: sel.Range) void {
 /// ```zig
 /// const text = try selectionText(gpa, terminal, range);
 /// ```
-pub fn selectionText(gpa: std.mem.Allocator, terminal: *vt.Terminal, range: sel.Range) ![:0]const u8 {
+pub fn selectionText(gpa: std.mem.Allocator, terminal: *vt.Terminal, range: RangeType) ![:0]const u8 {
     const from, const to = range.ordered();
     const s = terminal.screens.active;
 
@@ -213,7 +210,7 @@ fn blitRow(projection: RowProjection) void {
 
         switch (raw.content_tag) {
             .codepoint, .codepoint_grapheme => {
-                var utf8: [ui.Cell.max_bytes]u8 = undefined;
+                var utf8: [CellType.max_bytes]u8 = undefined;
                 const text = encode(&utf8, raw.codepoint(), if (raw.content_tag == .codepoint_grapheme)
                     graphemes[x]
                 else
@@ -249,7 +246,7 @@ fn blitRow(projection: RowProjection) void {
 /// cluster is the concatenation rather than either one alone. A cluster longer
 /// than a cell is truncated at a codepoint boundary: a family emoji renders
 /// short, which is a visual defect, where a truncated code unit is mojibake.
-fn encode(out: *[ui.Cell.max_bytes]u8, base: u21, extra: []const u21) []const u8 {
+fn encode(out: *[CellType.max_bytes]u8, base: u21, extra: []const u21) []const u8 {
     // A cell the emulator never wrote holds codepoint zero, which is not a
     // character. Blanking it here keeps NUL out of the output stream.
     if (base == 0) {
@@ -272,7 +269,7 @@ fn encode(out: *[ui.Cell.max_bytes]u8, base: u21, extra: []const u21) []const u8
 /// The attribute word is reinterpreted rather than copied field by field;
 /// `ui.Style.Flags` is declared to match it and a test in `ui.zig` fails if a
 /// libghostty-vt update moves a bit.
-fn translate(style: vt.Style, colors: ColorSource) ui.Style {
+fn translate(style: vt.Style, colors: ColorSource) StyleType {
     return .{
         .fg = resolve(style.fg_color, colors, .foreground),
         .bg = resolve(style.bg_color, colors, .background),
@@ -293,7 +290,7 @@ fn translate(style: vt.Style, colors: ColorSource) ui.Style {
 /// whatever the user's theme happens to map that slot to.
 const DefaultColor = enum { foreground, background };
 
-fn resolve(c: vt.Style.Color, colors: ColorSource, default_color: DefaultColor) ui.Color {
+fn resolve(c: vt.Style.Color, colors: ColorSource, default_color: DefaultColor) ColorType {
     return switch (c) {
         .none => switch (default_color) {
             .foreground => defaultForeground(colors),
@@ -304,7 +301,7 @@ fn resolve(c: vt.Style.Color, colors: ColorSource, default_color: DefaultColor) 
     };
 }
 
-fn defaultForeground(source: ColorSource) ui.Color {
+fn defaultForeground(source: ColorSource) ColorType {
     if (source.terminal.modes.get(.reverse_colors)) {
         return rgb(source.colors.foreground);
     }
@@ -312,7 +309,7 @@ fn defaultForeground(source: ColorSource) ui.Color {
     return if (source.terminal.colors.foreground.override) |color| rgb(color) else .default;
 }
 
-fn defaultBackground(source: ColorSource) ui.Color {
+fn defaultBackground(source: ColorSource) ColorType {
     if (source.terminal.modes.get(.reverse_colors)) {
         return rgb(source.colors.background);
     }
@@ -320,7 +317,7 @@ fn defaultBackground(source: ColorSource) ui.Color {
     return if (source.terminal.colors.background.override) |color| rgb(color) else .default;
 }
 
-fn paletteColor(source: ColorSource, index: u8) ui.Color {
+fn paletteColor(source: ColorSource, index: u8) ColorType {
     if (source.terminal.colors.palette.mask.isSet(index)) {
         return rgb(source.colors.palette[index]);
     }
@@ -328,7 +325,7 @@ fn paletteColor(source: ColorSource, index: u8) ui.Color {
     return .{ .indexed = index };
 }
 
-fn rgb(c: vt.color.RGB) ui.Color {
+fn rgb(c: vt.color.RGB) ColorType {
     return .{ .rgb = .{ c.r, c.g, c.b } };
 }
 
@@ -336,7 +333,7 @@ fn rgb(c: vt.color.RGB) ui.Color {
 ///
 /// Reversing rather than painting a block keeps whatever character is under it
 /// legible, and costs no knowledge of the pane's theme.
-fn drawCursor(b: *ui.Buffer, area: ui.Rect, state: *const vt.RenderState) void {
+fn drawCursor(b: *BufferType, area: RectType, state: *const vt.RenderState) void {
     if (!state.cursor.visible) {
         return;
     }
@@ -353,11 +350,7 @@ fn drawCursor(b: *ui.Buffer, area: ui.Rect, state: *const vt.RenderState) void {
 // Tests
 // ---------------------------------------------------------------------------
 
-pub const testing = std.testing;
-
-const Pane = @import("BlitPane.zig");
-
-fn textOf(b: *ui.Buffer, x: u16, y: u16) []const u8 {
+fn textOf(b: *BufferType, x: u16, y: u16) []const u8 {
     return (b.at(x, y) orelse unreachable).text();
 }
 
@@ -372,7 +365,7 @@ test "the attribute word crosses as a bitcast, so its layout must match" {
     // type is still reachable - and reaching it this way means the test breaks
     // if the field is renamed, too.
     const VtFlags = @TypeOf(@as(vt.Style, undefined).flags);
-    try testing.expectEqual(@bitSizeOf(VtFlags), @bitSizeOf(ui.Style.Flags));
+    try std.testing.expectEqual(@bitSizeOf(VtFlags), @bitSizeOf(StyleType.Flags));
 
     const theirs: VtFlags = .{
         .bold = true,
@@ -385,18 +378,18 @@ test "the attribute word crosses as a bitcast, so its layout must match" {
         .overline = true,
         .underline = .curly,
     };
-    const ours: ui.Style.Flags = @bitCast(@as(u16, @bitCast(theirs)));
+    const ours: StyleType.Flags = @bitCast(@as(u16, @bitCast(theirs)));
 
-    try testing.expect(ours.bold and ours.italic and ours.faint and ours.blink);
-    try testing.expect(ours.inverse and ours.invisible and ours.strikethrough and ours.overline);
-    try testing.expectEqual(ui.Style.Underline.curly, ours.underline);
+    try std.testing.expect(ours.bold and ours.italic and ours.faint and ours.blink);
+    try std.testing.expect(ours.inverse and ours.invisible and ours.strikethrough and ours.overline);
+    try std.testing.expectEqual(StyleType.Underline.curly, ours.underline);
 }
 
 test "text lands in the cells the emulator put it in" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 3);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 3);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 20, 5);
+    var buf = try BufferType.init(gpa, 20, 5);
     defer buf.deinit();
 
     try pane.write("hola");
@@ -405,15 +398,15 @@ test "text lands in the cells the emulator put it in" {
     // Offset by the rectangle, not written at the origin: a pane is drawn
     // inside a layout, and getting this wrong is invisible until the pane is
     // not at (0,0).
-    try testing.expectEqualStrings("h", textOf(&buf, 2, 1));
-    try testing.expectEqualStrings("a", textOf(&buf, 5, 1));
+    try std.testing.expectEqualStrings("h", textOf(&buf, 2, 1));
+    try std.testing.expectEqualStrings("a", textOf(&buf, 5, 1));
 }
 
 test "a wide character owns two columns" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 2);
+    var buf = try BufferType.init(gpa, 10, 2);
     defer buf.deinit();
 
     try pane.write("漢字");
@@ -421,18 +414,18 @@ test "a wide character owns two columns" {
 
     // Width zero is how the diff knows to emit nothing for the trailing half.
     // Emitting there prints the glyph twice and shifts the rest of the row.
-    try testing.expectEqual(@as(u8, 2), (buf.at(0, 0).?).width);
-    try testing.expectEqual(@as(u8, 0), (buf.at(1, 0).?).width);
-    try testing.expectEqual(@as(u8, 2), (buf.at(2, 0).?).width);
-    try testing.expectEqualStrings("漢", textOf(&buf, 0, 0));
-    try testing.expectEqualStrings("字", textOf(&buf, 2, 0));
+    try std.testing.expectEqual(@as(u8, 2), (buf.at(0, 0).?).width);
+    try std.testing.expectEqual(@as(u8, 0), (buf.at(1, 0).?).width);
+    try std.testing.expectEqual(@as(u8, 2), (buf.at(2, 0).?).width);
+    try std.testing.expectEqualStrings("漢", textOf(&buf, 0, 0));
+    try std.testing.expectEqualStrings("字", textOf(&buf, 2, 0));
 }
 
 test "a grapheme cluster stays one cell" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 2);
+    var buf = try BufferType.init(gpa, 10, 2);
     defer buf.deinit();
 
     // The emulator hands back the base codepoint and the joiners separately;
@@ -442,15 +435,15 @@ test "a grapheme cluster stays one cell" {
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
 
     const cell = buf.at(0, 0).?;
-    try testing.expect(cell.len > 4);
-    try testing.expect(std.mem.indexOf(u8, cell.text(), "\u{200D}") != null);
+    try std.testing.expect(cell.len > 4);
+    try std.testing.expect(std.mem.indexOf(u8, cell.text(), "\u{200D}") != null);
 }
 
 test "attributes survive the crossing" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 2);
+    var buf = try BufferType.init(gpa, 10, 2);
     defer buf.deinit();
 
     // Bold, italic and curly underline: one from each half of the packed word,
@@ -459,69 +452,69 @@ test "attributes survive the crossing" {
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
 
     const flags = buf.at(0, 0).?.style.flags;
-    try testing.expect(flags.bold);
-    try testing.expect(flags.italic);
-    try testing.expectEqual(ui.Style.Underline.curly, flags.underline);
+    try std.testing.expect(flags.bold);
+    try std.testing.expect(flags.italic);
+    try std.testing.expectEqual(StyleType.Underline.curly, flags.underline);
 }
 
 test "unmodified colours defer to the outer terminal theme" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 2);
+    var buf = try BufferType.init(gpa, 10, 2);
     defer buf.deinit();
 
     try pane.write("\x1b[31mx");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
 
     const styled = buf.at(0, 0).?;
-    try testing.expect(styled.style.fg == .indexed);
-    try testing.expectEqual(@as(u8, 1), styled.style.fg.indexed);
-    try testing.expect(styled.style.bg == .default);
-    try testing.expect(buf.at(9, 1).?.style.bg == .default);
+    try std.testing.expect(styled.style.fg == .indexed);
+    try std.testing.expectEqual(@as(u8, 1), styled.style.fg.indexed);
+    try std.testing.expect(styled.style.bg == .default);
+    try std.testing.expect(buf.at(9, 1).?.style.bg == .default);
 }
 
 test "host query defaults do not turn semantic cells into opaque RGB backgrounds" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 2);
+    var buf = try BufferType.init(gpa, 10, 2);
     defer buf.deinit();
     pane.term.colors.foreground.default = .{ .r = 255, .g = 255, .b = 255 };
     pane.term.colors.background.default = .{ .r = 16, .g = 16, .b = 16 };
 
     try pane.write("x\x1b[48;2;44;44;44my");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
-    try testing.expect(buf.at(0, 0).?.style.fg == .default);
-    try testing.expect(buf.at(0, 0).?.style.bg == .default);
-    try testing.expect(buf.at(9, 1).?.style.bg == .default);
-    try testing.expectEqual(ui.Color{ .rgb = .{ 44, 44, 44 } }, buf.at(1, 0).?.style.bg);
+    try std.testing.expect(buf.at(0, 0).?.style.fg == .default);
+    try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
+    try std.testing.expect(buf.at(9, 1).?.style.bg == .default);
+    try std.testing.expectEqual(ColorType{ .rgb = .{ 44, 44, 44 } }, buf.at(1, 0).?.style.bg);
 }
 
 test "OSC default colour overrides stay inside the pane" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 2);
+    var buf = try BufferType.init(gpa, 10, 2);
     defer buf.deinit();
 
     try pane.write("\x1b]11;rgb:12/34/56\x07x");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
-    try testing.expectEqual(
-        ui.Color{ .rgb = .{ 0x12, 0x34, 0x56 } },
+    try std.testing.expectEqual(
+        ColorType{ .rgb = .{ 0x12, 0x34, 0x56 } },
         buf.at(0, 0).?.style.bg,
     );
 
     try pane.write("\x1b]111\x1b\\");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
-    try testing.expect(buf.at(0, 0).?.style.bg == .default);
+    try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
 }
 
 test "palette colours are resolved with the pane's own palette" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 2);
+    var buf = try BufferType.init(gpa, 10, 2);
     defer buf.deinit();
 
     // OSC 4 repaints colour 1 inside this pane only. Passing the index through
@@ -532,40 +525,40 @@ test "palette colours are resolved with the pane's own palette" {
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
 
     switch (buf.at(0, 0).?.style.fg) {
-        .rgb => |c| try testing.expectEqual([3]u8{ 0x00, 0xff, 0x00 }, c),
+        .rgb => |c| try std.testing.expectEqual([3]u8{ 0x00, 0xff, 0x00 }, c),
         else => return error.ColourNotResolved,
     }
 }
 
 test "clean rows are skipped and the caller can override that" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 4);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 4);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 4);
+    var buf = try BufferType.init(gpa, 10, 4);
     defer buf.deinit();
 
     try pane.write("uno\r\ndos\r\n");
     const first = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
-    try testing.expect(first.copied > 0);
+    try std.testing.expect(first.copied > 0);
 
     // Nothing was written to the pane in between, so a second blit is pure
     // waste. This is the whole reason a still pane costs nothing per frame.
     const second = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
-    try testing.expectEqual(@as(u16, 0), second.copied);
-    try testing.expectEqual(@as(u16, 4), second.skipped);
+    try std.testing.expectEqual(@as(u16, 0), second.copied);
+    try std.testing.expectEqual(@as(u16, 4), second.skipped);
 
     // But the emulator only knows about its own screen. When the destination
     // moved - a resize, a modal closing over the pane - the caller has to say
     // so, because no dirty flag will.
     const forced = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
-    try testing.expectEqual(@as(u16, 4), forced.copied);
+    try std.testing.expectEqual(@as(u16, 4), forced.copied);
 }
 
 test "only the rows that changed are copied" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 4);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 4);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 4);
+    var buf = try BufferType.init(gpa, 10, 4);
     defer buf.deinit();
 
     try pane.write("a\r\nb\r\nc\r\n");
@@ -582,16 +575,16 @@ test "only the rows that changed are copied" {
         .state = &pane.state,
         .options = .{ .damaged_rows = &damaged_rows },
     });
-    try testing.expect(partial.copied < 4);
-    try testing.expect(partial.skipped > 0);
-    try testing.expectEqual(@as(usize, partial.copied), std.mem.count(bool, &damaged_rows, &.{true}));
+    try std.testing.expect(partial.copied < 4);
+    try std.testing.expect(partial.skipped > 0);
+    try std.testing.expectEqual(@as(usize, partial.copied), std.mem.count(bool, &damaged_rows, &.{true}));
 }
 
 test "a pane smaller than its rectangle leaves nothing stale behind" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 4, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 4, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 5);
+    var buf = try BufferType.init(gpa, 10, 5);
     defer buf.deinit();
 
     // Whatever was on screen before the pane shrank. During a resize the
@@ -601,17 +594,17 @@ test "a pane smaller than its rectangle leaves nothing stale behind" {
     try pane.write("ab");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
 
-    try testing.expectEqualStrings("a", textOf(&buf, 0, 0));
+    try std.testing.expectEqualStrings("a", textOf(&buf, 0, 0));
     // Past the pane's last column, and past its last row.
-    try testing.expectEqualStrings(" ", textOf(&buf, 6, 0));
-    try testing.expectEqualStrings(" ", textOf(&buf, 0, 4));
+    try std.testing.expectEqualStrings(" ", textOf(&buf, 6, 0));
+    try std.testing.expectEqualStrings(" ", textOf(&buf, 0, 4));
 }
 
 test "the cursor inverts the cell it sits on rather than hiding it" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 2);
+    var buf = try BufferType.init(gpa, 10, 2);
     defer buf.deinit();
 
     try pane.write("ab\x1b[1;1H");
@@ -619,37 +612,37 @@ test "the cursor inverts the cell it sits on rather than hiding it" {
 
     // The character under the cursor must still be readable, and the cell to
     // its right must be untouched.
-    try testing.expectEqualStrings("a", textOf(&buf, 0, 0));
-    try testing.expect(buf.at(0, 0).?.style.flags.inverse);
-    try testing.expect(!buf.at(1, 0).?.style.flags.inverse);
+    try std.testing.expectEqualStrings("a", textOf(&buf, 0, 0));
+    try std.testing.expect(buf.at(0, 0).?.style.flags.inverse);
+    try std.testing.expect(!buf.at(1, 0).?.style.flags.inverse);
 }
 
 test "an unfocused pane draws no cursor" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 2);
+    var buf = try BufferType.init(gpa, 10, 2);
     defer buf.deinit();
 
     try pane.write("ab\x1b[1;1H");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .cursor = false } });
-    try testing.expect(!buf.at(0, 0).?.style.flags.inverse);
+    try std.testing.expect(!buf.at(0, 0).?.style.flags.inverse);
 }
 
 test "a pane wider than its rectangle is clipped, not wrapped" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 20, 2);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 20, 2);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 20, 4);
+    var buf = try BufferType.init(gpa, 20, 4);
     defer buf.deinit();
 
     try pane.write("0123456789abcdefghij");
     // A rectangle narrower and shorter than the pane.
     _ = blit(.{ .buffer = &buf, .area = .{ .x = 0, .y = 0, .w = 5, .h = 1 }, .terminal = &pane.term, .state = &pane.state, .options = .{} });
 
-    try testing.expectEqualStrings("4", textOf(&buf, 4, 0));
+    try std.testing.expectEqualStrings("4", textOf(&buf, 4, 0));
     // Column five belongs to whatever is drawn next, not to the pane.
-    try testing.expectEqualStrings(" ", textOf(&buf, 5, 0));
+    try std.testing.expectEqualStrings(" ", textOf(&buf, 5, 0));
 }
 
 test "a steady frame allocates nothing" {
@@ -661,10 +654,10 @@ test "a steady frame allocates nothing" {
     // The warm-up matters: the first frames legitimately allocate the row
     // storage and the grapheme arenas. What must not allocate is the
     // hundredth frame of an agent printing into a screen it has already sized.
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 40, 12);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 40, 12);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 40, 12);
+    var buf = try BufferType.init(gpa, 40, 12);
     defer buf.deinit();
 
     for (0..12) |_| try pane.write("warming the arenas up\r\n");
@@ -678,7 +671,7 @@ test "a steady frame allocates nothing" {
         try pane.state.update(failing.allocator(), &pane.term);
         _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
     }
-    try testing.expectEqual(@as(usize, 0), failing.allocations);
+    try std.testing.expectEqual(@as(usize, 0), failing.allocations);
 }
 
 test "a selected pane copies the agent's line, not the wrapped one" {
@@ -686,8 +679,8 @@ test "a selected pane copies the agent's line, not the wrapped one" {
     // The emulator broke this line to fit twenty columns; that break was never
     // in the agent's output, and pasting it puts a newline in the middle of a
     // command.
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 20, 4);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 20, 4);
     defer pane.deinit();
 
     const long = "cargo test --workspace --all-features";
@@ -699,16 +692,16 @@ test "a selected pane copies the agent's line, not the wrapped one" {
     });
     defer gpa.free(copied);
 
-    try testing.expectEqualStrings(long, copied);
+    try std.testing.expectEqualStrings(long, copied);
     // The specific failure: reading the painted cells would have found one.
-    try testing.expectEqual(@as(?usize, null), std.mem.indexOfScalar(u8, copied, '\n'));
+    try std.testing.expectEqual(@as(?usize, null), std.mem.indexOfScalar(u8, copied, '\n'));
 }
 
 test "a real line break is kept" {
     // The other half of the same claim. Unwrapping everything would join two
     // lines the agent deliberately separated.
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 20, 4);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 20, 4);
     defer pane.deinit();
     try pane.write("uno\r\ndos");
 
@@ -717,14 +710,14 @@ test "a real line break is kept" {
         .head = .{ .x = 2, .y = 1 },
     });
     defer gpa.free(copied);
-    try testing.expectEqualStrings("uno\ndos", copied);
+    try std.testing.expectEqualStrings("uno\ndos", copied);
 }
 
 test "highlighting a selection does not disturb the characters" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 3);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 3);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 3);
+    var buf = try BufferType.init(gpa, 10, 3);
     defer buf.deinit();
 
     try pane.write("hola");
@@ -736,11 +729,11 @@ test "highlighting a selection does not disturb the characters" {
         .options = .{ .selection = .{ .anchor = .{ .x = 1, .y = 0 }, .head = .{ .x = 2, .y = 0 } } },
     });
 
-    try testing.expectEqualStrings("o", buf.at(1, 0).?.text());
-    try testing.expect(buf.at(1, 0).?.style.flags.inverse);
-    try testing.expect(buf.at(2, 0).?.style.flags.inverse);
-    try testing.expect(!buf.at(0, 0).?.style.flags.inverse);
-    try testing.expect(!buf.at(3, 0).?.style.flags.inverse);
+    try std.testing.expectEqualStrings("o", buf.at(1, 0).?.text());
+    try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
+    try std.testing.expect(buf.at(2, 0).?.style.flags.inverse);
+    try std.testing.expect(!buf.at(0, 0).?.style.flags.inverse);
+    try std.testing.expect(!buf.at(3, 0).?.style.flags.inverse);
 }
 
 test "dragging a selection repaints rows the emulator calls clean" {
@@ -748,10 +741,10 @@ test "dragging a selection repaints rows the emulator calls clean" {
     // changes which cells are highlighted without changing a single character,
     // so the emulator marks nothing dirty and the highlight would freeze where
     // the drag started.
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 4);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 4);
     defer pane.deinit();
-    var buf = try ui.Buffer.init(gpa, 10, 4);
+    var buf = try BufferType.init(gpa, 10, 4);
     defer buf.deinit();
 
     try pane.write("aaa\r\nbbb\r\nccc");
@@ -762,7 +755,7 @@ test "dragging a selection repaints rows the emulator calls clean" {
         .state = &pane.state,
         .options = .{ .selection = .{ .anchor = .{ .x = 0, .y = 0 }, .head = .{ .x = 2, .y = 0 } } },
     });
-    try testing.expect(!buf.at(1, 1).?.style.flags.inverse);
+    try std.testing.expect(!buf.at(1, 1).?.style.flags.inverse);
 
     // Nothing written to the pane in between: every row is clean.
     const stats = blit(.{
@@ -772,17 +765,17 @@ test "dragging a selection repaints rows the emulator calls clean" {
         .state = &pane.state,
         .options = .{ .selection = .{ .anchor = .{ .x = 0, .y = 0 }, .head = .{ .x = 2, .y = 1 } } },
     });
-    try testing.expectEqual(@as(u16, 0), stats.copied);
-    try testing.expect(buf.at(1, 1).?.style.flags.inverse);
+    try std.testing.expectEqual(@as(u16, 0), stats.copied);
+    try std.testing.expect(buf.at(1, 1).?.style.flags.inverse);
 }
 
 test "a selection outside the pane is refused rather than guessed at" {
-    const gpa = testing.allocator;
-    var pane = try Pane.init(gpa, 10, 3);
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 10, 3);
     defer pane.deinit();
     try pane.write("hola");
 
-    try testing.expectError(error.OutOfBounds, selectionText(gpa, &pane.term, .{
+    try std.testing.expectError(error.OutOfBounds, selectionText(gpa, &pane.term, .{
         .anchor = .{ .x = 0, .y = 0 },
         .head = .{ .x = 0, .y = 99 },
     }));

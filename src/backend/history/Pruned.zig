@@ -1,6 +1,7 @@
-const Pruned = @This();
-const source_namespace = @import("model.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const QueryOrigin = @import("QueryOrigin.zig");
-request_id: source_namespace.schema.RequestId,
+const Pruned = @This();
+
+request_id: RequestIdType,
 origin: QueryOrigin,
 removed: u64,

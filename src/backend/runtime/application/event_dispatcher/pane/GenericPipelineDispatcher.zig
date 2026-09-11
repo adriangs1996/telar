@@ -1,7 +1,23 @@
 const GenericPipelineDependencies = @import("GenericPipelineDependencies.zig").Type;
+const OutputCompletion = @import("../../../entrypoints/events/pane/OutputCompletion.zig");
+const IngestTestGateType = @import("../../../IngestTestGate.zig");
+const mark_module = @import("telar-core").mark;
+const IngestCompletion = @import("../../../entrypoints/events/pane/IngestCompletion.zig");
+const ExitCompletion = @import("../../../entrypoints/events/pane/ExitCompletion.zig");
+const GenericOutputRuntimePort = @import("../../../entrypoints/events/pane/GenericOutputRuntimePort.zig").Type;
+const GenericPipeline = @import("../../../entrypoints/events/pane/GenericPipeline.zig").Type;
+const PaneType = @import("../../../../pane/Pane.zig");
+const OutputIngest = @import("../../../entrypoints/events/pane/OutputIngest.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const enter_module = @import("telar-core").enter;
+const PaneIngestStats = @import("../../../../pane/PaneIngestStats.zig");
+const GenericIngestRuntimePort = @import("../../../entrypoints/events/pane/GenericIngestRuntimePort.zig").Type;
+const GenericIngestCoordinator = @import("../../../entrypoints/events/pane/GenericIngestCoordinator.zig").Type;
+const ReadType = @import("../../../entrypoints/events/pane/Read.zig");
 const pane_launcher_mod = @import("../../pane_launcher.zig");
-const source_namespace = @import("pipeline.zig");
-const core = @import("telar-core");
+const GenericExitRuntimePort = @import("../../../entrypoints/events/pane/GenericExitRuntimePort.zig").Type;
+const GenericExitCoordinator = @import("../../../entrypoints/events/pane/GenericExitCoordinator.zig").Type;
+
 /// Binds pane output, ingestion and exit completions to one Application type.
 ///
 /// ```zig
@@ -15,8 +31,8 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
         /// ```zig
         /// try PanePipelineEvents.handleOutput(&application, event, ingest_gate);
         /// ```
-        pub fn handleOutput(application: *Application, event: pane_launcher_mod.PaneOutputEvent, ingest_gate: ?*source_namespace.IngestTestGate) !void {
-            core.echo_trace.mark(application.io, .output_dispatch);
+        pub fn handleOutput(application: *Application, event: OutputCompletion, ingest_gate: ?*IngestTestGateType) !void {
+            mark_module(application.io, .output_dispatch);
             var context: OutputRuntime = .{ .application = application, .ingest_gate = ingest_gate };
             var pipeline = paneOutputPipeline(&context);
             try pipeline.handle(event);
@@ -32,8 +48,8 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
         /// ```zig
         /// try PanePipelineEvents.handleIngested(&application, event);
         /// ```
-        pub fn handleIngested(application: *Application, event: source_namespace.PaneIngestEvent) !void {
-            core.echo_trace.mark(application.io, .ingest_dispatch);
+        pub fn handleIngested(application: *Application, event: IngestCompletion) !void {
+            mark_module(application.io, .ingest_dispatch);
             var coordinator = paneIngestCoordinator(application);
             try coordinator.handle(event);
         }
@@ -44,18 +60,18 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
         /// ```zig
         /// try PanePipelineEvents.handleExit(&application, event);
         /// ```
-        pub fn handleExit(application: *Application, event: pane_launcher_mod.PaneExitEvent) !void {
+        pub fn handleExit(application: *Application, event: ExitCompletion) !void {
             var coordinator = paneExitCoordinator(application);
             try coordinator.handle(event);
         }
 
         const OutputRuntime = struct {
             application: *Application,
-            ingest_gate: ?*source_namespace.IngestTestGate,
-            inline_ingest: ?source_namespace.PaneIngestEvent = null,
+            ingest_gate: ?*IngestTestGateType,
+            inline_ingest: ?IngestCompletion = null,
         };
 
-        const pane_output_runtime_port: source_namespace.pane_output_pipeline.RuntimePort(OutputRuntime) = .{
+        const pane_output_runtime_port: GenericOutputRuntimePort(OutputRuntime) = .{
             .schedule_observation = scheduleOutputObservation,
             .schedule_media = scheduleOutputMedia,
             .start_ingest = startOutputIngest,
@@ -64,7 +80,7 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
             .pump_clients = pumpAfterOutput,
         };
 
-        const RuntimePaneOutputPipeline = source_namespace.pane_output_pipeline.Pipeline(OutputRuntime, pane_output_runtime_port);
+        const RuntimePaneOutputPipeline = GenericPipeline(OutputRuntime, pane_output_runtime_port);
 
         fn paneOutputPipeline(context: *OutputRuntime) RuntimePaneOutputPipeline {
             return RuntimePaneOutputPipeline.init(context, .{
@@ -74,21 +90,21 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
             });
         }
 
-        fn scheduleOutputObservation(context: *OutputRuntime, pane: *source_namespace.Pane) !void {
+        fn scheduleOutputObservation(context: *OutputRuntime, pane: *PaneType) !void {
             return dependencies.schedule_observation(context.application, pane);
         }
 
-        fn scheduleOutputMedia(context: *OutputRuntime, pane: *source_namespace.Pane) !void {
+        fn scheduleOutputMedia(context: *OutputRuntime, pane: *PaneType) !void {
             return dependencies.schedule_media(context.application, pane);
         }
 
         const PaneIngestTask = struct {
-            ingest: source_namespace.pane_output_pipeline.Ingest,
-            gate: ?*source_namespace.IngestTestGate,
+            ingest: OutputIngest,
+            gate: ?*IngestTestGateType,
         };
 
-        fn startOutputIngest(context: *OutputRuntime, ingest: source_namespace.pane_output_pipeline.Ingest) !void {
-            core.echo_trace.mark(ingest.io, .vt_queued);
+        fn startOutputIngest(context: *OutputRuntime, ingest: OutputIngest) !void {
+            mark_module(ingest.io, .vt_queued);
             const task: PaneIngestTask = .{ .ingest = ingest, .gate = context.ingest_gate };
 
             if (context.ingest_gate == null and ingest.pane.canInlineOutput(ingest.bytes)) {
@@ -99,7 +115,7 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
             try context.application.select.concurrent(.pane_ingested, ingestPane, .{task});
         }
 
-        fn paneHasOutstandingFrame(context: *OutputRuntime, pane_id: source_namespace.schema.PaneId) bool {
+        fn paneHasOutstandingFrame(context: *OutputRuntime, pane_id: PaneIdType) bool {
             for (&context.application.clients.items) |*slot| {
                 const client = slot.* orelse continue;
                 const attachment = client.attachments.find(pane_id) orelse continue;
@@ -120,11 +136,11 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
             context.application.pumpAll();
         }
 
-        fn ingestPane(task: PaneIngestTask) source_namespace.PaneIngestEvent {
-            core.echo_trace.mark(task.ingest.io, .vt_start);
-            defer core.echo_trace.mark(task.ingest.io, .vt_done);
+        fn ingestPane(task: PaneIngestTask) IngestCompletion {
+            mark_module(task.ingest.io, .vt_start);
+            defer mark_module(task.ingest.io, .vt_done);
 
-            const path = source_namespace.diagnostics.enter(.interactive);
+            const path = enter_module(.interactive);
             defer path.restore();
 
             if (task.gate) |gate| {
@@ -133,7 +149,7 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
                 };
             }
 
-            var stats: source_namespace.pane_ingest_coordinator.Stats = .{};
+            var stats: PaneIngestStats = .{};
             stats.elapsed_ns = task.ingest.pane.ingest(task.ingest.io, task.ingest.bytes) catch |err| {
                 return .{ .pane = task.ingest.pane.key(), .result = err };
             };
@@ -141,7 +157,7 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
             return .{ .pane = task.ingest.pane.key(), .result = stats };
         }
 
-        const pane_ingest_runtime_port: source_namespace.pane_ingest_coordinator.RuntimePort(Application) = .{
+        const pane_ingest_runtime_port: GenericIngestRuntimePort(Application) = .{
             .schedule_observation = dependencies.schedule_observation,
             .schedule_media = dependencies.schedule_media,
             .refresh_clients = refreshPaneClients,
@@ -151,7 +167,7 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
             .pump_clients = pumpRuntimeClients,
         };
 
-        const RuntimePaneIngestCoordinator = source_namespace.pane_ingest_coordinator.Coordinator(Application, pane_ingest_runtime_port);
+        const RuntimePaneIngestCoordinator = GenericIngestCoordinator(Application, pane_ingest_runtime_port);
 
         fn paneIngestCoordinator(application: *Application) RuntimePaneIngestCoordinator {
             return RuntimePaneIngestCoordinator.init(application, .{
@@ -161,7 +177,7 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
             });
         }
 
-        fn refreshPaneClients(application: *Application, pane: *source_namespace.Pane) void {
+        fn refreshPaneClients(application: *Application, pane: *PaneType) void {
             for (&application.clients.items) |*slot| {
                 const client = slot.* orelse continue;
                 const attachment = client.attachments.find(pane.id) orelse continue;
@@ -172,18 +188,18 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
             }
         }
 
-        fn startNextPaneRead(application: *Application, read: source_namespace.pane_ingest_coordinator.Read) !void {
+        fn startNextPaneRead(application: *Application, read: ReadType) !void {
             try application.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ read.io, read.pane });
         }
 
-        const pane_exit_runtime_port: source_namespace.pane_exit_coordinator.RuntimePort(Application) = .{
+        const pane_exit_runtime_port: GenericExitRuntimePort(Application) = .{
             .revoke_credential = revokeExitedPaneCredential,
             .schedule_observation = dependencies.schedule_observation,
             .collect = collectPaneLifecycle,
             .pump_clients = pumpRuntimeClients,
         };
 
-        const RuntimePaneExitCoordinator = source_namespace.pane_exit_coordinator.Coordinator(Application, pane_exit_runtime_port);
+        const RuntimePaneExitCoordinator = GenericExitCoordinator(Application, pane_exit_runtime_port);
 
         fn paneExitCoordinator(application: *Application) RuntimePaneExitCoordinator {
             return RuntimePaneExitCoordinator.init(application, .{
@@ -193,7 +209,7 @@ pub fn Type(comptime Application: type, comptime dependencies: GenericPipelineDe
             });
         }
 
-        fn revokeExitedPaneCredential(application: *Application, pane: *source_namespace.Pane) void {
+        fn revokeExitedPaneCredential(application: *Application, pane: *PaneType) void {
             application.revokePaneCredential(pane);
         }
 

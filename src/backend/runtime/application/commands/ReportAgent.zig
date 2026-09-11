@@ -1,10 +1,11 @@
+const PaneKeyType = @import("../../../pane/PaneKey.zig");
+const AgentReportStateType = @import("telar-core").AgentReportState;
+const SessionFileType = @import("../../../agent/SessionFile.zig");
 const ReportAgent = @This();
-const pane_mod = @import("../../../pane/root.zig");
-const source_namespace = @import("report_agent.zig");
-const agent_mod = @import("../../../agent/root.zig");
-pane: pane_mod.PaneKey,
-state: source_namespace.schema.AgentReportState,
+
+pane: PaneKeyType,
+state: AgentReportStateType,
 session: []const u8,
-session_file: agent_mod.SessionFile = .{},
+session_file: SessionFileType = .{},
 now_ms: i64,
 now_ns: ?i64 = null,

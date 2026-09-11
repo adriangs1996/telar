@@ -1,15 +1,16 @@
-const std = @import("std");
 const builtin = @import("builtin");
-
-pub const Io = std.Io;
-pub const File = std.Io.File;
-
-const ca = @import("ca.zig");
-const capture_mod = @import("capture_support.zig");
-const db = @import("db.zig");
+const std = @import("std");
+const Pty = @import("Pty.zig");
+const Child = @import("Child.zig");
 const event = @import("event.zig");
-const osc = @import("osc.zig");
+const ChunkType = @import("Chunk.zig");
+const OutputActorContext = @import("OutputActorContext.zig");
+const ScannerType = @import("Scanner.zig");
+const CaptureType = @import("Capture.zig");
+const TimelineType = @import("Timeline.zig");
+const AuthorityType = @import("Authority.zig");
 const proxy = @import("proxy.zig");
+const Running = @import("Running.zig");
 
 // PTY proxy, iteration 2: two taps on one timeline.
 //
@@ -25,21 +26,11 @@ const proxy = @import("proxy.zig");
 //
 //   zig build run
 
-const KB = event.KB;
-
 /// Terminal ioctls, isolated per platform the way herdr keeps OS specifics in
 /// `src/platform/<os>.rs` instead of sprinkling `#[cfg]` through core modules.
-const TIOC = switch (builtin.os.tag) {
-    .macos => struct {
-        const GWINSZ: c_int = 0x40087468;
-        const SWINSZ: c_int = @bitCast(@as(u32, 0x80087467));
-        const SCTTY: c_int = 0x20007461;
-    },
-    .linux => struct {
-        const GWINSZ: c_int = 0x5413;
-        const SWINSZ: c_int = 0x5414;
-        const SCTTY: c_int = 0x540E;
-    },
+pub const TIOC = switch (builtin.os.tag) {
+    .macos => @import("ioctl_darwin.zig"),
+    .linux => @import("ioctl_linux.zig"),
     else => @compileError("unsupported platform"),
 };
 
@@ -93,8 +84,6 @@ fn makeRaw(fd: std.c.fd_t, termio: *std.posix.termios) !void {
 // ---------------------------------------------------------------------------
 // PTY
 // ---------------------------------------------------------------------------
-
-const Pty = @import("Pty.zig");
 
 fn openPty(host_tty: std.c.fd_t) !Pty {
     var ws: std.posix.winsize = undefined;
@@ -193,9 +182,9 @@ fn waitForChild(pid: std.c.pid_t) !ChildExit {
 /// Reads stdin rather than the `/dev/tty` handle on purpose. On macOS a
 /// descriptor opened from `/dev/tty` is the ctty clone device (rdev 2/0): `poll`
 /// answers POLLNVAL on it and `kqueue` refuses to register it at all.
-fn inputActor(io: Io, stdin: File, queue: *event.Queue) Io.Cancelable!void {
+fn inputActor(io: std.Io, stdin: std.Io.File, queue: *event.Queue) std.Io.Cancelable!void {
     while (true) {
-        var chunk: event.Chunk = .{};
+        var chunk: ChunkType = .{};
         chunk.len = stdin.readStreaming(io, &.{&chunk.bytes}) catch |err| switch (err) {
             error.Canceled => |e| return e,
             else => return,
@@ -207,9 +196,7 @@ fn inputActor(io: Io, stdin: File, queue: *event.Queue) Io.Cancelable!void {
     }
 }
 
-const OutputActorContext = @import("OutputActorContext.zig");
-
-fn outputActor(context: OutputActorContext) Io.Cancelable!void {
+fn outputActor(context: OutputActorContext) std.Io.Cancelable!void {
     const io = context.io;
     const gpa = context.allocator;
     const master = context.master;
@@ -217,12 +204,12 @@ fn outputActor(context: OutputActorContext) Io.Cancelable!void {
     const rows = context.rows;
     const cols = context.cols;
     const queue = context.queue;
-    var buffer: [64 * KB]u8 = undefined;
-    var scanner: osc.Scanner = .init(gpa);
+    var buffer: [64 * event.KB]u8 = undefined;
+    var scanner: ScannerType = .init(gpa);
     defer scanner.deinit();
     var last_title: event.CommandLine = .{};
 
-    var capture: capture_mod.Capture = undefined;
+    var capture: CaptureType = undefined;
     const capturing = if (capture.init(.{ .io = io, .allocator = gpa, .rows = rows, .cols = cols })) true else |_| false;
     defer if (capturing) capture.deinit();
 
@@ -301,7 +288,7 @@ fn onWindowChange(_: std.posix.SIG) callconv(.c) void {
     _ = std.c.write(winch_pipe_write, &byte, byte.len);
 }
 
-fn signalActor(io: Io, wake: File, queue: *event.Queue) Io.Cancelable!void {
+fn signalActor(io: std.Io, wake: std.Io.File, queue: *event.Queue) std.Io.Cancelable!void {
     var drain: [64]u8 = undefined;
 
     while (true) {
@@ -337,8 +324,6 @@ pub const default_shell = "/bin/zsh";
 const timeline_path = "timeline.db";
 pub const max_argv = 32;
 
-const Child = @import("Child.zig");
-
 /// No shell emits OSC 133 on its own; terminal emulators ship an rc file that
 /// installs the hooks. Borrowing Ghostty's is enough here — a real herdr ships
 /// its own and supports more than zsh.
@@ -348,7 +333,7 @@ const shell_integration_zdotdir =
 /// Points the child's zsh at that rc file. `overwrite = 0` keeps a ZDOTDIR the
 /// user already set, and a missing integration directory is left alone rather
 /// than starting a shell with no rc file at all.
-fn installShellIntegration(io: Io) void {
+fn installShellIntegration(io: std.Io) void {
     std.Io.Dir.accessAbsolute(io, shell_integration_zdotdir, .{}) catch return;
     _ = setenv("ZDOTDIR", shell_integration_zdotdir, 0);
 }
@@ -414,7 +399,7 @@ fn releaseEvent(gpa: std.mem.Allocator, item: event.Event) void {
 /// Empties whatever the actors queued but the main loop never reached. Without
 /// this, a child that exits while requests are still in flight leaks every
 /// captured body still waiting in the ring.
-fn drainQueue(io: Io, gpa: std.mem.Allocator, queue: *event.Queue) void {
+fn drainQueue(io: std.Io, gpa: std.mem.Allocator, queue: *event.Queue) void {
     queue.close(io);
 
     var leftovers: [16]event.Event = undefined;
@@ -427,8 +412,6 @@ fn drainQueue(io: Io, gpa: std.mem.Allocator, queue: *event.Queue) void {
         for (leftovers[0..n]) |item| releaseEvent(gpa, item);
     }
 }
-
-const Running = @import("Running.zig");
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -450,10 +433,10 @@ pub fn main(init: std.process.Init) !void {
     var session_buf: [48]u8 = undefined;
     const session_id = std.fmt.bufPrint(&session_buf, "{d}-{d}", .{
         std.c.getpid(),
-        Io.Timestamp.now(io, .real).toMilliseconds(),
+        std.Io.Timestamp.now(io, .real).toMilliseconds(),
     }) catch "session";
 
-    var timeline = try db.Timeline.open(timeline_path, session_id);
+    var timeline = try TimelineType.open(timeline_path, session_id);
     defer timeline.close();
 
     const pty = try openPty(host_fd);
@@ -463,7 +446,7 @@ pub fn main(init: std.process.Init) !void {
     // inherit HTTPS_PROXY and no `Io` worker thread is alive across the fork.
     // The CA has to exist before the fork too: the child inherits the env vars
     // that point its runtimes at it.
-    const authority: ?ca.Authority = ca.Authority.loadOrCreate(.{ .io = io, .allocator = init.gpa }, .{ .key = ca_key_path, .certificate = ca_cert_path }) catch null;
+    const authority: ?AuthorityType = AuthorityType.loadOrCreate(.{ .io = io, .allocator = init.gpa }, .{ .key = ca_key_path, .certificate = ca_cert_path }) catch null;
 
     const proxy_port = if (authority != null) proxy.reservePort(8099, 20) else null;
     if (proxy_port) |port| {
@@ -497,10 +480,10 @@ pub fn main(init: std.process.Init) !void {
     var tio = original.?;
     try makeRaw(host_fd, &tio);
 
-    const blocking: File.Flags = .{ .nonblocking = false };
-    const host_tty: File = .{ .handle = host_fd, .flags = blocking };
-    const master: File = .{ .handle = pty.master, .flags = blocking };
-    const wake: File = .{ .handle = winch_pipe[0], .flags = blocking };
+    const blocking: std.Io.File.Flags = .{ .nonblocking = false };
+    const host_tty: std.Io.File = .{ .handle = host_fd, .flags = blocking };
+    const master: std.Io.File = .{ .handle = pty.master, .flags = blocking };
+    const wake: std.Io.File = .{ .handle = winch_pipe[0], .flags = blocking };
 
     if (proxy_port != null) {
         try host_tty.writeStreamingAll(
@@ -514,10 +497,10 @@ pub fn main(init: std.process.Init) !void {
     var slots: [64]event.Event = undefined;
     var queue: event.Queue = .init(&slots);
 
-    var actors: Io.Group = .init;
+    var actors: std.Io.Group = .init;
     defer actors.cancel(io);
 
-    try actors.concurrent(io, inputActor, .{ io, File.stdin(), &queue });
+    try actors.concurrent(io, inputActor, .{ io, std.Io.File.stdin(), &queue });
     try actors.concurrent(io, outputActor, .{.{
         .io = io,
         .allocator = init.gpa,
@@ -545,7 +528,7 @@ pub fn main(init: std.process.Init) !void {
 
     loop: while (true) {
         const item = queue.getOne(io) catch break;
-        const now_ms = Io.Timestamp.now(io, .real).toMilliseconds();
+        const now_ms = std.Io.Timestamp.now(io, .real).toMilliseconds();
 
         switch (item) {
             .user_input => |chunk| master.writeStreamingAll(io, chunk.slice()) catch break :loop,
@@ -553,7 +536,7 @@ pub fn main(init: std.process.Init) !void {
             .command_started => |command| {
                 const id = next_command_id;
                 next_command_id += 1;
-                running = .{ .id = id, .started_at = Io.Timestamp.now(io, .awake) };
+                running = .{ .id = id, .started_at = std.Io.Timestamp.now(io, .awake) };
                 timeline.append(.{
                     .at_ms = now_ms,
                     .kind = .command_started,
@@ -571,7 +554,7 @@ pub fn main(init: std.process.Init) !void {
                 // a command that never started; there is nothing to close.
                 const open = running orelse continue;
                 running = null;
-                const elapsed = open.started_at.durationTo(Io.Timestamp.now(io, .awake));
+                const elapsed = open.started_at.durationTo(std.Io.Timestamp.now(io, .awake));
                 timeline.append(.{
                     .at_ms = now_ms,
                     .kind = .command_finished,

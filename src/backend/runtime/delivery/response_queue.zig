@@ -1,62 +1,63 @@
 //! Bounded, priority-aware responses awaiting one client session's writer.
 
+const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+const PaneOpenedType = @import("telar-core").PaneOpened;
+const PendingFailure = @import("PendingFailure.zig");
+const PendingTabSnapshot = @import("PendingTabSnapshot.zig");
+const PendingWorkspaceSnapshot = @import("PendingWorkspaceSnapshot.zig");
+const PendingTabCreated = @import("PendingTabCreated.zig");
+const PendingTabRenamed = @import("PendingTabRenamed.zig");
+const TabClosedType = @import("telar-core").TabClosed;
+const TabMovedType = @import("telar-core").TabMoved;
+const PendingNotification = @import("PendingNotification.zig");
+const NotificationShownType = @import("telar-core").NotificationShown;
+const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
+const QueryResultType = @import("../../history/QueryResult.zig");
+const RequestCompletedType = @import("telar-core").RequestCompleted;
+const PendingPaneText = @import("PendingPaneText.zig");
+const PendingPaneMatches = @import("PendingPaneMatches.zig");
+const HistoryPrunedType = @import("telar-core").HistoryPruned;
+const OutputResultType = @import("../../history/OutputResult.zig");
+const StatsResultType = @import("../../history/StatsResult.zig");
+const PaneFocusCommandType = @import("telar-core").PaneFocusCommand;
+const PaneFocusResultType = @import("telar-core").PaneFocusResult;
+const PendingSuggestion = @import("PendingSuggestion.zig");
+const ResponseQueue = @import("ResponseQueue.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const history = @import("../../history/root.zig");
-const pane = @import("../../pane/root.zig");
-const search_commands = @import("../application/commands/search_pane.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const RequestIdType = @import("telar-core").RequestId;
 
-pub const schema = core.schema;
-pub const capacity = pane.max_panes * 2;
-
-pub const PendingFailure = @import("PendingFailure.zig");
-
-pub const PendingSuggestion = @import("PendingSuggestion.zig");
-
-pub const PendingTabSnapshot = @import("PendingTabSnapshot.zig");
-
-pub const PendingWorkspaceSnapshot = @import("PendingWorkspaceSnapshot.zig");
-
-pub const PendingTabCreated = @import("PendingTabCreated.zig");
-
-pub const PendingTabRenamed = @import("PendingTabRenamed.zig");
-
-pub const PendingNotification = @import("PendingNotification.zig");
-
-pub const PendingPaneText = @import("PendingPaneText.zig");
-
-pub const PendingPaneMatches = @import("PendingPaneMatches.zig");
+pub const capacity = max_panes_per_tab * 2;
 
 pub const PendingResponse = union(enum) {
-    pane_opened: schema.PaneOpened,
+    pane_opened: PaneOpenedType,
     request_failed: PendingFailure,
     tab_snapshot: PendingTabSnapshot,
     workspace_snapshot: PendingWorkspaceSnapshot,
     tab_created: PendingTabCreated,
     tab_renamed: PendingTabRenamed,
-    tab_closed: schema.TabClosed,
-    tab_moved: schema.TabMoved,
+    tab_closed: TabClosedType,
+    tab_moved: TabMovedType,
     notification: PendingNotification,
-    notification_shown: schema.NotificationShown,
-    agent_sound: schema.AgentSoundNotification,
-    history_result: *history.model.QueryResult,
-    request_completed: schema.RequestCompleted,
+    notification_shown: NotificationShownType,
+    agent_sound: AgentSoundNotificationType,
+    history_result: *QueryResultType,
+    request_completed: RequestCompletedType,
     pane_text: PendingPaneText,
     pane_matches: PendingPaneMatches,
-    history_pruned: schema.HistoryPruned,
-    history_output: *history.model.OutputResult,
-    history_stats: *history.model.StatsResult,
-    pane_focus_command: schema.PaneFocusCommand,
-    pane_focus_result: schema.PaneFocusResult,
+    history_pruned: HistoryPrunedType,
+    history_output: *OutputResultType,
+    history_stats: *StatsResultType,
+    pane_focus_command: PaneFocusCommandType,
+    pane_focus_result: PaneFocusResultType,
     command_suggestion: PendingSuggestion,
 };
 
-pub const ResponseQueue = @import("ResponseQueue.zig");
-
 test "management responses overtake observation work" {
     var queue: ResponseQueue = .{};
-    const fake_history: *history.model.QueryResult =
-        @ptrFromInt(@alignOf(history.model.QueryResult));
+    const fake_history: *QueryResultType =
+        @ptrFromInt(@alignOf(QueryResultType));
     try queue.push(.{ .history_result = fake_history });
     try queue.push(.{ .request_failed = .{
         .request_id = @enumFromInt(2),
@@ -90,7 +91,7 @@ test "queue records lifetime high water" {
 
 test "a dropped workspace close preserves its handoff target" {
     var queue: ResponseQueue = .{};
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
@@ -108,7 +109,7 @@ test "a dropped workspace close preserves its handoff target" {
 
     try std.testing.expectEqualDeep(location.workspace, queue.resync_workspace.?);
     try std.testing.expectEqual(
-        @as(schema.WorkspaceId, @enumFromInt(6)),
+        @as(WorkspaceIdType, @enumFromInt(6)),
         queue.resync_previous_workspace.?,
     );
     queue.len = 0;
@@ -116,7 +117,7 @@ test "a dropped workspace close preserves its handoff target" {
 
 test "a dropped tab move preserves the workspace that must be resynchronized" {
     var queue: ResponseQueue = .{};
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
@@ -144,7 +145,7 @@ test "a dropped tab move preserves the workspace that must be resynchronized" {
 
 test "notification reservations remain exact when request IDs repeat" {
     var queue: ResponseQueue = .{};
-    const request_id: schema.RequestId = @enumFromInt(7);
+    const request_id: RequestIdType = @enumFromInt(7);
     for (0..queue.items.len - 1) |_| {
         try queue.push(.{ .notification_shown = .{
             .request_id = .none,

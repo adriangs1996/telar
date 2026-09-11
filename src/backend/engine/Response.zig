@@ -1,8 +1,9 @@
+const types = @import("types.zig");
 const Response = @This();
-const source_namespace = @import("types.zig");
-purpose: source_namespace.Purpose,
-status: source_namespace.Status,
-text: [source_namespace.max_reply_bytes]u8 = undefined,
+
+purpose: types.Purpose,
+status: types.Status,
+text: [types.max_reply_bytes]u8 = undefined,
 text_len: u16 = 0,
 
 pub fn textSlice(response: *const Response) []const u8 {

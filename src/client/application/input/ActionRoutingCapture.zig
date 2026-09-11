@@ -1,22 +1,26 @@
-const Capture = @This();
-const lua_config = @import("../../config/root.zig");
-const source_namespace = @import("action_routing.zig");
+const effects = @import("../../config/effects.zig");
+const action_routing = @import("action_routing.zig");
 const lua_action = @import("lua_action.zig");
-const Effects = @import("ActionRoutingEffects.zig");
+const PluginActionType = @import("../../input/PluginAction.zig");
+const KeyType = @import("../../input/Key.zig");
+const ActionRoutingEffects = @import("ActionRoutingEffects.zig");
+const action = @import("../../input/action.zig");
 const std = @import("std");
-events: [lua_config.max_expression_keys + 1]source_namespace.Event = undefined,
+const Capture = @This();
+
+events: [effects.max_expression_keys + 1]action_routing.Event = undefined,
 event_count: usize = 0,
-native_control: source_namespace.Control = .continue_routing,
+native_control: action_routing.Control = .continue_routing,
 lua_outcome: lua_action.Outcome = .applied,
 lua_command: ?lua_action.Command = null,
-plugin_action: source_namespace.PluginAction = undefined,
-keys: [lua_config.max_expression_keys]source_namespace.keybind.Key = undefined,
+plugin_action: PluginActionType = undefined,
+keys: [effects.max_expression_keys]KeyType = undefined,
 key_count: usize = 0,
 paste_bytes: [32]u8 = undefined,
 paste_len: usize = 0,
-failure: source_namespace.Failure = .none,
+failure: action_routing.Failure = .none,
 
-pub fn port(capture: *Capture) Effects {
+pub fn port(capture: *Capture) ActionRoutingEffects {
     return .{
         .context = capture,
         .native = native,
@@ -27,12 +31,12 @@ pub fn port(capture: *Capture) Effects {
     };
 }
 
-fn record(capture: *Capture, event: source_namespace.Event) void {
+fn record(capture: *Capture, event: action_routing.Event) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
 
-fn native(raw_context: *anyopaque, value: source_namespace.Action) !source_namespace.Control {
+fn native(raw_context: *anyopaque, value: action.Action) !action_routing.Control {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     _ = value;
     capture.record(.native);
@@ -56,7 +60,7 @@ fn lua(raw_context: *anyopaque, command: lua_action.Command) !lua_action.Outcome
     return capture.lua_outcome;
 }
 
-fn plugin(raw_context: *anyopaque, requested: source_namespace.PluginAction) !void {
+fn plugin(raw_context: *anyopaque, requested: PluginActionType) !void {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     capture.record(.plugin);
     capture.plugin_action = requested;
@@ -66,7 +70,7 @@ fn plugin(raw_context: *anyopaque, requested: source_namespace.PluginAction) !vo
     }
 }
 
-fn key(raw_context: *anyopaque, value: source_namespace.keybind.Key) !void {
+fn key(raw_context: *anyopaque, value: KeyType) !void {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     capture.record(.key);
     capture.keys[capture.key_count] = value;

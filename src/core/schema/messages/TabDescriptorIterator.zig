@@ -1,11 +1,12 @@
-const TabDescriptorIterator = @This();
-const wire = @import("../wire.zig");
-const source_namespace = @import("workspace.zig");
+const DecoderType = @import("../Decoder.zig");
+const TabDescriptorType = @import("../TabDescriptor.zig");
 const id = @import("../id.zig");
-decoder: wire.Decoder,
+const TabDescriptorIterator = @This();
+
+decoder: DecoderType,
 remaining: u16,
 
-pub fn next(iterator: *TabDescriptorIterator) !?source_namespace.TabDescriptor {
+pub fn next(iterator: *TabDescriptorIterator) !?TabDescriptorType {
     if (iterator.remaining == 0) {
         return null;
     }

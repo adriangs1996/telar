@@ -1,7 +1,8 @@
-const CwdState = @This();
-const source_namespace = @import("root.zig");
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const std = @import("std");
-bytes: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+const CwdState = @This();
+
+bytes: [max_cwd_bytes_module]u8 = undefined,
 len: u16 = 0,
 revision: u64 = 1,
 
@@ -48,6 +49,6 @@ fn set(state: *CwdState, path: []const u8) bool {
 }
 
 fn validCwd(path: []const u8) bool {
-    return path.len != 0 and path.len <= source_namespace.schema.max_cwd_bytes and
+    return path.len != 0 and path.len <= max_cwd_bytes_module and
         std.mem.indexOfScalar(u8, path, 0) == null;
 }

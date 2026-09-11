@@ -1,9 +1,10 @@
-const ProxyOptions = @This();
-const source_namespace = @import("proxy.zig");
+const proxy = @import("proxy.zig");
 const std = @import("std");
-action: source_namespace.ProxyTrustAction,
+const ProxyOptions = @This();
+
+action: proxy.ProxyTrustAction,
 ca_dir: ?[*:0]const u8 = null,
-linux_backend: ?source_namespace.LinuxTrustBackend = null,
+linux_backend: ?proxy.LinuxTrustBackend = null,
 
 pub fn parse(args: []const [*:0]const u8) !ProxyOptions {
     if (args.len < 2 or !std.mem.eql(u8, std.mem.span(args[0]), "trust")) {

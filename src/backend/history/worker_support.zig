@@ -1,25 +1,30 @@
 //! Sequential execution of history requests against durable storage.
 
+const QueryType = @import("Query.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const channel_mod = @import("channel_support.zig");
-const metrics_mod = @import("metrics.zig");
 const model = @import("model.zig");
-const sqlite = @import("persistence/sqlite.zig");
-
-pub const diagnostics = core.diagnostics;
-
-pub const Context = @import("Context.zig");
+const RequestIdType = @import("telar-core").RequestId;
+const QueryOriginType = @import("QueryOrigin.zig");
+const Context = @import("Context.zig");
+const PrunedType = @import("Pruned.zig");
+const StoreType = @import("persistence/Store.zig");
+const ImportBatchType = @import("ImportBatch.zig");
+const SessionStartedType = @import("SessionStarted.zig");
+const CommandFinishedType = @import("CommandFinished.zig");
+const CountersType = @import("Counters.zig");
+const Worker = @import("Worker.zig");
+const ImportEntryType = @import("telar-core").ImportEntry;
+const encodeImportHistory_module = @import("telar-core").encodeImportHistory;
+const decodeClient_module = @import("telar-core").decodeClient;
+const HistoryAuthorType = @import("telar-core").HistoryAuthor;
 
 pub const Execution = enum {
     continue_running,
     stop,
 };
 
-pub const Worker = @import("Worker.zig");
-
 test "query replacement stops at writes and preserves clients, pages and CLI replies" {
-    const query = try model.Query.init(.{ .request_id = @enumFromInt(1), .origin = .{
+    const query = try QueryType.init(.{ .request_id = @enumFromInt(1), .origin = .{
         .client = .{ .id = 1, .generation = 1 },
         .close_after_reply = false,
     }, .text = "g" });
@@ -71,7 +76,7 @@ pub fn superseded(request: model.Request, later: []const model.Request) bool {
     return false;
 }
 
-pub fn unavailableResponse(request_id: model.schema.RequestId, origin: model.QueryOrigin) model.Response {
+pub fn unavailableResponse(request_id: RequestIdType, origin: QueryOriginType) model.Response {
     return .{ .failed = .{
         .request_id = request_id,
         .origin = origin,
@@ -79,14 +84,14 @@ pub fn unavailableResponse(request_id: model.schema.RequestId, origin: model.Que
     } };
 }
 
-pub fn respondPruned(context: Context, pruned: model.Pruned) void {
+pub fn respondPruned(context: Context, pruned: PrunedType) void {
     context.channel.sendResponse(context.io, .{ .pruned = pruned }) catch {};
 }
 
 /// Writes one imported session and its commands idempotently. Both SQLite
 /// operations use `OR IGNORE`, keyed by deterministic session and sequence.
-pub fn writeImportBatch(database: *sqlite.Store, batch: *const model.ImportBatch) anyerror!void {
-    const session: model.SessionStarted = .{
+pub fn writeImportBatch(database: *StoreType, batch: *const ImportBatchType) anyerror!void {
+    const session: SessionStartedType = .{
         .id = batch.session_id,
         .pane_id = batch.pane_id,
         .location = batch.location,
@@ -97,7 +102,7 @@ pub fn writeImportBatch(database: *sqlite.Store, batch: *const model.ImportBatch
     try database.importSession(&session);
 
     for (batch.commands, batch.times, 0..) |command, time, index| {
-        var value: model.CommandFinished = .{
+        var value: CommandFinishedType = .{
             .session_id = batch.session_id,
             .pane_id = batch.pane_id,
             .location = batch.location,
@@ -137,7 +142,7 @@ test "database open degradation is explicit" {
     const directory_len = try temp.dir.realPath(io, &directory_buffer);
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = try std.fmt.bufPrintZ(&path_buffer, "{s}/missing/history.db", .{directory_buffer[0..directory_len]});
-    var metrics: metrics_mod.Counters = .{};
+    var metrics: CountersType = .{};
     var worker = Worker.init(std.testing.allocator, path, &metrics);
     defer worker.deinit();
 
@@ -148,7 +153,7 @@ test "database open degradation is explicit" {
 
 test "sqlite byte sampling distinguishes memory and disk databases" {
     const io = std.testing.io;
-    var metrics: metrics_mod.Counters = .{};
+    var metrics: CountersType = .{};
     var memory = Worker.init(std.testing.allocator, ":memory:", &metrics);
     defer memory.deinit();
 
@@ -169,33 +174,33 @@ test "sqlite byte sampling distinguishes memory and disk databases" {
 
 test "import batches remain idempotent at the worker storage boundary" {
     const gpa = std.testing.allocator;
-    var database = try sqlite.Store.open(":memory:");
+    var database = try StoreType.open(":memory:");
     defer database.close();
     var buffer: [512]u8 = undefined;
-    const entries = [_]model.schema.ImportEntry{
+    const entries = [_]ImportEntryType{
         .{ .started_at_ms = 1_000, .command = "git status" },
         .{ .started_at_ms = 2_000, .command = "make -j4" },
     };
-    const encoded = try model.schema.encodeImportHistory(&buffer, .{
+    const encoded = try encodeImportHistory_module(&buffer, .{
         .request_id = @enumFromInt(3),
         .source = "zsh:/tmp/histfile",
         .base_sequence = 0,
         .entries = &entries,
     });
-    const view = (try model.schema.decodeClient(encoded)).import_history;
-    const first = try model.ImportBatch.init(gpa, view);
+    const view = (try decodeClient_module(encoded)).import_history;
+    const first = try ImportBatchType.init(gpa, view);
     defer first.deinit(gpa);
-    const second = try model.ImportBatch.init(gpa, view);
+    const second = try ImportBatchType.init(gpa, view);
     defer second.deinit(gpa);
 
     try writeImportBatch(&database, first);
     try writeImportBatch(&database, second);
 
-    const origin: model.QueryOrigin = .{
+    const origin: QueryOriginType = .{
         .client = .{ .id = 1, .generation = 1 },
         .close_after_reply = false,
     };
-    const result = try database.query(gpa, &(try model.Query.init(.{
+    const result = try database.query(gpa, &(try QueryType.init(.{
         .request_id = @enumFromInt(9),
         .origin = origin,
     })));
@@ -203,5 +208,5 @@ test "import batches remain idempotent at the worker storage boundary" {
 
     try std.testing.expectEqual(@as(usize, 2), result.entries.len);
     try std.testing.expectEqualStrings("make -j4", result.entries[0].command);
-    try std.testing.expectEqual(model.schema.HistoryAuthor.human, result.entries[0].author);
+    try std.testing.expectEqual(HistoryAuthorType.human, result.entries[0].author);
 }

@@ -7,25 +7,17 @@
 //! it into place. Restore runs once, before the listener accepts clients.
 
 const std = @import("std");
-const core = @import("telar-core");
-const agent_mod = @import("../../agent/root.zig");
-const checkpoint = @import("../../persistence/checkpoint.zig");
-const pane_mod = @import("../../pane/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
-const client_layout_store = @import("client_layout_store.zig");
-
-pub const Io = std.Io;
-const File = Io.File;
-pub const schema = core.schema;
+const WriteJob = @import("WriteJob.zig");
+const max_agent_session_reference_bytes_module = @import("telar-core").max_agent_session_reference_bytes;
+const AgentProviderType = @import("telar-core").AgentProvider;
+const root_module = @import("../../agent/providers/providers.zig");
+const first_custom_agent_provider_module = @import("telar-core").first_custom_agent_provider;
+const State = @import("State.zig");
+const TestingScheduler = @import("TestingScheduler.zig");
+const OwnedWrite = @import("OwnedWrite.zig");
 
 pub const debounce_ns: u64 = 500 * std.time.ns_per_ms;
 pub const snapshot_bytes = 1024 * 1024;
-
-pub const State = @import("State.zig");
-
-pub const OwnedWrite = @import("OwnedWrite.zig");
-
-pub const WriteJob = @import("WriteJob.zig");
 
 /// Writes `job.bytes()` to a temp file next to the target and renames it over
 /// the previous checkpoint. Runs on a worker; never touches runtime state.
@@ -37,30 +29,28 @@ pub fn writeFile(job: WriteJob) anyerror!void {
     const io = job.io;
     var temp_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const temp_path = try std.fmt.bufPrint(&temp_buffer, "{s}.tmp", .{job.path});
-    const file = try Io.Dir.createFileAbsolute(io, temp_path, .{
+    const file = try std.Io.Dir.createFileAbsolute(io, temp_path, .{
         .truncate = true,
-        .permissions = File.Permissions.fromMode(0o600),
+        .permissions = std.Io.File.Permissions.fromMode(0o600),
     });
     file.writeStreamingAll(io, job.bytes()) catch |err| {
         file.close(io);
-        Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
+        std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
         return err;
     };
     file.sync(io) catch |err| {
         file.close(io);
-        Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
+        std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
         return err;
     };
     file.close(io);
-    Io.Dir.renameAbsolute(temp_path, job.path, io) catch |err| {
-        Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
+    std.Io.Dir.renameAbsolute(temp_path, job.path, io) catch |err| {
+        std.Io.Dir.deleteFileAbsolute(io, temp_path) catch {};
         return err;
     };
 }
 
-pub const Checkpointer = @import("GenericCheckpointer.zig").Type;
-
-pub const max_resume_command_bytes = 32 + schema.max_agent_session_reference_bytes;
+pub const max_resume_command_bytes = 32 + max_agent_session_reference_bytes_module;
 
 /// Builds the shell line that resumes a built-in agent's session, typed into
 /// the restored pane's shell. Only the built-in capability table
@@ -71,11 +61,11 @@ pub const max_resume_command_bytes = 32 + schema.max_agent_session_reference_byt
 /// ```zig
 /// const line = resumeCommand(&buffer, .claude, session) orelse return;
 /// ```
-pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: schema.AgentProvider, session: []const u8) ?[]const u8 {
+pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: AgentProviderType, session: []const u8) ?[]const u8 {
     if (!isUuid(session)) {
         return null;
     }
-    const template = agent_mod.providers.of(provider).resume_prefix orelse return null;
+    const template = root_module.of(provider).resume_prefix orelse return null;
     const len = template.len + session.len + 1;
     if (len > buffer.len) {
         return null;
@@ -110,7 +100,7 @@ test "resume commands exist only for built-in providers and UUID references" {
     try std.testing.expectEqualStrings("claude --resume " ++ session ++ "\r", resumeCommand(&buffer, .claude, session).?);
     try std.testing.expectEqualStrings("codex resume " ++ session ++ "\r", resumeCommand(&buffer, .codex, session).?);
     try std.testing.expectEqualStrings("pi --session " ++ session ++ "\r", resumeCommand(&buffer, .pi, session).?);
-    try std.testing.expect(resumeCommand(&buffer, @enumFromInt(schema.first_custom_agent_provider), session) == null);
+    try std.testing.expect(resumeCommand(&buffer, @enumFromInt(first_custom_agent_provider_module), session) == null);
     try std.testing.expect(resumeCommand(&buffer, .claude, "not-a-uuid") == null);
     try std.testing.expect(resumeCommand(&buffer, .claude, "0192aaaa-bbbb-cccc-dddd-eeeeffff000g") == null);
 }
@@ -141,8 +131,6 @@ test "checkpoint state debounces, coalesces and retries after failure" {
     disabled.noteChange(5);
     try std.testing.expect(!disabled.dirty);
 }
-
-const TestingScheduler = @import("TestingScheduler.zig");
 
 fn testingWrite() !OwnedWrite {
     return .{
@@ -181,9 +169,9 @@ test "writeFile replaces the checkpoint atomically and keeps it private" {
     var second = "second!".*;
     try writeFile(.{ .io = std.testing.io, .path = path, .buffer = &second, .len = second.len });
 
-    const written = try Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(64));
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(64));
     defer std.testing.allocator.free(written);
     try std.testing.expectEqualStrings("second!", written);
-    const stat = try Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false });
+    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, path, .{ .follow_symlinks = false });
     try std.testing.expectEqual(@as(u32, 0o600), stat.permissions.toMode() & 0o777);
 }

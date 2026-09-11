@@ -1,6 +1,7 @@
-const LoadContext = @This();
 const std = @import("std");
-const source_namespace = @import("generation_support.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
+const LoadContext = @This();
+
 gpa: std.mem.Allocator,
-io: source_namespace.Io,
-diagnostic: *source_namespace.Diagnostic,
+io: std.Io,
+diagnostic: *DiagnosticType,

@@ -1,12 +1,14 @@
-const PrepareTabCloseHandler = @This();
 const RequestCapacity = @import("RequestCapacity.zig");
 const DeliveryCapacity = @import("DeliveryCapacity.zig");
+const PendingAttachmentsType = @import("PendingAttachments.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_close_preparation.zig");
+const PrepareTabCloseHandler = @This();
+
 requests: RequestCapacity,
 deliveries: DeliveryCapacity,
-pending_attachments: tab_attachment_retirement.PendingAttachments,
+pending_attachments: PendingAttachmentsType,
 
 /// Reserves one close request, its recovery identity and every outbound
 /// delivery required to retire the exact tab without changing state.
@@ -14,7 +16,7 @@ pending_attachments: tab_attachment_retirement.PendingAttachments,
 /// ```zig
 /// try handler.execute(model, location);
 /// ```
-pub fn execute(handler: *const PrepareTabCloseHandler, model: *const client_model.Model, location: source_namespace.schema.TabLocation) !void {
+pub fn execute(handler: *const PrepareTabCloseHandler, model: *const ModelType, location: TabLocationType) !void {
     const plan = try model.planTabDetachment(location);
 
     try handler.requests.ensure(handler.requests.context, 2);

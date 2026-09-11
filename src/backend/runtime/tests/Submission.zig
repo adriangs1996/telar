@@ -1,13 +1,14 @@
+const QueryType = @import("../../history/Query.zig");
+const ServicePortType = @import("../application/queries/ServicePort.zig");
 const Submission = @This();
-const history_mod = @import("../../history/root.zig");
-const history_query = @import("../application/queries/history.zig");
-query: ?history_mod.Query = null,
 
-pub fn port(submission: *Submission) history_query.ServicePort {
+query: ?QueryType = null,
+
+pub fn port(submission: *Submission) ServicePortType {
     return .{ .context = submission, .submit_fn = submit };
 }
 
-fn submit(context: *anyopaque, query: history_mod.Query) bool {
+fn submit(context: *anyopaque, query: QueryType) bool {
     const submission: *Submission = @ptrCast(@alignCast(context));
     submission.query = query;
     return true;

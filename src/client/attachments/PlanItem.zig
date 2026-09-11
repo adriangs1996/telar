@@ -1,4 +1,6 @@
+const types = @import("types.zig");
+const RectType = @import("telar-core").Rect;
 const PlanItem = @This();
-const source_namespace = @import("types.zig");
-id: source_namespace.Id,
-area: source_namespace.ui.Rect,
+
+id: types.Id,
+area: RectType,

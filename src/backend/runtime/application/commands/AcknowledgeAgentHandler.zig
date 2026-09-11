@@ -1,8 +1,10 @@
-const AcknowledgeAgentHandler = @This();
-const source_namespace = @import("acknowledge_agent.zig");
+const TrackerType = @import("../../../agent/Tracker.zig");
 const AcknowledgeAgent = @import("AcknowledgeAgent.zig");
-const pane_mod = @import("../../../pane/root.zig");
-agents: *source_namespace.Tracker,
+const tracker_support = @import("../../../agent/tracker_support.zig");
+const PaneKeyType = @import("../../../pane/PaneKey.zig");
+const AcknowledgeAgentHandler = @This();
+
+agents: *TrackerType,
 
 /// Resolves the exact pane generation and lets the tracker turn an unseen
 /// completion back into `ready`. The tracker revision advances only when
@@ -11,8 +13,8 @@ agents: *source_namespace.Tracker,
 /// ```zig
 /// const result = handler.execute(.{ .pane_id = pane_id, .pane_generation = 3, .now_ms = now_ms });
 /// ```
-pub fn execute(handler: *AcknowledgeAgentHandler, command: AcknowledgeAgent) source_namespace.AcknowledgeAgentResult {
-    const key: pane_mod.PaneKey = .{
+pub fn execute(handler: *AcknowledgeAgentHandler, command: AcknowledgeAgent) tracker_support.AcknowledgeResult {
+    const key: PaneKeyType = .{
         .id = command.pane_id,
         .generation = command.pane_generation,
     };

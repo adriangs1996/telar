@@ -1,12 +1,22 @@
-const Effects = @This();
-const pane_mod = @import("../../pane/root.zig");
+const PaneLaunchedType = @import("../../pane/PaneLaunched.zig");
+const PanesType = @import("../application/commands/Panes.zig");
+const OpenPaneLaunchAuthority = @import("../application/commands/OpenPaneLaunchAuthority.zig");
+const OpenPaneGeometryLease = @import("../application/commands/OpenPaneGeometryLease.zig");
+const OpenPaneEventPublisher = @import("../application/commands/OpenPaneEventPublisher.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const OpenPaneLaunchPane = @import("../application/commands/OpenPaneLaunchPane.zig");
+const PrepareViewType = @import("../application/commands/PrepareView.zig");
+const OpenPanePrepareLaunch = @import("../application/commands/OpenPanePrepareLaunch.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const open_pane_commands = @import("../application/commands/open_pane.zig");
-const source_namespace = @import("open_pane_test.zig");
-launched: pane_mod.PaneLaunched,
+const Effects = @This();
+
+launched: PaneLaunchedType,
 event_count: usize = 0,
 attachment_count: usize = 0,
 
-pub fn panes(effects: *Effects) open_pane_commands.Panes {
+pub fn panes(effects: *Effects) PanesType {
     return .{
         .context = effects,
         .find = find,
@@ -17,11 +27,11 @@ pub fn panes(effects: *Effects) open_pane_commands.Panes {
     };
 }
 
-pub fn authority(effects: *Effects) open_pane_commands.LaunchAuthority {
+pub fn authority(effects: *Effects) OpenPaneLaunchAuthority {
     return .{ .context = effects, .prepare = prepare };
 }
 
-pub fn geometry(effects: *Effects) open_pane_commands.GeometryLease {
+pub fn geometry(effects: *Effects) OpenPaneGeometryLease {
     return .{
         .context = effects,
         .acquire = acquire,
@@ -29,39 +39,39 @@ pub fn geometry(effects: *Effects) open_pane_commands.GeometryLease {
     };
 }
 
-pub fn publisher(effects: *Effects) open_pane_commands.EventPublisher {
+pub fn publisher(effects: *Effects) OpenPaneEventPublisher {
     return .{ .context = effects, .publish = publish };
 }
 
-fn find(_: *anyopaque, _: source_namespace.schema.PaneId) ?pane_mod.PaneLaunched {
+fn find(_: *anyopaque, _: PaneIdType) ?PaneLaunchedType {
     return null;
 }
 
-fn first(_: *anyopaque, _: source_namespace.schema.TabLocation) ?pane_mod.PaneLaunched {
+fn first(_: *anyopaque, _: TabLocationType) ?PaneLaunchedType {
     return null;
 }
 
-fn launch(context: *anyopaque, _: open_pane_commands.LaunchPane) !pane_mod.PaneLaunched {
+fn launch(context: *anyopaque, _: OpenPaneLaunchPane) !PaneLaunchedType {
     const effects: *Effects = @ptrCast(@alignCast(context));
     return effects.launched;
 }
 
-fn prepareView(_: *anyopaque, _: open_pane_commands.PrepareView) !void {}
+fn prepareView(_: *anyopaque, _: PrepareViewType) !void {}
 
-fn attach(context: *anyopaque, _: pane_mod.PaneLaunched) !void {
+fn attach(context: *anyopaque, _: PaneLaunchedType) !void {
     const effects: *Effects = @ptrCast(@alignCast(context));
     effects.attachment_count += 1;
 }
 
-fn prepare(_: *anyopaque, _: open_pane_commands.PrepareLaunch) ![]const u8 {
+fn prepare(_: *anyopaque, _: OpenPanePrepareLaunch) ![]const u8 {
     return "/work/new";
 }
 
-fn acquire(_: *anyopaque, _: source_namespace.schema.WorkspaceLocation) bool {
+fn acquire(_: *anyopaque, _: WorkspaceLocationType) bool {
     return true;
 }
 
-fn release(_: *anyopaque, _: source_namespace.schema.WorkspaceLocation) void {
+fn release(_: *anyopaque, _: WorkspaceLocationType) void {
     unreachable;
 }
 

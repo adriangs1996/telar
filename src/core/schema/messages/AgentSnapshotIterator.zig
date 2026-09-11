@@ -1,13 +1,15 @@
+const DecoderType = @import("../Decoder.zig");
+const AgentSnapshotEntryType = @import("../AgentSnapshotEntry.zig");
+const agent = @import("agent.zig");
 const AgentSnapshotIterator = @This();
-const wire = @import("../wire.zig");
-const source_namespace = @import("agent.zig");
-decoder: wire.Decoder,
+
+decoder: DecoderType,
 remaining: u16,
 
-pub fn next(iterator: *AgentSnapshotIterator) !?source_namespace.AgentSnapshotEntry {
+pub fn next(iterator: *AgentSnapshotIterator) !?AgentSnapshotEntryType {
     if (iterator.remaining == 0) {
         return null;
     }
     iterator.remaining -= 1;
-    return try source_namespace.decodeAgentSnapshotEntry(&iterator.decoder);
+    return try agent.decodeAgentSnapshotEntry(&iterator.decoder);
 }

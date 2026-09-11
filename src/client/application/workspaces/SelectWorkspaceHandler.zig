@@ -1,9 +1,10 @@
-const SelectWorkspaceHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const SelectionGate = @import("SelectionGate.zig");
 const SelectionEffects = @import("SelectionEffects.zig");
-const source_namespace = @import("workspace_handoff.zig");
-model: *const client_model.Model,
+const workspace_handoff = @import("workspace_handoff.zig");
+const SelectWorkspaceHandler = @This();
+
+model: *const ModelType,
 gate: SelectionGate,
 effects: SelectionEffects,
 
@@ -13,7 +14,7 @@ effects: SelectionEffects,
 /// ```zig
 /// if (!try handler.execute(.{ .position = 1 })) return;
 /// ```
-pub fn execute(handler: *SelectWorkspaceHandler, target: source_namespace.SelectionTarget) !bool {
+pub fn execute(handler: *SelectWorkspaceHandler, target: workspace_handoff.SelectionTarget) !bool {
     if (handler.gate.pending(handler.gate.context)) {
         return false;
     }

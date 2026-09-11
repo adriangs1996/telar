@@ -1,14 +1,11 @@
 //! Wires per-pane attachment confirmation and canonical recovery to a client.
 
-const core = @import("telar-core");
-const panes_application = @import("telar-client").application.panes;
-const tabs_application = @import("telar-client").application.tabs;
-
 const Client = @import("../../Client.zig");
-const attach_pane = panes_application.attach_pane;
+const ConfirmPaneAttachmentHandlerType = @import("telar-client").ConfirmPaneAttachmentHandler;
+const RecoverPaneAttachmentHandlerType = @import("telar-client").RecoverPaneAttachmentHandler;
+const RequestTabSnapshotRecoveryHandlerType = @import("telar-client").RequestTabSnapshotRecoveryHandler;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
-const schema = core.schema;
-const tab_snapshot_recovery = tabs_application.tab_snapshot_recovery;
+const TabLocationType = @import("telar-core").TabLocation;
 
 /// Wires a runtime attachment confirmation to the passive client model.
 ///
@@ -16,7 +13,7 @@ const tab_snapshot_recovery = tabs_application.tab_snapshot_recovery;
 /// var handler = confirmationHandler(client);
 /// _ = try handler.execute(command);
 /// ```
-pub fn confirmationHandler(client: *Client) attach_pane.ConfirmPaneAttachmentHandler {
+pub fn confirmationHandler(client: *Client) ConfirmPaneAttachmentHandlerType {
     return .{ .model = &client.model };
 }
 
@@ -26,14 +23,14 @@ pub fn confirmationHandler(client: *Client) attach_pane.ConfirmPaneAttachmentHan
 /// var handler = recoveryHandler(client);
 /// _ = try handler.execute(attachment);
 /// ```
-pub fn recoveryHandler(client: *Client) attach_pane.RecoverPaneAttachmentHandler {
+pub fn recoveryHandler(client: *Client) RecoverPaneAttachmentHandlerType {
     return .{
         .model = &client.model,
         .snapshots = snapshotRecovery(client),
     };
 }
 
-fn snapshotRecovery(client: *Client) tab_snapshot_recovery.RequestTabSnapshotRecoveryHandler {
+fn snapshotRecovery(client: *Client) RequestTabSnapshotRecoveryHandlerType {
     return .{ .effects = .{
         .context = client,
         .pending = tabSnapshotPending,
@@ -47,7 +44,7 @@ fn tabSnapshotPending(context: *anyopaque) bool {
     return request_lifecycle.has(client, .tab_snapshot);
 }
 
-fn requestTabSnapshot(context: *anyopaque, location: schema.TabLocation) !void {
+fn requestTabSnapshot(context: *anyopaque, location: TabLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try request_lifecycle.requestTabSnapshot(client, location);

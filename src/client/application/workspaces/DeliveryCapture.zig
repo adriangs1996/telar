@@ -1,10 +1,12 @@
-const DeliveryCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("create_workspace.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const WorkspaceCreationDelivery = @import("WorkspaceCreationDelivery.zig");
+const WorkspaceReplacementType = @import("../../model/WorkspaceReplacement.zig");
 const std = @import("std");
-model: *const client_model.Model,
-expected: source_namespace.schema.TabLocation,
+const DeliveryCapture = @This();
+
+model: *const ModelType,
+expected: TabLocationType,
 calls: usize = 0,
 observed_commit: bool = false,
 fail: bool = false,
@@ -13,7 +15,7 @@ pub fn delivery(capture: *DeliveryCapture) WorkspaceCreationDelivery {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(context: *anyopaque, replacement: *const client_model.WorkspaceReplacement) !void {
+fn deliver(context: *anyopaque, replacement: *const WorkspaceReplacementType) !void {
     const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
     const version = capture.model.version();
     capture.calls += 1;

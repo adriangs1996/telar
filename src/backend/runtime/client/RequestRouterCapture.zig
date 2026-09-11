@@ -1,6 +1,8 @@
+const request_router = @import("request_router.zig");
+const PaneInputType = @import("telar-core").PaneInput;
 const Capture = @This();
-const source_namespace = @import("request_router.zig");
+
 calls: usize = 0,
-last: ?source_namespace.Tag = null,
-failure: ?source_namespace.Tag = null,
-pane_input: ?source_namespace.schema.PaneInput = null,
+last: ?request_router.Tag = null,
+failure: ?request_router.Tag = null,
+pane_input: ?PaneInputType = null,

@@ -3,13 +3,13 @@
 //! Host-terminal bytes never cross this boundary. Keys are parsed first and
 //! encoded against modes reported by the runtime-owned VT.
 
+const Key = @import("Key.zig");
+const InputModesType = @import("telar-core").InputModes;
 const std = @import("std");
-const core = @import("telar-core");
-const Char = @import("key_support.zig").Char;
-pub const Key = @import("key_support.zig").Key;
-pub const Modes = core.schema.frame.InputModes;
+const Encoding = @import("Encoding.zig");
+const Char = @import("Char.zig");
 
-pub fn encodeKey(buffer: []u8, key: Key, modes: Modes) ![]const u8 {
+pub fn encodeKey(buffer: []u8, key: Key, modes: InputModesType) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     const encoding: Encoding = .init(key, modes);
 
@@ -61,8 +61,6 @@ pub fn encodeKey(buffer: []u8, key: Key, modes: Modes) ![]const u8 {
     }
     return writer.buffered();
 }
-
-const Encoding = @import("Encoding.zig");
 
 fn encodeText(writer: *std.Io.Writer, key: Key, encoding: Encoding) !bool {
     if (encoding.reportsAllKeys()) {
@@ -208,7 +206,7 @@ fn encodeLegacyCharacter(writer: *std.Io.Writer, char: Char, key: Key) !void {
     try writer.writeByte(encoded);
 }
 
-pub fn encodePaste(buffer: []u8, text: []const u8, modes: Modes) ![]const u8 {
+pub fn encodePaste(buffer: []u8, text: []const u8, modes: InputModesType) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     if (modes.bracketed_paste) {
         try writer.writeAll("\x1b[200~");

@@ -1,11 +1,13 @@
 //! Application use case for reconciling the runtime workspace-list replica.
 
+const WorkspaceListCommitType = @import("../../model/WorkspaceListCommit.zig");
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const workspace_list = @import("../../workspace/root.zig").workspace_list;
-
-const schema = core.schema;
+const ReconcileWorkspaceListHandler = @import("ReconcileWorkspaceListHandler.zig");
+const EntryInputType = @import("../../workspace/EntryInput.zig");
+const VersionType = @import("../../model/Version.zig");
+const max_workspace_list_entries = @import("telar-core").max_workspace_list_entries;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 
 pub const Rejection = enum {
     too_many_workspaces,
@@ -17,10 +19,8 @@ pub const Rejection = enum {
 pub const Outcome = union(enum) {
     stale,
     rejected: Rejection,
-    applied: client_model.WorkspaceListCommit,
+    applied: WorkspaceListCommitType,
 };
-
-pub const ReconcileWorkspaceListHandler = @import("ReconcileWorkspaceListHandler.zig");
 
 pub fn classifyRejection(err: anyerror) ?Rejection {
     return switch (err) {
@@ -33,10 +33,10 @@ pub fn classifyRejection(err: anyerror) ?Rejection {
 }
 
 test "ReconcileWorkspaceListHandler commits only newer runtime state" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var handler: ReconcileWorkspaceListHandler = .{ .model = &model };
-    const entries = [_]workspace_list.EntryInput{
+    const entries = [_]EntryInputType{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/work/telar", .tab_count = 2 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 1 },
     };
@@ -47,23 +47,23 @@ test "ReconcileWorkspaceListHandler commits only newer runtime state" {
     try std.testing.expectEqual(@as(usize, 2), commit.count);
     try std.testing.expectEqual(@as(u64, 1), commit.workspace_list_revision);
     try std.testing.expect(model.knowsWorkspace(@enumFromInt(2)));
-    try std.testing.expectEqual(client_model.Version{ .workspace_list = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .workspace_list = 1 }, model.version());
     try std.testing.expect(try handler.execute(.{ .revision = 7, .entries = &entries }) == .stale);
-    try std.testing.expectEqual(client_model.Version{ .workspace_list = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .workspace_list = 1 }, model.version());
 }
 
 test "ReconcileWorkspaceListHandler classifies every bounded replacement rejection" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var handler: ReconcileWorkspaceListHandler = .{ .model = &model };
-    const baseline_entries = [_]workspace_list.EntryInput{.{
+    const baseline_entries = [_]EntryInputType{.{
         .workspace = @enumFromInt(9),
         .name = "baseline",
         .path = "/baseline",
         .tab_count = 1,
     }};
     _ = try handler.execute(.{ .revision = 1, .entries = &baseline_entries });
-    const too_many_entries: [workspace_list.max_entries + 1]workspace_list.EntryInput = @splat(.{
+    const too_many_entries: [max_workspace_list_entries + 1]EntryInputType = @splat(.{
         .workspace = @enumFromInt(1),
         .name = "workspace",
         .path = "/work",
@@ -74,8 +74,8 @@ test "ReconcileWorkspaceListHandler classifies every bounded replacement rejecti
 
     try std.testing.expectEqual(Rejection.too_many_workspaces, too_many.rejected);
 
-    const oversized_path: [schema.max_cwd_bytes + 1]u8 = @splat('x');
-    const oversized_path_entry = [_]workspace_list.EntryInput{.{
+    const oversized_path: [max_cwd_bytes_module + 1]u8 = @splat('x');
+    const oversized_path_entry = [_]EntryInputType{.{
         .workspace = @enumFromInt(1),
         .name = "workspace",
         .path = &oversized_path,
@@ -85,8 +85,8 @@ test "ReconcileWorkspaceListHandler classifies every bounded replacement rejecti
 
     try std.testing.expectEqual(Rejection.workspace_path_too_long, path_too_long.rejected);
 
-    const maximum_path: [schema.max_cwd_bytes]u8 = @splat('y');
-    const oversized_list_entries = [_]workspace_list.EntryInput{
+    const maximum_path: [max_cwd_bytes_module]u8 = @splat('y');
+    const oversized_list_entries = [_]EntryInputType{
         .{ .workspace = @enumFromInt(1), .name = "one", .path = &maximum_path, .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "two", .path = &maximum_path, .tab_count = 1 },
         .{ .workspace = @enumFromInt(3), .name = "three", .path = &maximum_path, .tab_count = 1 },
@@ -97,7 +97,7 @@ test "ReconcileWorkspaceListHandler classifies every bounded replacement rejecti
 
     try std.testing.expectEqual(Rejection.workspace_list_too_large, list_too_large.rejected);
 
-    const duplicate_entries = [_]workspace_list.EntryInput{
+    const duplicate_entries = [_]EntryInputType{
         .{ .workspace = @enumFromInt(1), .name = "one", .path = "/one", .tab_count = 1 },
         .{ .workspace = @enumFromInt(1), .name = "duplicate", .path = "/duplicate", .tab_count = 1 },
     };
@@ -105,7 +105,7 @@ test "ReconcileWorkspaceListHandler classifies every bounded replacement rejecti
 
     try std.testing.expectEqual(Rejection.duplicate_workspace, duplicate.rejected);
     try std.testing.expect(classifyRejection(error.UnexpectedWorkspaceListFailure) == null);
-    try std.testing.expectEqual(client_model.Version{ .workspace_list = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .workspace_list = 1 }, model.version());
     try std.testing.expectEqual(@as(u64, 1), model.workspaceListSnapshot().revision);
     try std.testing.expectEqualStrings("/baseline", model.workspaceListSnapshot().pathAt(0));
 }

@@ -1,8 +1,10 @@
-const InstallOptions = @This();
 const AuthorityPaths = @import("AuthorityPaths.zig");
 const Record = @import("Record.zig");
-const source_namespace = @import("proxy.zig");
+const proxy = @import("proxy.zig");
+const std = @import("std");
+const InstallOptions = @This();
+
 paths: AuthorityPaths,
 previous: ?Record,
-backend: source_namespace.TrustBackend,
-writer: *source_namespace.Io.Writer,
+backend: proxy.TrustBackend,
+writer: *std.Io.Writer,

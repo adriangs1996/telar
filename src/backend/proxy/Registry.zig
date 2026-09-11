@@ -1,9 +1,12 @@
-const Registry = @This();
-const source_namespace = @import("credential_registry.zig");
-const identity = @import("identity.zig");
+const std = @import("std");
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const CredentialType = @import("Credential.zig");
+const credential_registry = @import("credential_registry.zig");
 const PaneGeneration = @import("PaneGeneration.zig");
-mutex: source_namespace.Io.Mutex = .init,
-slots: [source_namespace.capacity]?identity.Credential = @splat(null),
+const Registry = @This();
+
+mutex: std.Io.Mutex = .init,
+slots: [max_agent_snapshot_entries]?CredentialType = @splat(null),
 
 /// Copies one live capability into bounded registry storage. Exact
 /// duplicate credentials are rejected.
@@ -11,15 +14,15 @@ slots: [source_namespace.capacity]?identity.Credential = @splat(null),
 /// ```zig
 /// try registry.register(io, &credential);
 /// ```
-pub fn register(registry: *Registry, io: source_namespace.Io, credential: *const identity.Credential) !void {
+pub fn register(registry: *Registry, io: std.Io, credential: *const CredentialType) !void {
     registry.mutex.lockUncancelable(io);
     defer registry.mutex.unlock(io);
 
-    var free: ?*?identity.Credential = null;
+    var free: ?*?CredentialType = null;
 
     for (&registry.slots) |*slot| {
         if (slot.*) |*existing| {
-            if (source_namespace.sameCredential(existing, credential)) {
+            if (credential_registry.sameCredential(existing, credential)) {
                 return error.DuplicateProxyCredential;
             }
         } else if (free == null) {
@@ -36,17 +39,17 @@ pub fn register(registry: *Registry, io: source_namespace.Io, credential: *const
 /// ```zig
 /// registry.remove(io, &credential);
 /// ```
-pub fn remove(registry: *Registry, io: source_namespace.Io, credential: *const identity.Credential) void {
+pub fn remove(registry: *Registry, io: std.Io, credential: *const CredentialType) void {
     registry.mutex.lockUncancelable(io);
     defer registry.mutex.unlock(io);
 
     for (&registry.slots) |*slot| {
         const existing = if (slot.*) |*value| value else continue;
-        if (!source_namespace.sameCredential(existing, credential)) {
+        if (!credential_registry.sameCredential(existing, credential)) {
             continue;
         }
 
-        source_namespace.erase(slot, existing);
+        credential_registry.erase(slot, existing);
         return;
     }
 }
@@ -57,7 +60,7 @@ pub fn remove(registry: *Registry, io: source_namespace.Io, credential: *const i
 /// ```zig
 /// registry.removePane(io, .{ .id = pane_id, .generation = generation });
 /// ```
-pub fn removePane(registry: *Registry, io: source_namespace.Io, pane: PaneGeneration) void {
+pub fn removePane(registry: *Registry, io: std.Io, pane: PaneGeneration) void {
     registry.mutex.lockUncancelable(io);
     defer registry.mutex.unlock(io);
 
@@ -67,7 +70,7 @@ pub fn removePane(registry: *Registry, io: source_namespace.Io, pane: PaneGenera
             continue;
         }
 
-        source_namespace.erase(slot, existing);
+        credential_registry.erase(slot, existing);
     }
 }
 
@@ -78,13 +81,13 @@ pub fn removePane(registry: *Registry, io: source_namespace.Io, pane: PaneGenera
 ///     rejectTunnel();
 /// }
 /// ```
-pub fn contains(registry: *Registry, io: source_namespace.Io, credential: *const identity.Credential) bool {
+pub fn contains(registry: *Registry, io: std.Io, credential: *const CredentialType) bool {
     registry.mutex.lockUncancelable(io);
     defer registry.mutex.unlock(io);
 
     for (&registry.slots) |*slot| {
         const existing = if (slot.*) |*value| value else continue;
-        if (source_namespace.sameCredential(existing, credential)) {
+        if (credential_registry.sameCredential(existing, credential)) {
             return true;
         }
     }

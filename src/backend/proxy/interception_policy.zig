@@ -1,11 +1,10 @@
 //! Exact-host and wildcard allowlist for TLS interception.
 
 const std = @import("std");
-const core = @import("telar-core");
-
-pub const max_configured_hosts = core.proxy.max_intercept_hosts;
-
-pub const Policy = @import("Policy.zig");
+const orderHostname_module = @import("telar-core").orderHostname;
+const Policy = @import("Policy.zig");
+const max_intercept_hosts_module = @import("telar-core").max_intercept_hosts;
+const max_hostname_bytes_module = @import("telar-core").max_hostname_bytes;
 
 pub fn deduplicate(values: [][]const u8, comptime compareFn: fn ([]const u8, []const u8) std.math.Order) u16 {
     var unique_count: usize = 0;
@@ -22,11 +21,11 @@ pub fn deduplicate(values: [][]const u8, comptime compareFn: fn ([]const u8, []c
 }
 
 pub fn lessThan(_: void, left: []const u8, right: []const u8) bool {
-    return core.proxy.orderHostname(left, right) == .lt;
+    return orderHostname_module(left, right) == .lt;
 }
 
 pub fn compare(target: []const u8, candidate: []const u8) std.math.Order {
-    return core.proxy.orderHostname(target, candidate);
+    return orderHostname_module(target, candidate);
 }
 
 pub fn suffixLessThan(_: void, left: []const u8, right: []const u8) bool {
@@ -43,7 +42,7 @@ fn orderReversedLabels(left: []const u8, right: []const u8) std.math.Order {
     while (left_end != 0 and right_end != 0) {
         const left_start = if (std.mem.lastIndexOfScalar(u8, left[0..left_end], '.')) |index| index + 1 else 0;
         const right_start = if (std.mem.lastIndexOfScalar(u8, right[0..right_end], '.')) |index| index + 1 else 0;
-        const order = core.proxy.orderHostname(left[left_start..left_end], right[right_start..right_end]);
+        const order = orderHostname_module(left[left_start..left_end], right[right_start..right_end]);
         if (order != .eq) {
             return order;
         }
@@ -92,13 +91,13 @@ test "empty policy and partial host matches never authorize interception" {
 }
 
 test "configured hosts respect count and hostname bounds" {
-    var too_many: [max_configured_hosts + 1][]const u8 = @splat("example.com");
+    var too_many: [max_intercept_hosts_module + 1][]const u8 = @splat("example.com");
 
     try std.testing.expectError(error.TooManyProxyInterceptHosts, Policy.init(&too_many));
     try std.testing.expectError(error.InvalidProxyInterceptHost, Policy.init(&.{""}));
     try std.testing.expectError(error.InvalidProxyInterceptHost, Policy.init(&.{"*example.com"}));
     try std.testing.expectError(error.InvalidProxyInterceptHost, Policy.init(&.{"api.*.example.com"}));
 
-    const oversized = "x" ** (core.proxy.max_hostname_bytes + 1);
+    const oversized = "x" ** (max_hostname_bytes_module + 1);
     try std.testing.expectError(error.InvalidProxyInterceptHost, Policy.init(&.{oversized}));
 }

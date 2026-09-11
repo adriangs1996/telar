@@ -1,5 +1,6 @@
+const TabLocationType = @import("telar-core").TabLocation;
 const Effects = @This();
-const source_namespace = @import("tab_snapshot_recovery.zig");
+
 context: *anyopaque,
 pending: *const fn (*anyopaque) bool,
-request: *const fn (*anyopaque, source_namespace.schema.TabLocation) anyerror!void,
+request: *const fn (*anyopaque, TabLocationType) anyerror!void,

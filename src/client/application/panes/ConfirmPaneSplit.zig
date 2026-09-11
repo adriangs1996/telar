@@ -1,6 +1,9 @@
+const PaneSplitType = @import("../../model/PaneSplit.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
 const ConfirmPaneSplit = @This();
-const source_namespace = @import("split_pane.zig");
-requested: source_namespace.PaneSplit,
-confirmed_pane: source_namespace.schema.PaneId,
-confirmed_location: source_namespace.schema.TabLocation,
+
+requested: PaneSplitType,
+confirmed_pane: PaneIdType,
+confirmed_location: TabLocationType,
 created: bool,

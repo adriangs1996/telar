@@ -1,13 +1,15 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const ReadPaneType = @import("telar-core").ReadPane;
 const Controller = @This();
-const source_namespace = @import("read_pane.zig");
-responses: *source_namespace.ResponseQueue,
+
+responses: *ResponseQueueType,
 
 /// Creates one controller bound to the requesting client's responses.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses);
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue) Controller {
+pub fn init(responses: *ResponseQueueType) Controller {
     return .{ .responses = responses };
 }
 
@@ -16,7 +18,7 @@ pub fn init(responses: *source_namespace.ResponseQueue) Controller {
 /// ```zig
 /// try controller.readPane(request);
 /// ```
-pub fn readPane(controller: *Controller, request: source_namespace.schema.ReadPane) !void {
+pub fn readPane(controller: *Controller, request: ReadPaneType) !void {
     try controller.responses.push(.{ .pane_text = .{
         .request_id = request.request_id,
         .pane = .{ .id = request.pane_id, .generation = request.pane_generation },

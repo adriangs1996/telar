@@ -1,5 +1,6 @@
-const Context = @This();
 const Client = @import("../../Client.zig");
-const source_namespace = @import("view_interactions.zig");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const Context = @This();
+
 client: *Client,
-model: *source_namespace.multiplexer.Model,
+model: *MultiplexerModel,

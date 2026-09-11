@@ -1,17 +1,20 @@
-const EffectsCapture = @This();
-const source_namespace = @import("request_failure.zig");
-const notifications = @import("../../root.zig").notifications;
+const request_failure = @import("request_failure.zig");
+const InputType = @import("../../notifications/NotificationInput.zig");
 const RecoveryEffects = @import("RecoveryEffects.zig");
 const NotificationEffects = @import("NotificationEffects.zig");
 const ReportingEffects = @import("ReportingEffects.zig");
 const HandleRequestFailureHandler = @import("HandleRequestFailureHandler.zig");
-const client_requests = @import("../../connection/root.zig").requests;
+const SplitType = @import("../../connection/Split.zig");
+const PaneOperationType = @import("../../connection/PaneOperation.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const InitialOpenFailure = @import("InitialOpenFailure.zig");
-events: [3]source_namespace.EffectEvent = undefined,
+const EffectsCapture = @This();
+
+events: [3]request_failure.EffectEvent = undefined,
 event_count: usize = 0,
-split_recovery: source_namespace.SplitRecovery = .current,
-initial_open_recovery: source_namespace.InitialOpenRecovery = .retried,
-notification: ?notifications.Input = null,
+split_recovery: request_failure.SplitRecovery = .current,
+initial_open_recovery: request_failure.InitialOpenRecovery = .retried,
+notification: ?InputType = null,
 reported_message: ?[]const u8 = null,
 fail_recovery: bool = false,
 fail_notification: bool = false,
@@ -42,7 +45,7 @@ pub fn handler(capture: *EffectsCapture) HandleRequestFailureHandler {
     };
 }
 
-fn record(capture: *EffectsCapture, event: source_namespace.EffectEvent) !void {
+fn record(capture: *EffectsCapture, event: request_failure.EffectEvent) !void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 
@@ -57,7 +60,7 @@ fn record(capture: *EffectsCapture, event: source_namespace.EffectEvent) !void {
     }
 }
 
-fn recoverSplit(context: *anyopaque, split: client_requests.Split) !source_namespace.SplitRecovery {
+fn recoverSplit(context: *anyopaque, split: SplitType) !request_failure.SplitRecovery {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     _ = split;
     try capture.record(.split);
@@ -65,19 +68,19 @@ fn recoverSplit(context: *anyopaque, split: client_requests.Split) !source_names
     return capture.split_recovery;
 }
 
-fn recoverAttachment(context: *anyopaque, attachment: client_requests.PaneOperation) !void {
+fn recoverAttachment(context: *anyopaque, attachment: PaneOperationType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     _ = attachment;
     try capture.record(.attachment);
 }
 
-fn recoverCloseTab(context: *anyopaque, location: source_namespace.schema.TabLocation) !void {
+fn recoverCloseTab(context: *anyopaque, location: TabLocationType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     _ = location;
     try capture.record(.close_tab);
 }
 
-fn recoverInitialOpen(context: *anyopaque, failure: InitialOpenFailure) !source_namespace.InitialOpenRecovery {
+fn recoverInitialOpen(context: *anyopaque, failure: InitialOpenFailure) !request_failure.InitialOpenRecovery {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     _ = failure;
     try capture.record(.initial_open);
@@ -85,7 +88,7 @@ fn recoverInitialOpen(context: *anyopaque, failure: InitialOpenFailure) !source_
     return capture.initial_open_recovery;
 }
 
-fn publish(context: *anyopaque, input: notifications.Input) !void {
+fn publish(context: *anyopaque, input: InputType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.notification = input;
     try capture.record(.publish);

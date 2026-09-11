@@ -1,7 +1,9 @@
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const LayoutType = @import("WorkspaceLayout.zig");
 const SavedLayout = @This();
-const source_namespace = @import("navigation.zig");
-const layout_mod = @import("layout_support.zig");
-location: source_namespace.schema.TabLocation,
-pane_id: source_namespace.schema.PaneId,
+
+location: TabLocationType,
+pane_id: PaneIdType,
 workspace_active: bool,
-layout: layout_mod.Layout,
+layout: LayoutType,

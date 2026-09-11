@@ -1,4 +1,5 @@
+const KeyType = @import("Key.zig");
 const Hint = @This();
-const keybind = @import("root.zig").keybind;
-key: keybind.Key,
+
+key: KeyType,
 label: []const u8,

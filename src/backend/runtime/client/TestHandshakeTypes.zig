@@ -1,5 +1,4 @@
 const TestHandshakeTypes = @This();
-const FakeConnection = @import("FakeConnection.zig");
-const FakeSession = @import("AdmissionFakeSession.zig");
-pub const Connection = FakeConnection;
-pub const Session = FakeSession;
+
+pub const Connection = @import("FakeConnection.zig");
+pub const Session = @import("AdmissionFakeSession.zig");

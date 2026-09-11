@@ -1,31 +1,37 @@
 //! Length-delimited protocol between the runtime and one tap worker.
 
+const ExchangeIdentity = @import("ExchangeIdentity.zig");
+const Exchange = @import("../proxy/capture/Exchange.zig");
 const std = @import("std");
-const core = @import("telar-core");
+const raw_module = @import("telar-core").raw;
+const ExchangeType = @import("Exchange.zig");
+const Cursor = @import("Cursor.zig");
+const pane_module = @import("telar-core").pane;
+const middleware = @import("../proxy/middleware.zig");
+const types = @import("../agent/types.zig");
+const BatchType = @import("Batch.zig");
 const effects = @import("effects.zig");
-const proxy = @import("../proxy/root.zig");
+const AgentReportStateType = @import("telar-core").AgentReportState;
+const NotificationLevelType = @import("telar-core").NotificationLevel;
+const Half = @import("../proxy/capture/Half.zig");
+const HalfType = @import("Half.zig");
+const buffer_support = @import("../proxy/capture/buffer_support.zig");
 
 pub const prefix_bytes = 4;
 pub const overhead_bytes = 64 * 1024;
-
-pub const Half = @import("Half.zig");
-
-pub const Exchange = @import("Exchange.zig");
-
-pub const ExchangeIdentity = @import("ExchangeIdentity.zig");
 
 /// Encodes one captured exchange into caller-owned frame payload storage.
 ///
 /// ```zig
 /// const payload = try encodeExchange(buffer, .{ .id = id, .generation = generation }, &exchange);
 /// ```
-pub fn encodeExchange(buffer: []u8, identity: ExchangeIdentity, captured: *const proxy.CaptureExchange) ![]const u8 {
+pub fn encodeExchange(buffer: []u8, identity: ExchangeIdentity, captured: *const Exchange) ![]const u8 {
     const representative = captured.request orelse captured.response orelse return error.EmptyCapture;
     var writer: std.Io.Writer = .fixed(buffer);
     try writer.writeByte(1);
     try writeInt(&writer, u64, identity.id);
     try writeInt(&writer, u64, identity.generation);
-    try writeInt(&writer, u64, core.schema.id.raw(representative.pane.id));
+    try writeInt(&writer, u64, raw_module(representative.pane.id));
     try writeInt(&writer, u64, representative.pane.generation);
     try writer.writeByte(@intFromEnum(representative.protocol));
     try writer.writeByte(@intFromEnum(representative.dialect));
@@ -45,17 +51,17 @@ pub fn encodeExchange(buffer: []u8, identity: ExchangeIdentity, captured: *const
 /// ```zig
 /// const exchange = try decodeExchange(payload);
 /// ```
-pub fn decodeExchange(bytes: []const u8) !Exchange {
+pub fn decodeExchange(bytes: []const u8) !ExchangeType {
     var cursor: Cursor = .{ .bytes = bytes };
     if (try cursor.byte() != 1) {
         return error.UnknownFrame;
     }
     const id = try cursor.int(u64);
     const generation = try cursor.int(u64);
-    const pane = core.schema.id.pane(try cursor.int(u64)) catch return error.InvalidExchange;
+    const pane = pane_module(try cursor.int(u64)) catch return error.InvalidExchange;
     const pane_generation = try cursor.int(u64);
-    const protocol = std.enums.fromInt(proxy.ObservationProtocol, try cursor.byte()) orelse return error.InvalidExchange;
-    const dialect = std.enums.fromInt(proxy.ApiDialect, try cursor.byte()) orelse return error.InvalidExchange;
+    const protocol = std.enums.fromInt(middleware.Protocol, try cursor.byte()) orelse return error.InvalidExchange;
+    const dialect = std.enums.fromInt(types.ApiDialect, try cursor.byte()) orelse return error.InvalidExchange;
     const connection_id = try cursor.int(u64);
     const stream_id = try cursor.int(u32);
     const host = try cursor.sized();
@@ -91,7 +97,7 @@ pub fn decodeExchange(bytes: []const u8) !Exchange {
 /// ```zig
 /// const payload = try encodeEffects(buffer, event_id, &batch);
 /// ```
-pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const effects.Batch) ![]const u8 {
+pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const BatchType) ![]const u8 {
     if (batch.len > effects.max_effects) {
         return error.TooManyEffects;
     }
@@ -118,7 +124,7 @@ pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const effects.Batch) !
         },
         .agent_evidence => |evidence| {
             try writer.writeByte(2);
-            try writeInt(&writer, u64, core.schema.id.raw(evidence.pane));
+            try writeInt(&writer, u64, raw_module(evidence.pane));
             try writer.writeByte(@intFromEnum(evidence.state));
             try writer.writeByte(@intFromEnum(evidence.confidence));
         },
@@ -139,7 +145,7 @@ pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const effects.Batch) !
 /// ```zig
 /// const decoded = try decodeEffects(payload);
 /// ```
-pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: effects.Batch } {
+pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: BatchType } {
     var cursor: Cursor = .{ .bytes = bytes };
     if (try cursor.byte() != 2) {
         return error.UnknownFrame;
@@ -149,7 +155,7 @@ pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: effects.
     if (count > effects.max_effects) {
         return error.TooManyEffects;
     }
-    var batch: effects.Batch = .{ .len = count };
+    var batch: BatchType = .{ .len = count };
 
     for (0..count) |index| {
         batch.items[index] = switch (try cursor.byte()) {
@@ -165,12 +171,12 @@ pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: effects.
                 .redact = try cursor.boolean(),
             } },
             2 => .{ .agent_evidence = .{
-                .pane = core.schema.id.pane(try cursor.int(u64)) catch return error.InvalidEffect,
-                .state = std.enums.fromInt(core.schema.AgentReportState, try cursor.byte()) orelse return error.InvalidEffect,
+                .pane = pane_module(try cursor.int(u64)) catch return error.InvalidEffect,
+                .state = std.enums.fromInt(AgentReportStateType, try cursor.byte()) orelse return error.InvalidEffect,
                 .confidence = std.enums.fromInt(effects.Confidence, try cursor.byte()) orelse return error.InvalidEffect,
             } },
             3 => .{ .notification = .{
-                .level = std.enums.fromInt(core.schema.NotificationLevel, try cursor.byte()) orelse return error.InvalidEffect,
+                .level = std.enums.fromInt(NotificationLevelType, try cursor.byte()) orelse return error.InvalidEffect,
                 .duration_ms = try cursor.int(u32),
                 .title = try cursor.sized(),
                 .message = try cursor.sized(),
@@ -215,7 +221,7 @@ pub fn decodeError(bytes: []const u8) !struct { event_id: u64, message: []const 
     return .{ .event_id = event_id, .message = message };
 }
 
-fn writeHalf(writer: *std.Io.Writer, optional: ?*proxy.CaptureHalf) !void {
+fn writeHalf(writer: *std.Io.Writer, optional: ?*Half) !void {
     try writer.writeByte(@intFromBool(optional != null));
     const half = optional orelse return;
     try writeSized(writer, half.head.bytes());
@@ -229,7 +235,7 @@ fn writeHalf(writer: *std.Io.Writer, optional: ?*proxy.CaptureHalf) !void {
     try writeInt(writer, i64, half.finished_at_ms);
 }
 
-fn readHalf(cursor: *Cursor) !?Half {
+fn readHalf(cursor: *Cursor) !?HalfType {
     if (!try cursor.boolean()) {
         return null;
     }
@@ -241,7 +247,7 @@ fn readHalf(cursor: *Cursor) !?Half {
         .head_truncated = try cursor.boolean(),
         .body_truncated = try cursor.boolean(),
         .status_code = try cursor.int(u16),
-        .outcome = std.enums.fromInt(proxy.CaptureOutcome, try cursor.byte()) orelse return error.InvalidExchange,
+        .outcome = std.enums.fromInt(buffer_support.Outcome, try cursor.byte()) orelse return error.InvalidExchange,
         .finished_at_ms = try cursor.int(i64),
     };
 }
@@ -260,10 +266,8 @@ fn writeInt(writer: *std.Io.Writer, comptime T: type, value: T) !void {
     try writer.writeAll(&bytes);
 }
 
-const Cursor = @import("Cursor.zig");
-
 test "effect protocol round trips all effect variants and rejects trailing bytes" {
-    var batch: effects.Batch = .{ .len = 3 };
+    var batch: BatchType = .{ .len = 3 };
     batch.items[0] = .{ .record_command = .{
         .command = "git status",
         .cwd = "/work",
@@ -283,7 +287,7 @@ test "effect protocol round trips all effect variants and rejects trailing bytes
     try std.testing.expectEqual(@as(u64, 9), decoded.event_id);
     try std.testing.expectEqualStrings("git status", decoded.batch.items[0].record_command.command);
     try std.testing.expectEqualStrings("call-1", decoded.batch.items[0].record_command.tool_call_id);
-    try std.testing.expectEqual(core.schema.AgentReportState.working, decoded.batch.items[1].agent_evidence.state);
+    try std.testing.expectEqual(AgentReportStateType.working, decoded.batch.items[1].agent_evidence.state);
     try std.testing.expectEqualStrings("Observed", decoded.batch.items[2].notification.message);
     storage[encoded.len] = 0;
     try std.testing.expectError(error.TrailingFrame, decodeEffects(storage[0 .. encoded.len + 1]));

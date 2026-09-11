@@ -1,4 +1,5 @@
+const types = @import("types.zig");
 const ClientLayoutSplit = @This();
-const source_namespace = @import("types.zig");
-axis: source_namespace.ClientLayoutAxis,
+
+axis: types.ClientLayoutAxis,
 ratio: u16,

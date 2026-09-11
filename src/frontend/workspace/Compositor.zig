@@ -1,32 +1,38 @@
-/// Presentation-owned cache for one active tab. It borrows an immutable
-/// multiplexer model during composition and returns the exact model work that
-/// may be committed only after the host flush succeeds.
-const Compositor = @This();
 const std = @import("std");
-const source_namespace = @import("multiplexer.zig");
+const BufferType = @import("telar-core").Buffer;
+const RectType = @import("telar-core").Rect;
+const TabLocationType = @import("telar-core").TabLocation;
 const BorderTheme = @import("BorderTheme.zig");
-const CopyProjection = @import("telar-client").workspace.multiplexer.CopyProjection;
-const layout_mod = @import("telar-client").workspace.layout;
-const presentation = @import("../presentation/root.zig");
+const CopyProjection = @import("telar-client").CopyProjection;
+const PaneBottomReservationType = @import("telar-client").PaneBottomReservation;
+const LayoutSnapshot = @import("telar-client").LayoutSnapshot;
+const PlanType = @import("../presentation/Plan.zig");
+const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 const PaneProjection = @import("PaneProjection.zig");
 const Composition = @import("Composition.zig");
 const CompositionResult = @import("CompositionResult.zig");
 const RenderStats = @import("RenderStats.zig");
+const multiplexer = @import("multiplexer.zig");
 const IncrementalComposition = @import("IncrementalComposition.zig");
 const CompositionInput = @import("CompositionInput.zig");
 const CopyChangeComposition = @import("CopyChangeComposition.zig");
-const Model = @import("telar-client").workspace.multiplexer.Model;
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+/// Presentation-owned cache for one active tab. It borrows an immutable
+/// multiplexer model during composition and returns the exact model work that
+/// may be committed only after the host flush succeeds.
+const Compositor = @This();
+
 gpa: std.mem.Allocator,
-composed: ?source_namespace.ui.Buffer = null,
-area: source_namespace.ui.Rect = .{},
-source: ?source_namespace.schema.TabLocation = null,
+composed: ?BufferType = null,
+area: RectType = .{},
+source: ?TabLocationType = null,
 border_theme: ?BorderTheme = null,
 copy: ?CopyProjection = null,
-bottom_reservation: ?layout_mod.PaneBottomReservation = null,
-bottom_reservation_area: source_namespace.ui.Rect = .{},
-layout_snapshot: layout_mod.Snapshot = .{},
-fullscreen_labels: presentation.pane_labels.Plan = .{},
-panes: [source_namespace.max_panes]PaneProjection = undefined,
+bottom_reservation: ?PaneBottomReservationType = null,
+bottom_reservation_area: RectType = .{},
+layout_snapshot: LayoutSnapshot = .{},
+fullscreen_labels: PlanType = .{},
+panes: [max_panes_per_tab]PaneProjection = undefined,
 pane_count: u8 = 0,
 progress_animation_frame: u8 = 0,
 invalidated: bool = true,
@@ -125,7 +131,7 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
             const pane = model.findConst(view.pane_id) orelse continue;
             full_stats.panes += 1;
             if (model.layout.hasBorders()) {
-                compositor.fullscreen_labels = source_namespace.drawBorder(target, .{
+                compositor.fullscreen_labels = multiplexer.drawBorder(target, .{
                     .view = view,
                     .foreground_name = pane.foregroundName(),
                     .fullscreen_model = if (model.layout.isFullscreen()) model else null,
@@ -146,7 +152,7 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
                 while (x < cols) : (x += 1) {
                     const source = &pane.buffer.cells[@as(usize, y) * pane.buffer.w + x];
                     var style = source.style;
-                    if (source_namespace.copyView(options.copy, pane.id)) |copy| {
+                    if (multiplexer.copyView(options.copy, pane.id)) |copy| {
                         const absolute_y = pane.scroll.offset + y;
                         if (copy.selected(x, absolute_y)) {
                             style.flags.inverse = !style.flags.inverse;
@@ -161,16 +167,16 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
                 }
             }
             if (view.focused) {
-                source_namespace.setPaneCursor(screen, pane, .{
+                multiplexer.setPaneCursor(screen, pane, .{
                     .content = view.content,
-                    .copy = source_namespace.copyView(options.copy, pane.id),
+                    .copy = multiplexer.copyView(options.copy, pane.id),
                 });
             }
             if (pane.graphics_placeholder) {
-                source_namespace.drawGraphicsPlaceholder(target, view.content, options.palette);
+                multiplexer.drawGraphicsPlaceholder(target, view.content, options.palette);
             }
         }
-        full_stats.damaged_cells = try source_namespace.syncComposed(screen, target);
+        full_stats.damaged_cells = try multiplexer.syncComposed(screen, target);
         break :full full_stats;
     } else incremental: {
         var context: IncrementalComposition = .{
@@ -197,7 +203,7 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
 /// ```zig
 /// compositor.copyArea(destination, area);
 /// ```
-pub fn copyArea(compositor: *const Compositor, destination: *source_namespace.ui.Buffer, area: source_namespace.ui.Rect) void {
+pub fn copyArea(compositor: *const Compositor, destination: *BufferType, area: RectType) void {
     const source = if (compositor.composed) |*buffer| buffer else return;
     if (source.w != destination.w or source.h != destination.h) {
         return;
@@ -219,7 +225,7 @@ pub fn copyArea(compositor: *const Compositor, destination: *source_namespace.ui
 /// ```zig
 /// const layout = compositor.layoutSnapshot();
 /// ```
-pub fn layoutSnapshot(compositor: *const Compositor) *const layout_mod.Snapshot {
+pub fn layoutSnapshot(compositor: *const Compositor) *const LayoutSnapshot {
     return &compositor.layout_snapshot;
 }
 
@@ -229,13 +235,13 @@ pub fn layoutSnapshot(compositor: *const Compositor) *const layout_mod.Snapshot 
 /// ```zig
 /// const shelf = compositor.bottomReservationArea();
 /// ```
-pub fn bottomReservationArea(compositor: *const Compositor) source_namespace.ui.Rect {
+pub fn bottomReservationArea(compositor: *const Compositor) RectType {
     return compositor.bottom_reservation_area;
 }
 
 /// Returns owned labels from the last cell composition for deferred media.
 /// Example: `const labels = compositor.fullscreenLabels();`.
-pub fn fullscreenLabels(compositor: *const Compositor) *const presentation.pane_labels.Plan {
+pub fn fullscreenLabels(compositor: *const Compositor) *const PlanType {
     return &compositor.fullscreen_labels;
 }
 
@@ -284,7 +290,7 @@ fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition)
             }
 
             stats.cells += end - start;
-            stats.damaged_cells += try source_namespace.syncPaneRange(.{
+            stats.damaged_cells += try multiplexer.syncPaneRange(.{
                 .screen = context.screen,
                 .composed = context.target,
                 .pane = pane,
@@ -293,13 +299,13 @@ fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition)
                 .source_y = y,
                 .start = start,
                 .end = end,
-                .copy = source_namespace.copyView(compositor.copy, pane.id),
+                .copy = multiplexer.copyView(compositor.copy, pane.id),
             });
         }
         if (view.focused) {
-            source_namespace.setPaneCursor(context.screen, pane, .{
+            multiplexer.setPaneCursor(context.screen, pane, .{
                 .content = view.content,
-                .copy = source_namespace.copyView(compositor.copy, pane.id),
+                .copy = multiplexer.copyView(compositor.copy, pane.id),
             });
         }
     }
@@ -318,7 +324,7 @@ fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposit
             continue;
         }
 
-        compositor.fullscreen_labels = source_namespace.drawBorder(context.target, .{
+        compositor.fullscreen_labels = multiplexer.drawBorder(context.target, .{
             .view = view,
             .foreground_name = pane.foregroundName(),
             .fullscreen_model = if (context.model.layout.isFullscreen()) context.model else null,
@@ -327,13 +333,13 @@ fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposit
             .animation_frame = options.progress_animation_frame,
             .palette = options.palette,
         });
-        _ = try source_namespace.syncComposedRow(context.screen, context.target, view.outer.y);
+        _ = try multiplexer.syncComposedRow(context.screen, context.target, view.outer.y);
     }
 }
 
 fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, input: CopyChangeComposition) !void {
-    const previous = source_namespace.copyView(context.previous_copy, input.pane.id);
-    const next = source_namespace.copyView(compositor.copy, input.pane.id);
+    const previous = multiplexer.copyView(context.previous_copy, input.pane.id);
+    const next = multiplexer.copyView(compositor.copy, input.pane.id);
     if (std.meta.eql(previous, next)) {
         return;
     }
@@ -341,8 +347,8 @@ fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, 
     var source_y: u16 = 0;
     while (source_y < input.rows) : (source_y += 1) {
         const absolute_y = input.pane.scroll.offset + source_y;
-        const before = source_namespace.copySelectionRange(previous, absolute_y, input.cols);
-        const after = source_namespace.copySelectionRange(next, absolute_y, input.cols);
+        const before = multiplexer.copySelectionRange(previous, absolute_y, input.cols);
+        const after = multiplexer.copySelectionRange(next, absolute_y, input.cols);
         if (std.meta.eql(before, after)) {
             continue;
         }
@@ -360,7 +366,7 @@ fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, 
         }
 
         input.stats.cells += end - start;
-        input.stats.damaged_cells += try source_namespace.syncPaneRange(.{
+        input.stats.damaged_cells += try multiplexer.syncPaneRange(.{
             .screen = context.screen,
             .composed = context.target,
             .pane = input.pane,
@@ -374,8 +380,8 @@ fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, 
     }
 }
 
-fn paneProjectionChanged(compositor: *Compositor, model: *const Model) bool {
-    var next: [source_namespace.max_panes]PaneProjection = undefined;
+fn paneProjectionChanged(compositor: *Compositor, model: *const MultiplexerModel) bool {
+    var next: [max_panes_per_tab]PaneProjection = undefined;
     var next_count: u8 = 0;
     for (compositor.layout_snapshot.views()) |view| {
         const pane = model.findConst(view.pane_id) orelse continue;
@@ -383,7 +389,7 @@ fn paneProjectionChanged(compositor: *Compositor, model: *const Model) bool {
             .pane_id = pane.id,
             .cols = pane.buffer.w,
             .rows = pane.buffer.h,
-            .scroll_offset = source_namespace.highlightedScrollOffset(compositor.copy, pane),
+            .scroll_offset = multiplexer.highlightedScrollOffset(compositor.copy, pane),
             .graphics_placeholder = pane.graphics_placeholder,
             .progress_state = pane.progress_state,
             .progress_percent = pane.progress_percent,

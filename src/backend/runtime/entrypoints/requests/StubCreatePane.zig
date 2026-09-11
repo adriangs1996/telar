@@ -1,16 +1,18 @@
+const PaneLaunchedType = @import("../../../pane/PaneLaunched.zig");
+const CreatePaneType = @import("../../application/commands/CreatePane.zig");
+const CreatePaneExecutorType = @import("../../application/commands/CreatePaneExecutor.zig");
 const StubCreatePane = @This();
-const pane_mod = @import("../../../pane/root.zig");
-const create_pane_commands = @import("../../application/commands/create_pane.zig");
-result: ?pane_mod.PaneLaunched = null,
+
+result: ?PaneLaunchedType = null,
 failure: ?anyerror = null,
 call_count: usize = 0,
-last_command: ?create_pane_commands.CreatePane = null,
+last_command: ?CreatePaneType = null,
 
-pub fn executor(stub: *StubCreatePane) create_pane_commands.CreatePaneExecutor {
+pub fn executor(stub: *StubCreatePane) CreatePaneExecutorType {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, command: create_pane_commands.CreatePane) anyerror!pane_mod.PaneLaunched {
+fn execute(context: *anyopaque, command: CreatePaneType) anyerror!PaneLaunchedType {
     const stub: *StubCreatePane = @ptrCast(@alignCast(context));
     stub.call_count += 1;
     stub.last_command = command;

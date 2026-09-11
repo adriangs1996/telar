@@ -1,5 +1,7 @@
+const PaneIdType = @import("telar-core").PaneId;
+const ScrollType = @import("telar-core").Scroll;
 const CopyModeFrame = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 previous_offset: u32,
-scroll: source_namespace.schema.frame.Scroll,
+scroll: ScrollType,

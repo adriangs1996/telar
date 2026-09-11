@@ -1,10 +1,11 @@
-const PlanWorkspaceArrivalHandler = @This();
-const Bookmarks = @import("WorkspaceArrivalPlanningBookmarks.zig");
-const pane_open_delivery = @import("../panes/root.zig").pane_open_delivery;
-const source_namespace = @import("workspace_arrival_planning.zig");
-const client_model = @import("../../root.zig").model;
+const WorkspaceArrivalPlanningBookmarks = @import("WorkspaceArrivalPlanningBookmarks.zig");
+const OpenedPaneType = @import("../panes/OpenedPane.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const WorkspaceArrivalType = @import("../../model/WorkspaceArrival.zig");
 const std = @import("std");
-bookmarks: Bookmarks,
+const PlanWorkspaceArrivalHandler = @This();
+
+bookmarks: WorkspaceArrivalPlanningBookmarks,
 
 /// Constructs one runtime-confirmed arrival and retains a saved layout
 /// only when its bookmark names the exact confirmed tab.
@@ -12,7 +13,7 @@ bookmarks: Bookmarks,
 /// ```zig
 /// const arrival = handler.execute(opened, requested_size);
 /// ```
-pub fn execute(handler: *const PlanWorkspaceArrivalHandler, opened: pane_open_delivery.OpenedPane, size: source_namespace.schema.TerminalSize) client_model.WorkspaceArrival {
+pub fn execute(handler: *const PlanWorkspaceArrivalHandler, opened: OpenedPaneType, size: TerminalSizeType) WorkspaceArrivalType {
     const bookmark = handler.bookmarks.find(
         handler.bookmarks.context,
         opened.location.workspace,

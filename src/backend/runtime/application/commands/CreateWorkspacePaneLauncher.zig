@@ -1,5 +1,6 @@
+const CreateWorkspaceLaunchPane = @import("CreateWorkspaceLaunchPane.zig");
+const CreateWorkspaceLaunchedPane = @import("CreateWorkspaceLaunchedPane.zig");
 const PaneLauncher = @This();
-const LaunchPane = @import("CreateWorkspaceLaunchPane.zig");
-const LaunchedPane = @import("CreateWorkspaceLaunchedPane.zig");
+
 context: *anyopaque,
-launch: *const fn (*anyopaque, LaunchPane) anyerror!LaunchedPane,
+launch: *const fn (*anyopaque, CreateWorkspaceLaunchPane) anyerror!CreateWorkspaceLaunchedPane,

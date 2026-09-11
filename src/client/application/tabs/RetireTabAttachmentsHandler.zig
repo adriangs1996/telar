@@ -1,14 +1,17 @@
-const RetireTabAttachmentsHandler = @This();
-const client_model = @import("../../root.zig").model;
-const pane_paste = @import("../input/root.zig").pane_paste;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const Effects = @import("TabAttachmentRetirementEffects.zig");
-const source_namespace = @import("tab_attachment_retirement.zig");
+const ModelType = @import("../../model/Model.zig");
+const PanePasteEffects = @import("../input/PanePasteEffects.zig");
+const PaneFocusReportingEffects = @import("../panes/PaneFocusReportingEffects.zig");
+const TabAttachmentRetirementEffects = @import("TabAttachmentRetirementEffects.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const PanePasteHandlerType = @import("../input/PanePasteHandler.zig");
 const std = @import("std");
-model: *client_model.Model,
-paste_effects: pane_paste.Effects,
-focus_effects: pane_focus_reporting.Effects,
-effects: Effects,
+const PaneFocusReportingHandlerType = @import("../panes/PaneFocusReportingHandler.zig");
+const RetireTabAttachmentsHandler = @This();
+
+model: *ModelType,
+paste_effects: PanePasteEffects,
+focus_effects: PaneFocusReportingEffects,
+effects: TabAttachmentRetirementEffects,
 
 /// Finishes tab-owned input authorities, delivers every required detach
 /// in pane order and commits operational detachment only after all effects.
@@ -16,11 +19,11 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(location);
 /// ```
-pub fn execute(handler: *RetireTabAttachmentsHandler, location: source_namespace.schema.TabLocation) !void {
+pub fn execute(handler: *RetireTabAttachmentsHandler, location: TabLocationType) !void {
     const plan = try handler.model.planTabDetachment(location);
 
     if (plan.owns_paste) {
-        var paste_handler: pane_paste.PanePasteHandler = .{
+        var paste_handler: PanePasteHandlerType = .{
             .model = handler.model,
             .effects = handler.paste_effects,
         };
@@ -29,7 +32,7 @@ pub fn execute(handler: *RetireTabAttachmentsHandler, location: source_namespace
     }
 
     if (plan.owns_reported_focus) {
-        var focus_handler: pane_focus_reporting.PaneFocusReportingHandler = .{
+        var focus_handler: PaneFocusReportingHandlerType = .{
             .model = handler.model,
             .effects = handler.focus_effects,
         };

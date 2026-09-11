@@ -1,32 +1,33 @@
+const InputType = @import("Input.zig");
+const NotificationLevelType = @import("telar-core").NotificationLevel;
+const default_notification_duration_ms_module = @import("telar-core").default_notification_duration_ms;
+const NotificationTargetType = @import("telar-core").NotificationTarget;
+const max_notification_title_bytes_module = @import("telar-core").max_notification_title_bytes;
+const max_notification_message_bytes_module = @import("telar-core").max_notification_message_bytes;
+const encodeShowNotification_module = @import("telar-core").encodeShowNotification;
 const Notification = @This();
-const source_namespace = @import("action.zig");
-pub const Input = struct {
-    level: source_namespace.schema.NotificationLevel = .info,
-    duration_ms: u32 = source_namespace.schema.default_notification_duration_ms,
-    target: source_namespace.schema.NotificationTarget = .none,
-    title: []const u8,
-    message: []const u8,
-};
 
-level: source_namespace.schema.NotificationLevel = .info,
-duration_ms: u32 = source_namespace.schema.default_notification_duration_ms,
-target: source_namespace.schema.NotificationTarget = .none,
-title_bytes: [source_namespace.schema.max_notification_title_bytes]u8 = @splat(0),
+pub const Input = @import("Input.zig");
+
+level: NotificationLevelType = .info,
+duration_ms: u32 = default_notification_duration_ms_module,
+target: NotificationTargetType = .none,
+title_bytes: [max_notification_title_bytes_module]u8 = @splat(0),
 title_len: u8,
-message_bytes: [source_namespace.schema.max_notification_message_bytes]u8 = @splat(0),
+message_bytes: [max_notification_message_bytes_module]u8 = @splat(0),
 message_len: u8,
 
 /// Copies a validated notification into bounded inline storage.
 /// For example: `const notification = try Notification.init(.{ .title = "Ready", .message = "Open result" });`.
-pub fn init(input: Input) !Notification {
+pub fn init(input: InputType) !Notification {
     // Reuse the wire validator so Lua and plugins cannot construct a value
     // that the runtime will reject after the effect batch is committed.
     var validation_buffer: [
         1 + 8 + 1 + 4 + 1 + 8 + 2 +
-            source_namespace.schema.max_notification_title_bytes + 2 +
-            source_namespace.schema.max_notification_message_bytes
+            max_notification_title_bytes_module + 2 +
+            max_notification_message_bytes_module
     ]u8 = undefined;
-    _ = try source_namespace.schema.encodeShowNotification(&validation_buffer, .{
+    _ = try encodeShowNotification_module(&validation_buffer, .{
         .request_id = @enumFromInt(1),
         .notification = .{
             .level = input.level,

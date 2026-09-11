@@ -1,7 +1,8 @@
-const RelayOptions = @This();
-const Route = @import("H2Route.zig");
-const provider = @import("../provider/request_support.zig");
+const H2Route = @import("H2Route.zig");
+const types = @import("../../agent/types.zig");
 const Transformation = @import("Transformation.zig");
-route: Route,
-dialect: provider.ApiDialect,
+const RelayOptions = @This();
+
+route: H2Route,
+dialect: types.ApiDialect,
 transformation: ?Transformation = null,

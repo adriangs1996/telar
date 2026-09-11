@@ -1,19 +1,22 @@
-const Capture = @This();
-const source_namespace = @import("pane_open_delivery.zig");
+const pane_open_delivery = @import("pane_open_delivery.zig");
 const OpenedPane = @import("OpenedPane.zig");
-const client_model = @import("../../root.zig").model;
-const Effects = @import("PaneOpenDeliveryEffects.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const PaneSplitType = @import("../../model/PaneSplit.zig");
+const PaneAttachmentType = @import("../../model/PaneAttachment.zig");
+const PaneOpenDeliveryEffects = @import("PaneOpenDeliveryEffects.zig");
 const WorkspaceCreation = @import("WorkspaceCreation.zig");
 const PaneSplitConfirmation = @import("PaneSplitConfirmation.zig");
 const PaneAttachmentConfirmation = @import("PaneAttachmentConfirmation.zig");
-effect: ?source_namespace.Effect = null,
-opened: ?OpenedPane = null,
-requested_size: ?source_namespace.schema.TerminalSize = null,
-split: ?client_model.PaneSplit = null,
-attachment: ?client_model.PaneAttachment = null,
-failure: ?source_namespace.Effect = null,
+const Capture = @This();
 
-pub fn effects(capture: *Capture) Effects {
+effect: ?pane_open_delivery.Effect = null,
+opened: ?OpenedPane = null,
+requested_size: ?TerminalSizeType = null,
+split: ?PaneSplitType = null,
+attachment: ?PaneAttachmentType = null,
+failure: ?pane_open_delivery.Effect = null,
+
+pub fn effects(capture: *Capture) PaneOpenDeliveryEffects {
     return .{
         .context = capture,
         .arrive_workspace = arriveWorkspace,
@@ -46,7 +49,7 @@ fn confirmAttachment(raw_context: *anyopaque, confirmation: PaneAttachmentConfir
     try capture.record(.confirm_attachment, confirmation.opened);
 }
 
-fn record(capture: *Capture, effect: source_namespace.Effect, opened: OpenedPane) !void {
+fn record(capture: *Capture, effect: pane_open_delivery.Effect, opened: OpenedPane) !void {
     capture.effect = effect;
     capture.opened = opened;
 

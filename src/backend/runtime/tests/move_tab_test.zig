@@ -1,17 +1,16 @@
 //! Vertical contract tests for the runtime move-tab flow.
 
+const RepositoryType = @import("../../workspace/Repository.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const StateType = @import("../../workspace/State.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const move_tab_commands = @import("../application/commands/move_tab.zig");
-const move_tab_controller = @import("../entrypoints/requests/move_tab.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const workspace_mod = @import("../../workspace/root.zig");
+const MoveTabTestEventCapture = @import("MoveTabTestEventCapture.zig");
+const MoveTabHandlerType = @import("../application/commands/MoveTabHandler.zig");
+const ResponseQueueType = @import("../delivery/ResponseQueue.zig");
+const MoveTabController = @import("../entrypoints/requests/MoveTabController.zig");
 
-const schema = core.schema;
-
-const EventCapture = @import("MoveTabTestEventCapture.zig");
-
-fn appendTestingTab(workspaces: *workspace_mod.Repository, workspace: schema.WorkspaceLocation) !schema.TabLocation {
+fn appendTestingTab(workspaces: *RepositoryType, workspace: WorkspaceLocationType) !TabLocationType {
     const aggregate = workspaces.find(workspace) orelse return error.WorkspaceNotFound;
     const tab_id = try workspaces.nextTabId();
     const created = try aggregate.createTab(tab_id, "logs");
@@ -20,18 +19,18 @@ fn appendTestingTab(workspaces: *workspace_mod.Repository, workspace: schema.Wor
 }
 
 test "a committed tab move survives response queue backpressure" {
-    var state: workspace_mod.State = .{};
-    var workspaces = workspace_mod.Repository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const initial = (try workspaces.ensure("/work/project")).location;
     const moved_location = try appendTestingTab(&workspaces, initial.workspace);
     const revision = workspaces.reader().revision();
-    var events: EventCapture = .{};
-    var handler: move_tab_commands.MoveTabHandler = .{
+    var events: MoveTabTestEventCapture = .{};
+    var handler: MoveTabHandlerType = .{
         .workspaces = &workspaces,
         .events = events.publisher(),
     };
-    var responses: delivery_mod.ResponseQueue = .{};
+    var responses: ResponseQueueType = .{};
 
     while (responses.len < responses.items.len) {
         try responses.push(.{ .tab_moved = .{
@@ -41,7 +40,7 @@ test "a committed tab move survives response queue backpressure" {
         } });
     }
 
-    var controller = move_tab_controller.Controller.init(&responses, handler.executor());
+    var controller = MoveTabController.init(&responses, handler.executor());
     try std.testing.expectError(error.ResponseQueueFull, controller.moveTab(.{
         .request_id = @enumFromInt(31),
         .location = moved_location,

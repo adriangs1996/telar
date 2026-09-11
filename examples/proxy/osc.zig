@@ -1,5 +1,5 @@
 const std = @import("std");
-const vt = @import("ghostty-vt");
+const Scanner = @import("Scanner.zig");
 
 // OSC scanner for shell semantic markers.
 //
@@ -30,8 +30,6 @@ pub const Marker = union(enum) {
     title: []const u8,
 };
 
-pub const Scanner = @import("Scanner.zig");
-
 pub const esc = 0x1B;
 pub const bel = 0x07;
 pub const st = '\\';
@@ -39,8 +37,6 @@ pub const st = '\\';
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-const testing = std.testing;
 
 /// Drains every marker a scanner finds across the given chunks, so a test can
 /// state the chunk boundaries it wants to exercise.
@@ -62,7 +58,7 @@ fn collect(chunks: []const []const u8, out: *std.ArrayList(Marker), gpa: std.mem
 }
 
 fn expectMarkers(chunks: []const []const u8, expected: []const Marker) !void {
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var found: std.ArrayList(Marker) = .empty;
     defer {
         for (found.items) |m| if (m == .title) gpa.free(m.title);
@@ -70,11 +66,11 @@ fn expectMarkers(chunks: []const []const u8, expected: []const Marker) !void {
     }
     try collect(chunks, &found, gpa);
 
-    try testing.expectEqual(expected.len, found.items.len);
+    try std.testing.expectEqual(expected.len, found.items.len);
     for (expected, found.items) |want, got| {
         switch (want) {
-            .title => |t| try testing.expectEqualStrings(t, got.title),
-            else => try testing.expectEqual(want, got),
+            .title => |t| try std.testing.expectEqualStrings(t, got.title),
+            else => try std.testing.expectEqual(want, got),
         }
     }
 }
@@ -145,7 +141,7 @@ test "an oversized payload does not break recovery" {
     // Rewritten from the hand-rolled version, which asserted the payload was
     // dropped at a private capacity constant. The contract is recovery, not the
     // capacity, so this asserts only that the next sequence still parses.
-    const gpa = testing.allocator;
+    const gpa = std.testing.allocator;
     var chunk: std.ArrayList(u8) = .empty;
     defer chunk.deinit(gpa);
     try chunk.appendSlice(gpa, "\x1b]2;");
@@ -160,6 +156,6 @@ test "an oversized payload does not break recovery" {
     }
     try collect(&.{chunk.items}, &found, gpa);
 
-    try testing.expect(found.items.len >= 1);
-    try testing.expectEqual(Marker.prompt_start, found.items[found.items.len - 1]);
+    try std.testing.expect(found.items.len >= 1);
+    try std.testing.expectEqual(Marker.prompt_start, found.items[found.items.len - 1]);
 }

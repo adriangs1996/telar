@@ -1,12 +1,15 @@
-const RemovalCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("close_tab.zig");
+const ModelType = @import("../../model/Model.zig");
+const types = @import("../../model/types.zig");
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const close_tab = @import("close_tab.zig");
 const RemovalDelivery = @import("RemovalDelivery.zig");
-model: *const client_model.Model,
+const RemovalCapture = @This();
+
+model: *const ModelType,
 calls: usize = 0,
-commit: ?client_model.TabRemovalCommit = null,
-previous_workspace: ?source_namespace.schema.WorkspaceId = null,
-directive: source_namespace.TabRemovalDirective = .continue_running,
+commit: ?types.TabRemovalCommit = null,
+previous_workspace: ?WorkspaceIdType = null,
+directive: close_tab.TabRemovalDirective = .continue_running,
 observed_commit: bool = false,
 failure: ?anyerror = null,
 
@@ -17,7 +20,7 @@ pub fn port(capture: *RemovalCapture) RemovalDelivery {
     };
 }
 
-fn deliver(context: *anyopaque, commit: client_model.TabRemovalCommit, previous_workspace: ?source_namespace.schema.WorkspaceId) !source_namespace.TabRemovalDirective {
+fn deliver(context: *anyopaque, commit: types.TabRemovalCommit, previous_workspace: ?WorkspaceIdType) !close_tab.TabRemovalDirective {
     const capture: *RemovalCapture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.commit = commit;
@@ -30,7 +33,7 @@ fn deliver(context: *anyopaque, commit: client_model.TabRemovalCommit, previous_
     return capture.directive;
 }
 
-fn observesCommit(capture: *const RemovalCapture, commit: client_model.TabRemovalCommit) bool {
+fn observesCommit(capture: *const RemovalCapture, commit: types.TabRemovalCommit) bool {
     const version = capture.model.version();
     return switch (commit) {
         .removed => |removal| capture.model.tabLocation(removal.removed.tab_id) == null and

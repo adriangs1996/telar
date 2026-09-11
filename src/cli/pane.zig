@@ -2,15 +2,16 @@
 //! without an attached UI client.
 
 const std = @import("std");
-const core = @import("telar-core");
-const agent = @import("agent.zig");
+const PaneOptions = @import("arguments/PaneOptions.zig");
+const SessionType = @import("Session.zig");
 const control = @import("control.zig");
-const parser = @import("parser.zig");
-
-const Io = std.Io;
-const File = Io.File;
-const schema = core.schema;
-const PaneOptions = parser.PaneOptions;
+const agent = @import("agent.zig");
+const ExecutionContextType = @import("ExecutionContext.zig");
+const PaneRefType = @import("PaneRef.zig");
+const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
+const raw_module = @import("telar-core").raw;
+const values = @import("arguments/values.zig");
+const SnapshotType = @import("Snapshot.zig");
 
 /// Runs one pane command and returns the process exit code.
 ///
@@ -18,10 +19,10 @@ const PaneOptions = parser.PaneOptions;
 /// std.process.exit(try pane.run(process_init, options));
 /// ```
 pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
-    var session = try control.Session.open(init, options.socket);
+    var session = try SessionType.open(init, options.socket);
     defer session.close();
     var output_buffer: [16 * 1024]u8 = undefined;
-    var output = File.stdout().writerStreaming(init.io, &output_buffer);
+    var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;
     defer writer.flush() catch {};
 
@@ -34,8 +35,8 @@ pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
     };
 }
 
-fn execute(session: *control.Session, options: PaneOptions, context: control.ExecutionContext) !u8 {
-    const pane: control.Session.PaneRef = if (options.action == .focus)
+fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContextType) !u8 {
+    const pane: PaneRefType = if (options.action == .focus)
         .{
             .pane_id = try control.currentPaneId(context.environ),
             .pane_generation = try control.currentPaneGeneration(context.environ),
@@ -61,7 +62,7 @@ fn execute(session: *control.Session, options: PaneOptions, context: control.Exe
             }
         },
         .send_keys => {
-            var storage: [schema.max_pane_text_input_bytes + 1]u8 = undefined;
+            var storage: [max_pane_text_input_bytes_module + 1]u8 = undefined;
             const text = std.mem.span(options.text.?);
             @memcpy(storage[0..text.len], text);
             var len = text.len;
@@ -77,7 +78,7 @@ fn execute(session: *control.Session, options: PaneOptions, context: control.Exe
             if (options.json) {
                 try context.writer.print("{{\"changed\":{},\"focused_pane_id\":{d},\"reason\":\"{s}\"}}\n", .{
                     result.outcome == .focused,
-                    schema.id.raw(result.focused_pane_id),
+                    raw_module(result.focused_pane_id),
                     @tagName(result.outcome),
                 });
             }
@@ -90,14 +91,14 @@ fn execute(session: *control.Session, options: PaneOptions, context: control.Exe
 /// Panes without an agent are still addressable: the generation comes from
 /// the agent snapshot when one exists, and otherwise generation 0 asks the
 /// runtime for the pane's current generation.
-fn resolvePane(session: *control.Session, target: parser.Target, environ: std.process.Environ) !control.Session.PaneRef {
+fn resolvePane(session: *SessionType, target: values.Target, environ: std.process.Environ) !PaneRefType {
     const pane_id: u64 = switch (target) {
         .current => try control.currentPaneId(environ),
         .pane => |pane| pane,
         .name => return error.InvalidPaneId,
     };
 
-    var snapshot: control.Snapshot = .{};
+    var snapshot: SnapshotType = .{};
     try session.fetchAgents(&snapshot);
     if (try snapshot.resolve(.{ .pane = pane_id }, environ)) |known| {
         return .{ .pane_id = known.pane_id, .pane_generation = known.pane_generation };

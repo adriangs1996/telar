@@ -1,19 +1,24 @@
-const OpenPaneHandler = @This();
-const source_namespace = @import("open_pane.zig");
+const Repository = @import("../../../workspace/Repository.zig");
 const Panes = @import("Panes.zig");
-const LaunchAuthority = @import("OpenPaneLaunchAuthority.zig");
-const GeometryLease = @import("OpenPaneGeometryLease.zig");
-const EventPublisher = @import("OpenPaneEventPublisher.zig");
+const OpenPaneLaunchAuthority = @import("OpenPaneLaunchAuthority.zig");
+const OpenPaneGeometryLease = @import("OpenPaneGeometryLease.zig");
+const OpenPaneEventPublisher = @import("OpenPaneEventPublisher.zig");
 const OpenPane = @import("OpenPane.zig");
 const OpenPaneResult = @import("OpenPaneResult.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
 const OpenPaneExecutor = @import("OpenPaneExecutor.zig");
-const pane_mod = @import("../../../pane/root.zig");
-const workspace_mod = @import("../../../workspace/root.zig");
-workspaces: *source_namespace.WorkspaceRepository,
+const PaneLaunchedType = @import("../../../pane/PaneLaunched.zig");
+const Proposal = @import("../../../workspace/Proposal.zig");
+const open_pane = @import("open_pane.zig");
+const WorkspaceCreatedType = @import("../../../workspace/WorkspaceCreated.zig");
+const OpenPaneHandler = @This();
+
+workspaces: *Repository,
 panes: Panes,
-authority: LaunchAuthority,
-geometry: GeometryLease,
-events: EventPublisher,
+authority: OpenPaneLaunchAuthority,
+geometry: OpenPaneGeometryLease,
+events: OpenPaneEventPublisher,
 
 /// Selects an existing pane by pane or workspace, or atomically reuses or
 /// launches the default pane for a launch cwd. New workspaces stay
@@ -28,9 +33,9 @@ pub fn execute(handler: *OpenPaneHandler, command: OpenPane) !OpenPaneResult {
     const active = switch (command.target) {
         .pane => |pane_id| handler.panes.find(handler.panes.context, pane_id) orelse return error.PaneNotFound,
         .workspace => |workspace_id| workspace: {
-            const workspace_location: source_namespace.schema.WorkspaceLocation = .{ .workspace = workspace_id };
+            const workspace_location: WorkspaceLocationType = .{ .workspace = workspace_id };
             const tab_id = handler.workspaces.reader().defaultTab(workspace_location) orelse return error.WorkspaceNotFound;
-            const location: source_namespace.schema.TabLocation = .{
+            const location: TabLocationType = .{
                 .workspace = workspace_location,
                 .tab_id = tab_id,
             };
@@ -59,10 +64,10 @@ pub fn executor(handler: *OpenPaneHandler) OpenPaneExecutor {
     return .{ .context = handler, .execute_fn = executeErased };
 }
 
-fn openDefault(handler: *OpenPaneHandler, command: OpenPane, created: *bool) !pane_mod.PaneLaunched {
+fn openDefault(handler: *OpenPaneHandler, command: OpenPane, created: *bool) !PaneLaunchedType {
     const launch = command.launch orelse return error.InvalidOpenRequest;
     const launch_cwd = try handler.authority.prepare(handler.authority.context, .{ .launch = launch });
-    var proposal: ?workspace_mod.WorkspaceProposal = null;
+    var proposal: ?Proposal = null;
     defer if (proposal) |*candidate| {
         candidate.rollback();
     };
@@ -97,10 +102,10 @@ fn openDefault(handler: *OpenPaneHandler, command: OpenPane, created: *bool) !pa
         .launch = launch,
         .launch_cwd = launch_cwd,
         .workspace_path = workspace_path,
-    }) catch |err| return source_namespace.mapLaunchError(err);
+    }) catch |err| return open_pane.mapLaunchError(err);
 
     if (proposal) |*candidate| {
-        const workspace_created = workspace_mod.WorkspaceCreated.init(location, candidate.name()) catch unreachable;
+        const workspace_created = WorkspaceCreatedType.init(location, candidate.name()) catch unreachable;
         _ = candidate.commit();
         handler.events.publish(handler.events.context, .{ .workspace_created = workspace_created });
     }

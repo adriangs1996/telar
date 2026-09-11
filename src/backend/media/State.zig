@@ -1,13 +1,15 @@
-const State = @This();
-const KittyFramingCounter = @import("../history/root.zig").escape.KittyFramingCounter;
-const shared_transfer = @import("shared_transfer.zig");
+const KittyFramingCounter = @import("../history/KittyFramingCounter.zig");
+const PreparedTransfersType = @import("PreparedTransfers.zig");
+const QueueType = @import("Queue.zig");
 const std = @import("std");
+const State = @This();
+
 kitty_framing: KittyFramingCounter = .{},
 kitty_loading_chunks: usize = 0,
 /// Generations the media actor froze for local clients, awaiting
 /// adoption on the runtime thread.
-prepared_transfers: shared_transfer.PreparedTransfers = .{},
-transfer_preparation: @import("transfer_preparation.zig").Queue = .{},
+prepared_transfers: PreparedTransfersType = .{},
+transfer_preparation: QueueType = .{},
 /// Attachments whose client takes shared-memory names. Written by the
 /// runtime thread, read by the media actor to decide whether freezing a
 /// generation right after decode can pay off.

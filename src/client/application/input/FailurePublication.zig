@@ -1,4 +1,5 @@
+const DiagnosticType = @import("../../config/Diagnostic.zig");
 const FailurePublication = @This();
-const config = @import("../../config/root.zig");
-diagnostic: config.Diagnostic,
+
+diagnostic: DiagnosticType,
 title: []const u8,

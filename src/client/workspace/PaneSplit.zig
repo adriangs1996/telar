@@ -1,8 +1,11 @@
-const PaneSplit = @This();
-const source_namespace = @import("multiplexer.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
 const layout_mod = @import("layout_support.zig");
-existing_pane: source_namespace.schema.PaneId,
-new_pane: source_namespace.schema.PaneId,
-location: source_namespace.schema.TabLocation,
+const RectType = @import("telar-core").Rect;
+const PaneSplit = @This();
+
+existing_pane: PaneIdType,
+new_pane: PaneIdType,
+location: TabLocationType,
 axis: layout_mod.Axis,
-area: source_namespace.ui.Rect,
+area: RectType,

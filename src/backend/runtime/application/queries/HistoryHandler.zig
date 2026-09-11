@@ -1,8 +1,9 @@
-const Handler = @This();
 const ServicePort = @import("ServicePort.zig");
-const Request = @import("HistoryRequest.zig");
-const source_namespace = @import("history.zig");
-const Executor = @import("HistoryExecutor.zig");
+const HistoryRequest = @import("HistoryRequest.zig");
+const QueryType = @import("../../../history/Query.zig");
+const HistoryExecutor = @import("HistoryExecutor.zig");
+const Handler = @This();
+
 service: ServicePort,
 
 /// Copies all borrowed request bytes before attempting bounded submission.
@@ -12,8 +13,8 @@ service: ServicePort,
 /// ```zig
 /// try handler.execute(request);
 /// ```
-pub fn execute(handler: *Handler, request: Request) !void {
-    const query = source_namespace.Query.init(.{
+pub fn execute(handler: *Handler, request: HistoryRequest) !void {
+    const query = QueryType.init(.{
         .request_id = request.request_id,
         .origin = request.origin,
         .text = request.text,
@@ -42,11 +43,11 @@ pub fn execute(handler: *Handler, request: Request) !void {
 /// ```zig
 /// const executor = handler.executor();
 /// ```
-pub fn executor(handler: *Handler) Executor {
+pub fn executor(handler: *Handler) HistoryExecutor {
     return .{ .context = handler, .execute_fn = executeErased };
 }
 
-fn executeErased(context: *anyopaque, request: Request) !void {
+fn executeErased(context: *anyopaque, request: HistoryRequest) !void {
     const handler: *Handler = @ptrCast(@alignCast(context));
     return handler.execute(request);
 }

@@ -1,10 +1,12 @@
-const Capture = @This();
-const source_namespace = @import("tab_close_preparation.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const tab_close_preparation = @import("tab_close_preparation.zig");
 const PrepareTabCloseHandler = @import("PrepareTabCloseHandler.zig");
-pending_pane: ?source_namespace.schema.PaneId,
+const Capture = @This();
+
+pending_pane: ?PaneIdType,
 available: usize,
 request_failure: ?anyerror = null,
-events: [4]source_namespace.Event = undefined,
+events: [4]tab_close_preparation.Event = undefined,
 event_count: usize = 0,
 
 pub fn handler(capture: *Capture) PrepareTabCloseHandler {
@@ -39,18 +41,18 @@ fn availableDeliveries(context: *anyopaque) usize {
     return capture.available;
 }
 
-fn attachmentPending(context: *anyopaque, pane_id: source_namespace.schema.PaneId) bool {
+fn attachmentPending(context: *anyopaque, pane_id: PaneIdType) bool {
     const capture: *Capture = @ptrCast(@alignCast(context));
     capture.append(.{ .attachment_pending = pane_id });
 
     return capture.pending_pane == pane_id;
 }
 
-fn append(capture: *Capture, event: source_namespace.Event) void {
+fn append(capture: *Capture, event: tab_close_preparation.Event) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
 
-pub fn eventSlice(capture: *const Capture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const Capture) []const tab_close_preparation.Event {
     return capture.events[0..capture.event_count];
 }

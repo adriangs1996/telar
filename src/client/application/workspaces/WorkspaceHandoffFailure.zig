@@ -1,4 +1,6 @@
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const FailureCodeType = @import("telar-core").FailureCode;
 const WorkspaceHandoffFailure = @This();
-const source_namespace = @import("workspace_handoff.zig");
-fallback_workspace: ?source_namespace.schema.WorkspaceId,
-code: source_namespace.schema.FailureCode,
+
+fallback_workspace: ?WorkspaceIdType,
+code: FailureCodeType,

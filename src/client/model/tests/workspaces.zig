@@ -1,74 +1,78 @@
+const ModelType = @import("../Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const agents = @import("../../agents/root.zig");
-const attachments = @import("../../attachments/root.zig");
-const lua_config = @import("../../config/root.zig");
-const graphics = @import("../../environment/root.zig");
-const input_capability = @import("../../input/root.zig");
-const notifications = @import("../../notifications/root.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-const client_model = @import("../root.zig");
-
-const copy_mode = input_capability.copy_mode;
-const keybind = input_capability;
-const capability_support = graphics;
-const schema = core.schema;
-const layout_mod = workspace_capability.layout;
-const multiplexer = workspace_capability.multiplexer;
-const tabs_mod = workspace_capability.tabs;
-const workspace_list_mod = workspace_capability.workspace_list;
-const ui = core.ui;
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const VersionType = @import("../Version.zig");
+const TabCreationPlanType = @import("../TabCreationPlan.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const RectType = @import("telar-core").Rect;
+const LayoutType = @import("../../workspace/WorkspaceLayout.zig");
+const LayoutSnapshot = @import("../../workspace/LayoutSnapshot.zig");
+const WorkspaceActivationType = @import("../WorkspaceActivation.zig");
+const PaneSnapshot = @import("../../workspace/PaneSnapshot.zig");
+const max_client_layout_nodes_module = @import("telar-core").max_client_layout_nodes;
+const ClientLayoutNodeType = @import("telar-core").ClientLayoutNode;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const LayoutsType = @import("../../workspace/Layouts.zig");
+const WorkspaceArrivalType = @import("../WorkspaceArrival.zig");
+const WorkspaceSnapshotInput = @import("../../workspace/WorkspaceSnapshotInput.zig");
+const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
+const WorkspaceTabInputType = @import("../../workspace/WorkspaceTabInput.zig");
+const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
+const PaneAttachmentType = @import("../PaneAttachment.zig");
+const types = @import("../types.zig");
+const PaneType = @import("../Pane.zig");
 
 test "workspace creation planning requires the attached focused pane" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expect(model.planWorkspaceCreation() == null);
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectEqual(pane_id, model.planWorkspaceCreation().?);
     model.workspace.findPane(pane_id).?.attached = false;
     try std.testing.expect(model.planWorkspaceCreation() == null);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "tab creation planning captures the workspace and attached focused pane" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expect(model.planTabCreation() == null);
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
-    try std.testing.expectEqualDeep(client_model.TabCreationPlan{
+    try std.testing.expectEqualDeep(TabCreationPlanType{
         .workspace = location.workspace,
         .cwd_source = pane_id,
     }, model.planTabCreation().?);
     model.workspace.findPane(pane_id).?.attached = false;
     try std.testing.expect(model.planTabCreation() == null);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "workspace departure commits one empty version and captures bounded client state" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const active: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const inactive: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
-    const first: schema.PaneId = @enumFromInt(1);
-    const focused: schema.PaneId = @enumFromInt(2);
-    const third: schema.PaneId = @enumFromInt(3);
-    const area: ui.Rect = .{ .w = 40, .h = 10 };
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const active: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const inactive: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const first: PaneIdType = @enumFromInt(1);
+    const focused: PaneIdType = @enumFromInt(2);
+    const third: PaneIdType = @enumFromInt(3);
+    const area: RectType = .{ .w = 40, .h = 10 };
     try model.workspace.bootstrap(.{ .pane_id = first, .location = active, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = focused, .location = active, .axis = .horizontal, .area = area });
     _ = try model.workspace.addCreated(.{
@@ -81,14 +85,14 @@ test "workspace departure commits one empty version and captures bounded client 
 
     const departure = model.departWorkspace();
 
-    try std.testing.expectEqualDeep(@as(?schema.WorkspaceLocation, workspace), departure.source);
+    try std.testing.expectEqualDeep(@as(?WorkspaceLocationType, workspace), departure.source);
     try std.testing.expectEqualDeep(active, departure.bookmark.?.location);
     try std.testing.expectEqual(focused, departure.bookmark.?.pane_id);
     try std.testing.expectEqual(focused, departure.bookmark.?.tab_layout.focused().?);
-    try std.testing.expectEqualSlices(schema.PaneId, &.{ first, focused, third }, departure.panes.slice());
+    try std.testing.expectEqualSlices(PaneIdType, &.{ first, focused, third }, departure.panes.slice());
     try std.testing.expect(model.workspace.workspace == null);
     try std.testing.expectEqual(@as(usize, 0), model.workspace.count);
-    try std.testing.expectEqualDeep(client_model.Version{
+    try std.testing.expectEqualDeep(VersionType{
         .workspace = 1,
         .tabs = 1,
         .active_tab = 1,
@@ -105,20 +109,20 @@ test "workspace departure commits one empty version and captures bounded client 
 }
 
 test "workspace arrival commits atomically and stages the saved layout" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(4),
     };
-    const left: schema.PaneId = @enumFromInt(10);
-    const focused: schema.PaneId = @enumFromInt(11);
-    const area: ui.Rect = .{ .w = 60, .h = 12 };
-    var saved: layout_mod.Layout = .{};
+    const left: PaneIdType = @enumFromInt(10);
+    const focused: PaneIdType = @enumFromInt(11);
+    const area: RectType = .{ .w = 60, .h = 12 };
+    var saved: LayoutType = .{};
     try saved.addRoot(left);
     try saved.split(.{ .existing_pane = left, .new_pane = focused, .axis = .horizontal });
-    var expected: layout_mod.Snapshot = .{};
+    var expected: LayoutSnapshot = .{};
     saved.snapshot(area, &expected);
 
     const activation = try model.arriveWorkspace(.{
@@ -130,7 +134,7 @@ test "workspace arrival commits atomically and stages the saved layout" {
 
     try std.testing.expectEqualDeep(location, model.activeTabLocation().?);
     try std.testing.expectEqual(focused, model.workspace.activeConst().?.model.layout.focused().?);
-    try std.testing.expectEqualDeep(client_model.WorkspaceActivation{
+    try std.testing.expectEqualDeep(WorkspaceActivationType{
         .pane_id = focused,
         .location = location,
         .workspace_revision_before = 0,
@@ -145,23 +149,23 @@ test "workspace arrival commits atomically and stages the saved layout" {
         .panes_revision = 1,
         .copy_revision = 0,
     }, activation);
-    try std.testing.expectEqualDeep(client_model.Version{
+    try std.testing.expectEqualDeep(VersionType{
         .workspace = 1,
         .tabs = 1,
         .active_tab = 1,
         .panes = 1,
     }, model.version());
 
-    const snapshot: client_model.TabSnapshot = .{
+    const snapshot: PaneSnapshot = .{
         .location = location,
         .panes = &.{ left, focused },
     };
     _ = try model.reconcileTab(snapshot, area);
-    var actual: layout_mod.Snapshot = .{};
+    var actual: LayoutSnapshot = .{};
     model.workspace.activeConst().?.model.layout.snapshot(area, &actual);
 
     try std.testing.expectEqual(focused, model.workspace.activeConst().?.model.layout.focused().?);
-    for ([_]schema.PaneId{ left, focused }) |pane_id| {
+    for ([_]PaneIdType{ left, focused }) |pane_id| {
         try std.testing.expectEqual(expected.find(pane_id).?.outer, actual.find(pane_id).?.outer);
     }
 }
@@ -175,17 +179,17 @@ test "workspace creation also retains inactive tab layouts" {
 }
 
 fn expectInactiveFullscreenReturn(replace: bool) !void {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const other_location: schema.TabLocation = .{ .workspace = location.workspace, .tab_id = @enumFromInt(2) };
-    const first: schema.PaneId = @enumFromInt(10);
-    const clicked: schema.PaneId = @enumFromInt(11);
-    const other: schema.PaneId = @enumFromInt(20);
-    const area: ui.Rect = .{ .w = 101, .h = 41 };
+    const other_location: TabLocationType = .{ .workspace = location.workspace, .tab_id = @enumFromInt(2) };
+    const first: PaneIdType = @enumFromInt(10);
+    const clicked: PaneIdType = @enumFromInt(11);
+    const other: PaneIdType = @enumFromInt(20);
+    const area: RectType = .{ .w = 101, .h = 41 };
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
     _ = try model.reconcileTab(.{ .location = location, .panes = &.{first} }, area);
     const original = &model.workspace.active().?.model;
@@ -193,7 +197,7 @@ fn expectInactiveFullscreenReturn(replace: bool) !void {
     try std.testing.expect(original.focusPane(first));
     try std.testing.expect(original.resizeFocused(.down, area));
     try std.testing.expect(original.toggleFullscreen());
-    var node_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    var node_storage: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
     const expected_nodes = original.layout.clientLayoutNodes(&node_storage);
     _ = try model.workspace.addCreated(.{
         .location = other_location,
@@ -220,16 +224,16 @@ fn expectInactiveFullscreenReturn(replace: bool) !void {
     const restored = &model.workspace.active().?.model;
     try std.testing.expect(restored.layout.isFullscreen());
     try std.testing.expectEqual(clicked, restored.layout.focused().?);
-    var restored_storage: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
+    var restored_storage: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
     try std.testing.expectEqualDeep(expected_nodes, restored.layout.clientLayoutNodes(&restored_storage));
     try std.testing.expect(restored.contentSize(first, area) == null);
-    try std.testing.expectEqual(schema.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, restored.contentSize(clicked, area).?);
+    try std.testing.expectEqual(TerminalSizeType{ .cols = area.w - 2, .rows = area.h - 2 }, restored.contentSize(clicked, area).?);
 }
 
 test "rejected workspace arrival preserves its previous model and version" {
-    var empty = client_model.Model.init(std.testing.allocator, true);
+    var empty = ModelType.init(std.testing.allocator, true);
     defer empty.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(4),
     };
@@ -242,9 +246,9 @@ test "rejected workspace arrival preserves its previous model and version" {
 
     try std.testing.expect(empty.workspace.workspace == null);
     try std.testing.expectEqual(@as(usize, 0), empty.workspace.count);
-    try std.testing.expectEqualDeep(client_model.Version{}, empty.version());
+    try std.testing.expectEqualDeep(VersionType{}, empty.version());
 
-    var occupied = client_model.Model.init(std.testing.allocator, true);
+    var occupied = ModelType.init(std.testing.allocator, true);
     defer occupied.deinit();
     try occupied.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 30, .rows = 8 } });
 
@@ -256,30 +260,30 @@ test "rejected workspace arrival preserves its previous model and version" {
 
     try std.testing.expectEqual(@as(usize, 1), occupied.workspace.count);
     try std.testing.expect(occupied.workspace.findPane(@enumFromInt(1)) != null);
-    try std.testing.expectEqualDeep(client_model.Version{}, occupied.version());
+    try std.testing.expectEqualDeep(VersionType{}, occupied.version());
 }
 
 test "workspace replacement commits the confirmed root and captures retired state" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const previous_workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const previous: schema.TabLocation = .{
+    const previous_workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const previous: TabLocationType = .{
         .workspace = previous_workspace,
         .tab_id = @enumFromInt(1),
     };
-    const inactive: schema.TabLocation = .{
+    const inactive: TabLocationType = .{
         .workspace = previous_workspace,
         .tab_id = @enumFromInt(2),
     };
-    const replacement: schema.TabLocation = .{
+    const replacement: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(3),
     };
-    const first: schema.PaneId = @enumFromInt(1);
-    const focused: schema.PaneId = @enumFromInt(2);
-    const inactive_pane: schema.PaneId = @enumFromInt(3);
-    const replacement_pane: schema.PaneId = @enumFromInt(4);
+    const first: PaneIdType = @enumFromInt(1);
+    const focused: PaneIdType = @enumFromInt(2);
+    const inactive_pane: PaneIdType = @enumFromInt(3);
+    const replacement_pane: PaneIdType = @enumFromInt(4);
     try model.workspace.bootstrap(.{ .pane_id = first, .location = previous, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = focused, .location = previous, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     _ = try model.workspace.addCreated(.{
@@ -296,11 +300,11 @@ test "workspace replacement commits the confirmed root and captures retired stat
         .size = .{ .cols = 30, .rows = 8 },
     });
 
-    try std.testing.expectEqualDeep(@as(?schema.WorkspaceLocation, previous_workspace), committed.departure.source);
+    try std.testing.expectEqualDeep(@as(?WorkspaceLocationType, previous_workspace), committed.departure.source);
     try std.testing.expectEqualDeep(previous, committed.departure.bookmark.?.location);
     try std.testing.expectEqual(focused, committed.departure.bookmark.?.pane_id);
-    try std.testing.expectEqualSlices(schema.PaneId, &.{ first, focused, inactive_pane }, committed.departure.panes.slice());
-    try std.testing.expectEqualDeep(client_model.WorkspaceActivation{
+    try std.testing.expectEqualSlices(PaneIdType, &.{ first, focused, inactive_pane }, committed.departure.panes.slice());
+    try std.testing.expectEqualDeep(WorkspaceActivationType{
         .pane_id = replacement_pane,
         .location = replacement,
         .workspace_revision_before = 0,
@@ -319,7 +323,7 @@ test "workspace replacement commits the confirmed root and captures retired stat
     try std.testing.expectEqual(@as(usize, 1), model.workspace.count);
     try std.testing.expect(model.workspace.findPane(first) == null);
     try std.testing.expect(model.workspace.findPane(replacement_pane) != null);
-    try std.testing.expectEqualDeep(client_model.Version{
+    try std.testing.expectEqualDeep(VersionType{
         .workspace = 1,
         .tabs = 1,
         .active_tab = 1,
@@ -328,13 +332,13 @@ test "workspace replacement commits the confirmed root and captures retired stat
 }
 
 test "workspace replacement captures invalid copy-mode release" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const previous: schema.TabLocation = .{
+    const previous: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const replacement: schema.TabLocation = .{
+    const replacement: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(2),
     };
@@ -355,13 +359,13 @@ test "workspace replacement captures invalid copy-mode release" {
 }
 
 test "rejected workspace replacement preserves the occupied projection" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectError(error.WorkspaceAlreadyActive, model.replaceWorkspace(.{
@@ -380,15 +384,15 @@ test "rejected workspace replacement preserves the occupied projection" {
 
     try std.testing.expectEqualDeep(location, model.activeTabLocation().?);
     try std.testing.expect(model.workspace.findPane(pane_id) != null);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "failed workspace replacement rolls back retained layouts" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
-    const pane_id: schema.PaneId = @enumFromInt(10);
-    const area: ui.Rect = .{ .w = 40, .h = 10 };
+    const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    const pane_id: PaneIdType = @enumFromInt(10);
+    const area: RectType = .{ .w = 40, .h = 10 };
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
     _ = try model.reconcileTab(.{ .location = location, .panes = &.{pane_id} }, area);
     _ = model.togglePaneFullscreen(.{ .area = area }).?;
@@ -410,21 +414,21 @@ test "failed workspace replacement rolls back retained layouts" {
 }
 
 test "provisional arrivals cannot overwrite retained fullscreen layouts" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
-    const first: schema.PaneId = @enumFromInt(10);
-    const clicked: schema.PaneId = @enumFromInt(11);
-    const area: ui.Rect = .{ .w = 60, .h = 12 };
-    var saved: layout_mod.Layout = .{};
+    const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    const first: PaneIdType = @enumFromInt(10);
+    const clicked: PaneIdType = @enumFromInt(11);
+    const area: RectType = .{ .w = 60, .h = 12 };
+    var saved: LayoutType = .{};
     try saved.addRoot(first);
     try saved.splitFocused(clicked, .vertical);
     try std.testing.expect(saved.focusPane(first));
     try std.testing.expect(saved.toggleFullscreen());
-    var layouts: workspace_capability.navigation.Layouts = .{};
+    var layouts: LayoutsType = .{};
     try layouts.remember(.{ .location = location, .pane_id = first, .workspace_active = true, .layout = saved });
     model.restoreClientLayouts(layouts);
-    const arrival: client_model.WorkspaceArrival = .{ .pane_id = clicked, .location = location, .size = .{ .cols = area.w, .rows = area.h } };
+    const arrival: WorkspaceArrivalType = .{ .pane_id = clicked, .location = location, .size = .{ .cols = area.w, .rows = area.h } };
     _ = try model.arriveWorkspace(arrival);
     _ = model.departWorkspace();
     try std.testing.expectEqualDeep(saved, model.saved_layouts.find(location).?.layout);
@@ -442,9 +446,9 @@ test "provisional arrivals cannot overwrite retained fullscreen layouts" {
 }
 
 test "workspace replacement can recover from an already empty source" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(2),
     };
@@ -457,7 +461,7 @@ test "workspace replacement can recover from an already empty source" {
 
     try std.testing.expect(committed.departure.source == null);
     try std.testing.expectEqualDeep(location, model.activeTabLocation().?);
-    try std.testing.expectEqualDeep(client_model.Version{
+    try std.testing.expectEqualDeep(VersionType{
         .workspace = 1,
         .tabs = 1,
         .active_tab = 1,
@@ -466,15 +470,15 @@ test "workspace replacement can recover from an already empty source" {
 }
 
 test "workspace reconciliation versions semantic dimensions independently" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first: schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: schema.TabLocation = .{
+    const second: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -485,7 +489,7 @@ test "workspace reconciliation versions semantic dimensions independently" {
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
-    const named: client_model.WorkspaceSnapshot = .{
+    const named: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = "project",
         .tabs = &.{
@@ -498,16 +502,16 @@ test "workspace reconciliation versions semantic dimensions independently" {
     try std.testing.expect(name_change.workspace_changed);
     try std.testing.expect(!name_change.tabs_changed);
     try std.testing.expect(!name_change.active_tab_changed);
-    try std.testing.expectEqualDeep(client_model.Version{ .workspace = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .workspace = 1 }, model.version());
 
     const unchanged = try model.reconcileWorkspace(named);
 
     try std.testing.expect(!unchanged.workspace_changed);
     try std.testing.expect(!unchanged.tabs_changed);
     try std.testing.expect(!unchanged.active_tab_changed);
-    try std.testing.expectEqualDeep(client_model.Version{ .workspace = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .workspace = 1 }, model.version());
 
-    const reordered: client_model.WorkspaceSnapshot = .{
+    const reordered: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = "project",
         .tabs = &.{
@@ -522,9 +526,9 @@ test "workspace reconciliation versions semantic dimensions independently" {
     try std.testing.expect(!tabs_change.active_tab_changed);
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
     try std.testing.expectEqualStrings("server", model.workspace.items[0].?.labelSlice());
-    try std.testing.expectEqualDeep(client_model.Version{ .workspace = 1, .tabs = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .workspace = 1, .tabs = 1 }, model.version());
 
-    const removed: client_model.WorkspaceSnapshot = .{
+    const removed: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = "project",
         .tabs = &.{
@@ -538,9 +542,9 @@ test "workspace reconciliation versions semantic dimensions independently" {
     try std.testing.expect(active_change.active_tab_changed);
     try std.testing.expectEqualDeep(second, active_change.previous_active);
     try std.testing.expectEqualDeep(first, active_change.active);
-    try std.testing.expectEqualSlices(schema.TabLocation, &.{second}, active_change.removed_tabs.slice());
-    try std.testing.expectEqualSlices(schema.PaneId, &.{@enumFromInt(2)}, active_change.removed_panes.slice());
-    try std.testing.expectEqualDeep(client_model.Version{ .workspace = 1, .tabs = 2, .active_tab = 1 }, model.version());
+    try std.testing.expectEqualSlices(TabLocationType, &.{second}, active_change.removed_tabs.slice());
+    try std.testing.expectEqualSlices(PaneIdType, &.{@enumFromInt(2)}, active_change.removed_panes.slice());
+    try std.testing.expectEqualDeep(VersionType{ .workspace = 1, .tabs = 2, .active_tab = 1 }, model.version());
     try std.testing.expectEqual(model.version().workspace, active_change.workspace_revision);
     try std.testing.expectEqual(model.version().tabs, active_change.tabs_revision);
     try std.testing.expectEqual(model.version().active_tab, active_change.active_tab_revision);
@@ -549,16 +553,16 @@ test "workspace reconciliation versions semantic dimensions independently" {
 }
 
 test "rejected workspace snapshots preserve state and revisions" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const location: schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const location: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    const empty: client_model.WorkspaceSnapshot = .{
+    const empty: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = "project",
         .tabs = &.{},
@@ -566,7 +570,7 @@ test "rejected workspace snapshots preserve state and revisions" {
 
     try std.testing.expectError(error.WorkspaceHasNoTabs, model.reconcileWorkspace(empty));
 
-    const duplicate: client_model.WorkspaceSnapshot = .{
+    const duplicate: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = "project",
         .tabs = &.{
@@ -576,7 +580,7 @@ test "rejected workspace snapshots preserve state and revisions" {
     };
     try std.testing.expectError(error.DuplicateTab, model.reconcileWorkspace(duplicate));
 
-    var excessive_tabs: [tabs_mod.max_tabs + 1]client_model.WorkspaceTabInput = undefined;
+    var excessive_tabs: [max_tabs_per_workspace + 1]WorkspaceTabInputType = undefined;
     for (&excessive_tabs, 0..) |*tab, index| {
         tab.* = .{
             .tab_id = @enumFromInt(@as(u64, @intCast(index + 1))),
@@ -584,7 +588,7 @@ test "rejected workspace snapshots preserve state and revisions" {
             .label = "tab",
         };
     }
-    const excessive: client_model.WorkspaceSnapshot = .{
+    const excessive: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = "project",
         .tabs = &excessive_tabs,
@@ -595,21 +599,21 @@ test "rejected workspace snapshots preserve state and revisions" {
     try std.testing.expectEqual(@as(usize, 1), model.workspace.count);
     try std.testing.expect(model.workspace.findPane(@enumFromInt(1)) != null);
     try std.testing.expectEqualStrings("", model.workspace.workspaceName());
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "active tab reconciliation versions pane changes and reports retired panes" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: schema.PaneId = @enumFromInt(1);
-    const second: schema.PaneId = @enumFromInt(2);
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    const discovered: client_model.TabSnapshot = .{
+    const discovered: PaneSnapshot = .{
         .location = location,
         .panes = &.{ first, second },
     };
@@ -620,8 +624,8 @@ test "active tab reconciliation versions pane changes and reports retired panes"
     try std.testing.expect(addition.panes_changed);
     try std.testing.expectEqual(@as(usize, 0), addition.removed_panes.slice().len);
     try std.testing.expect(model.workspace.findPane(second) != null);
-    try std.testing.expectEqualDeep(client_model.Version{ .panes = 1 }, model.version());
-    try std.testing.expectEqualDeep(ui.Rect{ .w = 40, .h = 10 }, addition.area);
+    try std.testing.expectEqualDeep(VersionType{ .panes = 1 }, model.version());
+    try std.testing.expectEqualDeep(RectType{ .w = 40, .h = 10 }, addition.area);
     try std.testing.expect(addition.snapshot_loaded);
     try std.testing.expectEqual(model.workspace.activeConst().?.model.layout.currentRevision(), addition.layout_revision);
     try std.testing.expectEqual(model.version().workspace, addition.workspace_revision);
@@ -632,35 +636,35 @@ test "active tab reconciliation versions pane changes and reports retired panes"
     const unchanged = try model.reconcileTab(discovered, .{ .w = 40, .h = 10 });
 
     try std.testing.expect(!unchanged.panes_changed);
-    try std.testing.expectEqualDeep(client_model.Version{ .panes = 1 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .panes = 1 }, model.version());
 
-    const removed: client_model.TabSnapshot = .{
+    const removed: PaneSnapshot = .{
         .location = location,
         .panes = &.{second},
     };
     const removal = try model.reconcileTab(removed, .{ .w = 40, .h = 10 });
 
     try std.testing.expect(removal.panes_changed);
-    try std.testing.expectEqualSlices(schema.PaneId, &.{first}, removal.removed_panes.slice());
+    try std.testing.expectEqualSlices(PaneIdType, &.{first}, removal.removed_panes.slice());
     try std.testing.expect(model.workspace.findPane(first) == null);
-    try std.testing.expectEqualDeep(client_model.Version{ .panes = 2 }, model.version());
+    try std.testing.expectEqualDeep(VersionType{ .panes = 2 }, model.version());
 }
 
 test "tab reconciliation rejects excessive pane membership atomically" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const root_pane: schema.PaneId = @enumFromInt(1);
+    const root_pane: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = root_pane, .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    var pane_ids: [schema.max_panes_per_tab + 1]schema.PaneId = undefined;
+    var pane_ids: [max_panes_per_tab_module + 1]PaneIdType = undefined;
     for (&pane_ids, 0..) |*pane_id, index| {
         pane_id.* = @enumFromInt(@as(u64, @intCast(index + 1)));
     }
-    const snapshot: client_model.TabSnapshot = .{
+    const snapshot: PaneSnapshot = .{
         .location = location,
         .panes = &pane_ids,
     };
@@ -669,19 +673,19 @@ test "tab reconciliation rejects excessive pane membership atomically" {
 
     try std.testing.expectEqual(@as(usize, 1), model.workspace.find(location.tab_id).?.model.pane_count);
     try std.testing.expect(model.workspace.findPane(root_pane) != null);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "inactive tab reconciliation does not advance the visible pane revision" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const active: schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const active: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const inactive: schema.TabLocation = .{
+    const inactive: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -693,7 +697,7 @@ test "inactive tab reconciliation does not advance the visible pane revision" {
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.workspace.select(active.tab_id));
-    const snapshot: client_model.TabSnapshot = .{
+    const snapshot: PaneSnapshot = .{
         .location = inactive,
         .panes = &.{ @enumFromInt(2), @enumFromInt(3) },
     };
@@ -703,22 +707,22 @@ test "inactive tab reconciliation does not advance the visible pane revision" {
     try std.testing.expect(!reconciliation.active);
     try std.testing.expect(reconciliation.panes_changed);
     try std.testing.expect(model.workspace.findPane(@enumFromInt(3)) != null);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
     try std.testing.expect(reconciliation.snapshot_loaded);
     try std.testing.expectEqual(model.workspace.find(inactive.tab_id).?.model.layout.currentRevision(), reconciliation.layout_revision);
     try std.testing.expectEqual(model.version().panes, reconciliation.panes_revision);
 }
 
 test "tab reconciliation rejects pane identities owned by another tab" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first: schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: schema.TabLocation = .{
+    const second: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -729,7 +733,7 @@ test "tab reconciliation rejects pane identities owned by another tab" {
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
-    const snapshot: client_model.TabSnapshot = .{
+    const snapshot: PaneSnapshot = .{
         .location = first,
         .panes = &.{ @enumFromInt(1), @enumFromInt(2) },
     };
@@ -738,40 +742,40 @@ test "tab reconciliation rejects pane identities owned by another tab" {
 
     try std.testing.expectEqual(@as(usize, 1), model.workspace.find(first.tab_id).?.model.pane_count);
     try std.testing.expectEqual(@as(usize, 1), model.workspace.find(second.tab_id).?.model.pane_count);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "pane attachment confirmation changes only active operational state" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const discovered: schema.PaneId = @enumFromInt(2);
+    const discovered: PaneIdType = @enumFromInt(2);
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.addDiscovered(.{ .pane_id = discovered, .location = location, .area = .{ .w = 40, .h = 10 } });
-    const attachment: client_model.PaneAttachment = .{ .pane_id = discovered, .location = location };
+    const attachment: PaneAttachmentType = .{ .pane_id = discovered, .location = location };
 
     try std.testing.expect(model.needsPaneAttachment(attachment));
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.confirmed, try model.confirmPaneAttachment(attachment));
+    try std.testing.expectEqual(types.PaneAttachmentConfirmation.confirmed, try model.confirmPaneAttachment(attachment));
     try std.testing.expect(!model.needsPaneAttachment(attachment));
     try std.testing.expect(model.workspace.findPane(discovered).?.attached);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(attachment));
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqual(types.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(attachment));
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "pane attachment confirmation ignores inactive missing and wrong-location panes" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
-    const discovered: schema.PaneId = @enumFromInt(3);
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const discovered: PaneIdType = @enumFromInt(3);
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.addDiscovered(.{ .pane_id = discovered, .location = first, .area = .{ .w = 40, .h = 10 } });
     _ = try model.workspace.addCreated(.{
@@ -782,31 +786,31 @@ test "pane attachment confirmation ignores inactive missing and wrong-location p
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
 
-    const inactive: client_model.PaneAttachment = .{ .pane_id = discovered, .location = first };
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(inactive));
+    const inactive: PaneAttachmentType = .{ .pane_id = discovered, .location = first };
+    try std.testing.expectEqual(types.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(inactive));
     try std.testing.expect(!model.needsPaneAttachment(inactive));
     try std.testing.expect(!model.workspace.findPane(discovered).?.attached);
 
     try std.testing.expect(model.workspace.select(first.tab_id));
-    const missing: client_model.PaneAttachment = .{ .pane_id = @enumFromInt(9), .location = first };
-    const wrong_location: client_model.PaneAttachment = .{ .pane_id = discovered, .location = second };
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(missing));
-    try std.testing.expectEqual(client_model.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(wrong_location));
+    const missing: PaneAttachmentType = .{ .pane_id = @enumFromInt(9), .location = first };
+    const wrong_location: PaneAttachmentType = .{ .pane_id = discovered, .location = second };
+    try std.testing.expectEqual(types.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(missing));
+    try std.testing.expectEqual(types.PaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(wrong_location));
     try std.testing.expect(!model.needsPaneAttachment(missing));
     try std.testing.expect(!model.needsPaneAttachment(wrong_location));
     try std.testing.expect(!model.workspace.findPane(discovered).?.attached);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "tab detachment plans exact operational state before a silent commit" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const second: schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
-    const root: schema.PaneId = @enumFromInt(1);
-    const sibling: schema.PaneId = @enumFromInt(2);
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const root: PaneIdType = @enumFromInt(1);
+    const sibling: PaneIdType = @enumFromInt(2);
     try model.workspace.bootstrap(.{ .pane_id = root, .location = first, .size = .{ .cols = 20, .rows = 5 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = first, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     try std.testing.expect(model.workspace.active().?.model.focusPane(root));
@@ -829,8 +833,8 @@ test "tab detachment plans exact operational state before a silent commit" {
     const plan = try model.planTabDetachment(first);
 
     try std.testing.expectEqual(@as(usize, 2), plan.slice().len);
-    try std.testing.expectEqualDeep(client_model.TabDetachmentPlan.Pane{ .pane_id = root, .attached = true }, plan.slice()[0]);
-    try std.testing.expectEqualDeep(client_model.TabDetachmentPlan.Pane{ .pane_id = sibling, .attached = false }, plan.slice()[1]);
+    try std.testing.expectEqualDeep(PaneType{ .pane_id = root, .attached = true }, plan.slice()[0]);
+    try std.testing.expectEqualDeep(PaneType{ .pane_id = sibling, .attached = false }, plan.slice()[1]);
     try std.testing.expect(plan.owns_paste);
     try std.testing.expect(plan.owns_reported_focus);
     try std.testing.expect(plan.paste_marker_required);
@@ -841,7 +845,7 @@ test "tab detachment plans exact operational state before a silent commit" {
     try std.testing.expectError(error.InvalidTabDetachment, model.commitTabDetachment(invalid));
 
     var unbounded = plan;
-    unbounded.len = multiplexer.max_panes + 1;
+    unbounded.len = max_panes_per_tab_module + 1;
     try std.testing.expectError(error.InvalidTabDetachment, model.commitTabDetachment(unbounded));
 
     root_pane.attached = false;
@@ -856,7 +860,7 @@ test "tab detachment plans exact operational state before a silent commit" {
     try std.testing.expectEqual(@as(u64, 0), sibling_pane.pending_frame_id);
     try std.testing.expect(model.panePasteActive());
     try std.testing.expect(model.reportedPaneFocus() != null);
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 
     try std.testing.expectError(error.UnexpectedTab, model.planTabDetachment(.{
         .workspace = workspace,

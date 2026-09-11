@@ -1,6 +1,7 @@
-const PaneInputEffects = @This();
 const PaneInputEffect = @import("PaneInputEffect.zig");
-const set_pane_viewport = @import("../panes/root.zig").set_pane_viewport;
+const PaneViewportEffectsType = @import("../panes/PaneViewportEffects.zig");
+const PaneInputEffects = @This();
+
 context: *anyopaque,
 send: *const fn (*anyopaque, PaneInputEffect) anyerror!void,
-viewport: set_pane_viewport.PaneViewportEffects,
+viewport: PaneViewportEffectsType,

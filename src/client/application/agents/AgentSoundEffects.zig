@@ -1,4 +1,5 @@
+const AgentSoundType = @import("telar-core").AgentSound;
 const Effects = @This();
-const source_namespace = @import("agent_sound.zig");
+
 context: *anyopaque,
-schedule: *const fn (*anyopaque, source_namespace.schema.AgentSound) anyerror!void,
+schedule: *const fn (*anyopaque, AgentSoundType) anyerror!void,

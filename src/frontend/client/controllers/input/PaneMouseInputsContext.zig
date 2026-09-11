@@ -1,6 +1,8 @@
-const Context = @This();
 const Client = @import("../../Client.zig");
-const source_namespace = @import("pane_mouse_inputs.zig");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const RectType = @import("telar-core").Rect;
+const Context = @This();
+
 client: *Client,
-model: *source_namespace.multiplexer.Model,
-area: source_namespace.ui.Rect,
+model: *MultiplexerModel,
+area: RectType,

@@ -1,58 +1,34 @@
+const GraphicsCountsType = @import("GraphicsCounts.zig");
+const CellPreparationType = @import("CellPreparation.zig");
+const GraphicsPreparationType = @import("GraphicsPreparation.zig");
+const PreparedType = @import("Prepared.zig");
+const CommitEffectType = @import("CommitEffect.zig");
+const PaneType = @import("../../pane/Pane.zig");
+const CellSync = @import("CellSync.zig");
+const GraphicsSync = @import("GraphicsSync.zig");
+const std = @import("std");
+const RangeType = @import("Range.zig");
+const selection = @import("selection.zig");
+const encodePaneCwd_module = @import("telar-core").encodePaneCwd;
+const encodePaneTitle_module = @import("telar-core").encodePaneTitle;
+const encodePaneForeground_module = @import("telar-core").encodePaneForeground;
+const encodePaneProgress_module = @import("telar-core").encodePaneProgress;
+const encodePaneExited_module = @import("telar-core").encodePaneExited;
+const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
+const attachment_namespace = @import("attachment_namespace.zig");
 /// Per-client rendering state. It is disposable: reconnecting creates a fresh
 /// baseline while the pane and its PTY continue to exist.
 const Attachment = @This();
-const core = @import("telar-core");
-const source_namespace = @import("root.zig");
-const telemetry = @import("../observability/root.zig").telemetry;
-const cell = @import("cell.zig");
-const graphics_module = @import("graphics.zig");
-const std = @import("std");
-const selection = @import("selection.zig");
-pub const GraphicsCounts = struct {
-    images: u32,
-    placements: u32,
-    /// Freezes refused because the next image exceeded the client's or
-    /// the runtime's memory credit.
-    stage_blocked: u32,
-    /// Transfers adopted from objects the media actor froze.
-    adopted: u32,
-    /// Time spent copying frozen generations out of live media storage
-    /// on the runtime thread, the fallback when nothing was adopted.
-    freeze: core.diagnostics.Timing,
-};
-pub const CellPreparation = struct {
-    io: source_namespace.Io,
-    buffer: []u8,
-    metrics: *telemetry.RuntimeMetrics,
-};
-pub const GraphicsPreparation = struct {
-    buffer: []u8,
-    global_credit: usize,
-    live_storage_available: bool,
-};
-pub const Prepared = struct {
-    bytes: []const u8,
-    effect: Effect,
 
-    const Effect = union(enum) {
-        cwd: u64,
-        foreground: u64,
-        title: u64,
-        progress: u64,
-        cells,
-        exit,
-        graphics: GraphicsCounts,
-    };
-};
+pub const GraphicsCounts = @import("GraphicsCounts.zig");
+pub const CellPreparation = @import("CellPreparation.zig");
+pub const GraphicsPreparation = @import("GraphicsPreparation.zig");
+pub const Prepared = @import("Prepared.zig");
 
-pub const CommitEffect = struct {
-    detach_after_send: ?source_namespace.schema.PaneId = null,
-    graphics_message: bool = false,
-    graphics: GraphicsCounts = .{ .images = 0, .placements = 0, .stage_blocked = 0, .adopted = 0, .freeze = .{} },
-};
-pane: *source_namespace.Pane,
-cells: cell.Sync,
-graphics: graphics_module.Sync,
+pub const CommitEffect = @import("CommitEffect.zig");
+pane: *PaneType,
+cells: CellSync,
+graphics: GraphicsSync,
 observed_cwd_revision: u64 = 0,
 observed_foreground_revision: u64 = 0,
 /// Starts at the empty-title revision so a fresh attachment learns only
@@ -61,7 +37,7 @@ observed_title_revision: u64 = 1,
 observed_progress_revision: u64 = 1,
 exit_sent: bool = false,
 
-pub fn init(gpa: std.mem.Allocator, pane: *source_namespace.Pane) !Attachment {
+pub fn init(gpa: std.mem.Allocator, pane: *PaneType) !Attachment {
     return .{
         .pane = pane,
         .cells = try .init(gpa, pane),
@@ -89,7 +65,7 @@ pub fn requestCellSnapshot(attachment: *Attachment) void {
     attachment.cells.requestSnapshot();
 }
 
-pub fn copySelection(attachment: *Attachment, range: selection.Range, scratch: []u8) selection.Result {
+pub fn copySelection(attachment: *Attachment, range: RangeType, scratch: []u8) selection.Result {
     return selection.extract(attachment.pane, range, scratch);
 }
 
@@ -105,13 +81,13 @@ pub fn acknowledgeFrame(attachment: *Attachment, frame_id: u64, now_ns: u64) ?u6
     return attachment.cells.acknowledge(frame_id, now_ns);
 }
 
-pub fn prepareCwd(attachment: *Attachment, buffer: []u8) !?Prepared {
+pub fn prepareCwd(attachment: *Attachment, buffer: []u8) !?PreparedType {
     const pane = attachment.pane;
     if (attachment.observed_cwd_revision == pane.cwd.revision) {
         return null;
     }
     return .{
-        .bytes = try source_namespace.schema.encodePaneCwd(buffer, .{
+        .bytes = try encodePaneCwd_module(buffer, .{
             .pane_id = pane.id,
             .cwd = pane.cwd.slice(),
         }),
@@ -119,13 +95,13 @@ pub fn prepareCwd(attachment: *Attachment, buffer: []u8) !?Prepared {
     };
 }
 
-pub fn prepareTitle(attachment: *Attachment, buffer: []u8) !?Prepared {
+pub fn prepareTitle(attachment: *Attachment, buffer: []u8) !?PreparedType {
     const pane = attachment.pane;
     if (attachment.observed_title_revision == pane.title.revision) {
         return null;
     }
     return .{
-        .bytes = try source_namespace.schema.encodePaneTitle(buffer, .{
+        .bytes = try encodePaneTitle_module(buffer, .{
             .pane_id = pane.id,
             .title = pane.title.slice(),
         }),
@@ -133,13 +109,13 @@ pub fn prepareTitle(attachment: *Attachment, buffer: []u8) !?Prepared {
     };
 }
 
-pub fn prepareForeground(attachment: *Attachment, buffer: []u8) !?Prepared {
+pub fn prepareForeground(attachment: *Attachment, buffer: []u8) !?PreparedType {
     const pane = attachment.pane;
     if (attachment.observed_foreground_revision == pane.foreground_revision) {
         return null;
     }
     return .{
-        .bytes = try source_namespace.schema.encodePaneForeground(buffer, .{
+        .bytes = try encodePaneForeground_module(buffer, .{
             .pane_id = pane.id,
             .name = pane.agent_process_cache.name(),
         }),
@@ -152,14 +128,14 @@ pub fn prepareForeground(attachment: *Attachment, buffer: []u8) !?Prepared {
 /// ```zig
 /// const prepared = try attachment.prepareProgress(buffer);
 /// ```
-pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?Prepared {
+pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?PreparedType {
     const pane = attachment.pane;
     if (attachment.observed_progress_revision == pane.progress_revision) {
         return null;
     }
 
     return .{
-        .bytes = try source_namespace.schema.encodePaneProgress(buffer, .{
+        .bytes = try encodePaneProgress_module(buffer, .{
             .pane_id = pane.id,
             .state = pane.progress_state,
             .percent = pane.progress_percent,
@@ -174,7 +150,7 @@ pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?Prepared {
 /// ```zig
 /// const prepared = try attachment.prepareNextCells(.{ .io = io, .buffer = buffer, .metrics = metrics });
 /// ```
-pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparation) !?Prepared {
+pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparationType) !?PreparedType {
     const pane = attachment.pane;
     if (pane.ingest_pending) {
         return null;
@@ -211,7 +187,7 @@ pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparation) !
     return .{ .bytes = payload, .effect = .cells };
 }
 
-pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?Prepared {
+pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?PreparedType {
     const pane = attachment.pane;
     if (pane.ingest_pending or attachment.exit_sent or !pane.output_done or
         pane.exit == null or attachment.outstandingFrameId() != 0)
@@ -220,7 +196,7 @@ pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?Prepared {
     }
     const exit = pane.exit.?;
     return .{
-        .bytes = try source_namespace.schema.encodePaneExited(buffer, .{
+        .bytes = try encodePaneExited_module(buffer, .{
             .pane_id = pane.id,
             .kind = switch (exit) {
                 .exited => .exited,
@@ -248,7 +224,7 @@ pub fn configureGraphics(attachment: *Attachment, shared: bool) void {
 }
 
 pub fn returnGraphicsCredit(attachment: *Attachment, bytes: usize) bool {
-    const available = core.graphics.max_image_bytes_per_pane -| attachment.graphics.credit;
+    const available = max_image_bytes_per_pane_module -| attachment.graphics.credit;
     if (bytes == 0 or bytes > available) {
         return false;
     }
@@ -277,8 +253,8 @@ pub fn hasGraphicsWork(attachment: *const Attachment) bool {
 /// ```zig
 /// const prepared = try attachment.prepareNextGraphics(.{ .buffer = buffer, .global_credit = credit, .live_storage_available = true });
 /// ```
-pub fn prepareNextGraphics(attachment: *Attachment, preparation: GraphicsPreparation) !?Prepared {
-    const payload = (try source_namespace.encodeNextGraphics(attachment, preparation)) orelse return null;
+pub fn prepareNextGraphics(attachment: *Attachment, preparation: GraphicsPreparationType) !?PreparedType {
+    const payload = (try attachment_namespace.encodeNextGraphics(attachment, preparation)) orelse return null;
 
     return .{
         .bytes = payload,
@@ -287,11 +263,11 @@ pub fn prepareNextGraphics(attachment: *Attachment, preparation: GraphicsPrepara
 }
 
 pub fn abandonGraphics(attachment: *Attachment) void {
-    source_namespace.abandonGraphicsBatch(attachment);
+    attachment_namespace.abandonGraphicsBatch(attachment);
 }
 
-pub fn takeGraphicsCounts(attachment: *Attachment) GraphicsCounts {
-    const result: GraphicsCounts = .{
+pub fn takeGraphicsCounts(attachment: *Attachment) GraphicsCountsType {
+    const result: GraphicsCountsType = .{
         .images = attachment.graphics.sent_images,
         .placements = attachment.graphics.sent_placements,
         .stage_blocked = attachment.graphics.stage_blocked,
@@ -306,8 +282,8 @@ pub fn takeGraphicsCounts(attachment: *Attachment) GraphicsCounts {
     return result;
 }
 
-pub fn stageGraphics(attachment: *Attachment, global_credit: usize) !source_namespace.StageResult {
-    return source_namespace.stageNextTransfer(attachment, global_credit);
+pub fn stageGraphics(attachment: *Attachment, global_credit: usize) !attachment_namespace.StageResult {
+    return attachment_namespace.stageNextTransfer(attachment, global_credit);
 }
 
 pub fn graphicsCaughtUp(attachment: *const Attachment) bool {
@@ -319,7 +295,7 @@ pub fn graphicsTransferBytes(attachment: *const Attachment) usize {
     return if (attachment.graphics.transfer) |transfer| transfer.reserved_len else 0;
 }
 
-pub fn commitPrepared(attachment: *Attachment, prepared: Prepared) CommitEffect {
+pub fn commitPrepared(attachment: *Attachment, prepared: PreparedType) CommitEffectType {
     return switch (prepared.effect) {
         .cwd => |revision| effect: {
             attachment.observed_cwd_revision = revision;

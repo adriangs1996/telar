@@ -1,17 +1,19 @@
-const EventCapture = @This();
-const workspace_mod = @import("../../../workspace/root.zig");
-const EventPublisher = @import("RenameTabEventPublisher.zig");
+const ReaderType = @import("../../../workspace/Reader.zig");
+const TabRenamedType = @import("../../../workspace/TabRenamed.zig");
+const RenameTabEventPublisher = @import("RenameTabEventPublisher.zig");
 const std = @import("std");
-reader: workspace_mod.Reader,
+const EventCapture = @This();
+
+reader: ReaderType,
 count: usize = 0,
-last: ?workspace_mod.TabRenamed = null,
+last: ?TabRenamedType = null,
 observed_committed_state: bool = false,
 
-pub fn publisher(capture: *EventCapture) EventPublisher {
+pub fn publisher(capture: *EventCapture) RenameTabEventPublisher {
     return .{ .context = capture, .publish = publish };
 }
 
-fn publish(context: *anyopaque, event: workspace_mod.TabRenamed) void {
+fn publish(context: *anyopaque, event: TabRenamedType) void {
     const capture: *EventCapture = @ptrCast(@alignCast(context));
     const committed_label = capture.reader.tabLabel(event.location) orelse return;
 

@@ -1,12 +1,21 @@
-const Reader = @This();
-const source_namespace = @import("repository_support.zig");
+const StateType = @import("State.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const WorkspaceType = @import("Workspace.zig");
+const repository_support = @import("repository_support.zig");
 const std = @import("std");
-const workspace_mod = @import("workspace_support.zig");
+const TabIdType = @import("telar-core").TabId;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
+const TabDescriptorType = @import("telar-core").TabDescriptor;
 const DescriptorSnapshot = @import("DescriptorSnapshot.zig");
 const state_mod = @import("state_support.zig");
-state: *const source_namespace.State,
+const WorkspaceListEntryType = @import("telar-core").WorkspaceListEntry;
+const Reader = @This();
 
-pub fn init(state: *const source_namespace.State) Reader {
+state: *const StateType,
+
+pub fn init(state: *const StateType) Reader {
     return .{ .state = state };
 }
 
@@ -18,7 +27,7 @@ pub fn revision(reader: Reader) u64 {
     return reader.state.revision;
 }
 
-pub fn containsWorkspace(reader: Reader, location: source_namespace.schema.WorkspaceLocation) bool {
+pub fn containsWorkspace(reader: Reader, location: WorkspaceLocationType) bool {
     return reader.find(location) != null;
 }
 
@@ -27,7 +36,7 @@ pub fn containsWorkspace(reader: Reader, location: source_namespace.schema.Works
 /// ```zig
 /// const location = reader.locationByPath("/work/telar") orelse return;
 /// ```
-pub fn locationByPath(reader: Reader, path: []const u8) ?source_namespace.schema.TabLocation {
+pub fn locationByPath(reader: Reader, path: []const u8) ?TabLocationType {
     const workspace = reader.findByPath(path) orelse return null;
     return .{
         .workspace = .{ .workspace = workspace.id },
@@ -35,8 +44,8 @@ pub fn locationByPath(reader: Reader, path: []const u8) ?source_namespace.schema
     };
 }
 
-fn find(reader: Reader, location: source_namespace.schema.WorkspaceLocation) ?*const source_namespace.Workspace {
-    const workspace_id = source_namespace.workspaceId(location) orelse return null;
+fn find(reader: Reader, location: WorkspaceLocationType) ?*const WorkspaceType {
+    const workspace_id = repository_support.workspaceId(location) orelse return null;
 
     for (&reader.state.items) |*slot| {
         const workspace = if (slot.*) |*value| value else continue;
@@ -49,7 +58,7 @@ fn find(reader: Reader, location: source_namespace.schema.WorkspaceLocation) ?*c
     return null;
 }
 
-fn findByPath(reader: Reader, path: []const u8) ?*const source_namespace.Workspace {
+fn findByPath(reader: Reader, path: []const u8) ?*const WorkspaceType {
     for (&reader.state.items) |*slot| {
         const workspace = if (slot.*) |*value| value else continue;
 
@@ -61,22 +70,22 @@ fn findByPath(reader: Reader, path: []const u8) ?*const source_namespace.Workspa
     return null;
 }
 
-pub fn contains(reader: Reader, location: source_namespace.schema.TabLocation) bool {
+pub fn contains(reader: Reader, location: TabLocationType) bool {
     const workspace = reader.find(location.workspace) orelse return false;
     return workspace.containsTab(location.tab_id);
 }
 
-pub fn defaultTab(reader: Reader, location: source_namespace.schema.WorkspaceLocation) ?source_namespace.schema.TabId {
+pub fn defaultTab(reader: Reader, location: WorkspaceLocationType) ?TabIdType {
     const workspace = reader.find(location) orelse return null;
     return workspace.defaultTab();
 }
 
-pub fn workspacePath(reader: Reader, location: source_namespace.schema.WorkspaceLocation) ?[]const u8 {
+pub fn workspacePath(reader: Reader, location: WorkspaceLocationType) ?[]const u8 {
     const workspace = reader.find(location) orelse return null;
     return workspace.pathSlice();
 }
 
-pub fn workspaceName(reader: Reader, location: source_namespace.schema.WorkspaceLocation) ?[]const u8 {
+pub fn workspaceName(reader: Reader, location: WorkspaceLocationType) ?[]const u8 {
     const workspace = reader.find(location) orelse return null;
     return workspace.name();
 }
@@ -87,12 +96,12 @@ pub fn workspaceName(reader: Reader, location: source_namespace.schema.Workspace
 /// ```zig
 /// const explicit = reader.explicitName(location) orelse "";
 /// ```
-pub fn explicitName(reader: Reader, location: source_namespace.schema.WorkspaceLocation) ?[]const u8 {
+pub fn explicitName(reader: Reader, location: WorkspaceLocationType) ?[]const u8 {
     const workspace = reader.find(location) orelse return null;
     return workspace.explicitName();
 }
 
-pub fn tabLabel(reader: Reader, location: source_namespace.schema.TabLocation) ?[]const u8 {
+pub fn tabLabel(reader: Reader, location: TabLocationType) ?[]const u8 {
     const workspace = reader.find(location.workspace) orelse return null;
     return workspace.tabLabel(location.tab_id);
 }
@@ -102,7 +111,7 @@ pub fn tabLabel(reader: Reader, location: source_namespace.schema.TabLocation) ?
 /// ```zig
 /// const previous = reader.previousWorkspace(workspace_id);
 /// ```
-pub fn previousWorkspace(reader: Reader, workspace_id: source_namespace.schema.WorkspaceId) ?source_namespace.schema.WorkspaceId {
+pub fn previousWorkspace(reader: Reader, workspace_id: WorkspaceIdType) ?WorkspaceIdType {
     if (reader.state.count < 2) {
         return null;
     }
@@ -147,7 +156,7 @@ pub fn totalTabs(reader: Reader) usize {
 /// var tabs: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
 /// const snapshot = reader.descriptors(location, &tabs) orelse return;
 /// ```
-pub fn descriptors(reader: Reader, location: source_namespace.schema.WorkspaceLocation, output: *[workspace_mod.max_tabs_per_workspace]source_namespace.schema.TabDescriptor) ?DescriptorSnapshot {
+pub fn descriptors(reader: Reader, location: WorkspaceLocationType, output: *[max_tabs_per_workspace_module]TabDescriptorType) ?DescriptorSnapshot {
     const workspace = reader.find(location) orelse return null;
 
     return .{
@@ -163,7 +172,7 @@ pub fn descriptors(reader: Reader, location: source_namespace.schema.WorkspaceLo
 /// var entries: [max_workspaces]schema.WorkspaceListEntry = undefined;
 /// const list = reader.listEntries(&entries);
 /// ```
-pub fn listEntries(reader: Reader, output: *[state_mod.max_workspaces]source_namespace.schema.WorkspaceListEntry) []const source_namespace.schema.WorkspaceListEntry {
+pub fn listEntries(reader: Reader, output: *[state_mod.max_workspaces]WorkspaceListEntryType) []const WorkspaceListEntryType {
     var count_value: usize = 0;
 
     for (&reader.state.items) |*slot| {

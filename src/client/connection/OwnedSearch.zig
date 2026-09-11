@@ -1,11 +1,15 @@
+const RequestIdType = @import("telar-core").RequestId;
+const PaneIdType = @import("telar-core").PaneId;
+const max_search_needle_bytes_module = @import("telar-core").max_search_needle_bytes;
+const SearchPaneType = @import("telar-core").SearchPane;
 const OwnedSearch = @This();
-const source_namespace = @import("outbox_support.zig");
-request_id: source_namespace.schema.RequestId,
-pane_id: source_namespace.schema.PaneId,
-needle: [source_namespace.schema.max_search_needle_bytes]u8 = undefined,
+
+request_id: RequestIdType,
+pane_id: PaneIdType,
+needle: [max_search_needle_bytes_module]u8 = undefined,
 needle_len: u8 = 0,
 
-pub fn view(value: *const OwnedSearch) source_namespace.schema.SearchPane {
+pub fn view(value: *const OwnedSearch) SearchPaneType {
     return .{
         .request_id = value.request_id,
         .pane_id = value.pane_id,

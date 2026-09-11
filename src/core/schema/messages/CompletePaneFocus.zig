@@ -1,12 +1,15 @@
-const CompletePaneFocus = @This();
 const ClientRoute = @import("ClientRoute.zig");
-const source_namespace = @import("focus.zig");
+const id = @import("../id.zig");
+const types = @import("../types.zig");
+const codec = @import("../codec.zig");
+const CompletePaneFocus = @This();
+
 requester: ClientRoute,
-request_id: source_namespace.RequestId,
-pane_id: source_namespace.PaneId,
+request_id: id.RequestId,
+pane_id: id.PaneId,
 pane_generation: u64,
-outcome: source_namespace.PaneFocusOutcome,
-focused_pane_id: source_namespace.PaneId,
+outcome: types.PaneFocusOutcome,
+focused_pane_id: id.PaneId,
 
 /// Validates the echoed route and the focused pane required on success.
 ///
@@ -15,12 +18,12 @@ focused_pane_id: source_namespace.PaneId,
 /// ```
 pub fn validateWire(completion: CompletePaneFocus) !void {
     try completion.requester.validateWire();
-    try source_namespace.validateRequestId(completion.request_id);
-    try source_namespace.validatePaneId(completion.pane_id);
+    try codec.validateRequestId(completion.request_id);
+    try codec.validatePaneId(completion.pane_id);
     if (completion.pane_generation == 0) {
         return error.InvalidPaneGeneration;
     }
     if (completion.outcome == .focused) {
-        try source_namespace.validatePaneId(completion.focused_pane_id);
+        try codec.validatePaneId(completion.focused_pane_id);
     }
 }

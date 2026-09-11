@@ -1,4 +1,5 @@
+const PaneIdType = @import("telar-core").PaneId;
 const SearchPane = @This();
-const source_namespace = @import("search_pane.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 needle: []const u8,

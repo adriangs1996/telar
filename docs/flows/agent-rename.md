@@ -130,7 +130,7 @@ the probe then degrades to reporting nothing.
 
 ## Proof
 
-- `src/backend/agent/agent.zig` and `tracker.zig` prove precedence, clearing,
+- `src/backend/agent/Agent.zig` and `tracker.zig` prove precedence, clearing,
   durability, watch registration, single-flight probing, stale discard and
   that a re-read name never undoes a later manual title.
 - `src/backend/agent/session_file.zig` proves the bounded watch store and the

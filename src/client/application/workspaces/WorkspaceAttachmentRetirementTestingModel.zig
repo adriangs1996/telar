@@ -1,24 +1,27 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("workspace_attachment_retirement.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-model: *client_model.Model,
-root: source_namespace.schema.PaneId,
-sibling: source_namespace.schema.PaneId,
-other_root: source_namespace.schema.PaneId,
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const TestingModel = @This();
+
+model: *ModelType,
+root: PaneIdType,
+sibling: PaneIdType,
+other_root: PaneIdType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const active: source_namespace.schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const other: source_namespace.schema.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
-    const root: source_namespace.schema.PaneId = @enumFromInt(1);
-    const sibling: source_namespace.schema.PaneId = @enumFromInt(2);
-    const other_root: source_namespace.schema.PaneId = @enumFromInt(3);
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const active: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const other: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const root: PaneIdType = @enumFromInt(1);
+    const sibling: PaneIdType = @enumFromInt(2);
+    const other_root: PaneIdType = @enumFromInt(3);
     try model.workspace.bootstrap(.{ .pane_id = root, .location = active, .size = .{ .cols = 40, .rows = 10 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = root, .new_pane = sibling, .location = active, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     _ = try model.workspace.addCreated(.{

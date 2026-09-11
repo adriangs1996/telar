@@ -1,35 +1,26 @@
 //! Application command for renaming a tab aggregate.
 
+const StateType = @import("../../../workspace/State.zig");
+const RepositoryType = @import("../../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_mod = @import("../../../workspace/root.zig");
+const RenameTabEventCapture = @import("RenameTabEventCapture.zig");
+const RenameTabHandler = @import("RenameTabHandler.zig");
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const tab_module = @import("telar-core").tab;
+const TabLocationType = @import("telar-core").TabLocation;
+const workspace_module = @import("telar-core").workspace;
 
-pub const schema = core.schema;
-pub const WorkspaceRepository = workspace_mod.Repository;
-
-pub const RenameTab = @import("RenameTab.zig");
-
-pub const RenameTabResult = workspace_mod.TabRenamed;
-
-pub const EventPublisher = @import("RenameTabEventPublisher.zig");
-
-pub const RenameTabExecutor = @import("RenameTabExecutor.zig");
-
-pub const RenameTabHandler = @import("RenameTabHandler.zig");
-
-const EventCapture = @import("RenameTabEventCapture.zig");
-
-fn testingRepository(state: *workspace_mod.State) WorkspaceRepository {
-    return WorkspaceRepository.init(state, std.testing.allocator);
+fn testingRepository(state: *StateType) RepositoryType {
+    return RepositoryType.init(state, std.testing.allocator);
 }
 
 test "RenameTabHandler commits before publishing one owned event" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
     const revision = workspaces.reader().revision();
-    var capture: EventCapture = .{ .reader = workspaces.reader() };
+    var capture: RenameTabEventCapture = .{ .reader = workspaces.reader() };
     var handler: RenameTabHandler = .{
         .workspaces = &workspaces,
         .events = capture.publisher(),
@@ -53,12 +44,12 @@ test "RenameTabHandler commits before publishing one owned event" {
 }
 
 test "RenameTabHandler rejects invalid targets and labels without effects" {
-    var state: workspace_mod.State = .{};
+    var state: StateType = .{};
     var workspaces = testingRepository(&state);
     defer workspaces.deinit();
     const location = (try workspaces.ensure("/work/project")).location;
     const revision = workspaces.reader().revision();
-    var capture: EventCapture = .{ .reader = workspaces.reader() };
+    var capture: RenameTabEventCapture = .{ .reader = workspaces.reader() };
     var handler: RenameTabHandler = .{
         .workspaces = &workspaces,
         .events = capture.publisher(),
@@ -69,21 +60,21 @@ test "RenameTabHandler rejects invalid targets and labels without effects" {
         .label = "",
     }));
 
-    const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    const oversized: [max_tab_label_bytes_module + 1]u8 = @splat('x');
     try std.testing.expectError(error.InvalidTabLabel, handler.execute(.{
         .location = location,
         .label = &oversized,
     }));
 
     var missing_tab = location;
-    missing_tab.tab_id = try schema.id.tab(999);
+    missing_tab.tab_id = try tab_module(999);
     try std.testing.expectError(error.TabNotFound, handler.execute(.{
         .location = missing_tab,
         .label = "missing",
     }));
 
-    const missing_workspace: schema.TabLocation = .{
-        .workspace = .{ .workspace = try schema.id.workspace(999) },
+    const missing_workspace: TabLocationType = .{
+        .workspace = .{ .workspace = try workspace_module(999) },
         .tab_id = location.tab_id,
     };
     try std.testing.expectError(error.TabNotFound, handler.execute(.{

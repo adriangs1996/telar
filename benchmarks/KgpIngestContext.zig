@@ -1,8 +1,9 @@
-const KgpIngestContext = @This();
 const vt = @import("ghostty-vt");
 const std = @import("std");
-const source_namespace = @import("main.zig");
-const core = @import("telar-core");
+const main = @import("main.zig");
+const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
+const KgpIngestContext = @This();
+
 const width = 1920;
 const height = 1080;
 const raw_len = width * height * 4;
@@ -14,14 +15,14 @@ stream: vt.TerminalStream,
 gpa: std.mem.Allocator,
 command: []u8,
 
-fn init(io: source_namespace.Io, gpa: std.mem.Allocator) !KgpIngestContext {
+pub fn init(io: std.Io, gpa: std.mem.Allocator) !KgpIngestContext {
     const raw = try gpa.alloc(u8, raw_len);
     defer gpa.free(raw);
     for (raw, 0..) |*byte, index| byte.* = @truncate(index % 251);
 
     const compressed_buffer = try gpa.alloc(u8, raw_len + 1024);
     defer gpa.free(compressed_buffer);
-    var output: source_namespace.Io.Writer = .fixed(compressed_buffer);
+    var output: std.Io.Writer = .fixed(compressed_buffer);
     var compression_buffer: [std.compress.flate.max_window_len]u8 = undefined;
     var compressor = try std.compress.flate.Compress.init(
         &output,
@@ -44,9 +45,9 @@ fn init(io: source_namespace.Io, gpa: std.mem.Allocator) !KgpIngestContext {
     @memcpy(command[prefix.len + encoded_len ..], suffix);
 
     var terminal = try vt.Terminal.init(io, gpa, .{
-        .cols = source_namespace.cols,
-        .rows = source_namespace.rows,
-        .kitty_image_storage_limit = core.graphics.max_image_bytes_per_screen,
+        .cols = main.cols,
+        .rows = main.rows,
+        .kitty_image_storage_limit = max_image_bytes_per_screen_module,
         .kitty_image_loading_limits = .direct,
     });
     errdefer terminal.deinit(gpa);
@@ -57,7 +58,7 @@ fn init(io: source_namespace.Io, gpa: std.mem.Allocator) !KgpIngestContext {
     return .{ .terminal = terminal, .stream = stream, .gpa = gpa, .command = command };
 }
 
-fn deinit(context: *KgpIngestContext) void {
+pub fn deinit(context: *KgpIngestContext) void {
     context.stream.deinit();
     context.terminal.deinit(context.gpa);
     context.gpa.free(context.command);

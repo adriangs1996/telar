@@ -1,27 +1,34 @@
-const PaneFixture = @This();
-const source_namespace = @import("support.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const TabLocationType = @import("telar-core").TabLocation;
 const std = @import("std");
-const history = @import("../../history/root.zig");
-const pane_mod = @import("../../pane/root.zig");
-const attachment_mod = @import("../attachment/root.zig");
-const agent_mod = @import("../../agent/root.zig");
-const telemetry_mod = @import("../observability/root.zig").telemetry;
-const core = @import("telar-core");
-const pty = @import("../../pty/root.zig");
-pub const initial_size: source_namespace.schema.TerminalSize = .{ .cols = 20, .rows = 5 };
-pub const location: source_namespace.schema.TabLocation = .{
+const ServiceType = @import("../../history/Service.zig");
+const GraphicsBudgetType = @import("../../media/GraphicsBudget.zig");
+const PaneType = @import("../../pane/Pane.zig");
+const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
+const TrackerType = @import("../../agent/Tracker.zig");
+const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
+const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
+const pane_module = @import("telar-core").pane;
+const PaneIdType = @import("telar-core").PaneId;
+const CommandType = @import("../../pty/Command.zig");
+const raw_module = @import("telar-core").raw;
+const support = @import("support.zig");
+const PaneFixture = @This();
+
+pub const initial_size: TerminalSizeType = .{ .cols = 20, .rows = 5 };
+pub const location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(2) },
     .tab_id = @enumFromInt(5),
 };
 
 pane_allocator: std.testing.FailingAllocator = undefined,
 attachment_allocator: std.testing.FailingAllocator = undefined,
-history_service: history.Service = undefined,
-budget: pane_mod.GraphicsBudget = undefined,
-pane: *pane_mod.Pane = undefined,
-attachments: attachment_mod.AttachmentStore = .{},
-agents: agent_mod.Tracker = .{},
-metrics: telemetry_mod.RuntimeMetrics = .{ .started_ns = 0 },
+history_service: ServiceType = undefined,
+budget: GraphicsBudgetType = undefined,
+pane: *PaneType = undefined,
+attachments: AttachmentStoreType = .{},
+agents: TrackerType = .{},
+metrics: RuntimeMetricsType = .{ .started_ns = 0 },
 
 /// Creates one running pane and one client attachment with independently
 /// injectable allocators.
@@ -37,14 +44,14 @@ pub fn init(fixture: *PaneFixture) !void {
     fixture.* = .{};
     fixture.pane_allocator = .init(std.testing.allocator, .{});
     fixture.attachment_allocator = .init(std.testing.allocator, .{});
-    fixture.history_service = try history.Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
+    fixture.history_service = try ServiceType.init(std.testing.allocator, .{ .database_path = ":memory:" });
     errdefer {
         fixture.history_service.stop(io);
         fixture.history_service.deinit(io);
     }
 
-    fixture.budget = pane_mod.GraphicsBudget.init(core.graphics.max_image_bytes_global);
-    fixture.pane = try fixture.createPane(try source_namespace.schema.id.pane(7));
+    fixture.budget = GraphicsBudgetType.init(max_image_bytes_global_module);
+    fixture.pane = try fixture.createPane(try pane_module(7));
     errdefer {
         fixture.pane.session.shutdown();
         fixture.pane.destroy();
@@ -73,16 +80,16 @@ pub fn deinit(fixture: *PaneFixture) void {
 /// ```zig
 /// const second = try fixture.createPane(try schema.id.pane(8));
 /// ```
-pub fn createPane(fixture: *PaneFixture, pane_id: source_namespace.schema.PaneId) !*pane_mod.Pane {
+pub fn createPane(fixture: *PaneFixture, pane_id: PaneIdType) !*PaneType {
     const arguments = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try pty.Command.fromArgv(&arguments);
-    const pane = try pane_mod.Pane.create(.{
+    const command = try CommandType.fromArgv(&arguments);
+    const pane = try PaneType.create(.{
         .io = std.testing.io,
         .gpa = fixture.pane_allocator.allocator(),
         .history_service = &fixture.history_service,
         .graphics_budget = &fixture.budget,
     }, .{
-        .identity = .{ .id = pane_id, .generation = source_namespace.schema.id.raw(pane_id) },
+        .identity = .{ .id = pane_id, .generation = raw_module(pane_id) },
         .location = location,
         .command = &command,
         .launch_cwd = "/",
@@ -122,7 +129,7 @@ pub fn failNextAttachmentAllocation(fixture: *PaneFixture) void {
 /// Executes a queued media turn deterministically, with the production borrow.
 /// Example: `fixture.processMedia();`.
 pub fn processMedia(fixture: *PaneFixture) void {
-    source_namespace.processMediaTurn(fixture.pane);
+    support.processMediaTurn(fixture.pane);
 }
 
 pub fn addRgbaImage(fixture: *PaneFixture, image_id: u32) !void {

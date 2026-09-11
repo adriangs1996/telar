@@ -1,34 +1,34 @@
-const AttachmentStore = @This();
-const source_namespace = @import("root.zig");
+const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+const IteratorType = @import("Iterator.zig");
 const Attachment = @import("Attachment.zig");
+const GenericSlotIndex = @import("telar-core").GenericSlotIndex;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const raw_module = @import("telar-core").raw;
 const std = @import("std");
+const GraphicsCreditType = @import("telar-core").GraphicsCredit;
+const attachment_namespace = @import("attachment_namespace.zig");
+const FrameAckType = @import("telar-core").FrameAck;
+const SetPaneViewportType = @import("telar-core").SetPaneViewport;
 const SelectionQuery = @import("SelectionQuery.zig");
+const selection = @import("selection.zig");
+const PaneType = @import("../../pane/Pane.zig");
 const PaneDetached = @import("PaneDetached.zig");
-const core = @import("telar-core");
-pub const capacity = source_namespace.max_panes;
-pub const Iterator = struct {
-    store: *const AttachmentStore,
-    position: usize = 0,
+const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
+const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
+pub const AttachmentStore = @This();
 
-    pub fn next(self: *Iterator) ?*const Attachment {
-        while (self.position < self.store.items.len) {
-            defer self.position += 1;
-            if (self.store.items[self.position]) |*value| {
-                return value;
-            }
-        }
-        return null;
-    }
-};
+pub const capacity = @import("telar-core").max_panes_per_tab;
+pub const Iterator = @import("Iterator.zig");
 
-items: [source_namespace.max_panes]?Attachment = [_]?Attachment{null} ** source_namespace.max_panes,
+items: [max_panes_per_tab]?Attachment = [_]?Attachment{null} ** max_panes_per_tab,
 count: usize = 0,
-index: source_namespace.SlotIndex(2 * source_namespace.max_panes) = .{},
-workspace: ?source_namespace.schema.WorkspaceLocation = null,
+index: GenericSlotIndex(2 * max_panes_per_tab) = .{},
+workspace: ?WorkspaceLocationType = null,
 shared_graphics: bool = false,
 
-pub fn find(store: *AttachmentStore, pane_id: source_namespace.schema.PaneId) ?*Attachment {
-    const slot = store.index.get(source_namespace.schema.id.raw(pane_id)) orelse return null;
+pub fn find(store: *AttachmentStore, pane_id: PaneIdType) ?*Attachment {
+    const slot = store.index.get(raw_module(pane_id)) orelse return null;
     const attachment = &store.items[slot].?;
     std.debug.assert(attachment.pane.id == pane_id);
     return attachment;
@@ -42,7 +42,7 @@ pub fn find(store: *AttachmentStore, pane_id: source_namespace.schema.PaneId) ?*
 ///     recordStaleMessage();
 /// }
 /// ```
-pub fn requestCellSnapshot(store: *AttachmentStore, pane_id: source_namespace.schema.PaneId) bool {
+pub fn requestCellSnapshot(store: *AttachmentStore, pane_id: PaneIdType) bool {
     const attachment = store.find(pane_id) orelse return false;
     attachment.requestCellSnapshot();
     return true;
@@ -57,7 +57,7 @@ pub fn requestCellSnapshot(store: *AttachmentStore, pane_id: source_namespace.sc
 ///     recordStaleMessage();
 /// }
 /// ```
-pub fn requestGraphicsSnapshot(store: *AttachmentStore, pane_id: source_namespace.schema.PaneId) bool {
+pub fn requestGraphicsSnapshot(store: *AttachmentStore, pane_id: PaneIdType) bool {
     const attachment = store.find(pane_id) orelse return false;
     attachment.requestGraphicsSnapshot();
     return true;
@@ -69,7 +69,7 @@ pub fn requestGraphicsSnapshot(store: *AttachmentStore, pane_id: source_namespac
 /// ```zig
 /// const update = store.returnGraphicsCredit(credit);
 /// ```
-pub fn returnGraphicsCredit(store: *AttachmentStore, credit: source_namespace.schema.GraphicsCredit) source_namespace.GraphicsCreditUpdate {
+pub fn returnGraphicsCredit(store: *AttachmentStore, credit: GraphicsCreditType) attachment_namespace.GraphicsCreditUpdate {
     const attachment = store.find(credit.pane_id) orelse return .pane_not_attached;
     const bytes = std.math.cast(usize, credit.bytes) orelse return .invalid_amount;
 
@@ -86,7 +86,7 @@ pub fn returnGraphicsCredit(store: *AttachmentStore, credit: source_namespace.sc
 /// ```zig
 /// const elapsed = store.acknowledgeFrame(ack, received_at_ns) orelse return;
 /// ```
-pub fn acknowledgeFrame(store: *AttachmentStore, ack: source_namespace.schema.FrameAck, received_at_ns: u64) ?u64 {
+pub fn acknowledgeFrame(store: *AttachmentStore, ack: FrameAckType, received_at_ns: u64) ?u64 {
     const attachment = store.find(ack.pane_id) orelse return null;
     return attachment.acknowledgeFrame(ack.frame_id, received_at_ns);
 }
@@ -97,7 +97,7 @@ pub fn acknowledgeFrame(store: *AttachmentStore, ack: source_namespace.schema.Fr
 /// ```zig
 /// const update = try store.setPaneViewport(viewport) orelse return;
 /// ```
-pub fn setPaneViewport(store: *AttachmentStore, viewport: source_namespace.schema.SetPaneViewport) !?source_namespace.ViewportUpdate {
+pub fn setPaneViewport(store: *AttachmentStore, viewport: SetPaneViewportType) !?attachment_namespace.ViewportUpdate {
     const attachment = store.find(viewport.pane_id) orelse return null;
     const changed = try attachment.setViewport(viewport.offset);
     return if (changed) .changed else .unchanged;
@@ -113,7 +113,7 @@ pub fn setPaneViewport(store: *AttachmentStore, viewport: source_namespace.schem
 ///     .scratch = &scratch,
 /// }) orelse return;
 /// ```
-pub fn copySelection(store: *AttachmentStore, pane_id: source_namespace.schema.PaneId, query: SelectionQuery) ?source_namespace.SelectionResult {
+pub fn copySelection(store: *AttachmentStore, pane_id: PaneIdType, query: SelectionQuery) ?selection.Result {
     const attachment = store.find(pane_id) orelse return null;
     return attachment.copySelection(query.range, query.scratch);
 }
@@ -125,7 +125,7 @@ pub fn at(store: *AttachmentStore, index: usize) ?*Attachment {
     return if (store.items[index]) |*attachment| attachment else null;
 }
 
-pub fn iterator(store: *const AttachmentStore) Iterator {
+pub fn iterator(store: *const AttachmentStore) IteratorType {
     return .{ .store = store };
 }
 
@@ -133,7 +133,7 @@ pub fn len(store: *const AttachmentStore) usize {
     return store.count;
 }
 
-pub fn currentWorkspace(store: *const AttachmentStore) ?source_namespace.schema.WorkspaceLocation {
+pub fn currentWorkspace(store: *const AttachmentStore) ?WorkspaceLocationType {
     return store.workspace;
 }
 
@@ -143,7 +143,7 @@ pub fn currentWorkspace(store: *const AttachmentStore) ?source_namespace.schema.
 /// ```zig
 /// const update = store.configureGraphics(true);
 /// ```
-pub fn configureGraphics(store: *AttachmentStore, shared: bool) source_namespace.GraphicsConfigurationUpdate {
+pub fn configureGraphics(store: *AttachmentStore, shared: bool) attachment_namespace.GraphicsConfigurationUpdate {
     if (store.shared_graphics == shared) {
         return .unchanged;
     }
@@ -157,7 +157,7 @@ pub fn configureGraphics(store: *AttachmentStore, shared: bool) source_namespace
     return .changed;
 }
 
-pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *source_namespace.Pane) !*Attachment {
+pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *PaneType) !*Attachment {
     std.debug.assert(pane.launch_state == .running);
     if (store.find(pane.id)) |existing| {
         return existing;
@@ -167,14 +167,14 @@ pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *source_nam
             return error.WorkspaceMismatch;
         }
     }
-    if (store.count == source_namespace.max_panes) {
+    if (store.count == max_panes_per_tab) {
         return error.AttachmentLimitReached;
     }
     for (&store.items, 0..) |*slot, position| {
         if (slot.* == null) {
             slot.* = try Attachment.init(gpa, pane);
             slot.*.?.configureGraphics(store.shared_graphics);
-            store.index.put(source_namespace.schema.id.raw(pane.id), position);
+            store.index.put(raw_module(pane.id), position);
             if (store.workspace == null) {
                 store.workspace = pane.location.workspace;
             }
@@ -195,15 +195,15 @@ pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *source_nam
 ///     _ = store.leaveWorkspace(detached.workspace);
 /// }
 /// ```
-pub fn detach(store: *AttachmentStore, pane_id: source_namespace.schema.PaneId) ?PaneDetached {
-    const position = store.index.get(source_namespace.schema.id.raw(pane_id)) orelse return null;
+pub fn detach(store: *AttachmentStore, pane_id: PaneIdType) ?PaneDetached {
+    const position = store.index.get(raw_module(pane_id)) orelse return null;
     const attachment = &store.items[position].?;
     std.debug.assert(attachment.pane.id == pane_id);
     const workspace = attachment.pane.location.workspace;
     std.debug.assert(store.workspace != null and std.meta.eql(store.workspace.?, workspace));
 
     attachment.deinit();
-    store.index.remove(source_namespace.schema.id.raw(pane_id));
+    store.index.remove(raw_module(pane_id));
     store.items[position] = null;
     store.count -= 1;
 
@@ -223,7 +223,7 @@ pub fn detach(store: *AttachmentStore, pane_id: source_namespace.schema.PaneId) 
 ///     release(workspace);
 /// }
 /// ```
-pub fn leaveWorkspace(store: *AttachmentStore, workspace: source_namespace.schema.WorkspaceLocation) bool {
+pub fn leaveWorkspace(store: *AttachmentStore, workspace: WorkspaceLocationType) bool {
     if (store.count != 0 or store.workspace == null or !std.meta.eql(store.workspace.?, workspace)) {
         return false;
     }
@@ -232,7 +232,7 @@ pub fn leaveWorkspace(store: *AttachmentStore, workspace: source_namespace.schem
     return true;
 }
 
-pub fn observes(store: *const AttachmentStore, workspace: source_namespace.schema.WorkspaceLocation) bool {
+pub fn observes(store: *const AttachmentStore, workspace: WorkspaceLocationType) bool {
     return store.workspace != null and std.meta.eql(store.workspace.?, workspace);
 }
 
@@ -240,11 +240,11 @@ pub fn availableGraphicsCredit(store: *const AttachmentStore) usize {
     var outstanding: usize = 0;
     for (store.items) |slot| {
         const attachment = slot orelse continue;
-        outstanding +|= core.graphics.max_image_bytes_per_pane -
-            @min(attachment.graphicsCredit(), core.graphics.max_image_bytes_per_pane);
+        outstanding +|= max_image_bytes_per_pane_module -
+            @min(attachment.graphicsCredit(), max_image_bytes_per_pane_module);
     }
-    return core.graphics.max_image_bytes_global -|
-        @min(outstanding, core.graphics.max_image_bytes_global);
+    return max_image_bytes_global_module -|
+        @min(outstanding, max_image_bytes_global_module);
 }
 
 /// Releases every attachment while preserving per-client configuration for

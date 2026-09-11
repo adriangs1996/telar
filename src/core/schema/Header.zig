@@ -1,7 +1,8 @@
-const Header = @This();
 const id = @import("id.zig");
 const Cursor = @import("Cursor.zig");
 const Scroll = @import("Scroll.zig");
+const Header = @This();
+
 pane_id: id.PaneId,
 frame_id: u64,
 base_frame_id: u64,

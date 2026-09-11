@@ -1,10 +1,11 @@
 //! Bounded delivery channel for proxy observations.
 
-const std = @import("std");
+const ObservationQueueMetrics = @import("ObservationQueueMetrics.zig");
+const ChannelType = @import("Channel.zig");
+const MiddlewareEvent = @import("MiddlewareEvent.zig");
 const identity = @import("identity.zig");
-const middleware = @import("middleware.zig");
-
-pub const Io = std.Io;
+const std = @import("std");
+const GateState = @import("GateState.zig");
 
 pub const capacity = 256;
 
@@ -14,9 +15,7 @@ pub const Metrics = @import("ObservationQueueMetrics.zig");
 
 pub const Channel = @import("Channel.zig");
 
-const GateState = @import("GateState.zig");
-
-fn testEvent(generation: u64, connection_id: u64) middleware.Event {
+fn testEvent(generation: u64, connection_id: u64) MiddlewareEvent {
     return .{
         .credential = .{
             .pane_id = @enumFromInt(7),
@@ -31,7 +30,7 @@ fn testEvent(generation: u64, connection_id: u64) middleware.Event {
     };
 }
 
-fn publishBatch(channel: *Channel, io: Io, first_connection_id: u64) void {
+fn publishBatch(channel: *ChannelType, io: std.Io, first_connection_id: u64) void {
     for (0..64) |index| {
         channel.publish(io, testEvent(1, first_connection_id + @as(u64, @intCast(index))));
     }
@@ -39,17 +38,17 @@ fn publishBatch(channel: *Channel, io: Io, first_connection_id: u64) void {
 
 test "publication rejects revoked credentials without consuming capacity" {
     var state: GateState = .{};
-    var channel: Channel = undefined;
+    var channel: ChannelType = undefined;
     channel.init(state.gate());
 
     channel.publish(std.testing.io, testEvent(2, 1));
 
-    try std.testing.expectEqualDeep(Metrics{ .queued = 0, .high_water = 0, .dropped = 0 }, channel.metrics());
+    try std.testing.expectEqualDeep(ObservationQueueMetrics{ .queued = 0, .high_water = 0, .dropped = 0 }, channel.metrics());
 }
 
 test "bounded publication records depth high water and loss" {
     var state: GateState = .{};
-    var channel: Channel = undefined;
+    var channel: ChannelType = undefined;
     channel.init(state.gate());
 
     for (0..capacity) |index| {
@@ -57,7 +56,7 @@ test "bounded publication records depth high water and loss" {
     }
     channel.publish(std.testing.io, testEvent(1, capacity));
 
-    try std.testing.expectEqualDeep(Metrics{
+    try std.testing.expectEqualDeep(ObservationQueueMetrics{
         .queued = capacity,
         .high_water = capacity,
         .dropped = 1,
@@ -76,9 +75,9 @@ test "concurrent publishers cannot reserve beyond the fixed bound" {
     const publisher_count = 8;
     const events_per_publisher = 64;
     var state: GateState = .{};
-    var channel: Channel = undefined;
+    var channel: ChannelType = undefined;
     channel.init(state.gate());
-    var publishers: Io.Group = .init;
+    var publishers: std.Io.Group = .init;
 
     for (0..publisher_count) |index| {
         try publishers.concurrent(std.testing.io, publishBatch, .{
@@ -89,7 +88,7 @@ test "concurrent publishers cannot reserve beyond the fixed bound" {
     }
     try publishers.await(std.testing.io);
 
-    try std.testing.expectEqualDeep(Metrics{
+    try std.testing.expectEqualDeep(ObservationQueueMetrics{
         .queued = capacity,
         .high_water = capacity,
         .dropped = publisher_count * events_per_publisher - capacity,
@@ -103,7 +102,7 @@ test "concurrent publishers cannot reserve beyond the fixed bound" {
 
 test "delivery discards events revoked after publication" {
     var state: GateState = .{};
-    var channel: Channel = undefined;
+    var channel: ChannelType = undefined;
     channel.init(state.gate());
 
     channel.publish(std.testing.io, testEvent(1, 1));
@@ -114,7 +113,7 @@ test "delivery discards events revoked after publication" {
     defer std.crypto.secureZero(u8, &event.credential.token);
 
     try std.testing.expectEqual(@as(u64, 2), event.connection_id);
-    try std.testing.expectEqualDeep(Metrics{
+    try std.testing.expectEqualDeep(ObservationQueueMetrics{
         .queued = 0,
         .high_water = 2,
         .dropped = 0,
@@ -123,21 +122,21 @@ test "delivery discards events revoked after publication" {
 
 test "direct handoff reserves depth before a waiting receiver releases it" {
     var state: GateState = .{};
-    var channel: Channel = undefined;
+    var channel: ChannelType = undefined;
     channel.init(state.gate());
-    var receiver = try std.testing.io.concurrent(Channel.receive, .{ &channel, std.testing.io });
+    var receiver = try std.testing.io.concurrent(ChannelType.receive, .{ &channel, std.testing.io });
 
     channel.publish(std.testing.io, testEvent(1, 9));
     var event = try receiver.await(std.testing.io);
     defer std.crypto.secureZero(u8, &event.credential.token);
 
     try std.testing.expectEqual(@as(u64, 9), event.connection_id);
-    try std.testing.expectEqualDeep(Metrics{ .queued = 0, .high_water = 1, .dropped = 0 }, channel.metrics());
+    try std.testing.expectEqualDeep(ObservationQueueMetrics{ .queued = 0, .high_water = 1, .dropped = 0 }, channel.metrics());
 }
 
 test "closure drains buffered observations then rejects delivery and publication" {
     var state: GateState = .{};
-    var channel: Channel = undefined;
+    var channel: ChannelType = undefined;
     channel.init(state.gate());
     channel.publish(std.testing.io, testEvent(1, 4));
     channel.close(std.testing.io);
@@ -148,14 +147,14 @@ test "closure drains buffered observations then rejects delivery and publication
     try std.testing.expectError(error.Closed, channel.receive(std.testing.io));
 
     channel.publish(std.testing.io, testEvent(1, 5));
-    try std.testing.expectEqualDeep(Metrics{ .queued = 0, .high_water = 1, .dropped = 1 }, channel.metrics());
+    try std.testing.expectEqualDeep(ObservationQueueMetrics{ .queued = 0, .high_water = 1, .dropped = 1 }, channel.metrics());
 }
 
 test "closure wakes a receiver waiting on an empty channel" {
     var state: GateState = .{};
-    var channel: Channel = undefined;
+    var channel: ChannelType = undefined;
     channel.init(state.gate());
-    var receiver = try std.testing.io.concurrent(Channel.receive, .{ &channel, std.testing.io });
+    var receiver = try std.testing.io.concurrent(ChannelType.receive, .{ &channel, std.testing.io });
 
     channel.close(std.testing.io);
 

@@ -1,4 +1,5 @@
+const TabIdType = @import("telar-core").TabId;
 const RequestRenameTab = @This();
-const source_namespace = @import("rename_tab.zig");
-tab_id: source_namespace.schema.TabId,
+
+tab_id: TabIdType,
 label: []const u8,

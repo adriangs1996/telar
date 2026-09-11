@@ -1,12 +1,14 @@
-const Runtime = @This();
-const source_namespace = @import("engine.zig");
-const engine = @import("../../engine/root.zig");
+const OptionsType = @import("../../engine/Options.zig");
+const ServiceType = @import("../../engine/Service.zig");
+const engine = @import("engine.zig");
 const std = @import("std");
-const RuntimeState = @import("EngineRuntimeState.zig");
-lifecycle: source_namespace.EngineLifecycle,
+const EngineRuntimeState = @import("EngineRuntimeState.zig");
+const Runtime = @This();
 
-pub const Options = engine.Options;
-pub const Service = engine.Service;
+lifecycle: engine.EngineLifecycle,
+
+pub const Options = @import("../../engine/Options.zig");
+pub const Service = @import("../../engine/Service.zig");
 
 /// Creates the engine service at a stable address and starts its actor.
 /// No child process starts until the first prompt.
@@ -15,9 +17,9 @@ pub const Service = engine.Service;
 /// var engine_runtime = try Runtime.init(io, gpa, options);
 /// defer engine_runtime.deinit();
 /// ```
-pub fn init(io: source_namespace.Io, gpa: std.mem.Allocator, options: Options) !Runtime {
-    const state = try gpa.create(RuntimeState);
-    const engine_service = engine.Service.init(gpa, options) catch |err| {
+pub fn init(io: std.Io, gpa: std.mem.Allocator, options: OptionsType) !Runtime {
+    const state = try gpa.create(EngineRuntimeState);
+    const engine_service = ServiceType.init(gpa, options) catch |err| {
         gpa.destroy(state);
         return err;
     };
@@ -27,7 +29,7 @@ pub fn init(io: source_namespace.Io, gpa: std.mem.Allocator, options: Options) !
         .service = engine_service,
     };
 
-    return .{ .lifecycle = try source_namespace.EngineLifecycle.start(state) };
+    return .{ .lifecycle = try engine.EngineLifecycle.start(state) };
 }
 
 /// Borrows the service for as long as this runtime remains alive.
@@ -35,7 +37,7 @@ pub fn init(io: source_namespace.Io, gpa: std.mem.Allocator, options: Options) !
 /// ```zig
 /// const service = engine_runtime.service();
 /// ```
-pub fn service(runtime: *Runtime) *engine.Service {
+pub fn service(runtime: *Runtime) *ServiceType {
     return &runtime.lifecycle.state.service;
 }
 

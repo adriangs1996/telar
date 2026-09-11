@@ -1,10 +1,11 @@
+const CompressionType = @import("Compression.zig");
 const ImageState = @This();
-const source_namespace = @import("kitty_delivery.zig");
+
 external_id: u32 = 0,
 transmitted: bool = false,
 force_direct: bool = false,
 compressed: ?[]u8 = null,
-compression: ?*source_namespace.Compression = null,
+compression: ?*CompressionType = null,
 incompressible: bool = false,
 emitted_shared: bool = false,
 transmitted_pass: u64 = 0,

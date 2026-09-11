@@ -1,4 +1,6 @@
+const id = @import("../id.zig");
+const TerminalSizeType = @import("../TerminalSize.zig");
 const PaneResize = @This();
-const source_namespace = @import("pane.zig");
-pane_id: source_namespace.PaneId,
-size: source_namespace.TerminalSize,
+
+pane_id: id.PaneId,
+size: TerminalSizeType,

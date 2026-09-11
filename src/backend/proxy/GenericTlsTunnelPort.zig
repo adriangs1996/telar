@@ -1,6 +1,7 @@
 const GenericAttempt = @import("GenericAttempt.zig").Type;
 const tls = @import("tls.zig");
 const GenericEstablished = @import("GenericEstablished.zig").Type;
+
 /// Defines interception policy, TLS establishment, metrics, and failure
 /// publication supplied by the proxy service.
 ///

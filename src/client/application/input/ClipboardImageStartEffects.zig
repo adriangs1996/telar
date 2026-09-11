@@ -1,4 +1,5 @@
+const ClipboardCaptureType = @import("../../model/ClipboardCapture.zig");
 const StartEffects = @This();
-const client_model = @import("../../root.zig").model;
+
 context: *anyopaque,
-schedule: *const fn (*anyopaque, client_model.ClipboardCapture) anyerror!void,
+schedule: *const fn (*anyopaque, ClipboardCaptureType) anyerror!void,

@@ -1,21 +1,22 @@
-const LocalListener = @This();
-const source_namespace = @import("local.zig");
 const std = @import("std");
-const core = @import("telar-core");
-listener: source_namespace.Io.net.Server,
-path: [source_namespace.Io.net.UnixAddress.max_len]u8 = undefined,
+const local = @import("local.zig");
+const SocketChannelType = @import("telar-core").SocketChannel;
+const LocalListener = @This();
+
+listener: std.Io.net.Server,
+path: [std.Io.net.UnixAddress.max_len]u8 = undefined,
 path_len: usize,
-inode: source_namespace.Io.File.INode,
+inode: std.Io.File.INode,
 active: bool = true,
 
-pub fn listen(io: source_namespace.Io, path: []const u8) !LocalListener {
-    const address = try source_namespace.localAddress(path);
-    try source_namespace.validateEndpointDirectory(path);
-    try source_namespace.reclaimStaleEndpoint(io, path);
+pub fn listen(io: std.Io, path: []const u8) !LocalListener {
+    const address = try local.localAddress(path);
+    try local.validateEndpointDirectory(path);
+    try local.reclaimStaleEndpoint(io, path);
     var listener = try address.listen(io, .{});
     errdefer listener.deinit(io);
 
-    const stat = try source_namespace.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
+    const stat = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
     if (stat.kind != .unix_domain_socket) {
         return error.InvalidEndpoint;
     }
@@ -26,10 +27,10 @@ pub fn listen(io: source_namespace.Io, path: []const u8) !LocalListener {
     // cannot restrict the endpoint. Renaming it out from under us in this
     // window requires write permission on the directory, which the trust
     // validation above already refused to anyone but the owner.
-    try source_namespace.Io.Dir.cwd().setFilePermissions(
+    try std.Io.Dir.cwd().setFilePermissions(
         io,
         path,
-        source_namespace.Io.File.Permissions.fromMode(0o600),
+        std.Io.File.Permissions.fromMode(0o600),
         .{ .follow_symlinks = false },
     );
 
@@ -42,18 +43,18 @@ pub fn listen(io: source_namespace.Io, path: []const u8) !LocalListener {
     return result;
 }
 
-pub fn accept(listener: *LocalListener, io: source_namespace.Io) !core.transport.SocketChannel {
+pub fn accept(listener: *LocalListener, io: std.Io) !SocketChannelType {
     std.debug.assert(listener.active);
     const stream = try listener.listener.accept(io);
     errdefer stream.close(io);
-    const peer_uid = try source_namespace.peerUid(stream.socket.handle);
-    if (!source_namespace.sameUserPeer(peer_uid, std.c.geteuid())) {
+    const peer_uid = try local.peerUid(stream.socket.handle);
+    if (!local.sameUserPeer(peer_uid, std.c.geteuid())) {
         return error.PeerNotOwned;
     }
     return .init(stream);
 }
 
-pub fn deinit(listener: *LocalListener, io: source_namespace.Io) void {
+pub fn deinit(listener: *LocalListener, io: std.Io) void {
     if (!listener.active) {
         return;
     }
@@ -73,10 +74,10 @@ pub fn shutdown(listener: *LocalListener) void {
     _ = std.c.shutdown(listener.listener.socket.handle, std.posix.SHUT.RDWR);
 }
 
-fn removeIfOwned(io: source_namespace.Io, path: []const u8, inode: source_namespace.Io.File.INode) void {
-    const stat = source_namespace.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch return;
+fn removeIfOwned(io: std.Io, path: []const u8, inode: std.Io.File.INode) void {
+    const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch return;
     if (stat.kind != .unix_domain_socket or stat.inode != inode) {
         return;
     }
-    source_namespace.Io.Dir.deleteFileAbsolute(io, path) catch {};
+    std.Io.Dir.deleteFileAbsolute(io, path) catch {};
 }

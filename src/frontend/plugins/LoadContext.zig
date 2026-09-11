@@ -1,6 +1,6 @@
-const LoadContext = @This();
 const std = @import("std");
-const source_namespace = @import("root.zig");
+const LoadContext = @This();
+
 gpa: std.mem.Allocator,
-io: source_namespace.Io,
+io: std.Io,
 config_dir: []const u8,

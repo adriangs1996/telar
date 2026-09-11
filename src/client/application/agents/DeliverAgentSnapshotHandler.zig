@@ -1,12 +1,14 @@
-const DeliverAgentSnapshotHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("AgentSnapshotDeliveryEffects.zig");
-const notification_capability = @import("../../root.zig").notifications;
-const core = @import("telar-core");
-const source_namespace = @import("agent_snapshot_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const AgentSnapshotDeliveryEffects = @import("AgentSnapshotDeliveryEffects.zig");
+const AgentSnapshotCommitType = @import("../../model/AgentSnapshotCommit.zig");
+const notification_capability = @import("../../notifications/notifications.zig");
+const generic_display_name_module = @import("telar-core").generic_display_name;
+const agent_snapshot_delivery = @import("agent_snapshot_delivery.zig");
 const std = @import("std");
-model: *const client_model.Model,
-effects: Effects,
+const DeliverAgentSnapshotHandler = @This();
+
+model: *const ModelType,
+effects: AgentSnapshotDeliveryEffects,
 
 /// Validates one exact commit before synchronizing attachments, publishing
 /// bounded actionable alerts and reconciling sidebar animation in order.
@@ -14,7 +16,7 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(&commit);
 /// ```
-pub fn execute(handler: *DeliverAgentSnapshotHandler, commit: *const client_model.AgentSnapshotCommit) !void {
+pub fn execute(handler: *DeliverAgentSnapshotHandler, commit: *const AgentSnapshotCommitType) !void {
     try handler.validate(commit);
     try handler.effects.synchronize_attachments(handler.effects.context);
 
@@ -26,8 +28,8 @@ pub fn execute(handler: *DeliverAgentSnapshotHandler, commit: *const client_mode
         }
 
         var message_buffer: [96]u8 = undefined;
-        const label = if (snapshot.find(change.key)) |agent| agent.displayName() else core.agent_manifest.generic_display_name;
-        const alert = source_namespace.alertInput(change, label, &message_buffer) orelse continue;
+        const label = if (snapshot.find(change.key)) |agent| agent.displayName() else generic_display_name_module;
+        const alert = agent_snapshot_delivery.alertInput(change, label, &message_buffer) orelse continue;
 
         try handler.effects.publish_alert(handler.effects.context, alert);
         alert_count += 1;
@@ -36,7 +38,7 @@ pub fn execute(handler: *DeliverAgentSnapshotHandler, commit: *const client_mode
     try handler.effects.synchronize_animation(handler.effects.context);
 }
 
-fn validate(handler: *const DeliverAgentSnapshotHandler, commit: *const client_model.AgentSnapshotCommit) !void {
+fn validate(handler: *const DeliverAgentSnapshotHandler, commit: *const AgentSnapshotCommitType) !void {
     const snapshot = handler.model.agentSnapshot();
     const change_count: usize = commit.status_changes.count;
     if (snapshot.revision != commit.runtime_revision or

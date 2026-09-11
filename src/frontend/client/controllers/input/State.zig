@@ -1,29 +1,35 @@
-const State = @This();
-const source_namespace = @import("host_inputs.zig");
+const std = @import("std");
+const host_inputs = @import("host_inputs.zig");
 const Chunk = @import("Chunk.zig");
-const deadline_timer = @import("telar-client").resources.deadline_timer;
+const SchedulerType = @import("telar-client").Scheduler;
+const LeasesType = @import("telar-client").Leases;
+const StartupInputState = @import("../../resources/StartupInputState.zig");
 const Config = @import("Config.zig");
-const widgets = @import("../../../widgets/root.zig");
-file: source_namespace.File,
-router: source_namespace.Router,
+const ModeType = @import("telar-client").Mode;
+const ActionType = @import("telar-client").Action;
+const HintsType = @import("telar-client").Hints;
+const State = @This();
+
+file: std.Io.File,
+router: host_inputs.Router,
 /// The one in-flight TTY read lands here. The read task owns it until
 /// its `.input` completion, and routing finishes before the next read is
 /// armed, so the event carries a length instead of 4 KiB of bytes.
 chunk: Chunk = .{},
 read_pending: bool = false,
 presentation_revision: u64 = 0,
-input_timeout: deadline_timer.Scheduler = .{},
-binding_timeout: deadline_timer.Scheduler = .{},
-application_leases: source_namespace.key_routing.Leases = .{},
-startup_input: @import("../../resources/startup_input.zig").State = .{},
+input_timeout: SchedulerType = .{},
+binding_timeout: SchedulerType = .{},
+application_leases: LeasesType = .{},
+startup_input: StartupInputState = .{},
 
 /// Creates the host input state around the client-owned TTY handle.
 ///
 /// ```zig
 /// const state = try State.init(input_file, config);
 /// ```
-pub fn init(file: source_namespace.File, config: Config) !State {
-    return .{ .file = file, .router = try source_namespace.buildRouter(config) };
+pub fn init(file: std.Io.File, config: Config) !State {
+    return .{ .file = file, .router = try host_inputs.buildRouter(config) };
 }
 
 /// Replaces the native router and wakes timers that still follow its old
@@ -32,7 +38,7 @@ pub fn init(file: source_namespace.File, config: Config) !State {
 /// ```zig
 /// state.replaceRouter(io, replacement);
 /// ```
-pub fn replaceRouter(state: *State, io: source_namespace.Io, replacement: source_namespace.Router) void {
+pub fn replaceRouter(state: *State, io: std.Io, replacement: host_inputs.Router) void {
     const prefix_was_pending = state.router.prefixPending();
     var inherited = replacement;
     inherited.inheritPhysicalLeases(&state.router);
@@ -59,13 +65,13 @@ pub fn presentationVersion(state: *const State) u64 {
 /// ```zig
 /// const mode = state.statusMode(copy_mode_active);
 /// ```
-pub fn statusMode(state: *const State, copy_mode_active: bool) widgets.status_bar.Mode {
+pub fn statusMode(state: *const State, copy_mode_active: bool) ModeType {
     if (!state.router.prefixPending()) {
         return if (copy_mode_active) .copy else .normal;
     }
 
     const DescribedAction = struct {
-        action: source_namespace.Action,
+        action: ActionType,
         label: []const u8,
     };
     const useful = [_]DescribedAction{
@@ -78,7 +84,7 @@ pub fn statusMode(state: *const State, copy_mode_active: bool) widgets.status_ba
         .{ .action = .close_pane, .label = "close pane" },
         .{ .action = .enter_copy_mode, .label = "copy mode" },
     };
-    var hints: widgets.status_bar.Hints = .{};
+    var hints: HintsType = .{};
     for (useful) |described| {
         const key = state.router.prefixedKeyForAction(described.action) orelse continue;
 

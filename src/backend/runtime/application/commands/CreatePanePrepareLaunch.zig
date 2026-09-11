@@ -1,4 +1,6 @@
+const TabLocationType = @import("telar-core").TabLocation;
+const LaunchViewType = @import("telar-core").LaunchView;
 const PrepareLaunch = @This();
-const source_namespace = @import("create_pane.zig");
-location: source_namespace.schema.TabLocation,
-launch: source_namespace.schema.LaunchView,
+
+location: TabLocationType,
+launch: LaunchViewType,

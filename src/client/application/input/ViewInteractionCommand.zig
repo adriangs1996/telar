@@ -1,5 +1,6 @@
+const view_interaction = @import("view_interaction.zig");
 const Command = @This();
-const source_namespace = @import("view_interaction.zig");
-intent: source_namespace.Intent = .none,
+
+intent: view_interaction.Intent = .none,
 layout_changed: bool = false,
 consumed: bool = false,

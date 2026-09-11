@@ -1,5 +1,6 @@
+const CreateTabLaunchedPane = @import("CreateTabLaunchedPane.zig");
 const PaneAttachment = @This();
-const LaunchedPane = @import("CreateTabLaunchedPane.zig");
+
 context: *anyopaque,
 /// Projects the committed pane into the requesting client's attachments.
-attach: *const fn (*anyopaque, LaunchedPane) anyerror!void,
+attach: *const fn (*anyopaque, CreateTabLaunchedPane) anyerror!void,

@@ -1,5 +1,6 @@
+const types = @import("../../model/types.zig");
+const pane_input = @import("pane_input.zig");
 const PasteMarkerCommand = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_input.zig");
-target: client_model.PaneInputTarget,
-marker: source_namespace.PasteMarker,
+
+target: types.PaneInputTarget,
+marker: pane_input.PasteMarker,

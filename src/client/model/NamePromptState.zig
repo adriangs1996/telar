@@ -1,15 +1,17 @@
-const State = @This();
 const Prompt = @import("Prompt.zig");
-const source_namespace = @import("name_prompt.zig");
+const name_prompt = @import("name_prompt.zig");
 const std = @import("std");
 const History = @import("History.zig");
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 const FieldPosition = @import("FieldPosition.zig");
+const State = @This();
+
 value: ?Prompt = null,
 revision: u64 = 0,
 
 /// Reconciles search scope, selection and scroll after a history transition.
 /// Example: `state.updateHistory(.{ .selection = 0, .reset_scroll = true });`.
-pub fn updateHistory(state: *State, update: struct { scope: ?source_namespace.HistoryScope = null, selection: ?u16 = null, reset_scroll: bool = false, scroll_limit: ?u32 = null }) void {
+pub fn updateHistory(state: *State, update: struct { scope: ?name_prompt.HistoryScope = null, selection: ?u16 = null, reset_scroll: bool = false, scroll_limit: ?u32 = null }) void {
     const prompt = state.mutable() orelse return;
     if (prompt.mode != .history) {
         return;
@@ -65,7 +67,7 @@ pub fn takeHistoryPage(state: *State) @FieldType(History, "page_requested") {
 /// ```zig
 /// prompt.begin(.create_workspace);
 /// ```
-pub fn begin(state: *State, command: source_namespace.Begin) void {
+pub fn begin(state: *State, command: name_prompt.Begin) void {
     state.value = switch (command) {
         .rename_tab => |rename| .{
             .mode = .{ .rename_tab = rename.tab_id },
@@ -77,7 +79,7 @@ pub fn begin(state: *State, command: source_namespace.Begin) void {
         },
         .rename_workspace => |rename| .{
             .mode = .{ .rename_workspace = rename.workspace },
-            .field = .init(if (rename.name.len <= source_namespace.schema.max_tab_label_bytes) rename.name else ""),
+            .field = .init(if (rename.name.len <= max_tab_label_bytes_module) rename.name else ""),
         },
         .copy_search => |direction| .{
             .mode = .{ .copy_search = direction },
@@ -136,7 +138,7 @@ pub fn version(state: *const State) u64 {
 /// ```zig
 /// const transition = prompt.apply(.backspace);
 /// ```
-pub fn apply(state: *State, command: source_namespace.Command) source_namespace.Transition {
+pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition {
     const prompt = state.mutable() orelse return .unchanged;
     switch (command) {
         .paste_start => {
@@ -159,7 +161,7 @@ pub fn apply(state: *State, command: source_namespace.Command) source_namespace.
             if (prompt.pasting) {
                 return state.editField(.{ .insert = " " });
             }
-            if (prompt.field.text().len == 0 and !source_namespace.selects(prompt.target())) {
+            if (prompt.field.text().len == 0 and !name_prompt.selects(prompt.target())) {
                 return .unchanged;
             }
 
@@ -188,7 +190,7 @@ pub fn apply(state: *State, command: source_namespace.Command) source_namespace.
                 return .changed;
             }
 
-            if (!source_namespace.selects(prompt.target()) or prompt.selection() == 0) {
+            if (!name_prompt.selects(prompt.target()) or prompt.selection() == 0) {
                 return .unchanged;
             }
 
@@ -208,7 +210,7 @@ pub fn apply(state: *State, command: source_namespace.Command) source_namespace.
                 return .changed;
             }
 
-            if (!source_namespace.selects(prompt.target())) {
+            if (!name_prompt.selects(prompt.target())) {
                 return .unchanged;
             }
 
@@ -274,7 +276,7 @@ pub fn apply(state: *State, command: source_namespace.Command) source_namespace.
 /// ```zig
 /// std.debug.assert(prompt.finish(submission.target));
 /// ```
-pub fn finish(state: *State, target: source_namespace.Target) bool {
+pub fn finish(state: *State, target: name_prompt.Target) bool {
     const prompt = state.currentConst() orelse return false;
     if (!std.meta.eql(prompt.target(), target)) {
         return false;
@@ -285,7 +287,7 @@ pub fn finish(state: *State, target: source_namespace.Target) bool {
     return true;
 }
 
-fn editField(state: *State, command: source_namespace.Command) source_namespace.Transition {
+fn editField(state: *State, command: name_prompt.Command) name_prompt.Transition {
     const prompt = state.mutable() orelse return .unchanged;
     const before: FieldPosition = .capture(&prompt.field);
     switch (command) {
@@ -302,7 +304,7 @@ fn editField(state: *State, command: source_namespace.Command) source_namespace.
         return .unchanged;
     }
 
-    if (source_namespace.selects(prompt.target()) and before.len != prompt.field.len) {
+    if (name_prompt.selects(prompt.target()) and before.len != prompt.field.len) {
         prompt.setSelection(0);
     }
     state.revision +%= 1;

@@ -1,9 +1,8 @@
 //! Bounded ownership for host keys that report a physical lifecycle.
 
+const GenericTable = @import("GenericTable.zig").Type;
+const PhysicalType = @import("Physical.zig");
 const std = @import("std");
-pub const Identity = @import("root.zig").Key.Physical;
-
-pub const Table = @import("GenericTable.zig").Type;
 
 const TestOwner = enum {
     binding,
@@ -11,10 +10,10 @@ const TestOwner = enum {
     prompt,
 };
 
-const TestTable = Table(TestOwner, 2);
+const TestTable = GenericTable(TestOwner, 2);
 
 test "a physical identity keeps one replaceable owner" {
-    const key: Identity = .{ .value = 115 };
+    const key: PhysicalType = .{ .value = 115 };
     var leases: TestTable = .{};
 
     try std.testing.expect(leases.acquire(key, .binding));

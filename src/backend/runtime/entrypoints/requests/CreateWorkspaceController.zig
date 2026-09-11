@@ -1,16 +1,19 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const CreateWorkspaceExecutorType = @import("../../application/commands/CreateWorkspaceExecutor.zig");
+const CreateWorkspaceViewType = @import("telar-core").CreateWorkspaceView;
+const CreateWorkspaceFailure = @import("CreateWorkspaceFailure.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const Controller = @This();
-const source_namespace = @import("create_workspace.zig");
-const create_workspace_commands = @import("../../application/commands/create_workspace.zig");
-const Failure = @import("CreateWorkspaceFailure.zig");
-responses: *source_namespace.ResponseQueue,
-create_workspace: create_workspace_commands.CreateWorkspaceExecutor,
+
+responses: *ResponseQueueType,
+create_workspace: CreateWorkspaceExecutorType,
 
 /// Creates a controller scoped to one create-workspace request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, create_workspace: create_workspace_commands.CreateWorkspaceExecutor) Controller {
+pub fn init(responses: *ResponseQueueType, create_workspace: CreateWorkspaceExecutorType) Controller {
     return .{ .responses = responses, .create_workspace = create_workspace };
 }
 
@@ -20,13 +23,13 @@ pub fn init(responses: *source_namespace.ResponseQueue, create_workspace: create
 /// ```zig
 /// try controller.createWorkspace(request);
 /// ```
-pub fn createWorkspace(controller: *Controller, request: source_namespace.schema.CreateWorkspaceView) !void {
+pub fn createWorkspace(controller: *Controller, request: CreateWorkspaceViewType) !void {
     const result = controller.create_workspace.execute(.{
         .name = request.name,
         .size = request.size,
         .launch = request.launch,
     }) catch |err| {
-        const failure: Failure = switch (err) {
+        const failure: CreateWorkspaceFailure = switch (err) {
             error.InvalidLaunchCwd => .{ .code = .invalid_request, .message = "cwd source pane is unavailable" },
             error.WorkspaceCreateFailed => .{ .code = .resource_limit, .message = "could not create workspace" },
             error.GeometryUnavailable => .{ .code = .resource_limit, .message = "workspace geometry is unavailable" },
@@ -48,7 +51,7 @@ pub fn createWorkspace(controller: *Controller, request: source_namespace.schema
     } });
 }
 
-fn queueFailure(controller: *Controller, request_id: source_namespace.schema.RequestId, failure: Failure) !void {
+fn queueFailure(controller: *Controller, request_id: RequestIdType, failure: CreateWorkspaceFailure) !void {
     try controller.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,

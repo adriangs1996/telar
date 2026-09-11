@@ -1,13 +1,17 @@
-const DeliverTabRemovalHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("TabRemovalDeliveryEffects.zig");
-const source_namespace = @import("tab_removal_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabRemovalDeliveryEffects = @import("TabRemovalDeliveryEffects.zig");
+const types = @import("../../model/types.zig");
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const close_tab = @import("close_tab.zig");
-const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
+const ReleasePaneResourcesHandlerType = @import("../panes/ReleasePaneResourcesHandler.zig");
+const RetireReportedPaneFocusHandlerType = @import("../panes/RetireReportedPaneFocusHandler.zig");
 const std = @import("std");
-model: *client_model.Model,
-effects: Effects,
+const TabLocationType = @import("telar-core").TabLocation;
+const TabType = @import("../../workspace/Tab.zig");
+const DeliverTabRemovalHandler = @This();
+
+model: *ModelType,
+effects: TabRemovalDeliveryEffects,
 
 /// Validates one exact removed or stale commit before retiring resources,
 /// activating a successor tab and choosing workspace handoff or exit.
@@ -15,7 +19,7 @@ effects: Effects,
 /// ```zig
 /// const directive = try handler.execute(commit, previous_workspace);
 /// ```
-pub fn execute(handler: *DeliverTabRemovalHandler, commit: client_model.TabRemovalCommit, previous_workspace: ?source_namespace.schema.WorkspaceId) !close_tab.TabRemovalDirective {
+pub fn execute(handler: *DeliverTabRemovalHandler, commit: types.TabRemovalCommit, previous_workspace: ?WorkspaceIdType) !close_tab.TabRemovalDirective {
     try handler.validate(commit);
 
     const removal = switch (commit) {
@@ -27,7 +31,7 @@ pub fn execute(handler: *DeliverTabRemovalHandler, commit: client_model.TabRemov
     };
     handler.effects.retire_tab_requests(handler.effects.context, removal.removed);
 
-    var release_pane: pane_resource_release.ReleasePaneResourcesHandler = .{
+    var release_pane: ReleasePaneResourcesHandlerType = .{
         .model = handler.model,
         .effects = .{
             .context = handler.effects.context,
@@ -39,7 +43,7 @@ pub fn execute(handler: *DeliverTabRemovalHandler, commit: client_model.TabRemov
     }
 
     if (removal.was_active) {
-        var retire_focus: pane_focus_reporting.RetireReportedPaneFocusHandler = .{
+        var retire_focus: RetireReportedPaneFocusHandlerType = .{
             .model = handler.model,
         };
         _ = retire_focus.execute();
@@ -69,7 +73,7 @@ pub fn execute(handler: *DeliverTabRemovalHandler, commit: client_model.TabRemov
     return .continue_running;
 }
 
-fn validate(handler: *const DeliverTabRemovalHandler, commit: client_model.TabRemovalCommit) !void {
+fn validate(handler: *const DeliverTabRemovalHandler, commit: types.TabRemovalCommit) !void {
     const version = handler.model.version();
     switch (commit) {
         .stale => |stale| {
@@ -143,7 +147,7 @@ fn validate(handler: *const DeliverTabRemovalHandler, commit: client_model.TabRe
     }
 }
 
-fn exactTab(handler: *const DeliverTabRemovalHandler, location: source_namespace.schema.TabLocation) !*source_namespace.tabs_mod.Tab {
+fn exactTab(handler: *const DeliverTabRemovalHandler, location: TabLocationType) !*TabType {
     const tab = handler.model.workspace.find(location.tab_id) orelse return error.StaleTabRemoval;
     if (!std.meta.eql(tab.location, location)) {
         return error.StaleTabRemoval;

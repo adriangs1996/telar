@@ -1,5 +1,6 @@
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const Reconciliation = @This();
-const source_namespace = @import("resync_required.zig");
-required_workspace: source_namespace.schema.WorkspaceLocation,
-projected_workspace: ?source_namespace.schema.WorkspaceLocation,
+
+required_workspace: WorkspaceLocationType,
+projected_workspace: ?WorkspaceLocationType,
 snapshot_pending: bool,

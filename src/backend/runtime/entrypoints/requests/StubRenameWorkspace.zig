@@ -1,19 +1,23 @@
-const StubRenameWorkspace = @This();
-const rename_workspace_commands = @import("../../application/commands/rename_workspace.zig");
-const source_namespace = @import("rename_workspace.zig");
+const WorkspaceRenamed = @import("../../../workspace/WorkspaceRenamed.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const RenameWorkspaceExecutorType = @import("../../application/commands/RenameWorkspaceExecutor.zig");
+const RenameWorkspaceType = @import("../../application/commands/RenameWorkspace.zig");
 const std = @import("std");
-result: ?rename_workspace_commands.RenameWorkspaceResult = null,
+const StubRenameWorkspace = @This();
+
+result: ?WorkspaceRenamed = null,
 failure: ?anyerror = null,
 call_count: usize = 0,
-last_location: ?source_namespace.schema.WorkspaceLocation = null,
-last_name: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+last_location: ?WorkspaceLocationType = null,
+last_name: [max_tab_label_bytes_module]u8 = undefined,
 last_name_len: u8 = 0,
 
-pub fn executor(stub: *StubRenameWorkspace) rename_workspace_commands.RenameWorkspaceExecutor {
+pub fn executor(stub: *StubRenameWorkspace) RenameWorkspaceExecutorType {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, command: rename_workspace_commands.RenameWorkspace) anyerror!rename_workspace_commands.RenameWorkspaceResult {
+fn execute(context: *anyopaque, command: RenameWorkspaceType) anyerror!WorkspaceRenamed {
     const stub: *StubRenameWorkspace = @ptrCast(@alignCast(context));
     std.debug.assert(command.name.len <= stub.last_name.len);
 

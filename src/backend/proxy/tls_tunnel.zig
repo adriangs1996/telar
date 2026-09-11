@@ -1,17 +1,12 @@
 //! Passthrough and TLS interception policy for an authenticated CONNECT tunnel.
 
+const GenericAttempt = @import("GenericAttempt.zig").Type;
+
+const GenericTlsTunnelPort = @import("GenericTlsTunnelPort.zig").Type;
+const GenericTlsTunnelCommand = @import("GenericTlsTunnelCommand.zig").Type;
+const TlsTunnelCapture = @import("TlsTunnelCapture.zig");
 const std = @import("std");
 const tls = @import("tls.zig");
-
-pub const Attempt = @import("GenericAttempt.zig").Type;
-
-pub const Established = @import("GenericEstablished.zig").Type;
-
-pub const Route = @import("GenericRoute.zig").Type;
-
-pub const Port = @import("GenericTlsTunnelPort.zig").Type;
-
-pub const Command = @import("GenericTlsTunnelCommand.zig").Type;
 
 pub const Step = enum {
     check_interception,
@@ -21,28 +16,26 @@ pub const Step = enum {
     publish_failure,
 };
 
-const Capture = @import("TlsTunnelCapture.zig");
-
-const test_port: Port(Capture, u8, u16) = .{
-    .should_intercept = Capture.shouldIntercept,
-    .record_passthrough = Capture.recordPassthrough,
-    .intercept = Capture.intercept,
-    .record_failure = Capture.recordFailure,
-    .publish_failure = Capture.publishFailure,
+const test_port: GenericTlsTunnelPort(TlsTunnelCapture, u8, u16) = .{
+    .should_intercept = TlsTunnelCapture.shouldIntercept,
+    .record_passthrough = TlsTunnelCapture.recordPassthrough,
+    .intercept = TlsTunnelCapture.intercept,
+    .record_failure = TlsTunnelCapture.recordFailure,
+    .publish_failure = TlsTunnelCapture.publishFailure,
 };
 
-const TestCommand = Command(Capture, test_port);
+const TestCommand = GenericTlsTunnelCommand(TlsTunnelCapture, test_port);
 
-fn testAttempt() Attempt(u8) {
+fn testAttempt() GenericAttempt(u8) {
     return .{ .host = "api.openai.com", .child = 3, .origin = 5 };
 }
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const TlsTunnelCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
 test "a host outside the allowlist avoids every TLS operation" {
-    var capture: Capture = .{};
+    var capture: TlsTunnelCapture = .{};
 
     const route = TestCommand.execute(&capture, testAttempt()).?;
 
@@ -51,7 +44,7 @@ test "a host outside the allowlist avoids every TLS operation" {
 }
 
 test "HTTP11 negotiation transfers the established session" {
-    var capture: Capture = .{ .allow_interception = true, .protocol = .http11 };
+    var capture: TlsTunnelCapture = .{ .allow_interception = true, .protocol = .http11 };
 
     const route = TestCommand.execute(&capture, testAttempt()).?;
 
@@ -64,7 +57,7 @@ test "HTTP11 negotiation transfers the established session" {
 }
 
 test "HTTP2 negotiation transfers the established session" {
-    var capture: Capture = .{ .allow_interception = true, .protocol = .h2 };
+    var capture: TlsTunnelCapture = .{ .allow_interception = true, .protocol = .h2 };
 
     const route = TestCommand.execute(&capture, testAttempt()).?;
 
@@ -85,7 +78,7 @@ test "every TLS establishment failure records and publishes exactly once" {
     };
 
     for (failures) |failure| {
-        var capture: Capture = .{ .allow_interception = true, .failure = failure };
+        var capture: TlsTunnelCapture = .{ .allow_interception = true, .failure = failure };
 
         try std.testing.expect(TestCommand.execute(&capture, testAttempt()) == null);
 

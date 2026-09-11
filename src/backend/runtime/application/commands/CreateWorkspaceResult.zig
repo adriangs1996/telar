@@ -1,5 +1,6 @@
+const WorkspaceCreatedType = @import("../../../workspace/WorkspaceCreated.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const CreateWorkspaceResult = @This();
-const workspace_mod = @import("../../../workspace/root.zig");
-const source_namespace = @import("create_workspace.zig");
-created: workspace_mod.WorkspaceCreated,
-root_pane_id: source_namespace.schema.PaneId,
+
+created: WorkspaceCreatedType,
+root_pane_id: PaneIdType,

@@ -1,19 +1,19 @@
 //! Application policy for assigning routed host input to one client owner.
 
+const KeyType = @import("../../input/Key.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const GenericTable = @import("../../input/GenericTable.zig").Type;
+const keybind = @import("../../input/keybind.zig");
+const KeyRoutingAuthority = @import("KeyRoutingAuthority.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const input_capability = @import("../../input/root.zig");
-
-pub const keybind = input_capability.keybind;
-const key_lease = input_capability.key_lease;
-pub const schema = core.schema;
+const chord = @import("../../input/chord.zig");
+const KeyRoutingCapture = @import("KeyRoutingCapture.zig");
+const PhysicalType = @import("../../input/Physical.zig");
 
 pub const Command = union(enum) {
     bytes: []const u8,
-    key: keybind.Key,
+    key: KeyType,
 };
-
-pub const Authority = @import("KeyRoutingAuthority.zig");
 
 pub const Owner = enum {
     ignored,
@@ -23,26 +23,20 @@ pub const Owner = enum {
     pane,
 };
 
-pub const Outcome = @import("KeyRoutingOutcome.zig");
-
 pub const PaneTarget = union(enum) {
     current,
-    lease: schema.PaneId,
+    lease: PaneIdType,
 };
-
-pub const PaneCommand = @import("PaneCommand.zig");
 
 pub const LeaseOwner = union(enum) {
     ignored,
     attachment_modal,
     name_prompt,
     copy_mode,
-    pane: schema.PaneId,
+    pane: PaneIdType,
 };
 
-pub const Leases = key_lease.Table(LeaseOwner, keybind.max_physical_leases);
-
-pub const Effects = @import("KeyRoutingEffects.zig");
+pub const Leases = GenericTable(LeaseOwner, keybind.max_physical_leases);
 
 /// Returns whether the native router must bypass configured bindings for the
 /// current exclusive owner.
@@ -50,11 +44,9 @@ pub const Effects = @import("KeyRoutingEffects.zig");
 /// ```zig
 /// if (captures(authority)) routeDirectly();
 /// ```
-pub fn captures(authority: Authority) bool {
+pub fn captures(authority: KeyRoutingAuthority) bool {
     return authority.attachment_modal_active or authority.prompt_active;
 }
-
-pub const KeyRoutingHandler = @import("KeyRoutingHandler.zig");
 
 pub fn requestsClipboardPreview(command: Command) bool {
     return switch (command) {
@@ -79,8 +71,6 @@ pub const Failure = enum {
     preview,
 };
 
-const Capture = @import("KeyRoutingCapture.zig");
-
 test "key routing captures only modal and prompt authority" {
     try std.testing.expect(captures(.{ .attachment_modal_active = true }));
     try std.testing.expect(captures(.{ .prompt_active = true }));
@@ -89,11 +79,11 @@ test "key routing captures only modal and prompt authority" {
 }
 
 test "semantic key routing selects modal prompt copy mode or pane in order" {
-    const key = try keybind.parseKey("x");
-    var capture: Capture = .{};
+    const key = try chord.parseKey("x");
+    var capture: KeyRoutingCapture = .{};
     var handler = capture.routingHandler();
 
-    const modal = try handler.execute(.{ .key = try keybind.parseKey("escape") }, .{
+    const modal = try handler.execute(.{ .key = try chord.parseKey("escape") }, .{
         .attachment_modal_active = true,
         .prompt_active = true,
         .copy_mode_active = true,
@@ -126,7 +116,7 @@ test "semantic key routing selects modal prompt copy mode or pane in order" {
 }
 
 test "byte routing ignores empty values and bypasses modal authority" {
-    var capture: Capture = .{};
+    var capture: KeyRoutingCapture = .{};
     var handler = capture.routingHandler();
 
     const empty = try handler.execute(.{ .bytes = "" }, .{ .attachment_modal_active = true });
@@ -156,8 +146,8 @@ test "byte routing ignores empty values and bypasses modal authority" {
 }
 
 test "clipboard preview follows one confirmed pane delivery and cannot fail the key" {
-    const control_v = try keybind.parseKey("ctrl+v");
-    var capture: Capture = .{ .failure = .preview };
+    const control_v = try chord.parseKey("ctrl+v");
+    var capture: KeyRoutingCapture = .{ .failure = .preview };
     var handler = capture.routingHandler();
 
     const delivered = try handler.execute(.{ .key = control_v }, .{});
@@ -177,10 +167,10 @@ test "clipboard preview follows one confirmed pane delivery and cannot fail the 
     _ = try handler.execute(.{ .key = shifted }, .{});
     try std.testing.expectEqualSlices(Event, &.{.pane}, capture.events[0..capture.event_count]);
 
-    const other_keys = [_]keybind.Key{
-        try keybind.parseKey("alt+v"),
-        try keybind.parseKey("v"),
-        try keybind.parseKey("ctrl+shift+left"),
+    const other_keys = [_]KeyType{
+        try chord.parseKey("alt+v"),
+        try chord.parseKey("v"),
+        try chord.parseKey("ctrl+shift+left"),
     };
     for (other_keys) |key| {
         capture = .{};
@@ -191,7 +181,7 @@ test "clipboard preview follows one confirmed pane delivery and cannot fail the 
 }
 
 test "selected key owner failures propagate without falling through" {
-    var capture: Capture = .{ .failure = .prompt };
+    var capture: KeyRoutingCapture = .{ .failure = .prompt };
     var handler = capture.routingHandler();
 
     try std.testing.expectError(
@@ -207,7 +197,7 @@ test "selected key owner failures propagate without falling through" {
     handler = capture.routingHandler();
     try std.testing.expectError(
         error.CopyModeInputFailed,
-        handler.execute(.{ .key = try keybind.parseKey("x") }, .{ .copy_mode_active = true }),
+        handler.execute(.{ .key = try chord.parseKey("x") }, .{ .copy_mode_active = true }),
     );
     try std.testing.expectEqualSlices(Event, &.{.copy_key}, capture.events[0..capture.event_count]);
 
@@ -218,10 +208,10 @@ test "selected key owner failures propagate without falling through" {
 }
 
 test "a pane key lifecycle stays with the pane that received its press" {
-    const first: schema.PaneId = @enumFromInt(1);
-    const second: schema.PaneId = @enumFromInt(2);
-    const identity: keybind.Key.Physical = .{ .value = 120 };
-    var capture: Capture = .{ .pane_id = first };
+    const first: PaneIdType = @enumFromInt(1);
+    const second: PaneIdType = @enumFromInt(2);
+    const identity: PhysicalType = .{ .value = 120 };
+    var capture: KeyRoutingCapture = .{ .pane_id = first };
     var handler = capture.routingHandler();
 
     const press = try handler.execute(.{ .key = .{
@@ -252,8 +242,8 @@ test "a pane key lifecycle stays with the pane that received its press" {
 }
 
 test "prompt repeats stay with the prompt and release has no side effect" {
-    const identity: keybind.Key.Physical = .{ .value = 97 };
-    var capture: Capture = .{};
+    const identity: PhysicalType = .{ .value = 97 };
+    var capture: KeyRoutingCapture = .{};
     var handler = capture.routingHandler();
 
     _ = try handler.execute(.{ .key = .{
@@ -276,7 +266,7 @@ test "prompt repeats stay with the prompt and release has no side effect" {
 }
 
 test "orphan lifecycles and saturated leases fail closed" {
-    var capture: Capture = .{};
+    var capture: KeyRoutingCapture = .{};
     var handler = capture.routingHandler();
 
     const orphan = try handler.execute(.{ .key = .{
@@ -300,7 +290,7 @@ test "orphan lifecycles and saturated leases fail closed" {
 }
 
 test "failed press delivery does not leave a lease" {
-    var capture: Capture = .{ .failure = .prompt };
+    var capture: KeyRoutingCapture = .{ .failure = .prompt };
     var handler = capture.routingHandler();
 
     try std.testing.expectError(error.PromptInputFailed, handler.execute(.{ .key = .{

@@ -1,11 +1,12 @@
-const AgentLineInput = @This();
-const Input = @import("SidebarInput.zig");
+const SidebarInput = @import("SidebarInput.zig");
 const Semantic = @import("Semantic.zig");
-const agents = @import("telar-client").agents;
-const ui = @import("../ui/root.zig");
-sidebar: Input,
+const AgentType = @import("telar-client").Agent;
+const ColorType = @import("telar-core").Color;
+const AgentLineInput = @This();
+
+sidebar: SidebarInput,
 semantic: *Semantic,
 y: u16,
-agent: *const agents.Agent,
+agent: *const AgentType,
 line: u2,
-background: ui.Color,
+background: ColorType,

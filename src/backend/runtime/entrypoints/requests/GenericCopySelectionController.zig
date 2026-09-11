@@ -1,6 +1,8 @@
-const source_namespace = @import("copy_selection.zig");
-const copy_selection_commands = @import("../../application/commands/copy_selection.zig");
+const RuntimeMetricsType = @import("../../observability/RuntimeMetrics.zig");
+const selection = @import("../../attachment/selection.zig");
+const CopySelectionType = @import("telar-core").CopySelection;
 const std = @import("std");
+
 /// Builds a statically dispatched selection controller. `Clipboard` owns only
 /// confirmed output; extraction uses request-scoped scratch storage.
 ///
@@ -12,10 +14,10 @@ pub fn Type(comptime Executor: type, comptime Clipboard: type) type {
     return struct {
         const Self = @This();
 
-        metrics: *source_namespace.RuntimeMetrics,
+        metrics: *RuntimeMetricsType,
         executor: Executor,
         clipboard: Clipboard,
-        scratch: [copy_selection_commands.scratch_bytes]u8 = undefined,
+        scratch: [selection.scratch_bytes]u8 = undefined,
 
         /// Creates one request-scoped controller without modifying pending
         /// clipboard delivery.
@@ -23,7 +25,7 @@ pub fn Type(comptime Executor: type, comptime Clipboard: type) type {
         /// ```zig
         /// var controller = SelectionController.init(&metrics, &handler, &delivery);
         /// ```
-        pub fn init(metrics: *source_namespace.RuntimeMetrics, executor: Executor, clipboard: Clipboard) Self {
+        pub fn init(metrics: *RuntimeMetricsType, executor: Executor, clipboard: Clipboard) Self {
             return .{
                 .metrics = metrics,
                 .executor = executor,
@@ -39,7 +41,7 @@ pub fn Type(comptime Executor: type, comptime Clipboard: type) type {
         /// ```zig
         /// controller.copySelection(request);
         /// ```
-        pub fn copySelection(controller: *Self, request: source_namespace.schema.CopySelection) void {
+        pub fn copySelection(controller: *Self, request: CopySelectionType) void {
             const result = controller.executor.execute(.{
                 .pane_id = request.pane_id,
                 .start_x = request.start_x,

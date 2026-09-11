@@ -1,20 +1,22 @@
-const Authority = @This();
 const Pair = @import("Pair.zig");
 const Resources = @import("Resources.zig");
 const AuthorityFiles = @import("AuthorityFiles.zig");
-const source_namespace = @import("ca.zig");
+const ca = @import("ca.zig");
 const std = @import("std");
+const tls = @import("tls");
+const Authority = @This();
+
 pair: Pair,
 
 /// Loads the CA from `key_path`/`cert_path`, generating and persisting one
 /// on first run.
-pub fn loadOrCreate(resources: Resources, files: AuthorityFiles) source_namespace.Error!Authority {
-    if (source_namespace.load(resources, files)) |pair| {
+pub fn loadOrCreate(resources: Resources, files: AuthorityFiles) ca.Error!Authority {
+    if (ca.load(resources, files)) |pair| {
         return .{ .pair = pair };
     } else |_| {}
 
-    const pair = try source_namespace.generate(resources.io);
-    try source_namespace.persist(resources.io, pair, files);
+    const pair = try ca.generate(resources.io);
+    try ca.persist(resources.io, pair, files);
     return .{ .pair = pair };
 }
 
@@ -25,15 +27,15 @@ pub fn loadOrCreate(resources: Resources, files: AuthorityFiles) source_namespac
 /// not go through the proxy — and every tool that talks to something else —
 /// starts failing with "unable to get issuer cert". The child must trust the
 /// real world plus us.
-pub fn writeBundle(self: *const Authority, resources: Resources, out_path: []const u8) source_namespace.Error!void {
+pub fn writeBundle(self: *const Authority, resources: Resources, out_path: []const u8) ca.Error!void {
     const io = resources.io;
     const gpa = resources.allocator;
-    const cwd: source_namespace.Io.Dir = .cwd();
+    const cwd: std.Io.Dir = .cwd();
 
-    const roots = source_namespace.readSystemRoots(io, gpa) catch &[_]u8{};
+    const roots = ca.readSystemRoots(io, gpa) catch &[_]u8{};
     defer if (roots.len > 0) gpa.free(roots);
 
-    var pem_buf: [source_namespace.max_pem_len]u8 = undefined;
+    var pem_buf: [ca.max_pem_len]u8 = undefined;
     const ours = try self.pair.certPem(&pem_buf);
 
     const bundle = std.mem.concat(gpa, u8, &.{ roots, ours }) catch return error.WriteFailed;
@@ -43,22 +45,22 @@ pub fn writeBundle(self: *const Authority, resources: Resources, out_path: []con
 }
 
 /// Mints a leaf certificate for `host`, signed by this authority.
-pub fn mint(self: *const Authority, io: source_namespace.Io, host: []const u8) source_namespace.Error!Pair {
-    const now = source_namespace.Io.Clock.real.now(io).toSeconds();
+pub fn mint(self: *const Authority, io: std.Io, host: []const u8) ca.Error!Pair {
+    const now = std.Io.Clock.real.now(io).toSeconds();
 
-    var leaf: Pair = .{ .key_pair = source_namespace.x509.KeyPair.generate(io) };
-    const written = source_namespace.x509.create(
+    var leaf: Pair = .{ .key_pair = tls.x509.KeyPair.generate(io) };
+    const written = tls.x509.create(
         &leaf.cert_buf,
         .{
             .common_name = host,
             .dns_name = host,
             // Must differ per certificate, or clients cache-collide them.
-            .serial = source_namespace.randomSerial(io),
-            .not_before = now - source_namespace.backdate_seconds,
-            .not_after = now + source_namespace.leaf_seconds,
+            .serial = ca.randomSerial(io),
+            .not_before = now - ca.backdate_seconds,
+            .not_after = now + ca.leaf_seconds,
         },
         leaf.key_pair.public_key,
-        .{ .common_name = source_namespace.ca_common_name, .key_pair = &self.pair.key_pair },
+        .{ .common_name = ca.ca_common_name, .key_pair = &self.pair.key_pair },
     ) catch return error.CertFailed;
 
     leaf.cert_len = written.len;

@@ -1,32 +1,26 @@
 //! Application use case for releasing every client authority tied to one
 //! canonically retired pane.
 
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const ReleasedResources = @import("ReleasedResources.zig");
-
-pub const Effects = @import("PaneResourceReleaseEffects.zig");
-
-pub const ReleasePaneResourcesHandler = @import("ReleasePaneResourcesHandler.zig");
-
-const EffectCapture = @import("PaneResourceReleaseEffectCapture.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const PaneResourceReleaseEffectCapture = @import("PaneResourceReleaseEffectCapture.zig");
+const ReleasePaneResourcesHandler = @import("ReleasePaneResourcesHandler.zig");
+const ReleasedResources = @import("ReleasedResources.zig");
 
 test "ReleasePaneResourcesHandler retires exact pane authorities before graphics" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     _ = model.beginPanePaste().?;
     _ = model.syncReportedPaneFocus().?;
-    var capture: EffectCapture = .{ .model = &model };
+    var capture: PaneResourceReleaseEffectCapture = .{ .model = &model };
     var handler: ReleasePaneResourcesHandler = .{
         .model = &model,
         .effects = capture.effects(),
@@ -61,14 +55,14 @@ test "ReleasePaneResourcesHandler retires exact pane authorities before graphics
 }
 
 test "ReleasePaneResourcesHandler clears stale graphics for an unknown pane" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectCapture = .{ .model = &model };
+    var capture: PaneResourceReleaseEffectCapture = .{ .model = &model };
     var handler: ReleasePaneResourcesHandler = .{
         .model = &model,
         .effects = capture.effects(),
     };
-    const pane_id: schema.PaneId = @enumFromInt(9);
+    const pane_id: PaneIdType = @enumFromInt(9);
 
     try std.testing.expectEqualDeep(ReleasedResources{
         .copy_mode = false,

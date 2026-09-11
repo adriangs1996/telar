@@ -1,4 +1,6 @@
+const PaneIdType = @import("telar-core").PaneId;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const AgentHandoff = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
-fallback_workspace: ?source_namespace.schema.WorkspaceId,
+
+pane_id: PaneIdType,
+fallback_workspace: ?WorkspaceIdType,

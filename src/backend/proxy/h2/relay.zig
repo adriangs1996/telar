@@ -5,17 +5,37 @@
 //! independent inflater and deflater. DATA, flow control, and stream ownership
 //! remain end to end in both modes.
 
-const std = @import("std");
+const framing = @import("framing.zig");
 const stream_state = @import("streams.zig");
+const StatsType = @import("Stats.zig");
+const LifecycleType = @import("Lifecycle.zig");
+const RequestBodyType = @import("RequestBody.zig");
+const RequestFinishedType = @import("RequestFinished.zig");
+const ResponseBodyType = @import("ResponseBody.zig");
+const HeaderFieldType = @import("HeaderField.zig");
+const HeaderBlockType = @import("HeaderBlock.zig");
+const PeerSettingsType = @import("PeerSettings.zig");
+const RelayRoute = @import("RelayRoute.zig");
+const TransformedRouteType = @import("TransformedRoute.zig");
+const GenericTranscodePort = @import("GenericTranscodePort.zig").Type;
+const Observer = @import("Observer.zig");
+const std = @import("std");
+const TranscodeConfiguration = @import("TranscodeConfiguration.zig");
+const Transcoder = @import("Transcoder.zig");
+const HeadersType = @import("../Headers.zig");
 const middleware = @import("../middleware.zig");
-const provider = @import("../provider/request_support.zig");
-const tls = @import("../tls.zig");
+const FrameHeader = @import("FrameHeader.zig");
+const HeaderEmission = @import("HeaderEmission.zig");
+const BodyCollector = @import("BodyCollector.zig");
+const TestTranscodeSetup = @import("TestTranscodeSetup.zig");
+const TransformationType = @import("../Transformation.zig");
+const TransformPipelineType = @import("../TransformPipeline.zig");
+const FakeWriteSession = @import("FakeWriteSession.zig");
 
 pub const c = @cImport({
     @cInclude("nghttp2/nghttp2.h");
 });
 
-const framing = @import("framing.zig");
 pub const frame_header_len = framing.header_bytes;
 pub const client_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 pub const max_header_block_bytes = 128 * 1024;
@@ -51,12 +71,12 @@ pub const HeaderBlock = @import("HeaderBlock.zig");
 
 /// One borrowed observation produced while relaying HTTP/2 frames.
 pub const Event = union(enum) {
-    lifecycle: Lifecycle,
-    request_headers: HeaderBlock,
-    request_body: RequestBody,
-    request_finished: RequestFinished,
-    response_headers: HeaderBlock,
-    response_body: ResponseBody,
+    lifecycle: LifecycleType,
+    request_headers: HeaderBlockType,
+    request_body: RequestBodyType,
+    request_finished: RequestFinishedType,
+    response_headers: HeaderBlockType,
+    response_body: ResponseBodyType,
 };
 
 pub const PeerSettings = @import("PeerSettings.zig");
@@ -67,30 +87,16 @@ pub const TransformedRoute = @import("TransformedRoute.zig");
 
 pub const HeaderKind = enum { none, headers, push_promise };
 
-const Decoded = @import("Decoded.zig");
-
-const Observer = @import("Observer.zig");
-
-const TranscodeConfiguration = @import("TranscodeConfiguration.zig");
-
-const CompletedFrame = @import("CompletedFrame.zig");
-
-const FrameHeader = @import("FrameHeader.zig");
-
-const TranscodePort = @import("GenericTranscodePort.zig").Type;
-
-fn transcodePort(session: anytype, sink: anytype) TranscodePort(@TypeOf(session), @TypeOf(sink)) {
+fn transcodePort(session: anytype, sink: anytype) GenericTranscodePort(@TypeOf(session), @TypeOf(sink)) {
     return .{ .session = session, .sink = sink };
 }
-
-const Transcoder = @import("Transcoder.zig");
 
 /// Relays one HTTP/2 direction byte for byte while publishing decoded events.
 ///
 /// ```zig
 /// const stats = relay(session, route, &sink);
 /// ```
-pub fn relay(session: anytype, route: Route, sink: anytype) Stats {
+pub fn relay(session: anytype, route: RelayRoute, sink: anytype) StatsType {
     var observer = Observer.init(route.dialect, route.direction);
     defer observer.deinit();
     var preface_offset: usize = 0;
@@ -139,7 +145,7 @@ pub fn relay(session: anytype, route: Route, sink: anytype) Stats {
 /// ```zig
 /// const stats = relayTransformed(session, route, &sink);
 /// ```
-pub fn relayTransformed(session: anytype, transformed_route: TransformedRoute, sink: anytype) Stats {
+pub fn relayTransformed(session: anytype, transformed_route: TransformedRouteType, sink: anytype) StatsType {
     const route = transformed_route.route;
     const configuration: TranscodeConfiguration = .{
         .direction = route.direction,
@@ -186,7 +192,7 @@ pub fn relayTransformed(session: anytype, transformed_route: TransformedRoute, s
     return .{ .decode_failed = transcoder.failed };
 }
 
-pub fn headerKind(block_type: u8, headers: *const middleware.Headers) middleware.HeaderKind {
+pub fn headerKind(block_type: u8, headers: *const HeadersType) middleware.HeaderKind {
     if (block_type == frame_push_promise) {
         return .push_promise;
     }
@@ -199,11 +205,11 @@ pub fn headerKind(block_type: u8, headers: *const middleware.Headers) middleware
     return .trailers;
 }
 
-pub fn parseStatusHeader(headers: *const middleware.Headers) u16 {
+pub fn parseStatusHeader(headers: *const HeadersType) u16 {
     return std.fmt.parseInt(u16, headers.find(":status") orelse return 0, 10) catch 0;
 }
 
-pub fn validH2Headers(headers: *const middleware.Headers, kind: middleware.HeaderKind) bool {
+pub fn validH2Headers(headers: *const HeadersType, kind: middleware.HeaderKind) bool {
     var regular_seen = false;
     var method_seen = false;
     var scheme_seen = false;
@@ -280,7 +286,7 @@ fn pseudoAllowed(kind: middleware.HeaderKind, name: []const u8) bool {
     };
 }
 
-fn requestPseudosValid(headers: *const middleware.Headers, kind: middleware.HeaderKind) bool {
+fn requestPseudosValid(headers: *const HeadersType, kind: middleware.HeaderKind) bool {
     const method = headers.find(":method") orelse return false;
     if (!validToken(method)) {
         return false;
@@ -359,7 +365,7 @@ fn validStatus(value: []const u8) bool {
     return status >= 100 and status <= 599 and status != 101;
 }
 
-pub fn compatibleH2Headers(original: *const middleware.Headers, transformed: *const middleware.Headers, kind: middleware.HeaderKind) bool {
+pub fn compatibleH2Headers(original: *const HeadersType, transformed: *const HeadersType, kind: middleware.HeaderKind) bool {
     if (!validH2Headers(transformed, kind) or
         !sameHeaderValues(original, transformed, "content-length"))
     {
@@ -387,7 +393,7 @@ fn statusSemantics(status: u16) StatusSemantics {
     return .invalid;
 }
 
-fn sameHeaderValues(left: *const middleware.Headers, right: *const middleware.Headers, wanted: []const u8) bool {
+fn sameHeaderValues(left: *const HeadersType, right: *const HeadersType, wanted: []const u8) bool {
     var left_index: usize = 0;
     var right_index: usize = 0;
     while (true) {
@@ -402,7 +408,7 @@ fn sameHeaderValues(left: *const middleware.Headers, right: *const middleware.He
     }
 }
 
-fn nextHeaderValue(headers: *const middleware.Headers, wanted: []const u8, index: *usize) ?[]const u8 {
+fn nextHeaderValue(headers: *const HeadersType, wanted: []const u8, index: *usize) ?[]const u8 {
     while (index.* < headers.len) {
         const field = headers.fields[index.*];
         index.* += 1;
@@ -426,14 +432,14 @@ pub fn isHeaderFrame(frame_type: u8) bool {
         frame_type == frame_continuation;
 }
 
-fn streamId(header: *const [frame_header_len]u8) u32 {
+fn streamId(header: *const [framing.header_bytes]u8) u32 {
     return (@as(u32, header[5] & 0x7f) << 24) |
         (@as(u32, header[6]) << 16) |
         (@as(u32, header[7]) << 8) |
         header[8];
 }
 
-pub fn writeFrameHeader(buffer: *[frame_header_len]u8, header: FrameHeader) void {
+pub fn writeFrameHeader(buffer: *[framing.header_bytes]u8, header: FrameHeader) void {
     buffer.* = .{
         @truncate(header.length >> 16),
         @truncate(header.length >> 8),
@@ -447,11 +453,9 @@ pub fn writeFrameHeader(buffer: *[frame_header_len]u8, header: FrameHeader) void
     };
 }
 
-const HeaderEmission = @import("HeaderEmission.zig");
-
 pub fn emitHeaders(port: anytype, emission: HeaderEmission) void {
     for (emission.headers.fields[0..emission.headers.len]) |field| {
-        const fields = [_]HeaderField{.{
+        const fields = [_]HeaderFieldType{.{
             .name = emission.headers.name(field),
             .value = emission.headers.value(field),
         }};
@@ -462,7 +466,7 @@ pub fn emitHeaders(port: anytype, emission: HeaderEmission) void {
     }
 }
 
-fn lifecycle(event: Event) ?Lifecycle {
+fn lifecycle(event: Event) ?LifecycleType {
     return switch (event) {
         .lifecycle => |value| value,
         .request_headers => null,
@@ -473,13 +477,11 @@ fn lifecycle(event: Event) ?Lifecycle {
     };
 }
 
-const BodyCollector = @import("BodyCollector.zig");
-
 test "HTTP2 observer exposes request DATA across every two-chunk split" {
     const payload = "{\"stream\":true}";
-    var wire: [frame_header_len + payload.len]u8 = undefined;
-    writeFrameHeader(wire[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 5 });
-    @memcpy(wire[frame_header_len..], payload);
+    var wire: [framing.header_bytes + payload.len]u8 = undefined;
+    writeFrameHeader(wire[0..framing.header_bytes], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 5 });
+    @memcpy(wire[framing.header_bytes..], payload);
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
@@ -501,9 +503,9 @@ test "HTTP2 observer exposes request DATA across every two-chunk split" {
 
 test "HTTP2 observer finishes a bodyless request across every two-chunk split" {
     const block = "\x83\x04\x0c/v1/messages";
-    var wire: [frame_header_len + block.len]u8 = undefined;
-    writeFrameHeader(wire[0..frame_header_len], .{ .length = block.len, .frame_type = frame_headers, .flags = flag_end_headers | flag_end_stream, .stream_id = 5 });
-    @memcpy(wire[frame_header_len..], block);
+    var wire: [framing.header_bytes + block.len]u8 = undefined;
+    writeFrameHeader(wire[0..framing.header_bytes], .{ .length = block.len, .frame_type = frame_headers, .flags = flag_end_headers | flag_end_stream, .stream_id = 5 });
+    @memcpy(wire[framing.header_bytes..], block);
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
@@ -522,9 +524,9 @@ test "HTTP2 observer finishes a bodyless request across every two-chunk split" {
 
 test "HTTP2 observer exposes DATA payload across every two-chunk split" {
     const payload = "event: message_delta\ndata: payload\n\n";
-    var wire: [frame_header_len + payload.len]u8 = undefined;
-    writeFrameHeader(wire[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 7 });
-    @memcpy(wire[frame_header_len..], payload);
+    var wire: [framing.header_bytes + payload.len]u8 = undefined;
+    writeFrameHeader(wire[0..framing.header_bytes], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 7 });
+    @memcpy(wire[framing.header_bytes..], payload);
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
@@ -570,12 +572,12 @@ test "HTTP2 observer attaches the decoded final status to response DATA" {
     const encoded = c.nghttp2_hd_deflate_hd(deflater, &block, block.len, &fields, fields.len);
     try std.testing.expect(encoded > 0);
 
-    var header: [frame_header_len]u8 = undefined;
+    var header: [framing.header_bytes]u8 = undefined;
     writeFrameHeader(&header, .{ .length = @intCast(encoded), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 17 });
     const payload = "payload";
-    var data: [frame_header_len + payload.len]u8 = undefined;
-    writeFrameHeader(data[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 17 });
-    @memcpy(data[frame_header_len..], payload);
+    var data: [framing.header_bytes + payload.len]u8 = undefined;
+    writeFrameHeader(data[0..framing.header_bytes], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 17 });
+    @memcpy(data[framing.header_bytes..], payload);
     var collector: BodyCollector = .{};
     var observer = Observer.init(.anthropic_messages, .response);
     defer observer.deinit();
@@ -595,13 +597,13 @@ test "HTTP2 observer attaches the decoded final status to response DATA" {
 test "HTTP2 observer excludes the pad length and padding from DATA payload" {
     const payload = "hello";
     const padding_len = 2;
-    var wire: [frame_header_len + 1 + payload.len + padding_len]u8 = @splat(0);
+    var wire: [framing.header_bytes + 1 + payload.len + padding_len]u8 = @splat(0);
     writeFrameHeader(
-        wire[0..frame_header_len],
-        .{ .length = wire.len - frame_header_len, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 9 },
+        wire[0..framing.header_bytes],
+        .{ .length = wire.len - framing.header_bytes, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 9 },
     );
-    wire[frame_header_len] = padding_len;
-    @memcpy(wire[frame_header_len + 1 ..][0..payload.len], payload);
+    wire[framing.header_bytes] = padding_len;
+    @memcpy(wire[framing.header_bytes + 1 ..][0..payload.len], payload);
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
@@ -618,9 +620,9 @@ test "HTTP2 observer excludes the pad length and padding from DATA payload" {
 }
 
 test "HTTP2 observer drops invalid DATA padding from observation only" {
-    var wire: [frame_header_len + 2]u8 = @splat(0);
-    writeFrameHeader(wire[0..frame_header_len], .{ .length = 2, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 11 });
-    wire[frame_header_len] = 2;
+    var wire: [framing.header_bytes + 2]u8 = @splat(0);
+    writeFrameHeader(wire[0..framing.header_bytes], .{ .length = 2, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 11 });
+    wire[framing.header_bytes] = 2;
     var collector: BodyCollector = .{};
     var observer = Observer.init(.anthropic_messages, .response);
     defer observer.deinit();
@@ -654,16 +656,16 @@ test "HPACK status turns a completed HTTP2 error stream into failure" {
     const encoded_len: usize = @intCast(block_len);
     const first_len = encoded_len / 2;
     const second_len = encoded_len - first_len;
-    var frames: [2 * frame_header_len + block.len]u8 = undefined;
-    writeFrameHeader(frames[0..frame_header_len], .{ .length = first_len, .frame_type = frame_headers, .flags = flag_end_stream, .stream_id = 1 });
-    @memcpy(frames[frame_header_len..][0..first_len], block[0..first_len]);
-    const second_header = frame_header_len + first_len;
+    var frames: [2 * framing.header_bytes + block.len]u8 = undefined;
+    writeFrameHeader(frames[0..framing.header_bytes], .{ .length = first_len, .frame_type = frame_headers, .flags = flag_end_stream, .stream_id = 1 });
+    @memcpy(frames[framing.header_bytes..][0..first_len], block[0..first_len]);
+    const second_header = framing.header_bytes + first_len;
     writeFrameHeader(
-        frames[second_header..][0..frame_header_len],
+        frames[second_header..][0..framing.header_bytes],
         .{ .length = second_len, .frame_type = frame_continuation, .flags = flag_end_headers, .stream_id = 1 },
     );
     @memcpy(
-        frames[second_header + frame_header_len ..][0..second_len],
+        frames[second_header + framing.header_bytes ..][0..second_len],
         block[first_len..encoded_len],
     );
 
@@ -681,7 +683,7 @@ test "HPACK status turns a completed HTTP2 error stream into failure" {
     var collector: Collector = .{};
     var observer = Observer.init(.anthropic_messages, .response);
     defer observer.deinit();
-    for (frames[0 .. 2 * frame_header_len + encoded_len]) |byte|
+    for (frames[0 .. 2 * framing.header_bytes + encoded_len]) |byte|
         observer.observe(&.{byte}, &collector);
     try std.testing.expect(!observer.failed);
     try std.testing.expectEqual(middleware.Phase.request_failed, collector.phase);
@@ -720,7 +722,7 @@ test "request trailers do not emit a second request start" {
         request_fields.len,
     );
     try std.testing.expect(request_len > 0);
-    var request_header: [frame_header_len]u8 = undefined;
+    var request_header: [framing.header_bytes]u8 = undefined;
     writeFrameHeader(&request_header, .{ .length = @intCast(request_len), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 1 });
     observer.observe(&request_header, &collector);
     observer.observe(request_block[0..@intCast(request_len)], &collector);
@@ -741,7 +743,7 @@ test "request trailers do not emit a second request start" {
         trailer_fields.len,
     );
     try std.testing.expect(trailer_len > 0);
-    var trailer_header: [frame_header_len]u8 = undefined;
+    var trailer_header: [framing.header_bytes]u8 = undefined;
     writeFrameHeader(&trailer_header, .{ .length = @intCast(trailer_len), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 1 });
     observer.observe(&trailer_header, &collector);
     observer.observe(trailer_block[0..@intCast(trailer_len)], &collector);
@@ -762,7 +764,7 @@ test "cross-dialect HTTP2 requests are classified as auxiliary" {
     var block: [256]u8 = undefined;
     const block_len = c.nghttp2_hd_deflate_hd(deflater, &block, block.len, &fields, fields.len);
     try std.testing.expect(block_len > 0);
-    var header: [frame_header_len]u8 = undefined;
+    var header: [framing.header_bytes]u8 = undefined;
     writeFrameHeader(&header, .{ .length = @intCast(block_len), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 1 });
 
     const Collector = struct {
@@ -817,7 +819,7 @@ test "HPACK dynamic table survives padded response blocks" {
         const encoded = c.nghttp2_hd_deflate_hd(deflater, &block, block.len, &fields, fields.len);
         try std.testing.expect(encoded > 0);
         const encoded_len: usize = @intCast(encoded);
-        var header: [frame_header_len]u8 = undefined;
+        var header: [framing.header_bytes]u8 = undefined;
         writeFrameHeader(
             &header,
             .{ .length = 1 + encoded_len + 2, .frame_type = frame_headers, .flags = flag_padded | flag_end_headers | flag_end_stream, .stream_id = @intCast(stream_id) },
@@ -831,10 +833,8 @@ test "HPACK dynamic table survives padded response blocks" {
     try std.testing.expectEqual(@as(usize, 2), collector.completed);
 }
 
-const FakeWriteSession = @import("FakeWriteSession.zig");
-
-fn decodeTestHeaderBlock(inflater: *c.nghttp2_hd_inflater, block: []const u8) !middleware.Headers {
-    var headers: middleware.Headers = .{};
+fn decodeTestHeaderBlock(inflater: *c.nghttp2_hd_inflater, block: []const u8) !HeadersType {
+    var headers: HeadersType = .{};
     var input = block;
     while (true) {
         var field: c.nghttp2_nv = undefined;
@@ -863,8 +863,6 @@ fn decodeTestHeaderBlock(inflater: *c.nghttp2_hd_inflater, block: []const u8) !m
         try std.testing.expect(consumed != 0 or flags & c.NGHTTP2_HD_INFLATE_EMIT != 0);
     }
 }
-
-const TestTranscodeSetup = @import("TestTranscodeSetup.zig");
 
 fn initTestTranscoder(setup: TestTranscodeSetup) Transcoder {
     return Transcoder.init(setup.dialect, .{
@@ -901,24 +899,24 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
         fields.len,
     );
     try std.testing.expect(compressed_len > 0);
-    var frame: [frame_header_len + compressed.len]u8 = undefined;
+    var frame: [framing.header_bytes + compressed.len]u8 = undefined;
     writeFrameHeader(
-        frame[0..frame_header_len],
+        frame[0..framing.header_bytes],
         .{ .length = @intCast(compressed_len), .frame_type = frame_headers, .flags = flag_end_headers | flag_end_stream, .stream_id = 1 },
     );
     @memcpy(
-        frame[frame_header_len..][0..@intCast(compressed_len)],
+        frame[framing.header_bytes..][0..@intCast(compressed_len)],
         compressed[0..@intCast(compressed_len)],
     );
 
     const AddHeader = struct {
-        fn transform(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+        fn transform(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
             transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = AddHeader.transform });
     var session: FakeWriteSession = .{};
     const Collector = struct {
@@ -941,12 +939,12 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
         }
     };
     var collector: Collector = .{ .session = &session };
-    var source_settings: PeerSettings = .{};
-    var target_settings: PeerSettings = .{};
+    var source_settings: PeerSettingsType = .{};
+    var target_settings: PeerSettingsType = .{};
     target_settings.header_table_size.store(8192, .seq_cst);
     var transcoder = initTestTranscoder(.{ .dialect = .openai_responses, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
-    for (frame[0 .. frame_header_len + @as(usize, @intCast(compressed_len))]) |byte|
+    for (frame[0 .. framing.header_bytes + @as(usize, @intCast(compressed_len))]) |byte|
         try std.testing.expect(transcoder.process(
             &.{byte},
             transcodePort(&session, &collector),
@@ -958,7 +956,7 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     try std.testing.expect(session.output[4] & flag_end_headers != 0);
     const output_len = (@as(usize, session.output[0]) << 16) |
         (@as(usize, session.output[1]) << 8) | session.output[2];
-    try std.testing.expectEqual(frame_header_len + output_len, session.len);
+    try std.testing.expectEqual(framing.header_bytes + output_len, session.len);
     var output_inflater: ?*c.nghttp2_hd_inflater = null;
     try std.testing.expectEqual(@as(c_int, 0), c.nghttp2_hd_inflate_new(&output_inflater));
     defer c.nghttp2_hd_inflate_del(output_inflater);
@@ -968,7 +966,7 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     );
     const decoded = try decodeTestHeaderBlock(
         output_inflater.?,
-        session.output[frame_header_len..][0..output_len],
+        session.output[framing.header_bytes..][0..output_len],
     );
     try std.testing.expectEqualStrings("enabled", decoded.find("x-telar").?);
     try std.testing.expectEqualStrings("POST", decoded.find(":method").?);
@@ -992,16 +990,16 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
         auxiliary_fields.len,
     );
     try std.testing.expect(auxiliary_len > 0);
-    var auxiliary_frame: [frame_header_len + auxiliary_compressed.len]u8 = undefined;
+    var auxiliary_frame: [framing.header_bytes + auxiliary_compressed.len]u8 = undefined;
     writeFrameHeader(
-        auxiliary_frame[0..frame_header_len],
+        auxiliary_frame[0..framing.header_bytes],
         .{ .length = @intCast(auxiliary_len), .frame_type = frame_headers, .flags = flag_end_headers | flag_end_stream, .stream_id = 3 },
     );
     @memcpy(
-        auxiliary_frame[frame_header_len..][0..@intCast(auxiliary_len)],
+        auxiliary_frame[framing.header_bytes..][0..@intCast(auxiliary_len)],
         auxiliary_compressed[0..@intCast(auxiliary_len)],
     );
-    for (auxiliary_frame[0 .. frame_header_len + @as(usize, @intCast(auxiliary_len))]) |byte|
+    for (auxiliary_frame[0 .. framing.header_bytes + @as(usize, @intCast(auxiliary_len))]) |byte|
         try std.testing.expect(transcoder.process(
             &.{byte},
             transcodePort(&session, &collector),
@@ -1019,12 +1017,12 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
     defer c.nghttp2_hd_inflate_del(output_inflater);
 
     const Identity = struct {
-        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     const Collector = struct {
         completed: usize = 0,
@@ -1038,8 +1036,8 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettings = .{};
-    var target_settings: PeerSettings = .{};
+    var source_settings: PeerSettingsType = .{};
+    var target_settings: PeerSettingsType = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
@@ -1060,13 +1058,13 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
         const encoded_len: usize = @intCast(encoded);
         const first_len = encoded_len / 2;
         const second_len = encoded_len - first_len;
-        var wire: [2 * frame_header_len + 1 + 5 + 512 + 2]u8 = undefined;
+        var wire: [2 * framing.header_bytes + 1 + 5 + 512 + 2]u8 = undefined;
         const first_payload_len = 1 + 5 + first_len + 2;
         writeFrameHeader(
-            wire[0..frame_header_len],
+            wire[0..framing.header_bytes],
             .{ .length = first_payload_len, .frame_type = frame_headers, .flags = flag_padded | flag_priority | flag_end_stream, .stream_id = @intCast(stream_id) },
         );
-        var cursor: usize = frame_header_len;
+        var cursor: usize = framing.header_bytes;
         wire[cursor] = 2;
         cursor += 1;
         const priority = [_]u8{ 0, 0, 0, 0, 16 };
@@ -1077,10 +1075,10 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
         @memset(wire[cursor..][0..2], 0);
         cursor += 2;
         writeFrameHeader(
-            wire[cursor..][0..frame_header_len],
+            wire[cursor..][0..framing.header_bytes],
             .{ .length = second_len, .frame_type = frame_continuation, .flags = flag_end_headers, .stream_id = @intCast(stream_id) },
         );
-        cursor += frame_header_len;
+        cursor += framing.header_bytes;
         @memcpy(wire[cursor..][0..second_len], compressed[first_len..encoded_len]);
         cursor += second_len;
 
@@ -1094,12 +1092,12 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
         try std.testing.expect(output[4] & flag_padded == 0);
         try std.testing.expect(output[4] & flag_priority != 0);
         try std.testing.expect(output[4] & flag_end_headers != 0);
-        try std.testing.expectEqualSlices(u8, &priority, output[frame_header_len..][0..5]);
+        try std.testing.expectEqualSlices(u8, &priority, output[framing.header_bytes..][0..5]);
         const output_payload_len = (@as(usize, output[0]) << 16) |
             (@as(usize, output[1]) << 8) | output[2];
         const decoded = try decodeTestHeaderBlock(
             output_inflater.?,
-            output[frame_header_len + priority.len ..][0 .. output_payload_len - priority.len],
+            output[framing.header_bytes + priority.len ..][0 .. output_payload_len - priority.len],
         );
         try std.testing.expectEqualStrings("200", decoded.find(":status").?);
         try std.testing.expectEqualStrings("same-value", decoded.find("x-repeat").?);
@@ -1138,10 +1136,10 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
         const fragment_len = @min(@as(usize, 16 * 1024), compressed_len - encoded_offset);
         const final = encoded_offset + fragment_len == compressed_len;
         writeFrameHeader(
-            input_wire[input_len..][0..frame_header_len],
+            input_wire[input_len..][0..framing.header_bytes],
             .{ .length = fragment_len, .frame_type = if (first) frame_headers else frame_continuation, .flags = if (final) flag_end_headers else 0, .stream_id = test_stream_id },
         );
-        input_len += frame_header_len;
+        input_len += framing.header_bytes;
         @memcpy(
             input_wire[input_len..][0..fragment_len],
             compressed[encoded_offset..][0..fragment_len],
@@ -1152,20 +1150,20 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
     }
 
     const Identity = struct {
-        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettings = .{};
-    var target_settings: PeerSettings = .{};
+    var source_settings: PeerSettingsType = .{};
+    var target_settings: PeerSettingsType = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     var input_offset: usize = 0;
@@ -1184,7 +1182,7 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
     var frame_count: usize = 0;
     var final_seen = false;
     while (output_offset < session.len) {
-        const header = session.output[output_offset..][0..frame_header_len];
+        const header = session.output[output_offset..][0..framing.header_bytes];
         const payload_len = (@as(usize, header[0]) << 16) |
             (@as(usize, header[1]) << 8) | header[2];
         try std.testing.expect(payload_len <= 16 * 1024);
@@ -1193,17 +1191,17 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
             header[3],
         );
         try std.testing.expectEqual(test_stream_id, streamId(header));
-        try std.testing.expect(output_offset + frame_header_len + payload_len <= session.len);
+        try std.testing.expect(output_offset + framing.header_bytes + payload_len <= session.len);
         @memcpy(
             output_block[output_block_len..][0..payload_len],
-            session.output[output_offset + frame_header_len ..][0..payload_len],
+            session.output[output_offset + framing.header_bytes ..][0..payload_len],
         );
         output_block_len += payload_len;
         final_seen = header[4] & flag_end_headers != 0;
         if (final_seen) {
-            try std.testing.expectEqual(session.len, output_offset + frame_header_len + payload_len);
+            try std.testing.expectEqual(session.len, output_offset + framing.header_bytes + payload_len);
         }
-        output_offset += frame_header_len + payload_len;
+        output_offset += framing.header_bytes + payload_len;
         frame_count += 1;
     }
     try std.testing.expect(frame_count > 1);
@@ -1221,25 +1219,25 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
 
 test "HTTP2 SETTINGS update the opposite encoder bounds without changing wire bytes" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var child_settings: PeerSettings = .{};
-    var origin_settings: PeerSettings = .{};
+    var child_settings: PeerSettingsType = .{};
+    var origin_settings: PeerSettingsType = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &child_settings, .target_settings = &origin_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
-    var settings_frame: [frame_header_len + 12]u8 = undefined;
-    writeFrameHeader(settings_frame[0..frame_header_len], .{ .length = 12, .frame_type = c.NGHTTP2_SETTINGS, .flags = 0, .stream_id = 0 });
+    var settings_frame: [framing.header_bytes + 12]u8 = undefined;
+    writeFrameHeader(settings_frame[0..framing.header_bytes], .{ .length = 12, .frame_type = c.NGHTTP2_SETTINGS, .flags = 0, .stream_id = 0 });
     std.mem.writeInt(u16, settings_frame[9..11], c.NGHTTP2_SETTINGS_HEADER_TABLE_SIZE, .big);
     std.mem.writeInt(u32, settings_frame[11..15], 0, .big);
     std.mem.writeInt(u16, settings_frame[15..17], c.NGHTTP2_SETTINGS_MAX_FRAME_SIZE, .big);
@@ -1270,26 +1268,26 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
         fields.len,
     );
     try std.testing.expect(compressed_len > 0);
-    var header: [frame_header_len]u8 = undefined;
+    var header: [framing.header_bytes]u8 = undefined;
     writeFrameHeader(&header, .{ .length = @intCast(compressed_len), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 19 });
 
     const payload = "payload";
-    var data: [frame_header_len + payload.len]u8 = undefined;
-    writeFrameHeader(data[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 19 });
-    @memcpy(data[frame_header_len..], payload);
+    var data: [framing.header_bytes + payload.len]u8 = undefined;
+    writeFrameHeader(data[0..framing.header_bytes], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 19 });
+    @memcpy(data[framing.header_bytes..], payload);
 
     const Identity = struct {
-        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     var collector: BodyCollector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettings = .{};
-    var target_settings: PeerSettings = .{};
+    var source_settings: PeerSettingsType = .{};
+    var target_settings: PeerSettingsType = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
@@ -1315,24 +1313,24 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
 
 test "HTTP2 transform mode exposes unpadded response DATA without changing wire bytes" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
 
     const payload = "event: message_delta\ndata: transformed\n\n";
-    var wire: [frame_header_len + payload.len]u8 = undefined;
-    writeFrameHeader(wire[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 13 });
-    @memcpy(wire[frame_header_len..], payload);
+    var wire: [framing.header_bytes + payload.len]u8 = undefined;
+    writeFrameHeader(wire[0..framing.header_bytes], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 13 });
+    @memcpy(wire[framing.header_bytes..], payload);
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
         var session: FakeWriteSession = .{};
-        var source_settings: PeerSettings = .{};
-        var target_settings: PeerSettings = .{};
+        var source_settings: PeerSettingsType = .{};
+        var target_settings: PeerSettingsType = .{};
         var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
         defer transcoder.deinit();
 
@@ -1354,24 +1352,24 @@ test "HTTP2 transform mode exposes unpadded response DATA without changing wire 
 
 test "HTTP2 transform mode exposes request DATA without changing wire bytes" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
 
     const payload = "{\"stream\":true}";
-    var wire: [frame_header_len + payload.len]u8 = undefined;
-    writeFrameHeader(wire[0..frame_header_len], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 21 });
-    @memcpy(wire[frame_header_len..], payload);
+    var wire: [framing.header_bytes + payload.len]u8 = undefined;
+    writeFrameHeader(wire[0..framing.header_bytes], .{ .length = payload.len, .frame_type = frame_data, .flags = flag_end_stream, .stream_id = 21 });
+    @memcpy(wire[framing.header_bytes..], payload);
 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
         var session: FakeWriteSession = .{};
-        var source_settings: PeerSettings = .{};
-        var target_settings: PeerSettings = .{};
+        var source_settings: PeerSettingsType = .{};
+        var target_settings: PeerSettingsType = .{};
         var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
         defer transcoder.deinit();
 
@@ -1396,28 +1394,28 @@ test "HTTP2 transform mode exposes request DATA without changing wire bytes" {
 
 test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
 
     const payload = "payload";
     const padding_len = 3;
-    var wire: [frame_header_len + 1 + payload.len + padding_len]u8 = @splat(0);
+    var wire: [framing.header_bytes + 1 + payload.len + padding_len]u8 = @splat(0);
     writeFrameHeader(
-        wire[0..frame_header_len],
-        .{ .length = wire.len - frame_header_len, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 15 },
+        wire[0..framing.header_bytes],
+        .{ .length = wire.len - framing.header_bytes, .frame_type = frame_data, .flags = flag_padded | flag_end_stream, .stream_id = 15 },
     );
-    wire[frame_header_len] = padding_len;
-    @memcpy(wire[frame_header_len + 1 ..][0..payload.len], payload);
+    wire[framing.header_bytes] = padding_len;
+    @memcpy(wire[framing.header_bytes + 1 ..][0..payload.len], payload);
 
     var collector: BodyCollector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettings = .{};
-    var target_settings: PeerSettings = .{};
+    var source_settings: PeerSettingsType = .{};
+    var target_settings: PeerSettingsType = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
@@ -1435,35 +1433,35 @@ test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
 
 test "HTTP2 transform mode relays DATA and control frames byte for byte" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: middleware.Transformation) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettings = .{};
-    var target_settings: PeerSettings = .{};
+    var source_settings: PeerSettingsType = .{};
+    var target_settings: PeerSettingsType = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
-    var wire: [3 * frame_header_len + 17]u8 = undefined;
+    var wire: [3 * framing.header_bytes + 17]u8 = undefined;
     var cursor: usize = 0;
-    writeFrameHeader(wire[cursor..][0..frame_header_len], .{ .length = 5, .frame_type = frame_data, .flags = 0, .stream_id = 1 });
-    cursor += frame_header_len;
+    writeFrameHeader(wire[cursor..][0..framing.header_bytes], .{ .length = 5, .frame_type = frame_data, .flags = 0, .stream_id = 1 });
+    cursor += framing.header_bytes;
     @memcpy(wire[cursor..][0..5], "hello");
     cursor += 5;
-    writeFrameHeader(wire[cursor..][0..frame_header_len], .{ .length = 4, .frame_type = 0x8, .flags = 0, .stream_id = 1 });
-    cursor += frame_header_len;
+    writeFrameHeader(wire[cursor..][0..framing.header_bytes], .{ .length = 4, .frame_type = 0x8, .flags = 0, .stream_id = 1 });
+    cursor += framing.header_bytes;
     std.mem.writeInt(u32, wire[cursor..][0..4], 1024, .big);
     cursor += 4;
-    writeFrameHeader(wire[cursor..][0..frame_header_len], .{ .length = 8, .frame_type = 0x6, .flags = 0, .stream_id = 0 });
-    cursor += frame_header_len;
+    writeFrameHeader(wire[cursor..][0..framing.header_bytes], .{ .length = 8, .frame_type = 0x6, .flags = 0, .stream_id = 0 });
+    cursor += framing.header_bytes;
     @memcpy(wire[cursor..][0..8], "12345678");
     cursor += 8;
 
@@ -1494,37 +1492,37 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
         fields.len,
     );
     try std.testing.expect(compressed_len > 0);
-    var frame: [frame_header_len + compressed.len]u8 = undefined;
+    var frame: [framing.header_bytes + compressed.len]u8 = undefined;
     writeFrameHeader(
-        frame[0..frame_header_len],
+        frame[0..framing.header_bytes],
         .{ .length = @intCast(compressed_len), .frame_type = frame_headers, .flags = flag_end_headers, .stream_id = 1 },
     );
     @memcpy(
-        frame[frame_header_len..][0..@intCast(compressed_len)],
+        frame[framing.header_bytes..][0..@intCast(compressed_len)],
         compressed[0..@intCast(compressed_len)],
     );
 
     const Invalid = struct {
-        fn transform(_: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+        fn transform(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
             transformation.effects.remove(":scheme") catch return .preserve;
             transformation.effects.set(.{ .name = "content-length", .value = "9" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Invalid.transform });
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettings = .{};
-    var target_settings: PeerSettings = .{};
+    var source_settings: PeerSettingsType = .{};
+    var target_settings: PeerSettingsType = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     try std.testing.expect(transcoder.process(
-        frame[0 .. frame_header_len + @as(usize, @intCast(compressed_len))],
+        frame[0 .. framing.header_bytes + @as(usize, @intCast(compressed_len))],
         transcodePort(&session, &collector),
     ));
 
@@ -1535,7 +1533,7 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
     defer c.nghttp2_hd_inflate_del(output_inflater);
     const decoded = try decodeTestHeaderBlock(
         output_inflater.?,
-        session.output[frame_header_len..][0..output_len],
+        session.output[framing.header_bytes..][0..output_len],
     );
     try std.testing.expectEqualStrings("https", decoded.find(":scheme").?);
     try std.testing.expectEqualStrings("4", decoded.find("content-length").?);
@@ -1560,21 +1558,21 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
         fields.len,
     );
     try std.testing.expect(compressed_len > 0);
-    var frame: [frame_header_len + 4 + compressed.len]u8 = undefined;
+    var frame: [framing.header_bytes + 4 + compressed.len]u8 = undefined;
     writeFrameHeader(
-        frame[0..frame_header_len],
+        frame[0..framing.header_bytes],
         .{ .length = 4 + @as(usize, @intCast(compressed_len)), .frame_type = frame_push_promise, .flags = flag_end_headers, .stream_id = 1 },
     );
-    std.mem.writeInt(u32, frame[frame_header_len..][0..4], 2, .big);
+    std.mem.writeInt(u32, frame[framing.header_bytes..][0..4], 2, .big);
     @memcpy(
-        frame[frame_header_len + 4 ..][0..@intCast(compressed_len)],
+        frame[framing.header_bytes + 4 ..][0..@intCast(compressed_len)],
         compressed[0..@intCast(compressed_len)],
     );
 
     const Capture = struct {
         stream_id: u32 = 0,
         kind: middleware.HeaderKind = .trailers,
-        fn transform(raw: *anyopaque, transformation: middleware.Transformation) middleware.TransformStatus {
+        fn transform(raw: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
             const self: *@This() = @ptrCast(@alignCast(raw));
             self.stream_id = transformation.snapshot.context.stream_id;
             self.kind = transformation.snapshot.context.kind;
@@ -1582,26 +1580,26 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
         }
     };
     var capture: Capture = .{};
-    var pipeline: middleware.TransformPipeline = .{};
+    var pipeline: TransformPipelineType = .{};
     try pipeline.add(.{ .context = &capture, .transform = Capture.transform });
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettings = .{};
-    var target_settings: PeerSettings = .{};
+    var source_settings: PeerSettingsType = .{};
+    var target_settings: PeerSettingsType = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     try std.testing.expect(transcoder.process(
-        frame[0 .. frame_header_len + 4 + @as(usize, @intCast(compressed_len))],
+        frame[0 .. framing.header_bytes + 4 + @as(usize, @intCast(compressed_len))],
         transcodePort(&session, &collector),
     ));
     try std.testing.expectEqual(@as(u32, 2), capture.stream_id);
     try std.testing.expectEqual(middleware.HeaderKind.push_promise, capture.kind);
     try std.testing.expectEqual(@as(u32, 2), std.mem.readInt(
         u32,
-        session.output[frame_header_len..][0..4],
+        session.output[framing.header_bytes..][0..4],
         .big,
     ));
 }

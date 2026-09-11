@@ -1,17 +1,22 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const RuntimeMetricsType = @import("../../observability/RuntimeMetrics.zig");
+const HistoryExecutor = @import("../../application/queries/HistoryExecutor.zig");
+const QueryOriginType = @import("../../../history/QueryOrigin.zig");
+const QueryHistoryType = @import("telar-core").QueryHistory;
+const enabled_module = @import("telar-core").enabled;
+const HistoryQueryFailure = @import("HistoryQueryFailure.zig");
 const Controller = @This();
-const source_namespace = @import("history_query.zig");
-const history_query = @import("../../application/queries/history.zig");
-const Failure = @import("HistoryQueryFailure.zig");
-responses: *source_namespace.ResponseQueue,
-metrics: *source_namespace.RuntimeMetrics,
-query: history_query.Executor,
+
+responses: *ResponseQueueType,
+metrics: *RuntimeMetricsType,
+query: HistoryExecutor,
 
 /// Creates a controller scoped to one history-query request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, &metrics, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, metrics: *source_namespace.RuntimeMetrics, query: history_query.Executor) Controller {
+pub fn init(responses: *ResponseQueueType, metrics: *RuntimeMetricsType, query: HistoryExecutor) Controller {
     return .{ .responses = responses, .metrics = metrics, .query = query };
 }
 
@@ -22,7 +27,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, metrics: *source_namespa
 /// ```zig
 /// try controller.queryHistory(origin, request);
 /// ```
-pub fn queryHistory(controller: *Controller, origin: source_namespace.QueryOrigin, request: source_namespace.schema.QueryHistory) !void {
+pub fn queryHistory(controller: *Controller, origin: QueryOriginType, request: QueryHistoryType) !void {
     controller.query.execute(.{
         .request_id = request.request_id,
         .origin = origin,
@@ -48,7 +53,7 @@ pub fn queryHistory(controller: *Controller, origin: source_namespace.QueryOrigi
             return;
         },
         error.HistoryQueueFull => {
-            if (comptime source_namespace.diagnostics.enabled) {
+            if (comptime enabled_module) {
                 controller.metrics.history_query_failures += 1;
             }
 
@@ -62,12 +67,12 @@ pub fn queryHistory(controller: *Controller, origin: source_namespace.QueryOrigi
         else => return err,
     };
 
-    if (comptime source_namespace.diagnostics.enabled) {
+    if (comptime enabled_module) {
         controller.metrics.history_queries += 1;
     }
 }
 
-fn queueFailure(controller: *Controller, failure: Failure) !void {
+fn queueFailure(controller: *Controller, failure: HistoryQueryFailure) !void {
     try controller.responses.push(.{ .request_failed = .{
         .request_id = failure.request_id,
         .code = failure.code,

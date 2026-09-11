@@ -1,16 +1,19 @@
+const ReadContextType = @import("ReadContext.zig");
+const StatsContextType = @import("StatsContext.zig");
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const ServiceType = @import("../../../history/Service.zig");
+const StatsQueryType = @import("../../../history/StatsQuery.zig");
 const Controller = @This();
-const source_namespace = @import("history_output.zig");
-const history_mod = @import("../../../history/root.zig");
-const std = @import("std");
-responses: *source_namespace.ResponseQueue,
-service: *history_mod.Service,
+
+responses: *ResponseQueueType,
+service: *ServiceType,
 
 /// Creates a controller scoped to one output read.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, application.history_service);
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, service: *history_mod.Service) Controller {
+pub fn init(responses: *ResponseQueueType, service: *ServiceType) Controller {
     return .{ .responses = responses, .service = service };
 }
 
@@ -19,7 +22,7 @@ pub fn init(responses: *source_namespace.ResponseQueue, service: *history_mod.Se
 /// ```zig
 /// try controller.readHistoryOutput(context);
 /// ```
-pub fn readHistoryOutput(controller: *Controller, context: ReadContext) !void {
+pub fn readHistoryOutput(controller: *Controller, context: ReadContextType) !void {
     if (!controller.service.readOutput(context.io, .{
         .request_id = context.request.request_id,
         .origin = context.origin,
@@ -38,8 +41,8 @@ pub fn readHistoryOutput(controller: *Controller, context: ReadContext) !void {
 /// ```zig
 /// try controller.historyStats(context);
 /// ```
-pub fn historyStats(controller: *Controller, context: StatsContext) !void {
-    const query = history_mod.model.StatsQuery.init(.{
+pub fn historyStats(controller: *Controller, context: StatsContextType) !void {
+    const query = StatsQueryType.init(.{
         .request_id = context.request.request_id,
         .origin = context.origin,
         .scope = context.request.scope,
@@ -64,14 +67,6 @@ pub fn historyStats(controller: *Controller, context: StatsContext) !void {
     }
 }
 
-pub const ReadContext = struct {
-    io: std.Io,
-    origin: source_namespace.QueryOrigin,
-    request: source_namespace.schema.ReadHistoryOutput,
-};
+pub const ReadContext = @import("ReadContext.zig");
 
-pub const StatsContext = struct {
-    io: std.Io,
-    origin: source_namespace.QueryOrigin,
-    request: source_namespace.schema.HistoryStatsQuery,
-};
+pub const StatsContext = @import("StatsContext.zig");

@@ -1,11 +1,13 @@
-const StubExecutor = @This();
 const graphics_credit_commands = @import("../../application/commands/graphics_credit.zig");
+const ReturnGraphicsCreditType = @import("../../application/commands/ReturnGraphicsCredit.zig");
+const StubExecutor = @This();
+
 result: graphics_credit_commands.ReturnGraphicsCreditResult = .returned,
 failure: ?anyerror = null,
 call_count: usize = 0,
-command: ?graphics_credit_commands.ReturnGraphicsCredit = null,
+command: ?ReturnGraphicsCreditType = null,
 
-pub fn execute(stub: *StubExecutor, command: graphics_credit_commands.ReturnGraphicsCredit) !graphics_credit_commands.ReturnGraphicsCreditResult {
+pub fn execute(stub: *StubExecutor, command: ReturnGraphicsCreditType) !graphics_credit_commands.ReturnGraphicsCreditResult {
     stub.call_count += 1;
     stub.command = command;
 

@@ -1,5 +1,6 @@
+const RectType = @import("telar-core").Rect;
+const kitty_sidebar = @import("kitty_sidebar.zig");
 const SidebarProviderPlacement = @This();
-const core = @import("telar-core");
-const source_namespace = @import("kitty_sidebar.zig");
-area: core.ui.Rect,
-provider: source_namespace.SidebarProvider,
+
+area: RectType,
+provider: kitty_sidebar.SidebarProvider,

@@ -1,10 +1,11 @@
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 const OwnedTabLabel = @This();
-const source_namespace = @import("events.zig");
-bytes: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+
+bytes: [max_tab_label_bytes_module]u8 = undefined,
 len: u8,
 
 pub fn init(label: []const u8) !OwnedTabLabel {
-    if (label.len == 0 or label.len > source_namespace.schema.max_tab_label_bytes) {
+    if (label.len == 0 or label.len > max_tab_label_bytes_module) {
         return error.InvalidTabLabel;
     }
 

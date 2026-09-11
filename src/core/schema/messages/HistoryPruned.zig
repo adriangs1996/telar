@@ -1,5 +1,6 @@
+const id = @import("../id.zig");
 /// How many entries a delete or prune removed.
 const HistoryPruned = @This();
-const source_namespace = @import("history.zig");
-request_id: source_namespace.RequestId,
+
+request_id: id.RequestId,
 removed: u64,

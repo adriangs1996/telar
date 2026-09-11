@@ -1,7 +1,8 @@
-const OwnedClientLayout = @This();
-const source_namespace = @import("outbox_support.zig");
+const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
 const std = @import("std");
-bytes: [source_namespace.schema.max_client_layout_wire_bytes]u8 = undefined,
+const OwnedClientLayout = @This();
+
+bytes: [max_client_layout_wire_bytes_module]u8 = undefined,
 len: u16 = 0,
 used: bool = false,
 

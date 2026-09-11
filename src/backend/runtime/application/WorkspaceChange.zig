@@ -1,5 +1,8 @@
+const ClientKeyType = @import("../../history/ClientKey.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const WorkspaceChange = @This();
-const source_namespace = @import("root.zig");
-origin: source_namespace.ClientKey,
-workspace: source_namespace.schema.WorkspaceLocation,
-previous_workspace: ?source_namespace.schema.WorkspaceId = null,
+
+origin: ClientKeyType,
+workspace: WorkspaceLocationType,
+previous_workspace: ?WorkspaceIdType = null,

@@ -1,7 +1,8 @@
-const TransformCase = @This();
-const request = @import("request_support.zig");
+const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
-dialect: request.ApiDialect = .anthropic_messages,
+const TransformCase = @This();
+
+dialect: types.ApiDialect = .anthropic_messages,
 direction: middleware.Direction = .request,
 kind: middleware.HeaderKind = .request,
 method: []const u8 = "POST",

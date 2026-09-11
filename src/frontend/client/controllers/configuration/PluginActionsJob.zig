@@ -1,5 +1,6 @@
+const PluginExecutionIdType = @import("telar-client").PluginExecutionId;
+const WorkerRequestType = @import("../../../plugins/WorkerRequest.zig");
 const Job = @This();
-const client_model = @import("telar-client").model;
-const plugin_broker = @import("../../../plugins/root.zig");
-execution_id: client_model.PluginExecutionId,
-request: plugin_broker.WorkerRequest,
+
+execution_id: PluginExecutionIdType,
+request: WorkerRequestType,

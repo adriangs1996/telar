@@ -1,11 +1,13 @@
-const TransformedRoute = @This();
-const Route = @import("RelayRoute.zig");
+const RelayRoute = @import("RelayRoute.zig");
 const PeerSettings = @import("PeerSettings.zig");
-const middleware = @import("../middleware.zig");
+const TransformPipelineType = @import("../TransformPipeline.zig");
 const std = @import("std");
-route: Route,
+const TransformContextType = @import("../TransformContext.zig");
+const TransformedRoute = @This();
+
+route: RelayRoute,
 source_settings: *PeerSettings,
 target_settings: *PeerSettings,
-pipeline: *const middleware.TransformPipeline,
+pipeline: *const TransformPipelineType,
 io: std.Io,
-transform_context: middleware.TransformContext,
+transform_context: TransformContextType,

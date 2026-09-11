@@ -1,16 +1,14 @@
 //! Application policy for delivering one atomically committed workspace
 //! creation replacement.
 
+const PaneIdType = @import("telar-core").PaneId;
+const ModelType = @import("../../model/Model.zig");
+const WorkspaceCreationDeliveryEffectsCapture = @import("WorkspaceCreationDeliveryEffectsCapture.zig");
+const DeliverWorkspaceCreationHandler = @import("DeliverWorkspaceCreationHandler.zig");
+const WorkspaceCreationDeliveryTestingModel = @import("WorkspaceCreationDeliveryTestingModel.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const workspace_transition_delivery = @import("workspace_transition_delivery.zig");
 
-pub const schema = core.schema;
-
-pub const DeliverWorkspaceCreationHandler = @import("DeliverWorkspaceCreationHandler.zig");
-
-pub fn containsPane(panes: []const schema.PaneId, wanted: schema.PaneId) bool {
+pub fn containsPane(panes: []const PaneIdType, wanted: PaneIdType) bool {
     for (panes) |pane_id| {
         if (pane_id == wanted) {
             return true;
@@ -34,11 +32,7 @@ pub const Failure = enum {
     active_resources,
 };
 
-const TestingModel = @import("WorkspaceCreationDeliveryTestingModel.zig");
-
-const EffectsCapture = @import("WorkspaceCreationDeliveryEffectsCapture.zig");
-
-fn deliveryHandler(model: *client_model.Model, capture: *EffectsCapture) DeliverWorkspaceCreationHandler {
+fn deliveryHandler(model: *ModelType, capture: *WorkspaceCreationDeliveryEffectsCapture) DeliverWorkspaceCreationHandler {
     return .{
         .model = model,
         .release_effects = capture.releaseEffects(),
@@ -47,10 +41,10 @@ fn deliveryHandler(model: *client_model.Model, capture: *EffectsCapture) Deliver
 }
 
 test "DeliverWorkspaceCreationHandler releases before ordered activation" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const replacement = try testing.replace();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceCreationDeliveryEffectsCapture = .{
         .model = testing.model,
         .replacement = &replacement,
     };
@@ -68,7 +62,7 @@ test "DeliverWorkspaceCreationHandler releases before ordered activation" {
         .request_tab_snapshot,
     }, capture.eventSlice());
     try std.testing.expectEqualDeep(replacement.departure.bookmark.?, capture.remembered.?);
-    try std.testing.expectEqualSlices(schema.PaneId, replacement.departure.panes.slice(), capture.cleared_panes[0..capture.cleared_count]);
+    try std.testing.expectEqualSlices(PaneIdType, replacement.departure.panes.slice(), capture.cleared_panes[0..capture.cleared_count]);
     try std.testing.expectEqualDeep(replacement.activation.location.workspace, capture.workspace_request.?);
     try std.testing.expectEqualDeep(replacement.activation.location, capture.tab_request.?);
     try std.testing.expect(capture.release_complete_before_activation);
@@ -76,13 +70,13 @@ test "DeliverWorkspaceCreationHandler releases before ordered activation" {
 }
 
 test "DeliverWorkspaceCreationHandler accepts an exact invalid-copy release" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const paste = testing.model.panePasteSession().?;
     try std.testing.expect(testing.model.finishPanePaste(paste));
     try std.testing.expect(testing.model.enterCopyMode());
     const replacement = try testing.replace();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceCreationDeliveryEffectsCapture = .{
         .model = testing.model,
         .replacement = &replacement,
     };
@@ -98,10 +92,10 @@ test "DeliverWorkspaceCreationHandler accepts an exact invalid-copy release" {
 }
 
 test "DeliverWorkspaceCreationHandler validates replacement before release" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const replacement = try testing.replace();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceCreationDeliveryEffectsCapture = .{
         .model = testing.model,
         .replacement = &replacement,
     };
@@ -150,10 +144,10 @@ test "DeliverWorkspaceCreationHandler validates replacement before release" {
 }
 
 test "DeliverWorkspaceCreationHandler preserves release after activation failure" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceCreationDeliveryTestingModel.init();
     defer testing.deinit();
     const replacement = try testing.replace();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceCreationDeliveryEffectsCapture = .{
         .model = testing.model,
         .replacement = &replacement,
         .failure = .active_resources,
@@ -173,7 +167,7 @@ test "DeliverWorkspaceCreationHandler preserves release after activation failure
 }
 
 test "DeliverWorkspaceCreationHandler activates an exact replacement from an empty source" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     const replacement = try model.replaceWorkspace(.{
         .pane_id = @enumFromInt(3),
@@ -183,7 +177,7 @@ test "DeliverWorkspaceCreationHandler activates an exact replacement from an emp
         },
         .size = .{ .cols = 50, .rows = 12 },
     });
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceCreationDeliveryEffectsCapture = .{
         .model = &model,
         .replacement = &replacement,
     };

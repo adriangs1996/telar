@@ -3,31 +3,25 @@
 //! Focus replacements keep the old labels visible until the new image is placed.
 //! Text, geometry and theme changes still fall back to cells; latest plan wins.
 
+const PlanType = @import("../presentation/Plan.zig");
+const LabelType = @import("../presentation/Label.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const kitty = @import("kitty.zig");
-const rounded = @import("rounded_rectangle.zig");
-const raster = @import("rasterizer_support.zig");
-const labels = @import("../presentation/root.zig").pane_labels;
-const theme = @import("../ui/root.zig").theme;
-pub const ui = core.ui;
-pub const Io = std.Io;
+const measure_module = @import("telar-core").measure;
+const PillRenderer = @import("PillRenderer.zig");
+const theme = @import("../ui/theme_support.zig");
+const kitty_codec = @import("kitty_codec.zig");
 
 pub const max_cache_bytes = 1024 * 1024;
 pub const image_id: u32 = 0x80003000;
 pub const placement_id: u32 = 0x80003100;
 
-const Key = @import("Key.zig");
-
-pub const Renderer = @import("PillRenderer.zig");
-
-fn testingPlan(names: []const []const u8, selected: usize) labels.Plan {
-    var plan: labels.Plan = .{ .area = .{ .x = 2, .y = 1, .h = 1 } };
+fn testingPlan(names: []const []const u8, selected: usize) PlanType {
+    var plan: PlanType = .{ .area = .{ .x = 2, .y = 1, .h = 1 } };
     for (names, 0..) |name, index| {
-        var label: labels.Label = .{ .offset = plan.area.w, .width = 0, .selected = index == selected };
+        var label: LabelType = .{ .offset = plan.area.w, .width = 0, .selected = index == selected };
         const text = std.fmt.bufPrint(&label.bytes, "{d} {s}", .{ index + 1, name }) catch unreachable;
         label.len = @intCast(text.len);
-        label.width = ui.measure(text) + 2;
+        label.width = measure_module(text) + 2;
         plan.labels[plan.len] = label;
         plan.len += 1;
         plan.area.w += label.width + @as(u16, @intFromBool(index + 1 != names.len));
@@ -37,7 +31,7 @@ fn testingPlan(names: []const []const u8, selected: usize) labels.Plan {
 }
 
 test "small labels use JetBrains Mono and a centered three-quarter-height pill" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = PillRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     const palette = &theme.default_theme.palette;
     _ = renderer.configure(.{ .support = .supported, .cell_width = 22, .cell_height = 58 });
@@ -63,39 +57,39 @@ test "small labels use JetBrains Mono and a centered three-quarter-height pill" 
     }
 
     try std.testing.expect(text_pixels != 0);
-    var storage: [kitty.transmission_budget_per_frame + 8192]u8 = undefined;
-    var writer = Io.Writer.fixed(&storage);
+    var storage: [kitty_codec.transmission_budget_per_frame + 8192]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(renderer.covers(&plan, palette));
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "Y=7") != null);
     try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, writer.buffered(), "a=p"));
     const generation = renderer.generation;
     renderer.prepare(&plan, palette);
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     try std.testing.expectEqual(@as(usize, 0), try renderer.write(&writer));
     try std.testing.expectEqual(generation, renderer.generation);
 
     plan.area.x += 1;
     renderer.observe(&plan, palette);
     try std.testing.expect(renderer.retirementPending());
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.writeRetirements(&writer);
     renderer.prepare(&plan, palette);
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=t") == null);
     try std.testing.expect(renderer.covers(&plan, palette));
 }
 
 test "label coverage rejects stale focus text theme and cell size" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = PillRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     var palette = theme.default_theme.palette;
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var plan = testingPlan(&.{ "zsh", "nvim" }, 1);
     renderer.prepare(&plan, &palette);
     var storage: [128 * 1024]u8 = undefined;
-    var writer = Io.Writer.fixed(&storage);
+    var writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     const generation = renderer.generation;
     plan.labels[0].selected = true;
@@ -108,7 +102,7 @@ test "label coverage rejects stale focus text theme and cell size" {
     renderer.prepare(&plan, &palette);
     try std.testing.expect(renderer.image_dirty);
     try std.testing.expectEqual(generation + 1, renderer.generation);
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
 
     plan = testingPlan(&.{ "zsh", "bash" }, 0);
@@ -117,13 +111,13 @@ test "label coverage rejects stale focus text theme and cell size" {
     renderer.prepare(&plan, &palette);
     try std.testing.expect(renderer.retirementPending());
     try std.testing.expect(!renderer.coversText(&plan, &palette));
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     palette.subtext0 = .{ .rgb = .{ 12, 34, 56 } };
     try std.testing.expect(!renderer.coversText(&plan, &palette));
     renderer.prepare(&plan, &palette);
     try std.testing.expect(renderer.retirementPending());
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(renderer.covers(&plan, &palette));
     try std.testing.expect(renderer.coversText(&plan, &palette));
@@ -131,19 +125,19 @@ test "label coverage rejects stale focus text theme and cell size" {
     try std.testing.expect(!renderer.covers(&plan, &palette));
     try std.testing.expect(!renderer.coversText(&plan, &palette));
     renderer.prepare(&plan, &palette);
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(renderer.covers(&plan, &palette));
     _ = renderer.configure(.{ .support = .unsupported, .cell_width = 0, .cell_height = 0 });
     try std.testing.expect(!renderer.coversText(&plan, &palette));
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=d,d=I") != null);
     try std.testing.expect(!renderer.damaged());
 }
 
 test "large label images are chunked and canceled before replacement or hide" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = PillRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     const palette = &theme.default_theme.palette;
     _ = renderer.configure(.{ .support = .supported, .cell_width = 22, .cell_height = 64 });
@@ -152,15 +146,15 @@ test "large label images are chunked and canceled before replacement or hide" {
     renderer.prepare(&large, palette);
     try std.testing.expect(!renderer.failed);
     try std.testing.expect(renderer.retainedBytes() <= max_cache_bytes);
-    var storage: [kitty.transmission_budget_per_frame + 8192]u8 = undefined;
-    var writer = Io.Writer.fixed(&storage);
+    var storage: [kitty_codec.transmission_budget_per_frame + 8192]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(renderer.transferInProgress());
     try std.testing.expect(!renderer.covers(&large, palette));
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=p") == null);
     renderer.prepare(&large, palette);
     while (renderer.transferInProgress()) {
-        writer = Io.Writer.fixed(&storage);
+        writer = std.Io.Writer.fixed(&storage);
         _ = try renderer.write(&writer);
         try std.testing.expect(writer.buffered().len <= storage.len);
     }
@@ -170,41 +164,41 @@ test "large label images are chunked and canceled before replacement or hide" {
     replaced.labels[3].selected = false;
     replaced.labels[4].selected = true;
     renderer.prepare(&replaced, palette);
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(renderer.transferInProgress());
     const small = testingPlan(&.{"nvim"}, 0);
     renderer.observe(&small, palette);
     try std.testing.expect(renderer.abort_pending);
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     try std.testing.expectEqual(@as(usize, 0), try renderer.writeRetirements(&writer));
     renderer.prepare(&small, palette);
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), "\x1b_Gm=0;\x1b\\"));
     try std.testing.expect(renderer.covers(&small, palette));
 
     renderer.prepare(&large, palette);
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     renderer.observe(&.{}, palette);
-    writer = Io.Writer.fixed(&storage);
+    writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(std.mem.startsWith(u8, writer.buffered(), "\x1b_Gm=0;\x1b\\"));
     try std.testing.expect(!renderer.damaged());
 }
 
 test "focus replacements retain graphical text through chunking and latest-wins cancellation" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = PillRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     const palette = &theme.default_theme.palette;
     _ = renderer.configure(.{ .support = .supported, .cell_width = 22, .cell_height = 64 });
     const names = [_][]const u8{"long-process-label"} ** 8;
     var plan = testingPlan(&names, 0);
     renderer.prepare(&plan, palette);
-    var storage: [kitty.transmission_budget_per_frame + 8192]u8 = undefined;
+    var storage: [kitty_codec.transmission_budget_per_frame + 8192]u8 = undefined;
     while (renderer.damaged()) {
-        var writer = Io.Writer.fixed(&storage);
+        var writer = std.Io.Writer.fixed(&storage);
         _ = try renderer.write(&writer);
     }
 
@@ -221,7 +215,7 @@ test "focus replacements retain graphical text through chunking and latest-wins 
         try std.testing.expectEqual(original_key, renderer.key.?);
         try std.testing.expectEqual(original_pixels, renderer.pixels.ptr);
         try std.testing.expect(renderer.coversText(&plan, palette));
-        var writer = Io.Writer.fixed(&storage);
+        var writer = std.Io.Writer.fixed(&storage);
         _ = try renderer.write(&writer);
         try std.testing.expect(renderer.transferInProgress());
         try std.testing.expect(renderer.coversText(&plan, palette));
@@ -234,7 +228,7 @@ test "focus replacements retain graphical text through chunking and latest-wins 
     }
 
     while (renderer.transferInProgress()) {
-        var writer = Io.Writer.fixed(&storage);
+        var writer = std.Io.Writer.fixed(&storage);
         _ = try renderer.write(&writer);
         try std.testing.expect(renderer.coversText(&plan, palette));
         if (renderer.transferInProgress()) {
@@ -252,7 +246,7 @@ test "focus replacements retain graphical text through chunking and latest-wins 
     try std.testing.expect(!renderer.damaged());
     renderer.observe(&.{}, palette);
     try std.testing.expect(!renderer.coversText(&plan, palette));
-    var writer = Io.Writer.fixed(&storage);
+    var writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=d") != null);
     try std.testing.expect(!renderer.damaged());
@@ -260,7 +254,7 @@ test "focus replacements retain graphical text through chunking and latest-wins 
 
 test "unsupported text quotas and allocation failure keep the cell fallback" {
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    var renderer = Renderer.init(failing.allocator());
+    var renderer = PillRenderer.init(failing.allocator());
     defer renderer.deinit();
     const palette = &theme.default_theme.palette;
     const plan = testingPlan(&.{ "zsh", "nvim" }, 1);
@@ -279,7 +273,7 @@ test "unsupported text quotas and allocation failure keep the cell fallback" {
     renderer.prepare(&plan, palette);
     try std.testing.expectEqual(@as(usize, 0), renderer.retainedBytes());
 
-    var unsupported = Renderer.init(std.testing.allocator);
+    var unsupported = PillRenderer.init(std.testing.allocator);
     defer unsupported.deinit();
     _ = unsupported.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     const unknown_glyph = testingPlan(&.{"\u{10ffff}"}, 0);

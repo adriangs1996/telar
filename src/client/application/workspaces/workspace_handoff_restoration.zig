@@ -1,14 +1,11 @@
 //! Application policy for restoring the visible active tab after a local
 //! workspace-handoff effect fails before departure commits.
 
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const WorkspaceHandoffRestorationTestingModel = @import("WorkspaceHandoffRestorationTestingModel.zig");
+const WorkspaceHandoffRestorationCapture = @import("WorkspaceHandoffRestorationCapture.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const tab_snapshot_recovery = @import("../tabs/root.zig").tab_snapshot_recovery;
-
-pub const schema = core.schema;
-
-pub const Effects = @import("WorkspaceHandoffRestorationEffects.zig");
 
 pub const Outcome = enum {
     no_active_tab,
@@ -16,12 +13,10 @@ pub const Outcome = enum {
     snapshot_requested,
 };
 
-pub const RestoreWorkspaceHandoffHandler = @import("RestoreWorkspaceHandoffHandler.zig");
-
 pub const Event = union(enum) {
-    show_graphics: schema.PaneId,
+    show_graphics: PaneIdType,
     snapshot_pending,
-    request_snapshot: schema.TabLocation,
+    request_snapshot: TabLocationType,
 };
 
 pub const Failure = enum {
@@ -30,14 +25,10 @@ pub const Failure = enum {
     snapshot,
 };
 
-const TestingModel = @import("WorkspaceHandoffRestorationTestingModel.zig");
-
-const Capture = @import("WorkspaceHandoffRestorationCapture.zig");
-
 test "RestoreWorkspaceHandoffHandler shows only active panes before snapshot recovery" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceHandoffRestorationTestingModel.init();
     defer testing.deinit();
-    var capture: Capture = .{ .sibling = testing.sibling };
+    var capture: WorkspaceHandoffRestorationCapture = .{ .sibling = testing.sibling };
     var handler = capture.handler();
     const version = testing.model.version();
 
@@ -58,9 +49,9 @@ test "RestoreWorkspaceHandoffHandler shows only active panes before snapshot rec
 }
 
 test "RestoreWorkspaceHandoffHandler coalesces only after restoring graphics" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceHandoffRestorationTestingModel.init();
     defer testing.deinit();
-    var capture: Capture = .{
+    var capture: WorkspaceHandoffRestorationCapture = .{
         .sibling = testing.sibling,
         .pending = true,
     };
@@ -77,10 +68,10 @@ test "RestoreWorkspaceHandoffHandler coalesces only after restoring graphics" {
 }
 
 test "RestoreWorkspaceHandoffHandler ignores an already empty model" {
-    var testing = try TestingModel.init();
+    var testing = try WorkspaceHandoffRestorationTestingModel.init();
     defer testing.deinit();
     _ = testing.model.departWorkspace();
-    var capture: Capture = .{ .sibling = testing.sibling };
+    var capture: WorkspaceHandoffRestorationCapture = .{ .sibling = testing.sibling };
     var handler = capture.handler();
 
     const outcome = try handler.execute(testing.model);
@@ -90,9 +81,9 @@ test "RestoreWorkspaceHandoffHandler ignores an already empty model" {
 }
 
 test "RestoreWorkspaceHandoffHandler preserves completed stages on failure" {
-    var graphics = try TestingModel.init();
+    var graphics = try WorkspaceHandoffRestorationTestingModel.init();
     defer graphics.deinit();
-    var graphics_capture: Capture = .{
+    var graphics_capture: WorkspaceHandoffRestorationCapture = .{
         .sibling = graphics.sibling,
         .failure = .sibling_graphics,
     };
@@ -104,9 +95,9 @@ test "RestoreWorkspaceHandoffHandler preserves completed stages on failure" {
         .{ .show_graphics = graphics.sibling },
     }, graphics_capture.eventSlice());
 
-    var snapshot = try TestingModel.init();
+    var snapshot = try WorkspaceHandoffRestorationTestingModel.init();
     defer snapshot.deinit();
-    var snapshot_capture: Capture = .{
+    var snapshot_capture: WorkspaceHandoffRestorationCapture = .{
         .sibling = snapshot.sibling,
         .failure = .snapshot,
     };

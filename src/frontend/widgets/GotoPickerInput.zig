@@ -1,8 +1,9 @@
-const Input = @This();
-const source_namespace = @import("goto_picker.zig");
+const goto_picker = @import("goto_picker.zig");
 const Row = @import("Row.zig");
+const Input = @This();
+
 title: []const u8,
-field: *source_namespace.Field,
+field: *goto_picker.Field,
 rows: []const Row,
 total: u16,
 /// Short status shown in the bottom border, e.g. the active scope.

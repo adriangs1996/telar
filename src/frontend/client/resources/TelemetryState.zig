@@ -1,10 +1,14 @@
-const State = @This();
 const Metrics = @import("Metrics.zig");
-const source_namespace = @import("telemetry.zig");
+const SinkType = @import("telar-core").Sink;
+const telemetry = @import("telemetry.zig");
 const std = @import("std");
+const enabled_module = @import("telar-core").enabled;
+const now_module = @import("telar-core").now;
+const State = @This();
+
 metrics: Metrics,
-sink: source_namespace.diagnostics.Sink,
-buffer: [source_namespace.buffer_size]u8 = undefined,
+sink: SinkType,
+buffer: [telemetry.buffer_size]u8 = undefined,
 write_pending: bool = false,
 enabled: bool,
 
@@ -13,10 +17,10 @@ enabled: bool,
 /// ```zig
 /// var telemetry = State.init(io, runtime_endpoint);
 /// ```
-pub fn init(io: source_namespace.Io, endpoint: []const u8) State {
-    if (!source_namespace.diagnostics.enabled or endpoint.len == 0) {
+pub fn init(io: std.Io, endpoint: []const u8) State {
+    if (!enabled_module or endpoint.len == 0) {
         return .{
-            .metrics = .{ .started_ns = source_namespace.diagnostics.now(io) },
+            .metrics = .{ .started_ns = now_module(io) },
             .sink = .{},
             .enabled = false,
         };
@@ -24,10 +28,10 @@ pub fn init(io: source_namespace.Io, endpoint: []const u8) State {
 
     var suffix_buffer: [64]u8 = undefined;
     const suffix = std.fmt.bufPrint(&suffix_buffer, "client-{d}", .{std.c.getpid()}) catch "client";
-    var sink = source_namespace.diagnostics.Sink.init(io, endpoint, suffix);
+    var sink = SinkType.init(io, endpoint, suffix);
 
     return .{
-        .metrics = .{ .started_ns = source_namespace.diagnostics.now(io) },
+        .metrics = .{ .started_ns = now_module(io) },
         .sink = sink,
         .enabled = sink.available(),
     };
@@ -38,7 +42,7 @@ pub fn init(io: source_namespace.Io, endpoint: []const u8) State {
 /// ```zig
 /// telemetry.deinit(io);
 /// ```
-pub fn deinit(state: *State, io: source_namespace.Io) void {
+pub fn deinit(state: *State, io: std.Io) void {
     state.write_pending = false;
     state.enabled = false;
     state.sink.deinit(io);
@@ -58,7 +62,7 @@ pub fn reserveWrite(state: *State) bool {
     return true;
 }
 
-pub fn disable(state: *State, io: source_namespace.Io) void {
+pub fn disable(state: *State, io: std.Io) void {
     state.enabled = false;
 
     if (!state.write_pending) {

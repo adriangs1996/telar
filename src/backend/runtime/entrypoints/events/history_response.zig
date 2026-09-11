@@ -1,13 +1,14 @@
 //! Routing and ownership policy for asynchronous history responses.
 
-const std = @import("std");
-const history = @import("../../../history/root.zig");
-
-pub const RuntimePort = @import("GenericHistoryResponseRuntimePort.zig").Type;
-
-pub const Controller = @import("GenericController.zig").Type;
-
+const GenericHistoryResponseRuntimePort = @import("GenericHistoryResponseRuntimePort.zig").Type;
+const HistoryResponseCapture = @import("HistoryResponseCapture.zig");
 const FakeSession = @import("FakeSession.zig");
+const GenericController = @import("GenericController.zig").Type;
+const QueryOriginType = @import("../../../history/QueryOrigin.zig");
+const EntryType = @import("../../../history/Entry.zig");
+const QueryResultType = @import("../../../history/QueryResult.zig");
+const std = @import("std");
+const FailureType = @import("../../../history/Failure.zig");
 
 pub const Step = enum {
     enqueue_pruned,
@@ -22,24 +23,22 @@ pub const Step = enum {
     pump_clients,
 };
 
-const Capture = @import("HistoryResponseCapture.zig");
-
-const test_port: RuntimePort(Capture, *FakeSession) = .{
-    .rearm_receive = Capture.rearmReceive,
-    .resolve = Capture.resolve,
-    .set_close_after_reply = Capture.setCloseAfterReply,
-    .enqueue_query_result = Capture.enqueueQueryResult,
-    .enqueue_failure = Capture.enqueueFailure,
-    .enqueue_pruned = Capture.enqueuePruned,
-    .enqueue_output_result = Capture.enqueueOutputResult,
-    .enqueue_stats_result = Capture.enqueueStatsResult,
-    .dispose_query_result = Capture.disposeQueryResult,
-    .pump_clients = Capture.pumpClients,
+const test_port: GenericHistoryResponseRuntimePort(HistoryResponseCapture, *FakeSession) = .{
+    .rearm_receive = HistoryResponseCapture.rearmReceive,
+    .resolve = HistoryResponseCapture.resolve,
+    .set_close_after_reply = HistoryResponseCapture.setCloseAfterReply,
+    .enqueue_query_result = HistoryResponseCapture.enqueueQueryResult,
+    .enqueue_failure = HistoryResponseCapture.enqueueFailure,
+    .enqueue_pruned = HistoryResponseCapture.enqueuePruned,
+    .enqueue_output_result = HistoryResponseCapture.enqueueOutputResult,
+    .enqueue_stats_result = HistoryResponseCapture.enqueueStatsResult,
+    .dispose_query_result = HistoryResponseCapture.disposeQueryResult,
+    .pump_clients = HistoryResponseCapture.pumpClients,
 };
 
-const TestController = Controller(Capture, *FakeSession, test_port);
+const TestController = GenericController(HistoryResponseCapture, *FakeSession, test_port);
 
-fn testQueryResult(origin: history.model.QueryOrigin, entries: []history.model.Entry) history.model.QueryResult {
+fn testQueryResult(origin: QueryOriginType, entries: []EntryType) QueryResultType {
     return .{
         .request_id = @enumFromInt(13),
         .origin = origin,
@@ -48,7 +47,7 @@ fn testQueryResult(origin: history.model.QueryOrigin, entries: []history.model.E
     };
 }
 
-fn testFailure(origin: history.model.QueryOrigin) history.model.Failure {
+fn testFailure(origin: QueryOriginType) FailureType {
     return .{
         .request_id = @enumFromInt(17),
         .origin = origin,
@@ -56,19 +55,19 @@ fn testFailure(origin: history.model.QueryOrigin) history.model.Failure {
     };
 }
 
-fn testOrigin(close_after_reply: bool) history.model.QueryOrigin {
+fn testOrigin(close_after_reply: bool) QueryOriginType {
     return .{
         .client = .{ .id = 7, .generation = 11 },
         .close_after_reply = close_after_reply,
     };
 }
 
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const HistoryResponseCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
 test "a failed worker receive ends without rearming or routing" {
-    var capture: Capture = .{};
+    var capture: HistoryResponseCapture = .{};
     var controller = TestController.init(&capture);
 
     try controller.handle(error.ResponseQueueClosed);
@@ -77,9 +76,9 @@ test "a failed worker receive ends without rearming or routing" {
 }
 
 test "rearm failure disposes an owned query result before propagating" {
-    var entries: [0]history.model.Entry = .{};
+    var entries: [0]EntryType = .{};
     var result = testQueryResult(testOrigin(false), &entries);
-    var capture: Capture = .{ .rearm_failure = true };
+    var capture: HistoryResponseCapture = .{ .rearm_failure = true };
     var controller = TestController.init(&capture);
 
     try std.testing.expectError(error.SchedulerUnavailable, controller.handle(.{ .query_result = &result }));
@@ -89,9 +88,9 @@ test "rearm failure disposes an owned query result before propagating" {
 }
 
 test "a stale query result is disposed without pumping clients" {
-    var entries: [0]history.model.Entry = .{};
+    var entries: [0]EntryType = .{};
     var result = testQueryResult(testOrigin(false), &entries);
-    var capture: Capture = .{ .resolve_client = false };
+    var capture: HistoryResponseCapture = .{ .resolve_client = false };
     var controller = TestController.init(&capture);
 
     try controller.handle(.{ .query_result = &result });
@@ -101,9 +100,9 @@ test "a stale query result is disposed without pumping clients" {
 }
 
 test "an accepted query result transfers ownership before pumping" {
-    var entries: [0]history.model.Entry = .{};
+    var entries: [0]EntryType = .{};
     var result = testQueryResult(testOrigin(true), &entries);
-    var capture: Capture = .{};
+    var capture: HistoryResponseCapture = .{};
     var controller = TestController.init(&capture);
 
     try controller.handle(.{ .query_result = &result });
@@ -121,9 +120,9 @@ test "an accepted query result transfers ownership before pumping" {
 }
 
 test "query response backpressure disposes before pumping" {
-    var entries: [0]history.model.Entry = .{};
+    var entries: [0]EntryType = .{};
     var result = testQueryResult(testOrigin(false), &entries);
-    var capture: Capture = .{ .query_queue_accepts = false };
+    var capture: HistoryResponseCapture = .{ .query_queue_accepts = false };
     var controller = TestController.init(&capture);
 
     try controller.handle(.{ .query_result = &result });
@@ -140,7 +139,7 @@ test "query response backpressure disposes before pumping" {
 }
 
 test "a stale failure response has no owned value or delivery effects" {
-    var capture: Capture = .{ .resolve_client = false };
+    var capture: HistoryResponseCapture = .{ .resolve_client = false };
     var controller = TestController.init(&capture);
 
     try controller.handle(.{ .failed = testFailure(testOrigin(true)) });
@@ -150,7 +149,7 @@ test "a stale failure response has no owned value or delivery effects" {
 }
 
 test "failure response backpressure still leaves a delivery opportunity" {
-    var capture: Capture = .{ .failure_queue_accepts = false };
+    var capture: HistoryResponseCapture = .{ .failure_queue_accepts = false };
     var controller = TestController.init(&capture);
 
     try controller.handle(.{ .failed = testFailure(testOrigin(true)) });

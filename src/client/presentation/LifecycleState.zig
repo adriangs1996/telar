@@ -1,26 +1,23 @@
-const State = @This();
-const presentation = @import("root.zig");
-const source_namespace = @import("lifecycle.zig");
+const ObservationType = @import("Observation.zig");
+const GeometryType = @import("Geometry.zig");
+const Flight = @import("Flight.zig");
 const std = @import("std");
 const Submission = @import("Submission.zig");
-observed: presentation.Observation = .{},
-prepared: presentation.Observation = .{},
-delivered: presentation.Observation = .{},
-delivered_geometry: ?presentation.Geometry = null,
+const lifecycle = @import("lifecycle.zig");
+const DeliveryType = @import("PresentationDelivery.zig");
+const State = @This();
+
+observed: ObservationType = .{},
+prepared: ObservationType = .{},
+delivered: ObservationType = .{},
+delivered_geometry: ?GeometryType = null,
 preparation_invalid: bool = false,
 next_token: u64 = 1,
 active: ?Flight = null,
 
-const Flight = struct {
-    token: source_namespace.Token,
-    observation: presentation.Observation,
-    geometry: presentation.Geometry,
-    delivery: presentation.Delivery,
-};
-
 /// Coalesces an observation without retaining model or projection pointers.
 /// Example: `if (state.observe(observation)) requestDraw();`.
-pub fn observe(state: *State, observation: presentation.Observation) bool {
+pub fn observe(state: *State, observation: ObservationType) bool {
     if (std.meta.eql(state.observed, observation)) {
         return false;
     }
@@ -37,7 +34,7 @@ pub fn needsPreparation(state: *const State) bool {
 
 /// Seals owned identities after synchronous preparation. No pane data is borrowed.
 /// Example: `const token = try state.begin(.{ .observation = observed, .commit = commit });`.
-pub fn begin(state: *State, submission: Submission) !source_namespace.Token {
+pub fn begin(state: *State, submission: Submission) !lifecycle.Token {
     if (state.active != null) {
         return error.PresentationBusy;
     }
@@ -54,7 +51,7 @@ pub fn begin(state: *State, submission: Submission) !source_namespace.Token {
         return error.InvalidPresentationCommit;
     }
 
-    const token: source_namespace.Token = @enumFromInt(state.next_token);
+    const token: lifecycle.Token = @enumFromInt(state.next_token);
     state.next_token += 1;
     state.prepared = submission.observation;
     state.preparation_invalid = false;
@@ -70,7 +67,7 @@ pub fn begin(state: *State, submission: Submission) !source_namespace.Token {
 /// Releases exactly one flight. Old completions cannot consume newer work.
 /// A delivered older model version still ACKs only its captured pane frames.
 /// Example: `const delivery = state.complete(token, .delivered) orelse return;`.
-pub fn complete(state: *State, token: source_namespace.Token, outcome: source_namespace.Outcome) ?presentation.Delivery {
+pub fn complete(state: *State, token: lifecycle.Token, outcome: lifecycle.Outcome) ?DeliveryType {
     const flight = state.active orelse return null;
     if (flight.token != token) {
         return null;

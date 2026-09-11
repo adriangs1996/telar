@@ -1,8 +1,9 @@
-const ClientTabLayoutIterator = @This();
-const wire = @import("../wire.zig");
+const DecoderType = @import("../Decoder.zig");
 const ClientTabLayoutView = @import("ClientTabLayoutView.zig");
-const source_namespace = @import("layout.zig");
-decoder: wire.Decoder,
+const layout = @import("layout.zig");
+const ClientTabLayoutIterator = @This();
+
+decoder: DecoderType,
 remaining: u16,
 
 /// Decodes the next tab layout, returning null after the declared count.
@@ -16,5 +17,5 @@ pub fn next(iterator: *ClientTabLayoutIterator) !?ClientTabLayoutView {
     }
 
     iterator.remaining -= 1;
-    return @as(?ClientTabLayoutView, try source_namespace.decodeClientTabLayout(&iterator.decoder));
+    return @as(?ClientTabLayoutView, try layout.decodeClientTabLayout(&iterator.decoder));
 }

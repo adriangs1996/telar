@@ -1,17 +1,15 @@
 //! Correlated, bounded search turns. No worker borrows terminal state.
+
+const SearchPaneType = @import("telar-core").SearchPane;
+const Cursor = @import("../../pane/Cursor.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const pane_mod = @import("../../pane/root.zig");
-const history = @import("../../history/root.zig");
-pub const schema = core.schema;
-
-pub const Pending = @import("Pending.zig");
-
-pub const Wake = @import("Wake.zig");
+const Wake = @import("Wake.zig");
+const MatchesType = @import("commands/Matches.zig");
+const RequestIdType = @import("telar-core").RequestId;
 
 /// Starts a search, replacing only this client's previous search.
 /// Example: `try start(application, session, request);`.
-pub fn start(application: anytype, session: anytype, request: schema.SearchPane) !void {
+pub fn start(application: anytype, session: anytype, request: SearchPaneType) !void {
     const attachment = session.attachments.find(request.pane_id) orelse {
         try session.delivery.responses.push(.{ .request_failed = .{
             .request_id = request.request_id,
@@ -27,7 +25,7 @@ pub fn start(application: anytype, session: anytype, request: schema.SearchPane)
     session.pending_search = .{
         .request_id = request.request_id,
         .pane = attachment.pane.key(),
-        .cursor = pane_mod.TextSearch.init(request.needle),
+        .cursor = Cursor.init(request.needle),
         .deadline_ns = std.Io.Clock.awake.now(application.io).nanoseconds + 250 * std.time.ns_per_ms,
     };
     if (session.search_scheduled) {
@@ -77,7 +75,7 @@ pub fn advance(application: anytype, completion: Wake) !void {
         return;
     };
     if (complete) {
-        const matches: @import("commands/search_pane.zig").Matches = .{
+        const matches: MatchesType = .{
             .items = pending.cursor.matches,
             .count = pending.cursor.count,
             .truncated = pending.cursor.truncated,
@@ -94,7 +92,7 @@ pub fn advance(application: anytype, completion: Wake) !void {
     }
 }
 
-fn fail(session: anytype, request_id: schema.RequestId, message: []const u8) !void {
+fn fail(session: anytype, request_id: RequestIdType, message: []const u8) !void {
     try session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = .resource_limit,

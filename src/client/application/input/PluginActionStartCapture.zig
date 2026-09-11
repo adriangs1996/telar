@@ -1,10 +1,12 @@
-const StartCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("plugin_action.zig");
-const StartEffects = @import("PluginActionStartEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const plugin_action = @import("plugin_action.zig");
+const PluginActionStartEffects = @import("PluginActionStartEffects.zig");
 const StartDelivery = @import("StartDelivery.zig");
+const PluginExecutionType = @import("../../model/PluginExecution.zig");
 const std = @import("std");
-model: *const client_model.Model,
+const StartCapture = @This();
+
+model: *const ModelType,
 prepare_calls: usize = 0,
 schedule_calls: usize = 0,
 delivery_calls: usize = 0,
@@ -13,9 +15,9 @@ scheduled_after_commit: bool = false,
 prepare_error: ?anyerror = null,
 fail_schedule: bool = false,
 fail_delivery: bool = false,
-delivered_outcome: ?source_namespace.StartOutcome = null,
+delivered_outcome: ?plugin_action.StartOutcome = null,
 
-pub fn port(capture: *StartCapture) StartEffects {
+pub fn port(capture: *StartCapture) PluginActionStartEffects {
     return .{
         .context = capture,
         .prepare = prepare,
@@ -36,7 +38,7 @@ fn prepare(raw_context: *anyopaque) !void {
     }
 }
 
-fn schedule(raw_context: *anyopaque, execution: client_model.PluginExecution) !void {
+fn schedule(raw_context: *anyopaque, execution: PluginExecutionType) !void {
     const capture: *StartCapture = @ptrCast(@alignCast(raw_context));
     capture.schedule_calls += 1;
     capture.scheduled_after_commit = std.meta.eql(
@@ -48,7 +50,7 @@ fn schedule(raw_context: *anyopaque, execution: client_model.PluginExecution) !v
     }
 }
 
-fn deliver(raw_context: *anyopaque, outcome: source_namespace.StartOutcome) !void {
+fn deliver(raw_context: *anyopaque, outcome: plugin_action.StartOutcome) !void {
     const capture: *StartCapture = @ptrCast(@alignCast(raw_context));
     capture.delivery_calls += 1;
     capture.delivered_outcome = outcome;

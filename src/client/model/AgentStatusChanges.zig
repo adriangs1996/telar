@@ -1,8 +1,9 @@
-const AgentStatusChanges = @This();
-const agents = @import("../agents/root.zig");
+const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
 const AgentStatusChange = @import("AgentStatusChange.zig");
 const std = @import("std");
-items: [agents.max_agents]AgentStatusChange = undefined,
+const AgentStatusChanges = @This();
+
+items: [max_agent_snapshot_entries]AgentStatusChange = undefined,
 count: u8 = 0,
 
 pub fn append(changes: *AgentStatusChanges, change: AgentStatusChange) void {

@@ -1,10 +1,12 @@
+const ModelType = @import("../../model/Model.zig");
+const RectType = @import("telar-core").Rect;
+const TabSnapshotEffects = @import("TabSnapshotEffects.zig");
+const PaneSnapshot = @import("../../workspace/PaneSnapshot.zig");
 const ApplyTabSnapshotHandler = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_snapshot.zig");
-const Effects = @import("TabSnapshotEffects.zig");
-model: *client_model.Model,
-area: source_namespace.ui.Rect,
-effects: Effects,
+
+model: *ModelType,
+area: RectType,
+effects: TabSnapshotEffects,
 
 /// Commits canonical pane membership before delivering client resources.
 /// Model failures have no effects; effect failures preserve the commit.
@@ -12,7 +14,7 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(snapshot);
 /// ```
-pub fn execute(handler: *ApplyTabSnapshotHandler, snapshot: client_model.TabSnapshot) !void {
+pub fn execute(handler: *ApplyTabSnapshotHandler, snapshot: PaneSnapshot) !void {
     const reconciliation = try handler.model.reconcileTab(snapshot, handler.area);
     try handler.effects.deliver(handler.effects.context, &reconciliation);
 }

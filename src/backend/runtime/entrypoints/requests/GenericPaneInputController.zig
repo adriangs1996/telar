@@ -1,5 +1,7 @@
-const source_namespace = @import("pane_input.zig");
+const RuntimeMetricsType = @import("../../observability/RuntimeMetrics.zig");
+const PaneInputType = @import("telar-core").PaneInput;
 const pane_input_commands = @import("../../application/commands/pane_input.zig");
+
 /// Builds a controller around a statically dispatched command executor. The
 /// concrete executor remains visible to the compiler so this protocol boundary
 /// adds neither allocation nor indirect dispatch to the interactive path.
@@ -12,7 +14,7 @@ pub fn Type(comptime Executor: type) type {
     return struct {
         const Self = @This();
 
-        metrics: *source_namespace.RuntimeMetrics,
+        metrics: *RuntimeMetricsType,
         executor: Executor,
 
         /// Creates one controller bound to the requesting client and handler.
@@ -20,7 +22,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// var controller = InputController.init(&metrics, &handler);
         /// ```
-        pub fn init(metrics: *source_namespace.RuntimeMetrics, executor: Executor) Self {
+        pub fn init(metrics: *RuntimeMetricsType, executor: Executor) Self {
             return .{ .metrics = metrics, .executor = executor };
         }
 
@@ -31,7 +33,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// try controller.paneInput(request);
         /// ```
-        pub inline fn paneInput(controller: *Self, request: source_namespace.schema.PaneInput) !pane_input_commands.PaneInputResult {
+        pub inline fn paneInput(controller: *Self, request: PaneInputType) !pane_input_commands.PaneInputResult {
             const result = try controller.executor.execute(.{
                 .pane_id = request.pane_id,
                 .bytes = request.bytes,

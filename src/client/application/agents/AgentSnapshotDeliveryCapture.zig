@@ -1,7 +1,9 @@
-const DeliveryCapture = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const AgentSnapshotDelivery = @import("AgentSnapshotDelivery.zig");
-model: *const client_model.Model,
+const AgentSnapshotCommitType = @import("../../model/AgentSnapshotCommit.zig");
+const DeliveryCapture = @This();
+
+model: *const ModelType,
 calls: usize = 0,
 observed_commit: bool = false,
 fail: bool = false,
@@ -15,7 +17,7 @@ pub fn reset(capture: *DeliveryCapture) void {
     capture.observed_commit = false;
 }
 
-fn deliver(context: *anyopaque, commit: *const client_model.AgentSnapshotCommit) !void {
+fn deliver(context: *anyopaque, commit: *const AgentSnapshotCommitType) !void {
     const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.observed_commit = capture.model.version().agents == commit.agent_revision and

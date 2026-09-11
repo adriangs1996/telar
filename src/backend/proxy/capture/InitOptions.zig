@@ -1,4 +1,6 @@
+const ConfigType = @import("Config.zig");
+const CredentialGateType = @import("CredentialGate.zig");
 const InitOptions = @This();
-const source_namespace = @import("root.zig");
-config: source_namespace.Config,
-gate: source_namespace.CredentialGate,
+
+config: ConfigType,
+gate: CredentialGateType,

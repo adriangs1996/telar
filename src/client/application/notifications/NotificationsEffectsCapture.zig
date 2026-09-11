@@ -1,7 +1,8 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const TimerEffects = @import("TimerEffects.zig");
-model: *const client_model.Model,
+const EffectsCapture = @This();
+
+model: *const ModelType,
 expected_revision: u64 = 0,
 calls: usize = 0,
 observed_commit: bool = false,

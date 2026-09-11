@@ -1,6 +1,7 @@
-const Frame = @This();
 const std = @import("std");
-const source_namespace = @import("shared_frame_test.zig");
+const shared_frame_test = @import("shared_frame_test.zig");
+const Frame = @This();
+
 name_buffer: [std.fs.max_path_bytes]u8 = undefined,
 name_len: usize = 0,
 envelope: [512]u8 = undefined,
@@ -20,7 +21,7 @@ pub fn publish(frame: *Frame, sequence: u32, pixels: []const u8) !void {
     const name_z = try std.fmt.bufPrintZ(&frame.name_buffer, "/tlrtest-frame-{d}-{d}", .{ std.c.getpid(), sequence });
     frame.name_len = name_z.len;
     _ = std.c.shm_unlink(name_z);
-    try source_namespace.createChildObject(name_z, pixels);
+    try shared_frame_test.createChildObject(name_z, pixels);
     const Encoder = std.base64.standard.Encoder;
     var encoded: [128]u8 = undefined;
     const payload = Encoder.encode(encoded[0..Encoder.calcSize(name_z.len)], name_z);

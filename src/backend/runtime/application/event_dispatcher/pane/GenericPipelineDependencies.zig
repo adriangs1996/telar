@@ -1,4 +1,5 @@
-const source_namespace = @import("pipeline.zig");
+const PaneType = @import("../../../../pane/Pane.zig");
+
 /// Declares the follow-up operations required while processing pane output.
 ///
 /// ```zig
@@ -6,8 +7,8 @@ const source_namespace = @import("pipeline.zig");
 /// ```
 pub fn Type(comptime Application: type) type {
     return struct {
-        schedule_observation: *const fn (*Application, *source_namespace.Pane) anyerror!void,
-        schedule_media: *const fn (*Application, *source_namespace.Pane) anyerror!void,
-        schedule_response: *const fn (*Application, *source_namespace.Pane) anyerror!void,
+        schedule_observation: *const fn (*Application, *PaneType) anyerror!void,
+        schedule_media: *const fn (*Application, *PaneType) anyerror!void,
+        schedule_response: *const fn (*Application, *PaneType) anyerror!void,
     };
 }

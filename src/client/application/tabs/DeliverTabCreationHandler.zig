@@ -1,16 +1,20 @@
-const DeliverTabCreationHandler = @This();
-const client_model = @import("../../root.zig").model;
-const pane_paste = @import("../input/root.zig").pane_paste;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
-const Effects = @import("TabCreationDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const PanePasteEffects = @import("../input/PanePasteEffects.zig");
+const PaneFocusReportingEffects = @import("../panes/PaneFocusReportingEffects.zig");
+const TabAttachmentRetirementEffects = @import("TabAttachmentRetirementEffects.zig");
+const TabCreationDeliveryEffects = @import("TabCreationDeliveryEffects.zig");
+const TabCreationType = @import("../../model/TabCreation.zig");
+const RetireTabAttachmentsHandlerType = @import("RetireTabAttachmentsHandler.zig");
 const std = @import("std");
-const source_namespace = @import("tab_creation_delivery.zig");
-model: *client_model.Model,
-paste_effects: pane_paste.Effects,
-focus_effects: pane_focus_reporting.Effects,
-attachment_effects: tab_attachment_retirement.Effects,
-effects: Effects,
+const TabLocationType = @import("telar-core").TabLocation;
+const TabType = @import("../../workspace/Tab.zig");
+const DeliverTabCreationHandler = @This();
+
+model: *ModelType,
+paste_effects: PanePasteEffects,
+focus_effects: PaneFocusReportingEffects,
+attachment_effects: TabAttachmentRetirementEffects,
+effects: TabCreationDeliveryEffects,
 
 /// Validates one exact creation before retiring the previous tab's
 /// attachments and synchronizing resources for the created root pane.
@@ -18,10 +22,10 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(creation);
 /// ```
-pub fn execute(handler: *DeliverTabCreationHandler, creation: client_model.TabCreation) !void {
+pub fn execute(handler: *DeliverTabCreationHandler, creation: TabCreationType) !void {
     try handler.validate(creation);
 
-    var retire_previous: tab_attachment_retirement.RetireTabAttachmentsHandler = .{
+    var retire_previous: RetireTabAttachmentsHandlerType = .{
         .model = handler.model,
         .paste_effects = handler.paste_effects,
         .focus_effects = handler.focus_effects,
@@ -32,7 +36,7 @@ pub fn execute(handler: *DeliverTabCreationHandler, creation: client_model.TabCr
     try handler.effects.synchronize_active_resources(handler.effects.context);
 }
 
-fn validate(handler: *const DeliverTabCreationHandler, creation: client_model.TabCreation) !void {
+fn validate(handler: *const DeliverTabCreationHandler, creation: TabCreationType) !void {
     if (std.meta.eql(creation.previous, creation.created)) {
         return error.StaleTabCreation;
     }
@@ -65,7 +69,7 @@ fn validate(handler: *const DeliverTabCreationHandler, creation: client_model.Ta
     }
 }
 
-fn exactTab(handler: *const DeliverTabCreationHandler, location: source_namespace.schema.TabLocation) !*source_namespace.tabs_mod.Tab {
+fn exactTab(handler: *const DeliverTabCreationHandler, location: TabLocationType) !*TabType {
     const tab = handler.model.workspace.find(location.tab_id) orelse return error.StaleTabCreation;
     if (!std.meta.eql(tab.location, location)) {
         return error.StaleTabCreation;

@@ -1,9 +1,9 @@
 //! Application boundary for the bounded client name prompt.
 
+const NamePromptState = @import("../../model/NamePromptState.zig");
+const NamePromptEffectsCapture = @import("NamePromptEffectsCapture.zig");
+const NamePromptHandler = @import("NamePromptHandler.zig");
 const std = @import("std");
-const name_prompt = @import("../../root.zig").model.name_prompt;
-
-pub const SubmitEffects = @import("SubmitEffects.zig");
 
 pub const Outcome = enum {
     unchanged,
@@ -17,13 +17,9 @@ pub const Outcome = enum {
     finished,
 };
 
-pub const NamePromptHandler = @import("NamePromptHandler.zig");
-
-const EffectsCapture = @import("NamePromptEffectsCapture.zig");
-
 test "accepted submission stays borrowed and active until the effect returns" {
-    var prompt: name_prompt.State = .{};
-    var capture: EffectsCapture = .{ .prompt = &prompt };
+    var prompt: NamePromptState = .{};
+    var capture: NamePromptEffectsCapture = .{ .prompt = &prompt };
     var handler: NamePromptHandler = .{
         .prompt = &prompt,
         .effects = capture.port(),
@@ -40,8 +36,8 @@ test "accepted submission stays borrowed and active until the effect returns" {
 }
 
 test "blocked and failed submissions retain the prompt" {
-    var prompt: name_prompt.State = .{};
-    var capture: EffectsCapture = .{
+    var prompt: NamePromptState = .{};
+    var capture: NamePromptEffectsCapture = .{
         .prompt = &prompt,
         .accept = false,
     };
@@ -62,8 +58,8 @@ test "blocked and failed submissions retain the prompt" {
 }
 
 test "editor and cancellation transitions never call submit effects" {
-    var prompt: name_prompt.State = .{};
-    var capture: EffectsCapture = .{ .prompt = &prompt };
+    var prompt: NamePromptState = .{};
+    var capture: NamePromptEffectsCapture = .{ .prompt = &prompt };
     var handler: NamePromptHandler = .{
         .prompt = &prompt,
         .effects = capture.port(),

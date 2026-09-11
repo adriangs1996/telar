@@ -1,14 +1,16 @@
-const Harness = @This();
-const source_namespace = @import("send_pane_text_test.zig");
-const pane_mod = @import("../../pane/root.zig");
-const ScheduleCapture = @import("SendPaneTextTestScheduleCapture.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const send_pane_text_commands = @import("../application/commands/send_pane_text.zig");
+const PaneFixtureType = @import("PaneFixture.zig");
+const PaneStoreType = @import("../../pane/PaneStore.zig");
+const SendPaneTextTestScheduleCapture = @import("SendPaneTextTestScheduleCapture.zig");
+const ResponseQueueType = @import("../delivery/ResponseQueue.zig");
+const SendPaneTextHandlerType = @import("../application/commands/SendPaneTextHandler.zig");
 const std = @import("std");
-fixture: source_namespace.PaneFixture = .{},
-panes: pane_mod.PaneStore = .{},
-capture: ScheduleCapture = .{},
-responses: delivery_mod.ResponseQueue = .{},
+const PaneKeyType = @import("../../pane/PaneKey.zig");
+const Harness = @This();
+
+fixture: PaneFixtureType = .{},
+panes: PaneStoreType = .{},
+capture: SendPaneTextTestScheduleCapture = .{},
+responses: ResponseQueueType = .{},
 
 pub fn init(harness: *Harness) !void {
     try harness.fixture.init();
@@ -20,7 +22,7 @@ pub fn deinit(harness: *Harness) void {
     harness.fixture.deinit();
 }
 
-pub fn handler(harness: *Harness) send_pane_text_commands.SendPaneTextHandler {
+pub fn handler(harness: *Harness) SendPaneTextHandlerType {
     return .{
         .panes = &harness.panes,
         .agents = &harness.fixture.agents,
@@ -33,6 +35,6 @@ pub fn handler(harness: *Harness) send_pane_text_commands.SendPaneTextHandler {
     };
 }
 
-pub fn key(harness: *const Harness) pane_mod.PaneKey {
+pub fn key(harness: *const Harness) PaneKeyType {
     return harness.fixture.pane.key();
 }

@@ -1,26 +1,17 @@
 //! Direct, PNG and shared-memory Kitty image transmission encoding.
 
 const std = @import("std");
+const TransmissionChunks = @import("TransmissionChunks.zig");
+const ChunkProgress = @import("ChunkProgress.zig");
 const command = @import("command.zig");
-const image_mod = @import("image_support.zig");
-
-const Io = std.Io;
-pub const Image = image_mod.Image;
-
-pub const ChunkProgress = @import("ChunkProgress.zig");
-
-pub const TransmissionChunks = @import("TransmissionChunks.zig");
-
-pub const PngTransmissionChunks = @import("PngTransmissionChunks.zig");
-
-pub const Transmission = @import("Transmission.zig");
-
-pub const SharedTransmission = @import("SharedTransmission.zig");
+const PngTransmissionChunks = @import("PngTransmissionChunks.zig");
+const Transmission = @import("Transmission.zig");
+const SharedTransmission = @import("SharedTransmission.zig");
 
 /// Emits direct-data chunks starting at `start_offset` and stops after roughly
 /// `budget` encoded bytes. At least one chunk is written when data remains.
 /// For example: `try writeTransmissionChunks(writer, transmission)`.
-pub fn writeTransmissionChunks(writer: *Io.Writer, transmission: TransmissionChunks) Io.Writer.Error!ChunkProgress {
+pub fn writeTransmissionChunks(writer: *std.Io.Writer, transmission: TransmissionChunks) std.Io.Writer.Error!ChunkProgress {
     const Encoder = std.base64.standard.Encoder;
     const raw_chunk_size = 3072;
     var encoded: [4096]u8 = undefined;
@@ -56,7 +47,7 @@ pub fn writeTransmissionChunks(writer: *Io.Writer, transmission: TransmissionChu
 
 /// Emits PNG chunks starting at `start_offset` and stops after roughly
 /// `budget` encoded bytes. For example: `try writePngTransmissionChunks(writer, transmission)`.
-pub fn writePngTransmissionChunks(writer: *Io.Writer, transmission: PngTransmissionChunks) Io.Writer.Error!ChunkProgress {
+pub fn writePngTransmissionChunks(writer: *std.Io.Writer, transmission: PngTransmissionChunks) std.Io.Writer.Error!ChunkProgress {
     const Encoder = std.base64.standard.Encoder;
     const raw_chunk_size = 3072;
     var encoded: [4096]u8 = undefined;
@@ -93,7 +84,7 @@ pub fn writePngTransmissionChunks(writer: *Io.Writer, transmission: PngTransmiss
 
 /// Emits one complete raw image transmission.
 /// For example: `try writeTransmission(writer, transmission)`.
-pub fn writeTransmission(writer: *Io.Writer, transmission: Transmission) Io.Writer.Error!usize {
+pub fn writeTransmission(writer: *std.Io.Writer, transmission: Transmission) std.Io.Writer.Error!usize {
     const progress = try writeTransmissionChunks(writer, .{
         .image_id = transmission.image_id,
         .image = transmission.image,
@@ -108,7 +99,7 @@ pub fn writeTransmission(writer: *Io.Writer, transmission: Transmission) Io.Writ
 
 /// Emits a shared-memory image transmission and requests a terminal response.
 /// For example: `try writeSharedTransmission(writer, transmission)`.
-pub fn writeSharedTransmission(writer: *Io.Writer, transmission: SharedTransmission) Io.Writer.Error!usize {
+pub fn writeSharedTransmission(writer: *std.Io.Writer, transmission: SharedTransmission) std.Io.Writer.Error!usize {
     const Encoder = std.base64.standard.Encoder;
     var encoded: [128]u8 = undefined;
     const payload = Encoder.encode(encoded[0..Encoder.calcSize(transmission.name.len)], transmission.name);
@@ -126,7 +117,7 @@ pub fn writeSharedTransmission(writer: *Io.Writer, transmission: SharedTransmiss
 
 /// Closes an interrupted chunked transfer with an empty final chunk.
 /// For example: `try writeTransmissionAbort(writer)`.
-pub fn writeTransmissionAbort(writer: *Io.Writer) Io.Writer.Error!usize {
+pub fn writeTransmissionAbort(writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     const closing = "\x1b_Gm=0;\x1b\\";
     try writer.writeAll(closing);
     return closing.len;
@@ -139,7 +130,7 @@ test "direct transmission chunks raw pixels without changing them" {
     }
 
     var output: [8192]u8 = undefined;
-    var writer = Io.Writer.fixed(&output);
+    var writer = std.Io.Writer.fixed(&output);
     _ = try writeTransmission(&writer, .{
         .image_id = 9,
         .image = .{ .format = .rgba, .width = 3073, .height = 1 },
@@ -152,7 +143,7 @@ test "direct transmission chunks raw pixels without changing them" {
 
 test "PNG transmission omits raw pixel dimensions" {
     var output: [8192]u8 = undefined;
-    var writer = Io.Writer.fixed(&output);
+    var writer = std.Io.Writer.fixed(&output);
     const progress = try writePngTransmissionChunks(&writer, .{
         .image_id = 0x90000001,
         .png = "encoded png bytes",

@@ -1,5 +1,6 @@
+const PaneAttachmentType = @import("../../model/PaneAttachment.zig");
 const ConfirmPaneAttachment = @This();
-const source_namespace = @import("attach_pane.zig");
-requested: source_namespace.PaneAttachment,
-confirmed: source_namespace.PaneAttachment,
+
+requested: PaneAttachmentType,
+confirmed: PaneAttachmentType,
 created: bool,

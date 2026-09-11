@@ -1,10 +1,12 @@
+const tracker_support = @import("../../../agent/tracker_support.zig");
+const AcknowledgeAgentType = @import("../../application/commands/AcknowledgeAgent.zig");
 const StubExecutor = @This();
-const acknowledge_agent_commands = @import("../../application/commands/acknowledge_agent.zig");
-result: acknowledge_agent_commands.AcknowledgeAgentResult = .acknowledged,
-call_count: usize = 0,
-command: ?acknowledge_agent_commands.AcknowledgeAgent = null,
 
-pub fn execute(stub: *StubExecutor, command: acknowledge_agent_commands.AcknowledgeAgent) acknowledge_agent_commands.AcknowledgeAgentResult {
+result: tracker_support.AcknowledgeResult = .acknowledged,
+call_count: usize = 0,
+command: ?AcknowledgeAgentType = null,
+
+pub fn execute(stub: *StubExecutor, command: AcknowledgeAgentType) tracker_support.AcknowledgeResult {
     stub.call_count += 1;
     stub.command = command;
     return stub.result;

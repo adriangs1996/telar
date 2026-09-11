@@ -1,5 +1,7 @@
+const PaneIdType = @import("telar-core").PaneId;
+const SearchMatchType = @import("telar-core").SearchMatch;
 const CopyModeMatches = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
+
+pane_id: PaneIdType,
 /// Borrowed only for the synchronous transition.
-matches: []const source_namespace.schema.SearchMatch,
+matches: []const SearchMatchType,

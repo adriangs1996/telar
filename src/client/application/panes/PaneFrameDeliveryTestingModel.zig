@@ -1,21 +1,28 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_frame_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-model: *client_model.Model,
-pane_id: source_namespace.schema.PaneId,
+const TabLocationType = @import("telar-core").TabLocation;
+const ScrollType = @import("telar-core").Scroll;
+const PaneFrameCommitType = @import("../../model/PaneFrameCommit.zig");
+const CellType = @import("telar-core").Cell;
+const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
+const decodeServer_module = @import("telar-core").decodeServer;
+const TestingModel = @This();
+
+model: *ModelType,
+pane_id: PaneIdType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const location: source_namespace.schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: source_namespace.schema.PaneId = @enumFromInt(1);
+    const pane_id: PaneIdType = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 2 } });
 
     return .{
@@ -29,10 +36,10 @@ pub fn deinit(testing: *TestingModel) void {
     std.testing.allocator.destroy(testing.model);
 }
 
-pub fn applyFrame(testing: *TestingModel, scroll: source_namespace.schema.frame.Scroll) !client_model.PaneFrameCommit {
-    const cells = [_]source_namespace.ui.Cell{ .{}, .{}, .{}, .{} };
+pub fn applyFrame(testing: *TestingModel, scroll: ScrollType) !PaneFrameCommitType {
+    const cells = [_]CellType{ .{}, .{}, .{}, .{} };
     var encoded: [512]u8 = undefined;
-    const bytes = try source_namespace.schema.encodePaneFrame(&encoded, .{
+    const bytes = try encodePaneFrame_module(&encoded, .{
         .pane_id = testing.pane_id,
         .frame_id = 7,
         .base_frame_id = 0,
@@ -41,7 +48,7 @@ pub fn applyFrame(testing: *TestingModel, scroll: source_namespace.schema.frame.
         .scroll = scroll,
         .spans = &.{.{ .start = 0, .cells = &cells }},
     });
-    const outcome = try testing.model.applyPaneFrame((try source_namespace.schema.decodeServer(bytes)).pane_frame);
+    const outcome = try testing.model.applyPaneFrame((try decodeServer_module(bytes)).pane_frame);
 
     return outcome.applied;
 }

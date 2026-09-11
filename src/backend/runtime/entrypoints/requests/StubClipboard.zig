@@ -1,12 +1,13 @@
+const PaneIdType = @import("telar-core").PaneId;
 const StubClipboard = @This();
-const source_namespace = @import("copy_selection.zig");
+
 accepted: bool = true,
 call_count: usize = 0,
-pane_id: source_namespace.schema.PaneId = .invalid,
+pane_id: PaneIdType = .invalid,
 bytes: [32]u8 = undefined,
 len: usize = 0,
 
-pub fn setClipboard(clipboard: *StubClipboard, pane_id: source_namespace.schema.PaneId, bytes: []const u8) bool {
+pub fn setClipboard(clipboard: *StubClipboard, pane_id: PaneIdType, bytes: []const u8) bool {
     clipboard.call_count += 1;
     if (!clipboard.accepted or bytes.len > clipboard.bytes.len) {
         return false;

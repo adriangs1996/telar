@@ -9,10 +9,9 @@
 //! renders the agents' own output, since that is the only answer guaranteed to
 //! match what appears on screen.
 
+const GraphemeIterator = @import("GraphemeIterator.zig");
 const std = @import("std");
-/// Imported by module name rather than by path so that a build can swap the
-/// width tables out. See `unicode.zig`.
-const unicode = @import("unicode");
+const ClusterType = @import("Cluster.zig");
 
 pub fn measure(text: []const u8) u16 {
     var total: u16 = 0;
@@ -20,8 +19,6 @@ pub fn measure(text: []const u8) u16 {
     while (it.next()) |cluster| total += cluster.width;
     return total;
 }
-
-pub const GraphemeIterator = @import("GraphemeIterator.zig");
 
 /// C0 controls, DEL and C1 controls: the codepoints a terminal interprets
 /// instead of drawing.
@@ -33,21 +30,19 @@ pub fn isControl(codepoint: u21) bool {
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-
 test "printable ascii measures one column with or without the fast path" {
     var it: GraphemeIterator = .{ .bytes = "ab\u{0301}c" };
     // 'a' takes the fast path; 'b' is followed by a combining acute and must
     // go through the table so the mark stays attached.
     const a = it.next().?;
-    try testing.expectEqualStrings("a", a.bytes);
-    try testing.expectEqual(@as(u8, 1), a.width);
+    try std.testing.expectEqualStrings("a", a.bytes);
+    try std.testing.expectEqual(@as(u8, 1), a.width);
     const b = it.next().?;
-    try testing.expectEqualStrings("b\u{0301}", b.bytes);
-    try testing.expectEqual(@as(u8, 1), b.width);
+    try std.testing.expectEqualStrings("b\u{0301}", b.bytes);
+    try std.testing.expectEqual(@as(u8, 1), b.width);
     const c = it.next().?;
-    try testing.expectEqualStrings("c", c.bytes);
-    try testing.expect(it.next() == null);
+    try std.testing.expectEqualStrings("c", c.bytes);
+    try std.testing.expect(it.next() == null);
 }
 
 test "a control character becomes a blank cell rather than its own byte" {
@@ -57,15 +52,15 @@ test "a control character becomes a blank cell rather than its own byte" {
     for (samples) |sample| {
         var it: GraphemeIterator = .{ .bytes = sample };
         const cluster = it.next().?;
-        try testing.expectEqualStrings(" ", cluster.bytes);
-        try testing.expectEqual(@as(u8, 1), cluster.width);
-        try testing.expectEqual(@as(?GraphemeIterator.Cluster, null), it.next());
+        try std.testing.expectEqualStrings(" ", cluster.bytes);
+        try std.testing.expectEqual(@as(u8, 1), cluster.width);
+        try std.testing.expectEqual(@as(?ClusterType, null), it.next());
     }
 
     var it: GraphemeIterator = .{ .bytes = "a\nb" };
-    try testing.expectEqualStrings("a", it.next().?.bytes);
-    try testing.expectEqualStrings(" ", it.next().?.bytes);
-    try testing.expectEqualStrings("b", it.next().?.bytes);
+    try std.testing.expectEqualStrings("a", it.next().?.bytes);
+    try std.testing.expectEqualStrings(" ", it.next().?.bytes);
+    try std.testing.expectEqualStrings("b", it.next().?.bytes);
 }
 
 test "measuring and iterating cannot disagree" {
@@ -84,40 +79,40 @@ test "measuring and iterating cannot disagree" {
         var total: u16 = 0;
         var it: GraphemeIterator = .{ .bytes = sample };
         while (it.next()) |cluster| total += cluster.width;
-        try testing.expectEqual(total, measure(sample));
+        try std.testing.expectEqual(total, measure(sample));
     }
 }
 
 test "a composed and a decomposed word measure the same" {
     // Three bytes apart, one column apart if this is wrong - and the drift is
     // invisible until a name happens to carry an accent.
-    try testing.expectEqual(measure("caf\u{00e9}"), measure("cafe\u{0301}"));
-    try testing.expectEqual(@as(u16, 4), measure("cafe\u{0301}"));
+    try std.testing.expectEqual(measure("caf\u{00e9}"), measure("cafe\u{0301}"));
+    try std.testing.expectEqual(@as(u16, 4), measure("cafe\u{0301}"));
 }
 
 test "a wide glyph is two columns and one cluster" {
     var it: GraphemeIterator = .{ .bytes = "\u{6f22}" };
     const cluster = it.next().?;
-    try testing.expectEqual(@as(u8, 2), cluster.width);
-    try testing.expectEqualStrings("\u{6f22}", cluster.bytes);
-    try testing.expectEqual(@as(?GraphemeIterator.Cluster, null), it.next());
+    try std.testing.expectEqual(@as(u8, 2), cluster.width);
+    try std.testing.expectEqualStrings("\u{6f22}", cluster.bytes);
+    try std.testing.expectEqual(@as(?ClusterType, null), it.next());
 }
 
 test "an unprintable character still occupies a column" {
     // A zero width cell cannot be addressed by a cursor, so anything the tables
     // measure as nothing becomes one blank rather than a hole the layout would
     // silently close up.
-    try testing.expectEqual(@as(u16, 1), measure("\x01"));
+    try std.testing.expectEqual(@as(u16, 1), measure("\x01"));
 }
 
 test "invalid utf-8 measures as one column rather than failing" {
     // Agents produce partial writes. A lone continuation byte is a cell to
     // draw, not an error to propagate up through the layout.
-    try testing.expectEqual(@as(u16, 1), measure("\xff"));
+    try std.testing.expectEqual(@as(u16, 1), measure("\xff"));
 
     var it: GraphemeIterator = .{ .bytes = "\xffa" };
-    try testing.expectEqualStrings("\u{FFFD}", it.next().?.bytes);
-    try testing.expectEqualStrings("a", it.next().?.bytes);
+    try std.testing.expectEqualStrings("\u{FFFD}", it.next().?.bytes);
+    try std.testing.expectEqualStrings("a", it.next().?.bytes);
 }
 
 test "iteration terminates on every prefix of a multi byte sequence" {

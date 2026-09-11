@@ -1,9 +1,11 @@
-const Connection = @This();
-const Options = @import("H2Options.zig");
-const provider = @import("../provider/root.zig");
+const H2Options = @import("H2Options.zig");
+const ResponseStreamsType = @import("../provider/ResponseStreams.zig");
+const Streams = @import("../provider/Streams.zig");
 const RelayContext = @import("RelayContext.zig");
-const source_namespace = @import("h2.zig");
-options: Options,
+const h2 = @import("h2.zig");
+const Connection = @This();
+
+options: H2Options,
 
 /// Binds an HTTP/2 TLS session to its exchange and immutable transform
 /// configuration.
@@ -11,7 +13,7 @@ options: Options,
 /// ```zig
 /// var connection = Connection.init(options);
 /// ```
-pub fn init(options: Options) Connection {
+pub fn init(options: H2Options) Connection {
     return .{ .options = options };
 }
 
@@ -23,9 +25,9 @@ pub fn init(options: Options) Connection {
 /// ```
 pub fn run(connection: *Connection) void {
     const options = connection.options;
-    var responses = provider.ResponseStreams.init(options.gpa, options.exchange.dialect);
+    var responses = ResponseStreamsType.init(options.gpa, options.exchange.dialect);
     defer responses.deinit();
-    var requests = provider.RequestStreams.init(options.exchange.dialect);
+    var requests = Streams.init(options.exchange.dialect);
     defer requests.deinit();
     var relay: RelayContext = .{
         .io = options.io,
@@ -38,5 +40,5 @@ pub fn run(connection: *Connection) void {
         .captures = options.captures,
     };
 
-    source_namespace.RelayConnection.run(&relay);
+    h2.RelayConnection.run(&relay);
 }

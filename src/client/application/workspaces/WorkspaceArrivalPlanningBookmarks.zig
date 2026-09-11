@@ -1,5 +1,6 @@
-const Bookmarks = @This();
-const source_namespace = @import("workspace_arrival_planning.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const Bookmark = @import("Bookmark.zig");
+const Bookmarks = @This();
+
 context: *anyopaque,
-find: *const fn (*anyopaque, source_namespace.schema.WorkspaceLocation) ?Bookmark,
+find: *const fn (*anyopaque, WorkspaceLocationType) ?Bookmark,

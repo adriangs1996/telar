@@ -1,8 +1,10 @@
-const GraphicsReadiness = @This();
-const source_namespace = @import("terminal_browser_pane.zig");
+const HostCapabilitiesType = @import("telar-client").HostCapabilities;
 const Emulator = @import("Emulator.zig");
 const GraphicsMirror = @import("GraphicsMirror.zig");
-capabilities: *const source_namespace.HostCapabilities,
+const StoreType = @import("telar-frontend").Store;
+const GraphicsReadiness = @This();
+
+capabilities: *const HostCapabilitiesType,
 emulator: *const Emulator,
 mirror: *const GraphicsMirror,
-store: *const source_namespace.kitty.Store,
+store: *const StoreType,

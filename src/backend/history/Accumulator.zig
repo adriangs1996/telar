@@ -1,8 +1,13 @@
-const Accumulator = @This();
 const std = @import("std");
+const EntryType = @import("Entry.zig");
 const model = @import("model.zig");
+const max_frame_size = @import("telar-core").max_frame_size;
+const QueryType = @import("Query.zig");
+const QueryResultType = @import("QueryResult.zig");
+const Accumulator = @This();
+
 gpa: std.mem.Allocator,
-entries: std.ArrayList(model.Entry) = .empty,
+entries: std.ArrayList(EntryType) = .empty,
 encoded_bytes: usize = model.encoded_result_header_bytes,
 limit: usize,
 has_more: bool = false,
@@ -19,10 +24,10 @@ pub fn deinit(accumulator: *Accumulator) void {
 
 /// Takes ownership even on rejection or allocation failure.
 /// Example: `if (!try accumulator.append(entry)) break;`.
-pub fn append(accumulator: *Accumulator, owned: model.Entry) !bool {
+pub fn append(accumulator: *Accumulator, owned: EntryType) !bool {
     var entry = owned;
     const bytes = model.encoded_entry_overhead_bytes + entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
-    if (accumulator.entries.items.len == accumulator.limit or bytes > model.max_result_payload_bytes - accumulator.encoded_bytes) {
+    if (accumulator.entries.items.len == accumulator.limit or bytes > max_frame_size - accumulator.encoded_bytes) {
         entry.deinit(accumulator.gpa);
         accumulator.has_more = true;
         return false;
@@ -36,8 +41,8 @@ pub fn append(accumulator: *Accumulator, owned: model.Entry) !bool {
 
 /// Transfers entries only after result allocation succeeds.
 /// Example: `return accumulator.finish(request, more_candidates);`.
-pub fn finish(accumulator: *Accumulator, request: *const model.Query, more_candidates: bool) !*model.QueryResult {
-    const result = try accumulator.gpa.create(model.QueryResult);
+pub fn finish(accumulator: *Accumulator, request: *const QueryType, more_candidates: bool) !*QueryResultType {
+    const result = try accumulator.gpa.create(QueryResultType);
     errdefer accumulator.gpa.destroy(result);
     result.* = .{
         .request_id = request.request_id,

@@ -1,9 +1,11 @@
-const DeliverPaneFrameHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("PaneFrameDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const PaneFrameDeliveryEffects = @import("PaneFrameDeliveryEffects.zig");
+const PaneFrameCommitType = @import("../../model/PaneFrameCommit.zig");
 const std = @import("std");
-model: *const client_model.Model,
-effects: Effects,
+const DeliverPaneFrameHandler = @This();
+
+model: *const ModelType,
+effects: PaneFrameDeliveryEffects,
 
 /// Validates one exact frame commit before reconciling graphics visibility
 /// and the resources derived from the currently active pane.
@@ -11,7 +13,7 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(commit);
 /// ```
-pub fn execute(handler: *DeliverPaneFrameHandler, commit: client_model.PaneFrameCommit) !void {
+pub fn execute(handler: *DeliverPaneFrameHandler, commit: PaneFrameCommitType) !void {
     try handler.validate(commit);
 
     const visible = handler.effects.pane_graphics_visible(handler.effects.context, commit.pane_id);
@@ -28,7 +30,7 @@ pub fn execute(handler: *DeliverPaneFrameHandler, commit: client_model.PaneFrame
     }
 }
 
-fn validate(handler: *const DeliverPaneFrameHandler, commit: client_model.PaneFrameCommit) !void {
+fn validate(handler: *const DeliverPaneFrameHandler, commit: PaneFrameCommitType) !void {
     const tab = handler.model.workspace.tabForPaneConst(commit.pane_id) orelse return error.StalePaneFrame;
     if (!std.meta.eql(tab.location, commit.location)) {
         return error.StalePaneFrame;

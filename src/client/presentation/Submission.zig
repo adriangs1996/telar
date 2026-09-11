@@ -1,7 +1,9 @@
+const ObservationType = @import("Observation.zig");
+const PresentationCommitType = @import("../panes/PresentationCommit.zig");
+const GeometryType = @import("Geometry.zig");
 const Submission = @This();
-const presentation = @import("root.zig");
-const panes = @import("../panes/root.zig");
-observation: presentation.Observation,
-commit: panes.PresentationCommit,
-geometry: presentation.Geometry = .{},
+
+observation: ObservationType,
+commit: PresentationCommitType,
+geometry: GeometryType = .{},
 media_pending: bool = false,

@@ -1,9 +1,10 @@
-const Regions = @This();
-const ui = @import("../ui/root.zig");
+const RectType = @import("telar-core").Rect;
 const Widths = @import("Widths.zig");
-items: [3]ui.Rect,
+const Regions = @This();
 
-pub fn calculate(area: ui.Rect, input: Widths) Regions {
+items: [3]RectType,
+
+pub fn calculate(area: RectType, input: Widths) Regions {
     var widths: [3]u16 = @splat(0);
     const tabs_index: usize = input.tabs_index;
     const tab_minimum = @min(input.desired[tabs_index], @min(area.w, 16));
@@ -44,8 +45,8 @@ pub fn calculate(area: ui.Rect, input: Widths) Regions {
     const tab_extra = @min(input.desired[tabs_index] - tab_minimum, remaining);
     widths[tabs_index] += tab_extra;
 
-    const left: ui.Rect = .{ .x = area.x, .y = area.y, .w = widths[0], .h = area.h };
-    const right: ui.Rect = .{
+    const left: RectType = .{ .x = area.x, .y = area.y, .w = widths[0], .h = area.h };
+    const right: RectType = .{
         .x = area.x + area.w - widths[2],
         .y = area.y,
         .w = widths[2],
@@ -55,7 +56,7 @@ pub fn calculate(area: ui.Rect, input: Widths) Regions {
     const gap_end = right.x;
     const centered = area.x + (area.w - widths[1]) / 2;
     const center_x = @min(@max(centered, gap_start), gap_end - widths[1]);
-    const center: ui.Rect = .{ .x = center_x, .y = area.y, .w = widths[1], .h = area.h };
+    const center: RectType = .{ .x = center_x, .y = area.y, .w = widths[1], .h = area.h };
 
     return .{ .items = .{ left, center, right } };
 }

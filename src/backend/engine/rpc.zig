@@ -6,9 +6,9 @@
 //! Records are JSON objects with a `type`; command replies carry
 //! `type = "response"`, the echoed `command` and a `success` flag.
 
+const RecordType = @import("Record.zig");
 const std = @import("std");
-
-pub const Io = std.Io;
+const Envelope = @import("Envelope.zig");
 
 /// Longest record the engine parses. Longer records are discarded whole; a
 /// discarded reply surfaces as `invalid_output` rather than a timeout.
@@ -22,8 +22,6 @@ pub const Kind = enum {
     other,
 };
 
-const Envelope = @import("Envelope.zig");
-
 pub const Record = @import("Record.zig");
 
 /// Parses one record. Malformed JSON, arrays and records above the line
@@ -33,7 +31,7 @@ pub const Record = @import("Record.zig");
 /// var record = parse(gpa, line) orelse continue;
 /// defer record.deinit();
 /// ```
-pub fn parse(gpa: std.mem.Allocator, line: []const u8) ?Record {
+pub fn parse(gpa: std.mem.Allocator, line: []const u8) ?RecordType {
     if (line.len == 0 or line.len > max_line_bytes) {
         return null;
     }

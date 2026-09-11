@@ -1,10 +1,7 @@
 //! Bounded SSH discovery data. All launch paths belong to the remote machine.
 
+const Discovery = @import("Discovery.zig");
 const std = @import("std");
-
-pub const LaunchDefaults = @import("LaunchDefaults.zig");
-
-pub const Discovery = @import("Discovery.zig");
 
 test "remote discovery keeps remote launch defaults and spaces in paths" {
     const found = try Discovery.parse("/home/build user\n/bin/bash\n/run/user/501/telar/runtime.sock\n");

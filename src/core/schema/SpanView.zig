@@ -1,5 +1,6 @@
-const SpanView = @This();
 const CellIterator = @import("CellIterator.zig");
+const SpanView = @This();
+
 start: u32,
 cell_count: u32,
 encoded_cells: []const u8,

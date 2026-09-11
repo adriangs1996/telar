@@ -1,18 +1,20 @@
+const DecoderType = @import("../Decoder.zig");
+const EnvironmentEntryType = @import("../EnvironmentEntry.zig");
+const codec = @import("../codec.zig");
 const EnvironmentIterator = @This();
-const wire = @import("../wire.zig");
-const source_namespace = @import("launch.zig");
-decoder: wire.Decoder,
+
+decoder: DecoderType,
 remaining: u16,
 
-pub fn next(iterator: *EnvironmentIterator) !?source_namespace.EnvironmentEntry {
+pub fn next(iterator: *EnvironmentIterator) !?EnvironmentEntryType {
     if (iterator.remaining == 0) {
         return null;
     }
     iterator.remaining -= 1;
-    const entry: source_namespace.EnvironmentEntry = .{
+    const entry: EnvironmentEntryType = .{
         .name = try iterator.decoder.readSized16(),
         .value = try iterator.decoder.readSized32(),
     };
-    try source_namespace.validateEnvironmentEntry(entry);
+    try codec.validateEnvironmentEntry(entry);
     return entry;
 }

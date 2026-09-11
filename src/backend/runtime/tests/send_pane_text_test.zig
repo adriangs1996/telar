@@ -1,24 +1,15 @@
 //! Vertical tests for text sent to a pane by a control client.
 
-const std = @import("std");
-const agent_identity = @import("../application/coordinators/root.zig").agent_identity;
-const core = @import("telar-core");
-const agent_mod = @import("../../agent/root.zig");
-const pane_mod = @import("../../pane/root.zig");
-const delivery_mod = @import("../delivery/root.zig");
-const pane_input_commands = @import("../application/commands/pane_input.zig");
-const send_pane_text_commands = @import("../application/commands/send_pane_text.zig");
-const send_pane_text_controller = @import("../entrypoints/requests/send_pane_text.zig");
-const test_support = @import("support.zig");
-
-const schema = core.schema;
-pub const Pane = pane_mod.Pane;
-pub const PaneFixture = test_support.PaneFixture;
-const SendPaneTextController = send_pane_text_controller.Controller(*send_pane_text_commands.SendPaneTextHandler);
-
-const ScheduleCapture = @import("SendPaneTextTestScheduleCapture.zig");
-
+const GenericSendPaneTextController = @import("../entrypoints/requests/GenericSendPaneTextController.zig").Type;
+const SendPaneTextHandlerType = @import("../application/commands/SendPaneTextHandler.zig");
 const Harness = @import("Harness.zig");
+const agent_identity = @import("../application/coordinators/agent_identity.zig");
+const std = @import("std");
+const AgentStatusType = @import("telar-core").AgentStatus;
+const send_pane_text_commands = @import("../application/commands/send_pane_text.zig");
+const FailureCodeType = @import("telar-core").FailureCode;
+
+const SendPaneTextController = GenericSendPaneTextController(*SendPaneTextHandlerType);
 
 fn blockAgent(harness: *Harness) !void {
     const identity = agent_identity.fromPane(harness.fixture.pane);
@@ -33,7 +24,7 @@ fn blockAgent(harness: *Harness) !void {
         .signal = .{ .provider = .claude, .status = .blocked, .confidence = 90, .identity_confirmed = true },
         .observed_at_ms = 1_000,
     }));
-    try std.testing.expectEqual(schema.AgentStatus.blocked, harness.fixture.agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(AgentStatusType.blocked, harness.fixture.agents.projectedStatus(identity.key).?);
 }
 
 test "a prompt reaches the PTY queue with Enter and is confirmed" {
@@ -100,7 +91,7 @@ test "a prompt to a blocked agent is refused before any byte is queued" {
     });
 
     try std.testing.expectEqual(@as(usize, 0), harness.capture.input_calls);
-    try std.testing.expectEqual(schema.FailureCode.agent_blocked, harness.responses.items[0].request_failed.code);
+    try std.testing.expectEqual(FailureCodeType.agent_blocked, harness.responses.items[0].request_failed.code);
 
     const raw = try handler.execute(.{ .pane = harness.key(), .mode = .raw, .text = "y" });
     try std.testing.expectEqual(send_pane_text_commands.SendPaneTextResult.handled, raw);

@@ -1,8 +1,9 @@
+const std = @import("std");
 /// The payload the Telar extension for Pi sends. Pi has no hook files: the
 /// extension installed by `telar integration install pi` runs
 /// `telar hook pi` on Pi's own extension events.
 const PiHookInput = @This();
-const std = @import("std");
+
 event: []const u8 = "",
 session_id: []const u8 = "",
 /// Whether Pi had no run in progress when the event fired.

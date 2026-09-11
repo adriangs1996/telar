@@ -1,10 +1,11 @@
+const diagnostics = @import("diagnostics.zig");
 const TerminalAllocationGuard = @This();
-const source_namespace = @import("diagnostics.zig");
+
 previous: bool,
 
 pub fn restore(guard: TerminalAllocationGuard) void {
-    if (!source_namespace.enabled) {
+    if (!diagnostics.enabled) {
         return;
     }
-    source_namespace.terminal_allocation_scope = guard.previous;
+    diagnostics.terminal_allocation_scope = guard.previous;
 }

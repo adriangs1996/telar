@@ -1,7 +1,7 @@
-const RuntimeState = @This();
-const source_namespace = @import("engine.zig");
 const std = @import("std");
-const engine = @import("../../engine/root.zig");
-io: source_namespace.Io,
+const ServiceType = @import("../../engine/Service.zig");
+const RuntimeState = @This();
+
+io: std.Io,
 gpa: std.mem.Allocator,
-service: engine.Service,
+service: ServiceType,

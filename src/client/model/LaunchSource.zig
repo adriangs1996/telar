@@ -1,4 +1,6 @@
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const LaunchSource = @This();
-const source_namespace = @import("root.zig");
-location: source_namespace.schema.TabLocation,
-pane_id: source_namespace.schema.PaneId,
+
+location: TabLocationType,
+pane_id: PaneIdType,

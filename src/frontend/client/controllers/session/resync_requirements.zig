@@ -1,13 +1,13 @@
 //! Adapts runtime resynchronization requirements to client application policy.
 
-const core = @import("telar-core");
-const session_application = @import("telar-client").application.session;
-
 const Client = @import("../../Client.zig");
+const ResyncRequiredType = @import("telar-core").ResyncRequired;
+const ApplicationSessionResyncRequiredOutcome = @import("telar-client").ApplicationSessionResyncRequiredOutcome;
 const request_lifecycle = @import("../../connection/request_lifecycle.zig");
+const HandleResyncRequiredHandlerType = @import("telar-client").HandleResyncRequiredHandler;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
-const resync_required = session_application.resync_required;
-const schema = core.schema;
 
 /// Resolves disposable client state and applies one validated runtime resync.
 /// The client loop maps only the returned `exit` outcome to process status.
@@ -15,7 +15,7 @@ const schema = core.schema;
 /// ```zig
 /// const outcome = try apply(client, required);
 /// ```
-pub fn apply(client: *Client, required: schema.ResyncRequired) !resync_required.Outcome {
+pub fn apply(client: *Client, required: ResyncRequiredType) !ApplicationSessionResyncRequiredOutcome {
     var use_case = handler(client);
 
     return use_case.execute(if (required.workspace_closed)
@@ -31,7 +31,7 @@ pub fn apply(client: *Client, required: schema.ResyncRequired) !resync_required.
         } });
 }
 
-fn handler(client: *Client) resync_required.HandleResyncRequiredHandler {
+fn handler(client: *Client) HandleResyncRequiredHandlerType {
     return .{ .effects = .{
         .context = client,
         .forget_workspace = forgetWorkspace,
@@ -40,19 +40,19 @@ fn handler(client: *Client) resync_required.HandleResyncRequiredHandler {
     } };
 }
 
-fn forgetWorkspace(context: *anyopaque, workspace: schema.WorkspaceLocation) void {
+fn forgetWorkspace(context: *anyopaque, workspace: WorkspaceLocationType) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     client.navigation_history.forget(workspace);
 }
 
-fn requestSnapshot(context: *anyopaque, workspace: schema.WorkspaceLocation) !void {
+fn requestSnapshot(context: *anyopaque, workspace: WorkspaceLocationType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try request_lifecycle.requestWorkspaceSnapshot(client, workspace);
 }
 
-fn requestHandoff(context: *anyopaque, workspace: schema.WorkspaceId) !void {
+fn requestHandoff(context: *anyopaque, workspace: WorkspaceIdType) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     _ = try workspace_handoffs.requestWorkspace(client, workspace);

@@ -1,9 +1,10 @@
+const ModelType = @import("../../model/Model.zig");
+const PaneGraphicsEffects = @import("PaneGraphicsEffects.zig");
+const pane_graphics = @import("pane_graphics.zig");
 const ReconcilePaneGraphicsHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("PaneGraphicsEffects.zig");
-const source_namespace = @import("pane_graphics.zig");
-model: *client_model.Model,
-effects: Effects,
+
+model: *ModelType,
+effects: PaneGraphicsEffects,
 
 /// Reconciles one physical resource result, then commits its derived cell
 /// fallback or performs bounded recovery. Presentation observes versions.
@@ -11,7 +12,7 @@ effects: Effects,
 /// ```zig
 /// const outcome = try handler.execute(command);
 /// ```
-pub fn execute(handler: *ReconcilePaneGraphicsHandler, command: source_namespace.Command) !source_namespace.Outcome {
+pub fn execute(handler: *ReconcilePaneGraphicsHandler, command: pane_graphics.Command) !pane_graphics.Outcome {
     const pane_id = command.paneId();
     const resource = try handler.effects.apply(handler.effects.context, command);
 

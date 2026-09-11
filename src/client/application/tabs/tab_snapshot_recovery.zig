@@ -1,33 +1,26 @@
 //! Application policy for coalescing canonical tab-snapshot recovery.
 
+const TabLocationType = @import("telar-core").TabLocation;
+const TabSnapshotRecoveryCapture = @import("TabSnapshotRecoveryCapture.zig");
 const std = @import("std");
-const core = @import("telar-core");
-
-pub const schema = core.schema;
-
-pub const Effects = @import("TabSnapshotRecoveryEffects.zig");
 
 pub const Outcome = enum {
     coalesced,
     requested,
 };
 
-pub const RequestTabSnapshotRecoveryHandler = @import("RequestTabSnapshotRecoveryHandler.zig");
-
 pub const Event = union(enum) {
     pending,
-    request: schema.TabLocation,
+    request: TabLocationType,
 };
 
-const Capture = @import("TabSnapshotRecoveryCapture.zig");
-
-const testing_location: schema.TabLocation = .{
+const testing_location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(3) },
     .tab_id = @enumFromInt(5),
 };
 
 test "RequestTabSnapshotRecoveryHandler coalesces an existing repair" {
-    var capture: Capture = .{ .is_pending = true };
+    var capture: TabSnapshotRecoveryCapture = .{ .is_pending = true };
     var handler = capture.handler();
 
     try std.testing.expectEqual(Outcome.coalesced, try handler.execute(testing_location));
@@ -35,7 +28,7 @@ test "RequestTabSnapshotRecoveryHandler coalesces an existing repair" {
 }
 
 test "RequestTabSnapshotRecoveryHandler requests one exact canonical repair" {
-    var capture: Capture = .{};
+    var capture: TabSnapshotRecoveryCapture = .{};
     var handler = capture.handler();
 
     try std.testing.expectEqual(Outcome.requested, try handler.execute(testing_location));
@@ -46,7 +39,7 @@ test "RequestTabSnapshotRecoveryHandler requests one exact canonical repair" {
 }
 
 test "RequestTabSnapshotRecoveryHandler preserves a failed request" {
-    var capture: Capture = .{ .request_failure = error.SnapshotRequestFailed };
+    var capture: TabSnapshotRecoveryCapture = .{ .request_failure = error.SnapshotRequestFailed };
     var handler = capture.handler();
 
     try std.testing.expectError(error.SnapshotRequestFailed, handler.execute(testing_location));

@@ -1,10 +1,12 @@
+const MappingType = @import("Mapping.zig");
+const std = @import("std");
+const GraphicsBudget = @import("GraphicsBudget.zig");
+const max_images_per_pane_module = @import("telar-core").max_images_per_pane;
 /// Allocator used by VT stream effects and KGP. Charging allocations before
 /// forwarding them to the child allocator makes compressed input, decoded
 /// pixels, parser buffers and IPC transfer snapshots obey one hard budget.
 const PaneMediaAllocator = @This();
-const std = @import("std");
-const GraphicsBudget = @import("GraphicsBudget.zig");
-const core = @import("telar-core");
+
 child: std.mem.Allocator,
 budget: *GraphicsBudget,
 limit: usize,
@@ -17,12 +19,9 @@ used: usize = 0,
 /// allocator's safety-checked scribble on freed memory away from an
 /// object a client or host may still be reading. Touched only by
 /// whoever holds the pane's media borrow.
-mappings: [core.graphics.max_images_per_pane]?Mapping = @splat(null),
+mappings: [max_images_per_pane_module]?MappingType = @splat(null),
 
-pub const Mapping = struct {
-    placeholder: [*]const u8,
-    pixels: []align(std.heap.page_size_min) u8,
-};
+pub const Mapping = @import("Mapping.zig");
 
 pub fn init(child: std.mem.Allocator, budget: *GraphicsBudget, limit: usize) PaneMediaAllocator {
     return .{ .child = child, .budget = budget, .limit = limit };

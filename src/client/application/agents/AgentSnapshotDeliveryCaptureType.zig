@@ -1,18 +1,20 @@
+const ModelType = @import("../../model/Model.zig");
+const AgentSnapshotCommitType = @import("../../model/AgentSnapshotCommit.zig");
+const agent_snapshot_delivery = @import("agent_snapshot_delivery.zig");
+const AgentSnapshotDeliveryEffects = @import("AgentSnapshotDeliveryEffects.zig");
+const InputType = @import("../../notifications/NotificationInput.zig");
 const Capture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("agent_snapshot_delivery.zig");
-const Effects = @import("AgentSnapshotDeliveryEffects.zig");
-const notification_capability = @import("../../root.zig").notifications;
-model: *const client_model.Model,
-commit: *const client_model.AgentSnapshotCommit,
-events: [8]source_namespace.Event = undefined,
+
+model: *const ModelType,
+commit: *const AgentSnapshotCommitType,
+events: [8]agent_snapshot_delivery.Event = undefined,
 event_count: usize = 0,
 alert_count: usize = 0,
 alerts_valid: bool = true,
 commit_observed: bool = true,
-failure: source_namespace.Failure = .none,
+failure: agent_snapshot_delivery.Failure = .none,
 
-pub fn effects(capture: *Capture) Effects {
+pub fn effects(capture: *Capture) AgentSnapshotDeliveryEffects {
     return .{
         .context = capture,
         .synchronize_attachments = synchronizeAttachments,
@@ -30,10 +32,10 @@ fn synchronizeAttachments(context: *anyopaque) !void {
     }
 }
 
-fn publishAlert(context: *anyopaque, input: notification_capability.Input) !void {
+fn publishAlert(context: *anyopaque, input: InputType) !void {
     const capture: *Capture = @ptrCast(@alignCast(context));
     capture.append(.publish_alert);
-    capture.alerts_valid = capture.alerts_valid and source_namespace.expectedAlert(input, capture.alert_count);
+    capture.alerts_valid = capture.alerts_valid and agent_snapshot_delivery.expectedAlert(input, capture.alert_count);
     capture.alert_count += 1;
 
     if (capture.failure == .alert) {
@@ -50,7 +52,7 @@ fn synchronizeAnimation(context: *anyopaque) !void {
     }
 }
 
-fn append(capture: *Capture, event: source_namespace.Event) void {
+fn append(capture: *Capture, event: agent_snapshot_delivery.Event) void {
     capture.observeCommit();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -65,6 +67,6 @@ fn observeCommit(capture: *Capture) void {
         capture.commit.agent_revision_before +% 1 == capture.commit.agent_revision;
 }
 
-pub fn eventSlice(capture: *const Capture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const Capture) []const agent_snapshot_delivery.Event {
     return capture.events[0..capture.event_count];
 }

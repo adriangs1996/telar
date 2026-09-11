@@ -1,22 +1,22 @@
 //! Wires host-key ownership policy to existing client input use cases.
 
-const core = @import("telar-core");
-const input_capability = @import("../../../input/root.zig");
-const input_application = @import("telar-client").application.input;
-const attachment_prompts = @import("attachment_prompts.zig");
-const clipboard_images = @import("../host/clipboard_images.zig");
-const copy_modes = @import("copy_modes.zig");
-const name_prompts = @import("name_prompts.zig");
-const pane_inputs = @import("pane_inputs.zig");
-const pane_geometry = @import("../panes/pane_geometry.zig");
-
 const Client = @import("../../Client.zig");
-const host_input = input_capability.encoding;
-const key_routing = input_application.key_routing;
-const schema = core.schema;
-
-pub const Command = key_routing.Command;
-pub const Outcome = key_routing.Outcome;
+const captures_module = @import("telar-client").captures;
+const ApplicationInputKeyRoutingCommand = @import("telar-client").ApplicationInputKeyRoutingCommand;
+const KeyRoutingOutcome = @import("telar-client").KeyRoutingOutcome;
+const KeyRoutingHandlerType = @import("telar-client").KeyRoutingHandler;
+const KeyRoutingAuthority = @import("telar-client").KeyRoutingAuthority;
+const encodeKey_module = @import("telar-client").encodeKey;
+const name_prompts = @import("name_prompts.zig");
+const KeyType = @import("telar-client").Key;
+const copy_modes = @import("copy_modes.zig");
+const PaneCommandType = @import("telar-client").PaneCommand;
+const PaneIdType = @import("telar-core").PaneId;
+const pane_inputs = @import("pane_inputs.zig");
+const attachment_prompts = @import("attachment_prompts.zig");
+const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const pane_geometry = @import("../panes/pane_geometry.zig");
+const clipboard_images = @import("../host/clipboard_images.zig");
 
 /// Returns whether modal or prompt authority must bypass configured bindings.
 /// Copy mode deliberately leaves native bindings available.
@@ -25,7 +25,7 @@ pub const Outcome = key_routing.Outcome;
 /// if (captures(client)) routeDirectly();
 /// ```
 pub fn captures(client: *const Client) bool {
-    return key_routing.captures(authority(client));
+    return captures_module(authority(client));
 }
 
 /// Routes one semantic key or borrowed byte slice to a single current owner.
@@ -33,8 +33,8 @@ pub fn captures(client: *const Client) bool {
 /// ```zig
 /// const outcome = try apply(client, .{ .key = key });
 /// ```
-pub fn apply(client: *Client, command: Command) !Outcome {
-    var use_case: key_routing.KeyRoutingHandler = .{
+pub fn apply(client: *Client, command: ApplicationInputKeyRoutingCommand) !KeyRoutingOutcome {
+    var use_case: KeyRoutingHandlerType = .{
         .leases = &client.host_input.application_leases,
         .effects = .{
             .context = client,
@@ -52,7 +52,7 @@ pub fn apply(client: *Client, command: Command) !Outcome {
     return outcome;
 }
 
-fn authority(client: *const Client) key_routing.Authority {
+fn authority(client: *const Client) KeyRoutingAuthority {
     return .{
         .attachment_modal_active = client.view.hasAttachmentModal(),
         .prompt_active = client.model.name_prompt.active(),
@@ -66,24 +66,24 @@ fn closeModal(raw_context: *anyopaque) void {
     _ = client.view.closeAttachmentModal();
 }
 
-fn routePrompt(raw_context: *anyopaque, command: Command) !void {
+fn routePrompt(raw_context: *anyopaque, command: ApplicationInputKeyRoutingCommand) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     var encoded: [32]u8 = undefined;
     const bytes = switch (command) {
         .bytes => |value| value,
-        .key => |value| try host_input.encodeKey(&encoded, value, .{}),
+        .key => |value| try encodeKey_module(&encoded, value, .{}),
     };
 
     _ = try name_prompts.handleInput(client, bytes);
 }
 
-fn routeCopyKey(raw_context: *anyopaque, key: input_capability.keybind.Key) !void {
+fn routeCopyKey(raw_context: *anyopaque, key: KeyType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     _ = try copy_modes.key(client, key);
 }
 
-fn routePane(raw_context: *anyopaque, command: key_routing.PaneCommand) !?schema.PaneId {
+fn routePane(raw_context: *anyopaque, command: PaneCommandType) !?PaneIdType {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const delivery = try pane_inputs.send(client, .{
         .target = switch (command.target) {
@@ -99,7 +99,7 @@ fn routePane(raw_context: *anyopaque, command: key_routing.PaneCommand) !?schema
 
     const completed = delivery orelse return null;
     if (attachment_prompts.observe(client, completed.pane_id, command.input)) {
-        @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
+        kitty_delivery.invalidatePlacements(&client.graphics_store);
         try pane_geometry.offerActive(client, client.geometry().area);
     }
 

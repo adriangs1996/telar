@@ -1,9 +1,11 @@
-const ConfirmPaneSplitHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const ConfirmationEffects = @import("ConfirmationEffects.zig");
 const ConfirmPaneSplit = @import("ConfirmPaneSplit.zig");
+const PaneSplitCommitType = @import("../../model/PaneSplitCommit.zig");
 const std = @import("std");
-model: *client_model.Model,
+const ConfirmPaneSplitHandler = @This();
+
+model: *ModelType,
 effects: ConfirmationEffects,
 
 /// Validates the exact runtime reply, commits the passive model and only
@@ -12,7 +14,7 @@ effects: ConfirmationEffects,
 /// ```zig
 /// const commit = try handler.execute(command);
 /// ```
-pub fn execute(handler: *ConfirmPaneSplitHandler, command: ConfirmPaneSplit) !client_model.PaneSplitCommit {
+pub fn execute(handler: *ConfirmPaneSplitHandler, command: ConfirmPaneSplit) !PaneSplitCommitType {
     if (!command.created or
         command.confirmed_pane == command.requested.target_pane or
         !std.meta.eql(command.confirmed_location, command.requested.location))

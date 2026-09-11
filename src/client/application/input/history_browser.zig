@@ -2,16 +2,13 @@
 //! Controllers own wire decoding and delivery; bounded model APIs own storage.
 
 const std = @import("std");
-const core = @import("telar-core");
-const model = @import("../../root.zig").model;
-pub const schema = core.schema;
-
-pub const Handler = @import("Handler.zig");
+const ModelType = @import("../../model/Model.zig");
+const Handler = @import("HistoryBrowserHandler.zig");
 
 test "inspection constraints change semantic scroll only when it exceeds the bound" {
-    const state = try std.testing.allocator.create(model.Model);
+    const state = try std.testing.allocator.create(ModelType);
     defer std.testing.allocator.destroy(state);
-    state.* = model.Model.init(std.testing.allocator, true);
+    state.* = ModelType.init(std.testing.allocator, true);
     defer state.deinit();
     state.name_prompt.begin(.history_palette);
     _ = state.name_prompt.apply(.toggle_inspection);

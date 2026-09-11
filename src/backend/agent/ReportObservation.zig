@@ -1,10 +1,11 @@
-const ReportObservation = @This();
 const Identity = @import("Identity.zig");
-const source_namespace = @import("types.zig");
+const AgentReportStateType = @import("telar-core").AgentReportState;
 const SessionReference = @import("SessionReference.zig");
 const SessionFile = @import("SessionFile.zig");
+const ReportObservation = @This();
+
 identity: Identity,
-state: source_namespace.schema.AgentReportState,
+state: AgentReportStateType,
 observed_at_ms: i64,
 /// Monotonic runtime-ingress time, used to order same-millisecond frames.
 observed_at_ns: ?i64 = null,

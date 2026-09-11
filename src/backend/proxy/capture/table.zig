@@ -1,11 +1,15 @@
 //! Runtime-side pairing table for independently published capture halves.
 
-const std = @import("std");
+const Exchange = @import("Exchange.zig");
+const HalfType = @import("Half.zig");
+const QuotaType = @import("Quota.zig");
 const buffer = @import("buffer_support.zig");
+const CredentialType = @import("../Credential.zig");
+const identity = @import("../identity.zig");
+const std = @import("std");
+const Joiner = @import("Joiner.zig");
 
 pub const capacity = 256;
-
-pub const Exchange = @import("Exchange.zig");
 
 pub const PushResult = union(enum) {
     pending,
@@ -13,25 +17,21 @@ pub const PushResult = union(enum) {
     partial: Exchange,
 };
 
-const Entry = @import("Entry.zig");
-
-pub const Joiner = @import("Joiner.zig");
-
-pub fn sideExchange(half: *buffer.Half) Exchange {
+pub fn sideExchange(half: *HalfType) Exchange {
     return switch (half.side) {
         .request => .{ .request = half },
         .response => .{ .response = half },
     };
 }
 
-fn testHalf(quota: *buffer.Quota, side: buffer.Side) *buffer.Half {
-    const credential: @import("../identity.zig").Credential = .{
+fn testHalf(quota: *QuotaType, side: buffer.Side) *HalfType {
+    const credential: CredentialType = .{
         .pane_id = @enumFromInt(7),
         .pane_generation = 1,
-        .token = .{0x5a} ** @import("../identity.zig").token_bytes,
+        .token = .{0x5a} ** identity.token_bytes,
     };
 
-    return buffer.Half.create(.{
+    return HalfType.create(.{
         .gpa = std.testing.allocator,
         .quota = quota,
         .config = .{
@@ -51,7 +51,7 @@ fn testHalf(quota: *buffer.Quota, side: buffer.Side) *buffer.Half {
 }
 
 test "joiner pairs independently delivered request and response halves" {
-    var quota = buffer.Quota.init(16);
+    var quota = QuotaType.init(16);
     var joiner = Joiner.init(30);
     defer joiner.deinit();
 
@@ -66,7 +66,7 @@ test "joiner pairs independently delivered request and response halves" {
 }
 
 test "joiner returns a partial exchange only after its deadline" {
-    var quota = buffer.Quota.init(16);
+    var quota = QuotaType.init(16);
     var joiner = Joiner.init(30);
     defer joiner.deinit();
 

@@ -1,18 +1,19 @@
-const AttachmentCapture = @This();
-const source_namespace = @import("create_workspace.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const ClientAttachment = @import("ClientAttachment.zig");
-const LaunchedPane = @import("CreateWorkspaceLaunchedPane.zig");
+const CreateWorkspaceLaunchedPane = @import("CreateWorkspaceLaunchedPane.zig");
+const AttachmentCapture = @This();
+
 failure: ?anyerror = null,
 event_count: ?*const usize = null,
 call_count: usize = 0,
-last_pane_id: source_namespace.schema.PaneId = .invalid,
+last_pane_id: PaneIdType = .invalid,
 event_observed_before_replace: bool = false,
 
 pub fn port(capture: *AttachmentCapture) ClientAttachment {
     return .{ .context = capture, .replace = replace };
 }
 
-fn replace(context: *anyopaque, pane: LaunchedPane) !void {
+fn replace(context: *anyopaque, pane: CreateWorkspaceLaunchedPane) !void {
     const capture: *AttachmentCapture = @ptrCast(@alignCast(context));
     capture.call_count += 1;
     capture.last_pane_id = pane.id;

@@ -107,24 +107,24 @@ usable replica and its local version.
 
 ## Proof
 
-- `src/frontend/agents/snapshot.zig` proves bounded ownership, stale rejection,
+- `src/client/agents/snapshot_support.zig` proves bounded ownership, stale rejection,
   exact identity lookup and atomic validation failure.
-- `src/frontend/client/model.zig` proves isolated versioning, transition
+- `src/client/model/Model.zig` proves isolated versioning, transition
   detection, navigation, attachment eligibility and immutable queries.
-- `src/frontend/client/application/agent_snapshot.zig` proves atomic commit
+- `src/client/application/agents/agent_snapshot.zig` proves atomic commit
   before exact delivery, stale suppression and retained commits on delivery
   failure.
-- `src/frontend/client/application/agent_snapshot_delivery.zig` proves exact
+- `src/client/application/agents/agent_snapshot_delivery.zig` proves exact
   commit validation, attachment-alert-animation ordering, alert policy and
   bounds, and failure cutoffs.
-- `src/frontend/client/application/active_pane_resource_delivery.zig` proves
+- `src/client/application/panes/active_pane_resource_delivery.zig` proves
   attachment-only synchronization and conditional geometry delivery.
-- `src/frontend/client/application/sidebar_animation.zig` and
-  `src/frontend/client/sidebar_animations.zig` separate active-state policy
+- `src/client/application/notifications/sidebar_animation.zig` and
+  `src/frontend/client/controllers/notifications/sidebar_animations.zig` separate active-state policy
   from the single pending timer.
 - `src/frontend/widgets/sidebar.zig` proves local pane-index projection does
   not mutate the runtime replica.
-- `src/frontend/client/client_test.zig` proves protocol adaptation,
+- `src/frontend/client/tests/` proves protocol adaptation,
   presenter-owned drawing, alert content and exact sound identity validation.
-- `src/backend/runtime/delivery.zig` proves runtime enrichment and per-client
+- `src/backend/runtime/delivery/` proves runtime enrichment and per-client
   revision delivery.

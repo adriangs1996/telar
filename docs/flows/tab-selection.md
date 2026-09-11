@@ -87,19 +87,19 @@ session.
 
 ## Proof
 
-- `src/frontend/workspace/tabs.zig` proves bounded positive and negative wrap,
+- `src/client/workspace/tabs.zig` proves bounded positive and negative wrap,
   complete-turn no-ops and overflow-safe offset reduction.
-- `src/frontend/client/model.zig` proves identity, position and offset
+- `src/client/model/Model.zig` proves identity, position and offset
   resolution plus exact version changes.
-- `src/frontend/client/application/select_tab.zig` proves snapshot gating,
+- `src/client/application/tabs/select_tab.zig` proves snapshot gating,
   commit ordering, no-op behavior and post-commit delivery failure.
-- `src/frontend/client/application/tab_selection_delivery.zig` proves exact
+- `src/client/application/tabs/tab_selection_delivery.zig` proves exact
   revisions and identities, local-layout ABA rejection, complete effect order
   and partial failure boundaries.
-- `src/frontend/client/application/tab_attachment_retirement.zig` proves
+- `src/client/application/tabs/tab_attachment_retirement.zig` proves
   exact previous-tab authority and attachment retirement.
-- `src/frontend/client/client_test.zig` proves native position and offset
+- `src/frontend/client/tests/` proves native position and offset
   entrypoints, attachment order, snapshot delivery and presenter observation.
-- `src/backend/runtime/controllers/detach_pane.zig` and
-  `src/backend/runtime/controllers/tab_snapshot.zig` prove the two runtime
+- `src/backend/runtime/entrypoints/requests/detach_pane.zig` and
+  `src/backend/runtime/entrypoints/requests/tab_snapshot.zig` prove the two runtime
   protocol entrypoints used after selection.

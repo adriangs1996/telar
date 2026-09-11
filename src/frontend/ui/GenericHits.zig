@@ -1,4 +1,5 @@
-const Rect = @import("telar-core").ui.Rect;
+const Rect = @import("telar-core").Rect;
+
 /// What was clickable, and which layer it belonged to.
 ///
 /// Generic over the action so this can live down here rather than in the

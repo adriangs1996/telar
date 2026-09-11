@@ -1,5 +1,7 @@
-const source_namespace = @import("send_pane_text.zig");
-const delivery_mod = @import("../../delivery/root.zig");
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const SendPaneTextType = @import("telar-core").SendPaneText;
+const PendingFailureType = @import("../../delivery/PendingFailure.zig");
+
 /// Builds a statically dispatched controller around one executor.
 ///
 /// ```zig
@@ -10,7 +12,7 @@ pub fn Type(comptime Executor: type) type {
     return struct {
         const Self = @This();
 
-        responses: *source_namespace.ResponseQueue,
+        responses: *ResponseQueueType,
         executor: Executor,
 
         /// Creates one controller bound to the requesting client's responses.
@@ -18,7 +20,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// var controller = SendPaneTextController.init(&responses, &handler);
         /// ```
-        pub fn init(responses: *source_namespace.ResponseQueue, executor: Executor) Self {
+        pub fn init(responses: *ResponseQueueType, executor: Executor) Self {
             return .{ .responses = responses, .executor = executor };
         }
 
@@ -27,7 +29,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// try controller.sendPaneText(request);
         /// ```
-        pub fn sendPaneText(controller: *Self, request: source_namespace.schema.SendPaneText) !void {
+        pub fn sendPaneText(controller: *Self, request: SendPaneTextType) !void {
             const result = try controller.executor.execute(.{
                 .pane = .{ .id = request.pane_id, .generation = request.pane_generation },
                 .mode = request.mode,
@@ -56,7 +58,7 @@ pub fn Type(comptime Executor: type) type {
             }
         }
 
-        fn fail(controller: *Self, failure: delivery_mod.PendingFailure) !void {
+        fn fail(controller: *Self, failure: PendingFailureType) !void {
             try controller.responses.push(.{ .request_failed = failure });
         }
     };

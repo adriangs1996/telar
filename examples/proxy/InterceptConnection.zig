@@ -1,5 +1,6 @@
+const std = @import("std");
 const InterceptConnection = @This();
-const source_namespace = @import("tls.zig");
+
 host: []const u8,
-child: source_namespace.net.Stream,
-origin: source_namespace.net.Stream,
+child: std.Io.net.Stream,
+origin: std.Io.net.Stream,

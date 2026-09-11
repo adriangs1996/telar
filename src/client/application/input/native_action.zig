@@ -1,18 +1,10 @@
 //! Application preflight for one source-independent native action.
 
+const NativeActionCapture = @import("NativeActionCapture.zig");
+const NativeActionHandler = @import("NativeActionHandler.zig");
+const action_module = @import("../../input/action.zig");
 const std = @import("std");
-const input = @import("../../input/root.zig");
 const action_routing = @import("action_routing.zig");
-
-pub const Action = input.action.Action;
-
-pub const Authority = @import("NativeActionAuthority.zig");
-
-pub const Control = action_routing.Control;
-
-pub const Effects = @import("NativeActionEffects.zig");
-
-pub const NativeActionHandler = @import("NativeActionHandler.zig");
 
 pub const Event = enum {
     leave_copy_mode,
@@ -25,15 +17,13 @@ pub const Failure = enum {
     deliver,
 };
 
-const Capture = @import("NativeActionCapture.zig");
-
 test "NativeActionHandler retires active copy mode before native delivery" {
-    var capture: Capture = .{ .control = .stop };
+    var capture: NativeActionCapture = .{ .control = .stop };
     var handler: NativeActionHandler = .{ .effects = capture.effects() };
-    const action = Action.detach;
+    const action = action_module.Action.detach;
 
     try std.testing.expectEqual(
-        Control.stop,
+        action_routing.Control.stop,
         try handler.execute(action, .{ .copy_mode_active = true }),
     );
 
@@ -42,11 +32,11 @@ test "NativeActionHandler retires active copy mode before native delivery" {
 }
 
 test "NativeActionHandler preserves copy mode for entry and inactive state" {
-    var capture: Capture = .{};
+    var capture: NativeActionCapture = .{};
     var handler: NativeActionHandler = .{ .effects = capture.effects() };
 
     try std.testing.expectEqual(
-        Control.continue_routing,
+        action_routing.Control.continue_routing,
         try handler.execute(.enter_copy_mode, .{ .copy_mode_active = true }),
     );
     try std.testing.expectEqualSlices(Event, &.{.deliver}, capture.eventSlice());
@@ -58,7 +48,7 @@ test "NativeActionHandler preserves copy mode for entry and inactive state" {
 }
 
 test "NativeActionHandler stops before delivery when copy-mode retirement fails" {
-    var capture: Capture = .{ .failure = .leave_copy_mode };
+    var capture: NativeActionCapture = .{ .failure = .leave_copy_mode };
     var handler: NativeActionHandler = .{ .effects = capture.effects() };
 
     try std.testing.expectError(
@@ -71,7 +61,7 @@ test "NativeActionHandler stops before delivery when copy-mode retirement fails"
 }
 
 test "NativeActionHandler retains completed preflight when delivery fails" {
-    var capture: Capture = .{ .failure = .deliver };
+    var capture: NativeActionCapture = .{ .failure = .deliver };
     var handler: NativeActionHandler = .{ .effects = capture.effects() };
 
     try std.testing.expectError(
@@ -80,5 +70,5 @@ test "NativeActionHandler retains completed preflight when delivery fails" {
     );
 
     try std.testing.expectEqualSlices(Event, &.{ .leave_copy_mode, .deliver }, capture.eventSlice());
-    try std.testing.expectEqualDeep(Action.toggle_sidebar, capture.delivered.?);
+    try std.testing.expectEqualDeep(action_module.Action.toggle_sidebar, capture.delivered.?);
 }

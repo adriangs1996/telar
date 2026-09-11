@@ -3,14 +3,13 @@
 //! Release builds compile every call site away. Debug builds write JSON Lines
 //! beside the runtime socket, never terminal or PTY contents.
 
-const std = @import("std");
 const builtin = @import("builtin");
-
-pub const Io = std.Io;
-pub const File = Io.File;
-pub const Allocator = std.mem.Allocator;
-
 const root = @import("root");
+const std = @import("std");
+const Guard = @import("Guard.zig");
+const TerminalAllocationGuard = @import("TerminalAllocationGuard.zig");
+const Timing = @import("Timing.zig");
+const Heap = @import("Heap.zig");
 
 /// Debug builds always collect diagnostics. An optimized build opts in by
 /// declaring `pub const telar_diagnostics = true` at its root, which the
@@ -18,17 +17,12 @@ const root = @import("root");
 /// measurements can read the counters without measuring safety checks.
 pub const enabled = builtin.mode == .Debug or
     (@hasDecl(root, "telar_diagnostics") and root.telar_diagnostics);
-pub const interval_ns: u64 = std.time.ns_per_s;
 
-pub const Timing = @import("Timing.zig");
-
-pub const Sink = @import("Sink.zig");
-
-pub fn now(io: Io) u64 {
+pub fn now(io: std.Io) u64 {
     if (!enabled) {
         return 0;
     }
-    const timestamp = Io.Timestamp.now(io, .awake);
+    const timestamp = std.Io.Timestamp.now(io, .awake);
     return @intCast(@max(timestamp.nanoseconds, 0));
 }
 
@@ -36,8 +30,8 @@ pub fn elapsed(start_ns: u64, end_ns: u64) u64 {
     return end_ns -| start_ns;
 }
 
-pub fn waitForTick(io: Io) anyerror!void {
-    try io.sleep(.fromNanoseconds(interval_ns), .awake);
+pub fn waitForTick(io: std.Io) anyerror!void {
+    try io.sleep(.fromNanoseconds(std.time.ns_per_s), .awake);
 }
 
 /// Which of the three budgets currently owns this thread's heap traffic.
@@ -53,8 +47,6 @@ pub const path_count = std.meta.tags(Path).len;
 pub threadlocal var current_path: Path = .other;
 pub threadlocal var terminal_allocation_scope: bool = false;
 
-pub const Guard = @import("Guard.zig");
-
 pub fn enter(path: Path) Guard {
     if (!enabled) {
         return .{ .previous = .other };
@@ -63,8 +55,6 @@ pub fn enter(path: Path) Guard {
     current_path = path;
     return .{ .previous = previous };
 }
-
-pub const TerminalAllocationGuard = @import("TerminalAllocationGuard.zig");
 
 /// Attributes allocations made by the external terminal emulator while
 /// preserving their interactive-path total. Debug telemetry can then
@@ -101,8 +91,6 @@ pub fn load(counter: *const Counter) u64 {
     }
     return counter.load(.monotonic);
 }
-
-pub const Heap = @import("Heap.zig");
 
 /// Resident set of this process, not the host. Zero when the platform
 /// cannot sample it.

@@ -2,21 +2,20 @@
 //! client, then lends each completed event to the dispatcher.
 
 const std = @import("std");
-const core = @import("telar-core");
-const platform = @import("../platform/root.zig");
-
-const Io = std.Io;
-const diagnostics = core.diagnostics;
-
+const SocketChannelType = @import("telar-core").SocketChannel;
+const Options = @import("Options.zig");
+const HeapType = @import("telar-core").Heap;
+const platform = @import("../platform/platform.zig");
+const sequences = @import("../platform/sequences.zig");
 const Client = @import("Client.zig");
-const client_events = @import("entrypoints/events.zig");
-const client_startup = @import("controllers/session/client_startup.zig");
 const host_resizes = @import("controllers/host/host_resizes.zig");
-const Options = Client.Options;
+const client_startup = @import("controllers/session/client_startup.zig");
+const client_events = @import("entrypoints/events.zig");
+const ClientIdentityType = @import("telar-core").ClientIdentity;
 
-pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, options: Options) !u8 {
+pub fn run(init: std.process.Init, connection: *SocketChannelType, options: Options) !u8 {
     const io = init.io;
-    var heap = diagnostics.Heap.init(init.gpa);
+    var heap = HeapType.init(init.gpa);
     const gpa = heap.allocator();
 
     // `Client.init` adopts the configuration generation, plugin registry and
@@ -50,10 +49,10 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
     var output_writer = tty_file.writer(io, &output_buffer);
     const writer = &output_writer.interface;
 
-    try writer.writeAll(platform.enter_sequence);
+    try writer.writeAll(sequences.enter);
     try writer.flush();
     defer {
-        writer.writeAll(platform.leave_sequence) catch {};
+        writer.writeAll(sequences.leave) catch {};
         writer.flush() catch {};
     }
 
@@ -101,7 +100,7 @@ pub fn run(init: std.process.Init, connection: *core.transport.SocketChannel, op
     }
 }
 
-fn terminalIdentity(environ: std.process.Environ, tty: *const platform.Tty) !core.schema.ClientIdentity {
+fn terminalIdentity(environ: std.process.Environ, tty: *const platform.Tty) !ClientIdentityType {
     const keys = [_][]const u8{
         "TERM_SESSION_ID",
         "WT_SESSION",

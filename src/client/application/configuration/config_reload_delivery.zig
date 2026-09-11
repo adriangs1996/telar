@@ -1,26 +1,25 @@
 //! Application policy for delivering one resolved configuration reload.
 
+const DiagnosticType = @import("../../config/Diagnostic.zig");
+const ConfigurationCommitType = @import("../../model/ConfigurationCommit.zig");
+const ModelType = @import("../../model/Model.zig");
+const Capture = @import("Capture.zig");
+const DeliverConfigReloadHandler = @import("DeliverConfigReloadHandler.zig");
 const std = @import("std");
-const lua_config = @import("../../config/root.zig");
-const notification_capability = @import("../../root.zig").notifications;
-const client_diagnostic = @import("client_diagnostic.zig");
-const client_model = @import("../../root.zig").model;
+const VersionType = @import("../../model/Version.zig");
+const notification_capability = @import("../../notifications/notifications.zig");
 
 pub const Resolution = union(enum) {
     unchanged,
-    rejected: lua_config.Diagnostic,
+    rejected: DiagnosticType,
     adopted,
 };
 
 pub const Outcome = union(enum) {
     unchanged,
     rejected,
-    adopted: client_model.ConfigurationCommit,
+    adopted: ConfigurationCommitType,
 };
-
-pub const Effects = @import("ConfigReloadDeliveryEffects.zig");
-
-pub const DeliverConfigReloadHandler = @import("DeliverConfigReloadHandler.zig");
 
 pub const Event = enum {
     apply_adoption,
@@ -35,9 +34,7 @@ pub const Failure = enum {
     rearm,
 };
 
-const Capture = @import("Capture.zig");
-
-pub fn testingCommit() client_model.ConfigurationCommit {
+pub fn testingCommit() ConfigurationCommitType {
     return .{
         .generation = 2,
         .configuration_revision = 1,
@@ -47,19 +44,19 @@ pub fn testingCommit() client_model.ConfigurationCommit {
     };
 }
 
-fn deliveryHandler(model: *client_model.Model, capture: *Capture) DeliverConfigReloadHandler {
+fn deliveryHandler(model: *ModelType, capture: *Capture) DeliverConfigReloadHandler {
     return .{ .model = model, .effects = capture.effects() };
 }
 
-fn makeDiagnostic(text: []const u8) lua_config.Diagnostic {
-    var value: lua_config.Diagnostic = .{};
+fn makeDiagnostic(text: []const u8) DiagnosticType {
+    var value: DiagnosticType = .{};
     value.set("{s}", .{text});
 
     return value;
 }
 
-fn invalidDiagnostic() lua_config.Diagnostic {
-    var value: lua_config.Diagnostic = .{};
+fn invalidDiagnostic() DiagnosticType {
+    var value: DiagnosticType = .{};
     value.buffer[0] = 0xff;
     value.len = 1;
 
@@ -67,7 +64,7 @@ fn invalidDiagnostic() lua_config.Diagnostic {
 }
 
 test "DeliverConfigReloadHandler rearms an unchanged reload without other effects" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var capture: Capture = .{ .model = &model };
     var handler = deliveryHandler(&model, &capture);
@@ -75,11 +72,11 @@ test "DeliverConfigReloadHandler rearms an unchanged reload without other effect
     try std.testing.expect(try handler.execute(.unchanged) == .unchanged);
 
     try std.testing.expectEqualSlices(Event, &.{.rearm}, capture.eventSlice());
-    try std.testing.expectEqualDeep(client_model.Version{}, model.version());
+    try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
 test "DeliverConfigReloadHandler commits a rejection before notifying and rearming" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var capture: Capture = .{ .model = &model };
     var handler = deliveryHandler(&model, &capture);
@@ -96,11 +93,11 @@ test "DeliverConfigReloadHandler commits a rejection before notifying and rearmi
     try std.testing.expectEqualStrings("Configuration rejected", capture.notification.?.title);
     try std.testing.expectEqual(@as(u64, 7 * std.time.ns_per_s), capture.notification.?.duration_ns);
     try std.testing.expect(capture.diagnostic_observed);
-    try std.testing.expectEqual(client_model.Version{ .diagnostic = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
 }
 
 test "DeliverConfigReloadHandler uses the explicit invalid diagnostic fallback" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var capture: Capture = .{ .model = &model };
     var handler = deliveryHandler(&model, &capture);
@@ -115,7 +112,7 @@ test "DeliverConfigReloadHandler uses the explicit invalid diagnostic fallback" 
 }
 
 test "DeliverConfigReloadHandler publishes success after adoption and before rearming" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var capture: Capture = .{ .model = &model };
     var handler = deliveryHandler(&model, &capture);
@@ -159,7 +156,7 @@ test "DeliverConfigReloadHandler preserves each completed stage after failures" 
     };
 
     for (scenarios) |scenario| {
-        var model = client_model.Model.init(std.testing.allocator, true);
+        var model = ModelType.init(std.testing.allocator, true);
         defer model.deinit();
         var capture: Capture = .{ .model = &model, .failure = scenario.failure };
         var handler = deliveryHandler(&model, &capture);
@@ -171,7 +168,7 @@ test "DeliverConfigReloadHandler preserves each completed stage after failures" 
 }
 
 test "DeliverConfigReloadHandler retains a rejected diagnostic when notification fails" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
     var capture: Capture = .{ .model = &model, .failure = .publish_notification };
     var handler = deliveryHandler(&model, &capture);
@@ -184,5 +181,5 @@ test "DeliverConfigReloadHandler retains a rejected diagnostic when notification
     try std.testing.expectEqualSlices(Event, &.{.publish_notification}, capture.eventSlice());
     try std.testing.expectEqualStrings("reload rejected", model.diagnostic().?);
     try std.testing.expect(capture.diagnostic_observed);
-    try std.testing.expectEqual(client_model.Version{ .diagnostic = 1 }, model.version());
+    try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
 }

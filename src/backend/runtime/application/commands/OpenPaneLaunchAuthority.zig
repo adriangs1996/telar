@@ -1,4 +1,5 @@
+const OpenPanePrepareLaunch = @import("OpenPanePrepareLaunch.zig");
 const LaunchAuthority = @This();
-const PrepareLaunch = @import("OpenPanePrepareLaunch.zig");
+
 context: *anyopaque,
-prepare: *const fn (*anyopaque, PrepareLaunch) anyerror![]const u8,
+prepare: *const fn (*anyopaque, OpenPanePrepareLaunch) anyerror![]const u8,

@@ -1,17 +1,20 @@
+const ModelType = @import("../../model/Model.zig");
+const config_reload = @import("config_reload.zig");
+const ConfigurationCommitType = @import("../../model/ConfigurationCommit.zig");
+const SidebarLayoutType = @import("../../model/SidebarLayout.zig");
+const ConfigReloadEffects = @import("ConfigReloadEffects.zig");
 const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("config_reload.zig");
-const Effects = @import("ConfigReloadEffects.zig");
-model: *const client_model.Model,
-events: [7]source_namespace.Event = undefined,
-event_count: usize = 0,
-commit: ?client_model.ConfigurationCommit = null,
-apply_theme: ?bool = null,
-sidebar: ?client_model.SidebarLayout = null,
-observed_commit: bool = true,
-failure: source_namespace.Failure = .none,
 
-pub fn port(capture: *EffectsCapture) Effects {
+model: *const ModelType,
+events: [7]config_reload.Event = undefined,
+event_count: usize = 0,
+commit: ?ConfigurationCommitType = null,
+apply_theme: ?bool = null,
+sidebar: ?SidebarLayoutType = null,
+observed_commit: bool = true,
+failure: config_reload.Failure = .none,
+
+pub fn port(capture: *EffectsCapture) ConfigReloadEffects {
     return .{
         .context = capture,
         .adopt_resources = adoptResources,
@@ -24,7 +27,7 @@ pub fn port(capture: *EffectsCapture) Effects {
     };
 }
 
-fn adoptResources(context: *anyopaque, commit: client_model.ConfigurationCommit) void {
+fn adoptResources(context: *anyopaque, commit: ConfigurationCommitType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.commit = commit;
     capture.record(.adopt_resources);
@@ -58,7 +61,7 @@ fn configureSidebar(context: *anyopaque) !void {
     }
 }
 
-fn applySidebar(context: *anyopaque, sidebar: client_model.SidebarLayout) !void {
+fn applySidebar(context: *anyopaque, sidebar: SidebarLayoutType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.sidebar = sidebar;
     capture.record(.apply_sidebar);
@@ -99,11 +102,11 @@ fn observeCommit(capture: *EffectsCapture) void {
         capture.model.diagnostic() == null;
 }
 
-fn record(capture: *EffectsCapture, event: source_namespace.Event) void {
+fn record(capture: *EffectsCapture, event: config_reload.Event) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
 
-pub fn eventSlice(capture: *const EffectsCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectsCapture) []const config_reload.Event {
     return capture.events[0..capture.event_count];
 }

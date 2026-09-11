@@ -1,14 +1,19 @@
 //! Compiler for `config.runtime.proxy`.
 
-const std = @import("std");
-const core = @import("telar-core");
-const lua = @import("lua-api").c;
-const config_model = @import("model.zig");
+const lua_api = @import("lua-api");
+const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
+const DiagnosticType = @import("telar-client").Diagnostic;
 const value = @import("lua_value.zig");
+const config_model = @import("model.zig");
+const std = @import("std");
+const max_intercept_hosts = @import("telar-core").max_intercept_hosts;
+const max_intercept_bytes = @import("telar-core").max_intercept_bytes;
+const PositiveField = @import("PositiveField.zig");
+const max_hostname_bytes_module = @import("telar-core").max_hostname_bytes;
 
-pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diagnostic: *config_model.Diagnostic) !void {
-    const absolute = lua.lua_absindex(state, -1);
-    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *DiagnosticType) !void {
+    const absolute = lua_api.c.lua_absindex(state, -1);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.proxy must be a table", .{});
         return error.InvalidConfig;
     }
@@ -19,26 +24,26 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
         .path = "config.runtime.proxy",
     }, diagnostic);
 
-    _ = lua.lua_getfield(state, absolute, "enabled");
-    if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
-        if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+    _ = lua_api.c.lua_getfield(state, absolute, "enabled");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TBOOLEAN) {
             value.pop(state, 1);
             diagnostic.set("config.runtime.proxy.enabled must be a boolean", .{});
             return error.InvalidConfig;
         }
 
-        runtime.proxy_enabled = lua.lua_toboolean(state, -1) != 0;
+        runtime.proxy_enabled = lua_api.c.lua_toboolean(state, -1) != 0;
     }
     value.pop(state, 1);
 
-    _ = lua.lua_getfield(state, absolute, "capture");
-    if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+    _ = lua_api.c.lua_getfield(state, absolute, "capture");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
         try parseCapture(state, runtime, diagnostic);
     }
     value.pop(state, 1);
 
-    _ = lua.lua_getfield(state, absolute, "ca_dir");
-    if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
+    _ = lua_api.c.lua_getfield(state, absolute, "ca_dir");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
         const path = value.string(state, -1) orelse {
             value.pop(state, 1);
             diagnostic.set("config.runtime.proxy.ca_dir must be a string", .{});
@@ -55,22 +60,22 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
     }
     value.pop(state, 1);
 
-    _ = lua.lua_getfield(state, absolute, "intercept_hosts");
+    _ = lua_api.c.lua_getfield(state, absolute, "intercept_hosts");
     defer value.pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
-    if (lua.lua_type(state, -1) != lua.LUA_TTABLE) {
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.proxy.intercept_hosts must be an array", .{});
         return error.InvalidConfig;
     }
 
-    const hosts = lua.lua_absindex(state, -1);
-    const count = lua.lua_rawlen(state, hosts);
-    if (count > config_model.max_proxy_intercept_hosts) {
+    const hosts = lua_api.c.lua_absindex(state, -1);
+    const count = lua_api.c.lua_rawlen(state, hosts);
+    if (count > max_intercept_hosts) {
         diagnostic.set(
             "config.runtime.proxy.intercept_hosts exceeds {d} entries",
-            .{config_model.max_proxy_intercept_hosts},
+            .{max_intercept_hosts},
         );
         return error.InvalidConfig;
     }
@@ -83,7 +88,7 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
 
     runtime.proxy_intercept_hosts = .{};
     for (0..count) |host_index| {
-        _ = lua.lua_geti(state, hosts, @intCast(host_index + 1));
+        _ = lua_api.c.lua_geti(state, hosts, @intCast(host_index + 1));
         defer value.pop(state, 1);
         const host = value.string(state, -1) orelse {
             diagnostic.set(
@@ -103,7 +108,7 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
         runtime.proxy_intercept_hosts.append(host) catch {
             diagnostic.set(
                 "config.runtime.proxy.intercept_hosts exceeds its {d}-byte budget",
-                .{config_model.max_proxy_intercept_bytes},
+                .{max_intercept_bytes},
             );
             return error.InvalidConfig;
         };
@@ -111,9 +116,9 @@ pub fn parse(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diag
     runtime.proxy_intercept_hosts.sortAndDeduplicate();
 }
 
-fn parseCapture(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, diagnostic: *config_model.Diagnostic) !void {
-    const absolute = lua.lua_absindex(state, -1);
-    if (lua.lua_type(state, absolute) != lua.LUA_TTABLE) {
+fn parseCapture(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *DiagnosticType) !void {
+    const absolute = lua_api.c.lua_absindex(state, -1);
+    if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.proxy.capture must be a table", .{});
         return error.InvalidConfig;
     }
@@ -124,15 +129,15 @@ fn parseCapture(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, d
         .path = "config.runtime.proxy.capture",
     }, diagnostic);
 
-    _ = lua.lua_getfield(state, absolute, "enabled");
-    if (lua.lua_type(state, -1) != lua.LUA_TNIL) {
-        if (lua.lua_type(state, -1) != lua.LUA_TBOOLEAN) {
+    _ = lua_api.c.lua_getfield(state, absolute, "enabled");
+    if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
+        if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TBOOLEAN) {
             value.pop(state, 1);
             diagnostic.set("config.runtime.proxy.capture.enabled must be a boolean", .{});
             return error.InvalidConfig;
         }
 
-        runtime.proxy_capture_enabled = lua.lua_toboolean(state, -1) != 0;
+        runtime.proxy_capture_enabled = lua_api.c.lua_toboolean(state, -1) != 0;
     }
     value.pop(state, 1);
 
@@ -171,12 +176,10 @@ fn parseCapture(state: *lua.lua_State, runtime: *config_model.RuntimeSnapshot, d
     }
 }
 
-const PositiveField = @import("PositiveField.zig");
-
-fn positiveBytesField(state: *lua.lua_State, field: PositiveField, diagnostic: *config_model.Diagnostic) !usize {
-    _ = lua.lua_getfield(state, field.table, field.name);
+fn positiveBytesField(state: *lua_api.c.lua_State, field: PositiveField, diagnostic: *DiagnosticType) !usize {
+    _ = lua_api.c.lua_getfield(state, field.table, field.name);
     defer value.pop(state, 1);
-    if (lua.lua_type(state, -1) == lua.LUA_TNIL) {
+    if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
         return field.default;
     }
 
@@ -193,7 +196,7 @@ fn positiveBytesField(state: *lua.lua_State, field: PositiveField, diagnostic: *
 }
 
 fn validHostname(host: []const u8) bool {
-    if (host.len == 0 or host.len > config_model.max_proxy_intercept_host_bytes) {
+    if (host.len == 0 or host.len > max_hostname_bytes_module) {
         return false;
     }
 
@@ -270,5 +273,5 @@ test "host validation accepts exact and leading wildcard DNS labels" {
     try std.testing.expect(!validHostname("*."));
     try std.testing.expect(!validHostname("openai.com:443"));
     try std.testing.expect(!validHostname("a" ** 64 ++ ".com"));
-    try std.testing.expectEqual(core.proxy.max_hostname_bytes, config_model.max_proxy_intercept_host_bytes);
+    try std.testing.expectEqual(max_hostname_bytes_module, max_hostname_bytes_module);
 }

@@ -1,11 +1,9 @@
 //! Native working-directory lookup for an observed process.
 
-const std = @import("std");
 const builtin = @import("builtin");
+const std = @import("std");
 
-const mac = if (builtin.os.tag == .macos) @cImport({
-    @cInclude("libproc.h");
-}) else struct {};
+const mac = if (builtin.os.tag == .macos) @import("darwin.zig").c else void;
 
 /// Reads the current working directory reported by the operating system.
 /// The returned slice borrows `buffer`; failure or insufficient space returns

@@ -1,9 +1,10 @@
+const ReaderType = @import("../../../workspace/Reader.zig");
+const WorkspaceSnapshotRequest = @import("WorkspaceSnapshotRequest.zig");
+const WorkspaceSnapshotResult = @import("WorkspaceSnapshotResult.zig");
+const WorkspaceSnapshotExecutor = @import("WorkspaceSnapshotExecutor.zig");
 const Handler = @This();
-const workspace_mod = @import("../../../workspace/root.zig");
-const Request = @import("WorkspaceSnapshotRequest.zig");
-const Result = @import("WorkspaceSnapshotResult.zig");
-const Executor = @import("WorkspaceSnapshotExecutor.zig");
-workspaces: workspace_mod.Reader,
+
+workspaces: ReaderType,
 
 /// Returns a reference to an existing workspace. Pane and tab descriptors
 /// remain late-bound in the encoder so queued snapshots cannot own stale
@@ -12,7 +13,7 @@ workspaces: workspace_mod.Reader,
 /// ```zig
 /// const snapshot = try handler.execute(.{ .location = location });
 /// ```
-pub fn execute(handler: *Handler, request: Request) !Result {
+pub fn execute(handler: *Handler, request: WorkspaceSnapshotRequest) !WorkspaceSnapshotResult {
     if (!handler.workspaces.containsWorkspace(request.location)) {
         return error.WorkspaceNotFound;
     }
@@ -25,11 +26,11 @@ pub fn execute(handler: *Handler, request: Request) !Result {
 /// ```zig
 /// const executor = handler.executor();
 /// ```
-pub fn executor(handler: *Handler) Executor {
+pub fn executor(handler: *Handler) WorkspaceSnapshotExecutor {
     return .{ .context = handler, .execute_fn = executeErased };
 }
 
-fn executeErased(context: *anyopaque, request: Request) !Result {
+fn executeErased(context: *anyopaque, request: WorkspaceSnapshotRequest) !WorkspaceSnapshotResult {
     const handler: *Handler = @ptrCast(@alignCast(context));
     return handler.execute(request);
 }

@@ -1,25 +1,25 @@
 //! Wires link intents to tab creation and bounded host workers.
 
-const core = @import("telar-core");
-const link_capability = @import("../../../links/root.zig");
-const presentation = @import("../../../presentation/root.zig");
-const workspace_capability = @import("../../../workspace/root.zig");
-const input_application = @import("telar-client").application.input;
-const notification_flow = @import("../notifications/notifications.zig");
-const tab_creations = @import("../tabs/tab_creations.zig");
-
 const Client = @import("../../Client.zig");
-const multiplexer = workspace_capability.multiplexer;
-const open_link = input_application.open_link;
-const term = presentation.screen;
+const TargetType = @import("telar-client").LinkTarget;
+const OpenLinkHandlerType = @import("telar-client").OpenLinkHandler;
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const term = @import("../../../presentation/screen_support.zig");
+const Command = @import("telar-client").LinksCommandCommand;
+const RectType = @import("telar-core").Rect;
+const extract_module = @import("telar-client").extract;
+const FilePathType = @import("telar-client").FilePath;
+const tab_creations = @import("../tabs/tab_creations.zig");
+const host_module = @import("../../../links/host.zig");
+const notification_flow = @import("../notifications/notifications.zig");
 
 /// Dispatches one owned target without letting opener failures leave input.
 ///
 /// ```zig
 /// _ = try apply(client, target);
 /// ```
-pub fn apply(client: *Client, target: link_capability.Target) !bool {
-    var handler: open_link.OpenLinkHandler = .{
+pub fn apply(client: *Client, target: TargetType) !bool {
+    var handler: OpenLinkHandlerType = .{
         .effects = .{
             .context = client,
             .open_file = openFile,
@@ -40,8 +40,8 @@ pub fn apply(client: *Client, target: link_capability.Target) !bool {
 /// ```zig
 /// if (try pointer(client, model, event)) return;
 /// ```
-pub fn pointer(client: *Client, model: *multiplexer.Model, event: term.Event.Mouse) !bool {
-    const command: link_capability.PointerCommand = .{
+pub fn pointer(client: *Client, model: *MultiplexerModel, event: term.Event.Mouse) !bool {
+    const command: Command = .{
         .kind = switch (event.kind) {
             .press => .press,
             .release => .release,
@@ -79,17 +79,17 @@ pub fn complete(client: *Client, result: anyerror!void) !void {
     };
 }
 
-fn targetAt(model: *multiplexer.Model, event: term.Event.Mouse, area: core.ui.Rect) ?link_capability.Target {
+fn targetAt(model: *MultiplexerModel, event: term.Event.Mouse, area: RectType) ?TargetType {
     const plan = model.planPaneMouse(event, area) orelse return null;
     const pane = model.findConst(plan.pane_id) orelse return null;
 
-    return link_capability.extract(&pane.buffer, pane.scroll, .{
+    return extract_module(&pane.buffer, pane.scroll, .{
         .x = event.x - plan.content.x,
         .y = pane.scroll.offset + event.y - plan.content.y,
     });
 }
 
-fn openFile(raw_context: *anyopaque, path: link_capability.FilePath) !void {
+fn openFile(raw_context: *anyopaque, path: FilePathType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
     const editor = client.options.editor;
     if (editor.len == 0) {
@@ -100,7 +100,7 @@ fn openFile(raw_context: *anyopaque, path: link_capability.FilePath) !void {
     _ = try handler.execute(.{ .arguments = &.{ editor, path.slice() } });
 }
 
-fn openExternal(raw_context: *anyopaque, target: link_capability.Target) !void {
+fn openExternal(raw_context: *anyopaque, target: TargetType) !void {
     const client: *Client = @ptrCast(@alignCast(raw_context));
 
     switch (client.link_opening.request(target)) {
@@ -113,8 +113,8 @@ fn openExternal(raw_context: *anyopaque, target: link_capability.Target) !void {
     }
 }
 
-fn startExternal(client: *Client, target: link_capability.Target) !void {
-    try client.select.concurrent(.link_opened, link_capability.host.open, .{ client.io, target });
+fn startExternal(client: *Client, target: TargetType) !void {
+    try client.select.concurrent(.link_opened, host_module.open, .{ client.io, target });
 }
 
 fn reportFailure(client: *Client, err: anyerror) !void {

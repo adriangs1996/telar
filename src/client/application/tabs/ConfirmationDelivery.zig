@@ -1,4 +1,5 @@
+const TabCreationType = @import("../../model/TabCreation.zig");
 const ConfirmationDelivery = @This();
-const client_model = @import("../../root.zig").model;
+
 context: *anyopaque,
-deliver: *const fn (*anyopaque, client_model.TabCreation) anyerror!void,
+deliver: *const fn (*anyopaque, TabCreationType) anyerror!void,

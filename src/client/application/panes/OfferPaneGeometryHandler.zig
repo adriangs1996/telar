@@ -1,6 +1,9 @@
-const OfferPaneGeometryHandler = @This();
 const OfferEffects = @import("OfferEffects.zig");
-const source_namespace = @import("pane_geometry_delivery.zig");
+const MultiplexerModel = @import("../../workspace/MultiplexerModel.zig");
+const RectType = @import("telar-core").Rect;
+const multiplexer_module = @import("../../workspace/multiplexer.zig");
+const OfferPaneGeometryHandler = @This();
+
 effects: OfferEffects,
 
 /// Offers every attached pane that has visible content in the supplied
@@ -9,7 +12,7 @@ effects: OfferEffects,
 /// ```zig
 /// const count = try handler.execute(model, area);
 /// ```
-pub fn execute(handler: *OfferPaneGeometryHandler, model: *source_namespace.multiplexer.Model, area: source_namespace.ui.Rect) !usize {
+pub fn execute(handler: *OfferPaneGeometryHandler, model: *MultiplexerModel, area: RectType) !usize {
     var count: usize = 0;
     var layout = model.layoutSnapshot(area).*;
     _ = layout.reserveBelowPane(handler.effects.bottom_reservation(handler.effects.context));
@@ -20,7 +23,7 @@ pub fn execute(handler: *OfferPaneGeometryHandler, model: *source_namespace.mult
         }
 
         const view = layout.find(pane.id) orelse continue;
-        var size = source_namespace.multiplexer.rectSize(view.content) orelse continue;
+        var size = multiplexer_module.rectSize(view.content) orelse continue;
         size.cell_width_px = model.cell_width_px;
         size.cell_height_px = model.cell_height_px;
         try handler.effects.deliver_resize(handler.effects.context, .{

@@ -1,5 +1,6 @@
-const Job = @This();
 const std = @import("std");
-const session_file = @import("../session_file.zig");
+const WatchType = @import("../Watch.zig");
+const Job = @This();
+
 io: std.Io,
-watch: session_file.Watch
+watch: WatchType

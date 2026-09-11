@@ -1,32 +1,38 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("workspace_snapshot_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const WorkspaceTabInputType = @import("../../workspace/WorkspaceTabInput.zig");
 const std = @import("std");
-model: *client_model.Model,
-workspace: source_namespace.schema.WorkspaceLocation,
-first: source_namespace.schema.TabLocation,
-second: source_namespace.schema.TabLocation,
-first_pane: source_namespace.schema.PaneId,
-second_pane: source_namespace.schema.PaneId,
-tabs: [1]client_model.WorkspaceTabInput,
+const WorkspaceSnapshotInput = @import("../../workspace/WorkspaceSnapshotInput.zig");
+const WorkspaceReconciliationType = @import("../../model/WorkspaceReconciliation.zig");
+const TestingModel = @This();
+
+model: *ModelType,
+workspace: WorkspaceLocationType,
+first: TabLocationType,
+second: TabLocationType,
+first_pane: PaneIdType,
+second_pane: PaneIdType,
+tabs: [1]WorkspaceTabInputType,
 
 pub fn init(two_tabs: bool) !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first: source_namespace.schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: source_namespace.schema.TabLocation = .{
+    const second: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    const first_pane: source_namespace.schema.PaneId = @enumFromInt(1);
-    const second_pane: source_namespace.schema.PaneId = @enumFromInt(2);
+    const first_pane: PaneIdType = @enumFromInt(1);
+    const second_pane: PaneIdType = @enumFromInt(2);
     try model.workspace.bootstrap(.{ .pane_id = first_pane, .location = first, .size = .{ .cols = 20, .rows = 5 } });
     if (two_tabs) {
         _ = try model.workspace.addCreated(.{
@@ -57,7 +63,7 @@ pub fn deinit(testing: *TestingModel) void {
     std.testing.allocator.destroy(testing.model);
 }
 
-fn snapshot(testing: *const TestingModel) client_model.WorkspaceSnapshot {
+fn snapshot(testing: *const TestingModel) WorkspaceSnapshotInput {
     return .{
         .workspace = testing.workspace,
         .name = "main",
@@ -65,6 +71,6 @@ fn snapshot(testing: *const TestingModel) client_model.WorkspaceSnapshot {
     };
 }
 
-pub fn reconcile(testing: *TestingModel) !client_model.WorkspaceReconciliation {
+pub fn reconcile(testing: *TestingModel) !WorkspaceReconciliationType {
     return testing.model.reconcileWorkspace(testing.snapshot());
 }

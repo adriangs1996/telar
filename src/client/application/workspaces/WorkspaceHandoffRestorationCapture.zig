@@ -1,10 +1,13 @@
-const Capture = @This();
-const source_namespace = @import("workspace_handoff_restoration.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const workspace_handoff_restoration = @import("workspace_handoff_restoration.zig");
 const RestoreWorkspaceHandoffHandler = @import("RestoreWorkspaceHandoffHandler.zig");
-sibling: source_namespace.schema.PaneId,
+const TabLocationType = @import("telar-core").TabLocation;
+const Capture = @This();
+
+sibling: PaneIdType,
 pending: bool = false,
-failure: source_namespace.Failure = .none,
-events: [4]source_namespace.Event = undefined,
+failure: workspace_handoff_restoration.Failure = .none,
+events: [4]workspace_handoff_restoration.Event = undefined,
 event_count: usize = 0,
 
 pub fn handler(capture: *Capture) RestoreWorkspaceHandoffHandler {
@@ -21,7 +24,7 @@ pub fn handler(capture: *Capture) RestoreWorkspaceHandoffHandler {
     };
 }
 
-fn showPaneGraphics(context: *anyopaque, pane_id: source_namespace.schema.PaneId) !void {
+fn showPaneGraphics(context: *anyopaque, pane_id: PaneIdType) !void {
     const capture: *Capture = @ptrCast(@alignCast(context));
     capture.append(.{ .show_graphics = pane_id });
     if (capture.failure == .sibling_graphics and pane_id == capture.sibling) {
@@ -36,7 +39,7 @@ fn tabSnapshotPending(context: *anyopaque) bool {
     return capture.pending;
 }
 
-fn requestTabSnapshot(context: *anyopaque, location: source_namespace.schema.TabLocation) !void {
+fn requestTabSnapshot(context: *anyopaque, location: TabLocationType) !void {
     const capture: *Capture = @ptrCast(@alignCast(context));
     capture.append(.{ .request_snapshot = location });
     if (capture.failure == .snapshot) {
@@ -44,11 +47,11 @@ fn requestTabSnapshot(context: *anyopaque, location: source_namespace.schema.Tab
     }
 }
 
-fn append(capture: *Capture, event: source_namespace.Event) void {
+fn append(capture: *Capture, event: workspace_handoff_restoration.Event) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
 
-pub fn eventSlice(capture: *const Capture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const Capture) []const workspace_handoff_restoration.Event {
     return capture.events[0..capture.event_count];
 }

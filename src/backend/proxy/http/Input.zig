@@ -1,12 +1,14 @@
-const Input = @This();
-const head = @import("head_support.zig");
-const middleware = @import("../middleware.zig");
+const HeadType = @import("Head.zig");
+const TransformPipelineType = @import("../TransformPipeline.zig");
 const std = @import("std");
+const TransformContextType = @import("../TransformContext.zig");
+const Input = @This();
+
 original: []const u8,
-original_head: head.Head,
+original_head: HeadType,
 is_response: bool,
 response_to_head: bool,
-pipeline: *const middleware.TransformPipeline,
+pipeline: *const TransformPipelineType,
 io: std.Io,
-context: middleware.TransformContext,
+context: TransformContextType,
 output: []u8,

@@ -1,16 +1,19 @@
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const OpenPaneExecutorType = @import("../../application/commands/OpenPaneExecutor.zig");
+const OpenPaneViewType = @import("telar-core").OpenPaneView;
+const OpenPaneFailure = @import("OpenPaneFailure.zig");
+const RequestIdType = @import("telar-core").RequestId;
 const Controller = @This();
-const source_namespace = @import("open_pane.zig");
-const open_pane_commands = @import("../../application/commands/open_pane.zig");
-const Failure = @import("OpenPaneFailure.zig");
-responses: *source_namespace.ResponseQueue,
-open_pane: open_pane_commands.OpenPaneExecutor,
+
+responses: *ResponseQueueType,
+open_pane: OpenPaneExecutorType,
 
 /// Creates a controller scoped to one open-pane request.
 ///
 /// ```zig
 /// var controller = Controller.init(&responses, handler.executor());
 /// ```
-pub fn init(responses: *source_namespace.ResponseQueue, open_pane: open_pane_commands.OpenPaneExecutor) Controller {
+pub fn init(responses: *ResponseQueueType, open_pane: OpenPaneExecutorType) Controller {
     return .{ .responses = responses, .open_pane = open_pane };
 }
 
@@ -20,13 +23,13 @@ pub fn init(responses: *source_namespace.ResponseQueue, open_pane: open_pane_com
 /// ```zig
 /// try controller.openPane(request);
 /// ```
-pub fn openPane(controller: *Controller, request: source_namespace.schema.OpenPaneView) !void {
+pub fn openPane(controller: *Controller, request: OpenPaneViewType) !void {
     const result = controller.open_pane.execute(.{
         .target = request.target,
         .size = request.size,
         .launch = request.launch,
     }) catch |err| {
-        const failure: Failure = switch (err) {
+        const failure: OpenPaneFailure = switch (err) {
             error.PaneNotFound => .{ .code = .pane_not_found, .message = "pane not found" },
             error.WorkspaceNotFound => .{ .code = .workspace_not_found, .message = "workspace not found" },
             error.WorkspaceHasNoPane => .{ .code = .pane_not_found, .message = "workspace has no running pane" },
@@ -53,7 +56,7 @@ pub fn openPane(controller: *Controller, request: source_namespace.schema.OpenPa
     } });
 }
 
-fn queueFailure(controller: *Controller, request_id: source_namespace.schema.RequestId, failure: Failure) !void {
+fn queueFailure(controller: *Controller, request_id: RequestIdType, failure: OpenPaneFailure) !void {
     try controller.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,

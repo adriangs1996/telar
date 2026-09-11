@@ -1,5 +1,6 @@
 const GenericAcceptPort = @import("GenericAcceptPort.zig").Type;
 const GenericState = @import("GenericState.zig").Type;
+
 /// Creates a statically dispatched accepted-socket coordinator.
 ///
 /// ```zig

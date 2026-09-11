@@ -1,13 +1,11 @@
 //! Projects committed sidebar visibility into disposable client resources.
 
-const workspace_capability = @import("../../../workspace/root.zig");
-const notifications_application = @import("telar-client").application.notifications;
-const client_model = @import("telar-client").model;
-const pane_geometry = @import("../panes/pane_geometry.zig");
-
 const Client = @import("../../Client.zig");
-const multiplexer = workspace_capability.multiplexer;
-const sidebar_layout_delivery = notifications_application.sidebar_layout_delivery;
+const SidebarLayoutType = @import("telar-client").SidebarLayout;
+const DeliverSidebarLayoutHandlerType = @import("telar-client").DeliverSidebarLayoutHandler;
+const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const pane_geometry = @import("../panes/pane_geometry.zig");
 
 /// Applies one exact model commit to the view, physical graphics placements
 /// and attached runtime pane geometry.
@@ -15,8 +13,8 @@ const sidebar_layout_delivery = notifications_application.sidebar_layout_deliver
 /// ```zig
 /// try apply(client, change);
 /// ```
-pub fn apply(client: *Client, change: client_model.SidebarLayout) !void {
-    const delivery_handler: sidebar_layout_delivery.DeliverSidebarLayoutHandler = .{
+pub fn apply(client: *Client, change: SidebarLayoutType) !void {
+    const delivery_handler: DeliverSidebarLayoutHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = client,
@@ -38,10 +36,10 @@ fn projectView(context: *anyopaque, visible: bool, width: u16) void {
 fn invalidateGraphicsPlacements(context: *anyopaque) void {
     const client: *Client = @ptrCast(@alignCast(context));
 
-    @import("../../../graphics/root.zig").kitty.delivery.invalidatePlacements(&client.graphics_store);
+    kitty_delivery.invalidatePlacements(&client.graphics_store);
 }
 
-fn offerPaneGeometry(context: *anyopaque, model: *multiplexer.Model) !void {
+fn offerPaneGeometry(context: *anyopaque, model: *MultiplexerModel) !void {
     const client: *Client = @ptrCast(@alignCast(context));
 
     try pane_geometry.offerAttached(client, model, client.geometry().area);

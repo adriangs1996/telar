@@ -1,11 +1,13 @@
-const StubExecutor = @This();
 const frame_ack_commands = @import("../../application/commands/frame_ack.zig");
+const AcknowledgeFrameType = @import("../../application/commands/AcknowledgeFrame.zig");
+const StubExecutor = @This();
+
 result: frame_ack_commands.FrameAckResult = .{ .acknowledged = 0 },
 failure: ?anyerror = null,
 call_count: usize = 0,
-command: ?frame_ack_commands.AcknowledgeFrame = null,
+command: ?AcknowledgeFrameType = null,
 
-pub fn execute(stub: *StubExecutor, command: frame_ack_commands.AcknowledgeFrame) !frame_ack_commands.FrameAckResult {
+pub fn execute(stub: *StubExecutor, command: AcknowledgeFrameType) !frame_ack_commands.FrameAckResult {
     stub.call_count += 1;
     stub.command = command;
 

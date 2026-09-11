@@ -1,9 +1,10 @@
-const OfferActivePaneGeometryHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const OfferEffects = @import("OfferEffects.zig");
-const source_namespace = @import("pane_geometry_delivery.zig");
+const RectType = @import("telar-core").Rect;
 const OfferPaneGeometryHandler = @import("OfferPaneGeometryHandler.zig");
-model: *client_model.Model,
+const OfferActivePaneGeometryHandler = @This();
+
+model: *ModelType,
 effects: OfferEffects,
 
 /// Selects the active tab once and offers its attached visible panes.
@@ -12,7 +13,7 @@ effects: OfferEffects,
 /// ```zig
 /// const count = try handler.execute(area);
 /// ```
-pub fn execute(handler: *OfferActivePaneGeometryHandler, area: source_namespace.ui.Rect) !usize {
+pub fn execute(handler: *OfferActivePaneGeometryHandler, area: RectType) !usize {
     const active = handler.model.workspace.active() orelse return 0;
     var offer: OfferPaneGeometryHandler = .{ .effects = handler.effects };
 

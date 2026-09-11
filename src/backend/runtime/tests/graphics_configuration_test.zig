@@ -1,14 +1,13 @@
 //! Vertical and application tests for client graphics transport policy.
 
+const GenericGraphicsConfigurationController = @import("../entrypoints/requests/GenericGraphicsConfigurationController.zig").Type;
+const ConfigureGraphicsHandlerType = @import("../application/commands/ConfigureGraphicsHandler.zig");
+const PaneFixture = @import("PaneFixture.zig");
+const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const std = @import("std");
-const attachment_mod = @import("../attachment/root.zig");
 const graphics_configuration_commands = @import("../application/commands/graphics_configuration.zig");
-const graphics_configuration_controller = @import("../entrypoints/requests/graphics_configuration.zig");
-const test_support = @import("support.zig");
 
-const AttachmentStore = attachment_mod.AttachmentStore;
-const PaneFixture = test_support.PaneFixture;
-const GraphicsConfigurationController = graphics_configuration_controller.Controller(*graphics_configuration_commands.ConfigureGraphicsHandler);
+const GraphicsConfigurationController = GenericGraphicsConfigurationController(*ConfigureGraphicsHandlerType);
 
 test "ConfigureGraphicsHandler updates existing attachments only for its client" {
     var fixture: PaneFixture = .{};
@@ -19,7 +18,7 @@ test "ConfigureGraphicsHandler updates existing attachments only for its client"
     defer other_client.deinit();
     const other_attachment = try other_client.attach(std.testing.allocator, fixture.pane);
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    var handler: graphics_configuration_commands.ConfigureGraphicsHandler = .{
+    var handler: ConfigureGraphicsHandlerType = .{
         .attachments = &fixture.attachments,
     };
 
@@ -44,7 +43,7 @@ test "graphics policy survives workspace clearing and resets at aggregate deinit
     defer fixture.deinit();
 
     fixture.attachments.deinit();
-    var handler: graphics_configuration_commands.ConfigureGraphicsHandler = .{
+    var handler: ConfigureGraphicsHandlerType = .{
         .attachments = &fixture.attachments,
     };
     try std.testing.expectEqual(
@@ -70,7 +69,7 @@ test "graphics configuration crosses controller and handler in both directions" 
     defer fixture.deinit();
 
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    var handler: graphics_configuration_commands.ConfigureGraphicsHandler = .{
+    var handler: ConfigureGraphicsHandlerType = .{
         .attachments = &fixture.attachments,
     };
     var controller = GraphicsConfigurationController.init(&handler);

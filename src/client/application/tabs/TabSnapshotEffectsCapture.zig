@@ -1,20 +1,22 @@
+const ModelType = @import("../../model/Model.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabSnapshotEffects = @import("TabSnapshotEffects.zig");
+const TabReconciliationType = @import("../../model/TabReconciliation.zig");
 const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_snapshot.zig");
-const Effects = @import("TabSnapshotEffects.zig");
-model: *client_model.Model,
-expected_pane: source_namespace.schema.PaneId,
+
+model: *ModelType,
+expected_pane: PaneIdType,
 calls: usize = 0,
 observed_commit: bool = false,
 active: bool = false,
 panes_changed: bool = false,
 fail: bool = false,
 
-pub fn port(capture: *EffectsCapture) Effects {
+pub fn port(capture: *EffectsCapture) TabSnapshotEffects {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(context: *anyopaque, reconciliation: *const client_model.TabReconciliation) !void {
+fn deliver(context: *anyopaque, reconciliation: *const TabReconciliationType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.calls += 1;
     capture.active = reconciliation.active;

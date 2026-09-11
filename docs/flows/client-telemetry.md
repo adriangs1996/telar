@@ -69,12 +69,12 @@ Neither condition changes semantic state or visible presentation.
 
 ## Proof
 
-- `src/frontend/client/telemetry.zig` proves the bounded projection, one-write
+- `src/frontend/client/resources/telemetry.zig` proves the bounded projection, one-write
   token, coalescence, deferred shutdown and write-failure recovery.
-- `src/frontend/client/client_test.zig` proves a real substituted client
+- `src/frontend/client/tests/` proves a real substituted client
   schedules and completes a snapshot write without changing model or
   presenter versions, and that tick failure disables the sink.
-- `src/frontend/client/client_events.zig` keeps telemetry events on the
+- `src/frontend/client/entrypoints/events.zig` keeps telemetry events on the
   observation path and delegates both lifecycle boundaries to the telemetry
   adapter.
 - `src/core/diagnostics.zig` owns the development-only sink, interval and heap

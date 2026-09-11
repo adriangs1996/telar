@@ -1,10 +1,14 @@
+const ImageType = @import("telar-core").Image;
+const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const kitty_delivery = @import("kitty_delivery.zig");
+const std = @import("std");
+const TabLocationType = @import("telar-core").TabLocation;
+const KittyGraphicsWriter = @import("KittyGraphicsWriter.zig");
 /// One pane holding a complete 512x256 RGBA image with one placement, the
 /// shape the budget and compression tests all exercise.
 const TransmissionFixture = @This();
-const source_namespace = @import("kitty.zig");
-const std = @import("std");
-const KittyGraphicsWriter = @import("KittyGraphicsWriter.zig");
-pub const metadata: source_namespace.graphics.Image = .{
+
+pub const metadata: ImageType = .{
     .key = .{ .image_id = 1, .generation = 1 },
     .format = .rgba,
     .width = 512,
@@ -12,19 +16,19 @@ pub const metadata: source_namespace.graphics.Image = .{
     .byte_len = 512 * 256 * 4,
 };
 
-model: source_namespace.multiplexer.Model,
-store: source_namespace.Store,
+model: MultiplexerModel,
+store: kitty_delivery.Store,
 
 pub fn init(pixels: []const u8) !TransmissionFixture {
     std.debug.assert(pixels.len == metadata.byte_len);
-    const location: source_namespace.schema.TabLocation = .{
+    const location: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = source_namespace.multiplexer.Model.init(std.testing.allocator);
+    var model = MultiplexerModel.init(std.testing.allocator);
     errdefer model.deinit();
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
-    var store = source_namespace.Store.init(std.testing.allocator);
+    var store = kitty_delivery.Store.init(std.testing.allocator);
     errdefer store.deinit();
     try store.applyImage(.{ .pane_id = @enumFromInt(1), .revision = 1, .image = metadata });
     try store.applyChunk(.{

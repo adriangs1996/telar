@@ -1,14 +1,16 @@
+const HistoryRequest = @import("../../application/queries/HistoryRequest.zig");
+const HistoryExecutor = @import("../../application/queries/HistoryExecutor.zig");
 const StubQuery = @This();
-const history_query = @import("../../application/queries/history.zig");
+
 failure: ?anyerror = null,
 calls: usize = 0,
-request: ?history_query.Request = null,
+request: ?HistoryRequest = null,
 
-pub fn executor(stub: *StubQuery) history_query.Executor {
+pub fn executor(stub: *StubQuery) HistoryExecutor {
     return .{ .context = stub, .execute_fn = execute };
 }
 
-fn execute(context: *anyopaque, request: history_query.Request) anyerror!void {
+fn execute(context: *anyopaque, request: HistoryRequest) anyerror!void {
     const stub: *StubQuery = @ptrCast(@alignCast(context));
     stub.calls += 1;
     stub.request = request;

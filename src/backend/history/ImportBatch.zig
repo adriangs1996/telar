@@ -1,24 +1,28 @@
+const model = @import("model.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const std = @import("std");
+const ImportHistoryViewType = @import("telar-core").ImportHistoryView;
 /// One owned batch of imported foreign history. The session identity is
 /// derived deterministically from the source label, so re-imports reuse the
 /// same session and `INSERT OR IGNORE` keeps them idempotent.
 const ImportBatch = @This();
-const source_namespace = @import("model.zig");
-const std = @import("std");
-session_id: source_namespace.SessionId,
-pane_id: source_namespace.schema.PaneId,
-location: source_namespace.schema.TabLocation,
+
+session_id: model.SessionId,
+pane_id: PaneIdType,
+location: TabLocationType,
 base_sequence: u64,
 started_at_ms: i64,
 source: []u8,
 times: []i64,
 commands: [][]u8,
 
-pub fn init(gpa: std.mem.Allocator, view: source_namespace.schema.ImportHistoryView) !*ImportBatch {
+pub fn init(gpa: std.mem.Allocator, view: ImportHistoryViewType) !*ImportBatch {
     const batch = try gpa.create(ImportBatch);
     errdefer gpa.destroy(batch);
     const seed_low = std.hash.Wyhash.hash(0x74656c6172_696d70, view.source);
     const seed_high = std.hash.Wyhash.hash(seed_low, view.source);
-    var session_id: source_namespace.SessionId = undefined;
+    var session_id: model.SessionId = undefined;
     std.mem.writeInt(u64, session_id[0..8], seed_low, .little);
     std.mem.writeInt(u64, session_id[8..16], seed_high, .little);
     // Masked to stay positive as SQLite's i64; bit zero keeps it nonzero.

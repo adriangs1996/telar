@@ -1,16 +1,19 @@
-const Capture = @This();
-const source_namespace = @import("key_routing.zig");
+const key_routing = @import("key_routing.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const KeyRoutingHandler = @import("KeyRoutingHandler.zig");
-const Effects = @import("KeyRoutingEffects.zig");
+const KeyRoutingEffects = @import("KeyRoutingEffects.zig");
+const KeyType = @import("../../input/Key.zig");
 const PaneCommand = @import("PaneCommand.zig");
-events: [5]source_namespace.Event = undefined,
+const Capture = @This();
+
+events: [5]key_routing.Event = undefined,
 event_count: usize = 0,
-command: ?source_namespace.Command = null,
+command: ?key_routing.Command = null,
 pane_delivered: bool = true,
-pane_id: source_namespace.schema.PaneId = @enumFromInt(1),
-pane_target: ?source_namespace.PaneTarget = null,
-failure: source_namespace.Failure = .none,
-leases: source_namespace.Leases = .{},
+pane_id: PaneIdType = @enumFromInt(1),
+pane_target: ?key_routing.PaneTarget = null,
+failure: key_routing.Failure = .none,
+leases: key_routing.Leases = .{},
 
 pub fn routingHandler(capture: *Capture) KeyRoutingHandler {
     return .{
@@ -19,7 +22,7 @@ pub fn routingHandler(capture: *Capture) KeyRoutingHandler {
     };
 }
 
-fn effects(capture: *Capture) Effects {
+fn effects(capture: *Capture) KeyRoutingEffects {
     return .{
         .context = capture,
         .close_modal = closeModal,
@@ -30,7 +33,7 @@ fn effects(capture: *Capture) Effects {
     };
 }
 
-fn record(capture: *Capture, event: source_namespace.Event) void {
+fn record(capture: *Capture, event: key_routing.Event) void {
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
 }
@@ -40,7 +43,7 @@ fn closeModal(raw_context: *anyopaque) void {
     capture.record(.close_modal);
 }
 
-fn prompt(raw_context: *anyopaque, command: source_namespace.Command) !void {
+fn prompt(raw_context: *anyopaque, command: key_routing.Command) !void {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     capture.record(.prompt);
     capture.command = command;
@@ -50,7 +53,7 @@ fn prompt(raw_context: *anyopaque, command: source_namespace.Command) !void {
     }
 }
 
-fn copyKey(raw_context: *anyopaque, key: source_namespace.keybind.Key) !void {
+fn copyKey(raw_context: *anyopaque, key: KeyType) !void {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     capture.record(.copy_key);
     capture.command = .{ .key = key };
@@ -60,7 +63,7 @@ fn copyKey(raw_context: *anyopaque, key: source_namespace.keybind.Key) !void {
     }
 }
 
-fn pane(raw_context: *anyopaque, command: PaneCommand) !?source_namespace.schema.PaneId {
+fn pane(raw_context: *anyopaque, command: PaneCommand) !?PaneIdType {
     const capture: *Capture = @ptrCast(@alignCast(raw_context));
     capture.record(.pane);
     capture.command = command.input;

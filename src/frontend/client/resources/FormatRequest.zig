@@ -1,9 +1,10 @@
-const FormatRequest = @This();
-const source_namespace = @import("telemetry.zig");
+const std = @import("std");
 const Metrics = @import("Metrics.zig");
-const pace = @import("../../presentation/root.zig").pace;
+const PacerType = @import("../../presentation/Pacer.zig");
 const Snapshot = @import("Snapshot.zig");
-io: source_namespace.Io,
+const FormatRequest = @This();
+
+io: std.Io,
 metrics: *const Metrics,
-pacer: *const pace.Pacer,
+pacer: *const PacerType,
 snapshot: Snapshot,

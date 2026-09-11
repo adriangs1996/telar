@@ -1,15 +1,19 @@
-const Cursor = @This();
-const source_namespace = @import("text_search.zig");
+const max_search_needle_bytes_module = @import("telar-core").max_search_needle_bytes;
+const max_search_matches_module = @import("telar-core").max_search_matches;
+const SearchMatchType = @import("telar-core").SearchMatch;
 const std = @import("std");
+const text_search = @import("text_search.zig");
+const Cursor = @This();
+
 pub const rows_per_turn = 32;
-needle: [source_namespace.schema.max_search_needle_bytes]u21 = undefined,
-prefix: [source_namespace.schema.max_search_needle_bytes]usize = undefined,
+needle: [max_search_needle_bytes_module]u21 = undefined,
+prefix: [max_search_needle_bytes_module]usize = undefined,
 needle_len: usize = 0,
 fold: bool = true,
 revision: ?u64 = null,
 next_row: usize = 0,
 end_row: usize = 0,
-matches: [source_namespace.schema.max_search_matches]source_namespace.schema.SearchMatch = undefined,
+matches: [max_search_matches_module]SearchMatchType = undefined,
 count: u8 = 0,
 truncated: bool = false,
 
@@ -71,14 +75,14 @@ pub fn advance(cursor: *Cursor, pane: anytype) !bool {
     } else {
         cursor.revision = pane.search_revision;
         cursor.end_row = pages.total_rows;
-        cursor.next_row = cursor.end_row -| source_namespace.max_rows;
+        cursor.next_row = cursor.end_row -| text_search.max_rows;
         cursor.truncated = cursor.next_row != 0;
     }
 
     const end = @min(cursor.end_row, cursor.next_row + rows_per_turn);
     while (cursor.next_row < end) : (cursor.next_row += 1) {
         const pin = pages.pin(.{ .screen = .{ .x = 0, .y = @intCast(cursor.next_row) } }) orelse continue;
-        var columns: [source_namespace.max_cols]u16 = undefined;
+        var columns: [text_search.max_cols]u16 = undefined;
         var row_length: usize = 0;
         var matched: usize = 0;
         for (pin.cells(.all), 0..) |cell, column| {

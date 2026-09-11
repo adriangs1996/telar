@@ -1,34 +1,31 @@
+const PruneInput = @import("PruneInput.zig");
+const RequestIdType = @import("telar-core").RequestId;
+const QueryOrigin = @import("QueryOrigin.zig");
+const HistoryScope = @import("telar-core").HistoryScope;
+const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const PaneIdType = @import("telar-core").PaneId;
+const max_history_query_bytes = @import("telar-core").max_history_query_bytes;
 /// Bounded owned prune filters, mirroring `Query`'s storage discipline.
 const Prune = @This();
-const source_namespace = @import("model.zig");
-const QueryOrigin = @import("QueryOrigin.zig");
-pub const Input = struct {
-    request_id: source_namespace.schema.RequestId,
-    origin: QueryOrigin,
-    scope: source_namespace.Scope = .global,
-    scope_value: []const u8 = "",
-    pane_id: source_namespace.schema.PaneId = .invalid,
-    before_ms: i64 = 0,
-    failed_only: bool = false,
-    match: []const u8 = "",
-};
 
-request_id: source_namespace.schema.RequestId,
+pub const Input = @import("PruneInput.zig");
+
+request_id: RequestIdType,
 origin: QueryOrigin,
-scope: source_namespace.Scope = .global,
-scope_text: [source_namespace.schema.max_cwd_bytes]u8 = undefined,
+scope: HistoryScope = .global,
+scope_text: [max_cwd_bytes_module]u8 = undefined,
 scope_text_len: u16 = 0,
-pane_id: source_namespace.schema.PaneId = .invalid,
+pane_id: PaneIdType = .invalid,
 before_ms: i64 = 0,
 failed_only: bool = false,
-match: [source_namespace.max_query_bytes]u8 = undefined,
+match: [max_history_query_bytes]u8 = undefined,
 match_len: u16 = 0,
 
-pub fn init(input: Input) !Prune {
-    if (input.match.len > source_namespace.max_query_bytes) {
+pub fn init(input: PruneInput) !Prune {
+    if (input.match.len > max_history_query_bytes) {
         return error.QueryTooLong;
     }
-    if (input.scope_value.len > source_namespace.schema.max_cwd_bytes) {
+    if (input.scope_value.len > max_cwd_bytes_module) {
         return error.ScopeTooLong;
     }
     if (input.scope == .pane and input.pane_id == .invalid) {

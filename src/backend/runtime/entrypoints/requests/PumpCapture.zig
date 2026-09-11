@@ -1,7 +1,8 @@
-const PumpCapture = @This();
-const source_namespace = @import("show_notification.zig");
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
 const Delivery = @import("Delivery.zig");
-responses: *source_namespace.ResponseQueue,
+const PumpCapture = @This();
+
+responses: *ResponseQueueType,
 expected_delivered: u8,
 call_count: usize = 0,
 observed_committed_confirmation: bool = false,

@@ -1,5 +1,8 @@
+const PaneIdType = @import("telar-core").PaneId;
+const PlacementType = @import("telar-core").Placement;
+const ImageType = @import("telar-core").Image;
 const PlacementGeometry = @This();
-const source_namespace = @import("kitty.zig");
-pane_id: source_namespace.schema.PaneId,
-placement: source_namespace.graphics.Placement,
-image: source_namespace.graphics.Image,
+
+pane_id: PaneIdType,
+placement: PlacementType,
+image: ImageType,

@@ -1,7 +1,8 @@
-const SgrInput = @This();
-const Mouse = @import("key_support.zig").Mouse;
-const source_namespace = @import("mouse_protocol.zig");
+const Mouse = @import("Mouse.zig");
+const PointType = @import("telar-core").Point;
 const PixelProjection = @import("PixelProjection.zig");
+const SgrInput = @This();
+
 event: Mouse,
-pane_position: source_namespace.ui.Point,
+pane_position: PointType,
 pixels: ?PixelProjection = null,

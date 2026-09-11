@@ -1,14 +1,16 @@
-const State = @This();
-const core = @import("telar-core");
-const client_outbox = @import("outbox_support.zig");
+const SocketChannelType = @import("telar-core").SocketChannel;
+const OutboxType = @import("Outbox.zig");
 const std = @import("std");
-const source_namespace = @import("runtime_transport.zig");
+const max_frame_size_module = @import("telar-core").max_frame_size;
+const read_buffer_size_module = @import("telar-core").read_buffer_size;
 const Bootstrap = @import("Bootstrap.zig");
-connection: *core.transport.SocketChannel,
+const State = @This();
+
+connection: *SocketChannelType,
 send_buffer: []u8,
 receive_buffer: []u8,
 read_buffer: []u8,
-outbox: client_outbox.Outbox = .{},
+outbox: OutboxType = .{},
 receive_pending: bool = false,
 
 /// Reserves the single receive buffer before a read actor starts.
@@ -38,7 +40,7 @@ pub fn completeRead(state: *State, result: anyerror![]u8) ![]u8 {
 
 /// Reads into the reserved bounded frame buffer on the I/O actor.
 /// Example: `return state.read(io);`.
-pub fn read(state: *State, io: source_namespace.Io) ![]u8 {
+pub fn read(state: *State, io: std.Io) ![]u8 {
     return state.connection.receive(io, state.receive_buffer);
 }
 
@@ -56,7 +58,7 @@ pub fn cancelSend(state: *State) void {
 
 /// Sends the reserved frame without knowing the client event protocol.
 /// Example: `try state.send(io, bytes);`.
-pub fn send(state: *State, io: source_namespace.Io, bytes: []const u8) !void {
+pub fn send(state: *State, io: std.Io, bytes: []const u8) !void {
     try state.connection.send(io, bytes);
 }
 
@@ -65,12 +67,12 @@ pub fn send(state: *State, io: source_namespace.Io, bytes: []const u8) !void {
 /// ```zig
 /// var state = try State.init(gpa, connection);
 /// ```
-pub fn init(gpa: std.mem.Allocator, connection: *core.transport.SocketChannel) !State {
-    const receive_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+pub fn init(gpa: std.mem.Allocator, connection: *SocketChannelType) !State {
+    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
     errdefer gpa.free(receive_buffer);
-    const read_buffer = try gpa.alloc(u8, core.transport.read_buffer_size);
+    const read_buffer = try gpa.alloc(u8, read_buffer_size_module);
     errdefer gpa.free(read_buffer);
-    const send_buffer = try gpa.alloc(u8, core.transport.max_frame_size);
+    const send_buffer = try gpa.alloc(u8, max_frame_size_module);
     connection.bindReadBuffer(read_buffer);
 
     return .{

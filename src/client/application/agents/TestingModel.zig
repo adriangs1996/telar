@@ -1,31 +1,32 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const agents = @import("../../root.zig").agents;
-const source_namespace = @import("agent_navigation.zig");
+const ModelType = @import("../../model/Model.zig");
+const AgentKeyType = @import("../../agents/AgentKey.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const std = @import("std");
-model: *client_model.Model,
-local_key: agents.AgentKey,
-remote_key: agents.AgentKey,
-second: source_namespace.schema.TabLocation,
+const TestingModel = @This();
+
+model: *ModelType,
+local_key: AgentKeyType,
+remote_key: AgentKeyType,
+second: TabLocationType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
-    const first: source_namespace.schema.TabLocation = .{
+    const first: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const second: source_namespace.schema.TabLocation = .{
+    const second: TabLocationType = .{
         .workspace = first.workspace,
         .tab_id = @enumFromInt(2),
     };
-    const local_key: agents.AgentKey = .{
+    const local_key: AgentKeyType = .{
         .pane_id = @enumFromInt(2),
         .pane_generation = 1,
     };
-    const remote_key: agents.AgentKey = .{
+    const remote_key: AgentKeyType = .{
         .pane_id = @enumFromInt(9),
         .pane_generation = 3,
     };

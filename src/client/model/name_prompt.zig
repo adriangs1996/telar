@@ -1,21 +1,20 @@
 //! Bounded name-prompt state and pure editing transitions.
 
+const GenericField = @import("../input/GenericField.zig").Type;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const TabIdType = @import("telar-core").TabId;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const copy_mode = @import("../input/copy_mode.zig");
+const Submission = @import("Submission.zig");
+const NamePromptState = @import("NamePromptState.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const input_capability = @import("../input/root.zig");
 
-const edit = input_capability.edit;
-pub const copy_mode = input_capability.copy_mode;
-
-pub const Direction = copy_mode.Direction;
-pub const schema = core.schema;
-
-pub const Field = edit.Field(schema.max_tab_label_bytes);
+pub const Field = GenericField(max_tab_label_bytes_module);
 
 pub const Target = union(enum) {
-    rename_tab: schema.TabId,
+    rename_tab: TabIdType,
     create_workspace,
-    rename_workspace: schema.WorkspaceLocation,
+    rename_workspace: WorkspaceLocationType,
     /// Copy-mode search input; the direction was chosen by `/` or `?`.
     copy_search: copy_mode.Direction,
     /// Fuzzy goto picker over workspaces, tabs and agents.
@@ -30,12 +29,12 @@ pub const Target = union(enum) {
 pub const Begin = union(enum) {
     copy_search: copy_mode.Direction,
     rename_tab: struct {
-        tab_id: schema.TabId,
+        tab_id: TabIdType,
         label: []const u8,
     },
     create_workspace,
     rename_workspace: struct {
-        workspace: schema.WorkspaceLocation,
+        workspace: WorkspaceLocationType,
         name: []const u8,
     },
     goto_picker,
@@ -90,8 +89,6 @@ pub const Command = union(enum) {
     end: bool,
 };
 
-pub const Submission = @import("Submission.zig");
-
 pub const Transition = union(enum) {
     unchanged,
     routing_changed,
@@ -102,12 +99,6 @@ pub const Transition = union(enum) {
     submitted: Submission,
 };
 
-pub const History = @import("History.zig");
-
-pub const Prompt = @import("Prompt.zig");
-
-pub const State = @import("NamePromptState.zig");
-
 /// Targets whose prompt drives a list selection instead of a plain name.
 /// The suggestion palette lists one row, so Enter on an empty field can
 /// still paste it.
@@ -115,10 +106,8 @@ pub fn selects(target: Target) bool {
     return target == .goto or target == .history or target == .suggest;
 }
 
-const FieldPosition = @import("FieldPosition.zig");
-
 test "selection clamping and combined history updates publish exactly one revision" {
-    var state: State = .{};
+    var state: NamePromptState = .{};
     state.begin(.goto_picker);
     _ = state.apply(.move_down);
     const selected_revision = state.version();
@@ -142,8 +131,8 @@ test "selection clamping and combined history updates publish exactly one revisi
 }
 
 test "prompt opening owns target text and one revision" {
-    var state: State = .{};
-    const workspace: schema.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
+    var state: NamePromptState = .{};
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(7) };
 
     state.begin(.{ .rename_workspace = .{
         .workspace = workspace,
@@ -157,7 +146,7 @@ test "prompt opening owns target text and one revision" {
 }
 
 test "visible edits advance revision while paste routing does not" {
-    var state: State = .{};
+    var state: NamePromptState = .{};
     state.begin(.{ .rename_tab = .{ .tab_id = @enumFromInt(3), .label = "logs" } });
 
     try std.testing.expect(state.apply(.paste_start) == .routing_changed);
@@ -174,7 +163,7 @@ test "visible edits advance revision while paste routing does not" {
 }
 
 test "submission borrows state until matching completion" {
-    var state: State = .{};
+    var state: NamePromptState = .{};
     state.begin(.create_workspace);
     try std.testing.expect(state.apply(.{ .insert = "agents" }) == .changed);
 
@@ -190,7 +179,7 @@ test "submission borrows state until matching completion" {
 }
 
 test "cancel closes the prompt and empty submit is inert" {
-    var state: State = .{};
+    var state: NamePromptState = .{};
     state.begin(.create_workspace);
 
     try std.testing.expect(state.apply(.submit) == .unchanged);
@@ -201,7 +190,7 @@ test "cancel closes the prompt and empty submit is inert" {
 }
 
 test "goto picker submits empty queries and tracks a resettable selection" {
-    var state: State = .{};
+    var state: NamePromptState = .{};
     state.begin(.goto_picker);
 
     try std.testing.expect(state.apply(.move_up) == .unchanged);
@@ -221,7 +210,7 @@ test "goto picker submits empty queries and tracks a resettable selection" {
 }
 
 test "rename prompts ignore picker selection commands" {
-    var state: State = .{};
+    var state: NamePromptState = .{};
     state.begin(.create_workspace);
 
     try std.testing.expect(state.apply(.move_down) == .unchanged);
@@ -230,7 +219,7 @@ test "rename prompts ignore picker selection commands" {
 }
 
 test "the history palette cycles scope with Tab and only there" {
-    var state: State = .{};
+    var state: NamePromptState = .{};
     state.begin(.history_palette);
     try std.testing.expect(state.apply(.move_down) == .changed);
 
@@ -252,7 +241,7 @@ test "the history palette cycles scope with Tab and only there" {
 }
 
 test "the suggestion palette submits empty fields and ignores history-only commands" {
-    var state: State = .{};
+    var state: NamePromptState = .{};
     state.begin(.suggest_palette);
     try std.testing.expectEqual(Target.suggest, state.currentConst().?.target());
 
@@ -267,7 +256,7 @@ test "the suggestion palette submits empty fields and ignores history-only comma
 }
 
 test "history inspection preserves query and selection and escape returns before closing" {
-    var state: State = .{};
+    var state: NamePromptState = .{};
     state.begin(.history_palette);
     _ = state.apply(.{ .insert = "zig" });
     _ = state.apply(.move_up);

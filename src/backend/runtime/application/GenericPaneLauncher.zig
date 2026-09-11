@@ -1,30 +1,36 @@
-const source_namespace = @import("pane_launcher.zig");
 const std = @import("std");
-const history = @import("../../history/root.zig");
-const core = @import("telar-core");
-const proxy_mod = @import("../../proxy/root.zig");
+const ServiceType = @import("../../history/Service.zig");
+const TableType = @import("telar-core").Table;
+const ProxyType = @import("../../proxy/Proxy.zig");
+const PaneStoreType = @import("../../pane/PaneStore.zig");
 const LaunchTestFault = @import("LaunchTestFault.zig");
+const TerminalColorsType = @import("telar-core").TerminalColors;
 const LaunchRequest = @import("LaunchRequest.zig");
+const PaneType = @import("../../pane/Pane.zig");
 const PaneOverrides = @import("PaneOverrides.zig");
-const pty = @import("../../pty/root.zig");
+const PaneEnvironmentType = @import("../../proxy/PaneEnvironment.zig");
+const ChildEnvironmentType = @import("../../pty/ChildEnvironment.zig");
 const OwnedCommand = @import("OwnedCommand.zig");
+const pane_launcher = @import("pane_launcher.zig");
+const model = @import("../../history/model.zig");
 const LaunchFailure = @import("LaunchFailure.zig");
+
 pub fn Type(comptime RuntimeEvent: type) type {
     return struct {
         const Self = @This();
 
-        io: source_namespace.Io,
+        io: std.Io,
         gpa: std.mem.Allocator,
-        select: *source_namespace.Io.Select(RuntimeEvent),
-        history_service: *history.Service,
+        select: *std.Io.Select(RuntimeEvent),
+        history_service: *ServiceType,
         inherited_environment: std.process.Environ,
         socket_path: []const u8,
         executable_path: []const u8,
-        manifests: *const core.agent_manifest.Table,
-        proxy: ?*proxy_mod.Proxy,
-        panes: *source_namespace.PaneStore,
+        manifests: *const TableType,
+        proxy: ?*ProxyType,
+        panes: *PaneStoreType,
         launch_fault: ?*LaunchTestFault,
-        terminal_colors: source_namespace.schema.TerminalColors = .{},
+        terminal_colors: TerminalColorsType = .{},
 
         /// Executes one pane-launch transaction and returns only after both
         /// runtime observation actors own their work.
@@ -32,7 +38,7 @@ pub fn Type(comptime RuntimeEvent: type) type {
         /// ```zig
         /// const pane = try launcher.launch(.{ .location = location, .size = size, .launch = view, .launch_cwd = cwd, .workspace_path = path });
         /// ```
-        pub fn launch(launcher: *Self, request: LaunchRequest) !*source_namespace.Pane {
+        pub fn launch(launcher: *Self, request: LaunchRequest) !*PaneType {
             const pane_key = try launcher.panes.allocateKey();
             var pane_overrides: PaneOverrides = .{};
             const identity_overrides = pane_overrides.build(.{
@@ -41,9 +47,9 @@ pub fn Type(comptime RuntimeEvent: type) type {
                 .socket_path = launcher.socket_path,
                 .executable_path = launcher.executable_path,
             });
-            var proxy_environment: ?proxy_mod.PaneEnvironment = null;
+            var proxy_environment: ?PaneEnvironmentType = null;
             defer if (proxy_environment) |*owned| owned.deinit();
-            var owned_environment: ?pty.ChildEnvironment = null;
+            var owned_environment: ?ChildEnvironmentType = null;
             defer if (owned_environment) |*owned| owned.deinit();
             var proxy_registered = false;
             errdefer if (proxy_registered) if (launcher.proxy) |proxy|
@@ -59,7 +65,7 @@ pub fn Type(comptime RuntimeEvent: type) type {
                 proxy_registered = true;
                 break :block proxy_environment.?.environment();
             } else block: {
-                owned_environment = try pty.ChildEnvironment.initWithOverrides(
+                owned_environment = try ChildEnvironmentType.initWithOverrides(
                     launcher.gpa,
                     launcher.inherited_environment,
                     .{ .telar_term_program = "telar", .overrides = identity_overrides },
@@ -75,7 +81,7 @@ pub fn Type(comptime RuntimeEvent: type) type {
             });
             defer command.deinit();
             const shell = std.mem.span(command.command.file);
-            const fresh = try source_namespace.Pane.create(.{
+            const fresh = try PaneType.create(.{
                 .io = launcher.io,
                 .gpa = launcher.gpa,
                 .history_service = launcher.history_service,
@@ -114,7 +120,7 @@ pub fn Type(comptime RuntimeEvent: type) type {
                 launcher.panes.removeAndDestroy(fresh);
                 return err;
             };
-            launcher.select.concurrent(.pane_exit, source_namespace.waitPane, .{fresh}) catch |err| {
+            launcher.select.concurrent(.pane_exit, pane_launcher.waitPane, .{fresh}) catch |err| {
                 fresh.cancelExitWait();
                 launcher.abort(fresh, .{ .shell = shell, .phase = .wait_actor, .cause = err });
                 launcher.panes.removeAndDestroy(fresh);
@@ -129,7 +135,7 @@ pub fn Type(comptime RuntimeEvent: type) type {
                 launcher.abort(fresh, .{ .shell = shell, .phase = .output_actor, .cause = err });
                 return err;
             };
-            launcher.select.concurrent(.pane_output, source_namespace.readPane, .{ launcher.io, fresh }) catch |err| {
+            launcher.select.concurrent(.pane_output, pane_launcher.readPane, .{ launcher.io, fresh }) catch |err| {
                 fresh.cancelPtyOutputRead();
                 fresh.finishPtyOutput();
                 launcher.abort(fresh, .{ .shell = shell, .phase = .output_actor, .cause = err });
@@ -141,13 +147,13 @@ pub fn Type(comptime RuntimeEvent: type) type {
             return fresh;
         }
 
-        fn injectFault(launcher: *Self, phase: history.LaunchPhase) !void {
+        fn injectFault(launcher: *Self, phase: model.LaunchPhase) !void {
             if (launcher.launch_fault) |fault| {
                 try fault.inject(phase);
             }
         }
 
-        fn recordFailure(launcher: *Self, pane: *const source_namespace.Pane, failure: LaunchFailure) void {
+        fn recordFailure(launcher: *Self, pane: *const PaneType, failure: LaunchFailure) void {
             _ = launcher.history_service.recordLaunchAttempt(launcher.io, .{
                 .pane_id = pane.id,
                 .pane_generation = pane.generation,
@@ -160,7 +166,7 @@ pub fn Type(comptime RuntimeEvent: type) type {
             });
         }
 
-        fn abort(launcher: *Self, pane: *source_namespace.Pane, failure: LaunchFailure) void {
+        fn abort(launcher: *Self, pane: *PaneType, failure: LaunchFailure) void {
             launcher.recordFailure(pane, failure);
             pane.abortLaunch();
         }

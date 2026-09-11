@@ -1,6 +1,7 @@
-const Request = @This();
-const core = @import("telar-core");
+const ImageKeyType = @import("telar-core").ImageKey;
 const std = @import("std");
-key: core.graphics.ImageKey,
+const Request = @This();
+
+key: ImageKeyType,
 shared_transport: bool,
 allocator: std.mem.Allocator,

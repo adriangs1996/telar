@@ -1,8 +1,9 @@
-const Effects = @This();
-const source_namespace = @import("pointer_routing.zig");
+const PointerCommandType = @import("PointerCommand.zig");
 const ViewOutcome = @import("ViewOutcome.zig");
+const Effects = @This();
+
 context: *anyopaque,
-copy_mode: *const fn (*anyopaque, source_namespace.PointerCommand) anyerror!bool,
-view: *const fn (*anyopaque, source_namespace.PointerCommand) anyerror!ViewOutcome,
-link: *const fn (*anyopaque, source_namespace.PointerCommand) anyerror!bool,
-pane: *const fn (*anyopaque, source_namespace.PointerCommand) anyerror!void,
+copy_mode: *const fn (*anyopaque, PointerCommandType) anyerror!bool,
+view: *const fn (*anyopaque, PointerCommandType) anyerror!ViewOutcome,
+link: *const fn (*anyopaque, PointerCommandType) anyerror!bool,
+pane: *const fn (*anyopaque, PointerCommandType) anyerror!void,

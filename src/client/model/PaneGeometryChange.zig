@@ -1,7 +1,10 @@
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const RectType = @import("telar-core").Rect;
 const PaneGeometryChange = @This();
-const source_namespace = @import("types.zig");
-location: source_namespace.schema.TabLocation,
-focused: source_namespace.schema.PaneId,
+
+location: TabLocationType,
+focused: PaneIdType,
 panes_revision: u64,
-area: source_namespace.ui.Rect,
+area: RectType,
 fullscreen: bool,

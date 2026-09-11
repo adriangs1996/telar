@@ -1,5 +1,6 @@
-const AgentSnapshotCommit = @This();
 const AgentStatusChanges = @import("AgentStatusChanges.zig");
+const AgentSnapshotCommit = @This();
+
 runtime_revision: u64,
 count: usize,
 status_changes: AgentStatusChanges,

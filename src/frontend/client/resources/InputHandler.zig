@@ -1,21 +1,20 @@
 //! Host input dispatch for one attached client. Constructed per event by the
 //! client's entrypoints.
 
-const input_capability = @import("../../input/root.zig");
-const presentation = @import("../../presentation/root.zig");
-const action_routing = @import("../controllers/input/action_routing.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
-const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const runtime_transport = @import("../entrypoints/runtime_io.zig");
-const key_routing = @import("../controllers/input/key_routing.zig");
-const paste_routing = @import("../controllers/input/paste_routing.zig");
-const pointer_routing = @import("../controllers/input/pointer_routing.zig");
-const action_mod = input_capability.action;
-const keybind = input_capability.keybind;
-const term = presentation.screen;
-
 const Client = @import("../Client.zig");
-const Action = action_mod.Action;
+const key_routing = @import("../controllers/input/key_routing.zig");
+const KeyType = @import("telar-client").Key;
+const paste_routing = @import("../controllers/input/paste_routing.zig");
+const term = @import("../../presentation/screen_support.zig");
+const pointer_routing = @import("../controllers/input/pointer_routing.zig");
+const host_capabilities = @import("../controllers/host/host_capabilities.zig");
+const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
+const runtime_transport = @import("../entrypoints/runtime_io.zig");
+const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
+const Action = @import("telar-client").Action;
+const RepeatPolicyType = @import("telar-client").RepeatPolicy;
+const action_routing = @import("../controllers/input/action_routing.zig");
+const ControlType = @import("telar-client").Control;
 
 const InputHandler = @This();
 
@@ -44,7 +43,7 @@ pub fn forward(handler: *InputHandler, bytes: []const u8) !void {
 /// ```zig
 /// try handler.key(pressed);
 /// ```
-pub fn key(handler: *InputHandler, value: keybind.Key) !void {
+pub fn key(handler: *InputHandler, value: KeyType) !void {
     _ = try key_routing.apply(handler.client, .{ .key = value });
 }
 
@@ -75,7 +74,7 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
     _ = try host_capabilities.observe(handler.client, response);
     switch (response) {
         .kitty_graphics => |reply| {
-            if (!@import("../../graphics/root.zig").kitty.delivery.noteHostReply(&handler.client.graphics_store, reply.image_id, reply.supported)) {
+            if (!kitty_delivery.noteHostReply(&handler.client.graphics_store, reply.image_id, reply.supported)) {
                 return;
             }
             try runtime_transport.flushGraphicsCredits(handler.client);
@@ -87,10 +86,10 @@ pub fn terminalResponse(handler: *InputHandler, response: term.Event.TerminalRes
 
 /// Opts native scroll bindings into paced repeats for their current pane.
 /// For example: `const policy = handler.repeatPolicy(action);`.
-pub fn repeatPolicy(handler: *const InputHandler, value: Action) ?keybind.RepeatPolicy {
+pub fn repeatPolicy(handler: *const InputHandler, value: Action) ?RepeatPolicyType {
     return action_routing.repeatPolicy(handler.client, value);
 }
 
-pub fn action(handler: *InputHandler, value: Action) !keybind.Control {
+pub fn action(handler: *InputHandler, value: Action) !ControlType {
     return action_routing.apply(handler.client, value);
 }

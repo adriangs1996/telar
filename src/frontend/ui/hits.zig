@@ -5,24 +5,21 @@
 //! widget cannot implement it: by the time the widget under the modal is asked,
 //! the wrong answer has already been given.
 
+const GenericHits = @import("GenericHits.zig").Type;
 const std = @import("std");
-const Rect = @import("telar-core").ui.Rect;
+const Rect = @import("telar-core").Rect;
 
 // ---------------------------------------------------------------------------
 // Hit testing
 // ---------------------------------------------------------------------------
 
-pub const Hits = @import("GenericHits.zig").Type;
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-const testing = std.testing;
-
 const TestAction = union(enum) { row: u16, button, dismiss };
 
-const TestHits = Hits(TestAction, 32);
+const TestHits = GenericHits(TestAction, 32);
 
 test "within a layer the newest registration wins" {
     var h: TestHits = .{};
@@ -30,8 +27,8 @@ test "within a layer the newest registration wins" {
     // A chip drawn on top of the row it belongs to.
     h.add(.{ .x = 5, .y = 0, .w = 4, .h = 1 }, .button);
 
-    try testing.expectEqual(TestAction.button, h.at(6, 0).?);
-    try testing.expectEqual(TestAction{ .row = 3 }, h.at(1, 0).?);
+    try std.testing.expectEqual(TestAction.button, h.at(6, 0).?);
+    try std.testing.expectEqual(TestAction{ .row = 3 }, h.at(1, 0).?);
 }
 
 test "a modal swallows clicks on its blank interior" {
@@ -48,11 +45,11 @@ test "a modal swallows clicks on its blank interior" {
     h.endLayer();
 
     // The modal's own control.
-    try testing.expectEqual(TestAction.button, h.at(13, 10).?);
+    try std.testing.expectEqual(TestAction.button, h.at(13, 10).?);
     // Its blank interior: swallowed, not passed down.
-    try testing.expectEqual(@as(?TestAction, null), h.at(25, 6));
+    try std.testing.expectEqual(@as(?TestAction, null), h.at(25, 6));
     // Outside it, the list is still live.
-    try testing.expectEqual(TestAction{ .row = 7 }, h.at(2, 2).?);
+    try std.testing.expectEqual(TestAction{ .row = 7 }, h.at(2, 2).?);
 }
 
 test "a modal can claim the whole screen to catch a click outside itself" {
@@ -67,8 +64,8 @@ test "a modal can claim the whole screen to catch a click outside itself" {
     h.add(.{ .x = 12, .y = 10, .w = 6, .h = 1 }, .button);
     h.endLayer();
 
-    try testing.expectEqual(TestAction.button, h.at(13, 10).?);
-    try testing.expectEqual(TestAction.dismiss, h.at(2, 2).?);
+    try std.testing.expectEqual(TestAction.button, h.at(13, 10).?);
+    try std.testing.expectEqual(TestAction.dismiss, h.at(2, 2).?);
 }
 
 test "a transparent overlay lets clicks through" {
@@ -81,8 +78,8 @@ test "a transparent overlay lets clicks through" {
     h.add(.{ .x = 12, .y = 10, .w = 6, .h = 1 }, .button);
     h.endLayer();
 
-    try testing.expectEqual(TestAction.button, h.at(13, 10).?);
-    try testing.expectEqual(TestAction{ .row = 7 }, h.at(25, 6).?);
+    try std.testing.expectEqual(TestAction.button, h.at(13, 10).?);
+    try std.testing.expectEqual(TestAction{ .row = 7 }, h.at(25, 6).?);
 }
 
 test "layers nest and unwind" {
@@ -100,13 +97,13 @@ test "layers nest and unwind" {
 
     h.endLayer();
 
-    try testing.expectEqual(TestAction.dismiss, h.at(10, 8).?);
+    try std.testing.expectEqual(TestAction.dismiss, h.at(10, 8).?);
     // Inside the dropdown but not on its item: the dropdown keeps it.
-    try testing.expectEqual(@as(?TestAction, null), h.at(16, 9));
+    try std.testing.expectEqual(@as(?TestAction, null), h.at(16, 9));
     // Inside the modal, outside the dropdown: the modal's control still works.
-    try testing.expectEqual(TestAction.button, h.at(7, 6).?);
+    try std.testing.expectEqual(TestAction.button, h.at(7, 6).?);
     // Outside everything.
-    try testing.expectEqual(TestAction{ .row = 1 }, h.at(1, 1).?);
+    try std.testing.expectEqual(TestAction{ .row = 1 }, h.at(1, 1).?);
 }
 
 test "clearing forgets the layers as well as the entries" {
@@ -119,6 +116,6 @@ test "clearing forgets the layers as well as the entries" {
 
     h.clear();
     h.add(.{ .x = 0, .y = 0, .w = 4, .h = 1 }, .{ .row = 0 });
-    try testing.expectEqual(TestAction{ .row = 0 }, h.at(1, 0).?);
-    try testing.expectEqual(@as(?TestAction, null), h.at(6, 6));
+    try std.testing.expectEqual(TestAction{ .row = 0 }, h.at(1, 0).?);
+    try std.testing.expectEqual(@as(?TestAction, null), h.at(6, 6));
 }

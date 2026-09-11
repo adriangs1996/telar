@@ -1,29 +1,15 @@
 //! Application use case for requesting one workspace rename.
 
+const RenameWorkspaceTestingModel = @import("RenameWorkspaceTestingModel.zig");
+const RenameWorkspaceRequestCapture = @import("RenameWorkspaceRequestCapture.zig");
+const RequestRenameWorkspaceHandler = @import("RequestRenameWorkspaceHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-
-pub const RequestRenameWorkspace = @import("RequestRenameWorkspace.zig");
-
-pub const RequestedRename = @import("RequestedRename.zig");
-
-pub const WorkspaceOperationGate = @import("RenameWorkspaceWorkspaceOperationGate.zig");
-
-pub const RenameRequestEffects = @import("RenameRequestEffects.zig");
-
-pub const RequestRenameWorkspaceHandler = @import("RequestRenameWorkspaceHandler.zig");
-
-const RequestCapture = @import("RenameWorkspaceRequestCapture.zig");
-
-const TestingModel = @import("RenameWorkspaceTestingModel.zig");
+const VersionType = @import("../../model/Version.zig");
 
 test "RequestRenameWorkspaceHandler sends the current target without provisional mutation" {
-    var testing = try TestingModel.init();
+    var testing = try RenameWorkspaceTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{};
+    var capture: RenameWorkspaceRequestCapture = .{};
     var handler: RequestRenameWorkspaceHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -39,13 +25,13 @@ test "RequestRenameWorkspaceHandler sends the current target without provisional
     try std.testing.expectEqualDeep(testing.workspace, capture.workspace.?);
     try std.testing.expectEqualStrings("agents", capture.nameSlice());
     try std.testing.expectEqualStrings("", testing.model.workspace.workspaceName());
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "RequestRenameWorkspaceHandler suppresses blocked and stale targets" {
-    var testing = try TestingModel.init();
+    var testing = try RenameWorkspaceTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{ .blocked = true };
+    var capture: RenameWorkspaceRequestCapture = .{ .blocked = true };
     var handler: RequestRenameWorkspaceHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -63,13 +49,13 @@ test "RequestRenameWorkspaceHandler suppresses blocked and stale targets" {
     }));
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "RequestRenameWorkspaceHandler propagates delivery failure without mutation" {
-    var testing = try TestingModel.init();
+    var testing = try RenameWorkspaceTestingModel.init();
     defer testing.deinit();
-    var capture: RequestCapture = .{ .failure = error.DeliveryFailed };
+    var capture: RenameWorkspaceRequestCapture = .{ .failure = error.DeliveryFailed };
     var handler: RequestRenameWorkspaceHandler = .{
         .model = testing.model,
         .gate = capture.gate(),
@@ -83,5 +69,5 @@ test "RequestRenameWorkspaceHandler propagates delivery failure without mutation
 
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqualStrings("", testing.model.workspace.workspaceName());
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }

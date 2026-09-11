@@ -1,4 +1,6 @@
-const source_namespace = @import("graphics_credit.zig");
+const RuntimeMetricsType = @import("../../observability/RuntimeMetrics.zig");
+const GraphicsCreditType = @import("telar-core").GraphicsCredit;
+
 /// Builds a statically dispatched controller for graphics flow control.
 ///
 /// ```zig
@@ -9,7 +11,7 @@ pub fn Type(comptime Executor: type) type {
     return struct {
         const Self = @This();
 
-        metrics: *source_namespace.RuntimeMetrics,
+        metrics: *RuntimeMetricsType,
         executor: Executor,
 
         /// Creates one controller bound to the requesting client and handler.
@@ -17,7 +19,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// var controller = GraphicsCreditController.init(&metrics, &handler);
         /// ```
-        pub fn init(metrics: *source_namespace.RuntimeMetrics, executor: Executor) Self {
+        pub fn init(metrics: *RuntimeMetricsType, executor: Executor) Self {
             return .{ .metrics = metrics, .executor = executor };
         }
 
@@ -27,7 +29,7 @@ pub fn Type(comptime Executor: type) type {
         /// ```zig
         /// try controller.graphicsCredit(credit);
         /// ```
-        pub inline fn graphicsCredit(controller: *Self, credit: source_namespace.schema.GraphicsCredit) !void {
+        pub inline fn graphicsCredit(controller: *Self, credit: GraphicsCreditType) !void {
             const result = try controller.executor.execute(.{
                 .pane_id = credit.pane_id,
                 .bytes = credit.bytes,

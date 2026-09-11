@@ -1,8 +1,8 @@
-const TestCompressionScheduler = @This();
 const Compression = @import("Compression.zig");
 const std = @import("std");
-const source_namespace = @import("kitty.zig");
 const delivery = @import("kitty_delivery.zig");
+const TestCompressionScheduler = @This();
+
 pending: ?*Compression = null,
 
 pub fn schedule(context: *anyopaque, job: *Compression) anyerror!void {
@@ -11,7 +11,7 @@ pub fn schedule(context: *anyopaque, job: *Compression) anyerror!void {
     scheduler.pending = job;
 }
 
-pub fn complete(scheduler: *TestCompressionScheduler, store: *source_namespace.Store) void {
+pub fn complete(scheduler: *TestCompressionScheduler, store: *delivery.Store) void {
     const job = scheduler.pending orelse return;
     delivery.completeCompression(store, Compression.run(job));
     scheduler.pending = null;

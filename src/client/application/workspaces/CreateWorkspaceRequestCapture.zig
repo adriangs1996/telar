@@ -1,16 +1,18 @@
-const RequestCapture = @This();
-const source_namespace = @import("create_workspace.zig");
-const WorkspaceOperationGate = @import("CreateWorkspaceWorkspaceOperationGate.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const CreateWorkspaceOperationGate = @import("CreateWorkspaceOperationGate.zig");
 const CreationRequestEffects = @import("CreationRequestEffects.zig");
 const WorkspaceCreation = @import("WorkspaceCreation.zig");
+const RequestCapture = @This();
+
 blocked: bool = false,
 fail: bool = false,
 calls: usize = 0,
-source: ?source_namespace.schema.PaneId = null,
-name: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+source: ?PaneIdType = null,
+name: [max_tab_label_bytes_module]u8 = undefined,
 name_len: u8 = 0,
 
-pub fn gate(capture: *RequestCapture) WorkspaceOperationGate {
+pub fn gate(capture: *RequestCapture) CreateWorkspaceOperationGate {
     return .{ .context = capture, .pending = pending };
 }
 

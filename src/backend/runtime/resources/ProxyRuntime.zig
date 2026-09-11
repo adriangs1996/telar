@@ -1,16 +1,23 @@
-const Runtime = @This();
-const source_namespace = @import("proxy.zig");
-const proxy_mod = @import("../../proxy/root.zig");
+const proxy_ops = @import("proxy.zig");
+const ProxyScopeType = @import("telar-core").ProxyScope;
+const Joiner = @import("../../proxy/capture/Joiner.zig");
 const CaptureSink = @import("CaptureSink.zig");
 const std = @import("std");
 const InitOptions = @import("InitOptions.zig");
+const ProxyType = @import("../../proxy/Proxy.zig");
+const Config = @import("../../proxy/capture/Config.zig");
 const ObservationScheduler = @import("ObservationScheduler.zig");
 const CaptureScheduler = @import("CaptureScheduler.zig");
 const CaptureInput = @import("CaptureInput.zig");
-owner: source_namespace.ProxyOwner,
-scope: source_namespace.schema.ProxyScope,
+const Half = @import("../../proxy/capture/Half.zig");
+const Exchange = @import("../../proxy/capture/Exchange.zig");
+const Snapshot = @import("../../proxy/Snapshot.zig");
+const Runtime = @This();
+
+owner: proxy_ops.ProxyOwner,
+scope: ProxyScopeType,
 system_trusted: bool,
-captures: proxy_mod.CaptureJoiner,
+captures: Joiner,
 capture_sink: ?CaptureSink = null,
 
 /// Creates the configured proxy, or an inactive owner when disabled.
@@ -19,17 +26,17 @@ capture_sink: ?CaptureSink = null,
 /// var proxy_runtime = try Runtime.init(io, gpa, .{ .config = config, .system_trusted = false });
 /// defer proxy_runtime.deinit();
 /// ```
-pub fn init(io: source_namespace.Io, gpa: std.mem.Allocator, options: InitOptions) !Runtime {
+pub fn init(io: std.Io, gpa: std.mem.Allocator, options: InitOptions) !Runtime {
     const owned_proxy = if (options.config) |value|
-        try proxy_mod.Proxy.create(io, gpa, value)
+        try ProxyType.create(io, gpa, value)
     else
         null;
 
-    const timeout_ms = if (options.config) |value| value.capture.join_timeout_ms else (proxy_mod.CaptureConfig{}).join_timeout_ms;
+    const timeout_ms = if (options.config) |value| value.capture.join_timeout_ms else (Config{}).join_timeout_ms;
 
     return .{
         .owner = .init(owned_proxy),
-        .scope = if (options.config) |value| source_namespace.configuredScope(value.intercept_hosts) else .exact,
+        .scope = if (options.config) |value| proxy_ops.configuredScope(value.intercept_hosts) else .exact,
         .system_trusted = options.system_trusted,
         .captures = .init(timeout_ms),
         .capture_sink = null,
@@ -41,7 +48,7 @@ pub fn init(io: source_namespace.Io, gpa: std.mem.Allocator, options: InitOption
 /// ```zig
 /// const proxy = proxy_runtime.capability();
 /// ```
-pub fn capability(runtime: *const Runtime) ?*proxy_mod.Proxy {
+pub fn capability(runtime: *const Runtime) ?*ProxyType {
     return runtime.owner.capability;
 }
 
@@ -59,7 +66,7 @@ pub fn active(runtime: *const Runtime) bool {
 /// ```zig
 /// if (proxy_runtime.interceptionScope() == .wildcard) warnExpandedScope();
 /// ```
-pub fn interceptionScope(runtime: *const Runtime) source_namespace.schema.ProxyScope {
+pub fn interceptionScope(runtime: *const Runtime) ProxyScopeType {
     return runtime.scope;
 }
 
@@ -118,7 +125,7 @@ pub fn acceptCapture(runtime: *Runtime, input: CaptureInput) void {
 /// ```zig
 /// runtime.decodeCapture(half);
 /// ```
-pub fn decodeCapture(runtime: *Runtime, half: *proxy_mod.CaptureHalf) void {
+pub fn decodeCapture(runtime: *Runtime, half: *Half) void {
     const proxy = runtime.owner.capability orelse return;
     proxy.decodeCapture(half);
 }
@@ -139,7 +146,7 @@ pub fn setCaptureSink(runtime: *Runtime, sink: CaptureSink) void {
     runtime.capture_sink = sink;
 }
 
-fn submitCapture(runtime: *Runtime, exchange: *proxy_mod.CaptureExchange) void {
+fn submitCapture(runtime: *Runtime, exchange: *Exchange) void {
     if (runtime.capture_sink) |sink| {
         sink.submit(exchange);
         return;
@@ -153,7 +160,7 @@ fn submitCapture(runtime: *Runtime, exchange: *proxy_mod.CaptureExchange) void {
 /// ```zig
 /// const metrics = proxy_runtime.metrics();
 /// ```
-pub fn metrics(runtime: *const Runtime) proxy_mod.MetricsSnapshot {
+pub fn metrics(runtime: *const Runtime) Snapshot {
     const owned_proxy = runtime.owner.capability orelse return .{};
     return owned_proxy.metrics();
 }

@@ -1,6 +1,7 @@
-const Quota = @This();
 const std = @import("std");
 const Reservation = @import("Reservation.zig");
+const Quota = @This();
+
 max_bytes: usize,
 reserved: std.atomic.Value(usize) = .init(0),
 

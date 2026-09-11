@@ -1,31 +1,32 @@
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const Fixture = @import("Fixture.zig");
+const FrameInput = @import("FrameInput.zig");
+const CellType = @import("telar-core").Cell;
+const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
+const decodeServer_module = @import("telar-core").decodeServer;
 const std = @import("std");
-const core = @import("telar-core");
-const client = @import("../root.zig");
-const presentation = @import("root.zig");
-pub const app = client.application;
-pub const schema = core.schema;
-pub const gpa = std.testing.allocator;
-pub const pane_id: schema.PaneId = @enumFromInt(1);
-pub const location: schema.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
-pub const retained = client.graphics.retained;
+const decodeClient_module = @import("telar-core").decodeClient;
+const GeometryType = @import("Geometry.zig");
+const ImageType = @import("telar-core").Image;
+const retained = @import("../graphics/retained.zig");
+const store = @import("../graphics/store.zig");
+const ConfirmPaneAttachmentHandlerType = @import("../application/panes/ConfirmPaneAttachmentHandler.zig");
+const PaneAttachmentType = @import("../model/PaneAttachment.zig");
+const types = @import("../model/types.zig");
+
+pub const pane_id: PaneIdType = @enumFromInt(1);
+pub const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+
 pub const Outcome = enum { applied, ignored, exit };
 
-const Fixture = @import("Fixture.zig");
-
-const Frames = @import("Frames.zig");
-
 // Unwired test capabilities fail explicitly instead of pretending to implement a client.
-const Unsupported = @import("Unsupported.zig");
-const UnsupportedVoid = @import("UnsupportedVoid.zig");
-const Adapters = @import("Adapters.zig");
-
-const FrameInput = @import("FrameInput.zig");
 
 fn sendFrame(fixture: *Fixture, input: FrameInput) !void {
     var wire: [1024]u8 = undefined;
-    var cells: [4]core.ui.Cell = @splat(.{});
+    var cells: [4]CellType = @splat(.{});
     cells[0].bytes[0] = input.text;
-    const bytes = try schema.encodePaneFrame(&wire, .{
+    const bytes = try encodePaneFrame_module(&wire, .{
         .pane_id = pane_id,
         .frame_id = input.frame_id,
         .base_frame_id = input.base,
@@ -35,7 +36,7 @@ fn sendFrame(fixture: *Fixture, input: FrameInput) !void {
         .input_modes = .{ .cursor_keys = input.cursor_keys },
         .spans = &.{.{ .start = 0, .cells = if (input.base == 0) &cells else cells[0..1] }},
     });
-    try fixture.receive(try schema.decodeServer(bytes));
+    try fixture.receive(try decodeServer_module(bytes));
     @memset(&wire, 0xff);
 }
 
@@ -54,7 +55,7 @@ test "shared entrypoint and handlers continue input while headless delivery owns
     try fixture.key(.{ .code = .up });
     var wire: [1024]u8 = undefined;
     const sent = (try fixture.outbox.beginSend(&wire)).?;
-    try std.testing.expectEqualStrings("\x1b[A", (try schema.decodeClient(sent)).pane_input.bytes);
+    try std.testing.expectEqualStrings("\x1b[A", (try decodeClient_module(sent)).pane_input.bytes);
     try fixture.outbox.finishSend({});
     try fixture.complete(first, .delivered);
     try fixture.expectAck(1);
@@ -106,7 +107,7 @@ test "broken bases request recovery and geometry ABA does not authorize a new ge
     fixture.geometry.update(old_area);
     try fixture.complete(token, .delivered);
     try fixture.expectAck(1);
-    const current_geometry = presentation.Geometry.capture(fixture.projection());
+    const current_geometry = GeometryType.capture(fixture.projection());
     try std.testing.expect(!fixture.adapter.state.delivered_geometry.?.matches(&current_geometry));
     const replacement = try fixture.prepare();
     try fixture.complete(replacement, .delivered);
@@ -136,10 +137,10 @@ test "retained graphics return credit on release before the delivered cell ackno
     const fixture = try Fixture.init();
     defer fixture.deinit();
     try sendFrame(fixture, .{});
-    const image: core.graphics.Image = .{ .key = .{ .image_id = 1, .generation = 1 }, .format = .rgb, .width = 1, .height = 1, .byte_len = 3 };
+    const image: ImageType = .{ .key = .{ .image_id = 1, .generation = 1 }, .format = .rgb, .width = 1, .height = 1, .byte_len = 3 };
     try fixture.graphics.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = image });
     try fixture.graphics.applyChunk(.{ .pane_id = pane_id, .revision = 1, .key = image.key, .offset = 0, .bytes = "rgb" });
-    const lease = try retained.retain(&fixture.graphics, client.graphics.identity(pane_id, image.key));
+    const lease = try retained.retain(&fixture.graphics, store.identity(pane_id, image.key));
     const token = try fixture.prepare();
     try fixture.graphics.applySnapshot(.{ .pane_id = pane_id, .revision = 2, .phase = .begin });
     try std.testing.expect(fixture.graphics.peekCredit() == null);
@@ -158,9 +159,9 @@ test "reattachment invalidates old acknowledgements without replacing the pane b
     try sendFrame(fixture, .{});
     const old = try fixture.prepare();
     try fixture.model.commitTabDetachment(try fixture.model.planTabDetachment(location));
-    var attach: app.panes.attach_pane.ConfirmPaneAttachmentHandler = .{ .model = &fixture.model };
-    const attachment: client.model.PaneAttachment = .{ .pane_id = pane_id, .location = location };
-    try std.testing.expectEqual(client.model.PaneAttachmentConfirmation.confirmed, try attach.execute(.{
+    var attach: ConfirmPaneAttachmentHandlerType = .{ .model = &fixture.model };
+    const attachment: PaneAttachmentType = .{ .pane_id = pane_id, .location = location };
+    try std.testing.expectEqual(types.PaneAttachmentConfirmation.confirmed, try attach.execute(.{
         .requested = attachment,
         .confirmed = attachment,
         .created = false,
@@ -175,7 +176,7 @@ test "reattachment invalidates old acknowledgements without replacing the pane b
 }
 
 test "headless preparation delivery input and steady-state patches allocate nothing" {
-    var allocator = std.testing.FailingAllocator.init(gpa, .{});
+    var allocator = std.testing.FailingAllocator.init(std.testing.allocator, .{});
     const fixture = try Fixture.initWithAllocator(allocator.allocator());
     defer fixture.deinit();
     try sendFrame(fixture, .{});

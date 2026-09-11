@@ -1,37 +1,33 @@
 //! Request-scoped controller for the rename-tab protocol message.
 
-const std = @import("std");
-const core = @import("telar-core");
-const rename_tab_commands = @import("../../application/commands/rename_tab.zig");
-const delivery_mod = @import("../../delivery/root.zig");
-
-pub const schema = core.schema;
-pub const PendingTabRenamed = delivery_mod.PendingTabRenamed;
-pub const ResponseQueue = delivery_mod.ResponseQueue;
-
-pub const Controller = @import("RenameTabController.zig");
-
-const Failure = @import("RenameTabFailure.zig");
-
+const TabLocationType = @import("telar-core").TabLocation;
+const workspace_module = @import("telar-core").workspace;
+const tab_module = @import("telar-core").tab;
+const ResponseQueue = @import("../../delivery/ResponseQueue.zig");
 const StubRenameTab = @import("StubRenameTab.zig");
+const TabRenamed = @import("../../../workspace/TabRenamed.zig");
+const RenameTabController = @import("RenameTabController.zig");
+const RequestIdType = @import("telar-core").RequestId;
+const std = @import("std");
+const FailureCodeType = @import("telar-core").FailureCode;
 
-fn testingLocation() !schema.TabLocation {
+fn testingLocation() !TabLocationType {
     return .{
-        .workspace = .{ .workspace = try schema.id.workspace(3) },
-        .tab_id = try schema.id.tab(7),
+        .workspace = .{ .workspace = try workspace_module(3) },
+        .tab_id = try tab_module(7),
     };
 }
 
 test "Controller maps a rename request and queues the canonical result" {
     const requested_location = try testingLocation();
     var canonical_location = requested_location;
-    canonical_location.tab_id = try schema.id.tab(8);
+    canonical_location.tab_id = try tab_module(8);
     var responses: ResponseQueue = .{};
     var rename_stub: StubRenameTab = .{
-        .result = try rename_tab_commands.RenameTabResult.init(canonical_location, "canonical"),
+        .result = try TabRenamed.init(canonical_location, "canonical"),
     };
-    var controller = Controller.init(&responses, rename_stub.executor());
-    const request_id: schema.RequestId = @enumFromInt(11);
+    var controller = RenameTabController.init(&responses, rename_stub.executor());
+    const request_id: RequestIdType = @enumFromInt(11);
 
     try controller.renameTab(.{
         .request_id = request_id,
@@ -53,7 +49,7 @@ test "Controller maps rename command errors without inventing domain effects" {
     const location = try testingLocation();
     const cases = [_]struct {
         command_error: anyerror,
-        failure_code: schema.FailureCode,
+        failure_code: FailureCodeType,
         message: []const u8,
     }{
         .{ .command_error = error.TabNotFound, .failure_code = .tab_not_found, .message = "tab not found" },
@@ -63,8 +59,8 @@ test "Controller maps rename command errors without inventing domain effects" {
     for (cases, 0..) |case, index| {
         var responses: ResponseQueue = .{};
         var rename_stub: StubRenameTab = .{ .failure = case.command_error };
-        var controller = Controller.init(&responses, rename_stub.executor());
-        const request_id: schema.RequestId = @enumFromInt(index + 20);
+        var controller = RenameTabController.init(&responses, rename_stub.executor());
+        const request_id: RequestIdType = @enumFromInt(index + 20);
 
         try controller.renameTab(.{
             .request_id = request_id,
@@ -84,7 +80,7 @@ test "Controller maps rename command errors without inventing domain effects" {
 test "Controller propagates unexpected command failures without a response" {
     var responses: ResponseQueue = .{};
     var rename_stub: StubRenameTab = .{ .failure = error.EventPublisherUnavailable };
-    var controller = Controller.init(&responses, rename_stub.executor());
+    var controller = RenameTabController.init(&responses, rename_stub.executor());
 
     try std.testing.expectError(error.EventPublisherUnavailable, controller.renameTab(.{
         .request_id = @enumFromInt(30),

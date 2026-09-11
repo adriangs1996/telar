@@ -1,16 +1,19 @@
-const Effects = @This();
-const attachment_mod = @import("../attachment/root.zig");
-const detach_pane_commands = @import("../application/commands/detach_pane.zig");
-const detach_pane_controller = @import("../entrypoints/requests/detach_pane.zig");
-const source_namespace = @import("detach_pane_test.zig");
+const PaneDetachedType = @import("../attachment/PaneDetached.zig");
+const AttachmentsType = @import("../application/commands/Attachments.zig");
+const DetachPaneGeometryLease = @import("../application/commands/DetachPaneGeometryLease.zig");
+const StaleMessagesType = @import("../entrypoints/requests/StaleMessages.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-detached: attachment_mod.PaneDetached,
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const Effects = @This();
+
+detached: PaneDetachedType,
 attachment_committed: bool = false,
 workspace_left: bool = false,
 geometry_released: bool = false,
 stale_count: usize = 0,
 
-pub fn attachments(effects: *Effects) detach_pane_commands.Attachments {
+pub fn attachments(effects: *Effects) AttachmentsType {
     return .{
         .context = effects,
         .detach = detach,
@@ -18,29 +21,29 @@ pub fn attachments(effects: *Effects) detach_pane_commands.Attachments {
     };
 }
 
-pub fn geometry(effects: *Effects) detach_pane_commands.GeometryLease {
+pub fn geometry(effects: *Effects) DetachPaneGeometryLease {
     return .{ .context = effects, .release = release };
 }
 
-pub fn staleMessages(effects: *Effects) detach_pane_controller.StaleMessages {
+pub fn staleMessages(effects: *Effects) StaleMessagesType {
     return .{ .context = effects, .record = recordStale };
 }
 
-fn detach(context: *anyopaque, pane_id: source_namespace.schema.PaneId) ?attachment_mod.PaneDetached {
+fn detach(context: *anyopaque, pane_id: PaneIdType) ?PaneDetachedType {
     const effects: *Effects = @ptrCast(@alignCast(context));
     std.debug.assert(pane_id == effects.detached.pane_id);
     effects.attachment_committed = true;
     return effects.detached;
 }
 
-fn release(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) void {
+fn release(context: *anyopaque, workspace: WorkspaceLocationType) void {
     const effects: *Effects = @ptrCast(@alignCast(context));
     std.debug.assert(effects.workspace_left);
     std.debug.assert(std.meta.eql(workspace, effects.detached.workspace));
     effects.geometry_released = true;
 }
 
-fn leaveWorkspace(context: *anyopaque, workspace: source_namespace.schema.WorkspaceLocation) bool {
+fn leaveWorkspace(context: *anyopaque, workspace: WorkspaceLocationType) bool {
     const effects: *Effects = @ptrCast(@alignCast(context));
     std.debug.assert(effects.attachment_committed);
     std.debug.assert(std.meta.eql(workspace, effects.detached.workspace));

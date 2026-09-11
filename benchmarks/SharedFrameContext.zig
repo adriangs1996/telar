@@ -1,52 +1,40 @@
+const std = @import("std");
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const PipelineType = @import("telar-backend").Pipeline;
+const builtin = @import("builtin");
+const main = @import("main.zig");
+const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
+const max_encoded_chunk_bytes_module = @import("telar-core").max_encoded_chunk_bytes;
+const StatsType = @import("telar-backend").Stats;
+const Sink = @import("Sink.zig");
+const freezeSharedPixels_module = @import("telar-backend").freezeSharedPixels;
 /// One terminal-browser style frame at 4K crossing the runtime: the child
 /// publishes a shared object, the media pipeline folds the envelope and lets
 /// Ghostty VT copy and unlink it, and the attachment freezes the resident
 /// generation for a local client. Each stage is timed on its own so the
 /// child's publish cost can be subtracted from the ingest figure.
 const SharedFrameContext = @This();
-const source_namespace = @import("main.zig");
-const std = @import("std");
-const core = @import("telar-core");
-const backend = @import("telar-backend");
-const builtin = @import("builtin");
+
 const width = 3840;
 const height = 2160;
 const raw_len = width * height * 4;
 const control = "\x1b[?2026h\x1b[H\x1b_Ga=T,f=32,s=3840,v=2160,t=s,i=7,p=1,C=1,q=2;";
 const trailer = "\x1b\\\x1b[?2026l";
 
-io: source_namespace.Io,
+io: std.Io,
 gpa: std.mem.Allocator,
 pixels: []u8,
-size: core.schema.TerminalSize,
+size: TerminalSizeType,
 /// Heap-allocated: the emulator stream keeps pointers into its terminal,
 /// so the pipeline must never move after `init`.
-pipeline: *backend.media.Pipeline,
+pipeline: *PipelineType,
 sequence: u64 = 0,
 name: [64]u8 = undefined,
 name_len: usize = 0,
 envelope: [256]u8 = undefined,
 envelope_len: usize = 0,
 
-const Sink = struct {
-    pipeline: *backend.media.Pipeline,
-
-    pub fn observe(sink: *Sink, bytes: []const u8) void {
-        sink.pipeline.stream.nextSlice(bytes);
-    }
-
-    /// The bare pipeline measures the emulator's own shared-memory load;
-    /// the pane-level single-copy path is exercised by the runtime tests.
-    pub fn observeSharedFrame(_: *Sink, _: backend.media.SharedFrameView) bool {
-        return false;
-    }
-
-    pub fn observeFileQuery(_: *Sink, _: backend.media.FileQueryView) bool {
-        return false;
-    }
-};
-
-fn init(io: source_namespace.Io, gpa: std.mem.Allocator) !SharedFrameContext {
+pub fn init(io: std.Io, gpa: std.mem.Allocator) !SharedFrameContext {
     if (comptime builtin.os.tag == .windows or !builtin.link_libc) {
         return error.SharedMemoryUnavailable;
     }
@@ -54,13 +42,13 @@ fn init(io: source_namespace.Io, gpa: std.mem.Allocator) !SharedFrameContext {
     errdefer gpa.free(pixels);
     for (pixels, 0..) |*byte, index| byte.* = @truncate(index % 251);
 
-    const size: core.schema.TerminalSize = .{
-        .cols = source_namespace.cols,
-        .rows = source_namespace.rows,
-        .cell_width_px = width / source_namespace.cols,
-        .cell_height_px = height / source_namespace.rows,
+    const size: TerminalSizeType = .{
+        .cols = main.cols,
+        .rows = main.rows,
+        .cell_width_px = width / main.cols,
+        .cell_height_px = height / main.rows,
     };
-    const pipeline = try gpa.create(backend.media.Pipeline);
+    const pipeline = try gpa.create(PipelineType);
     errdefer gpa.destroy(pipeline);
     const context: SharedFrameContext = .{
         .io = io,
@@ -73,21 +61,21 @@ fn init(io: source_namespace.Io, gpa: std.mem.Allocator) !SharedFrameContext {
         .io = io,
         .allocator = gpa,
         .size = size,
-        .storage_limit = core.graphics.max_image_bytes_per_screen,
-        .payload_limit = core.graphics.max_encoded_chunk_bytes,
+        .storage_limit = max_image_bytes_per_screen_module,
+        .payload_limit = max_encoded_chunk_bytes_module,
         .write_pty = null,
     });
     return context;
 }
 
-fn deinit(context: *SharedFrameContext) void {
+pub fn deinit(context: *SharedFrameContext) void {
     context.pipeline.deinit();
     context.gpa.destroy(context.pipeline);
     context.gpa.free(context.pixels);
 }
 
 /// The child's side of one frame: a fresh object, its size, one memcpy.
-fn publish(context: *SharedFrameContext) !void {
+pub fn publish(context: *SharedFrameContext) !void {
     context.sequence += 1;
     const name = try std.fmt.bufPrintZ(
         &context.name,
@@ -125,17 +113,17 @@ fn publish(context: *SharedFrameContext) !void {
     context.envelope_len = envelope.len;
 }
 
-fn unpublish(context: *SharedFrameContext) void {
+pub fn unpublish(context: *SharedFrameContext) void {
     _ = std.c.shm_unlink(context.name[0..context.name_len :0]);
 }
 
 /// The runtime's media actor for one batch holding the published frame.
-fn ingest(context: *SharedFrameContext) !u64 {
+pub fn ingest(context: *SharedFrameContext) !u64 {
     context.pipeline.queueOutput(context.envelope[0..context.envelope_len]);
     if (!context.pipeline.seal()) {
         return error.MediaBatchEmpty;
     }
-    var stats: backend.media.Stats = .{};
+    var stats: StatsType = .{};
     var sink: Sink = .{ .pipeline = context.pipeline };
     context.pipeline.processSealed(.{ .current_size = context.size, .stats = &stats }, &sink);
     context.pipeline.finishSealed();
@@ -149,8 +137,8 @@ fn ingest(context: *SharedFrameContext) !u64 {
 
 /// The freeze the send loop performs for a local client, then the unlink
 /// Ghostty would do after consuming it.
-fn freeze(context: *SharedFrameContext) !u64 {
-    const name = backend.runtime.freezeSharedPixels(context.pixels) orelse
+pub fn freeze(context: *SharedFrameContext) !u64 {
+    const name = freezeSharedPixels_module(context.pixels) orelse
         return error.SharedMemoryUnavailable;
     _ = std.c.shm_unlink(name.sliceZ());
     return name.slice().len;

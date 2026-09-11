@@ -1,8 +1,9 @@
+const connection = @import("connection.zig");
 const ExchangeState = @This();
-const source_namespace = @import("connection.zig");
+
 body_finished: bool = false,
 
-pub fn accept(state: *ExchangeState, event: source_namespace.Event) ?source_namespace.ExchangeOutcome {
+pub fn accept(state: *ExchangeState, event: connection.Event) ?connection.ExchangeOutcome {
     return switch (event) {
         .request_body => |forwarded| block: {
             if (!forwarded) {

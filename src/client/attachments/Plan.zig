@@ -1,7 +1,8 @@
-const Plan = @This();
-const source_namespace = @import("types.zig");
+const types = @import("types.zig");
 const PlanItem = @import("PlanItem.zig");
-thumbnails: [source_namespace.max_items]PlanItem = undefined,
+const Plan = @This();
+
+thumbnails: [types.max_items]PlanItem = undefined,
 thumbnail_count: u8 = 0,
 modal: ?PlanItem = null,
 

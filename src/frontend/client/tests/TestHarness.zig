@@ -1,21 +1,31 @@
-const TestHarness = @This();
-const core = @import("telar-core");
-const source_namespace = @import("support.zig");
-const Client = @import("../Client.zig");
+const SocketChannelType = @import("telar-core").SocketChannel;
 const std = @import("std");
+const Client = @import("../Client.zig");
 const runtime_transport = @import("../entrypoints/runtime_io.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const sidebar_animations = @import("../controllers/notifications/sidebar_animations.zig");
 const notification_flow = @import("../controllers/notifications/notifications.zig");
 const bar_updates = @import("../controllers/configuration/bar_updates.zig");
+const ClientMessageType = @import("telar-core").ClientMessage;
+const decodeClient_module = @import("telar-core").decodeClient;
+const PaneIdType = @import("telar-core").PaneId;
+const RequestIdType = @import("telar-core").RequestId;
+const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
 const server_messages = @import("../entrypoints/runtime_messages.zig");
+const decodeServer_module = @import("telar-core").decodeServer;
+const TabLocationType = @import("telar-core").TabLocation;
+const initial_request_id_module = @import("telar-client").initial_request_id;
 const request_lifecycle = @import("../connection/request_lifecycle.zig");
-const workspace_capability = @import("../../workspace/root.zig");
-connection: core.transport.SocketChannel,
-peer: core.transport.SocketChannel,
-input_read: source_namespace.File,
-input_write: source_namespace.File,
-sink: source_namespace.Io.Writer.Discarding,
+const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
+const TabIdType = @import("telar-core").TabId;
+const TabsModel = @import("telar-client").TabsModel;
+const TestHarness = @This();
+
+connection: SocketChannelType,
+peer: SocketChannelType,
+input_read: std.Io.File,
+input_write: std.Io.File,
+sink: std.Io.Writer.Discarding,
 client: *Client,
 
 pub fn init(harness: *TestHarness) !void {
@@ -141,12 +151,12 @@ pub fn settleModelPresentation(harness: *TestHarness) !void {
 }
 
 /// Receives the next message the client sent to the runtime.
-pub fn nextClientMessage(harness: *TestHarness, buffer: []u8) !source_namespace.schema.ClientMessage {
+pub fn nextClientMessage(harness: *TestHarness, buffer: []u8) !ClientMessageType {
     const payload = try harness.peer.receive(std.testing.io, buffer);
-    return source_namespace.schema.decodeClient(payload);
+    return decodeClient_module(payload);
 }
 
-pub fn nextAttachmentRequest(harness: *TestHarness, pane_id: source_namespace.schema.PaneId, buffer: []u8) !source_namespace.schema.RequestId {
+pub fn nextAttachmentRequest(harness: *TestHarness, pane_id: PaneIdType, buffer: []u8) !RequestIdType {
     while (true) {
         switch (try harness.nextClientMessage(buffer)) {
             .open_pane => |open| {
@@ -162,8 +172,8 @@ pub fn nextAttachmentRequest(harness: *TestHarness, pane_id: source_namespace.sc
     }
 }
 
-pub fn discoverAndRequestAttachment(harness: *TestHarness, pane_id: source_namespace.schema.PaneId, buffer: []u8) !source_namespace.schema.RequestId {
-    const snapshot = try source_namespace.schema.encodeTabSnapshot(buffer, .{
+pub fn discoverAndRequestAttachment(harness: *TestHarness, pane_id: PaneIdType, buffer: []u8) !RequestIdType {
+    const snapshot = try encodeTabSnapshot_module(buffer, .{
         .request_id = @enumFromInt(3),
         .location = bootstrap_location,
         .panes = &.{
@@ -171,33 +181,33 @@ pub fn discoverAndRequestAttachment(harness: *TestHarness, pane_id: source_names
             .{ .pane_id = pane_id, .lifecycle = .running },
         },
     });
-    _ = try server_messages.handleServerMessage(harness.client, try source_namespace.schema.decodeServer(snapshot));
+    _ = try server_messages.handleServerMessage(harness.client, try decodeServer_module(snapshot));
     try harness.settle();
 
     return harness.nextAttachmentRequest(pane_id, buffer);
 }
 
-pub const bootstrap_location: source_namespace.schema.TabLocation = .{
+pub const bootstrap_location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(1) },
     .tab_id = @enumFromInt(1),
 };
-pub const bootstrap_pane: source_namespace.schema.PaneId = @enumFromInt(10);
+pub const bootstrap_pane: PaneIdType = @enumFromInt(10);
 
 /// Answers the initial open request through the real entrypoint, leaving
 /// the client with one attached pane and its two snapshot requests (ids
 /// 2 and 3) delivered to the peer.
 pub fn bootstrap(harness: *TestHarness) !void {
-    try std.testing.expectEqual(source_namespace.initial_request_id, try request_lifecycle.registerInitial(harness.client));
+    try std.testing.expectEqual(initial_request_id_module, try request_lifecycle.registerInitial(harness.client));
     var payload: [128]u8 = undefined;
-    const opened = try source_namespace.schema.encodePaneOpened(&payload, .{
-        .request_id = source_namespace.initial_request_id,
+    const opened = try encodePaneOpened_module(&payload, .{
+        .request_id = initial_request_id_module,
         .pane_id = bootstrap_pane,
         .location = bootstrap_location,
         .created = true,
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try server_messages.handleServerMessage(harness.client, try source_namespace.schema.decodeServer(opened)),
+        try server_messages.handleServerMessage(harness.client, try decodeServer_module(opened)),
     );
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -209,8 +219,8 @@ pub fn bootstrap(harness: *TestHarness) !void {
     try harness.settleModelPresentation();
 }
 
-pub fn addTab(harness: *TestHarness, tab_id: source_namespace.schema.TabId, pane_id: source_namespace.schema.PaneId) !source_namespace.schema.TabLocation {
-    const location: source_namespace.schema.TabLocation = .{
+pub fn addTab(harness: *TestHarness, tab_id: TabIdType, pane_id: PaneIdType) !TabLocationType {
+    const location: TabLocationType = .{
         .workspace = bootstrap_location.workspace,
         .tab_id = tab_id,
     };
@@ -225,10 +235,10 @@ pub fn addTab(harness: *TestHarness, tab_id: source_namespace.schema.TabId, pane
     return location;
 }
 
-pub fn addInactiveTab(harness: *TestHarness, tab_id: source_namespace.schema.TabId, pane_id: source_namespace.schema.PaneId) !source_namespace.schema.TabLocation {
+pub fn addInactiveTab(harness: *TestHarness, tab_id: TabIdType, pane_id: PaneIdType) !TabLocationType {
     const location = try harness.addTab(tab_id, pane_id);
     const tab = harness.client.model.workspace.find(tab_id).?;
-    workspace_capability.tabs.Model.detachAll(tab);
+    TabsModel.detachAll(tab);
     try harness.client.graphics_store.setPaneVisible(pane_id, false);
     try std.testing.expect(harness.client.model.workspace.select(bootstrap_location.tab_id));
 

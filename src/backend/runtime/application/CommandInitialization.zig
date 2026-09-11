@@ -1,8 +1,9 @@
-const CommandInitialization = @This();
 const std = @import("std");
-const source_namespace = @import("pane_launcher.zig");
-const pty = @import("../../pty/root.zig");
+const LaunchViewType = @import("telar-core").LaunchView;
+const ChildEnvironmentType = @import("../../pty/ChildEnvironment.zig");
+const CommandInitialization = @This();
+
 gpa: std.mem.Allocator,
-launch: source_namespace.schema.LaunchView,
+launch: LaunchViewType,
 cwd_path: []const u8,
-environment: *const pty.ChildEnvironment,
+environment: *const ChildEnvironmentType,

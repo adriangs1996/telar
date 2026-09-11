@@ -1,4 +1,5 @@
+const key_routing = @import("key_routing.zig");
 const PaneCommand = @This();
-const source_namespace = @import("key_routing.zig");
-target: source_namespace.PaneTarget,
-input: source_namespace.Command,
+
+target: key_routing.PaneTarget,
+input: key_routing.Command,

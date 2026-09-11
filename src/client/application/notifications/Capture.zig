@@ -1,14 +1,15 @@
+const ModelType = @import("../../model/Model.zig");
+const SidebarAnimationEffects = @import("SidebarAnimationEffects.zig");
 const Capture = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("SidebarAnimationEffects.zig");
-model: *const client_model.Model,
+
+model: *const ModelType,
 expected_revision: u64 = 0,
 expected_frame: u8 = 0,
 calls: usize = 0,
 observed_commit: bool = false,
 fail: bool = false,
 
-pub fn effects(capture: *Capture) Effects {
+pub fn effects(capture: *Capture) SidebarAnimationEffects {
     return .{ .context = capture, .schedule = schedule };
 }
 

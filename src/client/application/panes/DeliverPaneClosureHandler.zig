@@ -1,13 +1,17 @@
-const DeliverPaneClosureHandler = @This();
-const client_model = @import("../../root.zig").model;
-const pane_geometry_delivery = @import("pane_geometry_delivery.zig");
-const Effects = @import("PaneClosureDeliveryEffects.zig");
-const pane_resource_release = @import("pane_resource_release.zig");
+const ModelType = @import("../../model/Model.zig");
+const OfferEffectsType = @import("OfferEffects.zig");
+const PaneClosureDeliveryEffects = @import("PaneClosureDeliveryEffects.zig");
+const types = @import("../../model/types.zig");
+const ReleasePaneResourcesHandlerType = @import("ReleasePaneResourcesHandler.zig");
+const OfferPaneGeometryHandlerType = @import("OfferPaneGeometryHandler.zig");
 const std = @import("std");
-const source_namespace = @import("pane_closure_delivery.zig");
-model: *client_model.Model,
-geometry_effects: pane_geometry_delivery.OfferEffects,
-effects: Effects,
+const TabLocationType = @import("telar-core").TabLocation;
+const TabType = @import("../../workspace/Tab.zig");
+const DeliverPaneClosureHandler = @This();
+
+model: *ModelType,
+geometry_effects: OfferEffectsType,
+effects: PaneClosureDeliveryEffects,
 
 /// Validates one exact pane-exit commit before retiring request and pane
 /// resources, then repairs active focus and geometry when required.
@@ -15,7 +19,7 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(exit);
 /// ```
-pub fn execute(handler: *DeliverPaneClosureHandler, exit: client_model.PaneExit) !void {
+pub fn execute(handler: *DeliverPaneClosureHandler, exit: types.PaneExit) !void {
     try handler.validate(exit);
 
     const pane_id = switch (exit) {
@@ -25,7 +29,7 @@ pub fn execute(handler: *DeliverPaneClosureHandler, exit: client_model.PaneExit)
     handler.effects.ignore_attachment(handler.effects.context, pane_id);
     handler.effects.complete_close(handler.effects.context, pane_id);
 
-    var release_pane: pane_resource_release.ReleasePaneResourcesHandler = .{
+    var release_pane: ReleasePaneResourcesHandlerType = .{
         .model = handler.model,
         .effects = .{
             .context = handler.effects.context,
@@ -50,13 +54,13 @@ pub fn execute(handler: *DeliverPaneClosureHandler, exit: client_model.PaneExit)
 
     const tab = try handler.exactTab(retirement.location);
     const area = handler.effects.active_geometry_area(handler.effects.context);
-    var offer_geometry: pane_geometry_delivery.OfferPaneGeometryHandler = .{
+    var offer_geometry: OfferPaneGeometryHandlerType = .{
         .effects = handler.geometry_effects,
     };
     _ = try offer_geometry.execute(&tab.model, area);
 }
 
-fn validate(handler: *const DeliverPaneClosureHandler, exit: client_model.PaneExit) !void {
+fn validate(handler: *const DeliverPaneClosureHandler, exit: types.PaneExit) !void {
     const version = handler.model.version();
     switch (exit) {
         .retired => |retirement| {
@@ -88,7 +92,7 @@ fn validate(handler: *const DeliverPaneClosureHandler, exit: client_model.PaneEx
     }
 }
 
-fn exactTab(handler: *const DeliverPaneClosureHandler, location: source_namespace.schema.TabLocation) !*source_namespace.tabs_mod.Tab {
+fn exactTab(handler: *const DeliverPaneClosureHandler, location: TabLocationType) !*TabType {
     const tab = handler.model.workspace.find(location.tab_id) orelse return error.StalePaneExit;
     if (!std.meta.eql(tab.location, location)) {
         return error.StalePaneExit;

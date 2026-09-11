@@ -1,27 +1,24 @@
 //! Application use case for reconciling one runtime pane frame.
 
-const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-pub const ui = core.ui;
-
-pub const PaneFrameEffects = @import("PaneFrameEffects.zig");
-
-pub const ApplyPaneFrameHandler = @import("ApplyPaneFrameHandler.zig");
-
-const TestingModel = @import("PaneFrameTestingModel.zig");
-
 const TestingFrame = @import("TestingFrame.zig");
+const FrameViewType = @import("telar-core").FrameView;
+const SpanType = @import("telar-core").Span;
+const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
+const decodeServer_module = @import("telar-core").decodeServer;
+const PaneFrameTestingModel = @import("PaneFrameTestingModel.zig");
+const PaneFrameEffectsCapture = @import("PaneFrameEffectsCapture.zig");
+const ApplyPaneFrameHandler = @import("ApplyPaneFrameHandler.zig");
+const CellType = @import("telar-core").Cell;
+const std = @import("std");
+const VersionType = @import("../../model/Version.zig");
 
-fn testingFrame(buffer: []u8, input: TestingFrame) !schema.frame.FrameView {
-    var spans: [1]schema.frame.Span = undefined;
-    const encoded_spans: []const schema.frame.Span = if (input.cells) |cells| block: {
+fn testingFrame(buffer: []u8, input: TestingFrame) !FrameViewType {
+    var spans: [1]SpanType = undefined;
+    const encoded_spans: []const SpanType = if (input.cells) |cells| block: {
         spans[0] = .{ .start = 0, .cells = cells };
         break :block &spans;
     } else &.{};
-    const encoded = try schema.encodePaneFrame(buffer, .{
+    const encoded = try encodePaneFrame_module(buffer, .{
         .pane_id = input.pane_id,
         .frame_id = input.frame_id,
         .base_frame_id = input.base_frame_id,
@@ -31,7 +28,7 @@ fn testingFrame(buffer: []u8, input: TestingFrame) !schema.frame.FrameView {
         .spans = encoded_spans,
     });
 
-    return (try schema.decodeServer(encoded)).pane_frame;
+    return (try decodeServer_module(encoded)).pane_frame;
 }
 
 pub const EffectEvent = enum {
@@ -39,17 +36,15 @@ pub const EffectEvent = enum {
     deliver,
 };
 
-const EffectsCapture = @import("PaneFrameEffectsCapture.zig");
-
 test "ApplyPaneFrameHandler commits before delivering client resources" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: PaneFrameEffectsCapture = .{ .model = testing.model };
     var handler: ApplyPaneFrameHandler = .{
         .model = testing.model,
         .effects = capture.port(),
     };
-    const cells = [_]ui.Cell{ .{}, .{}, .{}, .{} };
+    const cells = [_]CellType{ .{}, .{}, .{}, .{} };
     var encoded: [512]u8 = undefined;
 
     const outcome = try handler.execute(try testingFrame(&encoded, .{
@@ -65,10 +60,10 @@ test "ApplyPaneFrameHandler commits before delivering client resources" {
 }
 
 test "ApplyPaneFrameHandler requests recovery without committing a broken base" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameTestingModel.init();
     defer testing.deinit();
     testing.model.workspace.findPane(testing.pane_id).?.applied_frame_id = 3;
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: PaneFrameEffectsCapture = .{ .model = testing.model };
     var handler: ApplyPaneFrameHandler = .{
         .model = testing.model,
         .effects = capture.port(),
@@ -83,19 +78,19 @@ test "ApplyPaneFrameHandler requests recovery without committing a broken base" 
 
     try std.testing.expectEqualSlices(EffectEvent, &.{.recover}, capture.events[0..capture.event_count]);
     try std.testing.expectEqualDeep(outcome.resync, capture.recovery.?);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "ApplyPaneFrameHandler suppresses frames made stale by detach" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameTestingModel.init();
     defer testing.deinit();
     testing.model.workspace.findPane(testing.pane_id).?.attached = false;
-    var capture: EffectsCapture = .{ .model = testing.model };
+    var capture: PaneFrameEffectsCapture = .{ .model = testing.model };
     var handler: ApplyPaneFrameHandler = .{
         .model = testing.model,
         .effects = capture.port(),
     };
-    const cells = [_]ui.Cell{ .{}, .{}, .{}, .{} };
+    const cells = [_]CellType{ .{}, .{}, .{}, .{} };
     var encoded: [512]u8 = undefined;
 
     const outcome = try handler.execute(try testingFrame(&encoded, .{
@@ -105,18 +100,18 @@ test "ApplyPaneFrameHandler suppresses frames made stale by detach" {
 
     try std.testing.expect(outcome == .detached);
     try std.testing.expectEqual(@as(usize, 0), capture.event_count);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "ApplyPaneFrameHandler preserves commits after resource delivery failure" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{ .model = testing.model, .fail_delivery = true };
+    var capture: PaneFrameEffectsCapture = .{ .model = testing.model, .fail_delivery = true };
     var handler: ApplyPaneFrameHandler = .{
         .model = testing.model,
         .effects = capture.port(),
     };
-    const cells = [_]ui.Cell{ .{}, .{}, .{}, .{} };
+    const cells = [_]CellType{ .{}, .{}, .{}, .{} };
     var encoded: [512]u8 = undefined;
 
     try std.testing.expectError(error.ResourceSyncFailed, handler.execute(try testingFrame(&encoded, .{
@@ -126,15 +121,15 @@ test "ApplyPaneFrameHandler preserves commits after resource delivery failure" {
     })));
 
     try std.testing.expect(capture.observed_commit);
-    try std.testing.expectEqual(client_model.Version{ .frame = 1 }, testing.model.version());
+    try std.testing.expectEqual(VersionType{ .frame = 1 }, testing.model.version());
     try std.testing.expectEqual(@as(u64, 7), testing.model.workspace.findPane(testing.pane_id).?.applied_frame_id);
 }
 
 test "ApplyPaneFrameHandler propagates recovery failure without model mutation" {
-    var testing = try TestingModel.init();
+    var testing = try PaneFrameTestingModel.init();
     defer testing.deinit();
     testing.model.workspace.findPane(testing.pane_id).?.applied_frame_id = 3;
-    var capture: EffectsCapture = .{ .model = testing.model, .fail_recovery = true };
+    var capture: PaneFrameEffectsCapture = .{ .model = testing.model, .fail_recovery = true };
     var handler: ApplyPaneFrameHandler = .{
         .model = testing.model,
         .effects = capture.port(),
@@ -147,6 +142,6 @@ test "ApplyPaneFrameHandler propagates recovery failure without model mutation" 
         .base_frame_id = 2,
     })));
 
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
     try std.testing.expectEqual(@as(u64, 3), testing.model.workspace.findPane(testing.pane_id).?.applied_frame_id);
 }

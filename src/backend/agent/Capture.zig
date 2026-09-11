@@ -1,9 +1,10 @@
-const Capture = @This();
-const escape = @import("../history/escape.zig");
-const source_namespace = @import("description.zig");
+const InputScannerType = @import("../history/InputScanner.zig");
+const description = @import("description.zig");
 const std = @import("std");
-scanner: escape.InputScanner = .{},
-bytes: [source_namespace.max_query_bytes]u8 = undefined,
+const Capture = @This();
+
+scanner: InputScannerType = .{},
+bytes: [description.max_query_bytes]u8 = undefined,
 len: u16 = 0,
 truncated: bool = false,
 submitted: bool = false,

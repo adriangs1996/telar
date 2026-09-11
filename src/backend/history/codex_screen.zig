@@ -1,14 +1,15 @@
 //! Codex's live composer and the status rows immediately above it. Transcript
 //! text is never a ready prompt, even when it quotes the complete placeholder.
 
-const std = @import("std");
 const vt = @import("ghostty-vt");
-const core = @import("telar-core");
-
-const Signal = core.agent_manifest.Signal;
-const max_rows = 32;
-
+const TableType = @import("telar-core").Table;
+const Signal = @import("telar-core").Signal;
 const Row = @import("Row.zig");
+const std = @import("std");
+const StatusType = @import("telar-core").Status;
+const builtin_table_module = @import("telar-core").builtin_table;
+
+const max_rows = 32;
 
 /// Reads bounded terminal chrome. The cursor must belong to the composer to
 /// prove readiness; the placeholder only confirms identity. A draft works too.
@@ -16,7 +17,7 @@ const Row = @import("Row.zig");
 /// ```zig
 /// const signal = codex_screen.scan(terminal, manifests);
 /// ```
-pub fn scan(terminal: *const vt.Terminal, manifests: *const core.agent_manifest.Table) ?Signal {
+pub fn scan(terminal: *const vt.Terminal, manifests: *const TableType) ?Signal {
     const first_row = terminal.rows - @min(terminal.rows, max_rows);
     var y: usize = terminal.rows;
     while (y > first_row) {
@@ -74,7 +75,7 @@ test "Codex status clocks support remapped shortcuts and disabled animations" {
         defer stream.deinit();
         stream.nextSlice(text);
         stream.nextSlice("\r\n\r\n\xe2\x80\xba Ask Codex to do anything\x1b[3G");
-        try std.testing.expectEqual(core.agent_manifest.Status.working, scan(&terminal, &core.agent_manifest.builtin_table).?.status);
+        try std.testing.expectEqual(StatusType.working, scan(&terminal, &builtin_table_module).?.status);
     }
 }
 
@@ -85,9 +86,9 @@ test "Codex composer drafts prove readiness without claiming identity" {
     defer stream.deinit();
     stream.nextSlice("\xe2\x80\xba my next question\r\n  continued draft");
 
-    const signal = scan(&terminal, &core.agent_manifest.builtin_table).?;
+    const signal = scan(&terminal, &builtin_table_module).?;
     try std.testing.expect(signal.ready_confirmed);
     try std.testing.expect(!signal.identity_confirmed);
     stream.nextSlice("\x1b[?25l");
-    try std.testing.expect(scan(&terminal, &core.agent_manifest.builtin_table) == null);
+    try std.testing.expect(scan(&terminal, &builtin_table_module) == null);
 }

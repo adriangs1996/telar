@@ -1,4 +1,5 @@
 const std = @import("std");
+
 /// Fixed-capacity open-addressed map from a nonzero raw id to a byte-sized
 /// store slot. `maxInt(u64)` is reserved as a tombstone.
 pub fn Type(comptime capacity: usize) type {

@@ -1,24 +1,24 @@
 //! Contract and integration tests for the proxy service.
 
 const std = @import("std");
-const core = @import("telar-core");
-const identity = @import("../identity.zig");
-const middleware = @import("../middleware.zig");
+const CredentialType = @import("../Credential.zig");
+const raw_module = @import("telar-core").raw;
+const TestServiceFixture = @import("TestServiceFixture.zig");
+const Pane = @import("Pane.zig");
+const pane_module = @import("telar-core").pane;
+const HeadersType = @import("../Headers.zig");
+const TestOrigin = @import("TestOrigin.zig");
+const Service = @import("Service.zig");
+const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const observation_queue = @import("../observation_queue.zig");
-const service_mod = @import("service_support.zig");
+const middleware = @import("../middleware.zig");
 
-pub const Io = std.Io;
-pub const net = Io.net;
-const schema = core.schema;
-const event_capacity = observation_queue.capacity;
-const Pane = service_mod.Pane;
-pub const Service = service_mod.Service;
 const basic_raw_capacity = 128;
 const basic_encoded_capacity = std.base64.standard.Encoder.calcSize(basic_raw_capacity);
 
-fn encodeBasic(credential: *const identity.Credential, raw_buffer: *[basic_raw_capacity]u8, encoded_buffer: *[basic_encoded_capacity]u8) ![]const u8 {
+fn encodeBasic(credential: *const CredentialType, raw_buffer: *[basic_raw_capacity]u8, encoded_buffer: *[basic_encoded_capacity]u8) ![]const u8 {
     const raw = try std.fmt.bufPrint(raw_buffer, "telar:{d}.{d}.{x}", .{
-        schema.id.raw(credential.pane_id),
+        raw_module(credential.pane_id),
         credential.pane_generation,
         credential.token,
     });
@@ -27,15 +27,13 @@ fn encodeBasic(credential: *const identity.Credential, raw_buffer: *[basic_raw_c
     return std.base64.standard.Encoder.encode(encoded_buffer[0..encoded_len], raw);
 }
 
-const TestServiceFixture = @import("TestServiceFixture.zig");
-
 test "pane registration creates one live capability for the requested generation" {
     const io = std.testing.io;
     var fixture: TestServiceFixture = .{};
     try fixture.init(io, std.testing.allocator);
     defer fixture.deinit();
     const service = fixture.service.?;
-    const pane: Pane = .{ .id = try schema.id.pane(7), .generation = 3 };
+    const pane: Pane = .{ .id = try pane_module(7), .generation = 3 };
 
     var credential = try service.registerPane(pane);
     defer std.crypto.secureZero(u8, &credential.token);
@@ -54,7 +52,7 @@ test "service negotiates identity encoding for Claude message requests" {
     try fixture.init(std.testing.io, std.testing.allocator);
     defer fixture.deinit();
     const service = fixture.service.?;
-    var headers: middleware.Headers = .{};
+    var headers: HeadersType = .{};
     try headers.append(.{ .name = ":method", .value = "POST" });
     try headers.append(.{ .name = ":path", .value = "/v1/messages" });
     try headers.append(.{ .name = "accept-encoding", .value = "gzip, br" });
@@ -94,7 +92,7 @@ test "running service leaves exchange capture inert when disabled" {
     try std.testing.expectEqual(@as(u64, 0), snapshot.queued_captures);
 }
 
-fn echoOpaquePayload(io: Io, listener: *net.Server, expected: []const u8) !void {
+fn echoOpaquePayload(io: std.Io, listener: *std.Io.net.Server, expected: []const u8) !void {
     const stream = try listener.accept(io);
     defer stream.close(io);
     var read_buffer: [256]u8 = undefined;
@@ -108,7 +106,7 @@ fn echoOpaquePayload(io: Io, listener: *net.Server, expected: []const u8) !void 
     try writer.interface.flush();
 }
 
-fn rejectTlsHandshake(io: Io, listener: *net.Server) !void {
+fn rejectTlsHandshake(io: std.Io, listener: *std.Io.net.Server) !void {
     const stream = try listener.accept(io);
     defer stream.close(io);
 
@@ -118,12 +116,10 @@ fn rejectTlsHandshake(io: Io, listener: *net.Server) !void {
     try writer.interface.flush();
 }
 
-const TestOrigin = @import("TestOrigin.zig");
-
-fn listenTestOrigin(io: Io) !TestOrigin {
+fn listenTestOrigin(io: std.Io) !TestOrigin {
     var port: u16 = 49_152;
     while (port < 49_280) : (port += 1) {
-        const address = net.IpAddress.parse("127.0.0.1", port) catch unreachable;
+        const address = std.Io.net.IpAddress.parse("127.0.0.1", port) catch unreachable;
         const listener = address.listen(io, .{}) catch |err| switch (err) {
             error.AddressInUse => continue,
             else => |other| return other,
@@ -157,9 +153,9 @@ test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
         .intercept_hosts = &.{"api.openai.com"},
     });
     defer service.destroy();
-    var credential = try service.registerPane(.{ .id = try schema.id.pane(7), .generation = 12 });
+    var credential = try service.registerPane(.{ .id = try pane_module(7), .generation = 12 });
     defer std.crypto.secureZero(u8, &credential.token);
-    const observation: middleware.Event = .{
+    const observation: MiddlewareEvent = .{
         .credential = credential,
         .dialect = .openai_responses,
         .phase = .response_activity,
@@ -167,23 +163,23 @@ test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
         .connection_id = 1,
         .observed_at_ms = 1,
     };
-    for (0..event_capacity) |_| service.observations.pipeline().publish(io, observation);
+    for (0..observation_queue.capacity) |_| service.observations.pipeline().publish(io, observation);
     service.observations.pipeline().publish(io, observation);
     const observation_metrics = service.observations.metrics();
 
     try std.testing.expectEqual(
-        @as(u64, event_capacity),
+        @as(u64, observation_queue.capacity),
         observation_metrics.queued,
     );
     try std.testing.expectEqual(
-        @as(u64, event_capacity),
+        @as(u64, observation_queue.capacity),
         observation_metrics.high_water,
     );
     try std.testing.expectEqual(@as(u64, 1), observation_metrics.dropped);
     var worker = try service.start();
     defer service.cancel(&worker);
 
-    const proxy_address = try net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
+    const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try proxy_address.connect(io, .{ .mode = .stream });
     defer client.close(io);
     var write_buffer: [512]u8 = undefined;
@@ -247,12 +243,12 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
     });
     defer service.destroy();
 
-    var credential = try service.registerPane(.{ .id = try schema.id.pane(9), .generation = 4 });
+    var credential = try service.registerPane(.{ .id = try pane_module(9), .generation = 4 });
     defer std.crypto.secureZero(u8, &credential.token);
     var worker = try service.start();
     defer service.cancel(&worker);
 
-    const proxy_address = try net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
+    const proxy_address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try proxy_address.connect(io, .{ .mode = .stream });
     defer client.close(io);
     var write_buffer: [512]u8 = undefined;
@@ -320,7 +316,7 @@ test "receive discards observations queued before pane revocation" {
     });
     defer service.destroy();
 
-    var current = try service.registerPane(.{ .id = try schema.id.pane(7), .generation = 2 });
+    var current = try service.registerPane(.{ .id = try pane_module(7), .generation = 2 });
     defer std.crypto.secureZero(u8, &current.token);
     service.observations.pipeline().publish(io, .{
         .credential = current,
@@ -368,7 +364,7 @@ test "loopback service maps CONNECT authentication and target rejections" {
     var worker = try service.start();
     defer service.cancel(&worker);
 
-    const address = try net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
+    const address = try std.Io.net.IpAddress.parse("127.0.0.1", service.clientConfiguration().port);
     const client = try address.connect(io, .{ .mode = .stream });
     defer client.close(io);
     var write_buffer: [256]u8 = undefined;
@@ -431,7 +427,7 @@ test "loopback service maps CONNECT authentication and target rejections" {
         service.metrics().rejected_connections,
     );
 
-    var credential = try service.registerPane(.{ .id = try schema.id.pane(7), .generation = 12 });
+    var credential = try service.registerPane(.{ .id = try pane_module(7), .generation = 12 });
     defer std.crypto.secureZero(u8, &credential.token);
     var registered_raw_buffer: [basic_raw_capacity]u8 = undefined;
     defer std.crypto.secureZero(u8, &registered_raw_buffer);

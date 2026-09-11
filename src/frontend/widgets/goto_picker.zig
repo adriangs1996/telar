@@ -1,30 +1,28 @@
 //! Centered goto-picker modal: one query line above a scored result list.
 
-const std = @import("std");
-const core = @import("telar-core");
-const edit = @import("telar-client").input.edit;
+const GenericField = @import("telar-client").GenericField;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const RectType = @import("telar-core").Rect;
 const modal = @import("modal.zig");
+const ContextType = @import("Context.zig");
+const GotoPickerInput = @import("GotoPickerInput.zig");
+const GotoPickerOutput = @import("GotoPickerOutput.zig");
+const StyleType = @import("telar-core").Style;
+const std = @import("std");
+const BufferType = @import("telar-core").Buffer;
 const widget = @import("context_support.zig");
-const ui = @import("../ui/root.zig");
+const theme_support = @import("../ui/theme_support.zig");
 
-const schema = core.schema;
-
-pub const Field = edit.Field(schema.max_tab_label_bytes);
+pub const Field = GenericField(max_tab_label_bytes_module);
 pub const max_rows = 12;
 pub const max_row_bytes = 160;
-
-pub const Row = @import("Row.zig");
-
-pub const Input = @import("GotoPickerInput.zig");
-
-pub const Output = @import("GotoPickerOutput.zig");
 
 /// Application-level rectangle shared by picker and attachment modals.
 ///
 /// ```zig
 /// const area = modalArea(context.buffer.area());
 /// ```
-pub fn modalArea(application: ui.Rect) ui.Rect {
+pub fn modalArea(application: RectType) RectType {
     if (application.w < 20 or application.h < 6) {
         return .{};
     }
@@ -39,14 +37,14 @@ pub fn modalArea(application: ui.Rect) ui.Rect {
 /// ```zig
 /// const output = render(context, context.buffer.area(), picker_input);
 /// ```
-pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Output {
+pub fn render(context: *ContextType, application: RectType, input: GotoPickerInput) GotoPickerOutput {
     const area = modalArea(application);
     if (area.isEmpty()) {
         return .{ .area = area, .cursor = null };
     }
 
     const background = context.palette.panel_bg;
-    const style: ui.Style = .{ .fg = context.palette.text, .bg = background };
+    const style: StyleType = .{ .fg = context.palette.text, .bg = background };
     if (input.graphical_frame) {
         context.buffer.fillWithoutCorners(area, style);
     } else {
@@ -59,7 +57,7 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
         });
     }
 
-    const title: ui.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 4, .h = 1 };
+    const title: RectType = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 4, .h = 1 };
     _ = context.buffer.writeTruncated(title, .{ .point = .{ .x = title.x, .y = title.y }, .text = input.title, .max_width = title.w, .style = .{
         .fg = context.palette.accent,
         .bg = background,
@@ -67,7 +65,7 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
     } });
 
     const inner = area.inner(1);
-    const query: ui.Rect = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = 1 };
+    const query: RectType = .{ .x = inner.x, .y = inner.y, .w = inner.w, .h = 1 };
     const prefix_width = context.buffer.writeText(query, .{ .point = .{ .x = query.x, .y = query.y }, .text = "> ", .style = .{
         .fg = context.palette.accent,
         .bg = background,
@@ -83,7 +81,7 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
             break;
         }
 
-        const line: ui.Rect = .{ .x = inner.x, .y = row_y, .w = inner.w, .h = 1 };
+        const line: RectType = .{ .x = inner.x, .y = row_y, .w = inner.w, .h = 1 };
         const row_background = if (row.selected) context.palette.surface1 else background;
         context.buffer.fill(line, .{ .glyph = " ", .style = .{ .fg = context.palette.text, .bg = row_background } });
         _ = context.buffer.writeTruncated(line, .{ .point = .{ .x = line.x + 1, .y = line.y }, .text = row.slice(), .max_width = line.w -| 2, .style = .{
@@ -105,7 +103,7 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
     else
         "";
     if (footer_text.len != 0) {
-        const footer: ui.Rect = .{ .x = area.x + 2, .y = area.y + area.h - 1, .w = area.w -| 4, .h = 1 };
+        const footer: RectType = .{ .x = area.x + 2, .y = area.y + area.h - 1, .w = area.w -| 4, .h = 1 };
         _ = context.buffer.writeTruncated(footer, .{ .point = .{ .x = footer.x, .y = footer.y }, .text = footer_text, .max_width = footer.w, .style = .{
             .fg = context.palette.subtext0,
             .bg = background,
@@ -122,19 +120,19 @@ pub fn render(context: *widget.Context, application: ui.Rect, input: Input) Outp
 }
 
 test "cell fallback connects every border edge and graphical frame keeps corners untouched" {
-    var buffer = try ui.Buffer.init(std.testing.allocator, 40, 12);
+    var buffer = try BufferType.init(std.testing.allocator, 40, 12);
     defer buffer.deinit();
-    const outside: ui.Style = .{ .bg = .{ .rgb = .{ 1, 2, 3 } } };
+    const outside: StyleType = .{ .bg = .{ .rgb = .{ 1, 2, 3 } } };
     buffer.fill(buffer.area(), .{ .glyph = "#", .style = outside });
     var hits: widget.Hits = .{};
-    var context: widget.Context = .{
+    var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &ui.theme.default_theme.palette,
+        .palette = &theme_support.default_theme.palette,
         .hovered = null,
     };
     var field: Field = .{};
-    const input: Input = .{
+    const input: GotoPickerInput = .{
         .title = "goto",
         .field = &field,
         .rows = &.{},

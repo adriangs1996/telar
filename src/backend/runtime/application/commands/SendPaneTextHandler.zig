@@ -1,11 +1,15 @@
-const SendPaneTextHandler = @This();
-const source_namespace = @import("send_pane_text.zig");
-const pane_input_commands = @import("pane_input.zig");
+const PaneStoreType = @import("../../../pane/PaneStore.zig");
+const TrackerType = @import("../../../agent/Tracker.zig");
+const ForwarderType = @import("Forwarder.zig");
 const SendPaneText = @import("SendPaneText.zig");
+const send_pane_text = @import("send_pane_text.zig");
+const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
 const std = @import("std");
-panes: *source_namespace.PaneStore,
-agents: *const source_namespace.Tracker,
-input: pane_input_commands.Forwarder,
+const SendPaneTextHandler = @This();
+
+panes: *PaneStoreType,
+agents: *const TrackerType,
+input: ForwarderType,
 
 /// Resolves the exact pane generation and forwards the text. A prompt is
 /// refused while the projected agent is blocked, wrapped in bracketed paste
@@ -14,14 +18,14 @@ input: pane_input_commands.Forwarder,
 /// ```zig
 /// const result = try handler.execute(.{ .pane = key, .mode = .prompt, .text = "run the tests" });
 /// ```
-pub fn execute(handler: *SendPaneTextHandler, command: SendPaneText) !source_namespace.SendPaneTextResult {
+pub fn execute(handler: *SendPaneTextHandler, command: SendPaneText) !send_pane_text.SendPaneTextResult {
     const pane = handler.panes.resolveControl(command.pane) orelse return .pane_not_found;
 
     if (pane.exit != null) {
         return .pane_exited;
     }
 
-    var storage: [source_namespace.schema.max_pane_text_input_bytes + source_namespace.prompt_overhead]u8 = undefined;
+    var storage: [max_pane_text_input_bytes_module + send_pane_text.prompt_overhead]u8 = undefined;
     const bytes = switch (command.mode) {
         .raw => command.text,
         .prompt => prompt: {
@@ -29,7 +33,7 @@ pub fn execute(handler: *SendPaneTextHandler, command: SendPaneText) !source_nam
                 return .agent_blocked;
             }
 
-            break :prompt source_namespace.promptBytes(&storage, command.text, pane.terminal.modes.get(.bracketed_paste));
+            break :prompt send_pane_text.promptBytes(&storage, command.text, pane.terminal.modes.get(.bracketed_paste));
         },
     };
 

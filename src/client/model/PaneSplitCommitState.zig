@@ -1,5 +1,6 @@
+const types = @import("types.zig");
 const PaneSplitCommitState = @This();
-const source_namespace = @import("types.zig");
-disposition: source_namespace.PaneSplitDisposition,
-change: source_namespace.Change,
+
+disposition: types.PaneSplitDisposition,
+change: types.Change,
 layout_revision: u64,

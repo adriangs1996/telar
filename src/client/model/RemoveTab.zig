@@ -1,4 +1,5 @@
+const TabLocationType = @import("telar-core").TabLocation;
 const RemoveTab = @This();
-const source_namespace = @import("types.zig");
-location: source_namespace.schema.TabLocation,
+
+location: TabLocationType,
 workspace_removed: bool,

@@ -1,13 +1,14 @@
-const Unsupported = @This();
 const Fixture = @import("Fixture.zig");
-const source_namespace = @import("headless_tests.zig");
-pub fn apply(_: *Fixture, _: anytype) !source_namespace.Outcome {
+const headless_tests = @import("headless_tests.zig");
+const Unsupported = @This();
+
+pub fn apply(_: *Fixture, _: anytype) !headless_tests.Outcome {
     return error.UnsupportedTestEvent;
 }
 pub fn failed(_: *Fixture, _: anytype) bool {
     return false;
 }
-pub fn output(_: *Fixture, _: anytype) source_namespace.Outcome {
+pub fn output(_: *Fixture, _: anytype) headless_tests.Outcome {
     @panic("unsupported test event");
 }
 pub const applyCwd = apply;

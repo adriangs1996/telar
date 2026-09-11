@@ -1,24 +1,16 @@
 //! Application use case for applying one canonical tab snapshot.
 
+const TabSnapshotTestingModel = @import("TabSnapshotTestingModel.zig");
+const TabSnapshotEffectsCapture = @import("TabSnapshotEffectsCapture.zig");
+const ApplyTabSnapshotHandler = @import("ApplyTabSnapshotHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-
-pub const schema = core.schema;
-pub const ui = core.ui;
-
-pub const Effects = @import("TabSnapshotEffects.zig");
-
-pub const ApplyTabSnapshotHandler = @import("ApplyTabSnapshotHandler.zig");
-
-const EffectsCapture = @import("TabSnapshotEffectsCapture.zig");
-
-const TestingModel = @import("TabSnapshotTestingModel.zig");
+const PaneSnapshot = @import("../../workspace/PaneSnapshot.zig");
+const VersionType = @import("../../model/Version.zig");
 
 test "ApplyTabSnapshotHandler commits before delivering client resources" {
-    var testing = try TestingModel.init();
+    var testing = try TabSnapshotTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotEffectsCapture = .{
         .model = testing.model,
         .expected_pane = testing.discovered_pane,
     };
@@ -36,9 +28,9 @@ test "ApplyTabSnapshotHandler commits before delivering client resources" {
 }
 
 test "ApplyTabSnapshotHandler still runs resource effects for a canonical no-op" {
-    var testing = try TestingModel.init();
+    var testing = try TabSnapshotTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotEffectsCapture = .{
         .model = testing.model,
         .expected_pane = testing.discovered_pane,
     };
@@ -59,9 +51,9 @@ test "ApplyTabSnapshotHandler still runs resource effects for a canonical no-op"
 }
 
 test "ApplyTabSnapshotHandler rejects model failures before effects" {
-    var testing = try TestingModel.init();
+    var testing = try TabSnapshotTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotEffectsCapture = .{
         .model = testing.model,
         .expected_pane = testing.discovered_pane,
     };
@@ -70,7 +62,7 @@ test "ApplyTabSnapshotHandler rejects model failures before effects" {
         .area = .{ .w = 40, .h = 10 },
         .effects = capture.port(),
     };
-    const snapshot: client_model.TabSnapshot = .{
+    const snapshot: PaneSnapshot = .{
         .location = .{
             .workspace = testing.location.workspace,
             .tab_id = @enumFromInt(9),
@@ -81,13 +73,13 @@ test "ApplyTabSnapshotHandler rejects model failures before effects" {
     try std.testing.expectError(error.UnexpectedTab, handler.execute(snapshot));
 
     try std.testing.expectEqual(@as(usize, 0), capture.calls);
-    try std.testing.expectEqualDeep(client_model.Version{}, testing.model.version());
+    try std.testing.expectEqualDeep(VersionType{}, testing.model.version());
 }
 
 test "ApplyTabSnapshotHandler preserves a committed snapshot after effect failure" {
-    var testing = try TestingModel.init();
+    var testing = try TabSnapshotTestingModel.init();
     defer testing.deinit();
-    var capture: EffectsCapture = .{
+    var capture: TabSnapshotEffectsCapture = .{
         .model = testing.model,
         .expected_pane = testing.discovered_pane,
         .fail = true,

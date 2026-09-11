@@ -1,16 +1,18 @@
-const RequestCapture = @This();
-const source_namespace = @import("rename_workspace.zig");
-const WorkspaceOperationGate = @import("RenameWorkspaceWorkspaceOperationGate.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const RenameWorkspaceOperationGate = @import("RenameWorkspaceOperationGate.zig");
 const RenameRequestEffects = @import("RenameRequestEffects.zig");
 const RequestedRename = @import("RequestedRename.zig");
+const RequestCapture = @This();
+
 blocked: bool = false,
 failure: ?anyerror = null,
 calls: usize = 0,
-workspace: ?source_namespace.schema.WorkspaceLocation = null,
-name: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
+workspace: ?WorkspaceLocationType = null,
+name: [max_tab_label_bytes_module]u8 = undefined,
 name_len: u8 = 0,
 
-pub fn gate(capture: *RequestCapture) WorkspaceOperationGate {
+pub fn gate(capture: *RequestCapture) RenameWorkspaceOperationGate {
     return .{ .context = capture, .pending = pending };
 }
 

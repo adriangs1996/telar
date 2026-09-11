@@ -1,43 +1,39 @@
 //! CLI command selection; each grammar owns its options and validation.
 
+const ServerOptions = @import("arguments/ServerOptions.zig");
+const HistoryOptions = @import("arguments/HistoryOptions.zig");
+const NotificationOptions = @import("arguments/NotificationOptions.zig");
+const ConfigCheckOptions = @import("arguments/ConfigCheckOptions.zig");
+const PluginWorkerOptions = @import("arguments/PluginWorkerOptions.zig");
+const TapWorkerOptions = @import("arguments/TapWorkerOptions.zig");
+const PluginOptions = @import("arguments/PluginOptions.zig");
+const AgentOptions = @import("arguments/AgentOptions.zig");
+const PaneOptions = @import("arguments/PaneOptions.zig");
+const WorkspaceOptions = @import("arguments/WorkspaceOptions.zig");
+const ApiOptions = @import("arguments/ApiOptions.zig");
+const HookOptions = @import("arguments/HookOptions.zig");
+const IntegrationOptions = @import("arguments/IntegrationOptions.zig");
+const ProxyOptions = @import("arguments/ProxyOptions.zig");
+const RunOptions = @import("arguments/RunOptions.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const backend = @import("telar-backend");
-const frontend = @import("telar-frontend");
-const pty = backend.pty;
-const grammars = @import("arguments/root.zig");
-pub const max_args = pty.max_args;
-pub const Target = grammars.values.Target;
-pub const max_wait_timeout_seconds = grammars.values.max_wait_timeout_seconds;
-pub const default_wait_timeout_seconds = grammars.values.default_wait_timeout_seconds;
-pub const HookAgent = grammars.values.HookAgent;
-pub const NotificationOptions = grammars.notification.NotificationOptions;
-pub const HistoryAction = grammars.history.HistoryAction;
-pub const HistoryImportKind = grammars.history.HistoryImportKind;
-pub const HistoryOptions = grammars.history.HistoryOptions;
-pub const AgentAction = grammars.agent.AgentAction;
-pub const AgentOptions = grammars.agent.AgentOptions;
-pub const PaneAction = grammars.pane.PaneAction;
-pub const PaneOptions = grammars.pane.PaneOptions;
-pub const max_worktree_branch_bytes = grammars.workspace.max_worktree_branch_bytes;
-pub const WorkspaceAction = grammars.workspace.WorkspaceAction;
-pub const WorkspaceOptions = grammars.workspace.WorkspaceOptions;
-pub const HookOptions = grammars.hook.HookOptions;
-pub const IntegrationAction = grammars.integration.IntegrationAction;
-pub const IntegrationOptions = grammars.integration.IntegrationOptions;
-pub const ProxyTrustAction = grammars.proxy.ProxyTrustAction;
-pub const LinuxTrustBackend = grammars.proxy.LinuxTrustBackend;
-pub const ProxyOptions = grammars.proxy.ProxyOptions;
-pub const ApiOptions = grammars.api.ApiOptions;
-pub const ServerMode = grammars.server.ServerMode;
-pub const ServerAction = grammars.server.ServerAction;
-pub const ServerOptions = grammars.server.ServerOptions;
-pub const ConfigCheckOptions = grammars.config.ConfigCheckOptions;
-pub const PluginWorkerOptions = grammars.plugin_worker.PluginWorkerOptions;
-pub const TapWorkerOptions = grammars.tap_worker.TapWorkerOptions;
-pub const PluginCommand = grammars.plugin.PluginCommand;
-pub const PluginOptions = grammars.plugin.PluginOptions;
-pub const RunOptions = grammars.run.RunOptions;
+const BuiltinType = @import("telar-frontend").Builtin;
+const SidebarRenderingType = @import("telar-frontend").SidebarRendering;
+const server_module = @import("arguments/server.zig");
+const plugin_module = @import("arguments/plugin.zig");
+const CapabilityType = @import("telar-core").Capability;
+const history_module = @import("arguments/history.zig");
+const HistoryScopeType = @import("telar-core").HistoryScope;
+const NotificationLevelType = @import("telar-core").NotificationLevel;
+const PaneIdType = @import("telar-core").PaneId;
+const agent_module = @import("arguments/agent.zig");
+const AgentStatusType = @import("telar-core").AgentStatus;
+const PaneTextSourceType = @import("telar-core").PaneTextSource;
+const pane_module = @import("arguments/pane.zig");
+const PaneDirectionType = @import("telar-core").PaneDirection;
+const values_module = @import("arguments/values.zig");
+const integration_module = @import("arguments/integration.zig");
+const proxy_module = @import("arguments/proxy.zig");
+const HistoryAuthorFilterType = @import("telar-core").HistoryAuthorFilter;
 
 pub const Cli = union(enum) {
     help,
@@ -135,7 +131,7 @@ test "CLI defaults to the configured shell" {
     const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .run);
     try std.testing.expect(cli.run.command.argv[0] != null);
-    try std.testing.expectEqual(frontend.theme.Builtin.vesper, cli.run.theme.base);
+    try std.testing.expectEqual(BuiltinType.vesper, cli.run.theme.base);
 }
 
 test "CLI forwards a command without a shell" {
@@ -156,14 +152,14 @@ test "CLI delimiter permits option-shaped commands" {
 test "CLI selects a built-in theme before the command" {
     const args = [_][*:0]const u8{ "telar", "--theme=catppuccin", "/bin/sh" };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(frontend.theme.Builtin.catppuccin, cli.run.theme.base);
+    try std.testing.expectEqual(BuiltinType.catppuccin, cli.run.theme.base);
     try std.testing.expectEqualStrings("/bin/sh", std.mem.span(cli.run.command.file));
 }
 
 test "CLI runs the default shell when only a theme is provided" {
     const args = [_][*:0]const u8{ "telar", "--theme", "tokyonight" };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(frontend.theme.Builtin.tokyo_night, cli.run.theme.base);
+    try std.testing.expectEqual(BuiltinType.tokyo_night, cli.run.theme.base);
     try std.testing.expect(cli.run.command.argv[0] != null);
 }
 
@@ -183,7 +179,7 @@ test "CLI rejects unknown and duplicate themes" {
 test "CLI selects and validates the sidebar renderer" {
     const args = [_][*:0]const u8{ "telar", "--sidebar-renderer=kitty-hybrid", "/bin/sh" };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(frontend.kitty.SidebarRendering.kitty_hybrid, cli.run.sidebar_rendering);
+    try std.testing.expectEqual(SidebarRenderingType.kitty_hybrid, cli.run.sidebar_rendering);
 
     const invalid = [_][*:0]const u8{ "telar", "--sidebar-renderer", "sixel" };
     try std.testing.expectError(error.UnknownSidebarRenderer, Cli.parse(&invalid, .empty));
@@ -223,7 +219,7 @@ test "CLI parses --fresh for the client and the server and rejects it elsewhere"
     const server = [_][*:0]const u8{ "telar", "server", "--background", "--fresh" };
     const parsed_server = try Cli.parse(&server, .empty);
     try std.testing.expect(parsed_server.server.fresh);
-    try std.testing.expectEqual(ServerMode.background_launcher, parsed_server.server.mode);
+    try std.testing.expectEqual(server_module.ServerMode.background_launcher, parsed_server.server.mode);
 
     const stop = [_][*:0]const u8{ "telar", "server", "stop", "--fresh" };
     try std.testing.expectError(error.FreshRequiresRun, Cli.parse(&stop, .empty));
@@ -232,7 +228,7 @@ test "CLI parses --fresh for the client and the server and rejects it elsewhere"
 test "CLI keeps plugin inspection installation and trust separate" {
     const install = [_][*:0]const u8{ "telar", "plugin", "install", "./plugin" };
     const parsed_install = try Cli.parse(&install, .empty);
-    try std.testing.expectEqual(PluginCommand.install, parsed_install.plugin.command);
+    try std.testing.expectEqual(plugin_module.PluginCommand.install, parsed_install.plugin.command);
 
     const trust = [_][*:0]const u8{
         "telar",
@@ -243,8 +239,8 @@ test "CLI keeps plugin inspection installation and trust separate" {
         "history.read",
     };
     const parsed_trust = try Cli.parse(&trust, .empty);
-    try std.testing.expectEqual(PluginCommand.trust, parsed_trust.plugin.command);
-    try std.testing.expectEqual(core.plugin.Capability.history_read, parsed_trust.plugin.capabilities[0]);
+    try std.testing.expectEqual(plugin_module.PluginCommand.trust, parsed_trust.plugin.command);
+    try std.testing.expectEqual(CapabilityType.history_read, parsed_trust.plugin.capabilities[0]);
 }
 
 test "CLI parses the isolated plugin worker context" {
@@ -276,16 +272,16 @@ test "CLI recognizes the runtime server" {
     const args = [_][*:0]const u8{ "telar", "server" };
     const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .server);
-    try std.testing.expectEqual(ServerAction.run, cli.server.action);
-    try std.testing.expectEqual(ServerMode.foreground, cli.server.mode);
+    try std.testing.expectEqual(server_module.ServerAction.run, cli.server.action);
+    try std.testing.expectEqual(server_module.ServerMode.foreground, cli.server.mode);
 }
 
 test "CLI recognizes runtime stop" {
     const args = [_][*:0]const u8{ "telar", "server", "stop" };
     const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .server);
-    try std.testing.expectEqual(ServerAction.stop, cli.server.action);
-    try std.testing.expectEqual(ServerMode.foreground, cli.server.mode);
+    try std.testing.expectEqual(server_module.ServerAction.stop, cli.server.action);
+    try std.testing.expectEqual(server_module.ServerMode.foreground, cli.server.mode);
 }
 
 test "runtime stop cannot use an internal launcher mode" {
@@ -302,7 +298,7 @@ test "server socket and launcher mode are explicit" {
         "/tmp/telar-test.sock",
     };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(ServerMode.background_launcher, cli.server.mode);
+    try std.testing.expectEqual(server_module.ServerMode.background_launcher, cli.server.mode);
     try std.testing.expectEqualStrings("/tmp/telar-test.sock", std.mem.span(cli.server.socket.?));
 }
 
@@ -342,9 +338,9 @@ test "CLI parses history search filters" {
     };
     const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .history);
-    try std.testing.expectEqual(HistoryAction.search, cli.history.action);
+    try std.testing.expectEqual(history_module.HistoryAction.search, cli.history.action);
     try std.testing.expectEqualStrings("git commit", std.mem.span(cli.history.query.?));
-    try std.testing.expectEqual(core.schema.HistoryScope.workspace, cli.history.scope);
+    try std.testing.expectEqual(HistoryScopeType.workspace, cli.history.scope);
     try std.testing.expectEqualStrings("/work/telar", std.mem.span(cli.history.scope_value.?));
     try std.testing.expect(cli.history.failed_only);
     try std.testing.expectEqual(@as(u16, 40), cli.history.limit);
@@ -371,9 +367,9 @@ test "CLI parses clickable notification commands" {
     try std.testing.expect(parsed == .notification);
     try std.testing.expectEqualStrings("Build complete", std.mem.span(parsed.notification.title));
     try std.testing.expectEqualStrings("Open the pane", std.mem.span(parsed.notification.body.?));
-    try std.testing.expectEqual(core.schema.NotificationLevel.success, parsed.notification.level);
+    try std.testing.expectEqual(NotificationLevelType.success, parsed.notification.level);
     try std.testing.expectEqual(@as(u32, 2500), parsed.notification.duration_ms);
-    try std.testing.expectEqual(@as(core.schema.PaneId, @enumFromInt(42)), parsed.notification.target.pane);
+    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(42)), parsed.notification.target.pane);
     try std.testing.expectEqualStrings("/tmp/telar.sock", std.mem.span(parsed.notification.socket.?));
 }
 
@@ -406,15 +402,15 @@ test "CLI rejects conflicting history scopes" {
 test "CLI parses agent commands with their targets and options" {
     const list = [_][*:0]const u8{ "telar", "agent", "list", "--json" };
     const list_cli = try Cli.parse(&list, .empty);
-    try std.testing.expectEqual(AgentAction.list, list_cli.agent.action);
+    try std.testing.expectEqual(agent_module.AgentAction.list, list_cli.agent.action);
     try std.testing.expect(list_cli.agent.json);
     try std.testing.expect(list_cli.agent.target == null);
 
     const wait = [_][*:0]const u8{ "telar", "agent", "wait", "7", "--until", "blocked", "--timeout", "90s" };
     const wait_cli = try Cli.parse(&wait, .empty);
-    try std.testing.expectEqual(AgentAction.wait, wait_cli.agent.action);
+    try std.testing.expectEqual(agent_module.AgentAction.wait, wait_cli.agent.action);
     try std.testing.expectEqual(@as(u64, 7), wait_cli.agent.target.?.pane);
-    try std.testing.expectEqual(core.schema.AgentStatus.blocked, wait_cli.agent.until);
+    try std.testing.expectEqual(AgentStatusType.blocked, wait_cli.agent.until);
     try std.testing.expectEqual(@as(u32, 90), wait_cli.agent.timeout_seconds);
 
     const prompt = [_][*:0]const u8{ "telar", "agent", "prompt", "--current", "run the tests", "--wait" };
@@ -427,7 +423,7 @@ test "CLI parses agent commands with their targets and options" {
     const read_cli = try Cli.parse(&read, .empty);
     try std.testing.expectEqualStrings("Investigate proxy", std.mem.span(read_cli.agent.target.?.name));
     try std.testing.expectEqual(@as(u16, 25), read_cli.agent.lines);
-    try std.testing.expectEqual(core.schema.PaneTextSource.screen, read_cli.agent.source);
+    try std.testing.expectEqual(PaneTextSourceType.screen, read_cli.agent.source);
 }
 
 test "CLI rejects malformed agent commands" {
@@ -450,22 +446,22 @@ test "CLI rejects malformed agent commands" {
 test "CLI parses pane commands and refuses names as pane ids" {
     const read = [_][*:0]const u8{ "telar", "pane", "read", "4", "--lines", "10" };
     const read_cli = try Cli.parse(&read, .empty);
-    try std.testing.expectEqual(PaneAction.read, read_cli.pane.action);
+    try std.testing.expectEqual(pane_module.PaneAction.read, read_cli.pane.action);
     try std.testing.expectEqual(@as(u64, 4), read_cli.pane.target.pane);
     try std.testing.expectEqual(@as(u16, 10), read_cli.pane.lines);
 
     const send = [_][*:0]const u8{ "telar", "pane", "send-keys", "--current", "y", "--enter" };
     const send_cli = try Cli.parse(&send, .empty);
-    try std.testing.expectEqual(PaneAction.send_keys, send_cli.pane.action);
+    try std.testing.expectEqual(pane_module.PaneAction.send_keys, send_cli.pane.action);
     try std.testing.expect(send_cli.pane.target == .current);
     try std.testing.expectEqualStrings("y", std.mem.span(send_cli.pane.text.?));
     try std.testing.expect(send_cli.pane.enter);
 
     const focus = [_][*:0]const u8{ "telar", "pane", "focus", "--current", "--direction", "left", "--json" };
     const focus_cli = try Cli.parse(&focus, .empty);
-    try std.testing.expectEqual(PaneAction.focus, focus_cli.pane.action);
+    try std.testing.expectEqual(pane_module.PaneAction.focus, focus_cli.pane.action);
     try std.testing.expect(focus_cli.pane.target == .current);
-    try std.testing.expectEqual(core.schema.PaneDirection.left, focus_cli.pane.direction.?);
+    try std.testing.expectEqual(PaneDirectionType.left, focus_cli.pane.direction.?);
     try std.testing.expect(focus_cli.pane.json);
 
     const inexact_focus = [_][*:0]const u8{ "telar", "pane", "focus", "4", "--direction", "left" };
@@ -493,7 +489,7 @@ test "CLI parses the api schema command and the skill flag" {
 test "CLI parses agent session reports" {
     const args = [_][*:0]const u8{ "telar", "agent", "report-session", "--current", "0192aaaa-bbbb-cccc-dddd-eeeeffff0000" };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(AgentAction.report_session, cli.agent.action);
+    try std.testing.expectEqual(agent_module.AgentAction.report_session, cli.agent.action);
     try std.testing.expect(cli.agent.target.? == .current);
     try std.testing.expectEqualStrings("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", std.mem.span(cli.agent.text.?));
 
@@ -503,25 +499,25 @@ test "CLI parses agent session reports" {
 
 test "CLI parses hook and integration commands" {
     const hook = [_][*:0]const u8{ "telar", "hook", "claude" };
-    try std.testing.expectEqual(HookAgent.claude, (try Cli.parse(&hook, .empty)).hook.agent);
+    try std.testing.expectEqual(values_module.HookAgent.claude, (try Cli.parse(&hook, .empty)).hook.agent);
 
     const codex_hook = [_][*:0]const u8{ "telar", "hook", "codex" };
-    try std.testing.expectEqual(HookAgent.codex, (try Cli.parse(&codex_hook, .empty)).hook.agent);
+    try std.testing.expectEqual(values_module.HookAgent.codex, (try Cli.parse(&codex_hook, .empty)).hook.agent);
 
     const install = [_][*:0]const u8{ "telar", "integration", "install", "claude", "--settings", "/tmp/s.json" };
     const cli = try Cli.parse(&install, .empty);
-    try std.testing.expectEqual(IntegrationAction.install, cli.integration.action);
+    try std.testing.expectEqual(integration_module.IntegrationAction.install, cli.integration.action);
     try std.testing.expectEqualStrings("/tmp/s.json", std.mem.span(cli.integration.settings.?));
 
     const codex_install = [_][*:0]const u8{ "telar", "integration", "install", "codex" };
-    try std.testing.expectEqual(HookAgent.codex, (try Cli.parse(&codex_install, .empty)).integration.agent);
+    try std.testing.expectEqual(values_module.HookAgent.codex, (try Cli.parse(&codex_install, .empty)).integration.agent);
 
     const pi_hook = [_][*:0]const u8{ "telar", "hook", "pi", "--socket", "/tmp/s.sock" };
     const pi_cli = try Cli.parse(&pi_hook, .empty);
-    try std.testing.expectEqual(HookAgent.pi, pi_cli.hook.agent);
+    try std.testing.expectEqual(values_module.HookAgent.pi, pi_cli.hook.agent);
     try std.testing.expectEqualStrings("/tmp/s.sock", std.mem.span(pi_cli.hook.socket.?));
     const pi_status = [_][*:0]const u8{ "telar", "integration", "status", "pi" };
-    try std.testing.expectEqual(HookAgent.pi, (try Cli.parse(&pi_status, .empty)).integration.agent);
+    try std.testing.expectEqual(values_module.HookAgent.pi, (try Cli.parse(&pi_status, .empty)).integration.agent);
 
     const unknown = [_][*:0]const u8{ "telar", "integration", "install", "gemini" };
     try std.testing.expectError(error.UnknownHookAgent, Cli.parse(&unknown, .empty));
@@ -530,12 +526,12 @@ test "CLI parses hook and integration commands" {
 test "CLI parses explicit proxy trust actions and Linux backends" {
     const install = [_][*:0]const u8{ "telar", "proxy", "trust", "install", "--ca-dir", "/tmp/proxy", "--linux", "trust" };
     const parsed = (try Cli.parse(&install, .empty)).proxy;
-    try std.testing.expectEqual(ProxyTrustAction.install, parsed.action);
+    try std.testing.expectEqual(proxy_module.ProxyTrustAction.install, parsed.action);
     try std.testing.expectEqualStrings("/tmp/proxy", std.mem.span(parsed.ca_dir.?));
-    try std.testing.expectEqual(LinuxTrustBackend.trust, parsed.linux_backend.?);
+    try std.testing.expectEqual(proxy_module.LinuxTrustBackend.trust, parsed.linux_backend.?);
 
     const status = [_][*:0]const u8{ "telar", "proxy", "trust", "status" };
-    try std.testing.expectEqual(ProxyTrustAction.status, (try Cli.parse(&status, .empty)).proxy.action);
+    try std.testing.expectEqual(proxy_module.ProxyTrustAction.status, (try Cli.parse(&status, .empty)).proxy.action);
 
     const implicit = [_][*:0]const u8{ "telar", "proxy", "trust" };
     try std.testing.expectError(error.MissingProxyTrustAction, Cli.parse(&implicit, .empty));
@@ -550,7 +546,7 @@ test "CLI parses the remote destination and the server endpoint action" {
     try std.testing.expectEqualStrings("/bin/zsh", std.mem.span(cli.run.command.file));
 
     const endpoint = [_][*:0]const u8{ "telar", "server", "endpoint" };
-    try std.testing.expectEqual(ServerAction.endpoint, (try Cli.parse(&endpoint, .empty)).server.action);
+    try std.testing.expectEqual(server_module.ServerAction.endpoint, (try Cli.parse(&endpoint, .empty)).server.action);
 }
 
 test "workspace create parses worktree flags and rejects unsafe branches" {
@@ -576,7 +572,7 @@ test "workspace create parses worktree flags and rejects unsafe branches" {
 test "history author filter parses and rejects unknown values" {
     const agent_only = [_][*:0]const u8{ "telar", "history", "list", "--author", "agent" };
     const cli = try Cli.parse(&agent_only, .empty);
-    try std.testing.expectEqual(core.schema.HistoryAuthorFilter.agent, cli.history.author);
+    try std.testing.expectEqual(HistoryAuthorFilterType.agent, cli.history.author);
 
     const invalid = [_][*:0]const u8{ "telar", "history", "list", "--author", "robot" };
     try std.testing.expectError(error.InvalidHistoryAuthor, Cli.parse(&invalid, .empty));
@@ -585,11 +581,11 @@ test "history author filter parses and rejects unknown values" {
 test "history import parses kinds and the file option" {
     const explicit = [_][*:0]const u8{ "telar", "history", "import", "fish", "--file", "/tmp/h" };
     const cli = try Cli.parse(&explicit, .empty);
-    try std.testing.expectEqual(HistoryImportKind.fish, cli.history.import_kind);
+    try std.testing.expectEqual(history_module.HistoryImportKind.fish, cli.history.import_kind);
     try std.testing.expectEqualStrings("/tmp/h", std.mem.span(cli.history.import_file.?));
 
     const auto = [_][*:0]const u8{ "telar", "history", "import" };
-    try std.testing.expectEqual(HistoryImportKind.auto, (try Cli.parse(&auto, .empty)).history.import_kind);
+    try std.testing.expectEqual(history_module.HistoryImportKind.auto, (try Cli.parse(&auto, .empty)).history.import_kind);
 
     const unknown = [_][*:0]const u8{ "telar", "history", "import", "powershell" };
     try std.testing.expectError(error.UnknownHistoryImportKind, Cli.parse(&unknown, .empty));

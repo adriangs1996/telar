@@ -1,20 +1,23 @@
 //! Domain command handlers for workspace aggregates stored by a repository.
 
+const Repository = @import("Repository.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const WorkspaceRenamedType = @import("WorkspaceRenamed.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const TabMoveDirectionType = @import("telar-core").TabMoveDirection;
+const TabMovedType = @import("TabMoved.zig");
+const TabRemovedType = @import("TabRemoved.zig");
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const std = @import("std");
-const core = @import("telar-core");
-const events = @import("events.zig");
-const repository_mod = @import("repository_support.zig");
-const state_mod = @import("state_support.zig");
-
-const schema = core.schema;
-const Repository = repository_mod.Repository;
+const StateType = @import("State.zig");
+const tab_module = @import("telar-core").tab;
 
 /// Renames an existing aggregate and advances the workspace-list projection.
 ///
 /// ```zig
 /// try renameWorkspace(&repository, location, "backend");
 /// ```
-pub fn renameWorkspace(repository: *Repository, location: schema.WorkspaceLocation, name: []const u8) !events.WorkspaceRenamed {
+pub fn renameWorkspace(repository: *Repository, location: WorkspaceLocationType, name: []const u8) !WorkspaceRenamedType {
     const workspace = repository.find(location) orelse return error.WorkspaceNotFound;
     const renamed = try workspace.rename(name);
     repository.recordListChange();
@@ -26,7 +29,7 @@ pub fn renameWorkspace(repository: *Repository, location: schema.WorkspaceLocati
 /// ```zig
 /// const moved = try moveTab(&repository, location, .previous);
 /// ```
-pub fn moveTab(repository: *Repository, location: schema.TabLocation, direction: schema.TabMoveDirection) !events.TabMoved {
+pub fn moveTab(repository: *Repository, location: TabLocationType, direction: TabMoveDirectionType) !TabMovedType {
     const workspace = repository.find(location.workspace) orelse return error.WorkspaceNotFound;
     return workspace.moveTab(location.tab_id, direction) orelse error.TabNotFound;
 }
@@ -37,7 +40,7 @@ pub fn moveTab(repository: *Repository, location: schema.TabLocation, direction:
 /// ```zig
 /// const removed = removeTab(&repository, location) orelse return;
 /// ```
-pub fn removeTab(repository: *Repository, location: schema.TabLocation) ?events.TabRemoved {
+pub fn removeTab(repository: *Repository, location: TabLocationType) ?TabRemovedType {
     const workspace = repository.find(location.workspace) orelse return null;
 
     if (!workspace.removeTab(location.tab_id)) {
@@ -46,7 +49,7 @@ pub fn removeTab(repository: *Repository, location: schema.TabLocation) ?events.
 
     repository.recordListChange();
     const workspace_removed = workspace.tabCount() == 0;
-    var previous_workspace: ?schema.WorkspaceId = null;
+    var previous_workspace: ?WorkspaceIdType = null;
 
     if (workspace_removed) {
         const workspace_id = switch (location.workspace) {
@@ -58,14 +61,14 @@ pub fn removeTab(repository: *Repository, location: schema.TabLocation) ?events.
         std.debug.assert(removed);
     }
 
-    return events.TabRemoved.init(location, workspace_removed, previous_workspace) catch unreachable;
+    return TabRemovedType.init(location, workspace_removed, previous_workspace) catch unreachable;
 }
 
-fn insertWorkspace(repository: *Repository, path: []const u8) !schema.TabLocation {
+fn insertWorkspace(repository: *Repository, path: []const u8) !TabLocationType {
     return repository.insert(.{ .path = path });
 }
 
-fn insertTestingTab(repository: *Repository, location: schema.WorkspaceLocation, label: []const u8) !schema.TabLocation {
+fn insertTestingTab(repository: *Repository, location: WorkspaceLocationType, label: []const u8) !TabLocationType {
     const workspace = repository.find(location) orelse return error.WorkspaceNotFound;
     const tab_id = try repository.nextTabId();
     const created = try workspace.createTab(tab_id, label);
@@ -74,7 +77,7 @@ fn insertTestingTab(repository: *Repository, location: schema.WorkspaceLocation,
 }
 
 test "workspace commands move and remove tabs around repository state" {
-    var state: state_mod.State = .{};
+    var state: StateType = .{};
     var repository = Repository.init(&state, std.testing.allocator);
     defer repository.deinit();
     const initial = try insertWorkspace(&repository, "/work/project");
@@ -102,7 +105,7 @@ test "workspace commands move and remove tabs around repository state" {
 }
 
 test "closing workspaces returns the predecessor from repository order" {
-    var state: state_mod.State = .{};
+    var state: StateType = .{};
     var repository = Repository.init(&state, std.testing.allocator);
     defer repository.deinit();
     const first = try insertWorkspace(&repository, "/work/first");
@@ -131,14 +134,14 @@ test "closing workspaces returns the predecessor from repository order" {
 }
 
 test "removing a missing tab leaves repository state unchanged" {
-    var state: state_mod.State = .{};
+    var state: StateType = .{};
     var repository = Repository.init(&state, std.testing.allocator);
     defer repository.deinit();
     const existing = try insertWorkspace(&repository, "/work/project");
     const revision = repository.reader().revision();
-    const missing: schema.TabLocation = .{
+    const missing: TabLocationType = .{
         .workspace = existing.workspace,
-        .tab_id = try schema.id.tab(999),
+        .tab_id = try tab_module(999),
     };
 
     try std.testing.expect(removeTab(&repository, missing) == null);
@@ -147,7 +150,7 @@ test "removing a missing tab leaves repository state unchanged" {
 }
 
 test "workspace rename is aggregate behavior recorded by the repository" {
-    var state: state_mod.State = .{};
+    var state: StateType = .{};
     var repository = Repository.init(&state, std.testing.allocator);
     defer repository.deinit();
     const location = try insertWorkspace(&repository, "/work/project");

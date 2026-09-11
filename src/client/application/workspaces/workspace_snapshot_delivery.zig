@@ -1,31 +1,26 @@
 //! Application policy for delivering client resources after one canonical
 //! workspace snapshot commit.
 
+const TabIdType = @import("telar-core").TabId;
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const WorkspaceSnapshotDeliveryTestingModel = @import("WorkspaceSnapshotDeliveryTestingModel.zig");
+const WorkspaceSnapshotDeliveryEffectsCapture = @import("WorkspaceSnapshotDeliveryEffectsCapture.zig");
+const DeliverWorkspaceSnapshotHandler = @import("DeliverWorkspaceSnapshotHandler.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client_model = @import("../../root.zig").model;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const pane_geometry_delivery = @import("../panes/root.zig").pane_geometry_delivery;
-const pane_resource_release = @import("../panes/root.zig").pane_resource_release;
-
-pub const schema = core.schema;
-pub const ui = core.ui;
-
-pub const Effects = @import("WorkspaceSnapshotDeliveryEffects.zig");
-
-pub const DeliverWorkspaceSnapshotHandler = @import("DeliverWorkspaceSnapshotHandler.zig");
+const PaneResizeType = @import("telar-core").PaneResize;
 
 pub const Event = union(enum) {
-    ignore_tab: schema.TabId,
-    clear_graphics: schema.PaneId,
+    ignore_tab: TabIdType,
+    clear_graphics: PaneIdType,
     set_graphics_visible: struct {
-        pane_id: schema.PaneId,
+        pane_id: PaneIdType,
         visible: bool,
     },
     synchronize_active_resources,
     tab_snapshot_pending,
-    request_tab_snapshot: schema.TabLocation,
-    resize: schema.PaneId,
+    request_tab_snapshot: TabLocationType,
+    resize: PaneIdType,
 };
 
 pub const Failure = enum {
@@ -36,11 +31,7 @@ pub const Failure = enum {
     resize,
 };
 
-const TestingModel = @import("WorkspaceSnapshotDeliveryTestingModel.zig");
-
-const EffectsCapture = @import("WorkspaceSnapshotDeliveryEffectsCapture.zig");
-
-fn deliveryHandler(testing: *TestingModel, capture: *EffectsCapture) DeliverWorkspaceSnapshotHandler {
+fn deliveryHandler(testing: *WorkspaceSnapshotDeliveryTestingModel, capture: *WorkspaceSnapshotDeliveryEffectsCapture) DeliverWorkspaceSnapshotHandler {
     return .{
         .model = testing.model,
         .area = .{ .w = 40, .h = 10 },
@@ -50,7 +41,7 @@ fn deliveryHandler(testing: *TestingModel, capture: *EffectsCapture) DeliverWork
 }
 
 test "DeliverWorkspaceSnapshotHandler releases retired resources before activating the canonical tab" {
-    var testing = try TestingModel.init(true);
+    var testing = try WorkspaceSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
     const old_pane = testing.model.workspace.findPane(testing.second_pane).?;
     old_pane.input_modes.bracketed_paste = true;
@@ -58,7 +49,7 @@ test "DeliverWorkspaceSnapshotHandler releases retired resources before activati
     _ = testing.model.beginPanePaste().?;
     _ = testing.model.syncReportedPaneFocus().?;
     const reconciliation = try testing.reconcile();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
     };
@@ -81,12 +72,12 @@ test "DeliverWorkspaceSnapshotHandler releases retired resources before activati
 }
 
 test "DeliverWorkspaceSnapshotHandler offers geometry for a loaded canonical no-op" {
-    var testing = try TestingModel.init(false);
+    var testing = try WorkspaceSnapshotDeliveryTestingModel.init(false);
     defer testing.deinit();
     _ = try testing.reconcile();
     testing.model.workspace.active().?.snapshot_loaded = true;
     const reconciliation = try testing.reconcile();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
     };
@@ -105,12 +96,12 @@ test "DeliverWorkspaceSnapshotHandler offers geometry for a loaded canonical no-
 }
 
 test "DeliverWorkspaceSnapshotHandler preserves a pending tab snapshot" {
-    var testing = try TestingModel.init(false);
+    var testing = try WorkspaceSnapshotDeliveryTestingModel.init(false);
     defer testing.deinit();
     _ = try testing.reconcile();
     testing.model.workspace.active().?.snapshot_loaded = true;
     const reconciliation = try testing.reconcile();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
         .pending_snapshot = true,
@@ -120,14 +111,14 @@ test "DeliverWorkspaceSnapshotHandler preserves a pending tab snapshot" {
     try use_case.execute(&reconciliation);
 
     try std.testing.expectEqualDeep(&[_]Event{.tab_snapshot_pending}, capture.eventSlice());
-    try std.testing.expectEqual(@as(?schema.PaneResize, null), capture.delivered_resize);
+    try std.testing.expectEqual(@as(?PaneResizeType, null), capture.delivered_resize);
 }
 
 test "DeliverWorkspaceSnapshotHandler requests an unloaded active tab snapshot" {
-    var testing = try TestingModel.init(false);
+    var testing = try WorkspaceSnapshotDeliveryTestingModel.init(false);
     defer testing.deinit();
     const reconciliation = try testing.reconcile();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
     };
@@ -142,10 +133,10 @@ test "DeliverWorkspaceSnapshotHandler requests an unloaded active tab snapshot" 
 }
 
 test "DeliverWorkspaceSnapshotHandler rejects stale revisions and snapshot state" {
-    var testing = try TestingModel.init(false);
+    var testing = try WorkspaceSnapshotDeliveryTestingModel.init(false);
     defer testing.deinit();
     var reconciliation = try testing.reconcile();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
     };
@@ -178,10 +169,10 @@ test "DeliverWorkspaceSnapshotHandler rejects stale revisions and snapshot state
 }
 
 test "DeliverWorkspaceSnapshotHandler stops an active transition after graphics failure" {
-    var testing = try TestingModel.init(true);
+    var testing = try WorkspaceSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
     const reconciliation = try testing.reconcile();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
         .failure = .graphics_visibility,
@@ -199,10 +190,10 @@ test "DeliverWorkspaceSnapshotHandler stops an active transition after graphics 
 }
 
 test "DeliverWorkspaceSnapshotHandler stops after active resource failure" {
-    var testing = try TestingModel.init(true);
+    var testing = try WorkspaceSnapshotDeliveryTestingModel.init(true);
     defer testing.deinit();
     const reconciliation = try testing.reconcile();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
         .failure = .active_resources,
@@ -220,10 +211,10 @@ test "DeliverWorkspaceSnapshotHandler stops after active resource failure" {
 }
 
 test "DeliverWorkspaceSnapshotHandler preserves the commit after tab snapshot failure" {
-    var testing = try TestingModel.init(false);
+    var testing = try WorkspaceSnapshotDeliveryTestingModel.init(false);
     defer testing.deinit();
     const reconciliation = try testing.reconcile();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
         .failure = .tab_snapshot,
@@ -240,12 +231,12 @@ test "DeliverWorkspaceSnapshotHandler preserves the commit after tab snapshot fa
 }
 
 test "DeliverWorkspaceSnapshotHandler preserves the commit after geometry failure" {
-    var testing = try TestingModel.init(false);
+    var testing = try WorkspaceSnapshotDeliveryTestingModel.init(false);
     defer testing.deinit();
     _ = try testing.reconcile();
     testing.model.workspace.active().?.snapshot_loaded = true;
     const reconciliation = try testing.reconcile();
-    var capture: EffectsCapture = .{
+    var capture: WorkspaceSnapshotDeliveryEffectsCapture = .{
         .model = testing.model,
         .reconciliation = &reconciliation,
         .failure = .resize,

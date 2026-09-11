@@ -1,10 +1,12 @@
-const RemovedPanes = @This();
-const source_namespace = @import("types.zig");
+const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-items: [source_namespace.schema.max_panes_per_tab]source_namespace.schema.PaneId = undefined,
+const RemovedPanes = @This();
+
+items: [max_panes_per_tab_module]PaneIdType = undefined,
 count: u8 = 0,
 
-pub fn append(panes: *RemovedPanes, pane_id: source_namespace.schema.PaneId) void {
+pub fn append(panes: *RemovedPanes, pane_id: PaneIdType) void {
     std.debug.assert(panes.count < panes.items.len);
     panes.items[panes.count] = pane_id;
     panes.count += 1;
@@ -15,6 +17,6 @@ pub fn append(panes: *RemovedPanes, pane_id: source_namespace.schema.PaneId) voi
 /// ```zig
 /// for (removal.panes.slice()) |pane_id| release(pane_id);
 /// ```
-pub fn slice(panes: *const RemovedPanes) []const source_namespace.schema.PaneId {
+pub fn slice(panes: *const RemovedPanes) []const PaneIdType {
     return panes.items[0..panes.count];
 }

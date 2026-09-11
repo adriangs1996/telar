@@ -1,34 +1,39 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("pane_split_confirmation_delivery.zig");
-const core = @import("telar-core");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
+const RectType = @import("telar-core").Rect;
 const std = @import("std");
-model: *client_model.Model,
-first: source_namespace.schema.TabLocation,
-second: source_namespace.schema.TabLocation,
-first_pane: source_namespace.schema.PaneId,
-second_pane: source_namespace.schema.PaneId,
-created_pane: source_namespace.schema.PaneId,
-area: core.ui.Rect,
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const PaneSplitCommitType = @import("../../model/PaneSplitCommit.zig");
+const CommitPaneSplitType = @import("../../model/CommitPaneSplit.zig");
+const TestingModel = @This();
+
+model: *ModelType,
+first: TabLocationType,
+second: TabLocationType,
+first_pane: PaneIdType,
+second_pane: PaneIdType,
+created_pane: PaneIdType,
+area: RectType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first: source_namespace.schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: source_namespace.schema.TabLocation = .{
+    const second: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    const first_pane: source_namespace.schema.PaneId = @enumFromInt(1);
-    const second_pane: source_namespace.schema.PaneId = @enumFromInt(2);
-    const created_pane: source_namespace.schema.PaneId = @enumFromInt(3);
+    const first_pane: PaneIdType = @enumFromInt(1);
+    const second_pane: PaneIdType = @enumFromInt(2);
+    const created_pane: PaneIdType = @enumFromInt(3);
     try model.workspace.bootstrap(.{ .pane_id = first_pane, .location = first, .size = .{ .cols = 40, .rows = 10 } });
 
     return .{
@@ -47,17 +52,17 @@ pub fn deinit(testing: *TestingModel) void {
     std.testing.allocator.destroy(testing.model);
 }
 
-pub fn activeCommit(testing: *TestingModel) !client_model.PaneSplitCommit {
+pub fn activeCommit(testing: *TestingModel) !PaneSplitCommitType {
     return testing.model.commitPaneSplit(testing.command());
 }
 
-pub fn inactiveCommit(testing: *TestingModel) !client_model.PaneSplitCommit {
+pub fn inactiveCommit(testing: *TestingModel) !PaneSplitCommitType {
     try testing.addSecondTab();
 
     return testing.model.commitPaneSplit(testing.command());
 }
 
-pub fn staleCommit(testing: *TestingModel) !client_model.PaneSplitCommit {
+pub fn staleCommit(testing: *TestingModel) !PaneSplitCommitType {
     try testing.addSecondTab();
     if (!testing.model.workspace.remove(testing.first.tab_id)) {
         return error.MissingTab;
@@ -66,8 +71,8 @@ pub fn staleCommit(testing: *TestingModel) !client_model.PaneSplitCommit {
     return testing.model.commitPaneSplit(testing.command());
 }
 
-pub fn foreignWorkspaceCommit(testing: *TestingModel) !client_model.PaneSplitCommit {
-    const foreign: source_namespace.schema.TabLocation = .{
+pub fn foreignWorkspaceCommit(testing: *TestingModel) !PaneSplitCommitType {
+    const foreign: TabLocationType = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = testing.second.tab_id,
     };
@@ -89,7 +94,7 @@ fn addSecondTab(testing: *TestingModel) !void {
     }, .{ .cols = 40, .rows = 10 });
 }
 
-fn command(testing: *const TestingModel) client_model.CommitPaneSplit {
+fn command(testing: *const TestingModel) CommitPaneSplitType {
     return .{
         .split = .{
             .target_pane = testing.first_pane,

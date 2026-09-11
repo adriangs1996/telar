@@ -1,6 +1,10 @@
+const PaneIdType = @import("telar-core").PaneId;
+const TabLocationType = @import("telar-core").TabLocation;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const LayoutType = @import("../workspace/WorkspaceLayout.zig");
 const WorkspaceArrival = @This();
-const source_namespace = @import("types.zig");
-pane_id: source_namespace.schema.PaneId,
-location: source_namespace.schema.TabLocation,
-size: source_namespace.schema.TerminalSize,
-saved_layout: ?source_namespace.layout_mod.Layout = null,
+
+pane_id: PaneIdType,
+location: TabLocationType,
+size: TerminalSizeType,
+saved_layout: ?LayoutType = null,

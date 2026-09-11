@@ -1,5 +1,6 @@
+const PaneKeyType = @import("../../../pane/PaneKey.zig");
 const ReportAgentSession = @This();
-const pane_mod = @import("../../../pane/root.zig");
-pane: pane_mod.PaneKey,
+
+pane: PaneKeyType,
 session: []const u8,
 now_ms: i64,

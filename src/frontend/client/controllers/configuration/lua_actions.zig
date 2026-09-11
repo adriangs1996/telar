@@ -1,27 +1,27 @@
 //! Adapts the client-owned Lua generation to semantic application actions.
 
-const lua_config = @import("../../../config/root.zig");
-const input = @import("../../../input/root.zig");
-const input_application = @import("telar-client").application.input;
-
 const Client = @import("../../Client.zig");
-const client_actions = @import("../input/actions.zig");
-const plugin_actions = @import("plugin_actions.zig");
-const lua_action = input_application.lua_action;
-
-pub const Command = lua_action.Command;
-pub const Outcome = lua_action.Outcome;
-
+const ApplicationInputLuaActionCommand = @import("telar-client").ApplicationInputLuaActionCommand;
+const ApplicationInputLuaActionOutcome = @import("telar-client").ApplicationInputLuaActionOutcome;
 const EvaluationContext = @import("EvaluationContext.zig");
+const LuaActionHandlerType = @import("telar-client").LuaActionHandler;
+const CallbackContextType = @import("telar-client").CallbackContext;
+const InvocationType = @import("telar-client").Invocation;
+const EffectBatchType = @import("telar-client").EffectBatch;
+const ValidationType = @import("telar-client").Validation;
+const ActionType = @import("telar-client").Action;
+const DispositionType = @import("telar-client").Disposition;
+const plugin_actions = @import("plugin_actions.zig");
+const client_actions = @import("../input/actions.zig");
 
 /// Evaluates one configured Lua action against a model value snapshot.
 ///
 /// ```zig
 /// const outcome = try execute(client, command);
 /// ```
-pub fn execute(client: *Client, command: Command) !Outcome {
+pub fn execute(client: *Client, command: ApplicationInputLuaActionCommand) !ApplicationInputLuaActionOutcome {
     var context: EvaluationContext = .{ .client = client };
-    var use_case: lua_action.LuaActionHandler = .{
+    var use_case: LuaActionHandlerType = .{
         .model = &client.model,
         .effects = .{
             .context = &context,
@@ -34,7 +34,7 @@ pub fn execute(client: *Client, command: Command) !Outcome {
     return use_case.execute(command);
 }
 
-fn invoke(raw_context: *anyopaque, command: Command, callback_context: lua_config.CallbackContext) lua_action.Invocation {
+fn invoke(raw_context: *anyopaque, command: ApplicationInputLuaActionCommand, callback_context: CallbackContextType) InvocationType {
     const context: *EvaluationContext = @ptrCast(@alignCast(raw_context));
     const generation = context.client.lua_generation orelse return .unavailable;
 
@@ -62,7 +62,7 @@ fn invoke(raw_context: *anyopaque, command: Command, callback_context: lua_confi
     };
 }
 
-fn validate(raw_context: *anyopaque, batch: *const lua_config.EffectBatch) lua_action.Validation {
+fn validate(raw_context: *anyopaque, batch: *const EffectBatchType) ValidationType {
     const context: *EvaluationContext = @ptrCast(@alignCast(raw_context));
     for (batch.slice()) |effect| {
         switch (effect) {
@@ -93,7 +93,7 @@ fn validate(raw_context: *anyopaque, batch: *const lua_config.EffectBatch) lua_a
     return .valid;
 }
 
-fn apply(raw_context: *anyopaque, effect: input.action.Action) !lua_action.Disposition {
+fn apply(raw_context: *anyopaque, effect: ActionType) !DispositionType {
     const context: *EvaluationContext = @ptrCast(@alignCast(raw_context));
     return switch (effect) {
         .plugin => |requested| plugin: {
@@ -112,7 +112,7 @@ fn apply(raw_context: *anyopaque, effect: input.action.Action) !lua_action.Dispo
     };
 }
 
-fn invocationFailure(context: *EvaluationContext, reason: anyerror) lua_action.Invocation {
+fn invocationFailure(context: *EvaluationContext, reason: anyerror) InvocationType {
     if (context.diagnostic.len == 0) {
         context.diagnostic.set("Lua action failed: {s}", .{@errorName(reason)});
     }
@@ -123,7 +123,7 @@ fn invocationFailure(context: *EvaluationContext, reason: anyerror) lua_action.I
     } };
 }
 
-fn validationFailure(context: *EvaluationContext, reason: anyerror) lua_action.Validation {
+fn validationFailure(context: *EvaluationContext, reason: anyerror) ValidationType {
     return .{ .failed = .{
         .reason = reason,
         .diagnostic = context.diagnostic,

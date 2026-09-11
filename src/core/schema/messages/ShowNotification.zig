@@ -1,5 +1,6 @@
-const ShowNotification = @This();
-const source_namespace = @import("notification_support.zig");
+const id = @import("../id.zig");
 const Notification = @import("Notification.zig");
-request_id: source_namespace.RequestId,
+const ShowNotification = @This();
+
+request_id: id.RequestId,
 notification: Notification,

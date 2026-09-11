@@ -1,26 +1,31 @@
-const State = @This();
-const source_namespace = @import("copy_mode.zig");
+const PaneIdType = @import("telar-core").PaneId;
 const Point = @import("Point.zig");
 const PointerSelection = @import("PointerSelection.zig");
-const View = @import("View.zig");
-const core = @import("telar-core");
+const copy_mode = @import("copy_mode.zig");
+const max_search_matches = @import("telar-core").max_search_matches;
+const SearchMatchType = @import("telar-core").SearchMatch;
+const View = @import("CopyModeView.zig");
+const GranularityType = @import("telar-core").Granularity;
 const Screen = @import("Screen.zig");
 const PointerMotion = @import("PointerMotion.zig");
 const std = @import("std");
 const Viewport = @import("Viewport.zig");
-pane_id: source_namespace.schema.PaneId,
+const ScrollType = @import("telar-core").Scroll;
+const State = @This();
+
+pane_id: PaneIdType,
 cursor: Point,
 pointer: ?PointerSelection = null,
 anchor: ?Point = null,
 linewise: bool = false,
 entry_offset: u32,
 viewport_offset: u32,
-search_direction: source_namespace.Direction = .forward,
-matches: [source_namespace.max_matches]source_namespace.schema.SearchMatch = @splat(.{ .x = 0, .y = 0, .len = 0 }),
+search_direction: copy_mode.Direction = .forward,
+matches: [max_search_matches]SearchMatchType = @splat(.{ .x = 0, .y = 0, .len = 0 }),
 match_count: u8 = 0,
 match_index: u8 = 0,
 
-pub fn init(pane_id: source_namespace.schema.PaneId, cursor: Point, viewport_offset: u32) State {
+pub fn init(pane_id: PaneIdType, cursor: Point, viewport_offset: u32) State {
     return .{
         .pane_id = pane_id,
         .cursor = cursor,
@@ -40,8 +45,8 @@ pub fn view(state: State) View {
 
 /// Captures a word or line boundary once; subsequent drags retain it.
 /// Example: `state.beginPointer(.word, screen);`.
-pub fn beginPointer(state: *State, granularity: core.select.Granularity, screen: Screen) void {
-    const span = source_namespace.pointerSpan(state.cursor, granularity, screen);
+pub fn beginPointer(state: *State, granularity: GranularityType, screen: Screen) void {
+    const span = copy_mode.pointerSpan(state.cursor, granularity, screen);
     state.pointer = .{
         .start = span[0],
         .end = span[1],
@@ -66,8 +71,8 @@ pub fn movePointer(state: *State, motion: PointerMotion, screen: Screen) void {
         .x = @min(motion.position.x, screen.buffer.w - 1),
         .y = screen.scroll.offset + @min(motion.position.y, screen.buffer.h - 1),
     };
-    const span = source_namespace.pointerSpan(point, pointer.granularity, screen);
-    const backwards = source_namespace.less(point, pointer.start);
+    const span = copy_mode.pointerSpan(point, pointer.granularity, screen);
+    const backwards = copy_mode.less(point, pointer.start);
     state.anchor = if (backwards) pointer.end else pointer.start;
     state.cursor = if (backwards) span[0] else span[1];
     if (pointer.granularity == .character and std.meta.eql(span[0], pointer.start) and std.meta.eql(span[1], pointer.end)) {
@@ -117,7 +122,7 @@ pub fn top(state: *State) void {
     state.viewport_offset = 0;
 }
 
-pub fn bottom(state: *State, scroll: source_namespace.schema.frame.Scroll, rows: u16) void {
+pub fn bottom(state: *State, scroll: ScrollType, rows: u16) void {
     state.cursor.y = scroll.total_rows -| 1;
     state.viewport_offset = scroll.maxOffset(rows);
 }
@@ -137,7 +142,7 @@ pub fn lineEnd(state: *State, cols: u16) void {
 /// ```zig
 /// state.applyMatches(results, viewport);
 /// ```
-pub fn applyMatches(state: *State, results: []const source_namespace.schema.SearchMatch, viewport: Viewport) void {
+pub fn applyMatches(state: *State, results: []const SearchMatchType, viewport: Viewport) void {
     state.match_count = @intCast(@min(results.len, state.matches.len));
     @memcpy(state.matches[0..state.match_count], results[0..state.match_count]);
     if (state.match_count == 0) {
@@ -148,7 +153,7 @@ pub fn applyMatches(state: *State, results: []const source_namespace.schema.Sear
     switch (state.search_direction) {
         .forward => {
             for (state.matchSlice(), 0..) |match, index| {
-                if (source_namespace.less(state.cursor, .{ .x = match.x, .y = match.y })) {
+                if (copy_mode.less(state.cursor, .{ .x = match.x, .y = match.y })) {
                     selected = @intCast(index);
                     break;
                 }
@@ -159,7 +164,7 @@ pub fn applyMatches(state: *State, results: []const source_namespace.schema.Sear
             while (index > 0) {
                 index -= 1;
                 const match = state.matches[index];
-                if (source_namespace.less(.{ .x = match.x, .y = match.y }, state.cursor)) {
+                if (copy_mode.less(.{ .x = match.x, .y = match.y }, state.cursor)) {
                     selected = @intCast(index);
                     break;
                 }
@@ -189,7 +194,7 @@ pub fn cycleMatch(state: *State, delta: i2, viewport: Viewport) void {
     state.gotoMatch(@intCast(index), viewport);
 }
 
-pub fn matchSlice(state: *const State) []const source_namespace.schema.SearchMatch {
+pub fn matchSlice(state: *const State) []const SearchMatchType {
     return state.matches[0..state.match_count];
 }
 
@@ -203,7 +208,7 @@ fn gotoMatch(state: *State, index: u8, viewport: Viewport) void {
     state.reveal(viewport.rows, viewport.scroll);
 }
 
-fn reveal(state: *State, rows: u16, scroll: source_namespace.schema.frame.Scroll) void {
+fn reveal(state: *State, rows: u16, scroll: ScrollType) void {
     if (state.cursor.y < state.viewport_offset) {
         state.viewport_offset = state.cursor.y;
     } else if (state.cursor.y >= state.viewport_offset + rows) {

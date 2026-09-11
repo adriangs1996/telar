@@ -1,7 +1,8 @@
-const GraphicsBudget = @This();
 const ParkingMutex = @import("ParkingMutex.zig");
 const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 const std = @import("std");
+const GraphicsBudget = @This();
+
 mutex: ParkingMutex = .{},
 limit: usize,
 used: usize = 0,

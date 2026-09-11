@@ -1,4 +1,5 @@
+const PaneIdType = @import("telar-core").PaneId;
 const Pane = @This();
-const core = @import("telar-core");
-id: core.schema.PaneId,
+
+id: PaneIdType,
 generation: u64,

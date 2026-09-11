@@ -1,5 +1,18 @@
-const source_namespace = @import("observability.zig");
-const event_sources = @import("../../event_sources.zig");
+const SystemMetricsSample = @import("../../observability/SystemMetricsSample.zig");
+const State = @import("../../observability/State.zig");
+const GenericSystemMetricsCoordinatorRuntimePort = @import("../../observability/GenericSystemMetricsCoordinatorRuntimePort.zig").Type;
+const GenericSystemMetricsCoordinator = @import("../../observability/GenericSystemMetricsCoordinator.zig").Type;
+const SourcesType = @import("../../Sources.zig");
+const SamplerType = @import("../../observability/Sampler.zig");
+const system_metrics_module = @import("../../observability/system_metrics.zig");
+const GenericTelemetryTickCoordinatorRuntimePort = @import("../../observability/GenericTelemetryTickCoordinatorRuntimePort.zig").Type;
+const GenericTelemetryTickCoordinator = @import("../../observability/GenericTelemetryTickCoordinator.zig").Type;
+const store_support = @import("../../client/store_support.zig");
+const AttachmentStoreType = @import("../../attachment/AttachmentStore.zig");
+const ClientSampleType = @import("../../observability/ClientSample.zig");
+const telemetry_module = @import("../../observability/telemetry.zig");
+const std = @import("std");
+
 /// Binds observability event completions to one concrete Application type.
 ///
 /// ```zig
@@ -19,7 +32,7 @@ pub fn Type(comptime Application: type) type {
 
         /// Publishes a complete value-owned observation before client delivery.
         /// Example: `ObservabilityEvents.handleMetricsSample(&application, sample);`.
-        pub fn handleMetricsSample(application: *Application, sample: source_namespace.system_metrics_mod.Sample) void {
+        pub fn handleMetricsSample(application: *Application, sample: SystemMetricsSample) void {
             application.metrics.system_sample.observe(sample.duration_ns);
             application.metrics.system_sample_last_ns = sample.captured_ns;
             var coordinator = systemMetricsCoordinator(application);
@@ -32,7 +45,7 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// ObservabilityEvents.handleTelemetryTick(&application, telemetry, result);
         /// ```
-        pub fn handleTelemetryTick(application: *Application, telemetry: *source_namespace.TelemetryState, result: anyerror!void) void {
+        pub fn handleTelemetryTick(application: *Application, telemetry: *State, result: anyerror!void) void {
             var coordinator = telemetryTickCoordinator(application, telemetry);
             coordinator.handle(result);
         }
@@ -43,35 +56,35 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// ObservabilityEvents.handleTelemetryWritten(&application, telemetry, result);
         /// ```
-        pub fn handleTelemetryWritten(application: *Application, telemetry: *source_namespace.TelemetryState, result: anyerror!void) void {
+        pub fn handleTelemetryWritten(application: *Application, telemetry: *State, result: anyerror!void) void {
             switch (telemetry.finishWrite(result)) {
                 .ready => {},
                 .disable_sink => telemetry.deinit(application.io),
             }
         }
 
-        const system_metrics_runtime_port: source_namespace.system_metrics_coordinator.RuntimePort(Application) = .{
+        const system_metrics_runtime_port: GenericSystemMetricsCoordinatorRuntimePort(Application) = .{
             .rearm_tick = rearmSystemMetrics,
             .schedule = scheduleSystemMetrics,
             .pump_clients = pumpRuntimeClients,
         };
 
-        const RuntimeSystemMetricsCoordinator = source_namespace.system_metrics_coordinator.Coordinator(Application, system_metrics_runtime_port);
+        const RuntimeSystemMetricsCoordinator = GenericSystemMetricsCoordinator(Application, system_metrics_runtime_port);
 
         fn systemMetricsCoordinator(application: *Application) RuntimeSystemMetricsCoordinator {
             return RuntimeSystemMetricsCoordinator.init(application, .{ .sampler = &application.system_metrics, .pending = &application.system_metrics_pending });
         }
 
         fn rearmSystemMetrics(application: *Application) !void {
-            var sources = event_sources.Sources.init(application.io, application.select);
+            var sources = SourcesType.init(application.io, application.select);
             try sources.waitForSystemMetrics();
         }
 
-        fn scheduleSystemMetrics(application: *Application, sampler: source_namespace.system_metrics_mod.Sampler) !void {
-            try application.select.concurrent(.metrics_sampled, source_namespace.system_metrics_mod.sampleOwned, .{ application.io, sampler });
+        fn scheduleSystemMetrics(application: *Application, sampler: SamplerType) !void {
+            try application.select.concurrent(.metrics_sampled, system_metrics_module.sampleOwned, .{ application.io, sampler });
         }
 
-        const telemetry_tick_runtime_port: source_namespace.telemetry_tick_coordinator.RuntimePort(Application) = .{
+        const telemetry_tick_runtime_port: GenericTelemetryTickCoordinatorRuntimePort(Application) = .{
             .available = telemetryAvailable,
             .disable = disableTelemetry,
             .schedule_tick = scheduleTelemetryTick,
@@ -79,29 +92,29 @@ pub fn Type(comptime Application: type) type {
             .schedule_write = scheduleTelemetryWrite,
         };
 
-        const RuntimeTelemetryTickCoordinator = source_namespace.telemetry_tick_coordinator.Coordinator(Application, telemetry_tick_runtime_port);
+        const RuntimeTelemetryTickCoordinator = GenericTelemetryTickCoordinator(Application, telemetry_tick_runtime_port);
 
-        fn telemetryTickCoordinator(application: *Application, state: *source_namespace.TelemetryState) RuntimeTelemetryTickCoordinator {
+        fn telemetryTickCoordinator(application: *Application, state: *State) RuntimeTelemetryTickCoordinator {
             return RuntimeTelemetryTickCoordinator.init(application, state);
         }
 
-        fn telemetryAvailable(_: *Application, state: *const source_namespace.TelemetryState) bool {
+        fn telemetryAvailable(_: *Application, state: *const State) bool {
             return state.available();
         }
 
-        fn disableTelemetry(application: *Application, state: *source_namespace.TelemetryState) void {
+        fn disableTelemetry(application: *Application, state: *State) void {
             state.deinit(application.io);
         }
 
         fn scheduleTelemetryTick(application: *Application) !void {
-            var sources = event_sources.Sources.init(application.io, application.select);
+            var sources = SourcesType.init(application.io, application.select);
             try sources.waitForTelemetry();
         }
 
         fn formatTelemetrySample(application: *Application, buffer: []u8) ![]const u8 {
-            var attachment_stores: [source_namespace.max_clients]*const source_namespace.AttachmentStore = undefined;
+            var attachment_stores: [store_support.max_clients]*const AttachmentStoreType = undefined;
             var attachment_count: usize = 0;
-            var clients: source_namespace.telemetry_mod.ClientSample = .{ .count = application.clients.count };
+            var clients: ClientSampleType = .{ .count = application.clients.count };
 
             for (&application.clients.items) |*slot| {
                 const session = slot.* orelse continue;
@@ -117,7 +130,7 @@ pub fn Type(comptime Application: type) type {
             const proxy_metrics = application.proxy_runtime.metrics();
             const workspaces = application.workspaceReader();
 
-            return source_namespace.formatRuntimeTelemetry(buffer, .{
+            return telemetry_module.formatRuntimeTelemetry(buffer, .{
                 .io = application.io,
                 .metrics = &application.metrics,
                 .clients = clients,
@@ -159,11 +172,11 @@ pub fn Type(comptime Application: type) type {
             });
         }
 
-        fn scheduleTelemetryWrite(application: *Application, state: *source_namespace.TelemetryState, line: []const u8) !void {
+        fn scheduleTelemetryWrite(application: *Application, state: *State, line: []const u8) !void {
             try application.select.concurrent(.telemetry_written, writeDiagnostics, .{ application.io, state, line });
         }
 
-        fn writeDiagnostics(io: source_namespace.Io, state: *source_namespace.TelemetryState, bytes: []const u8) anyerror!void {
+        fn writeDiagnostics(io: std.Io, state: *State, bytes: []const u8) anyerror!void {
             try state.write(io, bytes);
         }
 

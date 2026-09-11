@@ -1,20 +1,24 @@
-const Prompt = @This();
-const source_namespace = @import("name_prompt.zig");
+const TabIdType = @import("telar-core").TabId;
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const copy_mode_module = @import("../input/copy_mode.zig");
 const History = @import("History.zig");
+const name_prompt = @import("name_prompt.zig");
+const Prompt = @This();
+
 mode: union(enum) {
-    rename_tab: source_namespace.schema.TabId,
+    rename_tab: TabIdType,
     create_workspace,
-    rename_workspace: source_namespace.schema.WorkspaceLocation,
-    copy_search: source_namespace.copy_mode.Direction,
+    rename_workspace: WorkspaceLocationType,
+    copy_search: copy_mode_module.Direction,
     goto: struct { selection: u16 = 0 },
     history: History,
     suggest,
 },
-field: source_namespace.Field,
+field: name_prompt.Field,
 pasting: bool = false,
 
 /// Example: `switch (prompt.target()) { ... }`.
-pub fn target(prompt: *const Prompt) source_namespace.Target {
+pub fn target(prompt: *const Prompt) name_prompt.Target {
     return switch (prompt.mode) {
         .rename_tab => |id| .{ .rename_tab = id },
         .create_workspace => .create_workspace,
@@ -36,7 +40,7 @@ pub fn selection(prompt: *const Prompt) u16 {
 }
 
 /// Example: `const scope = prompt.mode.history.scope();`.
-pub fn scope(prompt: *const Prompt) source_namespace.HistoryScope {
+pub fn scope(prompt: *const Prompt) name_prompt.HistoryScope {
     return if (prompt.mode == .history) prompt.mode.history.scope else .global;
 }
 

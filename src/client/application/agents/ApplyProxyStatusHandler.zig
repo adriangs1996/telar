@@ -1,8 +1,10 @@
-const ApplyProxyStatusHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const ProxyStatusDelivery = @import("ProxyStatusDelivery.zig");
-const core = @import("telar-core");
-model: *client_model.Model,
+const ProxyStatusType = @import("telar-core").ProxyStatus;
+const ProxyStatusCommitType = @import("../../model/ProxyStatusCommit.zig");
+const ApplyProxyStatusHandler = @This();
+
+model: *ModelType,
 delivery: ProxyStatusDelivery,
 
 /// Commits a changed proxy state before delivering its exact transition.
@@ -11,7 +13,7 @@ delivery: ProxyStatusDelivery,
 /// ```zig
 /// const commit = try handler.execute(.{ .active = true, .scope = .exact, .system_trusted = false }) orelse return;
 /// ```
-pub fn execute(handler: *ApplyProxyStatusHandler, status: core.schema.ProxyStatus) !?client_model.ProxyStatusCommit {
+pub fn execute(handler: *ApplyProxyStatusHandler, status: ProxyStatusType) !?ProxyStatusCommitType {
     const commit = handler.model.reconcileProxyStatus(status) orelse return null;
 
     try handler.delivery.deliver(handler.delivery.context, commit);

@@ -1,18 +1,20 @@
+const routing_tests = @import("routing_tests.zig");
+const KeyType = @import("Key.zig");
+const keybind_module = @import("keybind.zig");
 const Capture = @This();
-const source_namespace = @import("routing_tests.zig");
-const input = @import("root.zig");
-actions: [8]source_namespace.Action = undefined,
+
+actions: [8]routing_tests.Action = undefined,
 action_count: usize = 0,
-keys: [8]input.Key = undefined,
+keys: [8]KeyType = undefined,
 key_count: usize = 0,
 
-pub fn action(capture: *Capture, value: source_namespace.Action) !source_namespace.keybind.Control {
+pub fn action(capture: *Capture, value: routing_tests.Action) !keybind_module.Control {
     capture.actions[capture.action_count] = value;
     capture.action_count += 1;
     return .continue_routing;
 }
 
-pub fn key(capture: *Capture, value: input.Key) !void {
+pub fn key(capture: *Capture, value: KeyType) !void {
     capture.keys[capture.key_count] = value;
     capture.key_count += 1;
 }

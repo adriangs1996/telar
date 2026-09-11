@@ -1,25 +1,29 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("workspace_snapshot.zig");
+const ModelType = @import("../../model/Model.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const WorkspaceTabInputType = @import("../../workspace/WorkspaceTabInput.zig");
 const std = @import("std");
-model: *client_model.Model,
-workspace: source_namespace.schema.WorkspaceLocation,
-first: source_namespace.schema.TabLocation,
-second: source_namespace.schema.TabLocation,
-tabs: [1]client_model.WorkspaceTabInput,
+const WorkspaceSnapshotInput = @import("../../workspace/WorkspaceSnapshotInput.zig");
+const TestingModel = @This();
+
+model: *ModelType,
+workspace: WorkspaceLocationType,
+first: TabLocationType,
+second: TabLocationType,
+tabs: [1]WorkspaceTabInputType,
 
 pub fn init() !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const first: source_namespace.schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const first: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: source_namespace.schema.TabLocation = .{
+    const second: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -49,7 +53,7 @@ pub fn deinit(testing: *TestingModel) void {
     std.testing.allocator.destroy(testing.model);
 }
 
-pub fn snapshot(testing: *const TestingModel) client_model.WorkspaceSnapshot {
+pub fn snapshot(testing: *const TestingModel) WorkspaceSnapshotInput {
     return .{
         .workspace = testing.workspace,
         .name = "renamed",

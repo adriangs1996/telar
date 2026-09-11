@@ -1,35 +1,20 @@
 //! Application transaction for creating a workspace and its root pane.
 
+const LaunchViewType = @import("telar-core").LaunchView;
+const CreateWorkspace = @import("CreateWorkspace.zig");
+const StateType = @import("../../../workspace/State.zig");
+const RepositoryType = @import("../../../workspace/Repository.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const workspace_mod = @import("../../../workspace/root.zig");
-
-pub const schema = core.schema;
-pub const WorkspaceRepository = workspace_mod.Repository;
-
-pub const CreateWorkspace = @import("CreateWorkspace.zig");
-
-pub const CreateWorkspaceResult = @import("CreateWorkspaceResult.zig");
-
-pub const PrepareLaunch = @import("CreateWorkspacePrepareLaunch.zig");
-
-pub const LaunchPane = @import("CreateWorkspaceLaunchPane.zig");
-
-pub const LaunchedPane = @import("CreateWorkspaceLaunchedPane.zig");
-
-pub const LaunchAuthority = @import("CreateWorkspaceLaunchAuthority.zig");
-
-pub const GeometryLease = @import("CreateWorkspaceGeometryLease.zig");
-
-pub const PaneLauncher = @import("CreateWorkspacePaneLauncher.zig");
-
-pub const ClientAttachment = @import("ClientAttachment.zig");
-
-pub const EventPublisher = @import("CreateWorkspaceEventPublisher.zig");
-
-pub const CreateWorkspaceExecutor = @import("CreateWorkspaceExecutor.zig");
-
-pub const CreateWorkspaceHandler = @import("CreateWorkspaceHandler.zig");
+const CreateWorkspaceAuthorityCapture = @import("CreateWorkspaceAuthorityCapture.zig");
+const CreateWorkspaceGeometryCapture = @import("CreateWorkspaceGeometryCapture.zig");
+const CreateWorkspaceLauncherCapture = @import("CreateWorkspaceLauncherCapture.zig");
+const pane_module = @import("telar-core").pane;
+const CreateWorkspaceAttachmentCapture = @import("CreateWorkspaceAttachmentCapture.zig");
+const CreateWorkspaceEventCapture = @import("CreateWorkspaceEventCapture.zig");
+const CreateWorkspaceHandler = @import("CreateWorkspaceHandler.zig");
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const raw_module = @import("telar-core").raw;
+const state_support = @import("../../../workspace/state_support.zig");
 
 pub fn mapLaunchError(spawn_error: anyerror) anyerror {
     return switch (spawn_error) {
@@ -39,17 +24,7 @@ pub fn mapLaunchError(spawn_error: anyerror) anyerror {
     };
 }
 
-const AuthorityCapture = @import("CreateWorkspaceAuthorityCapture.zig");
-
-const GeometryCapture = @import("CreateWorkspaceGeometryCapture.zig");
-
-const LauncherCapture = @import("CreateWorkspaceLauncherCapture.zig");
-
-const AttachmentCapture = @import("CreateWorkspaceAttachmentCapture.zig");
-
-const EventCapture = @import("CreateWorkspaceEventCapture.zig");
-
-fn testingLaunch(cwd: []const u8) schema.LaunchView {
+fn testingLaunch(cwd: []const u8) LaunchViewType {
     return .{
         .cwd = cwd,
         .argument_count = 1,
@@ -69,15 +44,15 @@ fn testingCommand(name: []const u8) CreateWorkspace {
 }
 
 test "CreateWorkspaceHandler commits before publishing and replacing attachments" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const initial_revision = workspaces.reader().revision();
-    var authority: AuthorityCapture = .{};
-    var geometry: GeometryCapture = .{};
-    var launcher: LauncherCapture = .{ .pane_id = try schema.id.pane(17) };
-    var attachment: AttachmentCapture = .{};
-    var events: EventCapture = .{
+    var authority: CreateWorkspaceAuthorityCapture = .{};
+    var geometry: CreateWorkspaceGeometryCapture = .{};
+    var launcher: CreateWorkspaceLauncherCapture = .{ .pane_id = try pane_module(17) };
+    var attachment: CreateWorkspaceAttachmentCapture = .{};
+    var events: CreateWorkspaceEventCapture = .{
         .reader = workspaces.reader(),
         .initial_revision = initial_revision,
     };
@@ -118,15 +93,15 @@ test "CreateWorkspaceHandler commits before publishing and replacing attachments
 }
 
 test "CreateWorkspaceHandler stops before proposal when launch authority fails" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const revision = workspaces.reader().revision();
-    var authority: AuthorityCapture = .{ .failure = error.InvalidLaunchCwd };
-    var geometry: GeometryCapture = .{};
-    var launcher: LauncherCapture = .{ .pane_id = try schema.id.pane(17) };
-    var attachment: AttachmentCapture = .{};
-    var events: EventCapture = .{ .reader = workspaces.reader(), .initial_revision = revision };
+    var authority: CreateWorkspaceAuthorityCapture = .{ .failure = error.InvalidLaunchCwd };
+    var geometry: CreateWorkspaceGeometryCapture = .{};
+    var launcher: CreateWorkspaceLauncherCapture = .{ .pane_id = try pane_module(17) };
+    var attachment: CreateWorkspaceAttachmentCapture = .{};
+    var events: CreateWorkspaceEventCapture = .{ .reader = workspaces.reader(), .initial_revision = revision };
     var handler: CreateWorkspaceHandler = .{
         .workspaces = &workspaces,
         .authority = authority.port(),
@@ -147,15 +122,15 @@ test "CreateWorkspaceHandler stops before proposal when launch authority fails" 
 }
 
 test "CreateWorkspaceHandler maps proposal validation without consuming identity" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const revision = workspaces.reader().revision();
-    var authority: AuthorityCapture = .{};
-    var geometry: GeometryCapture = .{};
-    var launcher: LauncherCapture = .{ .pane_id = try schema.id.pane(17) };
-    var attachment: AttachmentCapture = .{};
-    var events: EventCapture = .{ .reader = workspaces.reader(), .initial_revision = revision };
+    var authority: CreateWorkspaceAuthorityCapture = .{};
+    var geometry: CreateWorkspaceGeometryCapture = .{};
+    var launcher: CreateWorkspaceLauncherCapture = .{ .pane_id = try pane_module(17) };
+    var attachment: CreateWorkspaceAttachmentCapture = .{};
+    var events: CreateWorkspaceEventCapture = .{ .reader = workspaces.reader(), .initial_revision = revision };
     var handler: CreateWorkspaceHandler = .{
         .workspaces = &workspaces,
         .authority = authority.port(),
@@ -164,7 +139,7 @@ test "CreateWorkspaceHandler maps proposal validation without consuming identity
         .attachment = attachment.port(),
         .events = events.publisher(),
     };
-    const oversized: [schema.max_tab_label_bytes + 1]u8 = @splat('x');
+    const oversized: [max_tab_label_bytes_module + 1]u8 = @splat('x');
 
     try std.testing.expectError(error.WorkspaceCreateFailed, handler.execute(testingCommand(&oversized)));
 
@@ -173,28 +148,28 @@ test "CreateWorkspaceHandler maps proposal validation without consuming identity
         .workspace => |id| id,
         .worktree => unreachable,
     };
-    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(workspace_id));
-    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(inserted.tab_id));
+    try std.testing.expectEqual(@as(u64, 1), raw_module(workspace_id));
+    try std.testing.expectEqual(@as(u64, 1), raw_module(inserted.tab_id));
     try std.testing.expectEqual(@as(usize, 0), geometry.acquire_count);
     try std.testing.expectEqual(@as(usize, 0), launcher.call_count);
     try std.testing.expectEqual(@as(usize, 0), events.count);
 }
 
 test "CreateWorkspaceHandler reports repository capacity before runtime effects" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
 
-    while (workspaces.reader().count() < workspace_mod.max_workspaces) {
+    while (workspaces.reader().count() < state_support.max_workspaces) {
         _ = try workspaces.insert(.{ .path = "/work/full" });
     }
 
     const revision = workspaces.reader().revision();
-    var authority: AuthorityCapture = .{};
-    var geometry: GeometryCapture = .{};
-    var launcher: LauncherCapture = .{ .pane_id = try schema.id.pane(17) };
-    var attachment: AttachmentCapture = .{};
-    var events: EventCapture = .{ .reader = workspaces.reader(), .initial_revision = revision };
+    var authority: CreateWorkspaceAuthorityCapture = .{};
+    var geometry: CreateWorkspaceGeometryCapture = .{};
+    var launcher: CreateWorkspaceLauncherCapture = .{ .pane_id = try pane_module(17) };
+    var attachment: CreateWorkspaceAttachmentCapture = .{};
+    var events: CreateWorkspaceEventCapture = .{ .reader = workspaces.reader(), .initial_revision = revision };
     var handler: CreateWorkspaceHandler = .{
         .workspaces = &workspaces,
         .authority = authority.port(),
@@ -206,7 +181,7 @@ test "CreateWorkspaceHandler reports repository capacity before runtime effects"
 
     try std.testing.expectError(error.WorkspaceCreateFailed, handler.execute(testingCommand("overflow")));
 
-    try std.testing.expectEqual(workspace_mod.max_workspaces, workspaces.reader().count());
+    try std.testing.expectEqual(state_support.max_workspaces, workspaces.reader().count());
     try std.testing.expectEqual(revision, workspaces.reader().revision());
     try std.testing.expectEqual(@as(usize, 0), geometry.acquire_count);
     try std.testing.expectEqual(@as(usize, 0), launcher.call_count);
@@ -215,15 +190,15 @@ test "CreateWorkspaceHandler reports repository capacity before runtime effects"
 }
 
 test "CreateWorkspaceHandler rolls back when geometry is unavailable" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const revision = workspaces.reader().revision();
-    var authority: AuthorityCapture = .{};
-    var geometry: GeometryCapture = .{ .available = false };
-    var launcher: LauncherCapture = .{ .pane_id = try schema.id.pane(17) };
-    var attachment: AttachmentCapture = .{};
-    var events: EventCapture = .{ .reader = workspaces.reader(), .initial_revision = revision };
+    var authority: CreateWorkspaceAuthorityCapture = .{};
+    var geometry: CreateWorkspaceGeometryCapture = .{ .available = false };
+    var launcher: CreateWorkspaceLauncherCapture = .{ .pane_id = try pane_module(17) };
+    var attachment: CreateWorkspaceAttachmentCapture = .{};
+    var events: CreateWorkspaceEventCapture = .{ .reader = workspaces.reader(), .initial_revision = revision };
     var handler: CreateWorkspaceHandler = .{
         .workspaces = &workspaces,
         .authority = authority.port(),
@@ -244,18 +219,18 @@ test "CreateWorkspaceHandler rolls back when geometry is unavailable" {
 }
 
 fn expectLaunchFailure(spawn_failure: anyerror, command_failure: anyerror) !void {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
     const revision = workspaces.reader().revision();
-    var authority: AuthorityCapture = .{};
-    var geometry: GeometryCapture = .{};
-    var launcher: LauncherCapture = .{
+    var authority: CreateWorkspaceAuthorityCapture = .{};
+    var geometry: CreateWorkspaceGeometryCapture = .{};
+    var launcher: CreateWorkspaceLauncherCapture = .{
         .failure = spawn_failure,
-        .pane_id = try schema.id.pane(17),
+        .pane_id = try pane_module(17),
     };
-    var attachment: AttachmentCapture = .{};
-    var events: EventCapture = .{ .reader = workspaces.reader(), .initial_revision = revision };
+    var attachment: CreateWorkspaceAttachmentCapture = .{};
+    var events: CreateWorkspaceEventCapture = .{ .reader = workspaces.reader(), .initial_revision = revision };
     var handler: CreateWorkspaceHandler = .{
         .workspaces = &workspaces,
         .authority = authority.port(),
@@ -280,8 +255,8 @@ fn expectLaunchFailure(spawn_failure: anyerror, command_failure: anyerror) !void
         .workspace => |id| id,
         .worktree => unreachable,
     };
-    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(workspace_id));
-    try std.testing.expectEqual(@as(u64, 1), schema.id.raw(inserted.tab_id));
+    try std.testing.expectEqual(@as(u64, 1), raw_module(workspace_id));
+    try std.testing.expectEqual(@as(u64, 1), raw_module(inserted.tab_id));
 }
 
 test "CreateWorkspaceHandler rolls back every pane launch failure category" {
@@ -291,14 +266,14 @@ test "CreateWorkspaceHandler rolls back every pane launch failure category" {
 }
 
 test "CreateWorkspaceHandler preserves committed state after attachment failure" {
-    var state: workspace_mod.State = .{};
-    var workspaces = WorkspaceRepository.init(&state, std.testing.allocator);
+    var state: StateType = .{};
+    var workspaces = RepositoryType.init(&state, std.testing.allocator);
     defer workspaces.deinit();
-    var authority: AuthorityCapture = .{};
-    var geometry: GeometryCapture = .{};
-    var launcher: LauncherCapture = .{ .pane_id = try schema.id.pane(17) };
-    var attachment: AttachmentCapture = .{ .failure = error.AttachmentUnavailable };
-    var events: EventCapture = .{
+    var authority: CreateWorkspaceAuthorityCapture = .{};
+    var geometry: CreateWorkspaceGeometryCapture = .{};
+    var launcher: CreateWorkspaceLauncherCapture = .{ .pane_id = try pane_module(17) };
+    var attachment: CreateWorkspaceAttachmentCapture = .{ .failure = error.AttachmentUnavailable };
+    var events: CreateWorkspaceEventCapture = .{
         .reader = workspaces.reader(),
         .initial_revision = workspaces.reader().revision(),
     };

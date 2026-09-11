@@ -5,23 +5,18 @@
 //! because the runtime lives on another machine.
 
 const std = @import("std");
-const core = @import("telar-core");
-const frontend = @import("telar-frontend");
-const runtime_connection = @import("runtime_connection.zig");
-
-pub const Io = std.Io;
-const RuntimeConnector = runtime_connection.RuntimeConnector;
-pub const Discovery = @import("remote_discovery.zig").Discovery;
-pub const LaunchDefaults = @import("remote_discovery.zig").LaunchDefaults;
+const Forward = @import("Forward.zig");
+const RuntimeConnector = @import("RuntimeConnector.zig");
+const SocketChannelType = @import("telar-core").SocketChannel;
+const Discovery = @import("Discovery.zig");
+const remote_discovery = @import("remote_discovery.zig");
 
 pub const connect_attempts = 100;
 pub const connect_interval_ms = 100;
 
-const endpoint_timeout: Io.Timeout = .{
+const endpoint_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(30) },
 };
-
-pub const Forward = @import("Forward.zig");
 
 /// Discovers the remote home, shell and runtime socket over SSH, then starts
 /// one `ssh -N -L` forward and waits until its private socket is connectable.
@@ -45,7 +40,7 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
         destinationHash(destination),
     });
     forward.local_path_len = local_path.len;
-    Io.Dir.deleteFileAbsolute(init.io, local_path) catch {};
+    std.Io.Dir.deleteFileAbsolute(init.io, local_path) catch {};
 
     var forward_spec_buffer: [2 * std.fs.max_path_bytes + 1]u8 = undefined;
     const forward_spec = try std.fmt.bufPrint(&forward_spec_buffer, "{s}:{s}", .{ local_path, forward.discovery.endpoint() });
@@ -80,7 +75,7 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
 /// ```zig
 /// var connection = try connectForwarded(init, &connector);
 /// ```
-pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnector) !core.transport.SocketChannel {
+pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnector) !SocketChannelType {
     var attempt: usize = 0;
     while (attempt < connect_attempts) : (attempt += 1) {
         if (connector.connect()) |connection| {
@@ -126,10 +121,10 @@ fn validateDestination(destination: []const u8) !void {
     }
 }
 
-fn waitForSocket(io: Io, path: []const u8) !void {
+fn waitForSocket(io: std.Io, path: []const u8) !void {
     var attempt: usize = 0;
     while (attempt < connect_attempts) : (attempt += 1) {
-        if (Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false })) |_| {
+        if (std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false })) |_| {
             return;
         } else |_| {
             io.sleep(.fromMilliseconds(connect_interval_ms), .awake) catch {};
@@ -159,7 +154,7 @@ test "SSH destinations cannot inject options or control bytes" {
 }
 
 test {
-    _ = @import("remote_discovery.zig");
+    _ = remote_discovery;
 }
 
 test "destination hashes are stable and distinct" {

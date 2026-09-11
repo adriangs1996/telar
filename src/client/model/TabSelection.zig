@@ -1,7 +1,8 @@
+const TabLocationType = @import("telar-core").TabLocation;
 const TabSelection = @This();
-const source_namespace = @import("types.zig");
-previous: source_namespace.schema.TabLocation,
-selected: source_namespace.schema.TabLocation,
+
+previous: TabLocationType,
+selected: TabLocationType,
 previous_layout_revision: u64,
 selected_layout_revision: u64,
 workspace_revision: u64,

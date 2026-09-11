@@ -1,6 +1,7 @@
-const CreateTabExecutor = @This();
 const CreateTab = @import("CreateTab.zig");
 const CreateTabResult = @import("CreateTabResult.zig");
+const CreateTabExecutor = @This();
+
 context: *anyopaque,
 execute_fn: *const fn (*anyopaque, CreateTab) anyerror!CreateTabResult,
 

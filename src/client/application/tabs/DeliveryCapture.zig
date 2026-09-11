@@ -1,10 +1,12 @@
-const DeliveryCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("create_tab.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const ConfirmationDelivery = @import("ConfirmationDelivery.zig");
+const TabCreationType = @import("../../model/TabCreation.zig");
 const std = @import("std");
-model: *client_model.Model,
-expected: source_namespace.schema.TabLocation,
+const DeliveryCapture = @This();
+
+model: *ModelType,
+expected: TabLocationType,
 calls: usize = 0,
 observed_commit: bool = false,
 fail: bool = false,
@@ -13,7 +15,7 @@ pub fn port(capture: *DeliveryCapture) ConfirmationDelivery {
     return .{ .context = capture, .deliver = deliver };
 }
 
-fn deliver(context: *anyopaque, creation: client_model.TabCreation) !void {
+fn deliver(context: *anyopaque, creation: TabCreationType) !void {
     const capture: *DeliveryCapture = @ptrCast(@alignCast(context));
     const version = capture.model.version();
     const previous = capture.model.workspace.find(creation.previous.tab_id);

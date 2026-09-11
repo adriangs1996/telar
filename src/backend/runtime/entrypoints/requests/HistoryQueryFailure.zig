@@ -1,5 +1,7 @@
+const RequestIdType = @import("telar-core").RequestId;
+const FailureCodeType = @import("telar-core").FailureCode;
 const Failure = @This();
-const source_namespace = @import("history_query.zig");
-request_id: source_namespace.schema.RequestId,
-code: source_namespace.schema.FailureCode,
+
+request_id: RequestIdType,
+code: FailureCodeType,
 message: []const u8,

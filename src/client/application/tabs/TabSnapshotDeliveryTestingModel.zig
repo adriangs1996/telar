@@ -1,33 +1,38 @@
-const TestingModel = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_snapshot_delivery.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabLocationType = @import("telar-core").TabLocation;
+const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-model: *client_model.Model,
-target: source_namespace.schema.TabLocation,
-root: source_namespace.schema.PaneId,
-discovered: source_namespace.schema.PaneId,
-other_pane: source_namespace.schema.PaneId,
-many: [2]source_namespace.schema.PaneId,
-root_only: [1]source_namespace.schema.PaneId,
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabReconciliationType = @import("../../model/TabReconciliation.zig");
+const RectType = @import("telar-core").Rect;
+const TestingModel = @This();
+
+model: *ModelType,
+target: TabLocationType,
+root: PaneIdType,
+discovered: PaneIdType,
+other_pane: PaneIdType,
+many: [2]PaneIdType,
+root_only: [1]PaneIdType,
 
 pub fn init(target_active: bool) !TestingModel {
-    const model = try std.testing.allocator.create(client_model.Model);
+    const model = try std.testing.allocator.create(ModelType);
     errdefer std.testing.allocator.destroy(model);
-    model.* = client_model.Model.init(std.testing.allocator, true);
+    model.* = ModelType.init(std.testing.allocator, true);
     errdefer model.deinit();
 
-    const workspace: source_namespace.schema.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    const target: source_namespace.schema.TabLocation = .{
+    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const target: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const other: source_namespace.schema.TabLocation = .{
+    const other: TabLocationType = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    const root: source_namespace.schema.PaneId = @enumFromInt(1);
-    const discovered: source_namespace.schema.PaneId = @enumFromInt(2);
-    const other_pane: source_namespace.schema.PaneId = @enumFromInt(3);
+    const root: PaneIdType = @enumFromInt(1);
+    const discovered: PaneIdType = @enumFromInt(2);
+    const other_pane: PaneIdType = @enumFromInt(3);
     try model.workspace.bootstrap(.{ .pane_id = root, .location = target, .size = .{ .cols = 20, .rows = 5 } });
     if (!target_active) {
         _ = try model.workspace.addCreated(.{
@@ -54,19 +59,19 @@ pub fn deinit(testing: *TestingModel) void {
     std.testing.allocator.destroy(testing.model);
 }
 
-pub fn reconcileMany(testing: *TestingModel) !client_model.TabReconciliation {
+pub fn reconcileMany(testing: *TestingModel) !TabReconciliationType {
     return testing.reconcile(&testing.many);
 }
 
-pub fn reconcileRoot(testing: *TestingModel) !client_model.TabReconciliation {
+pub fn reconcileRoot(testing: *TestingModel) !TabReconciliationType {
     return testing.reconcile(&testing.root_only);
 }
 
-pub fn reconcile(testing: *TestingModel, panes: []const source_namespace.schema.PaneId) !client_model.TabReconciliation {
+pub fn reconcile(testing: *TestingModel, panes: []const PaneIdType) !TabReconciliationType {
     return testing.reconcileIn(panes, .{ .w = 40, .h = 10 });
 }
 
-pub fn reconcileIn(testing: *TestingModel, panes: []const source_namespace.schema.PaneId, area: source_namespace.ui.Rect) !client_model.TabReconciliation {
+pub fn reconcileIn(testing: *TestingModel, panes: []const PaneIdType, area: RectType) !TabReconciliationType {
     return testing.model.reconcileTab(.{
         .location = testing.target,
         .panes = panes,

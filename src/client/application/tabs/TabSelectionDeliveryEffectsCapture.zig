@@ -1,31 +1,37 @@
-const EffectsCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("tab_selection_delivery.zig");
-const pane_paste = @import("../input/root.zig").pane_paste;
-const pane_focus_reporting = @import("../panes/root.zig").pane_focus_reporting;
-const tab_attachment_retirement = @import("tab_attachment_retirement.zig");
-const Effects = @import("TabSelectionDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const TabSelectionType = @import("../../model/TabSelection.zig");
+const PaneIdType = @import("telar-core").PaneId;
+const tab_selection_delivery = @import("tab_selection_delivery.zig");
+const PanePasteEffects = @import("../input/PanePasteEffects.zig");
+const PaneFocusReportingEffects = @import("../panes/PaneFocusReportingEffects.zig");
+const TabAttachmentRetirementEffects = @import("TabAttachmentRetirementEffects.zig");
+const TabSelectionDeliveryEffects = @import("TabSelectionDeliveryEffects.zig");
+const pane_paste = @import("../input/pane_paste.zig");
+const DeliveryType = @import("../panes/PaneFocusDelivery.zig");
+const TabLocationType = @import("telar-core").TabLocation;
 const std = @import("std");
-model: *client_model.Model,
-selection: client_model.TabSelection,
-previous_sibling: source_namespace.schema.PaneId,
-selected_sibling: source_namespace.schema.PaneId,
-events: [20]source_namespace.Event = undefined,
+const EffectsCapture = @This();
+
+model: *ModelType,
+selection: TabSelectionType,
+previous_sibling: PaneIdType,
+selected_sibling: PaneIdType,
+events: [20]tab_selection_delivery.Event = undefined,
 event_count: usize = 0,
 committed_state_observed: bool = true,
 paste_delivery_valid: bool = true,
 focus_delivery_valid: bool = true,
-failure: source_namespace.Failure = .none,
+failure: tab_selection_delivery.Failure = .none,
 
-pub fn pasteEffects(capture: *EffectsCapture) pane_paste.Effects {
+pub fn pasteEffects(capture: *EffectsCapture) PanePasteEffects {
     return .{ .context = capture, .deliver = deliverPaste };
 }
 
-pub fn focusEffects(capture: *EffectsCapture) pane_focus_reporting.Effects {
+pub fn focusEffects(capture: *EffectsCapture) PaneFocusReportingEffects {
     return .{ .context = capture, .deliver = deliverFocus };
 }
 
-pub fn attachmentEffects(capture: *EffectsCapture) tab_attachment_retirement.Effects {
+pub fn attachmentEffects(capture: *EffectsCapture) TabAttachmentRetirementEffects {
     return .{
         .context = capture,
         .attachment_pending = attachmentPending,
@@ -35,7 +41,7 @@ pub fn attachmentEffects(capture: *EffectsCapture) tab_attachment_retirement.Eff
     };
 }
 
-pub fn effects(capture: *EffectsCapture) Effects {
+pub fn effects(capture: *EffectsCapture) TabSelectionDeliveryEffects {
     return .{
         .context = capture,
         .set_pane_graphics_visible = setPaneGraphicsVisible,
@@ -59,21 +65,21 @@ fn deliverPaste(context: *anyopaque, delivery: pane_paste.Delivery) !bool {
     return true;
 }
 
-fn deliverFocus(context: *anyopaque, delivery: pane_focus_reporting.Delivery) !void {
+fn deliverFocus(context: *anyopaque, delivery: DeliveryType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .focus_out = delivery.pane_id });
     capture.focus_delivery_valid = delivery.direction == .focus_out and
         capture.model.reportedPaneFocus() == null;
 }
 
-fn attachmentPending(context: *anyopaque, pane_id: source_namespace.schema.PaneId) bool {
+fn attachmentPending(context: *anyopaque, pane_id: PaneIdType) bool {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .attachment_pending = pane_id });
 
     return false;
 }
 
-fn detachPane(context: *anyopaque, pane_id: source_namespace.schema.PaneId) !void {
+fn detachPane(context: *anyopaque, pane_id: PaneIdType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .detach = pane_id });
     if (capture.failure == .previous_detach and pane_id == capture.previous_sibling) {
@@ -81,12 +87,12 @@ fn detachPane(context: *anyopaque, pane_id: source_namespace.schema.PaneId) !voi
     }
 }
 
-fn retireAttachment(context: *anyopaque, pane_id: source_namespace.schema.PaneId) void {
+fn retireAttachment(context: *anyopaque, pane_id: PaneIdType) void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .retire_attachment = pane_id });
 }
 
-fn hideGraphics(context: *anyopaque, pane_id: source_namespace.schema.PaneId) !void {
+fn hideGraphics(context: *anyopaque, pane_id: PaneIdType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .graphics_visibility = .{
         .pane_id = pane_id,
@@ -94,7 +100,7 @@ fn hideGraphics(context: *anyopaque, pane_id: source_namespace.schema.PaneId) !v
     } });
 }
 
-fn setPaneGraphicsVisible(context: *anyopaque, pane_id: source_namespace.schema.PaneId, visible: bool) !void {
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .graphics_visibility = .{
         .pane_id = pane_id,
@@ -113,7 +119,7 @@ fn synchronizeActiveResources(context: *anyopaque) !void {
     }
 }
 
-fn requestTabSnapshot(context: *anyopaque, location: source_namespace.schema.TabLocation) !void {
+fn requestTabSnapshot(context: *anyopaque, location: TabLocationType) !void {
     const capture: *EffectsCapture = @ptrCast(@alignCast(context));
     capture.append(.{ .request_tab_snapshot = location });
     if (capture.failure == .tab_snapshot) {
@@ -121,7 +127,7 @@ fn requestTabSnapshot(context: *anyopaque, location: source_namespace.schema.Tab
     }
 }
 
-fn append(capture: *EffectsCapture, event: source_namespace.Event) void {
+fn append(capture: *EffectsCapture, event: tab_selection_delivery.Event) void {
     capture.committed_state_observed = capture.committed_state_observed and capture.observesSelection();
     capture.events[capture.event_count] = event;
     capture.event_count += 1;
@@ -144,6 +150,6 @@ fn observesSelection(capture: *const EffectsCapture) bool {
         version.copy == capture.selection.copy_revision;
 }
 
-pub fn eventSlice(capture: *const EffectsCapture) []const source_namespace.Event {
+pub fn eventSlice(capture: *const EffectsCapture) []const tab_selection_delivery.Event {
     return capture.events[0..capture.event_count];
 }

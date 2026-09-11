@@ -1,10 +1,12 @@
-const DeliverProxyStatusHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("ProxyStatusDeliveryEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const ProxyStatusDeliveryEffects = @import("ProxyStatusDeliveryEffects.zig");
+const ProxyStatusCommitType = @import("../../model/ProxyStatusCommit.zig");
 const std = @import("std");
-const notification_capability = @import("../../root.zig").notifications;
-model: *const client_model.Model,
-effects: Effects,
+const notification_capability = @import("../../notifications/notifications.zig");
+const DeliverProxyStatusHandler = @This();
+
+model: *const ModelType,
+effects: ProxyStatusDeliveryEffects,
 
 /// Validates one exact proxy transition before publishing its semantic
 /// notification.
@@ -12,7 +14,7 @@ effects: Effects,
 /// ```zig
 /// try handler.execute(commit);
 /// ```
-pub fn execute(handler: *DeliverProxyStatusHandler, commit: client_model.ProxyStatusCommit) !void {
+pub fn execute(handler: *DeliverProxyStatusHandler, commit: ProxyStatusCommitType) !void {
     try handler.validate(commit);
 
     const trust_only = commit.previous == commit.active and commit.previous_scope == commit.scope;
@@ -37,7 +39,7 @@ pub fn execute(handler: *DeliverProxyStatusHandler, commit: client_model.ProxySt
     });
 }
 
-fn validate(handler: *const DeliverProxyStatusHandler, commit: client_model.ProxyStatusCommit) !void {
+fn validate(handler: *const DeliverProxyStatusHandler, commit: ProxyStatusCommitType) !void {
     if (handler.model.proxyTlsActive() != commit.active or
         handler.model.proxyTlsScope() != commit.scope or
         handler.model.proxySystemTrusted() != commit.system_trusted or

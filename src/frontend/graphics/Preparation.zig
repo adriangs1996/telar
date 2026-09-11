@@ -1,9 +1,10 @@
+const RectType = @import("telar-core").Rect;
+const CenterType = @import("telar-client").Center;
+const PaletteType = @import("../ui/Palette.zig");
+const ThemeType = @import("telar-client").Theme;
 const Preparation = @This();
-const source_namespace = @import("toast.zig");
-const notifications = @import("telar-client").notifications;
-const theme = @import("../ui/root.zig").theme;
-const ui_icons = @import("../ui/root.zig").icons;
-area: source_namespace.ui.Rect,
-center: *const notifications.Center,
-palette: *const theme.Palette,
-icon_theme: ui_icons.Theme = .unicode,
+
+area: RectType,
+center: *const CenterType,
+palette: *const PaletteType,
+icon_theme: ThemeType = .unicode,

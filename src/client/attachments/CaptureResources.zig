@@ -1,8 +1,9 @@
+const Capture = @import("Capture.zig");
+const std = @import("std");
 /// Owns only the result pointer that can outlive a cancelled capture worker.
 /// The client model owns the active capture identity and target.
 const CaptureResources = @This();
-const Capture = @import("Capture.zig");
-const std = @import("std");
+
 orphan: ?*Capture = null,
 
 /// Transfers one completed worker result to the client event handler.

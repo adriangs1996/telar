@@ -1,12 +1,17 @@
+const RequestIdType = @import("telar-core").RequestId;
+const TerminalSizeType = @import("telar-core").TerminalSize;
+const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const LaunchType = @import("telar-core").Launch;
+const CreateWorkspaceType = @import("telar-core").CreateWorkspace;
 const OwnedCreateWorkspace = @This();
-const source_namespace = @import("outbox_support.zig");
-request_id: source_namespace.schema.RequestId,
-size: source_namespace.schema.TerminalSize,
-name: [source_namespace.schema.max_tab_label_bytes]u8 = undefined,
-name_len: u8,
-launch: source_namespace.schema.Launch,
 
-pub fn view(value: *const OwnedCreateWorkspace, cwd: []const u8) source_namespace.schema.CreateWorkspace {
+request_id: RequestIdType,
+size: TerminalSizeType,
+name: [max_tab_label_bytes_module]u8 = undefined,
+name_len: u8,
+launch: LaunchType,
+
+pub fn view(value: *const OwnedCreateWorkspace, cwd: []const u8) CreateWorkspaceType {
     var launch = value.launch;
     launch.cwd = cwd;
 

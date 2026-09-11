@@ -1,8 +1,10 @@
-const ApplyPaneFrameHandler = @This();
-const client_model = @import("../../root.zig").model;
+const ModelType = @import("../../model/Model.zig");
 const PaneFrameEffects = @import("PaneFrameEffects.zig");
-const source_namespace = @import("pane_frame.zig");
-model: *client_model.Model,
+const FrameViewType = @import("telar-core").FrameView;
+const types = @import("../../model/types.zig");
+const ApplyPaneFrameHandler = @This();
+
+model: *ModelType,
 effects: PaneFrameEffects,
 
 /// Commits a valid attached frame before updating client resources. A
@@ -12,7 +14,7 @@ effects: PaneFrameEffects,
 /// ```zig
 /// const outcome = try handler.execute(frame);
 /// ```
-pub fn execute(handler: *ApplyPaneFrameHandler, frame: source_namespace.schema.frame.FrameView) !client_model.PaneFrameOutcome {
+pub fn execute(handler: *ApplyPaneFrameHandler, frame: FrameViewType) !types.PaneFrameOutcome {
     const outcome = try handler.model.applyPaneFrame(frame);
     switch (outcome) {
         .detached => {},

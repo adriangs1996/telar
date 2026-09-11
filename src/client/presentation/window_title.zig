@@ -1,15 +1,13 @@
 //! Bounded window-title formatting and a synchronous host-title port.
+
+const Tokens = @import("Tokens.zig");
 const std = @import("std");
+const WindowTitleState = @import("WindowTitleState.zig");
+const Capture = @import("Capture.zig");
+const Sink = @import("Sink.zig");
+const SyncInput = @import("SyncInput.zig");
 
 pub const max_title_bytes = 256;
-
-pub const Sink = @import("Sink.zig");
-
-pub const State = @import("WindowTitleState.zig");
-
-pub const Tokens = @import("Tokens.zig");
-
-pub const SyncInput = @import("SyncInput.zig");
 
 /// Expands a bounded configuration template into printable, complete UTF-8.
 /// Example: `const text = render(&buffer, "{tab} - telar", .{ .tab = "build" });`.
@@ -75,10 +73,8 @@ fn append(buffer: *[max_title_bytes]u8, len: usize, value: []const u8) usize {
     return len + count;
 }
 
-const Capture = @import("Capture.zig");
-
 test "window titles use a host port and retry failed changes without a terminal writer" {
-    var state: State = .{};
+    var state: WindowTitleState = .{};
     var capture: Capture = .{ .fail = true };
     const sink: Sink = .{ .context = &capture, .set = Capture.set };
     const input: SyncInput = .{ .template = "{workspace}", .tokens = .{ .workspace = "café" } };

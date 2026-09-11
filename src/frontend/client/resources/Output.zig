@@ -1,27 +1,25 @@
-const Output = @This();
+const WorkType = @import("Work.zig");
 const std = @import("std");
-const source_namespace = @import("host_output.zig");
-const presenter = @import("../presentation/Presenter.zig");
+const TokenType = @import("telar-client").Token;
 const FastWrite = @import("FastWrite.zig");
+const Output = @This();
+
 allocator: std.mem.Allocator,
-target: *source_namespace.Io.Writer,
-writer: source_namespace.Io.Writer,
+target: *std.Io.Writer,
+writer: std.Io.Writer,
 buffers: [2][]u8,
 active: u1 = 0,
 pending: bool = false,
-delivery: ?presenter.Token = null,
+delivery: ?TokenType = null,
 draw_deferred: bool = false,
 media_deferred: bool = false,
 fast_write: ?FastWrite = null,
 
-pub const Work = struct {
-    target: *source_namespace.Io.Writer,
-    bytes: []const u8,
-};
+pub const Work = @import("Work.zig");
 
 /// Allocates two bounded buffers once; the client must keep Output stable.
 /// Example: `var output = try Output.init(gpa, host_writer);`.
-pub fn init(allocator: std.mem.Allocator, target: *source_namespace.Io.Writer) !Output {
+pub fn init(allocator: std.mem.Allocator, target: *std.Io.Writer) !Output {
     const first = try allocator.alloc(u8, 512 * 1024);
     errdefer allocator.free(first);
     const second = try allocator.alloc(u8, 512 * 1024);
@@ -47,7 +45,7 @@ pub fn prepareFrame(output: *Output, cells: usize) !void {
 
 /// Seals bytes without copying. The returned borrow ends at complete().
 /// Example: `const work = output.begin() orelse return;`.
-pub fn begin(output: *Output) ?Work {
+pub fn begin(output: *Output) ?WorkType {
     if (output.pending or output.writer.end == 0) {
         return null;
     }
@@ -61,7 +59,7 @@ pub fn begin(output: *Output) ?Work {
 
 /// Attempts one nonblocking prefix before handing the remaining bytes off.
 /// Example: `const remaining = try output.tryWrite(work);`.
-pub fn tryWrite(output: *Output, work: Work) !Work {
+pub fn tryWrite(output: *Output, work: WorkType) !WorkType {
     std.debug.assert(output.pending);
     const fast = output.fast_write orelse return work;
     const written = try fast.write(fast.context, work.bytes);
@@ -74,7 +72,7 @@ pub fn tryWrite(output: *Output, work: Work) !Work {
 
 /// Ends the borrow before propagating failure. Failed writes never ACK.
 /// Example: `const delivery = try output.complete(result);`.
-pub fn complete(output: *Output, result: anyerror!void) !?presenter.Token {
+pub fn complete(output: *Output, result: anyerror!void) !?TokenType {
     std.debug.assert(output.pending);
     output.pending = false;
     const delivery = output.delivery;
@@ -93,7 +91,7 @@ pub fn deinit(output: *Output) void {
 
 /// Runs exclusively on the host-output actor.
 /// Example: `try Output.write(work);`.
-pub fn write(work: Work) anyerror!void {
+pub fn write(work: WorkType) anyerror!void {
     try work.target.writeAll(work.bytes);
     try work.target.flush();
 }

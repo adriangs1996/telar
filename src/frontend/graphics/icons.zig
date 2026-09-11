@@ -8,13 +8,18 @@
 //! underneath every placement.
 
 const std = @import("std");
-const core = @import("telar-core");
-const kitty = @import("kitty.zig");
+const MarkType = @import("../ui/Mark.zig");
+const IconsSlot = @import("IconsSlot.zig");
+const ui_icons = @import("../ui/icons.zig");
+const IconType = @import("telar-client").Icon;
+const Placement = @import("Placement.zig");
+const RasterSize = @import("RasterSize.zig");
+const RasterizerType = @import("Rasterizer.zig");
+const AtlasInput = @import("AtlasInput.zig");
+const SurfaceType = @import("Surface.zig");
+const BitmapType = @import("Bitmap.zig");
 const bitmap = @import("bitmap_support.zig");
-const raster = @import("rasterizer_support.zig");
-const ui_icons = @import("../ui/root.zig").icons;
-
-pub const Io = std.Io;
+const IconsRenderer = @import("IconsRenderer.zig");
 
 pub const embedded_font: []const u8 = @embedFile("../assets/TelarNerdIcons-Regular.ttf");
 
@@ -33,15 +38,9 @@ pub const z_index: i32 = 10;
 const max_pixel_dimension: u16 = 48;
 pub const max_atlas_bytes: usize = 1536 * 1024;
 
-const Slot = @import("IconsSlot.zig");
-
 const max_columns: u8 = 2;
 
-const Placement = @import("Placement.zig");
-
-pub const Renderer = @import("IconsRenderer.zig");
-
-pub fn slotFromMark(mark: ui_icons.Mark) Slot {
+pub fn slotFromMark(mark: MarkType) IconsSlot {
     return .{
         .icon = mark.icon,
         .foreground = mark.foreground,
@@ -50,7 +49,7 @@ pub fn slotFromMark(mark: ui_icons.Mark) Slot {
     };
 }
 
-pub fn widestSlot(slots: []const Slot) u32 {
+pub fn widestSlot(slots: []const IconsSlot) u32 {
     var widest: u32 = 1;
     for (slots) |slot| {
         widest = @max(widest, slot.columns);
@@ -59,7 +58,7 @@ pub fn widestSlot(slots: []const Slot) u32 {
     return widest;
 }
 
-pub fn ensureSlot(slots: *[ui_icons.max_marks]Slot, count: *u8, wanted: Slot) !u8 {
+pub fn ensureSlot(slots: *[ui_icons.max_marks]IconsSlot, count: *u8, wanted: IconsSlot) !u8 {
     if (findSlot(slots[0..count.*], wanted)) |slot| {
         return slot;
     }
@@ -72,7 +71,7 @@ pub fn ensureSlot(slots: *[ui_icons.max_marks]Slot, count: *u8, wanted: Slot) !u
     return added;
 }
 
-pub fn isWorkingIcon(icon: ui_icons.Icon) bool {
+pub fn isWorkingIcon(icon: IconType) bool {
     return switch (icon) {
         .agent_working_0,
         .agent_working_1,
@@ -83,7 +82,7 @@ pub fn isWorkingIcon(icon: ui_icons.Icon) bool {
     };
 }
 
-fn findSlot(slots: []const Slot, wanted: Slot) ?u8 {
+fn findSlot(slots: []const IconsSlot, wanted: IconsSlot) ?u8 {
     for (slots, 0..) |slot, index| {
         if (std.meta.eql(slot, wanted)) {
             return @intCast(index);
@@ -92,7 +91,7 @@ fn findSlot(slots: []const Slot, wanted: Slot) ?u8 {
     return null;
 }
 
-pub fn slotsEqual(a: []const Slot, b: []const Slot) bool {
+pub fn slotsEqual(a: []const IconsSlot, b: []const IconsSlot) bool {
     if (a.len != b.len) {
         return false;
     }
@@ -114,8 +113,6 @@ pub fn rgbaLength(width: u32, height: u32) !usize {
     return std.math.mul(usize, pixels, 4) catch error.IconAtlasTooLarge;
 }
 
-const RasterSize = @import("RasterSize.zig");
-
 pub fn fitCell(cell_width: u16, cell_height: u16) RasterSize {
     const longest = @max(cell_width, cell_height);
     if (longest <= max_pixel_dimension) {
@@ -135,12 +132,10 @@ fn scaledDimension(value: u16, longest: u16) u16 {
     return @intCast(@max(1, numerator / longest));
 }
 
-const AtlasInput = @import("AtlasInput.zig");
-
 // Every slot is drawn into one contiguous cell-sized surface, then copied
 // into its atlas row. Rows are as wide as the widest slot; a narrower slot
 // leaves the rest of its row transparent and never places it.
-pub fn renderAtlas(text: *raster.Rasterizer, atlas: AtlasInput) !void {
+pub fn renderAtlas(text: *RasterizerType, atlas: AtlasInput) !void {
     const icon_size = @min(atlas.raster_size.width, atlas.raster_size.height);
     try text.setPixelHeight(icon_size);
     const metrics = text.metrics();
@@ -153,7 +148,7 @@ pub fn renderAtlas(text: *raster.Rasterizer, atlas: AtlasInput) !void {
     var cell_pixels: [@as(usize, max_columns) * max_pixel_dimension * max_pixel_dimension * 4]u8 = undefined;
     for (atlas.slots, 0..) |slot, index| {
         const width = @as(u32, atlas.raster_size.width) * slot.columns;
-        const surface: raster.Surface = .{
+        const surface: SurfaceType = .{
             .pixels = cell_pixels[0 .. @as(usize, width) * atlas.raster_size.height * 4],
             .width = width,
             .height = atlas.raster_size.height,
@@ -195,12 +190,12 @@ const mark_taps: u32 = 4;
 /// Paints the embedded mark into the slot with straight alpha: transparent
 /// outside its square and its rounded corners, so the host terminal composes
 /// it over whatever it paints behind the bar.
-fn paintMark(surface: raster.Surface) void {
+fn paintMark(surface: SurfaceType) void {
     @memset(surface.pixels, 0);
     const icon_size = @min(surface.width, surface.height);
     const offset_x = (surface.width - icon_size) / 2;
     const offset_y = (surface.height - icon_size) / 2;
-    const source: bitmap.Bitmap = .{ .pixels = mark_source, .stride = mark_source_side, .side = mark_source_side };
+    const source: BitmapType = .{ .pixels = mark_source, .stride = mark_source_side, .side = mark_source_side };
     const fine_size = icon_size * mark_taps;
     const tap_count: u32 = mark_taps * mark_taps;
 
@@ -234,7 +229,7 @@ fn paintMark(surface: raster.Surface) void {
     }
 }
 
-fn fill(surface: raster.Surface, color: [3]u8) void {
+fn fill(surface: SurfaceType, color: [3]u8) void {
     var pixel: usize = 0;
     while (pixel < surface.pixels.len) : (pixel += 4) {
         surface.pixels[pixel] = color[0];
@@ -245,12 +240,12 @@ fn fill(surface: raster.Surface, color: [3]u8) void {
 }
 
 test "embedded subset rasterizes every configured Nerd Font icon" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = IconsRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     try std.testing.expect(renderer.text != null);
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var marks: [std.meta.fields(ui_icons.Icon).len]ui_icons.Mark = undefined;
-    inline for (std.meta.fields(ui_icons.Icon), 0..) |field, index| {
+    var marks: [std.meta.fields(IconType).len]MarkType = undefined;
+    inline for (std.meta.fields(IconType), 0..) |field, index| {
         marks[index] = .{
             .area = .{ .x = @intCast(index), .w = 1, .h = 1 },
             .icon = @enumFromInt(field.value),
@@ -277,7 +272,7 @@ test "embedded subset rasterizes every configured Nerd Font icon" {
 }
 
 test "the telar mark slot keeps its weft and stays transparent outside its square" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = IconsRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 20, .cell_height = 40 });
     try renderer.prepare(&.{.{
@@ -305,7 +300,7 @@ test "the telar mark slot keeps its weft and stays transparent outside its squar
 }
 
 test "a two-column mark widens the atlas and places two cells" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = IconsRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     try renderer.prepare(&.{
@@ -320,7 +315,7 @@ test "a two-column mark widens the atlas and places two cells" {
     try std.testing.expectEqual(@as(u8, 0), renderer.atlas[glyph_row + 15 * 4 + 3]);
 
     var output: [65536]u8 = undefined;
-    var writer = Io.Writer.fixed(&output);
+    var writer = std.Io.Writer.fixed(&output);
     _ = try renderer.write(&writer);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "w=20,h=20,c=2,r=1") != null);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "w=10,h=20,c=1,r=1") != null);
@@ -332,7 +327,7 @@ test "icon slots preserve the terminal cell aspect ratio" {
 }
 
 test "round Nerd Font icons remain square inside a tall cell" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = IconsRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 20, .cell_height = 40 });
     try renderer.prepare(&.{.{
@@ -367,7 +362,7 @@ test "round Nerd Font icons remain square inside a tall cell" {
 }
 
 test "icon atlas is transmitted before its placements" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = IconsRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     try renderer.prepare(&.{.{
@@ -378,7 +373,7 @@ test "icon atlas is transmitted before its placements" {
     }});
 
     var output: [16384]u8 = undefined;
-    var writer = Io.Writer.fixed(&output);
+    var writer = std.Io.Writer.fixed(&output);
     _ = try renderer.write(&writer);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=t") != null);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "a=p") != null);
@@ -386,10 +381,10 @@ test "icon atlas is transmitted before its placements" {
 }
 
 test "working animation changes placements without retransmitting the atlas" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = IconsRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    const style = ui_icons.Mark{
+    const style = MarkType{
         .area = .{ .x = 2, .y = 3, .w = 1, .h = 1 },
         .icon = .agent_working_0,
         .foreground = .{ 255, 255, 255 },
@@ -397,7 +392,7 @@ test "working animation changes placements without retransmitting the atlas" {
     };
     try renderer.prepare(&.{style});
     var output: [65536]u8 = undefined;
-    var writer = Io.Writer.fixed(&output);
+    var writer = std.Io.Writer.fixed(&output);
     _ = try renderer.write(&writer);
     try std.testing.expect(!renderer.damaged());
 
@@ -409,7 +404,7 @@ test "working animation changes placements without retransmitting the atlas" {
 }
 
 test "unsupported terminals keep the renderer empty" {
-    var renderer = Renderer.init(std.testing.allocator);
+    var renderer = IconsRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .unsupported, .cell_width = 10, .cell_height = 20 });
     try renderer.prepare(&.{.{

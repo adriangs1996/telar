@@ -1,20 +1,22 @@
-const CreateWorkspaceHandler = @This();
-const source_namespace = @import("create_workspace.zig");
-const LaunchAuthority = @import("CreateWorkspaceLaunchAuthority.zig");
-const GeometryLease = @import("CreateWorkspaceGeometryLease.zig");
-const PaneLauncher = @import("CreateWorkspacePaneLauncher.zig");
+const Repository = @import("../../../workspace/Repository.zig");
+const CreateWorkspaceLaunchAuthority = @import("CreateWorkspaceLaunchAuthority.zig");
+const CreateWorkspaceGeometryLease = @import("CreateWorkspaceGeometryLease.zig");
+const CreateWorkspacePaneLauncher = @import("CreateWorkspacePaneLauncher.zig");
 const ClientAttachment = @import("ClientAttachment.zig");
-const EventPublisher = @import("CreateWorkspaceEventPublisher.zig");
+const CreateWorkspaceEventPublisher = @import("CreateWorkspaceEventPublisher.zig");
 const CreateWorkspace = @import("CreateWorkspace.zig");
 const CreateWorkspaceResult = @import("CreateWorkspaceResult.zig");
-const workspace_mod = @import("../../../workspace/root.zig");
+const create_workspace = @import("create_workspace.zig");
+const WorkspaceCreatedType = @import("../../../workspace/WorkspaceCreated.zig");
 const CreateWorkspaceExecutor = @import("CreateWorkspaceExecutor.zig");
-workspaces: *source_namespace.WorkspaceRepository,
-authority: LaunchAuthority,
-geometry: GeometryLease,
-launcher: PaneLauncher,
+const CreateWorkspaceHandler = @This();
+
+workspaces: *Repository,
+authority: CreateWorkspaceLaunchAuthority,
+geometry: CreateWorkspaceGeometryLease,
+launcher: CreateWorkspacePaneLauncher,
 attachment: ClientAttachment,
-events: EventPublisher,
+events: CreateWorkspaceEventPublisher,
 
 /// Creates an invisible workspace proposal, acquires its geometry lease,
 /// launches the root pane, then commits and publishes the aggregate before
@@ -52,8 +54,8 @@ pub fn execute(handler: *CreateWorkspaceHandler, command: CreateWorkspace) !Crea
         .launch = command.launch,
         .launch_cwd = launch_cwd,
         .workspace_path = proposal.path(),
-    }) catch |err| return source_namespace.mapLaunchError(err);
-    const created = workspace_mod.WorkspaceCreated.init(location, proposal.name()) catch unreachable;
+    }) catch |err| return create_workspace.mapLaunchError(err);
+    const created = WorkspaceCreatedType.init(location, proposal.name()) catch unreachable;
 
     _ = proposal.commit();
     committed = true;

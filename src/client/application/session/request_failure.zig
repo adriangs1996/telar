@@ -1,13 +1,13 @@
 //! Application policy for one rejected client request.
 
+const Command = @import("Command.zig");
+const InputType = @import("../../notifications/NotificationInput.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const notifications = @import("../../root.zig").notifications;
-const client_requests = @import("../../connection/root.zig").requests;
-
-pub const schema = core.schema;
-
-pub const Command = @import("Command.zig");
+const client_requests = @import("../../connection/requests.zig");
+const notifications = @import("../../notifications/notifications.zig");
+const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const TabLocationType = @import("telar-core").TabLocation;
+const RequestFailureEffectsCapture = @import("RequestFailureEffectsCapture.zig");
 
 pub const SplitRecovery = enum {
     current,
@@ -19,14 +19,6 @@ pub const InitialOpenRecovery = enum {
     unrecoverable,
 };
 
-pub const InitialOpenFailure = @import("InitialOpenFailure.zig");
-
-pub const RecoveryEffects = @import("RecoveryEffects.zig");
-
-pub const NotificationEffects = @import("NotificationEffects.zig");
-
-pub const ReportingEffects = @import("ReportingEffects.zig");
-
 pub const Outcome = enum {
     ignored,
     recovered,
@@ -34,9 +26,7 @@ pub const Outcome = enum {
     fatal,
 };
 
-pub const HandleRequestFailureHandler = @import("HandleRequestFailureHandler.zig");
-
-pub fn notification(command: Command) notifications.Input {
+pub fn notification(command: Command) InputType {
     return .{
         .level = .failure,
         .title = failureTitle(command.continuation),
@@ -76,7 +66,7 @@ fn notificationTarget(continuation: client_requests.Continuation) notifications.
     };
 }
 
-fn workspaceNotificationTarget(location: schema.WorkspaceLocation) notifications.Target {
+fn workspaceNotificationTarget(location: WorkspaceLocationType) notifications.Target {
     return switch (location) {
         .workspace => |workspace| .{ .select_workspace = workspace },
         .worktree => .none,
@@ -92,9 +82,7 @@ pub const EffectEvent = enum {
     report,
 };
 
-const EffectsCapture = @import("RequestFailureEffectsCapture.zig");
-
-const testing_location: schema.TabLocation = .{
+const testing_location: TabLocationType = .{
     .workspace = .{ .workspace = @enumFromInt(1) },
     .tab_id = @enumFromInt(2),
 };
@@ -108,7 +96,7 @@ fn testingCommand(continuation: client_requests.Continuation) Command {
 }
 
 test "request failure ignores retired work and classifies snapshot loss as fatal" {
-    var capture: EffectsCapture = .{};
+    var capture: RequestFailureEffectsCapture = .{};
     var handler = capture.handler();
 
     try std.testing.expectEqual(Outcome.ignored, try handler.execute(testingCommand(.ignored)));
@@ -129,7 +117,7 @@ test "request failure ignores retired work and classifies snapshot loss as fatal
 }
 
 test "request failure retries a vanished remembered pane once" {
-    var capture: EffectsCapture = .{};
+    var capture: RequestFailureEffectsCapture = .{};
     var handler = capture.handler();
     var command = testingCommand(.{ .initial_open = .{ .fallback_workspace = @enumFromInt(7) } });
     command.code = .pane_not_found;
@@ -160,7 +148,7 @@ test "request failure suppresses a stale split after recovery" {
         .axis = .horizontal,
         .area = .{ .w = 40, .h = 10 },
     } };
-    var capture: EffectsCapture = .{};
+    var capture: RequestFailureEffectsCapture = .{};
     var handler = capture.handler();
 
     try std.testing.expectEqual(Outcome.notified, try handler.execute(testingCommand(continuation)));
@@ -188,7 +176,7 @@ test "request failure refreshes only a missing pane attachment" {
         .pane_id = @enumFromInt(3),
         .location = testing_location,
     } };
-    var capture: EffectsCapture = .{};
+    var capture: RequestFailureEffectsCapture = .{};
     var handler = capture.handler();
     var command = testingCommand(continuation);
 
@@ -207,7 +195,7 @@ test "request failure refreshes only a missing pane attachment" {
 }
 
 test "request failure restores a rejected tab close before notifying" {
-    var capture: EffectsCapture = .{};
+    var capture: RequestFailureEffectsCapture = .{};
     var handler = capture.handler();
 
     try std.testing.expectEqual(
@@ -273,7 +261,7 @@ test "request failure maps direct notification titles and targets" {
     };
 
     for (cases) |case| {
-        var capture: EffectsCapture = .{};
+        var capture: RequestFailureEffectsCapture = .{};
         var handler = capture.handler();
 
         try std.testing.expectEqual(Outcome.notified, try handler.execute(testingCommand(case.continuation)));
@@ -286,7 +274,7 @@ test "request failure maps direct notification titles and targets" {
 }
 
 test "request failure does not notify after recovery failure" {
-    var capture: EffectsCapture = .{ .fail_recovery = true };
+    var capture: RequestFailureEffectsCapture = .{ .fail_recovery = true };
     var handler = capture.handler();
 
     try std.testing.expectError(
@@ -303,7 +291,7 @@ test "request failure does not notify after recovery failure" {
 }
 
 test "request failure retains recovery when notification publication fails" {
-    var capture: EffectsCapture = .{ .fail_notification = true };
+    var capture: RequestFailureEffectsCapture = .{ .fail_notification = true };
     var handler = capture.handler();
 
     try std.testing.expectError(

@@ -1,12 +1,15 @@
-const Capture = @This();
-const source_namespace = @import("agent_navigation.zig");
+const agent_navigation = @import("agent_navigation.zig");
 const HandoffGate = @import("HandoffGate.zig");
 const NavigationEffects = @import("NavigationEffects.zig");
-const client_model = @import("../../root.zig").model;
+const TabIdType = @import("telar-core").TabId;
+const PaneIdType = @import("telar-core").PaneId;
+const AgentHandoffType = @import("../../model/AgentHandoff.zig");
+const Capture = @This();
+
 blocked: bool = false,
 select_result: bool = true,
 failure_at: ?usize = null,
-events: [3]source_namespace.Event = undefined,
+events: [3]agent_navigation.Event = undefined,
 count: usize = 0,
 
 pub fn gate(capture: *Capture) HandoffGate {
@@ -22,7 +25,7 @@ pub fn port(capture: *Capture) NavigationEffects {
     };
 }
 
-fn record(capture: *Capture, event: source_namespace.Event) !void {
+fn record(capture: *Capture, event: agent_navigation.Event) !void {
     capture.events[capture.count] = event;
     capture.count += 1;
 
@@ -37,20 +40,20 @@ fn pending(context: *anyopaque) bool {
     return capture.blocked;
 }
 
-fn selectTab(context: *anyopaque, tab_id: source_namespace.schema.TabId) !bool {
+fn selectTab(context: *anyopaque, tab_id: TabIdType) !bool {
     const capture: *Capture = @ptrCast(@alignCast(context));
     try capture.record(.{ .select_tab = tab_id });
 
     return capture.select_result;
 }
 
-fn focusPane(context: *anyopaque, pane_id: source_namespace.schema.PaneId) !void {
+fn focusPane(context: *anyopaque, pane_id: PaneIdType) !void {
     const capture: *Capture = @ptrCast(@alignCast(context));
 
     try capture.record(.{ .focus_pane = pane_id });
 }
 
-fn requestHandoff(context: *anyopaque, handoff: client_model.AgentHandoff) !void {
+fn requestHandoff(context: *anyopaque, handoff: AgentHandoffType) !void {
     const capture: *Capture = @ptrCast(@alignCast(context));
 
     try capture.record(.{ .handoff = handoff });

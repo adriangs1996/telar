@@ -1,27 +1,21 @@
 //! Runtime anti-corruption layer from proxy events to agent observations.
 
+const ObservationType = @import("../../../proxy/Observation.zig");
+const Pane = @import("../../../pane/Pane.zig");
+const ProxyObservationType = @import("../../../agent/ProxyObservation.zig");
+const types = @import("../../../agent/types.zig");
+const agent_identity = @import("../../application/coordinators/agent_identity.zig");
+const GenericProxyObservationRuntimePort = @import("GenericProxyObservationRuntimePort.zig").Type;
+const ProxyObservationCapture = @import("ProxyObservationCapture.zig");
+const GenericProxyObservationAdapter = @import("GenericProxyObservationAdapter.zig").Type;
+const middleware = @import("../../../proxy/middleware.zig");
 const std = @import("std");
-const agent_identity = @import("../../application/coordinators/root.zig").agent_identity;
-const core = @import("telar-core");
-const agent_mod = @import("../../../agent/root.zig");
-const pane_mod = @import("../../../pane/root.zig");
-const proxy_mod = @import("../../../proxy/root.zig");
-const telemetry_mod = @import("../../observability/root.zig").telemetry;
-const test_support = @import("../../tests/support.zig");
+const enabled_module = @import("telar-core").enabled;
+const Fixture = @import("Fixture.zig");
+const AgentStatusType = @import("telar-core").AgentStatus;
 
-pub const diagnostics = core.diagnostics;
-const Pane = pane_mod.Pane;
-pub const PaneStore = pane_mod.PaneStore;
-pub const RuntimeMetrics = telemetry_mod.RuntimeMetrics;
-
-pub const Resources = @import("ProxyObservationResources.zig");
-
-pub const RuntimePort = @import("GenericProxyObservationRuntimePort.zig").Type;
-
-pub const Adapter = @import("GenericProxyObservationAdapter.zig").Type;
-
-pub fn translate(event: proxy_mod.Observation, pane: *const Pane) ?agent_mod.ProxyObservation {
-    const phase: agent_mod.ProxyPhase = switch (event.phase) {
+pub fn translate(event: ObservationType, pane: *const Pane) ?ProxyObservationType {
+    const phase: types.ProxyPhase = switch (event.phase) {
         .request_started => .request_started,
         .auxiliary_request_started => return null,
         .response_activity => .response_activity,
@@ -30,7 +24,7 @@ pub fn translate(event: proxy_mod.Observation, pane: *const Pane) ?agent_mod.Pro
         .request_failed => .request_failed,
     };
 
-    const protocol: agent_mod.ProxyProtocol = switch (event.protocol) {
+    const protocol: types.ProxyProtocol = switch (event.protocol) {
         .http11 => .http11,
         .h2 => .h2,
         .upgraded => .upgraded,
@@ -55,17 +49,15 @@ pub const Step = enum {
     pump_clients,
 };
 
-const Capture = @import("ProxyObservationCapture.zig");
-
-const test_port: RuntimePort(Capture) = .{
-    .rearm_receive = Capture.rearmReceive,
-    .schedule_description = Capture.scheduleDescription,
-    .pump_clients = Capture.pumpClients,
+const test_port: GenericProxyObservationRuntimePort(ProxyObservationCapture) = .{
+    .rearm_receive = ProxyObservationCapture.rearmReceive,
+    .schedule_description = ProxyObservationCapture.scheduleDescription,
+    .pump_clients = ProxyObservationCapture.pumpClients,
 };
 
-pub const TestAdapter = Adapter(Capture, test_port);
+pub const TestAdapter = GenericProxyObservationAdapter(ProxyObservationCapture, test_port);
 
-pub fn eventFor(pane: *const Pane, phase: proxy_mod.ObservationPhase, protocol: proxy_mod.ObservationProtocol) proxy_mod.Observation {
+pub fn eventFor(pane: *const Pane, phase: middleware.Phase, protocol: middleware.Protocol) ObservationType {
     return .{
         .pane = pane.key(),
         .dialect = .openai_responses,
@@ -78,14 +70,12 @@ pub fn eventFor(pane: *const Pane, phase: proxy_mod.ObservationPhase, protocol: 
     };
 }
 
-const Fixture = @import("Fixture.zig");
-
-fn expectSteps(capture: *const Capture, expected: []const Step) !void {
+fn expectSteps(capture: *const ProxyObservationCapture, expected: []const Step) !void {
     try std.testing.expectEqualSlices(Step, expected, capture.steps[0..capture.len]);
 }
 
 fn expectedProxyObservations() u64 {
-    return if (diagnostics.enabled) 1 else 0;
+    return if (enabled_module) 1 else 0;
 }
 
 test "every proxy protocol and inference phase translates without losing identity" {
@@ -93,8 +83,8 @@ test "every proxy protocol and inference phase translates without losing identit
     try fixture.init();
     defer fixture.deinit();
 
-    for (std.enums.values(proxy_mod.ObservationPhase)) |phase| {
-        for (std.enums.values(proxy_mod.ObservationProtocol)) |protocol| {
+    for (std.enums.values(middleware.Phase)) |phase| {
+        for (std.enums.values(middleware.Protocol)) |protocol| {
             const observation = translate(fixture.event(phase, protocol), fixture.support.pane);
 
             if (phase == .auxiliary_request_started) {
@@ -103,7 +93,7 @@ test "every proxy protocol and inference phase translates without losing identit
             }
 
             const translated = observation.?;
-            const expected_phase: agent_mod.ProxyPhase = switch (phase) {
+            const expected_phase: types.ProxyPhase = switch (phase) {
                 .request_started => .request_started,
                 .auxiliary_request_started => unreachable,
                 .response_activity => .response_activity,
@@ -111,14 +101,14 @@ test "every proxy protocol and inference phase translates without losing identit
                 .response_finished => .response_finished,
                 .request_failed => .request_failed,
             };
-            const expected_protocol: agent_mod.ProxyProtocol = switch (protocol) {
+            const expected_protocol: types.ProxyProtocol = switch (protocol) {
                 .http11 => .http11,
                 .h2 => .h2,
                 .upgraded => .upgraded,
             };
 
             try std.testing.expectEqualDeep(agent_identity.fromPane(fixture.support.pane), translated.identity);
-            try std.testing.expectEqual(agent_mod.ApiDialect.openai_responses, translated.dialect);
+            try std.testing.expectEqual(types.ApiDialect.openai_responses, translated.dialect);
             try std.testing.expectEqual(expected_phase, translated.phase);
             try std.testing.expectEqual(expected_protocol, translated.exchange.protocol);
             try std.testing.expectEqual(@as(u64, 17), translated.exchange.connection_id);
@@ -196,13 +186,13 @@ test "an inference start updates the agent before scheduling downstream work" {
     try adapter.handle(fixture.event(.request_started, .upgraded));
 
     try expectSteps(&fixture.capture, &.{ .rearm_receive, .schedule_description, .pump_clients });
-    try std.testing.expectEqual(core.schema.AgentStatus.working, fixture.capture.status_at_description_schedule.?);
-    try std.testing.expectEqual(core.schema.AgentStatus.working, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+    try std.testing.expectEqual(AgentStatusType.working, fixture.capture.status_at_description_schedule.?);
+    try std.testing.expectEqual(AgentStatusType.working, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
     try std.testing.expectEqual(expectedProxyObservations(), fixture.support.metrics.proxy_observations);
 }
 
 test "Claude provider completion projects ready for each HTTP protocol" {
-    inline for (.{ proxy_mod.ObservationProtocol.http11, .h2 }) |protocol| {
+    inline for (.{ middleware.Protocol.http11, .h2 }) |protocol| {
         var fixture: Fixture = .{};
         try fixture.init();
         defer fixture.deinit();
@@ -216,7 +206,7 @@ test "Claude provider completion projects ready for each HTTP protocol" {
         started.observed_at_ms = 100;
         try adapter.handle(started);
 
-        try std.testing.expectEqual(core.schema.AgentStatus.working, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+        try std.testing.expectEqual(AgentStatusType.working, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
         fixture.capture.len = 0;
 
         var completed = fixture.event(.provider_turn_completed, protocol);
@@ -227,8 +217,8 @@ test "Claude provider completion projects ready for each HTTP protocol" {
         try adapter.handle(completed);
 
         try expectSteps(&fixture.capture, &.{ .rearm_receive, .schedule_description, .pump_clients });
-        try std.testing.expectEqual(core.schema.AgentStatus.done, fixture.capture.status_at_description_schedule.?);
-        try std.testing.expectEqual(core.schema.AgentStatus.done, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+        try std.testing.expectEqual(AgentStatusType.done, fixture.capture.status_at_description_schedule.?);
+        try std.testing.expectEqual(AgentStatusType.done, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
         fixture.capture.len = 0;
 
         var finished = fixture.event(.response_finished, protocol);
@@ -238,7 +228,7 @@ test "Claude provider completion projects ready for each HTTP protocol" {
         finished.observed_at_ms = 300;
         try adapter.handle(finished);
 
-        try std.testing.expectEqual(core.schema.AgentStatus.done, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
+        try std.testing.expectEqual(AgentStatusType.done, fixture.support.agents.projectedStatus(fixture.support.pane.key()).?);
     }
 }
 

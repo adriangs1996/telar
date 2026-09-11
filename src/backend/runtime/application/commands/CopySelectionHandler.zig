@@ -1,7 +1,9 @@
-const CopySelectionHandler = @This();
-const source_namespace = @import("copy_selection.zig");
+const AttachmentStoreType = @import("../../attachment/AttachmentStore.zig");
 const CopySelection = @import("CopySelection.zig");
-attachments: *source_namespace.AttachmentStore,
+const copy_selection = @import("copy_selection.zig");
+const CopySelectionHandler = @This();
+
+attachments: *AttachmentStoreType,
 
 /// Resolves attachment authority and extracts the requested inclusive
 /// range into caller-owned scratch storage. Copied bytes borrow `scratch`
@@ -10,7 +12,7 @@ attachments: *source_namespace.AttachmentStore,
 /// ```zig
 /// const result = handler.execute(command, &scratch);
 /// ```
-pub fn execute(handler: *CopySelectionHandler, command: CopySelection, scratch: []u8) source_namespace.CopySelectionResult {
+pub fn execute(handler: *CopySelectionHandler, command: CopySelection, scratch: []u8) copy_selection.CopySelectionResult {
     const result = handler.attachments.copySelection(command.pane_id, .{
         .range = .{
             .start_x = command.start_x,

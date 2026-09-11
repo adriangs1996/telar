@@ -1,20 +1,21 @@
-const Manifest = @This();
-const source_namespace = @import("plugin.zig");
+const plugin = @import("plugin.zig");
 const ActionName = @import("ActionName.zig");
 const std = @import("std");
-id_bytes: [source_namespace.max_id_bytes]u8 = undefined,
+const Manifest = @This();
+
+id_bytes: [plugin.max_id_bytes]u8 = undefined,
 id_len: u8,
-version_bytes: [source_namespace.max_version_bytes]u8 = undefined,
+version_bytes: [plugin.max_version_bytes]u8 = undefined,
 version_len: u8,
-entry_bytes: [source_namespace.max_entry_bytes]u8 = undefined,
+entry_bytes: [plugin.max_entry_bytes]u8 = undefined,
 entry_len: u16,
-source_bytes: [source_namespace.max_source_bytes]u8 = undefined,
+source_bytes: [plugin.max_source_bytes]u8 = undefined,
 source_len: u16,
-revision_bytes: [source_namespace.max_revision_bytes]u8 = undefined,
+revision_bytes: [plugin.max_revision_bytes]u8 = undefined,
 revision_len: u8,
-actions: [source_namespace.max_actions]ActionName = undefined,
+actions: [plugin.max_actions]ActionName = undefined,
 action_count: u8,
-capabilities: source_namespace.CapabilitySet,
+capabilities: plugin.CapabilitySet,
 
 pub fn id(manifest: *const Manifest) []const u8 {
     return manifest.id_bytes[0..manifest.id_len];

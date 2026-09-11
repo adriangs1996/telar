@@ -1,7 +1,17 @@
-const history = @import("../../../history/root.zig");
-const source_namespace = @import("history.zig");
-const event_sources = @import("../../event_sources.zig");
-const delivery_mod = @import("../../delivery/root.zig");
+const model_module = @import("../../../history/model.zig");
+const GenericHistoryResponseRuntimePort = @import("../../entrypoints/events/GenericHistoryResponseRuntimePort.zig").Type;
+const Session = @import("../../client/Session.zig");
+const GenericController = @import("../../entrypoints/events/GenericController.zig").Type;
+const SourcesType = @import("../../Sources.zig");
+const ClientKeyType = @import("../../../history/ClientKey.zig");
+const QueryResultType = @import("../../../history/QueryResult.zig");
+const FailureType = @import("../../../history/Failure.zig");
+const StatsResultType = @import("../../../history/StatsResult.zig");
+const OutputResultType = @import("../../../history/OutputResult.zig");
+const PrunedType = @import("../../../history/Pruned.zig");
+const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
+const PendingFailureType = @import("../../delivery/PendingFailure.zig");
+
 /// Binds history-response completions to one concrete Application type.
 ///
 /// ```zig
@@ -15,12 +25,12 @@ pub fn Type(comptime Application: type) type {
         /// ```zig
         /// try HistoryEvents.handle(&application, result);
         /// ```
-        pub fn handle(application: *Application, result: anyerror!history.Response) !void {
+        pub fn handle(application: *Application, result: anyerror!model_module.Response) !void {
             var controller = historyResponseController(application);
             try controller.handle(result);
         }
 
-        const history_response_runtime_port: source_namespace.history_response_controller.RuntimePort(Application, *source_namespace.ClientSession) = .{
+        const history_response_runtime_port: GenericHistoryResponseRuntimePort(Application, *Session) = .{
             .rearm_receive = rearmHistoryResponse,
             .resolve = resolveHistoryResponseClient,
             .set_close_after_reply = setHistoryCloseAfterReply,
@@ -33,31 +43,31 @@ pub fn Type(comptime Application: type) type {
             .pump_clients = pumpRuntimeClients,
         };
 
-        const RuntimeHistoryResponseController = source_namespace.history_response_controller.Controller(Application, *source_namespace.ClientSession, history_response_runtime_port);
+        const RuntimeHistoryResponseController = GenericController(Application, *Session, history_response_runtime_port);
 
         fn historyResponseController(application: *Application) RuntimeHistoryResponseController {
             return RuntimeHistoryResponseController.init(application);
         }
 
         fn rearmHistoryResponse(application: *Application) !void {
-            var sources = event_sources.Sources.init(application.io, application.select);
+            var sources = SourcesType.init(application.io, application.select);
             try sources.receiveHistory(application.history_service);
         }
 
-        fn resolveHistoryResponseClient(application: *Application, client: source_namespace.ClientKey) ?*source_namespace.ClientSession {
+        fn resolveHistoryResponseClient(application: *Application, client: ClientKeyType) ?*Session {
             return application.clients.resolve(client);
         }
 
-        fn setHistoryCloseAfterReply(_: *Application, session: *source_namespace.ClientSession, enabled: bool) void {
+        fn setHistoryCloseAfterReply(_: *Application, session: *Session, enabled: bool) void {
             session.delivery.setCloseAfterReply(enabled);
         }
 
-        fn enqueueHistoryQueryResult(_: *Application, session: *source_namespace.ClientSession, result: *history.model.QueryResult) bool {
+        fn enqueueHistoryQueryResult(_: *Application, session: *Session, result: *QueryResultType) bool {
             session.delivery.responses.push(.{ .history_result = result }) catch return false;
             return true;
         }
 
-        fn enqueueHistoryFailure(_: *Application, session: *source_namespace.ClientSession, failure: history.model.Failure) bool {
+        fn enqueueHistoryFailure(_: *Application, session: *Session, failure: FailureType) bool {
             queueFailure(&session.delivery.responses, .{
                 .request_id = failure.request_id,
                 .code = .internal,
@@ -66,17 +76,17 @@ pub fn Type(comptime Application: type) type {
             return true;
         }
 
-        fn enqueueHistoryStatsResult(_: *Application, session: *source_namespace.ClientSession, result: *history.model.StatsResult) bool {
+        fn enqueueHistoryStatsResult(_: *Application, session: *Session, result: *StatsResultType) bool {
             session.delivery.responses.push(.{ .history_stats = result }) catch return false;
             return true;
         }
 
-        fn enqueueHistoryOutputResult(_: *Application, session: *source_namespace.ClientSession, result: *history.model.OutputResult) bool {
+        fn enqueueHistoryOutputResult(_: *Application, session: *Session, result: *OutputResultType) bool {
             session.delivery.responses.push(.{ .history_output = result }) catch return false;
             return true;
         }
 
-        fn enqueueHistoryPruned(_: *Application, session: *source_namespace.ClientSession, pruned: history.model.Pruned) bool {
+        fn enqueueHistoryPruned(_: *Application, session: *Session, pruned: PrunedType) bool {
             session.delivery.responses.push(.{ .history_pruned = .{
                 .request_id = pruned.request_id,
                 .removed = pruned.removed,
@@ -84,7 +94,7 @@ pub fn Type(comptime Application: type) type {
             return true;
         }
 
-        fn disposeHistoryQueryResult(_: *Application, result: *history.model.QueryResult) void {
+        fn disposeHistoryQueryResult(_: *Application, result: *QueryResultType) void {
             result.deinit();
         }
 
@@ -92,7 +102,7 @@ pub fn Type(comptime Application: type) type {
             application.pumpAll();
         }
 
-        fn queueFailure(responses: *source_namespace.ResponseQueue, failure: delivery_mod.PendingFailure) !void {
+        fn queueFailure(responses: *ResponseQueueType, failure: PendingFailureType) !void {
             try responses.push(.{ .request_failed = .{
                 .request_id = failure.request_id,
                 .code = failure.code,

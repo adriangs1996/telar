@@ -1,6 +1,7 @@
+const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const EntryInput = @This();
-const source_namespace = @import("workspace_list.zig");
-workspace: source_namespace.schema.WorkspaceId,
+
+workspace: WorkspaceIdType,
 name: []const u8,
 path: []const u8,
 tab_count: u16,

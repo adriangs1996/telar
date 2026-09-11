@@ -1,10 +1,15 @@
 //! Shared validators, composite-value codecs, and the derived fixed-layout
 //! serializer used by the files under `messages/`.
 
-const std = @import("std");
-const wire = @import("wire.zig");
 const id = @import("id.zig");
+const std = @import("std");
+const EnvironmentEntryType = @import("EnvironmentEntry.zig");
 const types = @import("types.zig");
+const EncoderType = @import("Encoder.zig");
+const TerminalSizeType = @import("TerminalSize.zig");
+const DecoderType = @import("Decoder.zig");
+const TabLocationType = @import("TabLocation.zig");
+const GenericDerived = @import("GenericDerived.zig").Type;
 
 // -- validators -------------------------------------------------------------
 
@@ -29,7 +34,7 @@ pub fn validateBytes(bytes: []const u8, maximum: usize, empty_allowed: bool) !vo
     }
 }
 
-pub fn validateEnvironmentEntry(entry: types.EnvironmentEntry) !void {
+pub fn validateEnvironmentEntry(entry: EnvironmentEntryType) !void {
     try validateBytes(entry.name, std.math.maxInt(u16), false);
     try validateBytes(entry.value, std.math.maxInt(u32), true);
     if (std.mem.findScalar(u8, entry.name, '=') != null) {
@@ -56,15 +61,15 @@ pub fn validateTabLabel(label: []const u8, empty_allowed: bool) !void {
 
 // -- composite values -------------------------------------------------------
 
-pub fn encodeSize(encoder: *wire.Encoder, size: types.TerminalSize) !void {
+pub fn encodeSize(encoder: *EncoderType, size: TerminalSizeType) !void {
     try encoder.writeInt(u16, size.cols);
     try encoder.writeInt(u16, size.rows);
     try encoder.writeInt(u16, size.cell_width_px);
     try encoder.writeInt(u16, size.cell_height_px);
 }
 
-pub fn decodeSize(decoder: *wire.Decoder) !types.TerminalSize {
-    const size = types.TerminalSize{
+pub fn decodeSize(decoder: *DecoderType) !TerminalSizeType {
+    const size = TerminalSizeType{
         .cols = try decoder.readInt(u16),
         .rows = try decoder.readInt(u16),
         .cell_width_px = try decoder.readInt(u16),
@@ -74,7 +79,7 @@ pub fn decodeSize(decoder: *wire.Decoder) !types.TerminalSize {
     return size;
 }
 
-pub fn encodeTabLocation(encoder: *wire.Encoder, location: types.TabLocation) !void {
+pub fn encodeTabLocation(encoder: *EncoderType, location: TabLocationType) !void {
     try encodeWorkspaceLocation(encoder, location.workspace);
     if (location.tab_id == .invalid) {
         return error.InvalidTabId;
@@ -82,7 +87,7 @@ pub fn encodeTabLocation(encoder: *wire.Encoder, location: types.TabLocation) !v
     try encoder.writeInt(u64, id.raw(location.tab_id));
 }
 
-pub fn encodeWorkspaceLocation(encoder: *wire.Encoder, location: types.WorkspaceLocation) !void {
+pub fn encodeWorkspaceLocation(encoder: *EncoderType, location: types.WorkspaceLocation) !void {
     switch (location) {
         .workspace => |workspace_id| {
             if (workspace_id == .invalid) {
@@ -101,14 +106,14 @@ pub fn encodeWorkspaceLocation(encoder: *wire.Encoder, location: types.Workspace
     }
 }
 
-pub fn decodeTabLocation(decoder: *wire.Decoder) !types.TabLocation {
+pub fn decodeTabLocation(decoder: *DecoderType) !TabLocationType {
     return .{
         .workspace = try decodeWorkspaceLocation(decoder),
         .tab_id = try id.tab(try decoder.readInt(u64)),
     };
 }
 
-pub fn decodeWorkspaceLocation(decoder: *wire.Decoder) !types.WorkspaceLocation {
+pub fn decodeWorkspaceLocation(decoder: *DecoderType) !types.WorkspaceLocation {
     return switch (try decoder.readByte()) {
         0 => .{ .workspace = try id.workspace(try decoder.readInt(u64)) },
         1 => .{ .worktree = try id.worktree(try decoder.readInt(u64)) },
@@ -155,11 +160,9 @@ pub fn decodeFailureCode(value: u16) error{UnknownFailureCode}!types.FailureCode
 // and `pub fn validateWire(message) !void` for rules beyond field types.
 // Variable-length messages (views, iterators, raw tails) stay hand-written.
 
-pub const Derived = @import("GenericDerived.zig").Type;
-
 pub fn encodeDerived(comptime tag: u8, buffer: []u8, message: anytype) ![]const u8 {
-    var encoder = wire.Encoder.init(buffer);
+    var encoder = EncoderType.init(buffer);
     try encoder.writeByte(tag);
-    try Derived(@TypeOf(message)).encode(&encoder, message);
+    try GenericDerived(@TypeOf(message)).encode(&encoder, message);
     return encoder.finish();
 }

@@ -1,16 +1,19 @@
-const RequestWorkspaceHandoffHandler = @This();
-const client_model = @import("../../root.zig").model;
-const workspace_handoff_admission = @import("workspace_handoff_admission.zig");
-const workspace_handoff_preparation = @import("workspace_handoff_preparation.zig");
-const workspace_attachment_retirement = @import("workspace_attachment_retirement.zig");
-const workspace_handoff_restoration = @import("workspace_handoff_restoration.zig");
+const ModelType = @import("../../model/Model.zig");
+const AdmitWorkspaceHandoffHandlerType = @import("AdmitWorkspaceHandoffHandler.zig");
+const PrepareWorkspaceHandoffHandlerType = @import("PrepareWorkspaceHandoffHandler.zig");
+const RetireWorkspaceAttachmentsHandlerType = @import("RetireWorkspaceAttachmentsHandler.zig");
+const RestoreWorkspaceHandoffHandlerType = @import("RestoreWorkspaceHandoffHandler.zig");
 const HandoffRequestEffects = @import("HandoffRequestEffects.zig");
 const WorkspaceHandoff = @import("WorkspaceHandoff.zig");
-model: *client_model.Model,
-admission: workspace_handoff_admission.AdmitWorkspaceHandoffHandler,
-preparation: workspace_handoff_preparation.PrepareWorkspaceHandoffHandler,
-retirement: workspace_attachment_retirement.RetireWorkspaceAttachmentsHandler,
-restoration: workspace_handoff_restoration.RestoreWorkspaceHandoffHandler,
+const workspace_handoff_admission = @import("workspace_handoff_admission.zig");
+const WorkspaceDepartureType = @import("../../model/WorkspaceDeparture.zig");
+const RequestWorkspaceHandoffHandler = @This();
+
+model: *ModelType,
+admission: AdmitWorkspaceHandoffHandlerType,
+preparation: PrepareWorkspaceHandoffHandlerType,
+retirement: RetireWorkspaceAttachmentsHandlerType,
+restoration: RestoreWorkspaceHandoffHandlerType,
 effects: HandoffRequestEffects,
 
 /// Admits one explicit authority, preflights without effects, retires
@@ -20,7 +23,7 @@ effects: HandoffRequestEffects,
 /// ```zig
 /// const departure = try handler.execute(command, .requested_departure);
 /// ```
-pub fn execute(handler: *RequestWorkspaceHandoffHandler, command: WorkspaceHandoff, authority: workspace_handoff_admission.Authority) !client_model.WorkspaceDeparture {
+pub fn execute(handler: *RequestWorkspaceHandoffHandler, command: WorkspaceHandoff, authority: workspace_handoff_admission.Authority) !WorkspaceDepartureType {
     try handler.admission.execute(authority);
 
     try handler.preparation.execute();

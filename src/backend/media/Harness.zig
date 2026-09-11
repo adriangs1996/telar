@@ -1,13 +1,21 @@
-const Harness = @This();
-const media = @import("root.zig");
+const PipelineType = @import("Pipeline.zig");
+const GraphicsBudgetType = @import("GraphicsBudget.zig");
+const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
+const State = @import("State.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const source_namespace = @import("png_test.zig");
+const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
+const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
+const png_test = @import("png_test.zig");
+const max_encoded_chunk_bytes_module = @import("telar-core").max_encoded_chunk_bytes;
+const ProcessorType = @import("Processor.zig");
+const StatsType = @import("Stats.zig");
 const vt = @import("ghostty-vt");
-pipeline: media.Pipeline,
-budget: media.GraphicsBudget,
-allocator: media.PaneMediaAllocator,
-ingestion: media.Ingestion = .{},
+const Harness = @This();
+
+pipeline: PipelineType,
+budget: GraphicsBudgetType,
+allocator: PaneMediaAllocatorType,
+ingestion: State = .{},
 replies: [1024]u8 = undefined,
 reply_len: usize = 0,
 
@@ -16,16 +24,16 @@ pub fn create(storage_limit: usize) !*Harness {
     errdefer std.testing.allocator.destroy(harness);
     harness.* = .{
         .pipeline = undefined,
-        .budget = .init(core.graphics.max_image_bytes_global),
+        .budget = .init(max_image_bytes_global_module),
         .allocator = undefined,
     };
-    harness.allocator = .init(std.testing.allocator, &harness.budget, core.graphics.max_image_bytes_per_pane);
+    harness.allocator = .init(std.testing.allocator, &harness.budget, max_image_bytes_per_pane_module);
     try harness.pipeline.init(.{
         .io = std.testing.io,
         .allocator = harness.allocator.allocator(),
-        .size = source_namespace.size,
+        .size = png_test.size,
         .storage_limit = storage_limit,
-        .payload_limit = core.graphics.max_encoded_chunk_bytes,
+        .payload_limit = max_encoded_chunk_bytes_module,
         .write_pty = writePty,
     });
     return harness;
@@ -44,7 +52,7 @@ pub fn feed(harness: *Harness, bytes: []const u8) void {
     std.debug.assert(harness.pipeline.seal());
     defer harness.pipeline.finishSealed();
 
-    var processor: media.Processor = .{
+    var processor: ProcessorType = .{
         .state = &harness.ingestion,
         .media = &harness.pipeline,
         .media_allocator = &harness.allocator,
@@ -53,14 +61,14 @@ pub fn feed(harness: *Harness, bytes: []const u8) void {
         .io = std.testing.io,
         .responses = .{ .context = harness, .write_fn = writeResponse },
     };
-    var stats: media.Stats = .{};
-    processor.processMedia(source_namespace.size, &stats);
+    var stats: StatsType = .{};
+    processor.processMedia(png_test.size, &stats);
     std.debug.assert(!stats.failed);
 }
 
 fn writePty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) void {
     const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
-    const pipeline: *media.Pipeline = @fieldParentPtr("stream", stream);
+    const pipeline: *PipelineType = @fieldParentPtr("stream", stream);
     const harness: *Harness = @fieldParentPtr("pipeline", pipeline);
     writeResponse(harness, response);
 }

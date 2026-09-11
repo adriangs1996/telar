@@ -1,18 +1,15 @@
 //! Application use cases for host-capability presentation capability observations.
 
+const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
-const client_model = @import("../../root.zig").model;
-
-pub const Effects = @import("HostCapabilitiesEffects.zig");
-
-pub const Handler = @import("Handler.zig");
-
-const EffectsCapture = @import("HostCapabilitiesEffectsCapture.zig");
+const HostCapabilitiesEffectsCapture = @import("HostCapabilitiesEffectsCapture.zig");
+const Handler = @import("HostCapabilitiesHandler.zig");
+const VersionType = @import("../../model/Version.zig");
 
 test "Handler commits an observation before synchronizing resources" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{ .model = &model };
+    var capture: HostCapabilitiesEffectsCapture = .{ .model = &model };
     var handler: Handler = .{
         .model = &model,
         .effects = capture.port(),
@@ -23,7 +20,7 @@ test "Handler commits an observation before synchronizing resources" {
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(@as(usize, 1), capture.calls);
     try std.testing.expectEqual(
-        client_model.Version{ .host_capabilities = 1 },
+        VersionType{ .host_capabilities = 1 },
         model.version(),
     );
     try std.testing.expectEqual(
@@ -33,9 +30,9 @@ test "Handler commits an observation before synchronizing resources" {
 }
 
 test "Handler suppresses repeated presentation capability observations" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{ .model = &model };
+    var capture: HostCapabilitiesEffectsCapture = .{ .model = &model };
     var handler: Handler = .{
         .model = &model,
         .effects = capture.port(),
@@ -53,9 +50,9 @@ test "Handler suppresses repeated presentation capability observations" {
 }
 
 test "Handler retains a capability commit after effect failure" {
-    var model = client_model.Model.init(std.testing.allocator, true);
+    var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capture: EffectsCapture = .{
+    var capture: HostCapabilitiesEffectsCapture = .{
         .model = &model,
         .fail = true,
     };
@@ -71,7 +68,7 @@ test "Handler retains a capability commit after effect failure" {
 
     try std.testing.expect(capture.observed_commit);
     try std.testing.expectEqual(
-        client_model.Version{ .host_capabilities = 1 },
+        VersionType{ .host_capabilities = 1 },
         model.version(),
     );
     try std.testing.expectEqual(

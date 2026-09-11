@@ -1,9 +1,10 @@
-const DeliverPresentationHandler = @This();
-const client_model = @import("../../root.zig").model;
-const Effects = @import("Effects.zig");
+const ModelType = @import("../../model/Model.zig");
+const Effects = @import("PresentationEffects.zig");
 const Command = @import("Command.zig");
-const source_namespace = @import("presentation_delivery.zig");
-model: *client_model.Model,
+const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+const DeliverPresentationHandler = @This();
+
+model: *ModelType,
 effects: Effects,
 
 /// Commits one successful host presentation before delivering transport
@@ -13,7 +14,7 @@ effects: Effects,
 /// try handler.execute(command);
 /// ```
 pub fn execute(handler: *DeliverPresentationHandler, command: Command) !void {
-    if (command.commit.len > source_namespace.multiplexer.max_panes) {
+    if (command.commit.len > max_panes_per_tab) {
         return error.InvalidPresentationCommit;
     }
 

@@ -1,7 +1,10 @@
-const Preparation = @This();
-const source_namespace = @import("root.zig");
+const std = @import("std");
+const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
 const Sources = @import("Sources.zig");
-io: source_namespace.Io,
-attachments: *source_namespace.AttachmentStore,
+const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
+const Preparation = @This();
+
+io: std.Io,
+attachments: *AttachmentStoreType,
 sources: Sources,
-metrics: *source_namespace.RuntimeMetrics,
+metrics: *RuntimeMetricsType,

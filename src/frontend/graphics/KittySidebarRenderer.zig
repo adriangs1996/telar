@@ -1,15 +1,19 @@
+const std = @import("std");
+const RectType = @import("telar-core").Rect;
+const SidebarProviderPlacement = @import("SidebarProviderPlacement.zig");
+const SidebarContent = @import("SidebarContent.zig");
+const CellSize = @import("CellSize.zig");
+const kitty_sidebar = @import("kitty_sidebar.zig");
+const SidebarFocus = @import("SidebarFocus.zig");
+const rounded = @import("rounded_rectangle.zig");
+const writeDeleteImage_module = @import("kitty_protocol").writeDeleteImage;
+const kitty_codec = @import("kitty_codec.zig");
+const writeDeletePlacement_module = @import("kitty_protocol").writeDeletePlacement;
 /// Media assets for the hybrid sidebar. Cells retain the complete fallback,
 /// hover, text, and hit targets; graphics add only the rounded focus edge and
 /// official provider artwork.
 const KittySidebarRenderer = @This();
-const std = @import("std");
-const core = @import("telar-core");
-const SidebarProviderPlacement = @import("SidebarProviderPlacement.zig");
-const SidebarContent = @import("SidebarContent.zig");
-const CellSize = @import("CellSize.zig");
-const source_namespace = @import("kitty_sidebar.zig");
-const SidebarFocus = @import("SidebarFocus.zig");
-const rounded = @import("rounded_rectangle.zig");
+
 const focused_card_id: u32 = 0x80000001;
 const focused_card_placement_id: u32 = 0x80000010;
 const provider_atlas_id: u32 = 0x80000003;
@@ -34,8 +38,8 @@ focused_card_pixels: []u8 = &.{},
 focused_card_width: u32 = 0,
 focused_card_height: u32 = 0,
 focused_card_color: [3]u8 = @splat(0),
-focused_card: ?core.ui.Rect = null,
-emitted_focused_card: ?core.ui.Rect = null,
+focused_card: ?RectType = null,
+emitted_focused_card: ?RectType = null,
 focused_card_dirty: bool = false,
 focused_card_emitted: bool = false,
 provider_atlas: []u8 = &.{},
@@ -43,7 +47,7 @@ provider_slot_width: u32 = 0,
 provider_slot_height: u32 = 0,
 provider_atlas_width: u32 = 0,
 provider_atlas_height: u32 = 0,
-area: core.ui.Rect = .{},
+area: RectType = .{},
 provider_marks: [max_provider_placements]SidebarProviderPlacement = undefined,
 provider_mark_count: u8 = 0,
 emitted_provider_mark_count: u8 = 0,
@@ -87,7 +91,7 @@ pub fn prepare(renderer: *KittySidebarRenderer, content: SidebarContent, cell: C
     const provider_slot_height = std.math.mul(u32, cell.height, provider_scale) catch return error.SidebarTooLarge;
     const provider_atlas_width = std.math.mul(u32, provider_count, provider_slot_width) catch return error.SidebarTooLarge;
     const provider_atlas_height = provider_slot_height;
-    const provider_atlas_len = try source_namespace.rgbaLength(provider_atlas_width, provider_atlas_height);
+    const provider_atlas_len = try kitty_sidebar.rgbaLength(provider_atlas_width, provider_atlas_height);
     const resized = renderer.provider_slot_width != provider_slot_width or
         renderer.provider_slot_height != provider_slot_height;
     if (resized) {
@@ -100,7 +104,7 @@ pub fn prepare(renderer: *KittySidebarRenderer, content: SidebarContent, cell: C
         renderer.provider_slot_height = provider_slot_height;
         renderer.provider_atlas_width = provider_atlas_width;
         renderer.provider_atlas_height = provider_atlas_height;
-        source_namespace.renderProviderAtlas(.{
+        kitty_sidebar.renderProviderAtlas(.{
             .destination = renderer.provider_atlas,
             .atlas = .{ .width = provider_atlas_width, .height = provider_atlas_height },
             .slot = .{ .width = provider_slot_width, .height = provider_slot_height },
@@ -116,7 +120,7 @@ pub fn prepare(renderer: *KittySidebarRenderer, content: SidebarContent, cell: C
     if (!std.meta.eql(renderer.area, content.area)) {
         renderer.placements_dirty = true;
     }
-    if (!source_namespace.providerPlacementsEqual(renderer.provider_marks[0..renderer.provider_mark_count], content.provider_marks)) {
+    if (!kitty_sidebar.providerPlacementsEqual(renderer.provider_marks[0..renderer.provider_mark_count], content.provider_marks)) {
         @memcpy(renderer.provider_marks[0..content.provider_marks.len], content.provider_marks);
         renderer.provider_mark_count = @intCast(content.provider_marks.len);
         renderer.placements_dirty = true;
@@ -142,7 +146,7 @@ fn prepareFocusedCard(renderer: *KittySidebarRenderer, focused: ?SidebarFocus, c
         return error.SidebarTooLarge;
     const target_height = std.math.mul(u32, value.area.h, cell.height) catch
         return error.SidebarTooLarge;
-    const raster_size = source_namespace.fitWithinPixels(
+    const raster_size = kitty_sidebar.fitWithinPixels(
         target_width,
         target_height,
         max_focused_card_pixels,
@@ -156,7 +160,7 @@ fn prepareFocusedCard(renderer: *KittySidebarRenderer, focused: ?SidebarFocus, c
         }
         return;
     }
-    const byte_len = try source_namespace.rgbaLength(raster_size.width, raster_size.height);
+    const byte_len = try kitty_sidebar.rgbaLength(raster_size.width, raster_size.height);
     const next_pixels = try renderer.gpa.alloc(u8, byte_len);
     errdefer renderer.gpa.free(next_pixels);
     const target_radius = @max(@as(u32, 2), @min(@as(u32, 12), cell.height / 3));
@@ -187,17 +191,17 @@ pub fn damaged(renderer: *const KittySidebarRenderer) bool {
 /// Emits pending sidebar images and placements. Geometry comes from what
 /// `prepare` rasterized: taking live cell sizes here let a resize between
 /// the two calls mismatch the placement against the pixels.
-pub fn write(renderer: *KittySidebarRenderer, writer: *source_namespace.Io.Writer) source_namespace.Io.Writer.Error!usize {
+pub fn write(renderer: *KittySidebarRenderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     if (!renderer.damaged()) {
         return 0;
     }
     var written: usize = 0;
     if (!renderer.visible) {
         if (renderer.focused_card_emitted) {
-            written += try source_namespace.writeDeleteImage(writer, focused_card_id);
+            written += try writeDeleteImage_module(writer, focused_card_id);
         }
         if (renderer.provider_emitted) {
-            written += try source_namespace.writeDeleteImage(writer, provider_atlas_id);
+            written += try writeDeleteImage_module(writer, provider_atlas_id);
         }
         renderer.emitted = false;
         renderer.focused_card_emitted = false;
@@ -210,7 +214,7 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *source_namespace.Io.Write
         return written;
     }
     if (renderer.focused_card_dirty) {
-        written += try source_namespace.writeTransmission(writer, .{
+        written += try kitty_codec.writeTransmission(writer, .{
             .external_id = focused_card_id,
             .image = .{
                 .key = .{ .image_id = focused_card_id, .generation = 1 },
@@ -224,7 +228,7 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *source_namespace.Io.Write
         renderer.focused_card_emitted = true;
     }
     if (renderer.provider_dirty) {
-        written += try source_namespace.writeTransmission(writer, .{
+        written += try kitty_codec.writeTransmission(writer, .{
             .external_id = provider_atlas_id,
             .image = .{
                 .key = .{ .image_id = provider_atlas_id, .generation = 1 },
@@ -239,7 +243,7 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *source_namespace.Io.Write
     }
     if (renderer.placements_dirty) {
         if (renderer.emitted_focused_card != null) {
-            written += try source_namespace.writeDeletePlacement(
+            written += try writeDeletePlacement_module(
                 writer,
                 focused_card_id,
                 focused_card_placement_id,
@@ -247,7 +251,7 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *source_namespace.Io.Write
         }
         if (renderer.focused_card) |card| {
             if (renderer.focused_card_emitted) {
-                written += try source_namespace.writePlacement(writer, .{
+                written += try kitty_codec.writePlacement(writer, .{
                     .image_id = focused_card_id,
                     .placement_id = focused_card_placement_id,
                     .value = .{
@@ -267,13 +271,13 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *source_namespace.Io.Write
             }
         }
         renderer.emitted_focused_card = renderer.focused_card;
-        for (0..renderer.emitted_provider_mark_count) |index| written += try source_namespace.writeDeletePlacement(
+        for (0..renderer.emitted_provider_mark_count) |index| written += try writeDeletePlacement_module(
             writer,
             provider_atlas_id,
             first_provider_placement_id + @as(u32, @intCast(index)),
         );
         for (renderer.provider_marks[0..renderer.provider_mark_count], 0..) |mark, index| {
-            written += try source_namespace.writePlacement(writer, .{
+            written += try kitty_codec.writePlacement(writer, .{
                 .image_id = provider_atlas_id,
                 .placement_id = first_provider_placement_id + @as(u32, @intCast(index)),
                 .value = .{

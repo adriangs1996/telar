@@ -1,18 +1,19 @@
-const CompletionCapture = @This();
-const client_model = @import("../../root.zig").model;
-const source_namespace = @import("plugin_action.zig");
-const CompletionEffects = @import("PluginActionCompletionEffects.zig");
+const ModelType = @import("../../model/Model.zig");
+const plugin_action = @import("plugin_action.zig");
+const PluginActionCompletionEffects = @import("PluginActionCompletionEffects.zig");
 const PluginResult = @import("PluginResult.zig");
-const config = @import("../../config/root.zig");
-model: *const client_model.Model,
-events: [2]source_namespace.CompletionEvent = undefined,
+const EffectBatchType = @import("../../config/EffectBatch.zig");
+const CompletionCapture = @This();
+
+model: *const ModelType,
+events: [2]plugin_action.CompletionEvent = undefined,
 event_count: usize = 0,
 observed_finished: bool = false,
 fail_authorize: bool = false,
 fail_apply: bool = false,
-disposition: source_namespace.BatchDisposition = .continue_client,
+disposition: plugin_action.BatchDisposition = .continue_client,
 
-pub fn port(capture: *CompletionCapture) CompletionEffects {
+pub fn port(capture: *CompletionCapture) PluginActionCompletionEffects {
     return .{
         .context = capture,
         .authorize = authorize,
@@ -31,7 +32,7 @@ fn authorize(raw_context: *anyopaque, result: PluginResult) !void {
     }
 }
 
-fn apply(raw_context: *anyopaque, batch: *const config.EffectBatch) !source_namespace.BatchDisposition {
+fn apply(raw_context: *anyopaque, batch: *const EffectBatchType) !plugin_action.BatchDisposition {
     const capture: *CompletionCapture = @ptrCast(@alignCast(raw_context));
     _ = batch;
     capture.events[capture.event_count] = .apply;

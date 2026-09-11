@@ -1,11 +1,12 @@
-const InitialClientState = @This();
-const frontend_ui = @import("../layout/root.zig");
-const bars_module = @import("../bars/root.zig");
-const source_namespace = @import("types.zig");
+const sidebar_module = @import("../layout/sidebar.zig");
+const LayoutType = @import("../bars/BarLayout.zig");
+const TerminalSizeType = @import("telar-core").TerminalSize;
 const HostCapabilities = @import("HostCapabilities.zig");
+const InitialClientState = @This();
+
 pane_gaps: bool,
-sidebar_width: u16 = frontend_ui.sidebar.default_width,
+sidebar_width: u16 = sidebar_module.default_width,
 configuration_generation: u64 = 0,
-bars: bars_module.Layout = .{},
-host_size: source_namespace.schema.TerminalSize = .{ .cols = 80, .rows = 24 },
+bars: LayoutType = .{},
+host_size: TerminalSizeType = .{ .cols = 80, .rows = 24 },
 host_capabilities: HostCapabilities = .{},

@@ -1,7 +1,8 @@
+const std = @import("std");
 /// Bytes borrowed by the write worker until the owning state receives completion.
 const WriteJob = @This();
-const source_namespace = @import("session_checkpoint.zig");
-io: source_namespace.Io,
+
+io: std.Io,
 path: []const u8,
 buffer: []u8,
 len: usize,
